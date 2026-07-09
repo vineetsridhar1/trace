@@ -8,8 +8,19 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { gql } from "@urql/core";
-import { Loader2, Maximize2, Minus, Plus } from "lucide-react";
+import {
+  FileDown,
+  GitBranchPlus,
+  Loader2,
+  Maximize2,
+  Minus,
+  Plus,
+  SlidersHorizontal,
+  Upload,
+  Wand2,
+} from "lucide-react";
 import type { Artifact } from "@trace/gql";
+import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 
@@ -32,6 +43,48 @@ const DESIGN_ARTIFACTS_QUERY = gql`
         name
         avatarUrl
       }
+    }
+  }
+`;
+
+const ITERATE_DESIGN_ARTIFACT_MUTATION = gql`
+  mutation IterateDesignArtifact($artifactId: ID!, $prompt: String!) {
+    iterateDesignArtifact(artifactId: $artifactId, prompt: $prompt) {
+      id
+    }
+  }
+`;
+
+const PATCH_DESIGN_ARTIFACT_TOKENS_MUTATION = gql`
+  mutation PatchDesignArtifactTokens($artifactId: ID!, $tokens: JSON!) {
+    patchDesignArtifactTokens(artifactId: $artifactId, tokens: $tokens) {
+      id
+    }
+  }
+`;
+
+const PUBLISH_DESIGN_ARTIFACT_MUTATION = gql`
+  mutation PublishDesignArtifact($artifactId: ID!) {
+    publishDesignArtifact(artifactId: $artifactId) {
+      id
+      publishedAt
+    }
+  }
+`;
+
+const EXPORT_DESIGN_ARTIFACT_PDF_MUTATION = gql`
+  mutation ExportDesignArtifactPdf($artifactId: ID!) {
+    exportDesignArtifactPdf(artifactId: $artifactId) {
+      id
+    }
+  }
+`;
+
+const PROMOTE_DESIGN_ARTIFACT_MUTATION = gql`
+  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!) {
+    promoteDesignArtifactToCodingSession(artifactId: $artifactId) {
+      id
+      sessionGroupId
     }
   }
 `;
@@ -259,6 +312,74 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
     }
   }, []);
 
+  const mutateSelectedArtifact = useCallback(
+    async (
+      mutation: ReturnType<typeof gql>,
+      variables: Record<string, unknown>,
+      successMessage: string,
+    ) => {
+      const result = await client.mutation(mutation, variables).toPromise();
+      if (result.error) {
+        toast.error("Design action failed", { description: result.error.message });
+        return;
+      }
+      toast.success(successMessage);
+      await loadArtifacts();
+    },
+    [loadArtifacts],
+  );
+
+  const handleIterate = useCallback(() => {
+    if (!selectedArtifact) return;
+    const prompt = window.prompt("Describe the next variant", selectedArtifact.prompt ?? "");
+    if (!prompt?.trim()) return;
+    void mutateSelectedArtifact(
+      ITERATE_DESIGN_ARTIFACT_MUTATION,
+      { artifactId: selectedArtifact.id, prompt: prompt.trim() },
+      "Variant created",
+    );
+  }, [mutateSelectedArtifact, selectedArtifact]);
+
+  const handleTweak = useCallback(() => {
+    if (!selectedArtifact) return;
+    const name = window.prompt("CSS variable name", "--trace-accent");
+    if (!name?.trim()) return;
+    const value = window.prompt("CSS variable value", "#0f766e");
+    if (!value?.trim()) return;
+    void mutateSelectedArtifact(
+      PATCH_DESIGN_ARTIFACT_TOKENS_MUTATION,
+      { artifactId: selectedArtifact.id, tokens: { [name.trim()]: value.trim() } },
+      "Tweak applied",
+    );
+  }, [mutateSelectedArtifact, selectedArtifact]);
+
+  const handlePublish = useCallback(() => {
+    if (!selectedArtifact) return;
+    void mutateSelectedArtifact(
+      PUBLISH_DESIGN_ARTIFACT_MUTATION,
+      { artifactId: selectedArtifact.id },
+      "Artifact published",
+    );
+  }, [mutateSelectedArtifact, selectedArtifact]);
+
+  const handleExportPdf = useCallback(() => {
+    if (!selectedArtifact) return;
+    void mutateSelectedArtifact(
+      EXPORT_DESIGN_ARTIFACT_PDF_MUTATION,
+      { artifactId: selectedArtifact.id },
+      "PDF export queued",
+    );
+  }, [mutateSelectedArtifact, selectedArtifact]);
+
+  const handlePromote = useCallback(() => {
+    if (!selectedArtifact) return;
+    void mutateSelectedArtifact(
+      PROMOTE_DESIGN_ARTIFACT_MUTATION,
+      { artifactId: selectedArtifact.id },
+      "Coding session created",
+    );
+  }, [mutateSelectedArtifact, selectedArtifact]);
+
   return (
     <main
       ref={canvasRef}
@@ -273,6 +394,56 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
         className="absolute right-3 top-3 z-10 flex items-center overflow-hidden rounded-md border bg-background shadow-sm"
         onPointerDown={(event) => event.stopPropagation()}
       >
+        <button
+          type="button"
+          onClick={handleIterate}
+          disabled={!selectedArtifact}
+          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
+          aria-label="Create variant"
+          title="Create variant"
+        >
+          <Wand2 size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={handleTweak}
+          disabled={!selectedArtifact}
+          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
+          aria-label="Tweak tokens"
+          title="Tweak tokens"
+        >
+          <SlidersHorizontal size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={handlePublish}
+          disabled={!selectedArtifact}
+          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
+          aria-label="Publish"
+          title="Publish"
+        >
+          <Upload size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={handleExportPdf}
+          disabled={!selectedArtifact}
+          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
+          aria-label="Export PDF"
+          title="Export PDF"
+        >
+          <FileDown size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={handlePromote}
+          disabled={!selectedArtifact}
+          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
+          aria-label="Promote to coding session"
+          title="Promote to coding session"
+        >
+          <GitBranchPlus size={14} />
+        </button>
         <button
           type="button"
           onClick={() => zoomBy(0.75)}

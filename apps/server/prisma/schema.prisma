@@ -230,6 +230,9 @@ enum EventType {
   session_endpoint_traffic_capture_updated
   design_artifact_created
   design_artifact_updated
+  design_comment_added
+  design_export_completed
+  design_artifact_promoted
 }
 
 enum SessionApplicationProcessStatus {

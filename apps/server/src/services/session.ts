@@ -895,6 +895,18 @@ Do this silently — do not mention it to the user unless they ask or it fails.
 If the user asks you to stop auto-saving or disable auto-save, stop doing this for the rest of the session.
 </system-instruction>`;
 
+const APP_SESSION_SYSTEM_PROMPT = `You are building a standalone Trace app session.
+
+Use a production-shaped full-stack starter as the default target: Next.js, Tailwind CSS, and shadcn/ui unless the user explicitly asks for another stack.
+
+Requirements:
+- Build a working application, not a static mock or landing page.
+- Keep the dev server running so Trace can detect the preview port.
+- Stamp interactive UI with data-trace-source="path:line" when practical so element picking can map preview elements back to code.
+- Use Tailwind tokens and shadcn components for UI primitives.
+- Create checkpoints with git commits when meaningful app milestones work.
+- Treat publish/share as exposing the running app endpoint, not generating a design artifact.`;
+
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
@@ -906,6 +918,12 @@ function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolea
   if (hasRepo) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
+}
+
+function appendSystemPromptForSession(session: { sessionGroup?: unknown }): string | undefined {
+  const group = session.sessionGroup;
+  if (!group || typeof group !== "object" || Array.isArray(group)) return undefined;
+  return (group as { kind?: string | null }).kind === "app" ? APP_SESSION_SYSTEM_PROMPT : undefined;
 }
 
 function buildBaseBranchInstruction(baseBranch: string): string {
@@ -2884,7 +2902,12 @@ export class SessionService {
   }
 
   private async startDesignSession(input: StartSessionServiceInput) {
-    if (input.repoId || input.sourceSessionId || input.restoreCheckpointId || input.sessionGroupId) {
+    if (
+      input.repoId ||
+      input.sourceSessionId ||
+      input.restoreCheckpointId ||
+      input.sessionGroupId
+    ) {
       throw new ValidationError("Design sessions must start as standalone artifact sessions.");
     }
     if (input.environmentId || input.runtimeInstanceId || input.hosting) {
@@ -3036,6 +3059,19 @@ export class SessionService {
     if (input.kind === "design") {
       return this.startDesignSession(input);
     }
+    if (input.kind === "app") {
+      if (input.repoId || input.sourceSessionId || input.restoreCheckpointId) {
+        throw new ValidationError("App sessions must start standalone without a linked repo.");
+      }
+      if (input.hosting && input.hosting !== "cloud") {
+        throw new ValidationError("App sessions are cloud-only.");
+      }
+      if (input.deferRuntimeSelection) {
+        throw new ValidationError("App sessions require a cloud runtime at creation.");
+      }
+      input.hosting = "cloud";
+      input.provisionWithoutPrompt = true;
+    }
 
     if (input.restoreCheckpointId && input.sessionGroupId) {
       throw new Error("restoreCheckpointId cannot reuse an existing session group");
@@ -3145,7 +3181,7 @@ export class SessionService {
     }
     if (existingGroup) {
       this.assertPrivateGroupOwner(existingGroup, input.createdById);
-      if (existingGroup.kind !== requestedGroupKind) {
+      if ((existingGroup.kind ?? "coding") !== requestedGroupKind) {
         throw new ValidationError("Cannot add a session with a different kind to this group.");
       }
     }
@@ -3180,7 +3216,9 @@ export class SessionService {
     }
 
     const authoritativeChannelRepoId =
-      resolvedChannel?.type === "coding" ? (resolvedChannel.repoId ?? null) : null;
+      requestedGroupKind === "coding" && resolvedChannel?.type === "coding"
+        ? (resolvedChannel.repoId ?? null)
+        : null;
 
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
       throw new Error("Coding channel sessions must use the channel's linked repo");
@@ -4375,6 +4413,7 @@ export class SessionService {
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
       enableClaudeInChrome: this.claudeInChromeFlag(session.tool, session.createdBy),
+      appendSystemPrompt: appendSystemPromptForSession(session),
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -5478,7 +5517,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { slug: true } },
+        sessionGroup: { select: { slug: true, kind: true } },
         channel: { select: { baseBranch: true } },
         connection: true,
         pendingRun: true,
@@ -5746,6 +5785,7 @@ export class SessionService {
       model: activeModel ?? undefined,
       reasoningEffort: activeReasoningEffort ?? undefined,
       enableClaudeInChrome: this.claudeInChromeFlag(activeTool, session.createdBy),
+      appendSystemPrompt: appendSystemPromptForSession(session),
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -6841,6 +6881,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
+        sessionGroup: { select: { kind: true } },
         connection: true,
       },
     });
@@ -6890,6 +6931,7 @@ export class SessionService {
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
         enableClaudeInChrome: this.claudeInChromeFlag(session.tool, session.createdBy),
+        appendSystemPrompt: appendSystemPromptForSession(session),
         interactionMode: options.interactionMode,
         cwd: session.workdir ?? undefined,
         checkpointContext,
@@ -7550,11 +7592,9 @@ export class SessionService {
       const runtimeConnection = this.parseConnection(sourceCloudRuntimeSession.connection);
       const sessionConnection = this.parseConnection(session.connection);
       const runtimeHasBinding =
-        !!runtimeConnection.runtimeInstanceId ||
-        !!runtimeConnection.providerRuntimeId;
+        !!runtimeConnection.runtimeInstanceId || !!runtimeConnection.providerRuntimeId;
       const sessionHasBinding =
-        !!sessionConnection.runtimeInstanceId ||
-        !!sessionConnection.providerRuntimeId;
+        !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
       if (!runtimeHasBinding && sessionHasBinding) {
         sourceCloudRuntimeSession = {
           ...sourceCloudRuntimeSession,
@@ -8997,6 +9037,7 @@ export class SessionService {
         repoId: true,
         connection: true,
         sessionGroupId: true,
+        sessionGroup: { select: { kind: true } },
       },
     });
 
@@ -9040,6 +9081,7 @@ export class SessionService {
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
       enableClaudeInChrome: this.claudeInChromeFlag(session.tool, session.createdBy),
+      appendSystemPrompt: appendSystemPromptForSession(session),
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -9053,6 +9095,7 @@ export class SessionService {
       model?: string;
       reasoningEffort?: string;
       enableClaudeInChrome?: boolean;
+      appendSystemPrompt?: string;
       interactionMode?: string;
       cwd?: string;
       toolSessionId?: string;
@@ -9292,16 +9335,13 @@ export class SessionService {
       const cloudSession =
         cloudSessions.find((session) => {
           const sessionConnection = this.parseConnection(session.connection);
-          return (
-            !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId
-          );
+          return !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
         }) ?? cloudSessions[0];
       if (!cloudSession) continue;
       if (!groupHasRuntimeBinding) {
         const sessionConnection = this.parseConnection(cloudSession.connection);
         const sessionHasRuntimeBinding =
-          !!sessionConnection.runtimeInstanceId ||
-          !!sessionConnection.providerRuntimeId;
+          !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
         if (!sessionHasRuntimeBinding) continue;
       }
 
@@ -9364,7 +9404,10 @@ export class SessionService {
         this.destroyRuntimeOptions(cloudSession.id, "idle_session_group_cleanup"),
       );
       // Destroying the runtime kills any forwarded application processes; reflect that.
-      await sessionApplicationService.markSessionGroupRuntimeStopped(group.id, session.organizationId);
+      await sessionApplicationService.markSessionGroupRuntimeStopped(
+        group.id,
+        session.organizationId,
+      );
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

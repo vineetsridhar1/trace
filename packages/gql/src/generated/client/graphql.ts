@@ -414,7 +414,10 @@ export type EventType =
   | "chat_member_removed"
   | "chat_renamed"
   | "design_artifact_created"
+  | "design_artifact_promoted"
   | "design_artifact_updated"
+  | "design_comment_added"
+  | "design_export_completed"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -647,7 +650,9 @@ export type Mutation = {
   editChannelMessage: Message;
   editChatMessage: Message;
   enableSessionEndpointForwarding: SessionEndpoint;
+  exportDesignArtifactPdf: Event;
   forkSession: Session;
+  iterateDesignArtifact: Artifact;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -658,6 +663,9 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  patchDesignArtifactTokens: Artifact;
+  promoteDesignArtifactToCodingSession: Session;
+  publishDesignArtifact: Artifact;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -895,8 +903,18 @@ export type MutationEnableSessionEndpointForwardingArgs = {
   endpointId: Scalars["ID"]["input"];
 };
 
+export type MutationExportDesignArtifactPdfArgs = {
+  artifactId: Scalars["ID"]["input"];
+};
+
 export type MutationForkSessionArgs = {
   eventId: Scalars["ID"]["input"];
+};
+
+export type MutationIterateDesignArtifactArgs = {
+  artifactId: Scalars["ID"]["input"];
+  html?: InputMaybe<Scalars["String"]["input"]>;
+  prompt: Scalars["String"]["input"];
 };
 
 export type MutationJoinChannelArgs = {
@@ -946,6 +964,20 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationPatchDesignArtifactTokensArgs = {
+  artifactId: Scalars["ID"]["input"];
+  tokens: Scalars["JSON"]["input"];
+};
+
+export type MutationPromoteDesignArtifactToCodingSessionArgs = {
+  artifactId: Scalars["ID"]["input"];
+  prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationPublishDesignArtifactArgs = {
+  artifactId: Scalars["ID"]["input"];
 };
 
 export type MutationQueueSessionMessageArgs = {
@@ -2557,27 +2589,54 @@ export type DesignArtifactsQuery = {
   }>;
 };
 
-export type CreateDesignArtifactMutationVariables = Exact<{
-  sessionGroupId: Scalars["ID"]["input"];
+export type IterateDesignArtifactMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
   prompt: Scalars["String"]["input"];
 }>;
 
-export type CreateDesignArtifactMutation = {
+export type IterateDesignArtifactMutation = {
   __typename?: "Mutation";
-  createDesignArtifact: {
-    __typename?: "Artifact";
+  iterateDesignArtifact: { __typename?: "Artifact"; id: string };
+};
+
+export type PatchDesignArtifactTokensMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+  tokens: Scalars["JSON"]["input"];
+}>;
+
+export type PatchDesignArtifactTokensMutation = {
+  __typename?: "Mutation";
+  patchDesignArtifactTokens: { __typename?: "Artifact"; id: string };
+};
+
+export type PublishDesignArtifactMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+}>;
+
+export type PublishDesignArtifactMutation = {
+  __typename?: "Mutation";
+  publishDesignArtifact: { __typename?: "Artifact"; id: string; publishedAt?: string | null };
+};
+
+export type ExportDesignArtifactPdfMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+}>;
+
+export type ExportDesignArtifactPdfMutation = {
+  __typename?: "Mutation";
+  exportDesignArtifactPdf: { __typename?: "Event"; id: string };
+};
+
+export type PromoteDesignArtifactToCodingSessionMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+}>;
+
+export type PromoteDesignArtifactToCodingSessionMutation = {
+  __typename?: "Mutation";
+  promoteDesignArtifactToCodingSession: {
+    __typename?: "Session";
     id: string;
-    sessionGroupId: string;
-    parentArtifactId?: string | null;
-    prompt?: string | null;
-    title: string;
-    contentType: string;
-    html: string;
-    metadata?: JsonValue | null;
-    publishedAt?: string | null;
-    createdAt: string;
-    updatedAt: string;
-    createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+    sessionGroupId?: string | null;
   };
 };
 
@@ -5006,17 +5065,17 @@ export const DesignArtifactsDocument = {
     },
   ],
 } as unknown as DocumentNode<DesignArtifactsQuery, DesignArtifactsQueryVariables>;
-export const CreateDesignArtifactDocument = {
+export const IterateDesignArtifactDocument = {
   kind: "Document",
   definitions: [
     {
       kind: "OperationDefinition",
       operation: "mutation",
-      name: { kind: "Name", value: "CreateDesignArtifact" },
+      name: { kind: "Name", value: "IterateDesignArtifact" },
       variableDefinitions: [
         {
           kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
           type: {
             kind: "NonNullType",
             type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
@@ -5036,12 +5095,12 @@ export const CreateDesignArtifactDocument = {
         selections: [
           {
             kind: "Field",
-            name: { kind: "Name", value: "createDesignArtifact" },
+            name: { kind: "Name", value: "iterateDesignArtifact" },
             arguments: [
               {
                 kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
               },
               {
                 kind: "Argument",
@@ -5051,30 +5110,105 @@ export const CreateDesignArtifactDocument = {
             ],
             selectionSet: {
               kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<IterateDesignArtifactMutation, IterateDesignArtifactMutationVariables>;
+export const PatchDesignArtifactTokensDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PatchDesignArtifactTokens" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "tokens" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "JSON" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "patchDesignArtifactTokens" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "tokens" },
+                value: { kind: "Variable", name: { kind: "Name", value: "tokens" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  PatchDesignArtifactTokensMutation,
+  PatchDesignArtifactTokensMutationVariables
+>;
+export const PublishDesignArtifactDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PublishDesignArtifact" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "publishDesignArtifact" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                { kind: "Field", name: { kind: "Name", value: "parentArtifactId" } },
-                { kind: "Field", name: { kind: "Name", value: "prompt" } },
-                { kind: "Field", name: { kind: "Name", value: "title" } },
-                { kind: "Field", name: { kind: "Name", value: "contentType" } },
-                { kind: "Field", name: { kind: "Name", value: "html" } },
-                { kind: "Field", name: { kind: "Name", value: "metadata" } },
                 { kind: "Field", name: { kind: "Name", value: "publishedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "createdBy" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
-                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                    ],
-                  },
-                },
               ],
             },
           },
@@ -5082,7 +5216,96 @@ export const CreateDesignArtifactDocument = {
       },
     },
   ],
-} as unknown as DocumentNode<CreateDesignArtifactMutation, CreateDesignArtifactMutationVariables>;
+} as unknown as DocumentNode<PublishDesignArtifactMutation, PublishDesignArtifactMutationVariables>;
+export const ExportDesignArtifactPdfDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ExportDesignArtifactPdf" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "exportDesignArtifactPdf" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  ExportDesignArtifactPdfMutation,
+  ExportDesignArtifactPdfMutationVariables
+>;
+export const PromoteDesignArtifactToCodingSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PromoteDesignArtifactToCodingSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "promoteDesignArtifactToCodingSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  PromoteDesignArtifactToCodingSessionMutation,
+  PromoteDesignArtifactToCodingSessionMutationVariables
+>;
 export const SessionGroupBranchDiffDocument = {
   kind: "Document",
   definitions: [

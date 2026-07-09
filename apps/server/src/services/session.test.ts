@@ -721,6 +721,72 @@ describe("SessionService", () => {
       expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
     });
 
+    it("rejects app sessions with linked repos", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "claude_code",
+          kind: "app",
+          repoId: "repo-1",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("App sessions must start standalone without a linked repo.");
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+    });
+
+    it("creates app sessions as standalone cloud groups", async () => {
+      const sessionGroup = makeSessionGroup({
+        kind: "app",
+        repoId: null,
+        repo: null,
+        channelId: "channel-1",
+      });
+      const session = makeSession({
+        sessionGroup,
+        hosting: "cloud",
+        repoId: null,
+        repo: null,
+        channelId: "channel-1",
+      });
+
+      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(makeAgentEnvironment());
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        kind: "app",
+        channelId: "channel-1",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          kind: "app",
+          channelId: "channel-1",
+          repoId: undefined,
+        }),
+        select: expect.any(Object),
+      });
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hosting: "cloud",
+            repoId: undefined,
+          }),
+        }),
+      );
+    });
+
     it("creates a new session group for a channel entrypoint", async () => {
       const sessionGroup = makeSessionGroup();
       const session = makeSession({ sessionGroup });

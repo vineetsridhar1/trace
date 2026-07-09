@@ -33,15 +33,16 @@ export async function createQuickSession(
 
   const channelRepoId = getChannelRepoId(channelId);
   const kind = options.kind ?? "coding";
+  const isCoding = kind === "coding";
 
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
         input: {
           kind,
-          ...(kind === "design" ? {} : { deferRuntimeSelection: true }),
+          ...(isCoding ? { deferRuntimeSelection: true } : {}),
           channelId,
-          repoId: kind === "design" ? undefined : (channelRepoId ?? undefined),
+          repoId: isCoding ? (channelRepoId ?? undefined) : undefined,
           visibility: options.visibility,
         },
       })

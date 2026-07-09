@@ -24,7 +24,11 @@ type Documents = {
   "\n  mutation RenameChat($chatId: ID!, $name: String!) {\n    renameChat(chatId: $chatId, name: $name) {\n      id\n      name\n    }\n  }\n": typeof types.RenameChatDocument;
   "\n  query ThreadReplies($rootMessageId: ID!, $limit: Int) {\n    threadReplies(rootMessageId: $rootMessageId, limit: $limit) {\n      id\n      chatId\n      channelId\n      text\n      html\n      mentions\n      parentMessageId\n      replyCount\n      latestReplyAt\n      threadRepliers {\n        type\n        id\n        name\n        avatarUrl\n      }\n      actor {\n        type\n        id\n        name\n        avatarUrl\n      }\n      createdAt\n      updatedAt\n      editedAt\n      deletedAt\n    }\n  }\n": typeof types.ThreadRepliesDocument;
   "\n  query DesignArtifacts($sessionGroupId: ID!) {\n    designArtifacts(sessionGroupId: $sessionGroupId) {\n      id\n      sessionGroupId\n      parentArtifactId\n      prompt\n      title\n      contentType\n      html\n      metadata\n      publishedAt\n      createdAt\n      updatedAt\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n    }\n  }\n": typeof types.DesignArtifactsDocument;
-  "\n  mutation CreateDesignArtifact($sessionGroupId: ID!, $prompt: String!) {\n    createDesignArtifact(sessionGroupId: $sessionGroupId, prompt: $prompt) {\n      id\n      sessionGroupId\n      parentArtifactId\n      prompt\n      title\n      contentType\n      html\n      metadata\n      publishedAt\n      createdAt\n      updatedAt\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n    }\n  }\n": typeof types.CreateDesignArtifactDocument;
+  "\n  mutation IterateDesignArtifact($artifactId: ID!, $prompt: String!) {\n    iterateDesignArtifact(artifactId: $artifactId, prompt: $prompt) {\n      id\n    }\n  }\n": typeof types.IterateDesignArtifactDocument;
+  "\n  mutation PatchDesignArtifactTokens($artifactId: ID!, $tokens: JSON!) {\n    patchDesignArtifactTokens(artifactId: $artifactId, tokens: $tokens) {\n      id\n    }\n  }\n": typeof types.PatchDesignArtifactTokensDocument;
+  "\n  mutation PublishDesignArtifact($artifactId: ID!) {\n    publishDesignArtifact(artifactId: $artifactId) {\n      id\n      publishedAt\n    }\n  }\n": typeof types.PublishDesignArtifactDocument;
+  "\n  mutation ExportDesignArtifactPdf($artifactId: ID!) {\n    exportDesignArtifactPdf(artifactId: $artifactId) {\n      id\n    }\n  }\n": typeof types.ExportDesignArtifactPdfDocument;
+  "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!) {\n    promoteDesignArtifactToCodingSession(artifactId: $artifactId) {\n      id\n      sessionGroupId\n    }\n  }\n": typeof types.PromoteDesignArtifactToCodingSessionDocument;
   "\n  query SessionGroupBranchDiff($sessionGroupId: ID!) {\n    sessionGroupBranchDiff(sessionGroupId: $sessionGroupId) {\n      path\n      status\n      additions\n      deletions\n    }\n  }\n": typeof types.SessionGroupBranchDiffDocument;
   "\n  query SessionGroupWorktreeChanges($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      files {\n        path\n        status\n        additions\n        deletions\n        diff\n        truncated\n        originalContent\n        modifiedContent\n        contentTruncated\n      }\n      totalCount\n      truncated\n    }\n  }\n": typeof types.SessionGroupWorktreeChangesDocument;
   "\n  mutation RevertSessionGroupFileChange($sessionGroupId: ID!, $filePath: String!) {\n    revertSessionGroupFileChange(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n": typeof types.RevertSessionGroupFileChangeDocument;
@@ -120,8 +124,16 @@ const documents: Documents = {
     types.ThreadRepliesDocument,
   "\n  query DesignArtifacts($sessionGroupId: ID!) {\n    designArtifacts(sessionGroupId: $sessionGroupId) {\n      id\n      sessionGroupId\n      parentArtifactId\n      prompt\n      title\n      contentType\n      html\n      metadata\n      publishedAt\n      createdAt\n      updatedAt\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n    }\n  }\n":
     types.DesignArtifactsDocument,
-  "\n  mutation CreateDesignArtifact($sessionGroupId: ID!, $prompt: String!) {\n    createDesignArtifact(sessionGroupId: $sessionGroupId, prompt: $prompt) {\n      id\n      sessionGroupId\n      parentArtifactId\n      prompt\n      title\n      contentType\n      html\n      metadata\n      publishedAt\n      createdAt\n      updatedAt\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n    }\n  }\n":
-    types.CreateDesignArtifactDocument,
+  "\n  mutation IterateDesignArtifact($artifactId: ID!, $prompt: String!) {\n    iterateDesignArtifact(artifactId: $artifactId, prompt: $prompt) {\n      id\n    }\n  }\n":
+    types.IterateDesignArtifactDocument,
+  "\n  mutation PatchDesignArtifactTokens($artifactId: ID!, $tokens: JSON!) {\n    patchDesignArtifactTokens(artifactId: $artifactId, tokens: $tokens) {\n      id\n    }\n  }\n":
+    types.PatchDesignArtifactTokensDocument,
+  "\n  mutation PublishDesignArtifact($artifactId: ID!) {\n    publishDesignArtifact(artifactId: $artifactId) {\n      id\n      publishedAt\n    }\n  }\n":
+    types.PublishDesignArtifactDocument,
+  "\n  mutation ExportDesignArtifactPdf($artifactId: ID!) {\n    exportDesignArtifactPdf(artifactId: $artifactId) {\n      id\n    }\n  }\n":
+    types.ExportDesignArtifactPdfDocument,
+  "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!) {\n    promoteDesignArtifactToCodingSession(artifactId: $artifactId) {\n      id\n      sessionGroupId\n    }\n  }\n":
+    types.PromoteDesignArtifactToCodingSessionDocument,
   "\n  query SessionGroupBranchDiff($sessionGroupId: ID!) {\n    sessionGroupBranchDiff(sessionGroupId: $sessionGroupId) {\n      path\n      status\n      additions\n      deletions\n    }\n  }\n":
     types.SessionGroupBranchDiffDocument,
   "\n  query SessionGroupWorktreeChanges($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      files {\n        path\n        status\n        additions\n        deletions\n        diff\n        truncated\n        originalContent\n        modifiedContent\n        contentTruncated\n      }\n      totalCount\n      truncated\n    }\n  }\n":
@@ -348,8 +360,32 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  mutation CreateDesignArtifact($sessionGroupId: ID!, $prompt: String!) {\n    createDesignArtifact(sessionGroupId: $sessionGroupId, prompt: $prompt) {\n      id\n      sessionGroupId\n      parentArtifactId\n      prompt\n      title\n      contentType\n      html\n      metadata\n      publishedAt\n      createdAt\n      updatedAt\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n    }\n  }\n",
-): (typeof documents)["\n  mutation CreateDesignArtifact($sessionGroupId: ID!, $prompt: String!) {\n    createDesignArtifact(sessionGroupId: $sessionGroupId, prompt: $prompt) {\n      id\n      sessionGroupId\n      parentArtifactId\n      prompt\n      title\n      contentType\n      html\n      metadata\n      publishedAt\n      createdAt\n      updatedAt\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n    }\n  }\n"];
+  source: "\n  mutation IterateDesignArtifact($artifactId: ID!, $prompt: String!) {\n    iterateDesignArtifact(artifactId: $artifactId, prompt: $prompt) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation IterateDesignArtifact($artifactId: ID!, $prompt: String!) {\n    iterateDesignArtifact(artifactId: $artifactId, prompt: $prompt) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation PatchDesignArtifactTokens($artifactId: ID!, $tokens: JSON!) {\n    patchDesignArtifactTokens(artifactId: $artifactId, tokens: $tokens) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation PatchDesignArtifactTokens($artifactId: ID!, $tokens: JSON!) {\n    patchDesignArtifactTokens(artifactId: $artifactId, tokens: $tokens) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation PublishDesignArtifact($artifactId: ID!) {\n    publishDesignArtifact(artifactId: $artifactId) {\n      id\n      publishedAt\n    }\n  }\n",
+): (typeof documents)["\n  mutation PublishDesignArtifact($artifactId: ID!) {\n    publishDesignArtifact(artifactId: $artifactId) {\n      id\n      publishedAt\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation ExportDesignArtifactPdf($artifactId: ID!) {\n    exportDesignArtifactPdf(artifactId: $artifactId) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation ExportDesignArtifactPdf($artifactId: ID!) {\n    exportDesignArtifactPdf(artifactId: $artifactId) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!) {\n    promoteDesignArtifactToCodingSession(artifactId: $artifactId) {\n      id\n      sessionGroupId\n    }\n  }\n",
+): (typeof documents)["\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!) {\n    promoteDesignArtifactToCodingSession(artifactId: $artifactId) {\n      id\n      sessionGroupId\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

@@ -322,6 +322,9 @@ enum EventType {
   session_endpoint_traffic_capture_updated
   design_artifact_created
   design_artifact_updated
+  design_comment_added
+  design_export_completed
+  design_artifact_promoted
 }
 
 # --- Core Types ---
@@ -1351,7 +1354,11 @@ type Query {
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
   sessionApplicationProcesses(sessionGroupId: ID!): [SessionApplicationProcess!]!
-  sessionApplicationLogs(processId: ID!, limit: Int, beforeSequence: Int): [SessionApplicationLogEntry!]!
+  sessionApplicationLogs(
+    processId: ID!
+    limit: Int
+    beforeSequence: Int
+  ): [SessionApplicationLogEntry!]!
   sessionEndpoints(sessionGroupId: ID!): [SessionEndpoint!]!
   endpointTraffic(endpointId: ID!, limit: Int, before: DateTime): [EndpointTrafficEntry!]!
   searchUsers(query: String!): [User!]!
@@ -1436,6 +1443,11 @@ type Mutation {
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
   createDesignArtifact(sessionGroupId: ID!, prompt: String!, html: String): Artifact!
+  iterateDesignArtifact(artifactId: ID!, prompt: String!, html: String): Artifact!
+  patchDesignArtifactTokens(artifactId: ID!, tokens: JSON!): Artifact!
+  publishDesignArtifact(artifactId: ID!): Artifact!
+  exportDesignArtifactPdf(artifactId: ID!): Event!
+  promoteDesignArtifactToCodingSession(artifactId: ID!, prompt: String): Session!
   forkSession(eventId: ID!): Session!
   runSession(id: ID!, prompt: String, interactionMode: String): Session!
   terminateSession(id: ID!): Session!
@@ -1557,13 +1569,31 @@ type Mutation {
   runSessionGroupSetupScript(sessionGroupId: ID!, scriptId: ID!): Boolean!
   startSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
   stopSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
-  startSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
-  stopSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
-  restartSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
-  enableSessionEndpointForwarding(endpointId: ID!, accessMode: SessionEndpointAccessMode): SessionEndpoint!
+  startSessionProcess(
+    sessionGroupId: ID!
+    appConfigId: ID!
+    processConfigId: ID!
+  ): SessionApplicationProcess!
+  stopSessionProcess(
+    sessionGroupId: ID!
+    appConfigId: ID!
+    processConfigId: ID!
+  ): SessionApplicationProcess!
+  restartSessionProcess(
+    sessionGroupId: ID!
+    appConfigId: ID!
+    processConfigId: ID!
+  ): SessionApplicationProcess!
+  enableSessionEndpointForwarding(
+    endpointId: ID!
+    accessMode: SessionEndpointAccessMode
+  ): SessionEndpoint!
   disableSessionEndpointForwarding(endpointId: ID!): SessionEndpoint!
   rotateSessionEndpoint(endpointId: ID!): SessionEndpoint!
-  updateSessionEndpointTrafficCapture(endpointId: ID!, mode: EndpointTrafficCaptureMode!): SessionEndpoint!
+  updateSessionEndpointTrafficCapture(
+    endpointId: ID!
+    mode: EndpointTrafficCaptureMode!
+  ): SessionEndpoint!
   clearEndpointTraffic(endpointId: ID!): Boolean!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!

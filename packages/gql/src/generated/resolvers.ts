@@ -415,7 +415,10 @@ export type EventType =
   | "chat_member_removed"
   | "chat_renamed"
   | "design_artifact_created"
+  | "design_artifact_promoted"
   | "design_artifact_updated"
+  | "design_comment_added"
+  | "design_export_completed"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -648,7 +651,9 @@ export type Mutation = {
   editChannelMessage: Message;
   editChatMessage: Message;
   enableSessionEndpointForwarding: SessionEndpoint;
+  exportDesignArtifactPdf: Event;
   forkSession: Session;
+  iterateDesignArtifact: Artifact;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -659,6 +664,9 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  patchDesignArtifactTokens: Artifact;
+  promoteDesignArtifactToCodingSession: Session;
+  publishDesignArtifact: Artifact;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -896,8 +904,18 @@ export type MutationEnableSessionEndpointForwardingArgs = {
   endpointId: Scalars["ID"]["input"];
 };
 
+export type MutationExportDesignArtifactPdfArgs = {
+  artifactId: Scalars["ID"]["input"];
+};
+
 export type MutationForkSessionArgs = {
   eventId: Scalars["ID"]["input"];
+};
+
+export type MutationIterateDesignArtifactArgs = {
+  artifactId: Scalars["ID"]["input"];
+  html?: InputMaybe<Scalars["String"]["input"]>;
+  prompt: Scalars["String"]["input"];
 };
 
 export type MutationJoinChannelArgs = {
@@ -947,6 +965,20 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationPatchDesignArtifactTokensArgs = {
+  artifactId: Scalars["ID"]["input"];
+  tokens: Scalars["JSON"]["input"];
+};
+
+export type MutationPromoteDesignArtifactToCodingSessionArgs = {
+  artifactId: Scalars["ID"]["input"];
+  prompt?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type MutationPublishDesignArtifactArgs = {
+  artifactId: Scalars["ID"]["input"];
 };
 
 export type MutationQueueSessionMessageArgs = {
@@ -3349,11 +3381,23 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationEnableSessionEndpointForwardingArgs, "endpointId">
   >;
+  exportDesignArtifactPdf?: Resolver<
+    ResolversTypes["Event"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationExportDesignArtifactPdfArgs, "artifactId">
+  >;
   forkSession?: Resolver<
     ResolversTypes["Session"],
     ParentType,
     ContextType,
     RequireFields<MutationForkSessionArgs, "eventId">
+  >;
+  iterateDesignArtifact?: Resolver<
+    ResolversTypes["Artifact"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationIterateDesignArtifactArgs, "artifactId" | "prompt">
   >;
   joinChannel?: Resolver<
     ResolversTypes["Channel"],
@@ -3414,6 +3458,24 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationMuteScopeArgs, "scopeId" | "scopeType">
+  >;
+  patchDesignArtifactTokens?: Resolver<
+    ResolversTypes["Artifact"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationPatchDesignArtifactTokensArgs, "artifactId" | "tokens">
+  >;
+  promoteDesignArtifactToCodingSession?: Resolver<
+    ResolversTypes["Session"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationPromoteDesignArtifactToCodingSessionArgs, "artifactId">
+  >;
+  publishDesignArtifact?: Resolver<
+    ResolversTypes["Artifact"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationPublishDesignArtifactArgs, "artifactId">
   >;
   queueSessionMessage?: Resolver<
     ResolversTypes["QueuedMessage"],

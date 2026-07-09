@@ -63,6 +63,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     model,
     reasoningEffort,
     enableClaudeInChrome,
+    appendSystemPrompt,
     toolSessionId,
   }: RunOptions) {
     this.cwd = cwd;
@@ -75,14 +76,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       this.claudeSessionId = toolSessionId;
     }
 
-    const args = [
-      "-p",
-      "--input-format",
-      "text",
-      "--output-format",
-      "stream-json",
-      "--verbose",
-    ];
+    const args = ["-p", "--input-format", "text", "--output-format", "stream-json", "--verbose"];
     if (model) {
       args.push("--model", model);
     }
@@ -91,6 +85,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     }
     if (enableClaudeInChrome) {
       args.push("--chrome");
+    }
+    if (appendSystemPrompt?.trim()) {
+      args.push("--append-system-prompt", appendSystemPrompt);
     }
     if (interactionMode === "plan") {
       args.push("--permission-mode", "plan");

@@ -69,10 +69,7 @@ import {
   removeQueuedCheckpointFile,
   writeCheckpointContext,
 } from "./hook-runtime.js";
-import {
-  collectTrackedPrWorkspaces,
-  type TrackedSessionWorkspace,
-} from "./pr-tracking.js";
+import { collectTrackedPrWorkspaces, type TrackedSessionWorkspace } from "./pr-tracking.js";
 
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const HOOK_QUEUE_FLUSH_INTERVAL_MS = 2_000;
@@ -257,19 +254,15 @@ async function inspectLocalPrStatus(workdir: string): Promise<{
 
   let stdout: string;
   try {
-    ({ stdout } = await execFileAsync(
-      "gh",
-      ["pr", "view", "--json", "url,state"],
-      {
-        cwd: workdir,
-        env: {
-          ...process.env,
-          GH_PROMPT_DISABLED: "1",
-        },
-        maxBuffer: 1024 * 1024,
-        timeout: LOCAL_PR_POLL_TIMEOUT_MS,
+    ({ stdout } = await execFileAsync("gh", ["pr", "view", "--json", "url,state"], {
+      cwd: workdir,
+      env: {
+        ...process.env,
+        GH_PROMPT_DISABLED: "1",
       },
-    ));
+      maxBuffer: 1024 * 1024,
+      timeout: LOCAL_PR_POLL_TIMEOUT_MS,
+    }));
   } catch (error) {
     const message = extractExecErrorMessage(error);
     if (isNoPullRequestError(message)) {
@@ -836,7 +829,12 @@ export class BridgeClient implements IBridgeClient {
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             console.warn(`[bridge] failed to inspect local PR status for ${workdir}: ${message}`);
-            const branch = await maybeReadGitRef(workdir, ["symbolic-ref", "--short", "-q", "HEAD"]);
+            const branch = await maybeReadGitRef(workdir, [
+              "symbolic-ref",
+              "--short",
+              "-q",
+              "HEAD",
+            ]);
             for (const sessionId of sessionIds) {
               this.send({
                 type: "session_pr_status",
@@ -894,6 +892,7 @@ export class BridgeClient implements IBridgeClient {
     model,
     reasoningEffort,
     enableClaudeInChrome,
+    appendSystemPrompt,
     interactionMode,
     toolSessionId,
     checkpointContext,
@@ -906,6 +905,7 @@ export class BridgeClient implements IBridgeClient {
     model?: string;
     reasoningEffort?: string;
     enableClaudeInChrome?: boolean;
+    appendSystemPrompt?: string;
     interactionMode?: string;
     toolSessionId?: string;
     checkpointContext?: GitCheckpointContext | null;
@@ -1008,6 +1008,7 @@ export class BridgeClient implements IBridgeClient {
         interactionMode,
         checkpointContext,
         imageUrls,
+        appendSystemPrompt,
       });
       return true;
     };
@@ -1100,6 +1101,7 @@ export class BridgeClient implements IBridgeClient {
       model,
       reasoningEffort,
       enableClaudeInChrome,
+      appendSystemPrompt,
       toolSessionId,
     });
   }
@@ -1115,6 +1117,7 @@ export class BridgeClient implements IBridgeClient {
           model: cmd.model,
           reasoningEffort: cmd.reasoningEffort,
           enableClaudeInChrome: cmd.enableClaudeInChrome,
+          appendSystemPrompt: cmd.appendSystemPrompt,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
@@ -1131,6 +1134,7 @@ export class BridgeClient implements IBridgeClient {
           model: cmd.model,
           reasoningEffort: cmd.reasoningEffort,
           enableClaudeInChrome: cmd.enableClaudeInChrome,
+          appendSystemPrompt: cmd.appendSystemPrompt,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,

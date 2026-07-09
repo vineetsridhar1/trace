@@ -323,6 +323,70 @@ export const sessionMutations = {
       actorType: ctx.actorType,
     });
   },
+  iterateDesignArtifact: (
+    _: unknown,
+    args: { artifactId: string; prompt: string; html?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.iterateDesignArtifact({
+      artifactId: args.artifactId,
+      prompt: args.prompt,
+      html: args.html ?? null,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  patchDesignArtifactTokens: (
+    _: unknown,
+    args: { artifactId: string; tokens: unknown },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    if (!args.tokens || typeof args.tokens !== "object" || Array.isArray(args.tokens)) {
+      throw new Error("tokens must be an object");
+    }
+    return artifactService.patchDesignArtifactTokens({
+      artifactId: args.artifactId,
+      tokens: args.tokens as Record<string, unknown>,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  publishDesignArtifact: (_: unknown, args: { artifactId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.publishDesignArtifact({
+      artifactId: args.artifactId,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  exportDesignArtifactPdf: (_: unknown, args: { artifactId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.exportDesignArtifactPdf({
+      artifactId: args.artifactId,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  promoteDesignArtifactToCodingSession: (
+    _: unknown,
+    args: { artifactId: string; prompt?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.promoteDesignArtifactToCodingSession({
+      artifactId: args.artifactId,
+      prompt: args.prompt ?? null,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
   forkSession: (_: unknown, args: { eventId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     if (!ctx.userId) throw new AuthenticationError();

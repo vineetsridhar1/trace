@@ -341,6 +341,7 @@ export class ContainerBridge implements IBridgeClient {
           model: cmd.model,
           reasoningEffort: cmd.reasoningEffort,
           enableClaudeInChrome: cmd.enableClaudeInChrome,
+          appendSystemPrompt: cmd.appendSystemPrompt,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           imageUrls: cmd.imageUrls,
@@ -812,6 +813,7 @@ export class ContainerBridge implements IBridgeClient {
     model,
     reasoningEffort,
     enableClaudeInChrome,
+    appendSystemPrompt,
     interactionMode,
     toolSessionId,
     imageUrls,
@@ -823,6 +825,7 @@ export class ContainerBridge implements IBridgeClient {
     model?: string;
     reasoningEffort?: string;
     enableClaudeInChrome?: boolean;
+    appendSystemPrompt?: string;
     interactionMode?: string;
     toolSessionId?: string;
     imageUrls?: string[];
@@ -907,6 +910,7 @@ export class ContainerBridge implements IBridgeClient {
         message,
         interactionMode,
         imageUrls,
+        appendSystemPrompt,
       });
       return true;
     };
@@ -999,6 +1003,7 @@ export class ContainerBridge implements IBridgeClient {
       model,
       reasoningEffort,
       enableClaudeInChrome,
+      appendSystemPrompt,
       toolSessionId,
     });
   }
