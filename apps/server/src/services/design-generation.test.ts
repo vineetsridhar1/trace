@@ -12,16 +12,27 @@ vi.mock("./event.js", () => ({
   },
 }));
 
+vi.mock("../lib/db.js", async () => {
+  const { createPrismaMock } = await import("../../test/helpers.js");
+  return { prisma: createPrismaMock() };
+});
+
+import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
 import { eventService } from "./event.js";
 import { designGenerationService } from "./design-generation.js";
 
 const aiServiceMock = aiService as any;
 const eventServiceMock = eventService as any;
+const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 
 describe("designGenerationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.sessionGroup.findFirst.mockResolvedValue({
+      designSystemId: "trace-core",
+      designSkillIds: ["dashboard", "a11y"],
+    });
   });
 
   it("streams HTML through the LLM adapter and records generation metadata", async () => {
@@ -69,8 +80,19 @@ describe("designGenerationService", () => {
     expect(aiServiceMock.stream).toHaveBeenCalledWith(
       expect.objectContaining({
         system: expect.stringContaining("origin-isolated user-content iframe"),
+        messages: [
+          {
+            role: "user",
+            content: "Design a dashboard",
+          },
+        ],
       }),
     );
+    const streamInput = aiServiceMock.stream.mock.calls[0]?.[0] as { system?: string } | undefined;
+    expect(streamInput?.system).toContain("Open Design System Prompt");
+    expect(streamInput?.system).toContain("Design a dashboard");
+    expect(streamInput?.system).toContain("trace-core");
+    expect(streamInput?.system).toContain("- dashboard");
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "design_generation_started",

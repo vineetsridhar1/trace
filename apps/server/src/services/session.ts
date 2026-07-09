@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
+  composeTraceDesignPrompt,
   hasQuestionBlock,
   hasPlanBlock,
   isSupportedModel,
@@ -561,6 +562,8 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   archivedAt: true,
   setupStatus: true,
   setupError: true,
+  designSystemId: true,
+  designSkillIds: true,
   forkedFromSessionGroupId: true,
   createdAt: true,
   updatedAt: true,
@@ -896,20 +899,28 @@ Do this silently — do not mention it to the user unless they ask or it fails.
 If the user asks you to stop auto-saving or disable auto-save, stop doing this for the rest of the session.
 </system-instruction>`;
 
-const APP_SESSION_SYSTEM_PROMPT = `You are building a standalone Trace app session.
+function normalizeOptionalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
 
-The cloud workspace starts from the Trace app starter: Next.js app router, Tailwind CSS, shadcn-compatible primitives, pnpm scripts, and Trace app metadata. Use that starter as the default target unless the user explicitly asks for another stack.
+function normalizeStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        .map((item) => item.trim())
+    : [];
+}
 
-Requirements:
-- Build a working application, not a static mock or landing page.
-- Run pnpm install before first use if dependencies are missing.
-- Run pnpm build or an equivalent verification before declaring the app done.
-- Start the preview with pnpm dev --hostname 0.0.0.0 so Trace can detect port 3000.
-- Keep the dev server running so Trace can detect the preview port.
-- Stamp interactive UI with data-trace-source="path:line" when practical so element picking can map preview elements back to code.
-- Use Tailwind tokens and shadcn components for UI primitives.
-- Create meaningful git commits as app milestones; Trace creates the managed remote lazily on the first checkpoint and pushes your HEAD there.
-- Treat publish/share as exposing the running app endpoint, not generating a design artifact.`;
+function designHarnessSettings(input: {
+  designSystemId?: unknown;
+  designSkillIds?: unknown;
+  skillIds?: unknown;
+}) {
+  return {
+    designSystemId: normalizeOptionalString(input.designSystemId),
+    designSkillIds: normalizeStringList(input.designSkillIds ?? input.skillIds),
+  };
+}
 
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
@@ -927,7 +938,20 @@ function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolea
 function appendSystemPromptForSession(session: { sessionGroup?: unknown }): string | undefined {
   const group = session.sessionGroup;
   if (!group || typeof group !== "object" || Array.isArray(group)) return undefined;
-  return (group as { kind?: string | null }).kind === "app" ? APP_SESSION_SYSTEM_PROMPT : undefined;
+  const typedGroup = group as {
+    kind?: string | null;
+    designSystemId?: string | null;
+    designSkillIds?: string[] | null;
+  };
+  return typedGroup.kind === "app"
+    ? composeTraceDesignPrompt({
+        kind: "app",
+        designSystemId: typedGroup.designSystemId ?? null,
+        skillIds: typedGroup.designSkillIds ?? [],
+        appStarterContext:
+          "Next.js App Router, Tailwind CSS, shadcn-compatible primitives, pnpm scripts, default port 3000, managed git checkpoints, endpoint publish/share.",
+      })
+    : undefined;
 }
 
 function buildBaseBranchInstruction(baseBranch: string): string {
@@ -2942,6 +2966,7 @@ export class SessionService {
       : input.prompt
         ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
         : "Untitled design";
+    const harnessSettings = designHarnessSettings(input);
     const now = new Date();
 
     let startEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
@@ -2958,6 +2983,8 @@ export class SessionService {
           visibility,
           channelId: resolvedChannelId,
           connection: Prisma.JsonNull,
+          designSystemId: harnessSettings.designSystemId ?? undefined,
+          designSkillIds: harnessSettings.designSkillIds,
         },
         select: SESSION_GROUP_SUMMARY_SELECT,
       });
@@ -3641,6 +3668,7 @@ export class SessionService {
       needsRuntimeProvisioning &&
       !!input.prompt &&
       (deferRuntimeSelection || !selectedRuntimeAccessAllowed);
+    const harnessSettings = designHarnessSettings(input);
     const initialConnection = sharedConnection
       ? sharedConnection
       : connJson(
@@ -3676,6 +3704,12 @@ export class SessionService {
             if (existingGroup.branch == null && resolvedBranch !== undefined) {
               nextGroupData.branch = resolvedBranch;
             }
+            if (input.designSystemId !== undefined) {
+              nextGroupData.designSystemId = harnessSettings.designSystemId;
+            }
+            if (input.designSkillIds !== undefined) {
+              nextGroupData.designSkillIds = harnessSettings.designSkillIds;
+            }
             if (Object.keys(nextGroupData).length === 0) {
               return existingGroup;
             }
@@ -3697,6 +3731,8 @@ export class SessionService {
               repoId: resolvedRepoId ?? undefined,
               branch: resolvedBranch ?? undefined,
               connection: initialConnection,
+              designSystemId: harnessSettings.designSystemId ?? undefined,
+              designSkillIds: harnessSettings.designSkillIds,
             },
             select: SESSION_GROUP_SUMMARY_SELECT,
           });

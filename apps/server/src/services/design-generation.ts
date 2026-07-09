@@ -5,6 +5,7 @@ import { aiService } from "./ai.js";
 import { eventService } from "./event.js";
 import { buildPlaceholderDesignArtifactHtml } from "./design-artifact-html.js";
 import type { ActorType } from "@trace/gql";
+import { prisma } from "../lib/db.js";
 
 const DEFAULT_DESIGN_MODEL = getDefaultModel("claude_code") ?? "anthropic/claude-sonnet-5";
 
@@ -47,6 +48,12 @@ export type GeneratedDesignArtifact = {
   metadata: Record<string, unknown>;
 };
 
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
 export const designGenerationService = {
   async generateHtml(input: {
     organizationId: string;
@@ -62,9 +69,21 @@ export const designGenerationService = {
     directionIndex?: number | null;
     directionCount?: number | null;
     directionLabel?: string | null;
+    elementAnchors?: Array<Record<string, unknown>> | null;
   }): Promise<GeneratedDesignArtifact> {
     const model = input.model ?? DEFAULT_DESIGN_MODEL;
     const generationId = input.generationId ?? randomUUID();
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: input.sessionGroupId, organizationId: input.organizationId },
+      select: { designSystemId: true, designSkillIds: true },
+    });
+    const designSystemId = group?.designSystemId ?? null;
+    const skillIds = stringList(group?.designSkillIds);
+    const artifactContext = input.parentHtml
+      ? `Previous artifact HTML:\n${input.parentHtml}`
+      : input.directionLabel
+        ? `Generate design direction: ${input.directionLabel}.`
+        : null;
     const streamPayloadBase = {
       generationId,
       sessionGroupId: input.sessionGroupId,
@@ -95,18 +114,19 @@ export const designGenerationService = {
         userId: input.actorId,
         model,
         system: composeTraceDesignPrompt({
-          parentHtml: input.parentHtml,
+          kind: "design",
+          userBrief: input.prompt,
+          designSystemId,
+          skillIds,
+          artifactContext,
+          elementAnchors: input.elementAnchors ?? null,
         }),
         maxTokens: 8192,
         temperature: 0.8,
         messages: [
           {
             role: "user",
-            content: [
-              input.parentHtml
-                ? `Brief:\n${input.prompt}\n\nPrevious artifact HTML:\n${input.parentHtml}`
-                : input.prompt,
-            ].join("\n"),
+            content: input.prompt,
           },
         ],
       })) {
@@ -142,6 +162,8 @@ export const designGenerationService = {
             promptComposer: "trace-open-design-v1",
             generationId,
             model,
+            designSystemId,
+            skillIds,
             fallbackReason: "missing_api_key",
           },
         };
@@ -189,6 +211,8 @@ export const designGenerationService = {
         promptComposer: "trace-open-design-v1",
         generationId,
         model: response?.model ?? model,
+        designSystemId,
+        skillIds,
         usage: response?.usage ?? null,
       },
     };

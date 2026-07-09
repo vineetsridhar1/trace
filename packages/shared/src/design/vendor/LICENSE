@@ -1,0 +1,5 @@
+Open Design prompt composer extraction
+
+The production integration is designed to vendor Apache-2.0 prompt-composer code from
+open-design. This directory preserves the intended vendor boundary for rebases while the
+Trace overlay stays outside the vendor module.

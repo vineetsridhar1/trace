@@ -395,6 +395,7 @@ export const artifactService = {
     actorType?: ActorType;
     prompt: string;
     html?: string | null;
+    elementAnchors?: Array<Record<string, unknown>> | null;
   }) {
     const { artifact: parent, sessionId } = await getDesignArtifactForWrite(
       input.artifactId,
@@ -413,6 +414,7 @@ export const artifactService = {
           prompt: input.prompt,
           parentArtifactId: parent.id,
           parentHtml: parent.html,
+          elementAnchors: input.elementAnchors ?? null,
         });
     const title = input.prompt.trim().slice(0, 120) || parent.title;
     const artifact = await prisma.artifact.create({
@@ -671,6 +673,7 @@ export const artifactService = {
           anchor: input.anchor,
           originalPrompt: artifact.prompt,
         }),
+        elementAnchors: input.anchor ? [input.anchor] : null,
       });
     }
 

@@ -538,6 +538,8 @@ model SessionGroup {
   archivedAt      DateTime?
   setupStatus     String      @default("idle")
   setupError      String?
+  designSystemId  String?
+  designSkillIds  String[]    @default([])
 
   sessions Session[]
   gitCheckpoints GitCheckpoint[]

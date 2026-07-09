@@ -2005,6 +2005,8 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  designSkillIds: Array<Scalars["String"]["output"]>;
+  designSystemId?: Maybe<Scalars["String"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
@@ -2155,6 +2157,8 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  designSkillIds?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  designSystemId?: InputMaybe<Scalars["String"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;

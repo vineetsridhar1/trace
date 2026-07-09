@@ -511,6 +511,8 @@ type SessionGroup {
   archivedAt: DateTime
   setupStatus: SetupStatus!
   setupError: String
+  designSystemId: String
+  designSkillIds: [String!]!
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -1098,6 +1100,8 @@ input StartSessionInput {
   projectId: ID
   prompt: String
   interactionMode: String
+  designSystemId: String
+  designSkillIds: [String!]
 }
 
 input UpdateSessionDefaultsInput {
