@@ -2700,7 +2700,7 @@ describe("SessionService", () => {
       );
     });
 
-    it("creates and pushes a managed repo for the first app checkpoint", async () => {
+    it("creates and pushes a managed repo before recording the first app checkpoint", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce({
         id: "session-1",
         organizationId: "org-1",
@@ -2716,16 +2716,8 @@ describe("SessionService", () => {
           branch: null,
         },
       });
-      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(null);
-      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "prompt-1" });
-      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(
-        makeGitCheckpoint({
-          repoId: "repo-managed-1",
-          promptEventId: "prompt-1",
-        }),
-      );
 
-      const result = await service.recordGitCheckpoint("session-1", {
+      const checkpoint = {
         trigger: "commit",
         command: "git commit -m 'checkpoint'",
         observedAt: "2024-01-02T00:00:02.000Z",
@@ -2736,14 +2728,10 @@ describe("SessionService", () => {
         author: "Test User <test@example.com>",
         committedAt: "2024-01-02T00:00:00.000Z",
         filesChanged: 3,
-      });
+      } as const;
+      const result = await service.recordGitCheckpoint("session-1", checkpoint);
 
-      expect(result).toEqual(
-        makeGitCheckpoint({
-          repoId: "repo-managed-1",
-          promptEventId: "prompt-1",
-        }),
-      );
+      expect(result).toBeNull();
       expect(managedGitServiceMock.createAppRepo).toHaveBeenCalledWith({
         organizationId: "org-1",
         name: "App builder",
@@ -2756,12 +2744,8 @@ describe("SessionService", () => {
         where: { id: "session-1" },
         data: { repoId: "repo-managed-1", branch: "main" },
       });
-      expect(prismaMock.gitCheckpoint.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          repoId: "repo-managed-1",
-          sessionGroupId: "group-1",
-        }),
-      });
+      expect(prismaMock.gitCheckpoint.create).not.toHaveBeenCalled();
+      expect(prismaMock.event.findFirst).not.toHaveBeenCalled();
       expect(sessionRouterMock.send).toHaveBeenCalledWith("session-1", {
         type: "configure_managed_git_remote",
         sessionId: "session-1",
@@ -2770,7 +2754,13 @@ describe("SessionService", () => {
         repoRemoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
         branch: "main",
         workdir: "/home/coder",
+        checkpoint,
       });
+      expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ type: "git_checkpoint" }),
+        }),
+      );
     });
 
     it("deduplicates checkpoints by session group and commit sha", async () => {

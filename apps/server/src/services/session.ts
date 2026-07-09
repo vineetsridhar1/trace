@@ -7080,6 +7080,34 @@ export class SessionService {
           },
         }),
       ]);
+
+      const branch = session.branch ?? session.sessionGroup.branch ?? managedRepo.defaultBranch;
+      const deliveryResult = sessionRouter.send(sessionId, {
+        type: "configure_managed_git_remote",
+        sessionId,
+        repoId: managedRepo.id,
+        repoName: managedRepo.name,
+        repoRemoteUrl: managedRepo.remoteUrl,
+        branch,
+        workdir: session.workdir ?? undefined,
+        checkpoint,
+      });
+      if (deliveryResult !== "delivered") {
+        await eventService.create({
+          organizationId: session.organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "managed_git_remote_push_failed",
+            repoId: managedRepo.id,
+            reason: deliveryResult,
+          } as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        });
+      }
+      return null;
     }
 
     if (!repoId) return;
@@ -7166,35 +7194,6 @@ export class SessionService {
         actorType: "system",
         actorId: "system",
       });
-
-      if (managedRepo) {
-        const branch =
-          session.branch ?? session.sessionGroup?.branch ?? managedGitService.defaultBranch;
-        const deliveryResult = sessionRouter.send(sessionId, {
-          type: "configure_managed_git_remote",
-          sessionId,
-          repoId: managedRepo.id,
-          repoName: managedRepo.name,
-          repoRemoteUrl: managedRepo.remoteUrl,
-          branch,
-          workdir: session.workdir ?? undefined,
-        });
-        if (deliveryResult !== "delivered") {
-          await eventService.create({
-            organizationId: session.organizationId,
-            scopeType: "session",
-            scopeId: sessionId,
-            eventType: "session_output",
-            payload: {
-              type: "managed_git_remote_push_failed",
-              repoId: managedRepo.id,
-              reason: deliveryResult,
-            } as Prisma.InputJsonValue,
-            actorType: "system",
-            actorId: "system",
-          });
-        }
-      }
     }
 
     if (rewrittenCheckpoint && rewrittenCheckpoint.id !== persisted.id) {

@@ -462,6 +462,12 @@ export class ContainerBridge implements IBridgeClient {
           .then(() => {
             this.send({ type: "repo_linked", repoId: cmd.repoId });
             this.send({
+              type: "managed_git_remote_configured",
+              sessionId: cmd.sessionId,
+              repoId: cmd.repoId,
+              checkpoint: cmd.checkpoint,
+            });
+            this.send({
               type: "session_output",
               sessionId: cmd.sessionId,
               data: {

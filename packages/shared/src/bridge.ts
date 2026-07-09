@@ -79,6 +79,7 @@ export interface BridgeConfigureManagedGitRemoteCommand {
   repoRemoteUrl: string;
   branch: string;
   workdir?: string;
+  checkpoint?: GitCheckpointBridgePayload;
 }
 
 export interface BridgeBootstrapAppWorkspaceCommand {
@@ -501,6 +502,13 @@ export interface BridgeGitCheckpoint {
   checkpoint: GitCheckpointBridgePayload;
 }
 
+export interface BridgeManagedGitRemoteConfigured {
+  type: "managed_git_remote_configured";
+  sessionId: string;
+  repoId: string;
+  checkpoint?: GitCheckpointBridgePayload;
+}
+
 /** Sent when a device bridge links a new repo (e.g. via saveRepoPath). Updates server-side registeredRepoIds. */
 export interface BridgeRepoLinked {
   type: "repo_linked";
@@ -819,6 +827,7 @@ export type BridgeMessage =
   | BridgeToolSessionId
   | BridgeToolSessionMissing
   | BridgeGitCheckpoint
+  | BridgeManagedGitRemoteConfigured
   | BridgeRepoLinked
   | BridgeLinkedCheckoutStatusResult
   | BridgeLinkedCheckoutChangedFileResult
