@@ -258,6 +258,21 @@ async function assertUrlRenders(url, label) {
   }
 }
 
+async function assertPdfDownload(url, label) {
+  const response = await fetch(url, { redirect: "follow" });
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!response.ok) {
+    throw new Error(`${label} returned HTTP ${response.status}`);
+  }
+  if (bytes.byteLength === 0) {
+    throw new Error(`${label} returned an empty file`);
+  }
+  const header = new TextDecoder().decode(bytes.slice(0, 5));
+  if (header !== "%PDF-") {
+    throw new Error(`${label} did not return a PDF`);
+  }
+}
+
 process.stdout.write("Starting fresh design session smoke...\n");
 const startData = await graphql(START_DESIGN_SESSION, {
   input: {
@@ -341,6 +356,7 @@ if (typeof exportPayload.fileUrl !== "string" || !exportPayload.fileUrl.trim()) 
 if (typeof exportPayload.byteSize !== "number" || exportPayload.byteSize <= 0) {
   throw new Error("PDF export byteSize is missing or empty");
 }
+await assertPdfDownload(exportPayload.fileUrl, "PDF export URL");
 
 const publishData = await graphql(PUBLISH_DESIGN_ARTIFACT, { artifactId: tweaked.id });
 const published = publishData.publishDesignArtifact;

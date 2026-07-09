@@ -304,6 +304,23 @@ async function renderUrl(url, label, options = {}) {
   }
 }
 
+async function assertImageDownload(url, label) {
+  const response = await fetch(url, { redirect: "follow" });
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!response.ok) {
+    throw new Error(`${label} returned HTTP ${response.status}`);
+  }
+  if (bytes.byteLength === 0) {
+    throw new Error(`${label} returned an empty file`);
+  }
+  const contentType = response.headers.get("content-type") ?? "";
+  const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (!contentType.startsWith("image/") && !png && !jpeg) {
+    throw new Error(`${label} did not return image bytes`);
+  }
+}
+
 async function createPreviewUrl(endpointId) {
   const data = await graphql(CREATE_PREVIEW, { endpointId });
   return data.createSessionEndpointPreview.url;
@@ -355,6 +372,9 @@ if (session.sessionGroup?.repo) {
 }
 
 const initial = await waitForReadyApp(session.sessionGroupId, "initial");
+if (requireCapture) {
+  await assertImageDownload(initial.checkpoint.captureUrl, "checkpoint capture URL");
+}
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
 await renderUrl(previewUrl, "private preview URL", { requireFetch: false });
 

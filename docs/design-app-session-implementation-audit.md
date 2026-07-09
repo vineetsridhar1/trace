@@ -294,3 +294,8 @@ During this continuation, the verification plan had an executable cloud app smok
 design acceptance path was still only manual. `pnpm smoke:design-session` now exercises a
 hosted design session across serverless start, artifact generation, fan-out, comments,
 token tweaks, PDF export, publish, browser rendering, and promotion into coding.
+
+During this continuation, the hosted smokes were tightened so generated file artifacts are
+fetched, not just checked by metadata. The design smoke downloads the exported PDF and
+asserts PDF bytes, and the cloud app smoke downloads the checkpoint capture image when
+capture verification is required.

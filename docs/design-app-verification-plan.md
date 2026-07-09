@@ -112,9 +112,10 @@ pnpm smoke:design-session
 The smoke starts a fresh `design` session and asserts it begins without a repo or runtime
 connection, waits for the initial LLM-generated artifact, generates three sibling
 directions, adds an anchored comment, creates a token-tweak child artifact, exports a
-non-empty PDF, publishes the artifact, opens the published URL in a clean browser, and
-promotes the tweaked artifact into a linked coding session. `TRACE_SMOKE_SKIP_BROWSER=1`
-may be used only for debugging, not final acceptance.
+non-empty PDF and downloads it from the export URL, publishes the artifact, opens the
+published URL in a clean browser, and promotes the tweaked artifact into a linked coding
+session. `TRACE_SMOKE_SKIP_BROWSER=1` may be used only for debugging, not final
+acceptance.
 
 ## Cloud App Smoke Command
 
@@ -129,12 +130,12 @@ pnpm smoke:cloud-app-session
 
 The smoke starts a fresh `app` session and asserts it begins without a repo, waits for the
 cloud runtime, process logs, enabled endpoint, managed-git checkpoint, managed repo link,
-and checkpoint capture, opens the private preview URL in a real browser, publishes the
-endpoint, opens the public URL unauthenticated, restores the checkpoint into a fresh app
-session, verifies that restore is backed by the managed repo, and opens the restored
-preview. It is strict by default: Chrome/Chromium and checkpoint capture are required.
-`TRACE_SMOKE_SKIP_BROWSER=1` or `TRACE_SMOKE_REQUIRE_CAPTURE=0` may be used only for
-debugging, not final acceptance.
+and checkpoint capture, downloads the capture image, opens the private preview URL in a
+real browser, publishes the endpoint, opens the public URL unauthenticated, restores the
+checkpoint into a fresh app session, verifies that restore is backed by the managed repo,
+and opens the restored preview. It is strict by default: Chrome/Chromium and checkpoint
+capture are required. `TRACE_SMOKE_SKIP_BROWSER=1` or `TRACE_SMOKE_REQUIRE_CAPTURE=0` may
+be used only for debugging, not final acceptance.
 
 ## Completion Gate
 
