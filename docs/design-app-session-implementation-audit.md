@@ -903,3 +903,9 @@ preview URLs and the published public URL, but did not directly prove the raw en
 host was private before publish. It now fetches the initial and restored endpoint URLs
 before minting preview credentials, requires an auth rejection, and verifies neither app
 HTML nor authoring overlay/source stamps leak from the unauthenticated endpoint.
+
+During this audit continuation, the hosted cloud app smoke proved managed-git clone and
+`ls-remote` reachability, but only checked that a user clone credential had an expiry. It
+now also requires the public remote URL to be uncredentialed and repo-scoped, the
+credentialed URL to differ while staying scoped to the same managed repo, and the expiry
+to be future-dated but no more than the short-lived ten-minute token window.

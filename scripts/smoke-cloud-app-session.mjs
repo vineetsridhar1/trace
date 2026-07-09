@@ -672,8 +672,25 @@ async function assertManagedGitCheckpointReachable(repoId, commitSha, sessionId)
       `Managed git remote URL is not scoped to the app repo: ${credential.remoteUrl}`,
     );
   }
+  if (credential.remoteUrl.includes("@") || credential.remoteUrl.includes("x-token:")) {
+    throw new Error("Managed git remote URL leaked credential material");
+  }
+  if (credential.credentialedRemoteUrl === credential.remoteUrl) {
+    throw new Error("Managed git credentialed remote URL did not include credentials");
+  }
+  if (!credential.credentialedRemoteUrl.includes(`/git/${organizationId}/${repoId}.git`)) {
+    throw new Error("Managed git credentialed remote URL is not scoped to the app repo");
+  }
   if (!credential.expiresAt) {
     throw new Error("Managed git credential did not include an expiry");
+  }
+  const expiresAtMs = Date.parse(credential.expiresAt);
+  const nowMs = Date.now();
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
+    throw new Error(`Managed git credential expiry is not in the future: ${credential.expiresAt}`);
+  }
+  if (expiresAtMs - nowMs > 10 * 60 * 1000 + 30_000) {
+    throw new Error(`Managed git credential expiry is not short-lived: ${credential.expiresAt}`);
   }
 
   let stdout = "";
