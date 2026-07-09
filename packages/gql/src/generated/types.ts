@@ -352,6 +352,26 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignPromptContentCatalog = {
+  __typename?: "DesignPromptContentCatalog";
+  designSystems: Array<DesignSystemOption>;
+  skills: Array<DesignSkillOption>;
+};
+
+export type DesignSkillOption = {
+  __typename?: "DesignSkillOption";
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  title?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type DesignSystemOption = {
+  __typename?: "DesignSystemOption";
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  name?: Maybe<Scalars["String"]["output"]>;
+};
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -1421,6 +1441,7 @@ export type Query = {
   chatMessages: Array<Message>;
   chats: Array<Chat>;
   designArtifacts: Array<Artifact>;
+  designPromptContentCatalog: DesignPromptContentCatalog;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;

@@ -543,6 +543,23 @@ type Artifact {
   updatedAt: DateTime!
 }
 
+type DesignPromptContentCatalog {
+  designSystems: [DesignSystemOption!]!
+  skills: [DesignSkillOption!]!
+}
+
+type DesignSystemOption {
+  id: ID!
+  name: String
+  description: String
+}
+
+type DesignSkillOption {
+  id: ID!
+  title: String
+  description: String
+}
+
 type Session {
   id: ID!
   name: String!
@@ -1303,6 +1320,7 @@ type Query {
   ): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   designArtifacts(sessionGroupId: ID!): [Artifact!]!
+  designPromptContentCatalog: DesignPromptContentCatalog!
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
   mySessions(

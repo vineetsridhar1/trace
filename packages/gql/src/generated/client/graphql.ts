@@ -354,6 +354,26 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignPromptContentCatalog = {
+  __typename?: "DesignPromptContentCatalog";
+  designSystems: Array<DesignSystemOption>;
+  skills: Array<DesignSkillOption>;
+};
+
+export type DesignSkillOption = {
+  __typename?: "DesignSkillOption";
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  title?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type DesignSystemOption = {
+  __typename?: "DesignSystemOption";
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  name?: Maybe<Scalars["String"]["output"]>;
+};
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -1423,6 +1443,7 @@ export type Query = {
   chatMessages: Array<Message>;
   chats: Array<Chat>;
   designArtifacts: Array<Artifact>;
+  designPromptContentCatalog: DesignPromptContentCatalog;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
@@ -3291,6 +3312,16 @@ export type PublishAppSessionMutation = {
     url: string;
     accessMode: SessionEndpointAccessMode;
   };
+};
+
+export type PatchAppSessionTokensMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  tokens: Scalars["JSON"]["input"];
+}>;
+
+export type PatchAppSessionTokensMutation = {
+  __typename?: "Mutation";
+  patchAppSessionTokens: { __typename?: "Event"; id: string };
 };
 
 export type CreateSessionEndpointPreviewMutationVariables = Exact<{
@@ -7293,6 +7324,59 @@ export const PublishAppSessionDocument = {
     },
   ],
 } as unknown as DocumentNode<PublishAppSessionMutation, PublishAppSessionMutationVariables>;
+export const PatchAppSessionTokensDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PatchAppSessionTokens" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "tokens" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "JSON" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "patchAppSessionTokens" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "tokens" },
+                value: { kind: "Variable", name: { kind: "Name", value: "tokens" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<PatchAppSessionTokensMutation, PatchAppSessionTokensMutationVariables>;
 export const CreateSessionEndpointPreviewDocument = {
   kind: "Document",
   definitions: [

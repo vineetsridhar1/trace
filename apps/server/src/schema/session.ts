@@ -9,6 +9,7 @@ import type {
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
 import { artifactService } from "../services/artifact.js";
+import { listTraceDesignPromptContent } from "../services/design-content.js";
 import { buildDesignArtifactPublicUrl } from "../services/design-artifact-serving.js";
 import { resolveDesignArtifactHtml } from "../services/design-artifact-storage.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -51,6 +52,10 @@ export const sessionQueries = {
       requireOrgContext(ctx),
       ctx.userId,
     );
+  },
+  designPromptContentCatalog: (_: unknown, _args: unknown, ctx: Context) => {
+    requireOrgContext(ctx);
+    return listTraceDesignPromptContent();
   },
   sessions: (
     _: unknown,

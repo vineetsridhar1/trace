@@ -24,6 +24,8 @@ Implemented:
   `design` and `app` session kinds.
 - `TRACE_DESIGN_CONTENT_DIRS` loads upstream-shaped design-system and skill content for
   prompt composition.
+- The same content roots expose a GraphQL-backed design prompt content catalog so clients
+  can populate design-system and skill pickers from configured Open Design content.
 - `startSession(kind: design)` creates a serverless design group without runtime
   provisioning.
 - Initial and fan-out artifact generation call the LLM-backed design generation service.
@@ -259,3 +261,9 @@ During this continuation, design groups already forced the sidebars closed but s
 rendered an inactive right-sidebar toggle in the header. The header now receives an
 explicit `canShowSidebar` flag and design mode disables that chrome alongside the
 applications toggle and tab strip.
+
+During this continuation, design harness settings existed on session creation but clients
+had no API to discover valid configured design-system or skill IDs. The server now exposes
+`designPromptContentCatalog` from the same `TRACE_DESIGN_CONTENT_DIRS` roots used for
+prompt composition, with service coverage for upstream-shaped catalog discovery and
+de-duplication across roots.

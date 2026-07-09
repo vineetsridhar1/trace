@@ -355,6 +355,26 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignPromptContentCatalog = {
+  __typename?: "DesignPromptContentCatalog";
+  designSystems: Array<DesignSystemOption>;
+  skills: Array<DesignSkillOption>;
+};
+
+export type DesignSkillOption = {
+  __typename?: "DesignSkillOption";
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  title?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type DesignSystemOption = {
+  __typename?: "DesignSystemOption";
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  name?: Maybe<Scalars["String"]["output"]>;
+};
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -1424,6 +1444,7 @@ export type Query = {
   chatMessages: Array<Message>;
   chats: Array<Chat>;
   designArtifacts: Array<Artifact>;
+  designPromptContentCatalog: DesignPromptContentCatalog;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
@@ -2526,6 +2547,9 @@ export type ResolversTypes = ResolversObject<{
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
   DeliveryResult: DeliveryResult;
+  DesignPromptContentCatalog: ResolverTypeWrapper<DesignPromptContentCatalog>;
+  DesignSkillOption: ResolverTypeWrapper<DesignSkillOption>;
+  DesignSystemOption: ResolverTypeWrapper<DesignSystemOption>;
   EndpointTrafficCaptureMode: EndpointTrafficCaptureMode;
   EndpointTrafficEntry: ResolverTypeWrapper<EndpointTrafficEntry>;
   EntityType: EntityType;
@@ -2666,6 +2690,9 @@ export type ResolversParentTypes = ResolversObject<{
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
+  DesignPromptContentCatalog: DesignPromptContentCatalog;
+  DesignSkillOption: DesignSkillOption;
+  DesignSystemOption: DesignSystemOption;
   EndpointTrafficEntry: EndpointTrafficEntry;
   Event: Event;
   Float: Scalars["Float"]["output"];
@@ -3035,6 +3062,38 @@ export interface DateTimeScalarConfig extends GraphQLScalarTypeConfig<
 > {
   name: "DateTime";
 }
+
+export type DesignPromptContentCatalogResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignPromptContentCatalog"] =
+    ResolversParentTypes["DesignPromptContentCatalog"],
+> = ResolversObject<{
+  designSystems?: Resolver<Array<ResolversTypes["DesignSystemOption"]>, ParentType, ContextType>;
+  skills?: Resolver<Array<ResolversTypes["DesignSkillOption"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type DesignSkillOptionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignSkillOption"] =
+    ResolversParentTypes["DesignSkillOption"],
+> = ResolversObject<{
+  description?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  title?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type DesignSystemOptionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignSystemOption"] =
+    ResolversParentTypes["DesignSystemOption"],
+> = ResolversObject<{
+  description?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  name?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
 
 export type EndpointTrafficEntryResolvers<
   ContextType = Context,
@@ -4127,6 +4186,11 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryDesignArtifactsArgs, "sessionGroupId">
   >;
+  designPromptContentCatalog?: Resolver<
+    ResolversTypes["DesignPromptContentCatalog"],
+    ParentType,
+    ContextType
+  >;
   endpointTraffic?: Resolver<
     Array<ResolversTypes["EndpointTrafficEntry"]>,
     ParentType,
@@ -4982,6 +5046,9 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ConnectionsBridge?: ConnectionsBridgeResolvers<ContextType>;
   ConnectionsRepoEntry?: ConnectionsRepoEntryResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
+  DesignPromptContentCatalog?: DesignPromptContentCatalogResolvers<ContextType>;
+  DesignSkillOption?: DesignSkillOptionResolvers<ContextType>;
+  DesignSystemOption?: DesignSystemOptionResolvers<ContextType>;
   EndpointTrafficEntry?: EndpointTrafficEntryResolvers<ContextType>;
   Event?: EventResolvers<ContextType>;
   GitCheckpoint?: GitCheckpointResolvers<ContextType>;

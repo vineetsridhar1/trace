@@ -2,7 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadTraceDesignPromptContent } from "./design-content.js";
+import { listTraceDesignPromptContent, loadTraceDesignPromptContent } from "./design-content.js";
 
 async function makeContentRoot() {
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "trace-design-content-"));
@@ -14,7 +14,11 @@ async function makeContentRoot() {
   });
   await fs.promises.writeFile(
     path.join(root, "design-systems", "trace-core", "manifest.json"),
-    JSON.stringify({ id: "trace-core", name: "Trace Core" }),
+    JSON.stringify({
+      id: "trace-core",
+      name: "Trace Core",
+      description: "Trace product interface system",
+    }),
   );
   await fs.promises.writeFile(
     path.join(root, "design-systems", "trace-core", "DESIGN.md"),
@@ -35,6 +39,10 @@ async function makeContentRoot() {
   await fs.promises.writeFile(
     path.join(root, "skills", "forms", "SKILL.md"),
     "# Forms\n\nUse explicit labels and validation messages.",
+  );
+  await fs.promises.writeFile(
+    path.join(root, "skills", "audit.md"),
+    "# Audit\n\nCheck visual hierarchy before finalizing.",
   );
   return root;
 }
@@ -78,5 +86,43 @@ describe("loadTraceDesignPromptContent", () => {
     expect(
       loadTraceDesignPromptContent({ designSystemId: "trace-core", skillIds: ["forms"] }),
     ).toEqual({});
+  });
+
+  it("lists configured design systems and skills for picker UIs", async () => {
+    const root = await makeContentRoot();
+    roots.push(root);
+    vi.stubEnv("TRACE_DESIGN_CONTENT_DIRS", root);
+
+    expect(listTraceDesignPromptContent()).toEqual({
+      designSystems: [
+        {
+          id: "trace-core",
+          name: "Trace Core",
+          description: "Trace product interface system",
+        },
+      ],
+      skills: [
+        {
+          id: "audit",
+          title: "Audit",
+          description: "Check visual hierarchy before finalizing.",
+        },
+        {
+          id: "forms",
+          title: "Forms",
+          description: "Use explicit labels and validation messages.",
+        },
+      ],
+    });
+  });
+
+  it("deduplicates catalog entries across content roots", async () => {
+    const firstRoot = await makeContentRoot();
+    const secondRoot = await makeContentRoot();
+    roots.push(firstRoot, secondRoot);
+    vi.stubEnv("TRACE_DESIGN_CONTENT_DIRS", [firstRoot, secondRoot].join(path.delimiter));
+
+    expect(listTraceDesignPromptContent().designSystems).toHaveLength(1);
+    expect(listTraceDesignPromptContent().skills).toHaveLength(2);
   });
 });
