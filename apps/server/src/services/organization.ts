@@ -36,7 +36,7 @@ export class OrganizationService {
             organization: { select: { id: true, name: true } },
           },
         },
-        repos: true,
+        repos: { where: { provider: "github" } },
         projects: true,
         channels: true,
       },
@@ -319,7 +319,8 @@ export class OrganizationService {
           organizationId: repo.organizationId,
           scopeType: "system",
           scopeId: repo.id,
-          eventType: input.applicationConfig != null ? "application_config_updated" : "repo_updated",
+          eventType:
+            input.applicationConfig != null ? "application_config_updated" : "repo_updated",
           payload: {
             repo: {
               id: repo.id,

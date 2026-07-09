@@ -13,6 +13,7 @@ import {
   GitBranchPlus,
   Loader2,
   Maximize2,
+  MessageSquare,
   Minus,
   Plus,
   SlidersHorizontal,
@@ -58,6 +59,14 @@ const ITERATE_DESIGN_ARTIFACT_MUTATION = gql`
 const PATCH_DESIGN_ARTIFACT_TOKENS_MUTATION = gql`
   mutation PatchDesignArtifactTokens($artifactId: ID!, $tokens: JSON!) {
     patchDesignArtifactTokens(artifactId: $artifactId, tokens: $tokens) {
+      id
+    }
+  }
+`;
+
+const COMMENT_DESIGN_ARTIFACT_MUTATION = gql`
+  mutation CommentDesignArtifact($artifactId: ID!, $body: String!, $sendToAgent: Boolean) {
+    commentDesignArtifact(artifactId: $artifactId, body: $body, sendToAgent: $sendToAgent) {
       id
     }
   }
@@ -362,6 +371,18 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
     );
   }, [mutateSelectedArtifact, selectedArtifact]);
 
+  const handleComment = useCallback(() => {
+    if (!selectedArtifact) return;
+    const body = window.prompt("Add a comment");
+    if (!body?.trim()) return;
+    const sendToAgent = window.confirm("Send this comment to the agent for the next iteration?");
+    void mutateSelectedArtifact(
+      COMMENT_DESIGN_ARTIFACT_MUTATION,
+      { artifactId: selectedArtifact.id, body: body.trim(), sendToAgent },
+      "Comment added",
+    );
+  }, [mutateSelectedArtifact, selectedArtifact]);
+
   const handleExportPdf = useCallback(() => {
     if (!selectedArtifact) return;
     void mutateSelectedArtifact(
@@ -413,6 +434,16 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
           title="Tweak tokens"
         >
           <SlidersHorizontal size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={handleComment}
+          disabled={!selectedArtifact}
+          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
+          aria-label="Comment"
+          title="Comment"
+        >
+          <MessageSquare size={14} />
         </button>
         <button
           type="button"

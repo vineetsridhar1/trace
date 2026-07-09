@@ -419,6 +419,7 @@ export type EventType =
   | "design_artifact_updated"
   | "design_comment_added"
   | "design_export_completed"
+  | "design_export_requested"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -620,6 +621,7 @@ export type Mutation = {
   assignTicket: Ticket;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
+  commentDesignArtifact: Event;
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
   commitSessionGroupFileChanges: Scalars["String"]["output"];
@@ -762,6 +764,13 @@ export type MutationClearEndpointTrafficArgs = {
 
 export type MutationClearQueuedMessagesArgs = {
   sessionId: Scalars["ID"]["input"];
+};
+
+export type MutationCommentDesignArtifactArgs = {
+  anchor?: InputMaybe<Scalars["JSON"]["input"]>;
+  artifactId: Scalars["ID"]["input"];
+  body: Scalars["String"]["input"];
+  sendToAgent?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
 
 export type MutationCommentOnTicketArgs = {
@@ -3195,6 +3204,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationClearQueuedMessagesArgs, "sessionId">
+  >;
+  commentDesignArtifact?: Resolver<
+    ResolversTypes["Event"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCommentDesignArtifactArgs, "artifactId" | "body">
   >;
   commentOnTicket?: Resolver<
     ResolversTypes["Event"],

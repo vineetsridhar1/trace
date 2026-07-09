@@ -355,6 +355,32 @@ export const sessionMutations = {
       actorType: ctx.actorType,
     });
   },
+  commentDesignArtifact: (
+    _: unknown,
+    args: {
+      artifactId: string;
+      body: string;
+      anchor?: unknown;
+      sendToAgent?: boolean | null;
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    if (args.anchor !== undefined && args.anchor !== null) {
+      if (typeof args.anchor !== "object" || Array.isArray(args.anchor)) {
+        throw new Error("anchor must be an object");
+      }
+    }
+    return artifactService.commentDesignArtifact({
+      artifactId: args.artifactId,
+      body: args.body,
+      anchor: (args.anchor ?? null) as Record<string, unknown> | null,
+      sendToAgent: args.sendToAgent ?? false,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
   publishDesignArtifact: (_: unknown, args: { artifactId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();
     return artifactService.publishDesignArtifact({

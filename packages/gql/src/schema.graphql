@@ -328,6 +328,7 @@ enum EventType {
   design_artifact_created
   design_artifact_updated
   design_comment_added
+  design_export_requested
   design_export_completed
   design_artifact_promoted
 }
@@ -1451,6 +1452,7 @@ type Mutation {
   createDesignArtifact(sessionGroupId: ID!, prompt: String!, html: String): Artifact!
   iterateDesignArtifact(artifactId: ID!, prompt: String!, html: String): Artifact!
   patchDesignArtifactTokens(artifactId: ID!, tokens: JSON!): Artifact!
+  commentDesignArtifact(artifactId: ID!, body: String!, anchor: JSON, sendToAgent: Boolean): Event!
   publishDesignArtifact(artifactId: ID!): Artifact!
   exportDesignArtifactPdf(artifactId: ID!): Event!
   promoteDesignArtifactToCodingSession(artifactId: ID!, prompt: String): Session!

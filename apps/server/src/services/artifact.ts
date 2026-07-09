@@ -52,18 +52,42 @@ function escapeCssValue(value: unknown): string {
   return String(value).replaceAll("\\", "\\\\").replaceAll("\n", " ").replaceAll(";", "");
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function patchRootCssVariables(html: string, tokens: Record<string, unknown>): string {
-  const declarations = Object.entries(tokens)
-    .filter(([key]) => /^--[a-zA-Z0-9-_]+$/.test(key))
+  const validTokens = Object.entries(tokens).filter(([key]) => /^--[a-zA-Z0-9-_]+$/.test(key));
+  if (validTokens.length === 0) return html;
+
+  const rootMatch = /:root\s*\{([\s\S]*?)\}/.exec(html);
+  if (rootMatch) {
+    const rootBlock = rootMatch[0];
+    let body = rootMatch[1] ?? "";
+    const existingIndentMatch = body.match(/\n(\s*)--[a-zA-Z0-9-_]+\s*:/);
+    const indent = existingIndentMatch?.[1] ?? "      ";
+
+    for (const [key, value] of validTokens) {
+      const declaration = `${indent}${key}: ${escapeCssValue(value)};`;
+      const declarationPattern = new RegExp(`(^|\\n)(\\s*)${escapeRegExp(key)}\\s*:[^;\\n]*(?:;)?`);
+      if (declarationPattern.test(body)) {
+        body = body.replace(declarationPattern, (_, prefix: string) => `${prefix}${declaration}`);
+      } else {
+        body = `${body.replace(/\s*$/, "")}\n${declaration}\n`;
+      }
+    }
+
+    return html.replace(rootBlock, `:root {${body}}`);
+  }
+
+  const declarations = validTokens
     .map(([key, value]) => `      ${key}: ${escapeCssValue(value)};`)
     .join("\n");
-  if (!declarations) return html;
-
   const nextRoot = `:root {\n${declarations}\n    }`;
-  if (/:root\s*\{[\s\S]*?\}/.test(html)) {
-    return html.replace(/:root\s*\{[\s\S]*?\}/, nextRoot);
+  if (html.includes("</style>")) {
+    return html.replace("</style>", `${nextRoot}\n  </style>`);
   }
-  return html.replace("</style>", `${nextRoot}\n  </style>`);
+  return `${html}\n<style>\n${nextRoot}\n</style>`;
 }
 
 async function getDesignArtifactForWrite(
@@ -347,14 +371,51 @@ export const artifactService = {
       organizationId: input.organizationId,
       scopeType: "session",
       scopeId: sessionId,
-      eventType: "design_export_completed",
+      eventType: "design_export_requested",
       payload: {
         artifactId: artifact.id,
         sessionGroupId: artifact.sessionGroupId,
         exportType: "pdf",
-        status: "completed",
+        status: "requested",
         fileName: `${artifact.title || "design"}.pdf`,
-        note: "PDF render-pool handoff recorded; renderer worker stores the binary in the upload pipeline.",
+        note: "PDF export requested. A render worker must emit design_export_completed with the stored file when rendering finishes.",
+      } as Prisma.InputJsonValue,
+      actorType: input.actorType ?? "user",
+      actorId: input.actorId,
+    });
+  },
+
+  async commentDesignArtifact(input: {
+    artifactId: string;
+    organizationId: string;
+    actorId: string;
+    actorType?: ActorType;
+    body: string;
+    anchor?: Record<string, unknown> | null;
+    sendToAgent?: boolean | null;
+  }) {
+    const trimmedBody = input.body.trim();
+    if (!trimmedBody) {
+      throw new ValidationError("Comment body is required.");
+    }
+    const { artifact, sessionId } = await getDesignArtifactForWrite(
+      input.artifactId,
+      input.organizationId,
+      input.actorId,
+    );
+
+    return eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "design_comment_added",
+      payload: {
+        artifactId: artifact.id,
+        sessionGroupId: artifact.sessionGroupId,
+        parentArtifactId: artifact.parentArtifactId,
+        body: trimmedBody,
+        anchor: input.anchor ?? null,
+        sendToAgent: input.sendToAgent ?? false,
       } as Prisma.InputJsonValue,
       actorType: input.actorType ?? "user",
       actorId: input.actorId,

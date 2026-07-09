@@ -418,6 +418,7 @@ export type EventType =
   | "design_artifact_updated"
   | "design_comment_added"
   | "design_export_completed"
+  | "design_export_requested"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -619,6 +620,7 @@ export type Mutation = {
   assignTicket: Ticket;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
+  commentDesignArtifact: Event;
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
   commitSessionGroupFileChanges: Scalars["String"]["output"];
@@ -761,6 +763,13 @@ export type MutationClearEndpointTrafficArgs = {
 
 export type MutationClearQueuedMessagesArgs = {
   sessionId: Scalars["ID"]["input"];
+};
+
+export type MutationCommentDesignArtifactArgs = {
+  anchor?: InputMaybe<Scalars["JSON"]["input"]>;
+  artifactId: Scalars["ID"]["input"];
+  body: Scalars["String"]["input"];
+  sendToAgent?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
 
 export type MutationCommentOnTicketArgs = {
@@ -2610,6 +2619,17 @@ export type PatchDesignArtifactTokensMutationVariables = Exact<{
 export type PatchDesignArtifactTokensMutation = {
   __typename?: "Mutation";
   patchDesignArtifactTokens: { __typename?: "Artifact"; id: string };
+};
+
+export type CommentDesignArtifactMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+  body: Scalars["String"]["input"];
+  sendToAgent?: InputMaybe<Scalars["Boolean"]["input"]>;
+}>;
+
+export type CommentDesignArtifactMutation = {
+  __typename?: "Mutation";
+  commentDesignArtifact: { __typename?: "Event"; id: string };
 };
 
 export type PublishDesignArtifactMutationVariables = Exact<{
@@ -5177,6 +5197,69 @@ export const PatchDesignArtifactTokensDocument = {
   PatchDesignArtifactTokensMutation,
   PatchDesignArtifactTokensMutationVariables
 >;
+export const CommentDesignArtifactDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CommentDesignArtifact" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "body" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sendToAgent" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "commentDesignArtifact" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "body" },
+                value: { kind: "Variable", name: { kind: "Name", value: "body" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sendToAgent" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sendToAgent" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<CommentDesignArtifactMutation, CommentDesignArtifactMutationVariables>;
 export const PublishDesignArtifactDocument = {
   kind: "Document",
   definitions: [
