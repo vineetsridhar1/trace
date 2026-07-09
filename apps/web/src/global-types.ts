@@ -8,6 +8,7 @@ declare global {
     readonly VITE_ENABLE_TICKETS?: string;
     readonly VITE_ENABLE_AGENT_DEBUG?: string;
     readonly VITE_ENABLE_AGENT?: string;
+    readonly VITE_TRACE_USER_CONTENT_ORIGIN?: string;
   }
 
   interface ImportMeta {

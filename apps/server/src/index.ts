@@ -46,6 +46,7 @@ import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.
 import { endpointProxyService } from "./services/endpoint-proxy.js";
 import { sessionApplicationService } from "./services/session-applications.js";
 import { endpointTrafficRetentionHours } from "./services/endpoint-utils.js";
+import { handleDesignArtifactUserContent } from "./services/design-artifact-serving.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -156,6 +157,7 @@ async function main() {
     }),
   );
   app.use(cookieParser());
+  app.use(handleDesignArtifactUserContent);
 
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     const endpointKey = endpointProxyService.extractKey(req.headers.host);

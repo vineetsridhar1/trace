@@ -107,6 +107,7 @@ const CARD_HEIGHT = 520;
 const CARD_GAP = 80;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.5;
+const USER_CONTENT_ORIGIN = import.meta.env.VITE_TRACE_USER_CONTENT_ORIGIN?.trim() || null;
 
 type Viewport = {
   x: number;
@@ -161,7 +162,43 @@ function getCanvasBounds(placements: ArtifactPlacement[]) {
   };
 }
 
+function getArtifactBootstrapUrl(artifactId: string) {
+  if (!USER_CONTENT_ORIGIN) return null;
+  try {
+    const url = new URL(USER_CONTENT_ORIGIN);
+    url.hostname = `${artifactId}.${url.hostname}`;
+    url.pathname = "/_bootstrap";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function ArtifactCard({ artifact, selected }: { artifact: Artifact; selected: boolean }) {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const bootstrapUrl = useMemo(() => getArtifactBootstrapUrl(artifact.id), [artifact.id]);
+  const bootstrapOrigin = useMemo(
+    () => (bootstrapUrl ? new URL(bootstrapUrl).origin : null),
+    [bootstrapUrl],
+  );
+  const postArtifactHtml = useCallback(() => {
+    const target = iframeRef.current?.contentWindow;
+    if (!target || !bootstrapOrigin) return;
+    target.postMessage(
+      {
+        type: "trace:artifact_html",
+        html: artifact.html,
+      },
+      bootstrapOrigin,
+    );
+  }, [artifact.html, bootstrapOrigin]);
+
+  useEffect(() => {
+    if (bootstrapUrl) postArtifactHtml();
+  }, [bootstrapUrl, postArtifactHtml]);
+
   return (
     <article
       className={cn(
@@ -178,12 +215,23 @@ function ArtifactCard({ artifact, selected }: { artifact: Artifact; selected: bo
           })}
         </div>
       </div>
-      <iframe
-        title={artifact.title}
-        srcDoc={artifact.html}
-        sandbox="allow-scripts"
-        className="pointer-events-none min-h-0 flex-1 bg-white"
-      />
+      {bootstrapUrl ? (
+        <iframe
+          ref={iframeRef}
+          title={artifact.title}
+          src={bootstrapUrl}
+          sandbox="allow-scripts allow-same-origin"
+          className="pointer-events-none min-h-0 flex-1 bg-white"
+          onLoad={postArtifactHtml}
+        />
+      ) : (
+        <iframe
+          title={artifact.title}
+          srcDoc={artifact.html}
+          sandbox="allow-scripts"
+          className="pointer-events-none min-h-0 flex-1 bg-white"
+        />
+      )}
     </article>
   );
 }
