@@ -8,11 +8,13 @@ This audit compares the current implementation against `docs/design-session-expe
 ## Current Status
 
 The main server/service/UI paths for `design` and `app` sessions are implemented and
-covered by focused tests. One item remains important before claiming the complete product
-goal is fully verified:
+covered by focused tests. Two hosted end-to-end runs remain important before claiming the
+complete product goal is fully verified:
 
-- A real configured cloud app session has not been run through a browser from prompt to
-  published URL in this environment.
+- A real configured hosted `design` session has not been run from prompt through publish,
+  PDF export, and promotion in this environment.
+- A real configured cloud `app` session has not been run through a browser from prompt to
+  checkpoint, restore, and published URL in this environment.
 
 ## Design Sessions
 
@@ -812,3 +814,12 @@ write a valid PDF and then keep its profile process alive long enough to hit the
 timeout. The renderer now treats a stable valid PDF file as completion, terminates the
 headless process before temp-profile cleanup, and has unit plus integration coverage for
 that behavior.
+
+During this continuation, the final hosted smoke environment remained unavailable
+(`TRACE_SMOKE_SERVER_URL`, `TRACE_SMOKE_AUTH_TOKEN`, and `TRACE_SMOKE_ORG_ID` were unset),
+so the goal still cannot be marked complete from this environment. The local opt-in
+browser/runtime evidence was rerun instead: design user-content `_bootstrap` and published
+artifact browser integration passed with `TRACE_RUN_DESIGN_BOOTSTRAP_BROWSER_SMOKE=1`,
+the generated app starter endpoint proxy/public/private-overlay browser smoke passed with
+`TRACE_RUN_APP_STARTER_PROXY_SMOKE=1`, and the real-Chrome PDF renderer integration
+passed.
