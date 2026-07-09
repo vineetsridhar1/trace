@@ -382,3 +382,9 @@ and published artifact rendering, `TRACE_RUN_APP_STARTER_PROXY_SMOKE=1` passed f
 generated Next.js starter page/API through the endpoint proxy and public browser endpoint,
 `@trace/shared smoke:app-starter` passed from generated starter files, and the
 container-bridge workspace integration passed managed-git bootstrap/push/clone/restore.
+
+During this continuation, the endpoint-proxy browser smoke was extended to cover the
+private app authoring overlay, not just public endpoint serving. The opt-in smoke now
+loads a private endpoint through the preview-auth cookie flow, verifies the injected
+overlay posts a `data-trace-source` element selection to the parent frame, and verifies
+script errors from the app frame are surfaced through the same overlay channel.

@@ -24,6 +24,7 @@ vi.mock("../lib/session-router.js", () => ({
 
 import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
+import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
 import { EndpointProxyService } from "./endpoint-proxy.js";
 
 const execFileAsync = promisify(execFile);
@@ -206,6 +207,8 @@ async function dumpEndpointHostDom(input: {
   chromeExecutable: string;
   proxyPort: number;
   endpointKey: string;
+  path?: string;
+  javascript?: "enabled" | "disabled";
 }) {
   const profileDir = await fs.mkdtemp(path.join(os.tmpdir(), "trace-endpoint-browser-"));
   try {
@@ -218,12 +221,38 @@ async function dumpEndpointHostDom(input: {
         "--no-first-run",
         "--no-default-browser-check",
         "--no-proxy-server",
-        "--disable-javascript",
+        ...(input.javascript === "disabled" ? ["--disable-javascript"] : []),
         `--user-data-dir=${profileDir}`,
         `--host-resolver-rules=MAP *.preview.localhost 127.0.0.1`,
-        "--virtual-time-budget=1000",
+        "--virtual-time-budget=3000",
         "--dump-dom",
-        `http://${input.endpointKey}.preview.localhost:${input.proxyPort}/`,
+        `http://${input.endpointKey}.preview.localhost:${input.proxyPort}${input.path ?? "/"}`,
+      ],
+      { maxBuffer: 10 * 1024 * 1024, timeout: 30_000 },
+    );
+    return stdout;
+  } finally {
+    await fs.rm(profileDir, { recursive: true, force: true });
+  }
+}
+
+async function dumpParentHarnessDom(input: { chromeExecutable: string; proxyPort: number }) {
+  const profileDir = await fs.mkdtemp(path.join(os.tmpdir(), "trace-endpoint-parent-"));
+  try {
+    const { stdout } = await execFileAsync(
+      input.chromeExecutable,
+      [
+        "--headless=new",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--no-proxy-server",
+        `--user-data-dir=${profileDir}`,
+        `--host-resolver-rules=MAP *.preview.localhost 127.0.0.1`,
+        "--virtual-time-budget=5000",
+        "--dump-dom",
+        `http://parent.preview.localhost:${input.proxyPort}/parent`,
       ],
       { maxBuffer: 10 * 1024 * 1024, timeout: 30_000 },
     );
@@ -348,10 +377,114 @@ describe("EndpointProxyService generated app starter smoke", () => {
           chromeExecutable,
           proxyPort,
           endpointKey: "endpointkey1",
+          javascript: "disabled",
         });
         expect(browserHtml).toContain("Browser public endpoint app");
         expect(browserHtml).toContain("data-trace-source");
         expect(browserHtml).not.toContain("data-trace-app-overlay");
+      } finally {
+        await close(proxyServer);
+      }
+    },
+    45_000,
+  );
+
+  runIfEnabled(
+    "runs the private endpoint authoring overlay in a real browser",
+    async () => {
+      const chromeExecutable = findChromeExecutable();
+      if (!chromeExecutable) return;
+
+      prismaMock.sessionEndpoint.findUnique.mockResolvedValue({
+        id: "endpoint-1",
+        key: "endpointkey1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        appConfigId: "web",
+        processConfigId: "dev",
+        portConfigId: "web",
+        status: "enabled",
+        accessMode: "private",
+        trafficCaptureMode: "metadata",
+        targetPort: 3000,
+        expiresAt: null,
+        revokedAt: null,
+      });
+      prismaMock.sessionGroup.findFirst.mockResolvedValue({
+        visibility: "public",
+        ownerUserId: "owner-1",
+      });
+
+      const service = new EndpointProxyService();
+      sessionRouterMock.sendToRuntime.mockImplementation((_runtimeKey, command) => {
+        const request = command as { requestId?: string };
+        if (!request.requestId) return "delivered";
+        service.resolveHttpResponse(request.requestId, {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+          bodyBase64: Buffer.from(
+            [
+              "<!doctype html><html><body>",
+              '<button id="target" data-trace-source="app/page.tsx:42">Select source</button>',
+              "<script>",
+              "setTimeout(function(){ document.getElementById('target').click(); }, 50);",
+              "setTimeout(function(){ throw new Error('overlay smoke error'); }, 100);",
+              "</script>",
+              "</body></html>",
+            ].join(""),
+          ).toString("base64"),
+        });
+        return "delivered";
+      });
+
+      const { token } = createEndpointPreviewToken({
+        userId: "user-1",
+        organizationId: "org-1",
+        endpointId: "endpoint-1",
+      });
+      const proxyServer = http.createServer((req, res) => {
+        if (req.headers.host?.startsWith("parent.preview.localhost:") && req.url === "/parent") {
+          const endpointUrl =
+            `http://endpointkey1.preview.localhost:${proxyPort}/__trace_preview_auth` +
+            `?token=${encodeURIComponent(token)}&next=/`;
+          res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+          res.end(
+            [
+              "<!doctype html><html><body>",
+              '<div id="status">pending</div>',
+              "<script>",
+              "var statusEl = document.getElementById('status');",
+              "window.addEventListener('message', function(event) {",
+              "  if (event.origin !== 'http://endpointkey1.preview.localhost:' + location.port) return;",
+              "  if (!event.data || event.data.type !== 'trace:app:overlay') return;",
+              "  statusEl.textContent += '|' + event.data.event + ':' +",
+              "    (event.data.sourceLocation || event.data.message || 'missing');",
+              "});",
+              "</script>",
+              `<iframe src="${endpointUrl}"></iframe>`,
+              "</body></html>",
+            ].join(""),
+          );
+          return;
+        }
+
+        const endpointKey = service.extractKey(req.headers.host);
+        if (!endpointKey) {
+          res.writeHead(404).end("Not an endpoint host");
+          return;
+        }
+        void service.handleHttpRequest(req, res, endpointKey).catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          if (!res.headersSent) res.writeHead(500);
+          res.end(message);
+        });
+      });
+      const proxyPort = await listen(proxyServer);
+
+      try {
+        const browserHtml = await dumpParentHarnessDom({ chromeExecutable, proxyPort });
+        expect(browserHtml).toContain("pending|element-selected:app/page.tsx:42");
+        expect(browserHtml).toContain("|error:Uncaught Error: overlay smoke error");
       } finally {
         await close(proxyServer);
       }
