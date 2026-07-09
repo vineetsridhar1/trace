@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseAppTokenPatchInput,
   parseTrustedAppOverlayMessage,
+  publishedAppShareUrl,
 } from "./SessionApplicationsPanel";
 
 describe("parseAppTokenPatchInput", () => {
@@ -80,5 +81,17 @@ describe("parseTrustedAppOverlayMessage", () => {
         previewUrl,
       ),
     ).toBeNull();
+  });
+});
+
+describe("publishedAppShareUrl", () => {
+  it("returns only public endpoint URLs for publish/share", () => {
+    expect(publishedAppShareUrl({ accessMode: "public", url: "https://app.trace.test" })).toBe(
+      "https://app.trace.test",
+    );
+    expect(
+      publishedAppShareUrl({ accessMode: "private", url: "https://app.trace.test" }),
+    ).toBeNull();
+    expect(publishedAppShareUrl(null)).toBeNull();
   });
 });

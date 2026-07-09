@@ -365,3 +365,7 @@ During this continuation, design artifact promotion was also connected to naviga
 After `promoteDesignArtifactToCodingSession` returns the promoted coding session, the
 design canvas now moves the user into that new session instead of leaving them on the
 design canvas with only a toast.
+
+During this continuation, app publish/share now gives explicit user feedback after a
+successful publish. The Applications panel copies only a public endpoint URL, shows an
+`App published` success toast, and includes an Open action for the shared endpoint.

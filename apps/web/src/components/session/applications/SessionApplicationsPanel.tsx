@@ -30,6 +30,7 @@ import { useUIStore } from "../../../stores/ui";
 import { Button } from "../../ui/button";
 import { TraceLoader } from "../../ui/trace-loader";
 import { DesignHarnessSettingsPopover } from "../../design/DesignHarnessSettingsPopover";
+import { toast } from "sonner";
 
 const APPLICATIONS_STATE_QUERY = gql`
   query SessionApplicationsState($sessionGroupId: ID!) {
@@ -220,6 +221,12 @@ export function parseAppTokenPatchInput(value: string): Record<string, unknown> 
     throw new Error("Token patch must be a JSON object.");
   }
   return parsed as Record<string, unknown>;
+}
+
+export function publishedAppShareUrl(
+  endpoint: Pick<SessionEndpoint, "accessMode" | "url"> | null | undefined,
+): string | null {
+  return endpoint?.accessMode === "public" && endpoint.url ? endpoint.url : null;
 }
 
 type AppOverlaySelection =
@@ -587,9 +594,18 @@ export function SessionApplicationsPanel({
         throw new Error(result.error.message);
       }
       await refresh();
-      const url = result.data?.publishAppSession?.url;
+      const url = publishedAppShareUrl(result.data?.publishAppSession);
       if (url) {
         await copyEndpointUrl(url);
+        toast.success("App published", {
+          description: "Public URL copied to clipboard.",
+          action: {
+            label: "Open",
+            onClick: () => window.open(url, "_blank", "noopener,noreferrer"),
+          },
+        });
+      } else {
+        toast.success("App published");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
