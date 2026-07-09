@@ -7,6 +7,7 @@ import {
   designCommentFromEvent,
   getDesignArtifactPreviewMode,
   normalizeDesignAnchor,
+  promotedSessionTarget,
   streamingArtifactsFromEvents,
   type DesignComment,
 } from "./DesignCanvas";
@@ -183,5 +184,20 @@ describe("design canvas anchors", () => {
       "Model failed &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;",
     );
     expect(artifacts["generation-1"]?.html).not.toContain("<script>");
+  });
+
+  it("extracts promoted coding session navigation targets", () => {
+    expect(
+      promotedSessionTarget({
+        id: "session-promoted",
+        sessionGroupId: "group-promoted",
+      }),
+    ).toEqual({
+      sessionId: "session-promoted",
+      sessionGroupId: "group-promoted",
+    });
+
+    expect(promotedSessionTarget({ id: "session-promoted" })).toBeNull();
+    expect(promotedSessionTarget(null)).toBeNull();
   });
 });

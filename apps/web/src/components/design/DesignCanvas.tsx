@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { DesignHarnessSettingsPopover } from "./DesignHarnessSettingsPopover";
+import { navigateToSession } from "../../stores/ui";
 
 const DESIGN_ARTIFACTS_QUERY = gql`
   query DesignArtifacts($sessionGroupId: ID!) {
@@ -486,6 +487,17 @@ export function designCommentsForPreview(comments: DesignComment[]) {
   }));
 }
 
+export function promotedSessionTarget(value: unknown): {
+  sessionId: string;
+  sessionGroupId: string;
+} | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const promoted = value as { id?: unknown; sessionGroupId?: unknown };
+  return typeof promoted.id === "string" && typeof promoted.sessionGroupId === "string"
+    ? { sessionId: promoted.id, sessionGroupId: promoted.sessionGroupId }
+    : null;
+}
+
 function ArtifactCard({
   artifact,
   selected,
@@ -923,12 +935,29 @@ export function DesignCanvas({
 
   const handlePromote = useCallback(() => {
     if (!selectedPersistedArtifact) return;
-    void mutateSelectedArtifact(
-      PROMOTE_DESIGN_ARTIFACT_MUTATION,
-      { artifactId: selectedPersistedArtifact.id },
-      "Coding session created",
-    );
-  }, [mutateSelectedArtifact, selectedPersistedArtifact]);
+    void (async () => {
+      const result = await client
+        .mutation<{
+          promoteDesignArtifactToCodingSession?: { id: string; sessionGroupId: string };
+        }>(PROMOTE_DESIGN_ARTIFACT_MUTATION, { artifactId: selectedPersistedArtifact.id })
+        .toPromise();
+      if (result.error) {
+        toast.error("Design action failed", { description: result.error.message });
+        return;
+      }
+
+      const target = promotedSessionTarget(result.data?.promoteDesignArtifactToCodingSession);
+      if (!target) {
+        toast.error("Promotion failed", {
+          description: "Server did not return a promoted session.",
+        });
+        return;
+      }
+
+      toast.success("Coding session created");
+      navigateToSession(null, target.sessionGroupId, target.sessionId);
+    })();
+  }, [selectedPersistedArtifact]);
 
   return (
     <main

@@ -360,3 +360,8 @@ inputs by session kind. App checkpoint restores now send `kind: "app"`, force cl
 hosting, and pin `tool: "claude_code"` so older or inconsistent app sessions cannot
 restore through a tool that drops the app harness; coding checkpoint restores keep their
 original tool and hosting behavior.
+
+During this continuation, design artifact promotion was also connected to navigation.
+After `promoteDesignArtifactToCodingSession` returns the promoted coding session, the
+design canvas now moves the user into that new session instead of leaving them on the
+design canvas with only a toast.
