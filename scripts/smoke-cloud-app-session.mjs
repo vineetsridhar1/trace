@@ -50,6 +50,7 @@ const START_APP_SESSION = `
     startSession(input: $input) {
       id
       sessionGroupId
+      tool
       hosting
       sessionGroup {
         id
@@ -542,6 +543,9 @@ async function verifyTerminalWorkdir(sessionId) {
 async function startAppSession(input) {
   const data = await graphql(START_APP_SESSION, { input });
   const session = data.startSession;
+  if (session.tool !== "claude_code") {
+    throw new Error(`Started app session tool is ${session.tool ?? "missing"}`);
+  }
   if (session.hosting !== "cloud")
     throw new Error(`Started app session hosting is ${session.hosting}`);
   if (session.sessionGroup?.kind !== "app") {

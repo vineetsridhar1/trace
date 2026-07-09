@@ -451,3 +451,8 @@ prove anchored design comments carry the payload needed by the canvas and iterat
 service. The smoke now checks the emitted `design_comment_added` payload for artifact id,
 body, `sendToAgent`, and the selected element anchor before polling for the child
 iteration artifact.
+
+During this continuation, the hosted `pnpm smoke:cloud-app-session` script was tightened
+to prove app sessions use the adapter path that can receive the Open Design app harness.
+The smoke now requests `tool` from `startSession` and requires fresh and restored app
+sessions to start with `claude_code`.
