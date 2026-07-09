@@ -230,7 +230,12 @@ export class EndpointProxyService {
         },
       },
     });
-    if (!process || process.status !== "running" || !process.runtimeInstanceId) {
+    if (
+      !process ||
+      process.status !== "running" ||
+      !process.runtimeInstanceId ||
+      process.runtimeInstanceId !== endpoint.currentRuntimeInstanceId
+    ) {
       res.writeHead(503).end("Process is not running");
       return;
     }
@@ -440,7 +445,11 @@ export class EndpointProxyService {
         },
       },
     });
-    if (!process?.runtimeInstanceId || process.status !== "running") {
+    if (
+      !process?.runtimeInstanceId ||
+      process.status !== "running" ||
+      process.runtimeInstanceId !== endpoint.currentRuntimeInstanceId
+    ) {
       client.close();
       return;
     }

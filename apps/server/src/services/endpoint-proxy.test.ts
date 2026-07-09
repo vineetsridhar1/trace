@@ -82,6 +82,7 @@ function endpoint(overrides: Record<string, unknown> = {}) {
     accessMode: "private",
     trafficCaptureMode: "metadata",
     targetPort: 3000,
+    currentRuntimeInstanceId: "runtime-1",
     expiresAt: null,
     revokedAt: null,
     ...overrides,
@@ -220,5 +221,28 @@ describe("EndpointProxyService", () => {
     expect(res.bodyValue).toContain("Published app");
     expect(res.bodyValue).toContain('data-trace-source="app/page.tsx:11"');
     expect(res.bodyValue).not.toContain("data-trace-app-overlay");
+  });
+
+  it("rejects stale endpoints whose process moved to another runtime", async () => {
+    prismaMock.sessionEndpoint.findUnique.mockResolvedValue(
+      endpoint({
+        accessMode: "public",
+        currentRuntimeInstanceId: "runtime-old",
+      }),
+    );
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      status: "running",
+      runtimeInstanceId: "runtime-new",
+    });
+    const service = new EndpointProxyService();
+    const res = makeResponse();
+
+    await service.handleHttpRequest(makeRequest({ url: "/" }), res, "endpointkey1");
+
+    expect(res.statusCodeValue).toBe(503);
+    expect(res.bodyValue).toBe("Process is not running");
+    expect(sessionRouterMock.getRuntime).not.toHaveBeenCalled();
+    expect(sessionRouterMock.sendToRuntime).not.toHaveBeenCalled();
   });
 });

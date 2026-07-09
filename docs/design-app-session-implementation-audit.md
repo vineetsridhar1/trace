@@ -678,3 +678,9 @@ blocking browser prompts even though the canvas is the primary design workflow s
 Both actions now use a reusable prompt popover with validation; comparative iteration
 still pre-fills the selected-artifact merge prompt and passes comparison artifact ids
 through the existing GraphQL/service path.
+
+During this audit pass, app preview and publish rejected stale endpoint/runtime bindings
+but the endpoint proxy itself still routed any enabled endpoint whose process row was
+running. HTTP and WebSocket proxy entrypoints now also require
+`endpoint.currentRuntimeInstanceId` to match the running process runtime before forwarding,
+so public and private endpoint hosts cannot route through stale forwarding rows.

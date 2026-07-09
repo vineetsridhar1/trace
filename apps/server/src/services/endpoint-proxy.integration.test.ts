@@ -280,6 +280,7 @@ describe("EndpointProxyService generated app starter smoke", () => {
       accessMode: "public",
       trafficCaptureMode: "metadata",
       targetPort: 3000,
+      currentRuntimeInstanceId: "runtime-1",
       expiresAt: null,
       revokedAt: null,
     });
@@ -407,6 +408,7 @@ describe("EndpointProxyService generated app starter smoke", () => {
         accessMode: "private",
         trafficCaptureMode: "metadata",
         targetPort: 3000,
+        currentRuntimeInstanceId: "runtime-1",
         expiresAt: null,
         revokedAt: null,
       });
