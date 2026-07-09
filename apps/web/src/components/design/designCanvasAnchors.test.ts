@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Event } from "@trace/gql";
-import { designCommentFromEvent, normalizeDesignAnchor } from "./DesignCanvas";
+import {
+  designCommentFromEvent,
+  getDesignArtifactPreviewMode,
+  normalizeDesignAnchor,
+} from "./DesignCanvas";
 
 describe("design canvas anchors", () => {
   it("normalizes bootstrap element-selected anchors", () => {
@@ -48,5 +52,11 @@ describe("design canvas anchors", () => {
       sendToAgent: true,
       timestamp: "2026-07-09T10:00:00.000Z",
     });
+  });
+
+  it("uses srcDoc only as an explicit development fallback", () => {
+    expect(getDesignArtifactPreviewMode("https://usercontent.example", false)).toBe("bootstrap");
+    expect(getDesignArtifactPreviewMode(null, true)).toBe("srcdoc");
+    expect(getDesignArtifactPreviewMode(null, false)).toBe("unavailable");
   });
 });

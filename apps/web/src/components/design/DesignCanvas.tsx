@@ -175,6 +175,7 @@ const CARD_GAP = 80;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.5;
 const USER_CONTENT_ORIGIN = import.meta.env.VITE_TRACE_USER_CONTENT_ORIGIN?.trim() || null;
+const SRC_DOC_PREVIEW_FALLBACK_ENABLED = import.meta.env.DEV === true;
 
 type Viewport = {
   x: number;
@@ -261,6 +262,14 @@ function getArtifactPublicUrl(artifact: Artifact) {
   } catch {
     return null;
   }
+}
+
+export function getDesignArtifactPreviewMode(
+  userContentOrigin: string | null,
+  srcDocFallbackEnabled: boolean,
+) {
+  if (userContentOrigin) return "bootstrap";
+  return srcDocFallbackEnabled ? "srcdoc" : "unavailable";
 }
 
 function eventPayload(event: Event): Record<string, unknown> | null {
@@ -411,6 +420,10 @@ function ArtifactCard({
     () => getArtifactBootstrapUrl(artifact.id, nonceRef.current),
     [artifact.id],
   );
+  const previewMode = getDesignArtifactPreviewMode(
+    USER_CONTENT_ORIGIN,
+    SRC_DOC_PREVIEW_FALLBACK_ENABLED,
+  );
   const bootstrapOrigin = useMemo(
     () => (bootstrapUrl ? new URL(bootstrapUrl).origin : null),
     [bootstrapUrl],
@@ -485,7 +498,7 @@ function ArtifactCard({
           </span>
         </div>
       </div>
-      {bootstrapUrl ? (
+      {bootstrapUrl && previewMode === "bootstrap" ? (
         <iframe
           ref={iframeRef}
           title={artifact.title}
@@ -494,13 +507,17 @@ function ArtifactCard({
           className="min-h-0 flex-1 bg-white"
           onLoad={postArtifactHtml}
         />
-      ) : (
+      ) : previewMode === "srcdoc" ? (
         <iframe
           title={artifact.title}
           srcDoc={artifact.html}
           sandbox="allow-scripts"
           className="min-h-0 flex-1 bg-white"
         />
+      ) : (
+        <div className="flex min-h-0 flex-1 items-center justify-center bg-muted/20 px-6 text-center text-sm leading-6 text-muted-foreground">
+          Configure VITE_TRACE_USER_CONTENT_ORIGIN to preview design artifacts.
+        </div>
       )}
       {comments.length > 0 ? (
         <div className="flex max-h-28 shrink-0 flex-col gap-1 overflow-y-auto border-t bg-background/95 px-3 py-2">
