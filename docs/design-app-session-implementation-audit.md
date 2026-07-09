@@ -467,3 +467,8 @@ to prove the live preview endpoint is the expected private app preview before pu
 The readiness poll now requires a running process bound to a runtime instance, an enabled
 endpoint on port 3000, and `accessMode: "private"` before continuing to terminal,
 checkpoint, publish, and restore assertions.
+
+During this continuation, the hosted `pnpm smoke:cloud-app-session` script was tightened
+to prove live runtime logs are flowing as structured app-process logs. The readiness poll
+now requires at least one stdout/stderr log entry with non-empty data, sequence, and
+timestamp for the running app process before continuing.

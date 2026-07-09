@@ -282,6 +282,18 @@ async function waitForReadyApp(sessionGroupId, label, options = {}) {
     if (logs.sessionApplicationLogs.length === 0) {
       return { ok: false, detail: `no logs for process ${process.id}` };
     }
+    const structuredLog = logs.sessionApplicationLogs.find(
+      (entry) =>
+        (entry.stream === "stdout" || entry.stream === "stderr") &&
+        typeof entry.data === "string" &&
+        entry.data.trim().length > 0 &&
+        typeof entry.sequence === "number" &&
+        typeof entry.timestamp === "string" &&
+        entry.timestamp.length > 0,
+    );
+    if (!structuredLog) {
+      return { ok: false, detail: `no structured runtime log for process ${process.id}` };
+    }
 
     let checkpoint = null;
     if (requireCheckpoint) {
