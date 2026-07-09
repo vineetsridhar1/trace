@@ -172,7 +172,7 @@ const DESIGN_DIRECTION_LABELS = [
 
 function normalizeDirectionCount(value: number | null | undefined): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return 3;
-  return Math.min(Math.max(Math.floor(value), 1), 4);
+  return Math.min(Math.max(Math.floor(value), 1), 8);
 }
 
 function buildDirectionPrompt(prompt: string, index: number, count: number): string {

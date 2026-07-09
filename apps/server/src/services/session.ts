@@ -443,6 +443,144 @@ function getIdleAgentStatus(agentStatus?: AgentStatus | null): AgentStatus {
   return agentStatus === "not_started" ? "not_started" : "done";
 }
 
+const MAX_DESIGN_CHAT_DIRECTIONS = 8;
+
+const DESIGN_COUNT_WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+};
+
+const DESIGN_COUNT_NOUN_PATTERN =
+  "(?:examples?|options?|directions?|variants?|canvases|screens?|concepts?)";
+
+function clampDesignChatDirectionCount(count: number): number {
+  return Math.min(Math.max(Math.floor(count), 1), MAX_DESIGN_CHAT_DIRECTIONS);
+}
+
+function designCountValue(value: string): number | null {
+  const normalized = value.trim().toLowerCase();
+  const numeric = Number.parseInt(normalized, 10);
+  if (Number.isFinite(numeric)) return clampDesignChatDirectionCount(numeric);
+  return DESIGN_COUNT_WORDS[normalized] ?? null;
+}
+
+function extractDesignDirectionCount(text: string): number | null {
+  const normalized = text.toLowerCase();
+  const countBeforeNoun = new RegExp(
+    `\\b(\\d+|${Object.keys(DESIGN_COUNT_WORDS).join("|")})\\s+${DESIGN_COUNT_NOUN_PATTERN}\\b`,
+    "i",
+  );
+  const nounBeforeCount = new RegExp(
+    `\\b${DESIGN_COUNT_NOUN_PATTERN}\\s*[:=]?\\s*(\\d+|${Object.keys(DESIGN_COUNT_WORDS).join("|")})\\b`,
+    "i",
+  );
+
+  const beforeMatch = normalized.match(countBeforeNoun);
+  if (beforeMatch?.[1]) return designCountValue(beforeMatch[1]);
+
+  const afterMatch = normalized.match(nounBeforeCount);
+  if (afterMatch?.[1]) return designCountValue(afterMatch[1]);
+
+  const compactAnswer = normalized.trim().match(/^(\d+|one|two|three|four|five|six|seven|eight)$/);
+  if (compactAnswer?.[1]) return designCountValue(compactAnswer[1]);
+
+  return null;
+}
+
+function shouldSkipDesignQuestions(text: string): boolean {
+  return /\b(?:skip questions|no questions|don't ask|dont ask|just build|go ahead|make it)\b/i.test(
+    text,
+  );
+}
+
+function designJsonObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function pendingDesignPromptFromPayload(payload: unknown): string | null {
+  const record = designJsonObject(payload);
+  const designRequest = designJsonObject(record?.designRequest);
+  if (designRequest?.status !== "pending") return null;
+  const prompt = designRequest.prompt;
+  return typeof prompt === "string" && prompt.trim() ? prompt : null;
+}
+
+function buildDesignChatPrompt(input: { brief: string; answers?: string | null }): string {
+  const answers = input.answers?.trim();
+  if (!answers) return input.brief;
+  return [input.brief, "", "Additional brief answers from the user:", answers].join("\n");
+}
+
+function designClarificationPayload(prompt: string): Prisma.InputJsonValue {
+  return {
+    type: "assistant",
+    message: {
+      content: [
+        {
+          type: "text",
+          text: "I need a few details before creating the design canvases.",
+        },
+        {
+          type: "question",
+          questions: [
+            {
+              header: "Examples",
+              question: "How many distinct design examples should I create?",
+              options: [
+                {
+                  label: "3 examples",
+                  description: "Balanced exploration with manageable review.",
+                },
+                { label: "1 example", description: "Fastest path to one concrete direction." },
+                { label: "6 examples", description: "Broader exploration across more canvases." },
+              ],
+              multiSelect: false,
+            },
+            {
+              header: "Surface",
+              question: "What surface should these canvases target?",
+              options: [
+                { label: "Desktop web app", description: "Optimized for a full product UI." },
+                { label: "Mobile app", description: "Optimized for a phone-sized workflow." },
+                { label: "Landing page", description: "Optimized for a public marketing page." },
+              ],
+              multiSelect: false,
+            },
+            {
+              header: "Fidelity",
+              question: "What level of fidelity should I aim for?",
+              options: [
+                {
+                  label: "High fidelity",
+                  description: "Detailed visuals, spacing, and realistic content.",
+                },
+                { label: "Wireframe", description: "Structure first, minimal styling." },
+                {
+                  label: "Design system",
+                  description: "Conservative, reusable product components.",
+                },
+              ],
+              multiSelect: false,
+            },
+          ],
+        },
+      ],
+    },
+    designRequest: {
+      status: "pending",
+      prompt,
+    },
+  } as Prisma.InputJsonValue;
+}
+
 /** Cast connection data to Prisma-compatible JSON */
 function connJson(data: SessionConnectionData): Prisma.InputJsonValue {
   return data as unknown as Prisma.InputJsonValue;
@@ -5781,6 +5919,215 @@ export class SessionService {
     return completed;
   }
 
+  private async findPendingDesignPrompt(sessionId: string): Promise<string | null> {
+    const recentOutputs = await prisma.event.findMany({
+      where: { scopeType: "session", scopeId: sessionId, eventType: "session_output" },
+      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+      take: 20,
+      select: { payload: true },
+    });
+
+    for (const output of recentOutputs) {
+      const prompt = pendingDesignPromptFromPayload(output.payload);
+      if (prompt) return prompt;
+    }
+
+    return null;
+  }
+
+  private async askDesignClarifyingQuestions(input: {
+    sessionId: string;
+    organizationId: string;
+    actorId: string;
+    actorType: ActorType;
+    prompt: string;
+  }) {
+    await prisma.session.update({
+      where: { id: input.sessionId },
+      data: {
+        agentStatus: "done",
+        sessionStatus: "needs_input",
+        lastMessageAt: new Date(),
+        ...(input.actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
+      },
+    });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: input.sessionId,
+      eventType: "session_output",
+      payload: designClarificationPayload(input.prompt),
+      actorType: "agent",
+      actorId: input.actorId,
+    });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: input.sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "question_pending",
+        sessionStatus: "needs_input",
+      },
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
+  private async sendDesignSessionMessage(input: {
+    sessionId: string;
+    sessionGroupId: string;
+    organizationId: string;
+    sessionStatus: SessionStatus;
+    text: string;
+    imageKeys?: string[];
+    actorType: ActorType;
+    actorId: string;
+    clientMutationId?: string;
+    clientSource?: string | null;
+  }) {
+    const messageEvent = await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: input.sessionId,
+      eventType: "message_sent",
+      payload: {
+        text: input.text,
+        clientSource: normalizeClientSource(input.clientSource),
+        ...(input.imageKeys?.length
+          ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
+          : {}),
+        ...(input.clientMutationId ? { clientMutationId: input.clientMutationId } : {}),
+      },
+      actorType: input.actorType,
+      actorId: input.actorId,
+    });
+
+    const pendingPrompt =
+      input.sessionStatus === "needs_input"
+        ? await this.findPendingDesignPrompt(input.sessionId)
+        : null;
+    const requestedCount = extractDesignDirectionCount(input.text);
+
+    if (!pendingPrompt && requestedCount == null && !shouldSkipDesignQuestions(input.text)) {
+      await this.askDesignClarifyingQuestions({
+        sessionId: input.sessionId,
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        actorType: input.actorType,
+        prompt: input.text,
+      });
+      return messageEvent;
+    }
+
+    const prompt = buildDesignChatPrompt({
+      brief: pendingPrompt ?? input.text,
+      answers: pendingPrompt ? input.text : null,
+    });
+    const directionCount = requestedCount ?? 3;
+    const runningSessionStatus = getRunningSessionStatus(input.sessionStatus);
+    const sessionGroup = await this.loadSessionGroupSnapshot(input.sessionGroupId);
+
+    await prisma.session.update({
+      where: { id: input.sessionId },
+      data: {
+        agentStatus: "active",
+        sessionStatus: runningSessionStatus,
+        lastMessageAt: new Date(),
+        ...(input.actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
+      },
+    });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: input.sessionId,
+      eventType: "session_resumed",
+      payload: {
+        sessionId: input.sessionId,
+        agentStatus: "active",
+        sessionStatus: runningSessionStatus,
+        clientSource: normalizeClientSource(input.clientSource),
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
+      actorType: input.actorType,
+      actorId: input.actorId,
+    });
+
+    try {
+      const { artifactService } = await import("./artifact.js");
+      await artifactService.generateDesignArtifacts({
+        sessionGroupId: input.sessionGroupId,
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        actorType: input.actorType,
+        prompt,
+        directionCount,
+      });
+
+      const idleSessionStatus = getIdleSessionStatus(runningSessionStatus);
+      await prisma.session.update({
+        where: { id: input.sessionId },
+        data: { agentStatus: "done", sessionStatus: idleSessionStatus },
+      });
+
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: input.sessionId,
+        eventType: "session_terminated",
+        payload: {
+          sessionId: input.sessionId,
+          reason: "bridge_complete",
+          agentStatus: "done",
+          sessionStatus: idleSessionStatus,
+          ...(sessionGroup ? { sessionGroup } : {}),
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Design generation failed.";
+      await prisma.session.update({
+        where: { id: input.sessionId },
+        data: { agentStatus: "failed", sessionStatus: runningSessionStatus },
+      });
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: input.sessionId,
+        eventType: "session_output",
+        payload: {
+          type: "assistant",
+          message: {
+            content: [{ type: "text", text: `Design generation failed: ${message}` }],
+          },
+        },
+        actorType: "agent",
+        actorId: input.actorId,
+      });
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: input.sessionId,
+        eventType: "session_terminated",
+        payload: {
+          sessionId: input.sessionId,
+          reason: "design_generation_failed",
+          agentStatus: "failed",
+          sessionStatus: runningSessionStatus,
+          ...(sessionGroup ? { sessionGroup } : {}),
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+    }
+
+    return messageEvent;
+  }
+
   async sendMessage({
     sessionId,
     text,
@@ -5828,6 +6175,28 @@ export class SessionService {
       },
     });
     validateUploadKeysForOrganization(imageKeys, session.organizationId);
+
+    if (session.sessionGroup?.kind === "design") {
+      if (session.worktreeDeleted) {
+        throw new Error("Cannot send messages: session worktree has been deleted");
+      }
+      if (!session.sessionGroupId) {
+        throw new Error("Design session has no session group.");
+      }
+      return this.sendDesignSessionMessage({
+        sessionId,
+        sessionGroupId: session.sessionGroupId,
+        organizationId: session.organizationId,
+        sessionStatus: session.sessionStatus,
+        text,
+        imageKeys,
+        actorType,
+        actorId,
+        clientMutationId,
+        clientSource,
+      });
+    }
+
     const conn = this.parseConnection(session.connection);
     const allowToolFallback =
       actorType === "user" &&

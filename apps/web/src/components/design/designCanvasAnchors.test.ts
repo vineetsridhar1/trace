@@ -17,7 +17,7 @@ import {
   streamingArtifactsFromEvents,
   updateDesignArtifactSelection,
   type DesignComment,
-} from "./DesignCanvas";
+} from "./designCanvasModel";
 
 describe("design canvas anchors", () => {
   it("normalizes bootstrap element-selected anchors", () => {

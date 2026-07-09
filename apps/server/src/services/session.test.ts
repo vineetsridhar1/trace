@@ -5004,6 +5004,126 @@ describe("SessionService", () => {
   });
 
   describe("sendMessage", () => {
+    it("asks structured design questions when a design chat prompt omits an example count", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "serverless",
+          repoId: null,
+          repo: null,
+          toolSessionId: null,
+          workdir: null,
+          sessionGroup: makeSessionGroup({ kind: "design", repoId: null, repo: null }),
+        }),
+      );
+      prismaMock.session.update.mockResolvedValue(makeSession());
+
+      const event = await service.sendMessage({
+        sessionId: "session-1",
+        text: "Design a billing settings experience",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(event).toEqual({ id: "event-1" });
+      expect(designGenerationServiceMock.generateHtml).not.toHaveBeenCalled();
+      expect(sessionRouterMock.send).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({ agentStatus: "done", sessionStatus: "needs_input" }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "assistant",
+            designRequest: expect.objectContaining({
+              status: "pending",
+              prompt: "Design a billing settings experience",
+            }),
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({ type: "question_pending" }),
+        }),
+      );
+    });
+
+    it("generates the requested number of design canvases from chat", async () => {
+      const designSession = makeSession({
+        hosting: "serverless",
+        repoId: null,
+        repo: null,
+        toolSessionId: null,
+        workdir: null,
+        sessionGroup: makeSessionGroup({ kind: "design", repoId: null, repo: null }),
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(designSession);
+      prismaMock.session.update.mockResolvedValue(designSession);
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: "group-1", visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({
+          id: "group-1",
+          kind: "design",
+          sessions: [{ id: "session-1" }],
+        });
+      prismaMock.artifact.create.mockImplementation(
+        async (args: { data: Record<string, unknown> }) => ({
+          id: String(args.data.id),
+          sessionGroupId: "group-1",
+          organizationId: "org-1",
+          parentArtifactId: null,
+          promptEventId: null,
+          prompt: args.data.prompt,
+          title: args.data.title,
+          contentType: args.data.contentType,
+          html: "",
+          htmlStorageKey: args.data.htmlStorageKey,
+          metadata: args.data.metadata,
+          publishedAt: null,
+          createdById: "user-1",
+          createdBy: { id: "user-1", name: "Test User", avatarUrl: null },
+          createdAt: new Date("2026-07-09T10:00:00.000Z"),
+          updatedAt: new Date("2026-07-09T10:00:00.000Z"),
+        }),
+      );
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "Create 5 examples of a billing settings experience",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(designGenerationServiceMock.generateHtml).toHaveBeenCalledTimes(5);
+      expect(designGenerationServiceMock.generateHtml).toHaveBeenNthCalledWith(
+        5,
+        expect.objectContaining({
+          sessionGroupId: "group-1",
+          directionIndex: 4,
+          directionCount: 5,
+          prompt: expect.stringContaining("variant 5 of 5"),
+        }),
+      );
+      expect(sessionRouterMock.send).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_resumed",
+          payload: expect.objectContaining({ agentStatus: "active" }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_terminated",
+          payload: expect.objectContaining({ reason: "bridge_complete", agentStatus: "done" }),
+        }),
+      );
+    });
+
     it("does not preserve a channel base branch as the worktree branch for deferred sessions", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
         makeSession({
