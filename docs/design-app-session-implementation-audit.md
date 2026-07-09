@@ -76,6 +76,8 @@ Implemented:
 - Detected HTTP ports create/enable `SessionEndpoint` rows for live preview.
 - A container-bridge process smoke starts a real HTTP app process, detects its preview
   port, proxies a request, and verifies rendered HTML/source stamps.
+- An env-gated endpoint-proxy integration smoke starts the generated Next.js starter and
+  verifies the Trace endpoint proxy serves the starter page and API route.
 - Logs, process state, endpoint preview, terminal, checkpoint panel, and publish/share
   controls are exposed through the session application UI.
 - `publishAppSession` flips the primary enabled endpoint to public and emits an endpoint
@@ -99,6 +101,7 @@ Verified:
 - `organization.test.ts`
 - `app-checkpoint-capture.test.ts`
 - `endpoint-proxy.test.ts`
+- `endpoint-proxy.integration.test.ts` with `TRACE_RUN_APP_STARTER_PROXY_SMOKE=1`
 - `workspace.integration.test.ts`
 - `managed-process-manager.test.ts`
 - `@trace/container-bridge build`
