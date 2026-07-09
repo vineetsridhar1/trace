@@ -8,9 +8,16 @@ This audit compares the current implementation against `docs/design-session-expe
 ## Current Status
 
 The main server/service/UI paths for `design` and `app` sessions are implemented and
-covered by focused tests. The remaining risk is runtime/browser smoke coverage: the code
-paths compile and service tests pass, but this audit did not run a live cloud app session
-through a browser from prompt to published URL.
+covered by focused tests. Two items remain important before claiming the complete product
+goal is fully verified:
+
+- A real configured cloud app session has not been run through a browser from prompt to
+  published URL in this environment.
+- Design artifact HTML is currently stored in the `Artifact.html` database column and
+  served from that row. The docs describe artifact HTML as living in the existing object
+  storage/upload pipeline. The current implementation satisfies lineage, preview,
+  publish, PDF, and promotion behavior, but it does not yet move artifact HTML blobs out
+  of the database.
 
 ## Design Sessions
 
@@ -32,7 +39,8 @@ Implemented:
 - The design canvas uses the existing session/chat shell, renders artifact variants on a
   pan/zoom canvas, and supports focus/fit/zoom controls.
 - Artifact previews use the user-content `_bootstrap` iframe flow when configured, with a
-  dev-only `srcDoc` fallback.
+  dev-only `srcDoc` fallback. Artifact HTML is read from the database-backed
+  `Artifact.html` field rather than object storage.
 - User-content bootstrap and published artifact responses set CSP, Permissions-Policy,
   COOP, Referrer-Policy, cache, and content-type isolation headers.
 - The web canvas has focused tests for nonce-bound `_bootstrap` artifact preview URLs and
@@ -147,11 +155,13 @@ Verified:
 - `@trace/shared build`
 - `@trace/shared smoke:app-starter`
 
-## Remaining Verification Gap
+## Remaining Gaps
 
-No code-level acceptance gap was found in this audit, but one product-level smoke remains
-unproven in this environment:
+The remaining gaps found by this audit are:
 
+- Move design artifact HTML persistence from the `Artifact.html` database field to the
+  existing upload/object-storage path described by `docs/design-session-experience.md`,
+  or explicitly revise the product contract to accept database-backed artifact HTML.
 - Run a real cloud `app` session end to end: prompt, starter boot, port detection, preview
   iframe, checkpoint, restore from checkpoint, capture thumbnail, publish public endpoint,
   and open the published URL.
