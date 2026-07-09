@@ -118,6 +118,7 @@ type UserSessionDefaults = {
 const SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS = 5_000;
 const LINKED_CHECKOUT_BRANCH_REFRESH_TIMEOUT_MS = 1_500;
 const FALLBACK_SESSION_TOOL: CodingTool = "claude_code";
+const APP_SESSION_TOOL: CodingTool = "claude_code";
 const LOCAL_TOOL_FALLBACK_ORDER: readonly CodingTool[] = [
   FALLBACK_SESSION_TOOL,
   "codex",
@@ -3323,6 +3324,11 @@ export class SessionService {
         : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
     const requestedGroupKind =
       input.kind === "app" || restoreGroup?.kind === "app" ? "app" : "coding";
+    if (requestedGroupKind === "app" && tool !== APP_SESSION_TOOL) {
+      throw new ValidationError(
+        "App sessions currently require Claude Code so the Open Design app harness can be delivered.",
+      );
+    }
     const existingGroup = existingGroupId
       ? await prisma.sessionGroup.findFirst({
           where: { id: existingGroupId, organizationId: input.organizationId },

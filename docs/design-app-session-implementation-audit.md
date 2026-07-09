@@ -343,3 +343,9 @@ During this continuation, the Open Design prompt composer had targeted substring
 but no rebase-review snapshots for the full composed prompts. `packages/shared` now
 snapshots one design artifact prompt and one app starter prompt, covering the vendored
 composer output plus the Trace overlays for both delivery paths.
+
+During this continuation, app sessions were found to rely on
+`RunOptions.appendSystemPrompt`, which only the Claude Code adapter currently maps to a
+real CLI option. `SessionService.start` now rejects app sessions that resolve to any
+other tool, including unsupported user defaults, so the Open Design app harness cannot be
+silently dropped.

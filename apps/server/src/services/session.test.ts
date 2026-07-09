@@ -790,6 +790,45 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
+    it("rejects app sessions with tools that cannot receive the Open Design app harness", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "codex",
+          kind: "app",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow(
+        "App sessions currently require Claude Code so the Open Design app harness can be delivered.",
+      );
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+    });
+
+    it("rejects app sessions when the user's default tool cannot receive the app harness", async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        defaultSessionTool: "codex",
+        defaultSessionModel: "openai-codex/gpt-5.5",
+        defaultSessionReasoningEffort: "medium",
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "app",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow(
+        "App sessions currently require Claude Code so the Open Design app harness can be delivered.",
+      );
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+    });
+
     it("creates app sessions without a repo until the first checkpoint", async () => {
       const sessionGroup = makeSessionGroup({
         kind: "app",
