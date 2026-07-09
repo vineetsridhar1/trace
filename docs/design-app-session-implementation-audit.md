@@ -388,3 +388,8 @@ private app authoring overlay, not just public endpoint serving. The opt-in smok
 loads a private endpoint through the preview-auth cookie flow, verifies the injected
 overlay posts a `data-trace-source` element selection to the parent frame, and verifies
 script errors from the app frame are surfaced through the same overlay channel.
+
+During this continuation, the hosted `pnpm smoke:cloud-app-session` script was tightened
+to assert the endpoint serving boundary directly: private preview URLs must include the
+authoring overlay in browser-rendered DOM, while the published public URL must not include
+`data-trace-app-overlay`.

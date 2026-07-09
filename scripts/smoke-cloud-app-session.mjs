@@ -276,6 +276,7 @@ async function waitForReadyApp(sessionGroupId, label, options = {}) {
 
 async function renderUrl(url, label, options = {}) {
   const requireFetch = options.requireFetch !== false;
+  const expectOverlay = options.expectOverlay === true;
   if (requireFetch) {
     const response = await fetch(url, { redirect: "follow" });
     const html = await response.text();
@@ -285,6 +286,7 @@ async function renderUrl(url, label, options = {}) {
     if (!html.includes(expectedText)) {
       throw new Error(`${label} fetch did not contain ${expectedText}`);
     }
+    assertOverlayState(html, label, expectOverlay);
   }
 
   if (skipBrowser) {
@@ -315,8 +317,19 @@ async function renderUrl(url, label, options = {}) {
     if (!stdout.includes(expectedText)) {
       throw new Error(`${label} browser DOM did not contain ${expectedText}`);
     }
+    assertOverlayState(stdout, `${label} browser DOM`, expectOverlay);
   } finally {
     await fsp.rm(profileDir, { recursive: true, force: true });
+  }
+}
+
+function assertOverlayState(html, label, expected) {
+  const hasOverlay = html.includes("data-trace-app-overlay");
+  if (expected && !hasOverlay) {
+    throw new Error(`${label} did not include the authoring overlay`);
+  }
+  if (!expected && hasOverlay) {
+    throw new Error(`${label} unexpectedly included the authoring overlay`);
   }
 }
 
@@ -498,10 +511,10 @@ if (requireCapture) {
 }
 const terminalOutput = await verifyTerminalWorkdir(session.id);
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
-await renderUrl(previewUrl, "private preview URL", { requireFetch: false });
+await renderUrl(previewUrl, "private preview URL", { requireFetch: false, expectOverlay: true });
 
 const publicUrl = await publishApp(session.sessionGroupId);
-await renderUrl(publicUrl, "published public URL");
+await renderUrl(publicUrl, "published public URL", { expectOverlay: false });
 
 const restored = await startAppSession({
   restoreCheckpointId: initial.checkpoint.id,
@@ -513,7 +526,10 @@ const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored",
   requireManagedRepo: true,
 });
 const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
-await renderUrl(restoredPreviewUrl, "restored preview URL", { requireFetch: false });
+await renderUrl(restoredPreviewUrl, "restored preview URL", {
+  requireFetch: false,
+  expectOverlay: true,
+});
 
 process.stdout.write(
   [
