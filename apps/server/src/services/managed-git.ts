@@ -4,10 +4,10 @@ import type { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
 import { promisify } from "util";
-import { Prisma, type PrismaClient } from "@prisma/client";
-import type { RepoApplicationConfigInput } from "@trace/gql";
+import type { PrismaClient } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { authenticateProvisionedRuntimeToken } from "../lib/runtime-adapters.js";
+import { buildDefaultAppSetupConfig } from "./app-starter-config.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_BRANCH = "main";
@@ -21,51 +21,6 @@ type PrismaTx = Omit<
   PrismaClient,
   "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
 >;
-
-const DEFAULT_APP_CONFIG: RepoApplicationConfigInput = {
-  setupScripts: [
-    {
-      id: "install",
-      name: "Install dependencies",
-      command: "pnpm install",
-      workingDirectory: ".",
-      env: [],
-    },
-    {
-      id: "build",
-      name: "Build app",
-      command: "pnpm build",
-      workingDirectory: ".",
-      env: [],
-    },
-  ],
-  applications: [
-    {
-      id: "web",
-      name: "Web app",
-      processes: [
-        {
-          id: "dev",
-          name: "Next.js dev server",
-          command: "pnpm dev --hostname 0.0.0.0",
-          workingDirectory: ".",
-          env: [],
-          required: true,
-          ports: [
-            {
-              id: "web",
-              label: "Web",
-              port: 3000,
-              protocol: "http",
-              defaultForwardingEnabled: true,
-              healthPath: "/",
-            },
-          ],
-        },
-      ],
-    },
-  ],
-};
 
 function gitStorageRoot(): string {
   return process.env.GIT_STORAGE_ROOT?.trim() || path.join(process.cwd(), ".trace-managed-git");
@@ -144,17 +99,6 @@ async function initBareRepo(repoPath: string): Promise<void> {
   if (fs.existsSync(repoPath)) return;
   fs.mkdirSync(path.dirname(repoPath), { recursive: true });
   await execFileAsync("git", ["init", "--bare", "--initial-branch", DEFAULT_BRANCH, repoPath]);
-}
-
-function buildDefaultAppSetupConfig(): Prisma.InputJsonValue {
-  return {
-    applications: DEFAULT_APP_CONFIG,
-    appStarter: {
-      version: 1,
-      framework: "nextjs",
-      packageManager: "pnpm",
-    },
-  } as Prisma.InputJsonValue;
 }
 
 function runGitHttpService(input: {

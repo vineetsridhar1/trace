@@ -6513,6 +6513,32 @@ export class SessionService {
       }
     }
 
+    if (session.sessionGroup?.kind === "app" && session.sessionGroupId) {
+      try {
+        await sessionApplicationService.startApplication(
+          session.sessionGroupId,
+          "web",
+          session.organizationId,
+          session.createdById,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await eventService.create({
+          organizationId: session.organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "app_preview_start_failed",
+            sessionGroupId: session.sessionGroupId,
+            error: message,
+          } as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        });
+      }
+    }
+
     // If a run was queued while workspace was being prepared, execute it now
     if (pendingRun) {
       const replayResult = await this.deliverPendingCommand(sessionId, pendingRun);

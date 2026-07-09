@@ -6435,6 +6435,179 @@ describe("SessionService", () => {
         }),
       );
     });
+
+    it("starts the default app preview when an app workspace becomes ready", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        readOnlyWorkspace: false,
+        workdir: null,
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          kind: "app",
+          repoId: null,
+          repo: null,
+          workdir: "/home/coder",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          sessionGroup: makeSessionGroup({
+            kind: "app",
+            repoId: null,
+            repo: null,
+            workdir: "/home/coder",
+          }),
+        }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ kind: "app", repoId: null, repo: null, workdir: "/home/coder" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      const repoLessAppGroup = {
+        id: "group-1",
+        organizationId: "org-1",
+        kind: "app",
+        ownerUserId: "user-1",
+        visibility: "public",
+        repoId: null,
+        workdir: "/home/coder",
+        repo: null,
+        sessions: [
+          {
+            id: "session-1",
+            workdir: "/home/coder",
+            connection: { runtimeInstanceId: "runtime-1" },
+          },
+        ],
+      };
+      prismaMock.sessionGroup.findFirstOrThrow
+        .mockResolvedValueOnce(repoLessAppGroup)
+        .mockResolvedValueOnce(repoLessAppGroup);
+      sessionRouterMock.getRuntime.mockReturnValue({
+        key: "runtime-1",
+        id: "runtime-1",
+        hostingMode: "cloud",
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      prismaMock.sessionApplicationProcess.upsert.mockResolvedValueOnce({
+        id: "process-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: null,
+        appConfigId: "web",
+        processConfigId: "dev",
+        label: "Next.js dev server",
+        command: "pnpm dev --hostname 0.0.0.0",
+        workingDirectory: ".",
+        status: "starting",
+        runtimeInstanceId: "runtime-1",
+        bridgeProcessId: null,
+        exitCode: null,
+        lastError: null,
+        startedByUserId: "user-1",
+        startedAt: new Date("2026-07-09T00:00:00.000Z"),
+        stoppedAt: null,
+        lastHeartbeatAt: null,
+        createdAt: new Date("2026-07-09T00:00:00.000Z"),
+        updatedAt: new Date("2026-07-09T00:00:00.000Z"),
+      });
+      prismaMock.sessionEndpoint.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: "endpoint-1",
+          organizationId: "org-1",
+          sessionGroupId: "group-1",
+          appConfigId: "web",
+          processConfigId: "dev",
+          portConfigId: "web",
+          accessMode: "private",
+        });
+      prismaMock.sessionEndpoint.create.mockResolvedValueOnce({
+        id: "endpoint-1",
+        key: "endpointkey1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: null,
+        appConfigId: "web",
+        processConfigId: "dev",
+        portConfigId: "web",
+        label: "Web",
+        targetPort: 3000,
+        protocol: "http",
+        status: "disabled",
+        accessMode: "private",
+        trafficCaptureMode: "metadata",
+        enabledAt: null,
+        disabledAt: null,
+        revokedAt: null,
+      });
+      prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
+        id: "endpoint-1",
+        key: "endpointkey1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: null,
+        appConfigId: "web",
+        processConfigId: "dev",
+        portConfigId: "web",
+        label: "Web",
+        targetPort: 3000,
+        protocol: "http",
+        status: "disabled",
+        accessMode: "private",
+        trafficCaptureMode: "metadata",
+        enabledAt: null,
+        disabledAt: null,
+        revokedAt: null,
+      });
+      prismaMock.sessionEndpoint.update.mockResolvedValueOnce({
+        id: "endpoint-1",
+        key: "endpointkey1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: null,
+        appConfigId: "web",
+        processConfigId: "dev",
+        portConfigId: "web",
+        label: "Web",
+        targetPort: 3000,
+        protocol: "http",
+        status: "enabled",
+        accessMode: "private",
+        trafficCaptureMode: "metadata",
+        enabledAt: new Date("2026-07-09T00:00:00.000Z"),
+        disabledAt: null,
+        revokedAt: null,
+      });
+
+      await service.workspaceReady("session-1", "/home/coder", "main");
+
+      expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+        "runtime-1",
+        expect.objectContaining({
+          type: "app_process_start",
+          sessionGroupId: "group-1",
+          sessionId: "session-1",
+          command: "pnpm dev --hostname 0.0.0.0",
+        }),
+        "org-1",
+      );
+      expect(prismaMock.sessionEndpoint.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: "enabled",
+            currentRuntimeInstanceId: "runtime-1",
+          }),
+        }),
+      );
+    });
   });
 
   describe("workspaceFailed", () => {

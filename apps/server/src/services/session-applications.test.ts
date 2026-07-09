@@ -38,6 +38,7 @@ function mockGroup() {
   prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValue({
     id: "group-1",
     organizationId: "org-1",
+    kind: "coding",
     ownerUserId: "user-1",
     visibility: "public",
     repoId: "repo-1",
@@ -192,6 +193,126 @@ describe("SessionApplicationService", () => {
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: "session_endpoint_created" }),
       prismaMock,
+    );
+  });
+
+  it("starts the default app preview before a managed repo exists", async () => {
+    const repoLessAppGroup = {
+      id: "group-1",
+      organizationId: "org-1",
+      kind: "app",
+      ownerUserId: "user-1",
+      visibility: "public",
+      repoId: null,
+      workdir: "/home/coder",
+      repo: null,
+      sessions: [
+        {
+          id: "session-1",
+          workdir: "/home/coder",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ],
+    };
+    prismaMock.sessionGroup.findFirstOrThrow
+      .mockResolvedValueOnce(repoLessAppGroup)
+      .mockResolvedValueOnce(repoLessAppGroup);
+    prismaMock.sessionApplicationProcess.upsert.mockResolvedValueOnce({
+      id: "process-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: null,
+      appConfigId: "web",
+      processConfigId: "dev",
+      label: "Next.js dev server",
+      command: "pnpm dev --hostname 0.0.0.0",
+      workingDirectory: ".",
+      status: "starting",
+      runtimeInstanceId: "runtime-1",
+      bridgeProcessId: null,
+      exitCode: null,
+      lastError: null,
+      startedByUserId: "user-1",
+      startedAt: new Date("2026-06-07T00:00:00.000Z"),
+      stoppedAt: null,
+      lastHeartbeatAt: null,
+      createdAt: new Date("2026-06-07T00:00:00.000Z"),
+      updatedAt: new Date("2026-06-07T00:00:00.000Z"),
+    });
+    prismaMock.sessionEndpoint.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: "endpoint-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        appConfigId: "web",
+        processConfigId: "dev",
+        portConfigId: "web",
+        accessMode: "private",
+      });
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: null,
+      appConfigId: "web",
+      processConfigId: "dev",
+      portConfigId: "web",
+      label: "Web",
+      targetPort: 3000,
+      protocol: "http",
+      status: "disabled",
+      accessMode: "private",
+      trafficCaptureMode: "metadata",
+      enabledAt: null,
+      disabledAt: null,
+      revokedAt: null,
+    });
+    prismaMock.sessionEndpoint.update.mockResolvedValueOnce({
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: null,
+      appConfigId: "web",
+      processConfigId: "dev",
+      portConfigId: "web",
+      label: "Web",
+      targetPort: 3000,
+      protocol: "http",
+      status: "enabled",
+      accessMode: "private",
+      trafficCaptureMode: "metadata",
+      enabledAt: new Date("2026-06-07T00:00:00.000Z"),
+      disabledAt: null,
+      revokedAt: null,
+    });
+
+    await new SessionApplicationService().startApplication("group-1", "web", "org-1", "user-1");
+
+    expect(prismaMock.sessionApplicationProcess.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          repoId: null,
+          command: "pnpm dev --hostname 0.0.0.0",
+        }),
+      }),
+    );
+    expect(prismaMock.sessionEndpoint.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ repoId: null, targetPort: 3000 }),
+      }),
+    );
+    expect(prismaMock.sessionEndpoint.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "endpoint-1" },
+        data: expect.objectContaining({
+          status: "enabled",
+          currentRuntimeInstanceId: "runtime-1",
+        }),
+      }),
     );
   });
 
@@ -367,7 +488,12 @@ describe("SessionApplicationService", () => {
       { id: "stale-2" },
     ]);
 
-    await new SessionApplicationService().appendProcessLog("process-1", "org-1", "stderr", "line\n");
+    await new SessionApplicationService().appendProcessLog(
+      "process-1",
+      "org-1",
+      "stderr",
+      "line\n",
+    );
 
     expect(prismaMock.sessionApplicationLogEntry.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -404,7 +530,9 @@ describe("SessionApplicationService", () => {
       lastError: null,
       ...data,
     }));
-    prismaMock.sessionEndpoint.findMany.mockResolvedValueOnce([{ id: "endpoint-1", status: "enabled" }]);
+    prismaMock.sessionEndpoint.findMany.mockResolvedValueOnce([
+      { id: "endpoint-1", status: "enabled" },
+    ]);
     prismaMock.sessionEndpoint.update.mockImplementationOnce(async ({ data }) => ({
       id: "endpoint-1",
       key: "endpointkey1",
@@ -428,7 +556,11 @@ describe("SessionApplicationService", () => {
     expect(prismaMock.sessionApplicationProcess.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "process-1" },
-        data: expect.objectContaining({ status: "stopped", runtimeInstanceId: null, bridgeProcessId: null }),
+        data: expect.objectContaining({
+          status: "stopped",
+          runtimeInstanceId: null,
+          bridgeProcessId: null,
+        }),
       }),
     );
     expect(prismaMock.sessionEndpoint.update).toHaveBeenCalledWith(
@@ -449,7 +581,11 @@ describe("SessionApplicationService", () => {
     prismaMock.sessionApplicationProcess.findFirst.mockResolvedValue(null);
 
     await expect(
-      new SessionApplicationService().markProcessRunning("missing-process", "org-1", "bridge-process"),
+      new SessionApplicationService().markProcessRunning(
+        "missing-process",
+        "org-1",
+        "bridge-process",
+      ),
     ).resolves.toBeNull();
     await expect(
       new SessionApplicationService().markProcessExited("missing-process", "org-1", 0),

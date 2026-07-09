@@ -641,8 +641,8 @@ model SessionSetupScriptRun {
   organization     Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sessionGroupId   String
   sessionGroup     SessionGroup                @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repoId           String
-  repo             Repo                        @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  repoId           String?
+  repo             Repo?                       @relation(fields: [repoId], references: [id], onDelete: Cascade)
 
   scriptConfigId   String
   label            String
@@ -670,8 +670,8 @@ model SessionApplicationProcess {
   organization       Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sessionGroupId     String
   sessionGroup       SessionGroup                    @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repoId             String
-  repo               Repo                            @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  repoId             String?
+  repo               Repo?                           @relation(fields: [repoId], references: [id], onDelete: Cascade)
 
   appConfigId        String
   processConfigId    String
@@ -720,8 +720,8 @@ model SessionEndpoint {
   organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sessionGroupId           String
   sessionGroup             SessionGroup               @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repoId                   String
-  repo                     Repo                       @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  repoId                   String?
+  repo                     Repo?                      @relation(fields: [repoId], references: [id], onDelete: Cascade)
 
   appConfigId              String
   processConfigId          String
