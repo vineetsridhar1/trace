@@ -15,6 +15,7 @@ This managed repository stores a standalone Trace app session.
       scripts: {
         dev: "next dev",
         build: "next build",
+        start: "next start",
         lint: "next lint",
         typecheck: "tsc --noEmit",
       },
@@ -140,6 +141,41 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 `,
+  "lib/persistence.ts": `export type AppItem = {
+  id: string;
+  title: string;
+  createdAt: string;
+};
+
+const globalStore = globalThis as typeof globalThis & {
+  __traceAppItems?: AppItem[];
+};
+
+function store() {
+  globalStore.__traceAppItems ??= [
+    {
+      id: "welcome",
+      title: "Replace this in-memory seam with a database adapter when the app needs durability.",
+      createdAt: new Date(0).toISOString(),
+    },
+  ];
+  return globalStore.__traceAppItems;
+}
+
+export function listItems() {
+  return [...store()];
+}
+
+export function createItem(title: string) {
+  const item: AppItem = {
+    id: crypto.randomUUID(),
+    title,
+    createdAt: new Date().toISOString(),
+  };
+  store().unshift(item);
+  return item;
+}
+`,
   "components/ui/button.tsx": `import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -228,6 +264,22 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   );
 }
 `,
+  "app/api/items/route.ts": `import { NextResponse } from "next/server";
+import { createItem, listItems } from "@/lib/persistence";
+
+export async function GET() {
+  return NextResponse.json({ items: listItems() });
+}
+
+export async function POST(request: Request) {
+  const body = (await request.json().catch(() => null)) as { title?: unknown } | null;
+  const title = typeof body?.title === "string" ? body.title.trim() : "";
+  if (!title) {
+    return NextResponse.json({ error: "title is required" }, { status: 400 });
+  }
+  return NextResponse.json({ item: createItem(title) }, { status: 201 });
+}
+`,
   "app/page.tsx": `import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -239,27 +291,43 @@ const tasks = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[var(--background)] px-6 py-10 text-[var(--foreground)]">
-      <section className="mx-auto flex max-w-5xl flex-col gap-8">
-        <div className="max-w-3xl">
-          <p className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--primary)]">
+    <main
+      data-trace-source="app/page.tsx:11"
+      className="min-h-screen bg-[var(--background)] px-6 py-10 text-[var(--foreground)]"
+    >
+      <section data-trace-source="app/page.tsx:15" className="mx-auto flex max-w-5xl flex-col gap-8">
+        <div data-trace-source="app/page.tsx:16" className="max-w-3xl">
+          <p
+            data-trace-source="app/page.tsx:17"
+            className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--primary)]"
+          >
             Trace app session
           </p>
-          <h1 className="text-4xl font-semibold tracking-normal sm:text-5xl">
+          <h1
+            data-trace-source="app/page.tsx:22"
+            className="text-4xl font-semibold tracking-normal sm:text-5xl"
+          >
             Build the full-stack app from here.
           </h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
+          <p
+            data-trace-source="app/page.tsx:28"
+            className="mt-4 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]"
+          >
             This managed repo starts with Next.js, Tailwind, shadcn-compatible primitives, a
             preview process, and checkpoint-friendly scripts.
           </p>
-          <Button className="mt-6">
+          <Button data-trace-source="app/page.tsx:34" className="mt-6">
             Start building
             <ArrowRight size={16} />
           </Button>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div data-trace-source="app/page.tsx:39" className="grid gap-3 sm:grid-cols-3">
           {tasks.map((task) => (
-            <div key={task} className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
+            <div
+              key={task}
+              data-trace-source="app/page.tsx:41"
+              className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-4"
+            >
               <CheckCircle2 className="mb-3 text-[var(--primary)]" size={20} />
               <p className="text-sm leading-6 text-[var(--card-foreground)]">{task}</p>
             </div>
