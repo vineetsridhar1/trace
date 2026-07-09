@@ -27,6 +27,9 @@ Implemented:
   dev-only `srcDoc` fallback.
 - The web canvas has focused tests for nonce-bound `_bootstrap` artifact preview URLs and
   published artifact user-content URLs.
+- An opt-in browser smoke verifies a real Chrome iframe can load the user-content
+  `_bootstrap` shell, receive artifact HTML over `postMessage`, execute it on the
+  artifact origin, and reply to the parent with the same nonce-bound protocol.
 - Published artifact URLs are served from wildcard user-content hosts only after
   `publishedAt` is set.
 - Element anchors are selected through `data-el` overlays and stored on design comments.
@@ -45,6 +48,8 @@ Verified:
 - `artifact.test.ts`
 - `design-generation.test.ts`
 - `design-artifact-serving.test.ts`
+- `design-artifact-serving.integration.test.ts` with
+  `TRACE_RUN_DESIGN_BOOTSTRAP_BROWSER_SMOKE=1`
 - `design-pdf-renderer.integration.test.ts`
 - `designCanvasAnchors.test.ts`
 - `@trace/server lint`
