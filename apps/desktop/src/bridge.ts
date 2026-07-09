@@ -1299,13 +1299,10 @@ export class BridgeClient implements IBridgeClient {
       case "terminate": {
         const adapter = this.adapters.get(cmd.sessionId);
         if (adapter) {
+          // Abort the running process but keep the adapter so it retains
+          // the tool session ID for --resume on subsequent messages.
           this.cancelRun(cmd.sessionId);
           adapter.abort();
-          if (adapter instanceof CodexAdapter) {
-            this.adapters.delete(cmd.sessionId);
-            this.reportedToolSessionIds.delete(cmd.sessionId);
-            this.pendingInputToolUseIds.delete(cmd.sessionId);
-          }
         }
         break;
       }

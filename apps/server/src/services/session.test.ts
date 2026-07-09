@@ -3622,36 +3622,6 @@ describe("SessionService", () => {
       );
     });
 
-    it("clears the Codex tool session id when dismissing a session", async () => {
-      prismaMock.session.findUniqueOrThrow
-        .mockResolvedValueOnce({ organizationId: "org-1" })
-        .mockResolvedValueOnce(
-          makeSession({
-            agentStatus: "active",
-            sessionStatus: "in_progress",
-            tool: "codex",
-            toolSessionId: "codex-thread-1",
-          }),
-        );
-      prismaMock.session.update.mockResolvedValueOnce(
-        makeSession({
-          agentStatus: "done",
-          sessionStatus: "in_progress",
-          tool: "codex",
-          toolSessionId: null,
-        }),
-      );
-
-      await service.dismiss("session-1", "user", "user-1");
-
-      expect(prismaMock.session.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: "session-1" },
-          data: { agentStatus: "done", toolSessionId: null },
-        }),
-      );
-    });
-
     it("clears needs_input when dismissing a session waiting for user input", async () => {
       prismaMock.session.findUniqueOrThrow
         .mockResolvedValueOnce({ organizationId: "org-1" })

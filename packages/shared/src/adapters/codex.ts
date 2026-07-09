@@ -4,6 +4,7 @@ import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./co
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
+const FIRST_OUTPUT_TIMEOUT_MS = 120_000;
 
 interface TierPricing {
   input: number;
@@ -241,12 +242,45 @@ export class CodexAdapter implements CodingToolAdapter {
 
     let finished = false;
     let exitFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let firstOutputTimer: ReturnType<typeof setTimeout> | null = null;
+    const stderrChunks: string[] = [];
     const clearExitFallbackTimer = () => {
       if (exitFallbackTimer) {
         clearTimeout(exitFallbackTimer);
         exitFallbackTimer = null;
       }
     };
+    const clearFirstOutputTimer = () => {
+      if (firstOutputTimer) {
+        clearTimeout(firstOutputTimer);
+        firstOutputTimer = null;
+      }
+    };
+    const emitOutput = (event: ToolOutput) => {
+      clearFirstOutputTimer();
+      onOutput(event);
+    };
+
+    firstOutputTimer = setTimeout(() => {
+      if (finished) return;
+      if (!isCurrentProcess()) return;
+      finished = true;
+      clearExitFallbackTimer();
+      const stderr = stderrChunks.length > 0 ? ` Stderr: ${stderrChunks.join("\n")}` : "";
+      emitOutput({
+        type: "error",
+        message: `Codex produced no output after ${Math.round(
+          FIRST_OUTPUT_TIMEOUT_MS / 1000,
+        )} seconds; the resumed tool session may be stuck.${stderr}`,
+      });
+      try {
+        process.kill(-child.pid!, "SIGTERM");
+      } catch {
+        /* already dead */
+      }
+      onComplete();
+      this.process = null;
+    }, FIRST_OUTPUT_TIMEOUT_MS);
 
     if (child.stdout) {
       // Prevent unhandled 'error' events on the pipe from crashing the process
@@ -258,14 +292,13 @@ export class CodexAdapter implements CodingToolAdapter {
         if (!line.trim()) return;
         try {
           const parsed = JSON.parse(line);
-          this.processEvent(parsed, onOutput);
+          this.processEvent(parsed, emitOutput);
         } catch {
           // Non-JSON text from stdout
         }
       });
     }
 
-    const stderrChunks: string[] = [];
     if (child.stderr) {
       child.stderr.on("error", () => {});
       const rl = createInterface({ input: child.stderr });
@@ -280,6 +313,7 @@ export class CodexAdapter implements CodingToolAdapter {
       if (!isCurrentProcess()) return;
       finished = true;
       clearExitFallbackTimer();
+      clearFirstOutputTimer();
       // If in plan mode and exited cleanly with text, wrap as PlanBlock.
       // Codex doesn't write plan files to disk, so filePath is omitted.
       if (
@@ -287,7 +321,7 @@ export class CodexAdapter implements CodingToolAdapter {
         (code === 0 || code === null) &&
         this.lastTextContent
       ) {
-        onOutput({
+        emitOutput({
           type: "assistant",
           message: { content: [{ type: "plan", content: this.lastTextContent }] },
         });
@@ -296,9 +330,9 @@ export class CodexAdapter implements CodingToolAdapter {
         const exitError = code !== 0 && code !== null;
         const isError = exitError || this.sawErrorEvent;
         if (exitError && stderrChunks.length > 0) {
-          onOutput({ type: "error", message: stderrChunks.join("\n") });
+          emitOutput({ type: "error", message: stderrChunks.join("\n") });
         }
-        onOutput({ type: "result", subtype: isError ? "error" : "success" });
+        emitOutput({ type: "result", subtype: isError ? "error" : "success" });
       }
       onComplete();
       this.process = null;
@@ -315,9 +349,10 @@ export class CodexAdapter implements CodingToolAdapter {
     child.on("error", (err: Error) => {
       if (finished) return;
       clearExitFallbackTimer();
+      clearFirstOutputTimer();
       finished = true;
       if (!isCurrentProcess()) return;
-      onOutput({ type: "error", message: err.message });
+      emitOutput({ type: "error", message: err.message });
       onComplete();
       this.process = null;
     });
