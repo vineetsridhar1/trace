@@ -109,6 +109,10 @@ ${html}
 </html>`;
 }
 
+function isPdf(buffer: Buffer): boolean {
+  return buffer.byteLength >= 5 && buffer.subarray(0, 5).toString("latin1") === "%PDF-";
+}
+
 export function countPdfPages(pdf: Buffer): number | null {
   const text = pdf.toString("latin1");
   const matches = text.match(/\/Type\s*\/Page\b/g);
@@ -136,6 +140,9 @@ export const designPdfRenderer = {
         const pdf = await fs.promises.readFile(outputPath);
         if (pdf.byteLength === 0) {
           throw new Error("Chromium produced an empty PDF");
+        }
+        if (!isPdf(pdf)) {
+          throw new Error("Chromium produced a non-PDF export");
         }
         return pdf;
       } finally {

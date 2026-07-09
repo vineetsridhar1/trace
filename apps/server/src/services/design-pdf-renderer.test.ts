@@ -115,6 +115,21 @@ describe("designPdfRenderer", () => {
     ).rejects.toThrow("Chromium produced an empty PDF");
   });
 
+  it("rejects non-PDF Chromium output", async () => {
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      fs.writeFileSync(outputPathFrom(args), Buffer.from("not a pdf"));
+      callbackFrom(args)(null, "", "");
+      return null as never;
+    });
+
+    await expect(
+      designPdfRenderer.renderHtmlToPdf({
+        artifactId: "artifact-1",
+        html: "<main>Corrupt</main>",
+      }),
+    ).rejects.toThrow("Chromium produced a non-PDF export");
+  });
+
   it("counts concrete PDF page objects when available", () => {
     const pdf = Buffer.from(
       "%PDF-1.7\n1 0 obj <</Type /Pages /Count 2>> endobj\n2 0 obj <</Type /Page>> endobj\n3 0 obj <</Type /Page>> endobj\n",

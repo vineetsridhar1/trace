@@ -314,3 +314,7 @@ placeholder HTML as a successful generated design artifact.
 During this continuation, app checkpoint capture accepted any non-empty Chromium output
 while storing it as `image/png`. Capture rendering now validates the PNG signature before
 upload, and the focused capture test rejects corrupt screenshot bytes.
+
+During this continuation, design PDF rendering accepted any non-empty Chromium output
+before upload. The renderer now validates the `%PDF-` signature and rejects corrupt output
+before `design_export_completed` can report a downloadable PDF.
