@@ -666,3 +666,9 @@ and hosted smoke but the design canvas still called `exportDesignArtifactPdf` wi
 the artifact id. The canvas now uses a dedicated PDF export popover, validates explicit
 page dimensions and margins client-side, and passes `DesignPdfPageOptionsInput` through
 the GraphQL mutation so print-fidelity controls are available in the product UI.
+
+During this audit pass, design comments and send-to-agent iteration were service-backed
+but still used blocking browser prompt/confirm dialogs in the canvas. The toolbar now
+uses a first-class comment popover with body validation, selected-anchor awareness, and a
+send-to-agent checkbox while keeping the existing `commentDesignArtifact` service event
+path as the source of truth.

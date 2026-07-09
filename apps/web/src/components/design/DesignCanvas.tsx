@@ -12,7 +12,6 @@ import {
   GitBranchPlus,
   Loader2,
   Maximize2,
-  MessageSquare,
   Minus,
   Minimize2,
   Monitor,
@@ -34,6 +33,7 @@ import {
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
+import { DesignCommentPopover, type DesignCommentInput } from "./DesignCommentPopover";
 import { DesignHarnessSettingsPopover } from "./DesignHarnessSettingsPopover";
 import {
   DesignPdfExportPopover,
@@ -1249,22 +1249,22 @@ export function DesignCanvas({
     })();
   }, [selectedPersistedArtifact]);
 
-  const handleComment = useCallback(() => {
-    if (!selectedPersistedArtifact) return;
-    const body = window.prompt("Add a comment");
-    if (!body?.trim()) return;
-    const sendToAgent = window.confirm("Send this comment to the agent for the next iteration?");
-    void mutateSelectedArtifact(
-      COMMENT_DESIGN_ARTIFACT_MUTATION,
-      {
-        artifactId: selectedPersistedArtifact.id,
-        body: body.trim(),
-        anchor: selectedAnchor,
-        sendToAgent,
-      },
-      "Comment added",
-    );
-  }, [mutateSelectedArtifact, selectedAnchor, selectedPersistedArtifact]);
+  const handleComment = useCallback(
+    async (comment: DesignCommentInput) => {
+      if (!selectedPersistedArtifact) return;
+      await mutateSelectedArtifact(
+        COMMENT_DESIGN_ARTIFACT_MUTATION,
+        {
+          artifactId: selectedPersistedArtifact.id,
+          body: comment.body,
+          anchor: selectedAnchor,
+          sendToAgent: comment.sendToAgent,
+        },
+        "Comment added",
+      );
+    },
+    [mutateSelectedArtifact, selectedAnchor, selectedPersistedArtifact],
+  );
 
   const handleExportPdf = useCallback(
     async (pageOptions: DesignPdfPageOptions | null) => {
@@ -1354,16 +1354,11 @@ export function DesignCanvas({
           <Wand2 size={14} />
         </button>
         <DesignTweaksPopover disabled={!selectedPersistedArtifact} onApply={handleTweak} />
-        <button
-          type="button"
-          onClick={handleComment}
+        <DesignCommentPopover
           disabled={!selectedPersistedArtifact}
-          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
-          aria-label="Comment"
-          title="Comment"
-        >
-          <MessageSquare size={14} />
-        </button>
+          hasAnchor={selectedAnchor !== null}
+          onSubmit={handleComment}
+        />
         <button
           type="button"
           onClick={handlePublish}
