@@ -46,7 +46,7 @@ export function serviceAdvertisementPrefix(service: GitService): Buffer {
   return Buffer.concat([encodePktLine(`# service=${service}\n`), FLUSH_PKT]);
 }
 
-export type ReceivePackCommand = {
+export type GitRefUpdate = {
   oldSha: string;
   newSha: string;
   ref: string;
@@ -54,63 +54,29 @@ export type ReceivePackCommand = {
 
 const ZERO_SHA = "0".repeat(40);
 
-/**
- * Parse the ref-update command list at the head of a git-receive-pack request
- * body. Each command is `<old-sha> <new-sha> <ref>`, the first carrying a
- * NUL-delimited capability list. Parsing stops at the first flush packet, after
- * which the packfile begins. Malformed input yields an empty list rather than
- * throwing — callers treat "no parseable commands" as "nothing to report".
- */
-export function parseReceivePackCommands(body: Buffer): ReceivePackCommand[] {
-  const commands: ReceivePackCommand[] = [];
-  let offset = 0;
-  while (offset + 4 <= body.length) {
-    const lengthHex = body.toString("utf8", offset, offset + 4);
-    const length = parseInt(lengthHex, 16);
-    if (Number.isNaN(length)) break;
-    // Flush (0000) ends the command list; delim/response-end (0001/0002) are
-    // not expected here — stop defensively.
-    if (length < 4) break;
-    if (offset + length > body.length) break;
-
-    let line = body.toString("utf8", offset + 4, offset + length);
-    offset += length;
-
-    // The first command carries "\0<capabilities>"; drop it.
-    const nulIndex = line.indexOf("\0");
-    if (nulIndex !== -1) line = line.slice(0, nulIndex);
-    line = line.replace(/\n$/, "");
-
-    const parts = line.split(" ");
-    if (parts.length >= 3) {
-      const [oldSha, newSha, ...refParts] = parts;
-      commands.push({ oldSha, newSha, ref: refParts.join(" ") });
-    }
-  }
-  return commands;
-}
-
 /** Classify a parsed command by comparing against the zero SHA. */
-export function classifyRefUpdate(command: ReceivePackCommand): "create" | "delete" | "update" {
+export function classifyRefUpdate(command: GitRefUpdate): "create" | "delete" | "update" {
   if (command.oldSha === ZERO_SHA) return "create";
   if (command.newSha === ZERO_SHA) return "delete";
   return "update";
 }
 
 /**
- * Filter requested ref commands down to the ones the repo actually accepted,
- * by reconciling against the post-receive ref state. `git receive-pack` can
- * exit 0 while rejecting individual updates (non-fast-forward, hook denial),
- * so a requested command is only "accepted" when the repo's current state
- * matches it: a create/update ref now resolves to `newSha`, and a delete ref
- * is now absent.
+ * Derive the exact ref transitions visible across a completed receive-pack.
+ * Reading actual state before and after avoids trusting requested commands:
+ * rejected updates produce no transition and therefore no event.
  */
-export function filterAcceptedCommands(
-  commands: ReceivePackCommand[],
-  actualRefs: Map<string, string>,
-): ReceivePackCommand[] {
-  return commands.filter((command) => {
-    if (classifyRefUpdate(command) === "delete") return !actualRefs.has(command.ref);
-    return actualRefs.get(command.ref) === command.newSha;
-  });
+export function diffRefStates(
+  before: ReadonlyMap<string, string>,
+  after: ReadonlyMap<string, string>,
+): GitRefUpdate[] {
+  const updates: GitRefUpdate[] = [];
+  const refs = new Set([...before.keys(), ...after.keys()]);
+  for (const ref of refs) {
+    const oldSha = before.get(ref);
+    const newSha = after.get(ref);
+    if (oldSha === newSha) continue;
+    updates.push({ ref, oldSha: oldSha ?? ZERO_SHA, newSha: newSha ?? ZERO_SHA });
+  }
+  return updates;
 }

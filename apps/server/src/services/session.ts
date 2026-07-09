@@ -8261,14 +8261,17 @@ export class SessionService {
         workdir: true,
         visibility: true,
         ownerUserId: true,
-        repo: { select: { remoteUrl: true, defaultBranch: true } },
+        repo: { select: { provider: true, remoteUrl: true, defaultBranch: true } },
       },
     });
     if (!group) throw new Error("Session group not found");
     if (!canViewSessionGroup(group, userId)) {
       throw new AuthorizationError("Not authorized for this session group");
     }
-    if (!group.repo?.remoteUrl) {
+    if (group.repo?.provider !== "github") {
+      throw new Error("Cannot access GitHub files for a managed repo.");
+    }
+    if (!group.repo.remoteUrl) {
       throw new Error("Cannot access files: this session group has no GitHub remote.");
     }
 

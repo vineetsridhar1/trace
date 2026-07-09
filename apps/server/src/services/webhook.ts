@@ -21,6 +21,9 @@ export class WebhookService {
     if (repo.organizationId !== organizationId) {
       throw new Error("Repo does not belong to the current organization");
     }
+    if (repo.provider !== "github") {
+      throw new Error("GitHub webhooks are only supported for GitHub repos");
+    }
 
     if (repo.webhookId) {
       throw new Error("Webhook already registered for this repo");
@@ -92,6 +95,7 @@ export class WebhookService {
             repo: {
               id: repo.id,
               name: repo.name,
+              provider: repo.provider,
               remoteUrl: repo.remoteUrl,
               defaultBranch: repo.defaultBranch,
               webhookActive: true,
@@ -114,6 +118,9 @@ export class WebhookService {
 
     if (repo.organizationId !== organizationId) {
       throw new Error("Repo does not belong to the current organization");
+    }
+    if (repo.provider !== "github") {
+      throw new Error("GitHub webhooks are only supported for GitHub repos");
     }
 
     if (!repo.webhookId) {
@@ -171,6 +178,7 @@ export class WebhookService {
             repo: {
               id: repo.id,
               name: repo.name,
+              provider: repo.provider,
               remoteUrl: repo.remoteUrl,
               defaultBranch: repo.defaultBranch,
               webhookActive: false,

@@ -244,6 +244,7 @@ export class OrganizationService {
               repo: {
                 id: repo.id,
                 name: repo.name,
+                provider: repo.provider,
                 remoteUrl: repo.remoteUrl,
                 defaultBranch: repo.defaultBranch,
                 webhookActive: !!repo.webhookId,
@@ -325,6 +326,7 @@ export class OrganizationService {
             repo: {
               id: repo.id,
               name: repo.name,
+              provider: repo.provider,
               remoteUrl: repo.remoteUrl,
               defaultBranch: repo.defaultBranch,
               webhookActive: !!repo.webhookId,

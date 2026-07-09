@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyRefUpdate,
+  diffRefStates,
   encodePktLine,
-  filterAcceptedCommands,
   gitSubcommand,
   isGitService,
-  parseReceivePackCommands,
   serviceAdvertisementPrefix,
   serviceRequiresWrite,
 } from "./git-http.js";
@@ -40,47 +39,27 @@ describe("git-http protocol helpers", () => {
     expect(gitSubcommand("git-receive-pack")).toBe("receive-pack");
   });
 
-  it("parses receive-pack commands and drops the capability list", () => {
-    const first = `${ZERO} ${A} refs/heads/main\0report-status side-band-64k\n`;
-    const second = `${A} ${B} refs/heads/dev\n`;
-    const body = Buffer.concat([
-      encodePktLine(first),
-      encodePktLine(second),
-      Buffer.from("0000"),
-      Buffer.from("PACK....binary...."),
-    ]);
-
-    const commands = parseReceivePackCommands(body);
-    expect(commands).toEqual([
-      { oldSha: ZERO, newSha: A, ref: "refs/heads/main" },
-      { oldSha: A, newSha: B, ref: "refs/heads/dev" },
-    ]);
-    expect(classifyRefUpdate(commands[0])).toBe("create");
-    expect(classifyRefUpdate(commands[1])).toBe("update");
+  it("classifies ref transitions", () => {
+    expect(classifyRefUpdate({ oldSha: ZERO, newSha: A, ref: "refs/heads/main" })).toBe("create");
+    expect(classifyRefUpdate({ oldSha: A, newSha: B, ref: "refs/heads/dev" })).toBe("update");
     expect(classifyRefUpdate({ oldSha: A, newSha: ZERO, ref: "refs/heads/x" })).toBe("delete");
   });
 
-  it("returns no commands for malformed input", () => {
-    expect(parseReceivePackCommands(Buffer.from("nothex"))).toEqual([]);
-    expect(parseReceivePackCommands(Buffer.alloc(0))).toEqual([]);
-    expect(parseReceivePackCommands(Buffer.from("0000"))).toEqual([]);
-  });
-
-  it("keeps only ref updates the repo actually accepted", () => {
-    const commands = [
-      { oldSha: ZERO, newSha: A, ref: "refs/heads/main" }, // accepted (now A)
-      { oldSha: B, newSha: A, ref: "refs/heads/dev" }, // rejected (still B)
-      { oldSha: A, newSha: ZERO, ref: "refs/heads/gone" }, // delete accepted (absent)
-      { oldSha: A, newSha: ZERO, ref: "refs/heads/kept" }, // delete rejected (still present)
-    ];
-    const actualRefs = new Map([
+  it("derives only actual ref transitions from pre/post state", () => {
+    const before = new Map([
       ["refs/heads/main", A],
-      ["refs/heads/dev", B],
-      ["refs/heads/kept", A],
+      ["refs/heads/gone", B],
+      ["refs/heads/unchanged", A],
     ]);
-    expect(filterAcceptedCommands(commands, actualRefs)).toEqual([
-      { oldSha: ZERO, newSha: A, ref: "refs/heads/main" },
-      { oldSha: A, newSha: ZERO, ref: "refs/heads/gone" },
+    const after = new Map([
+      ["refs/heads/main", B],
+      ["refs/heads/new", A],
+      ["refs/heads/unchanged", A],
+    ]);
+    expect(diffRefStates(before, after)).toEqual([
+      { oldSha: A, newSha: B, ref: "refs/heads/main" },
+      { oldSha: B, newSha: ZERO, ref: "refs/heads/gone" },
+      { oldSha: ZERO, newSha: A, ref: "refs/heads/new" },
     ]);
   });
 });

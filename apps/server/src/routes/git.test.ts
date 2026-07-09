@@ -12,9 +12,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 // LocalGitStorageAdapter (real `git init --bare`) so the round-trip exercises
 // actual git, not a stub.
 vi.mock("../lib/git-storage/index.js", async () => {
-  const { LocalGitStorageAdapter, isSafeStorageId, assertSafeStorageId } = await import(
-    "../lib/git-storage/local-adapter.js"
-  );
+  const { LocalGitStorageAdapter, isSafeStorageId, assertSafeStorageId } =
+    await import("../lib/git-storage/local-adapter.js");
   const root = path.join(os.tmpdir(), `trace-git-test-${randomUUID()}`);
   return {
     gitStorage: new LocalGitStorageAdapter(root),
@@ -30,10 +29,13 @@ vi.mock("../lib/db.js", async () => {
 });
 
 vi.mock("../services/event.js", () => ({
-  eventService: { create: vi.fn().mockResolvedValue({}) },
+  eventService: {
+    create: vi.fn().mockResolvedValue({}),
+    publishCreated: vi.fn(),
+  },
 }));
 
-import { gitRouter } from "./git.js";
+import { GitBodyLimitStream, gitRouter } from "./git.js";
 import { gitStorage } from "../lib/git-storage/index.js";
 import { LocalGitStorageAdapter } from "../lib/git-storage/local-adapter.js";
 import { managedGitService } from "../services/managed-git.js";
@@ -88,13 +90,15 @@ function markManagedRepo(repoId: string): void {
   });
 }
 
-function authUrl(repoId: string, capabilities: ("read" | "write")[]): string {
-  const { token } = managedGitService.mintAccessToken({
+async function authUrl(repoId: string, capabilities: ("read" | "write")[]): Promise<string> {
+  const { token } = await managedGitService.mintAccessToken({
     organizationId: ORG,
     repoId,
-    scope: "runtime",
-    subject: "runtime-1",
+    scope: "user",
+    subject: "user-1",
     capabilities,
+    actorType: "user",
+    actorId: "user-1",
   });
   const u = new URL(baseUrl);
   return `http://trace:${token}@${u.host}/git/${ORG}/${repoId}.git`;
@@ -126,7 +130,7 @@ describe("managed git smart-HTTP round-trip", () => {
     const repoId = randomUUID();
     markManagedRepo(repoId);
     await gitStorage.initBareRepo(ORG, repoId);
-    const url = authUrl(repoId, ["read", "write"]);
+    const url = await authUrl(repoId, ["read", "write"]);
 
     // Author a commit locally and push it to the managed remote.
     const work = await tmp("trace-git-work-");
@@ -160,10 +164,23 @@ describe("managed git smart-HTTP round-trip", () => {
 });
 
 describe("managed git auth", () => {
+  it("rejects a streamed body after its decompressed byte limit", async () => {
+    const limiter = new GitBodyLimitStream(4);
+    const failed = new Promise<void>((resolve, reject) => {
+      limiter.on("error", reject);
+      limiter.on("end", resolve);
+    });
+    limiter.resume();
+    limiter.end(Buffer.alloc(5));
+    await expect(failed).rejects.toThrow("Managed git request body too large");
+  });
+
   it("challenges unauthenticated info/refs with 401", async () => {
     const repoId = randomUUID();
     markManagedRepo(repoId);
-    const res = await fetch(`${baseUrl}/git/${ORG}/${repoId}.git/info/refs?service=git-upload-pack`);
+    const res = await fetch(
+      `${baseUrl}/git/${ORG}/${repoId}.git/info/refs?service=git-upload-pack`,
+    );
     expect(res.status).toBe(401);
     expect(res.headers.get("www-authenticate")).toContain("Basic");
   });
@@ -172,12 +189,14 @@ describe("managed git auth", () => {
     const repoId = randomUUID();
     markManagedRepo(repoId);
     await gitStorage.initBareRepo(ORG, repoId);
-    const { token } = managedGitService.mintAccessToken({
+    const { token } = await managedGitService.mintAccessToken({
       organizationId: ORG,
       repoId,
       scope: "user",
       subject: "user-1",
       capabilities: ["read"],
+      actorType: "user",
+      actorId: "user-1",
     });
     const res = await fetch(
       `${baseUrl}/git/${ORG}/${repoId}.git/info/refs?service=git-upload-pack`,
@@ -193,12 +212,14 @@ describe("managed git auth", () => {
     const repoId = randomUUID();
     markManagedRepo(repoId);
     await gitStorage.initBareRepo(ORG, repoId);
-    const { token } = managedGitService.mintAccessToken({
+    const { token } = await managedGitService.mintAccessToken({
       organizationId: ORG,
       repoId,
       scope: "user",
       subject: "user-1",
       capabilities: ["read"],
+      actorType: "user",
+      actorId: "user-1",
     });
     const res = await fetch(`${baseUrl}/git/${ORG}/${repoId}.git/git-receive-pack`, {
       method: "POST",
@@ -213,17 +234,18 @@ describe("managed git auth", () => {
 
   it("returns 404 for a repo that is not a managed repo", async () => {
     prismaMock.repo.findFirst.mockResolvedValue(null);
-    const { token } = managedGitService.mintAccessToken({
+    const { token } = await managedGitService.mintAccessToken({
       organizationId: ORG,
       repoId: "missing",
       scope: "user",
       subject: "user-1",
       capabilities: ["read"],
+      actorType: "user",
+      actorId: "user-1",
     });
-    const res = await fetch(
-      `${baseUrl}/git/${ORG}/missing.git/info/refs?service=git-upload-pack`,
-      { headers: { authorization: `Bearer ${token}` } },
-    );
+    const res = await fetch(`${baseUrl}/git/${ORG}/missing.git/info/refs?service=git-upload-pack`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
     expect(res.status).toBe(404);
   });
 });

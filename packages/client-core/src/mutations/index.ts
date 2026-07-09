@@ -425,6 +425,7 @@ export const MY_BRIDGE_RUNTIMES_FOR_HOME_QUERY = gql`
         repo {
           id
           name
+          provider
           remoteUrl
         }
         attachedSessionGroup {
@@ -503,6 +504,7 @@ export const MY_CONNECTIONS_QUERY = gql`
         repo {
           id
           name
+          provider
           remoteUrl
           defaultBranch
         }

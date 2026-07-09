@@ -16,7 +16,10 @@ vi.mock("../lib/db.js", async () => {
 });
 
 vi.mock("./event.js", () => ({
-  eventService: { create: vi.fn().mockResolvedValue({}) },
+  eventService: {
+    create: vi.fn().mockResolvedValue({ id: "event-1" }),
+    publishCreated: vi.fn(),
+  },
 }));
 
 import { managedGitService } from "./managed-git.js";
@@ -61,6 +64,41 @@ describe("createManagedRepo", () => {
     const created = createEventMock.mock.calls.find((c) => c[0]?.eventType === "repo_created");
     expect(created).toBeDefined();
     expect(created![0].payload.repo.provider).toBe("managed");
+    expect(created![0].deferPublish).toBe(true);
+    expect(eventService.publishCreated).toHaveBeenCalledWith({ id: "event-1" });
+  });
+
+  it("authorizes before filesystem creation", async () => {
+    prismaMock.orgMember.findUniqueOrThrow.mockRejectedValueOnce(new Error("not a member"));
+    const initSpy = vi.spyOn(gitStorage, "initBareRepo");
+
+    await expect(
+      managedGitService.createManagedRepo({
+        organizationId: "org-managed",
+        name: "design",
+        actorType: "user",
+        actorId: "user-1",
+      }),
+    ).rejects.toThrow("not a member");
+    expect(initSpy).not.toHaveBeenCalled();
+  });
+
+  it("removes bare storage when the atomic row/event transaction fails", async () => {
+    prismaMock.repo.create.mockImplementation(async (args: { data: Record<string, unknown> }) => ({
+      ...args.data,
+    }));
+    createEventMock.mockRejectedValueOnce(new Error("event insert failed"));
+    const deleteSpy = vi.spyOn(gitStorage, "deleteRepo");
+
+    await expect(
+      managedGitService.createManagedRepo({
+        organizationId: "org-managed",
+        name: "design",
+        actorType: "system",
+        actorId: "system",
+      }),
+    ).rejects.toThrow("event insert failed");
+    expect(deleteSpy).toHaveBeenCalledOnce();
   });
 });
 

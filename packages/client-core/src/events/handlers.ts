@@ -178,7 +178,10 @@ export function handleOrgEvent(event: Event): void {
     event.eventType === "application_config_updated"
   ) {
     const repo = asJsonObject(payload.repo);
-    if (repo && typeof repo.id === "string") {
+    // Managed repos are session durability plumbing, not user-selectable repos.
+    // Keep their events in the scoped event log without polluting the generic
+    // repo table that settings and coding-session pickers consume.
+    if (repo && repo.provider !== "managed" && typeof repo.id === "string") {
       const existing = batch.get("repos", repo.id);
       batch.upsert(
         "repos",

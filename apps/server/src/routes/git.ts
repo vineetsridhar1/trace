@@ -1,26 +1,44 @@
 import { spawn } from "child_process";
-import { gunzip } from "zlib";
-import { promisify } from "util";
+import { Transform } from "stream";
+import { createGunzip } from "zlib";
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { AuthorizationError } from "../lib/errors.js";
 import { gitStorage, isSafeStorageId } from "../lib/git-storage/index.js";
 import {
-  filterAcceptedCommands,
+  diffRefStates,
   gitSubcommand,
   isGitService,
-  parseReceivePackCommands,
   serviceAdvertisementPrefix,
   type GitService,
 } from "../lib/git-http.js";
 import { managedGitService, type ManagedGitAuth } from "../services/managed-git.js";
 
-const gunzipAsync = promisify(gunzip);
 const router: RouterType = Router();
 
-// Pushes buffer fully in memory so receive-pack commands can be parsed before
-// handing the pack to git. Bounded to keep a hostile client from exhausting
-// memory; generated app/design projects are far smaller than this.
+// Generated app/design projects should remain far below this. The limiter is a
+// streaming transform, so concurrent pushes never allocate this amount in RAM.
 const MAX_GIT_BODY_BYTES = 100 * 1024 * 1024;
+
+export class GitBodyLimitStream extends Transform {
+  private bytes = 0;
+
+  constructor(private readonly maxBytes = MAX_GIT_BODY_BYTES) {
+    super();
+  }
+
+  override _transform(
+    chunk: Buffer,
+    _encoding: BufferEncoding,
+    callback: (error?: Error | null, data?: Buffer) => void,
+  ): void {
+    this.bytes += chunk.length;
+    if (this.bytes > this.maxBytes) {
+      callback(new Error("Managed git request body too large"));
+      return;
+    }
+    callback(null, chunk);
+  }
+}
 
 function stripDotGit(repoParam: string): string {
   return repoParam.endsWith(".git") ? repoParam.slice(0, -4) : repoParam;
@@ -50,20 +68,6 @@ function readGitToken(req: Request): string | null {
 function requireAuth(res: Response): void {
   res.setHeader("WWW-Authenticate", 'Basic realm="Trace Managed Git"');
   res.status(401).send("Authentication required");
-}
-
-async function readBody(req: Request): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  for await (const chunk of req) {
-    const buf = chunk as Buffer;
-    total += buf.length;
-    if (total > MAX_GIT_BODY_BYTES) throw new Error("Managed git request body too large");
-    chunks.push(buf);
-  }
-  const body = Buffer.concat(chunks);
-  if (req.headers["content-encoding"] === "gzip") return gunzipAsync(body);
-  return body;
 }
 
 type ResolvedRequest = {
@@ -145,7 +149,7 @@ router.get("/:orgId/:repoId/info/refs", async (req: Request, res: Response) => {
   ]);
   // Don't leave git running if the client disconnects mid-request.
   res.on("close", () => {
-    if (child.exitCode === null) child.kill("SIGKILL");
+    if (!res.writableEnded && child.exitCode === null) child.kill("SIGKILL");
   });
   const stdout: Buffer[] = [];
   const stderr: Buffer[] = [];
@@ -174,20 +178,24 @@ function rpcHandler(service: GitService) {
       res.status(415).send("Unsupported content type");
       return;
     }
+    const encoding = req.headers["content-encoding"];
+    if (encoding !== undefined && encoding !== "identity" && encoding !== "gzip") {
+      res.status(415).send("Unsupported content encoding");
+      return;
+    }
+    const contentLength = Number(req.headers["content-length"] ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_GIT_BODY_BYTES) {
+      res.status(413).send("Managed git request body too large");
+      return;
+    }
 
     const resolved = await resolve(req, res, service);
     if (!resolved) return;
 
-    let body: Buffer;
-    try {
-      body = await readBody(req);
-    } catch (error) {
-      res.status(400).send(error instanceof Error ? error.message : "Invalid request body");
-      return;
-    }
-
-    const requestedCommands =
-      service === "git-receive-pack" ? parseReceivePackCommands(body) : [];
+    const refsBefore =
+      service === "git-receive-pack"
+        ? await gitStorage.listRefs(resolved.organizationId, resolved.repoId)
+        : null;
 
     const child = spawn("git", [gitSubcommand(service), "--stateless-rpc", resolved.repoPath]);
     const stderr: Buffer[] = [];
@@ -195,49 +203,85 @@ function rpcHandler(service: GitService) {
     child.on("error", () => {
       if (!res.headersSent) res.status(500).send("git operation failed");
     });
-    // git may close its stdin before consuming the whole body (e.g. it rejects
-    // the pack). Swallow the resulting EPIPE — an unhandled stream 'error'
-    // would otherwise crash the process.
-    child.stdin.on("error", () => {});
+    const limiter = new GitBodyLimitStream();
+    const decoder = encoding === "gzip" ? createGunzip() : null;
+    const input = decoder ?? req;
+
+    let inputFailed = false;
+    const failInput = (status: number, message: string): void => {
+      if (inputFailed) return;
+      inputFailed = true;
+      req.unpipe(decoder ?? limiter);
+      decoder?.unpipe(limiter);
+      limiter.unpipe(child.stdin);
+      decoder?.destroy();
+      limiter.destroy();
+      req.resume();
+      if (child.exitCode === null) child.kill("SIGKILL");
+      if (res.destroyed) return;
+      if (!res.headersSent) res.status(status).send(message);
+      else res.destroy();
+    };
+    req.on("error", () => failInput(400, "Invalid request body"));
+    decoder?.on("error", () => failInput(400, "Invalid gzip request body"));
+    limiter.on("error", (error: Error) => failInput(413, error.message));
+    // git may reject a request before consuming all input. Drain the remaining
+    // client body without forwarding it; EPIPE is expected and process-local.
+    child.stdin.on("error", (error: NodeJS.ErrnoException) => {
+      limiter.unpipe(child.stdin);
+      limiter.resume();
+      if (error.code !== "EPIPE" && error.code !== "ERR_STREAM_DESTROYED") {
+        failInput(500, "git operation failed");
+      }
+    });
+    // Attach every error listener before starting flow: a buffered malformed
+    // gzip body can fail as soon as the streams are connected.
+    if (decoder) req.pipe(decoder);
+    input.pipe(limiter).pipe(child.stdin);
     // Kill git if the client disconnects mid-request.
     res.on("close", () => {
-      if (child.exitCode === null) child.kill("SIGKILL");
+      if (!res.writableEnded && child.exitCode === null) child.kill("SIGKILL");
     });
 
     res.status(200);
     res.setHeader("Content-Type", `application/x-${service}-result`);
     res.setHeader("Cache-Control", "no-cache");
-    child.stdout.pipe(res);
+    const isReceivePack = service === "git-receive-pack";
+    // For pushes, keep the response open until the resulting event is durable.
+    // upload-pack remains fully streaming and ends with child stdout.
+    child.stdout.pipe(res, { end: !isReceivePack });
 
-    child.on("close", (code) => {
+    child.on("close", async (code) => {
+      if (inputFailed) return;
       if (code !== 0) {
         console.error(`[git] ${service} exited ${code}: ${Buffer.concat(stderr)}`);
+        if (res.destroyed) return;
         if (!res.headersSent) res.status(500).end();
+        else if (isReceivePack && !res.writableEnded) res.end();
         return;
       }
-      if (service === "git-receive-pack" && requestedCommands.length > 0) {
-        // Report only refs the repo actually accepted — receive-pack can exit 0
-        // while rejecting individual updates, so reconcile against real state.
-        void gitStorage
-          .listRefs(resolved.organizationId, resolved.repoId)
-          .then((actualRefs) => {
-            const accepted = filterAcceptedCommands(requestedCommands, actualRefs);
-            if (accepted.length === 0) return;
-            return managedGitService.recordPush({
+      if (isReceivePack && refsBefore) {
+        // Actual pre/post state is authoritative: rejected commands leave no
+        // transition and cannot produce a false repo_updated event.
+        try {
+          const actualRefs = await gitStorage.listRefs(resolved.organizationId, resolved.repoId);
+          const accepted = diffRefStates(refsBefore, actualRefs);
+          if (accepted.length > 0) {
+            await managedGitService.recordPush({
               organizationId: resolved.organizationId,
               repoId: resolved.repoId,
               commands: accepted,
               actorType: resolved.auth.scope === "user" ? "user" : "system",
               actorId: resolved.auth.subject,
             });
-          })
-          .catch((error: unknown) => {
-            console.error("[git] failed to record managed push", error);
-          });
+          }
+          if (!res.writableEnded) res.end();
+        } catch (error: unknown) {
+          console.error("[git] failed to record managed push", error);
+          if (!res.destroyed) res.destroy(error instanceof Error ? error : undefined);
+        }
       }
     });
-
-    if (child.stdin.writable) child.stdin.end(body);
   };
 }
 

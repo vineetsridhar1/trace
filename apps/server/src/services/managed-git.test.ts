@@ -1,20 +1,43 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import jwt from "jsonwebtoken";
 import { AuthorizationError, ValidationError } from "../lib/errors.js";
+
+vi.mock("../lib/db.js", async () => {
+  const { createPrismaMock } = await import("../../test/helpers.js");
+  return { prisma: createPrismaMock() };
+});
+
+vi.mock("./event.js", () => ({
+  eventService: {
+    create: vi.fn().mockResolvedValue({ id: "event-1" }),
+    publishCreated: vi.fn(),
+  },
+}));
+
 import { buildManagedGitUrl, managedGitService } from "./managed-git.js";
+import { eventService } from "./event.js";
+import { prisma } from "../lib/db.js";
+import { createPrismaMock } from "../../test/helpers.js";
 
 const ORG = "org-1";
 const REPO = "repo-1";
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
+const prismaMock = prisma as unknown as ReturnType<typeof createPrismaMock>;
+const createEventMock = eventService.create as unknown as ReturnType<typeof vi.fn>;
+
+afterEach(() => vi.clearAllMocks());
 
 describe("managed git tokens", () => {
-  it("mints and verifies a scoped token round-trip", () => {
-    const { token, expiresAt } = managedGitService.mintAccessToken({
+  it("mints and verifies a scoped token round-trip", async () => {
+    const { token, expiresAt } = await managedGitService.mintAccessToken({
       organizationId: ORG,
       repoId: REPO,
       scope: "runtime",
       subject: "runtime-instance-1",
       capabilities: ["read", "write"],
+      sessionId: "session-1",
+      actorType: "system",
+      actorId: "system",
     });
     expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
 
@@ -25,50 +48,82 @@ describe("managed git tokens", () => {
       scope: "runtime",
       subject: "runtime-instance-1",
       capabilities: ["read", "write"],
+      sessionId: "session-1",
     });
+    expect(createEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "managed_git_token_minted",
+        payload: expect.objectContaining({ repoId: REPO, sessionId: "session-1" }),
+      }),
+      prismaMock,
+    );
   });
 
-  it("round-trips a session-bound token", () => {
-    const { token } = managedGitService.mintAccessToken({
+  it("round-trips a session-bound token", async () => {
+    const { token } = await managedGitService.mintAccessToken({
       organizationId: ORG,
       repoId: REPO,
       scope: "runtime",
       subject: "runtime-1",
       capabilities: ["read", "write"],
       sessionId: "session-abc",
+      actorType: "system",
+      actorId: "system",
     });
     expect(managedGitService.verifyAccessToken(token)?.sessionId).toBe("session-abc");
   });
 
-  it("defaults user tokens to a short TTL and runtime tokens to a long one", () => {
-    const user = managedGitService.mintAccessToken({
+  it("defaults user tokens to a short TTL and runtime tokens to a long one", async () => {
+    const user = await managedGitService.mintAccessToken({
       organizationId: ORG,
       repoId: REPO,
       scope: "user",
       subject: "user-1",
       capabilities: ["read"],
+      actorType: "user",
+      actorId: "user-1",
     });
-    const runtime = managedGitService.mintAccessToken({
+    const runtime = await managedGitService.mintAccessToken({
       organizationId: ORG,
       repoId: REPO,
       scope: "runtime",
       subject: "runtime-1",
       capabilities: ["read", "write"],
+      sessionId: "session-1",
+      actorType: "system",
+      actorId: "system",
     });
     // User clone/export tokens are short-lived; runtime tokens live with the runtime.
     expect(runtime.expiresAt.getTime()).toBeGreaterThan(user.expiresAt.getTime());
   });
 
-  it("requires at least one capability", () => {
-    expect(() =>
+  it("requires at least one capability", async () => {
+    await expect(
       managedGitService.mintAccessToken({
         organizationId: ORG,
         repoId: REPO,
         scope: "user",
         subject: "user-1",
         capabilities: [],
+        actorType: "user",
+        actorId: "user-1",
       }),
-    ).toThrow(ValidationError);
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("does not mint a user token for a different subject", async () => {
+    await expect(
+      managedGitService.mintAccessToken({
+        organizationId: ORG,
+        repoId: REPO,
+        scope: "user",
+        subject: "user-2",
+        capabilities: ["read"],
+        actorType: "user",
+        actorId: "user-1",
+      }),
+    ).rejects.toThrow(AuthorizationError);
+    expect(createEventMock).not.toHaveBeenCalled();
   });
 
   it("rejects foreign, malformed, and non-managed-git tokens", () => {
@@ -86,19 +141,29 @@ describe("managed git tokens", () => {
 });
 
 describe("managed git authorization", () => {
-  function tokenWith(capabilities: ("read" | "write")[]): string {
-    return managedGitService.mintAccessToken({
-      organizationId: ORG,
-      repoId: REPO,
-      scope: "runtime",
-      subject: "runtime-1",
-      capabilities,
-    }).token;
+  async function tokenWith(capabilities: ("read" | "write")[]): Promise<string> {
+    return (
+      await managedGitService.mintAccessToken({
+        organizationId: ORG,
+        repoId: REPO,
+        scope: "runtime",
+        subject: "runtime-1",
+        capabilities,
+        sessionId: "session-1",
+        actorType: "system",
+        actorId: "system",
+      })
+    ).token;
   }
 
   it("allows fetch with a read token and push with a write token", async () => {
-    const read = tokenWith(["read"]);
-    const write = tokenWith(["read", "write"]);
+    prismaMock.session.findFirst.mockResolvedValue({
+      repoId: REPO,
+      sessionGroup: null,
+      connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+    });
+    const read = await tokenWith(["read"]);
+    const write = await tokenWith(["read", "write"]);
     await expect(
       managedGitService.authorizeRequest({
         token: read,
@@ -120,7 +185,7 @@ describe("managed git authorization", () => {
   it("rejects a read-only token attempting to push", async () => {
     await expect(
       managedGitService.authorizeRequest({
-        token: tokenWith(["read"]),
+        token: await tokenWith(["read"]),
         organizationId: ORG,
         repoId: REPO,
         service: "git-receive-pack",
@@ -140,7 +205,7 @@ describe("managed git authorization", () => {
 
     await expect(
       managedGitService.authorizeRequest({
-        token: tokenWith(["read", "write"]),
+        token: await tokenWith(["read", "write"]),
         organizationId: ORG,
         repoId: "other-repo",
         service: "git-upload-pack",
@@ -148,20 +213,20 @@ describe("managed git authorization", () => {
     ).rejects.toThrow(AuthorizationError);
   });
 
-  it("honors a registered request validator that denies", async () => {
-    const write = tokenWith(["read", "write"]);
-    managedGitService.setRequestValidator(() => false);
-    try {
-      await expect(
-        managedGitService.authorizeRequest({
-          token: write,
-          organizationId: ORG,
-          repoId: REPO,
-          service: "git-upload-pack",
-        }),
-      ).rejects.toThrow(AuthorizationError);
-    } finally {
-      managedGitService.setRequestValidator(null);
-    }
+  it("rejects a runtime token after its persisted runtime disconnects", async () => {
+    const write = await tokenWith(["read", "write"]);
+    prismaMock.session.findFirst.mockResolvedValue({
+      repoId: REPO,
+      sessionGroup: null,
+      connection: { state: "disconnected", runtimeInstanceId: "runtime-1" },
+    });
+    await expect(
+      managedGitService.authorizeRequest({
+        token: write,
+        organizationId: ORG,
+        repoId: REPO,
+        service: "git-upload-pack",
+      }),
+    ).rejects.toThrow(AuthorizationError);
   });
 });

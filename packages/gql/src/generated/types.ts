@@ -397,6 +397,7 @@ export type EventType =
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
+  | "managed_git_token_minted"
   | "member_joined"
   | "member_left"
   | "message_deleted"
