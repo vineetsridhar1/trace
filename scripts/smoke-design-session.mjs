@@ -764,6 +764,35 @@ async function assertBootstrapDoesNotLeakContent(url, label) {
   }
 }
 
+function userContentUrlForArtifact(referencePublicUrl, artifactId) {
+  const parsed = new URL(referencePublicUrl);
+  const [currentArtifactId, ...domainParts] = parsed.hostname.split(".");
+  if (!currentArtifactId || domainParts.length === 0) {
+    throw new Error(`Cannot derive user-content domain from ${referencePublicUrl}`);
+  }
+  parsed.hostname = `${artifactId}.${domainParts.join(".")}`;
+  parsed.pathname = "/";
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.toString();
+}
+
+async function assertUnpublishedUserContentBoundary(referencePublicUrl, artifact) {
+  const artifactUrl = userContentUrlForArtifact(referencePublicUrl, artifact.id);
+  const response = await fetch(artifactUrl, { redirect: "follow" });
+  const body = await response.text();
+  if (response.ok) {
+    throw new Error(`Unpublished artifact ${artifact.id} was directly fetchable`);
+  }
+  assertDesignArtifactHeaders(response, `unpublished artifact ${artifact.id}`, {
+    cacheControl: "no-store",
+  });
+  if (body.includes(expectedText) || body.includes(artifact.html)) {
+    throw new Error(`Unpublished artifact ${artifact.id} leaked HTML from direct URL`);
+  }
+  await assertBootstrapDoesNotLeakContent(artifactUrl, `unpublished artifact ${artifact.id}`);
+}
+
 function assertDesignArtifactHeaders(response, label, { cacheControl }) {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/html")) {
@@ -1050,6 +1079,7 @@ assertPublishedArtifactUrl(published.publicUrl, tweaked.id);
 await waitForPublishedArtifactEvent(session.id, tweaked.id, published.publicUrl);
 await assertUrlRenders(published.publicUrl, "published design artifact URL");
 await assertBootstrapDoesNotLeakContent(published.publicUrl, "published design artifact URL");
+await assertUnpublishedUserContentBoundary(published.publicUrl, generatedArtifacts[1]);
 
 const promoteData = await graphql(PROMOTE_DESIGN_ARTIFACT, {
   artifactId: tweaked.id,

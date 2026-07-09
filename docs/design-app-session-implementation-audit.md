@@ -884,3 +884,10 @@ the scoped session event stream consumed by the canvas. It now polls
 `design_comment_added` for the selected artifact id, session group id, body,
 `sendToAgent`, element anchor, and persisted bounds before waiting for the generated
 comment-driven iteration.
+
+During this audit continuation, the hosted design smoke proved artifacts did not expose a
+`publicUrl` before publish, but did not fetch an unpublished sibling on the wildcard
+user-content domain. After publishing the tweaked artifact, the smoke now derives the
+same user-content domain for an unpublished generated sibling, requires the direct root
+URL to reject without leaking artifact HTML, and still verifies that sibling's
+`/_bootstrap` shell contains no artifact content.
