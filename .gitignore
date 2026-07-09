@@ -28,3 +28,5 @@ apps/mobile/app/**/*.d.ts.map
 package-lock.json
 
 /sessions/
+# Managed git bare-repo storage (default GIT_STORAGE_ROOT in dev)
+.trace-git/

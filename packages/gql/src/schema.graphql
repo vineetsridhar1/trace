@@ -209,6 +209,11 @@ enum AgentEnvironmentAdapterType {
   provisioned
 }
 
+enum RepoProvider {
+  github
+  managed
+}
+
 enum InboxItemType {
   plan
   question
@@ -376,6 +381,7 @@ type User {
 type Repo {
   id: ID!
   name: String!
+  provider: RepoProvider!
   remoteUrl: String
   defaultBranch: String!
   webhookActive: Boolean!
