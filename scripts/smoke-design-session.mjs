@@ -269,6 +269,19 @@ function asObject(value, label) {
   return value;
 }
 
+function assertLlmArtifactMetadata(artifact, label, expectedSource) {
+  const metadata = asObject(artifact.metadata, `${label} metadata`);
+  if (metadata.generator !== "llm") {
+    throw new Error(`${label} generator is ${metadata.generator ?? "missing"}`);
+  }
+  if (metadata.promptComposer !== "trace-open-design-v1") {
+    throw new Error(`${label} promptComposer is ${metadata.promptComposer ?? "missing"}`);
+  }
+  if (expectedSource && metadata.source !== expectedSource) {
+    throw new Error(`${label} source is ${metadata.source ?? "missing"}`);
+  }
+}
+
 async function assertUrlRenders(url, label) {
   const response = await fetch(url, { redirect: "follow" });
   const body = await response.text();
@@ -371,6 +384,7 @@ if (session.sessionGroup?.connection) {
 
 const initialArtifacts = await waitForArtifacts(session.sessionGroupId, 1);
 assertArtifactHtml(initialArtifacts[0], "Initial");
+assertLlmArtifactMetadata(initialArtifacts[0], "Initial", "startSession");
 
 const generatedData = await graphql(GENERATE_DESIGN_ARTIFACTS, {
   sessionGroupId: session.sessionGroupId,
@@ -386,6 +400,7 @@ for (const artifact of generatedArtifacts) {
     throw new Error(`Generated direction ${artifact.id} unexpectedly has a parent artifact`);
   }
   assertArtifactHtml(artifact, "Generated direction");
+  assertLlmArtifactMetadata(artifact, "Generated direction", "generateDesignArtifacts");
 }
 const usage = await waitForDesignUsage(session.id);
 

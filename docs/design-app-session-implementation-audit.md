@@ -424,3 +424,8 @@ During this continuation, the hosted `pnpm smoke:design-session` script was tigh
 prove real design generation records session usage. After the initial fan-out generation,
 the smoke now polls the `session(id:)` token counters and requires positive input/output
 token totals before continuing.
+
+During this continuation, the hosted `pnpm smoke:design-session` script was tightened to
+prove generated artifacts came from the LLM/Open Design path. The smoke now checks initial
+and fan-out artifact metadata for `generator: "llm"`, the
+`trace-open-design-v1` prompt composer marker, and the expected service source.
