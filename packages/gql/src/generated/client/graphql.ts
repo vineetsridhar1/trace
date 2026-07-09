@@ -399,6 +399,7 @@ export type EventType =
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
+  | "managed_git_token_minted"
   | "member_joined"
   | "member_left"
   | "message_deleted"
@@ -1652,6 +1653,7 @@ export type Repo = {
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   projects: Array<Project>;
+  provider: RepoProvider;
   remoteUrl?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
@@ -1731,6 +1733,8 @@ export type RepoProcessDefinitionInput = {
   required?: InputMaybe<Scalars["Boolean"]["input"]>;
   workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
 };
+
+export type RepoProvider = "github" | "managed";
 
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";
@@ -3210,6 +3214,7 @@ export type SettingsReposQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
+    provider: RepoProvider;
     remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
@@ -3273,6 +3278,7 @@ export type AgentEnvironmentsSettingsQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
+    provider: RepoProvider;
     remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
@@ -3945,6 +3951,7 @@ export type ReposQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
+    provider: RepoProvider;
     remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
@@ -4082,6 +4089,7 @@ export type OnboardingReposQuery = {
     __typename?: "Repo";
     id: string;
     name: string;
+    provider: RepoProvider;
     remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
@@ -7197,6 +7205,7 @@ export const SettingsReposDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "provider" } },
                 { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
                 { kind: "Field", name: { kind: "Name", value: "webhookActive" } },
@@ -7375,6 +7384,7 @@ export const AgentEnvironmentsSettingsDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "provider" } },
                 { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
                 { kind: "Field", name: { kind: "Name", value: "webhookActive" } },
@@ -9638,6 +9648,7 @@ export const ReposDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "provider" } },
                 { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
                 { kind: "Field", name: { kind: "Name", value: "webhookActive" } },
@@ -9989,6 +10000,7 @@ export const OnboardingReposDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "provider" } },
                 { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
                 { kind: "Field", name: { kind: "Name", value: "webhookActive" } },

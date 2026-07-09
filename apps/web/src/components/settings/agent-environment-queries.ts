@@ -16,6 +16,7 @@ export const AGENT_ENVIRONMENTS_SETTINGS_QUERY = gql`
     repos(organizationId: $organizationId) {
       id
       name
+      provider
       remoteUrl
       defaultBranch
       webhookActive

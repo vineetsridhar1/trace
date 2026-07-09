@@ -209,6 +209,11 @@ enum AgentEnvironmentAdapterType {
   provisioned
 }
 
+enum RepoProvider {
+  github
+  managed
+}
+
 enum InboxItemType {
   plan
   question
@@ -258,6 +263,7 @@ enum EventType {
   organization_created
   repo_created
   repo_updated
+  managed_git_token_minted
   channel_created
   channel_updated
   channel_member_added
@@ -376,6 +382,7 @@ type User {
 type Repo {
   id: ID!
   name: String!
+  provider: RepoProvider!
   remoteUrl: String
   defaultBranch: String!
   webhookActive: Boolean!

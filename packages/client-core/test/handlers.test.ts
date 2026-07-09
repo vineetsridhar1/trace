@@ -132,6 +132,29 @@ beforeEach(() => {
 });
 
 describe("handleOrgEvent", () => {
+  it("does not expose managed repos through the generic repo table", () => {
+    const event = makeEvent({
+      eventType: "repo_created",
+      scopeType: "system",
+      scopeId: "managed-1",
+      payload: {
+        repo: {
+          id: "managed-1",
+          name: "generated app",
+          provider: "managed",
+          remoteUrl: "https://trace.test/git/org-1/managed-1.git",
+          defaultBranch: "main",
+          webhookActive: false,
+        },
+      },
+    });
+
+    handleOrgEvent(event);
+
+    expect(useEntityStore.getState().repos["managed-1"]).toBeUndefined();
+    expect(useEntityStore.getState().eventsByScope["system:managed-1"]?.[event.id]).toEqual(event);
+  });
+
   it("upserts the event into the scoped bucket", () => {
     const event = makeEvent({
       eventType: "session_output",

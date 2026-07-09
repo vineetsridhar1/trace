@@ -2734,7 +2734,11 @@ describe("SessionService", () => {
         worktreeDeleted: false,
         visibility: "private",
         ownerUserId: "owner-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
 
       await expect(service.listFiles("group-1", "org-1", "user-1")).rejects.toThrow(
@@ -2761,7 +2765,11 @@ describe("SessionService", () => {
         worktreeDeleted: false,
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
 
       await expect(service.listFiles("group-1", "org-1", "user-1")).rejects.toThrow(
@@ -2784,7 +2792,11 @@ describe("SessionService", () => {
         worktreeDeleted: false,
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       githubRepoServiceMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
 
@@ -2810,7 +2822,11 @@ describe("SessionService", () => {
         worktreeDeleted: false,
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       githubRepoServiceMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
 
@@ -2832,7 +2848,11 @@ describe("SessionService", () => {
         workdir: "/tmp/trace",
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       githubRepoServiceMock.readFile.mockResolvedValueOnce("hello");
 
@@ -2856,7 +2876,11 @@ describe("SessionService", () => {
         workdir: "/tmp/trace",
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       githubRepoServiceMock.readFile
         .mockRejectedValueOnce(new GitHubApiError(404, "Not Found"))
@@ -2893,7 +2917,11 @@ describe("SessionService", () => {
         workdir: "/tmp/trace",
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       githubRepoServiceMock.branchDiff.mockResolvedValueOnce([
         { path: "src/app.ts", status: "M", additions: 2, deletions: 1 },
@@ -2918,7 +2946,11 @@ describe("SessionService", () => {
         workdir: "/tmp/trace",
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       githubRepoServiceMock.readFile.mockResolvedValueOnce("base");
 
@@ -2940,7 +2972,11 @@ describe("SessionService", () => {
         workdir: "/tmp/trace",
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       githubRepoServiceMock.listFiles.mockResolvedValueOnce(["src/app.ts"]);
 
@@ -2962,7 +2998,11 @@ describe("SessionService", () => {
         workdir: "/tmp/trace",
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       githubRepoServiceMock.listDirectoryEntries.mockResolvedValueOnce([
         { name: "src", path: "src", isDirectory: true },
@@ -2999,7 +3039,11 @@ describe("SessionService", () => {
         workdir: "/tmp/trace",
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       githubRepoServiceMock.listFileTree.mockResolvedValueOnce({
         paths: ["README.md", "src/index.ts"],
@@ -3025,7 +3069,11 @@ describe("SessionService", () => {
         workdir: "/tmp/trace",
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       githubRepoServiceMock.listFileTree
         .mockRejectedValueOnce(new GitHubApiError(404, "Not Found"))
@@ -3056,7 +3104,11 @@ describe("SessionService", () => {
         workdir: "/tmp/trace",
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       githubRepoServiceMock.listFileTree.mockRejectedValueOnce(
         new GitHubApiError(403, "rate limit exceeded"),
@@ -3068,6 +3120,26 @@ describe("SessionService", () => {
       expect(githubRepoServiceMock.listFileTree).toHaveBeenCalledTimes(1);
     });
 
+    it("does not route managed repos through GitHub file APIs", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        branch: "main",
+        workdir: "/tmp/trace",
+        visibility: "public",
+        ownerUserId: "user-1",
+        repo: {
+          provider: "managed",
+          remoteUrl: "https://trace.test/git/org-1/repo-1.git",
+          defaultBranch: "main",
+        },
+      });
+
+      await expect(service.listFiles("group-1", "org-1", "user-1")).rejects.toThrow(
+        "Cannot access GitHub files for a managed repo",
+      );
+      expect(githubRepoServiceMock.listFiles).not.toHaveBeenCalled();
+    });
+
     it("saves files through the live session group runtime", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
@@ -3077,7 +3149,11 @@ describe("SessionService", () => {
         connection: { runtimeInstanceId: "runtime-1" },
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       prismaMock.session.findMany.mockResolvedValueOnce([
         {
@@ -3121,7 +3197,11 @@ describe("SessionService", () => {
         connection: { runtimeInstanceId: "runtime-1" },
         visibility: "public",
         ownerUserId: "owner-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       prismaMock.session.findMany.mockResolvedValueOnce([
         {
@@ -3153,7 +3233,11 @@ describe("SessionService", () => {
         connection: { runtimeInstanceId: "runtime-1" },
         visibility: "public",
         ownerUserId: "owner-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       prismaMock.session.findMany.mockResolvedValueOnce([
         {
@@ -3192,7 +3276,11 @@ describe("SessionService", () => {
         connection: { runtimeInstanceId: "runtime-1" },
         visibility: "public",
         ownerUserId: "user-1",
-        repo: { remoteUrl: "git@github.com:trace/trace.git", defaultBranch: "main" },
+        repo: {
+          provider: "github",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
       });
       prismaMock.session.findMany.mockResolvedValueOnce([
         {
