@@ -322,3 +322,8 @@ before `design_export_completed` can report a downloadable PDF.
 During this continuation, design artifact public URLs and app endpoint preview URLs
 trusted protocol environment variables directly. Both URL builders now accept only
 `http` or `https`, falling back to the safe default for invalid config values.
+
+During this continuation, managed-git smart HTTP had user-token coverage but no direct
+service test for provisioned runtime tokens. `managed-git.test.ts` now proves runtime
+tokens authorize only when their session is bound to the requested managed repo and reject
+unbound sessions before spawning git.

@@ -71,6 +71,32 @@ function basicAuth(token: string): string {
   return `Basic ${Buffer.from(`x-token:${token}`, "utf8").toString("base64")}`;
 }
 
+function runtimeToken(
+  input: {
+    organizationId?: string;
+    userId?: string;
+    sessionId?: string;
+    instanceId?: string;
+    repoId?: string;
+  } = {},
+): string {
+  return jwt.sign(
+    {
+      tokenType: "provisioned_runtime",
+      instanceId: input.instanceId ?? "runtime-1",
+      organizationId: input.organizationId ?? "org-1",
+      userId: input.userId ?? "user-1",
+      sessionId: input.sessionId ?? "session-1",
+      environmentId: "environment-1",
+      allowedScope: "session",
+      tool: "claude_code",
+      ...(input.repoId ? { repoId: input.repoId } : {}),
+    },
+    resolveJwtSecret(),
+    { expiresIn: 60 },
+  );
+}
+
 function mockGitSpawnSuccess(output = "001e# service=git-upload-pack\n0000") {
   spawnMock.mockImplementationOnce(() => {
     const child = new EventEmitter() as EventEmitter & {
@@ -506,5 +532,61 @@ describe("managedGitService", () => {
       ["upload-pack", "--stateless-rpc", "--advertise-refs", expect.stringContaining("repo-1.git")],
       { stdio: ["pipe", "pipe", "pipe"] },
     );
+  });
+
+  it("authorizes smart HTTP info refs with a provisioned runtime token bound to the repo", async () => {
+    prismaMock.repo.findFirst.mockResolvedValueOnce({
+      id: "repo-1",
+      setupConfig: {},
+    });
+    prismaMock.session.findFirst.mockResolvedValueOnce({ id: "session-1" });
+    mockGitSpawnSuccess();
+    const response = makeGitResponse();
+
+    await managedGitService.handleInfoRefs(
+      {
+        query: { service: "git-upload-pack" },
+        headers: { authorization: basicAuth(runtimeToken()) },
+      } as unknown as Request,
+      response as unknown as Response,
+      { orgId: "org-1", repoId: "repo-1" },
+    );
+
+    expect(prismaMock.orgMember.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.session.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "session-1",
+        organizationId: "org-1",
+        OR: [{ repoId: "repo-1" }, { sessionGroup: { repoId: "repo-1" } }],
+      },
+      select: { id: true },
+    });
+    expect(response.type).toHaveBeenCalledWith("application/x-git-upload-pack-advertisement");
+    expect(spawnMock).toHaveBeenCalledWith(
+      "git",
+      ["upload-pack", "--stateless-rpc", "--advertise-refs", expect.stringContaining("repo-1.git")],
+      { stdio: ["pipe", "pipe", "pipe"] },
+    );
+  });
+
+  it("rejects provisioned runtime tokens that are not bound to the managed repo", async () => {
+    prismaMock.repo.findFirst.mockResolvedValueOnce({
+      id: "repo-1",
+      setupConfig: {},
+    });
+    prismaMock.session.findFirst.mockResolvedValueOnce(null);
+    const response = makeGitResponse();
+
+    await managedGitService.handleInfoRefs(
+      {
+        query: { service: "git-upload-pack" },
+        headers: { authorization: basicAuth(runtimeToken({ sessionId: "session-other" })) },
+      } as unknown as Request,
+      response as unknown as Response,
+      { orgId: "org-1", repoId: "repo-1" },
+    );
+
+    expect(response.status).toHaveBeenCalledWith(401);
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 });
