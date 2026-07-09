@@ -29,9 +29,17 @@ const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").c
 describe("designGenerationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
     prismaMock.sessionGroup.findFirst.mockResolvedValue({
       designSystemId: "trace-core",
       designSkillIds: ["dashboard", "a11y"],
+    });
+    prismaMock.session.update.mockResolvedValue({
+      inputTokens: BigInt(10),
+      outputTokens: BigInt(20),
+      cacheReadTokens: BigInt(0),
+      cacheCreationTokens: BigInt(0),
+      costUsd: 0,
     });
   });
 
@@ -127,6 +135,34 @@ describe("designGenerationService", () => {
         }),
       }),
     );
+    expect(prismaMock.session.update).toHaveBeenCalledWith({
+      where: { id: "session-1" },
+      data: {
+        inputTokens: { increment: 10 },
+        outputTokens: { increment: 20 },
+      },
+      select: {
+        inputTokens: true,
+        outputTokens: true,
+        cacheReadTokens: true,
+        cacheCreationTokens: true,
+        costUsd: true,
+      },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_output",
+        scopeId: "session-1",
+        payload: expect.objectContaining({
+          type: "usage_updated",
+          inputTokens: 10,
+          outputTokens: 20,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          costUsd: 0,
+        }),
+      }),
+    );
   });
 
   it("emits generation failure events for model errors", async () => {
@@ -157,5 +193,59 @@ describe("designGenerationService", () => {
         }),
       }),
     );
+  });
+
+  it("does not silently create placeholder artifacts when model credentials are missing", async () => {
+    aiServiceMock.stream.mockReturnValue(
+      (async function* () {
+        yield { type: "error", error: new Error("No anthropic API key configured") };
+      })(),
+    );
+
+    await expect(
+      designGenerationService.generateHtml({
+        organizationId: "org-1",
+        actorId: "user-1",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        prompt: "Design a dashboard",
+        model: "anthropic/test",
+      }),
+    ).rejects.toThrow("No anthropic API key configured");
+
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_generation_failed",
+        scopeId: "session-1",
+        payload: expect.objectContaining({
+          sessionGroupId: "group-1",
+          error: "No anthropic API key configured",
+        }),
+      }),
+    );
+  });
+
+  it("allows placeholder generation only when explicitly enabled for local development", async () => {
+    vi.stubEnv("TRACE_DESIGN_ALLOW_PLACEHOLDER_FALLBACK", "true");
+    aiServiceMock.stream.mockReturnValue(
+      (async function* () {
+        yield { type: "error", error: new Error("No anthropic API key configured") };
+      })(),
+    );
+
+    const result = await designGenerationService.generateHtml({
+      organizationId: "org-1",
+      actorId: "user-1",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      prompt: "Design a dashboard",
+      model: "anthropic/test",
+    });
+
+    expect(result.html).toContain("Design artifact");
+    expect(result.metadata).toMatchObject({
+      generator: "local_fallback",
+      fallbackReason: "missing_api_key",
+    });
   });
 });

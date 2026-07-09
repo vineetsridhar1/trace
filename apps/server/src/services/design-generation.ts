@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
-import { composeTraceDesignPrompt, getDefaultModel, type LLMResponse } from "@trace/shared";
+import {
+  composeTraceDesignPrompt,
+  getDefaultModel,
+  type LLMResponse,
+  type LLMUsage,
+} from "@trace/shared";
 import { aiService } from "./ai.js";
 import { eventService } from "./event.js";
 import { buildPlaceholderDesignArtifactHtml } from "./design-artifact-html.js";
@@ -42,6 +47,56 @@ ${candidate}
 function isMissingKeyError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /^No \w+ API key configured/.test(message);
+}
+
+function allowPlaceholderFallback(): boolean {
+  return process.env.TRACE_DESIGN_ALLOW_PLACEHOLDER_FALLBACK === "true";
+}
+
+function numberFromBigInt(value: bigint | number | null | undefined): number {
+  return typeof value === "bigint" ? Number(value) : (value ?? 0);
+}
+
+async function recordDesignUsage(input: {
+  organizationId: string;
+  sessionId: string;
+  usage: LLMUsage | null | undefined;
+}): Promise<void> {
+  const inputTokens = input.usage?.inputTokens ?? 0;
+  const outputTokens = input.usage?.outputTokens ?? 0;
+  if (inputTokens === 0 && outputTokens === 0) return;
+
+  const updated = await prisma.session.update({
+    where: { id: input.sessionId },
+    data: {
+      inputTokens: { increment: inputTokens },
+      outputTokens: { increment: outputTokens },
+    },
+    select: {
+      inputTokens: true,
+      outputTokens: true,
+      cacheReadTokens: true,
+      cacheCreationTokens: true,
+      costUsd: true,
+    },
+  });
+
+  await eventService.create({
+    organizationId: input.organizationId,
+    scopeType: "session",
+    scopeId: input.sessionId,
+    eventType: "session_output",
+    payload: {
+      type: "usage_updated",
+      inputTokens: numberFromBigInt(updated.inputTokens),
+      outputTokens: numberFromBigInt(updated.outputTokens),
+      cacheReadTokens: numberFromBigInt(updated.cacheReadTokens),
+      cacheCreationTokens: numberFromBigInt(updated.cacheCreationTokens),
+      costUsd: updated.costUsd,
+    } as Prisma.InputJsonValue,
+    actorType: "system",
+    actorId: "system",
+  });
 }
 
 export type GeneratedDesignArtifact = {
@@ -156,7 +211,7 @@ export const designGenerationService = {
         }
       }
     } catch (error) {
-      if (isMissingKeyError(error)) {
+      if (isMissingKeyError(error) && allowPlaceholderFallback()) {
         return {
           html: buildPlaceholderDesignArtifactHtml(input.prompt),
           metadata: {
@@ -205,6 +260,11 @@ export const designGenerationService = {
       } as Prisma.InputJsonValue,
       actorType: input.actorType ?? "user",
       actorId: input.actorId,
+    });
+    await recordDesignUsage({
+      organizationId: input.organizationId,
+      sessionId: input.sessionId,
+      usage: response?.usage,
     });
     return {
       html,
