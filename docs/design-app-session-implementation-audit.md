@@ -672,3 +672,9 @@ but still used blocking browser prompt/confirm dialogs in the canvas. The toolba
 uses a first-class comment popover with body validation, selected-anchor awareness, and a
 send-to-agent checkbox while keeping the existing `commentDesignArtifact` service event
 path as the source of truth.
+
+During this audit pass, design direction generation and artifact iteration still used
+blocking browser prompts even though the canvas is the primary design workflow surface.
+Both actions now use a reusable prompt popover with validation; comparative iteration
+still pre-fills the selected-artifact merge prompt and passes comparison artifact ids
+through the existing GraphQL/service path.

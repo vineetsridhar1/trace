@@ -19,7 +19,6 @@ import {
   Smartphone,
   Tablet,
   Upload,
-  Wand2,
 } from "lucide-react";
 import type { Artifact, Event } from "@trace/gql";
 import {
@@ -39,6 +38,7 @@ import {
   DesignPdfExportPopover,
   type DesignPdfPageOptions,
 } from "./DesignPdfExportPopover";
+import { DesignPromptPopover, type DesignPromptInput } from "./DesignPromptPopover";
 import { DesignTweaksPopover } from "./DesignTweaksPopover";
 import { navigateToSession } from "../../stores/ui";
 
@@ -1169,44 +1169,36 @@ export function DesignCanvas({
     [],
   );
 
-  const handleIterate = useCallback(() => {
-    if (!selectedPersistedArtifact) return;
-    const prompt = window.prompt(
-      selectedPersistedArtifacts.length >= 2
-        ? "Describe the comparative variant"
-        : "Describe the next variant",
-      buildDesignIterationPromptDefault(promptDefaultArtifacts),
-    );
-    if (!prompt?.trim()) return;
-    const comparisonArtifactIds = promptDefaultArtifacts
-      .slice(1)
-      .map((artifact) => artifact.id)
-      .filter((artifactId) => artifactId !== selectedPersistedArtifact.id);
-    void mutateSelectedArtifact(
-      ITERATE_DESIGN_ARTIFACT_MUTATION,
-      {
-        artifactId: selectedPersistedArtifact.id,
-        prompt: prompt.trim(),
-        comparisonArtifactIds: comparisonArtifactIds.length > 0 ? comparisonArtifactIds : null,
-      },
-      "Variant created",
-    );
-  }, [
-    mutateSelectedArtifact,
-    promptDefaultArtifacts,
-    selectedPersistedArtifact,
-    selectedPersistedArtifacts.length,
-  ]);
+  const handleIterate = useCallback(
+    async ({ prompt }: DesignPromptInput) => {
+      if (!selectedPersistedArtifact) return;
+      const comparisonArtifactIds = promptDefaultArtifacts
+        .slice(1)
+        .map((artifact) => artifact.id)
+        .filter((artifactId) => artifactId !== selectedPersistedArtifact.id);
+      await mutateSelectedArtifact(
+        ITERATE_DESIGN_ARTIFACT_MUTATION,
+        {
+          artifactId: selectedPersistedArtifact.id,
+          prompt,
+          comparisonArtifactIds: comparisonArtifactIds.length > 0 ? comparisonArtifactIds : null,
+        },
+        "Variant created",
+      );
+    },
+    [mutateSelectedArtifact, promptDefaultArtifacts, selectedPersistedArtifact],
+  );
 
-  const handleGenerateDirections = useCallback(() => {
-    const prompt = window.prompt("Describe the design directions");
-    if (!prompt?.trim()) return;
-    void mutateSelectedArtifact(
-      GENERATE_DESIGN_ARTIFACTS_MUTATION,
-      { sessionGroupId, prompt: prompt.trim(), directionCount: 3 },
-      "Directions generated",
-    );
-  }, [mutateSelectedArtifact, sessionGroupId]);
+  const handleGenerateDirections = useCallback(
+    async ({ prompt }: DesignPromptInput) => {
+      await mutateSelectedArtifact(
+        GENERATE_DESIGN_ARTIFACTS_MUTATION,
+        { sessionGroupId, prompt, directionCount: 3 },
+        "Directions generated",
+      );
+    },
+    [mutateSelectedArtifact, sessionGroupId],
+  );
 
   const handleTweak = useCallback(
     async (tokens: Record<string, string>) => {
@@ -1331,28 +1323,25 @@ export function DesignCanvas({
           designSkillIds={designSkillIds}
           triggerClassName="border-r"
         />
-        <button
-          type="button"
-          onClick={handleGenerateDirections}
-          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground"
-          aria-label="Generate directions"
+        <DesignPromptPopover
           title="Generate directions"
-        >
-          <Wand2 size={14} />
-        </button>
+          actionLabel="Generate"
+          onSubmit={handleGenerateDirections}
+        />
         <div className="inline-flex h-8 items-center border-r px-2 text-xs tabular-nums text-muted-foreground">
           {selectedArtifactIds.length === 0 ? "None" : `${selectedArtifactIds.length} selected`}
         </div>
-        <button
-          type="button"
-          onClick={handleIterate}
+        <DesignPromptPopover
           disabled={!selectedPersistedArtifact}
-          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
-          aria-label="Create variant"
-          title="Create variant"
-        >
-          <Wand2 size={14} />
-        </button>
+          title={
+            selectedPersistedArtifacts.length >= 2
+              ? "Create comparative variant"
+              : "Create variant"
+          }
+          actionLabel="Create"
+          defaultPrompt={buildDesignIterationPromptDefault(promptDefaultArtifacts)}
+          onSubmit={handleIterate}
+        />
         <DesignTweaksPopover disabled={!selectedPersistedArtifact} onApply={handleTweak} />
         <DesignCommentPopover
           disabled={!selectedPersistedArtifact}
