@@ -43,7 +43,7 @@ export function AiLoadingIndicator({ model, startedAt }: AiLoadingIndicatorProps
       transition={{ duration: 0.18, ease: "easeOut" }}
       className="flex items-center gap-1.5 pb-2"
     >
-      <TraceLoader size={14} showLabel={false} className="text-white" />
+      <TraceLoader size={14} showLabel={false} className="text-muted-foreground" />
       <span className="text-[11px] text-muted-foreground">
         {model} is working • {formatTime(elapsed)}
       </span>

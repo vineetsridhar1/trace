@@ -12,6 +12,7 @@ import {
   reconcileOptimisticChatMessage,
   removeOptimisticChatMessage,
 } from "@trace/client-core";
+import { markJustSent } from "./just-sent";
 
 const SEND_CHAT_MESSAGE = gql`
   mutation SendChatMessage($chatId: ID!, $html: String, $parentId: ID, $clientMutationId: String) {
@@ -39,6 +40,9 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
         eventId: tempEventId,
         clientMutationId,
       } = optimisticallyInsertChatMessage(chatId, html, parentId);
+
+      // Mark so the message animates in once when it renders.
+      markJustSent(tempMessageId);
 
       try {
         const result = await client
