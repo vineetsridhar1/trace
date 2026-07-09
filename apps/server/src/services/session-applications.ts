@@ -691,6 +691,9 @@ export class SessionApplicationService {
     if (endpoint.revokedAt || endpoint.status === "revoked") {
       throw new ValidationError("Endpoint has been revoked.");
     }
+    if (endpoint.status !== "enabled") {
+      throw new ValidationError("Start the app preview before opening it.");
+    }
 
     const credential = createEndpointPreviewToken({
       userId,

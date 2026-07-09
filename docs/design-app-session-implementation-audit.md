@@ -590,3 +590,8 @@ re-validating that its backing app process was still running. `publishAppSession
 requires the selected endpoint's process to be in `running` state before flipping it
 public, preserving the v1 contract that publish/share exposes a live app endpoint rather
 than a stale forwarding row.
+
+During this audit pass, app preview URL creation was found to mint signed preview
+credentials for disabled endpoints. The proxy still refused those requests later, but the
+service contract now fails earlier: `createEndpointPreview` requires an enabled,
+non-revoked endpoint before returning the iframe-auth URL used by app preview.

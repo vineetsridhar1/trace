@@ -777,6 +777,25 @@ describe("SessionApplicationService", () => {
     expect(preview.expiresAt.getTime()).toBeGreaterThan(Date.now());
   });
 
+  it("rejects preview URLs for disabled endpoints", async () => {
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      status: "disabled",
+      revokedAt: null,
+    });
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      visibility: "public",
+      ownerUserId: "owner-1",
+    });
+
+    await expect(
+      new SessionApplicationService().createEndpointPreview("endpoint-1", "org-1", "user-1"),
+    ).rejects.toThrow("Start the app preview before opening it.");
+  });
+
   it("patches app token files through the live cloud bridge", async () => {
     prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
       id: "group-1",
