@@ -848,3 +848,9 @@ and public URL but did not prove the client event path received the publish/shar
 It now polls the source session's events for `session_endpoint_access_updated` and
 requires the published endpoint id, `accessMode: "public"`, enabled status, URL, source
 session group id, and `published: true` payload.
+
+During this continuation, the hosted design smoke validated the design publish mutation
+and public user-content URL but did not prove the event-backed canvas state was updated.
+It now polls for `design_artifact_updated` with `published: true`, the published artifact
+id, a `publishedAt` timestamp, and the exact public URL before rendering the public
+artifact.

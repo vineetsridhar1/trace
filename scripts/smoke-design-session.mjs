@@ -386,6 +386,35 @@ async function waitForPdfExportTimelineEvents(sessionId, artifactId, exportPaylo
   });
 }
 
+async function waitForPublishedArtifactEvent(sessionId, artifactId, publicUrl) {
+  return pollUntil("published design artifact event", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      sessionId,
+      types: ["design_artifact_updated"],
+    });
+    const event = data.events?.find((candidate) => {
+      if (candidate.eventType !== "design_artifact_updated") return false;
+      const payload = candidate.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      const artifact = payload.artifact;
+      return (
+        payload.published === true &&
+        artifact &&
+        typeof artifact === "object" &&
+        !Array.isArray(artifact) &&
+        artifact.id === artifactId &&
+        typeof artifact.publishedAt === "string" &&
+        artifact.publicUrl === publicUrl
+      );
+    });
+    if (!event) {
+      return { ok: false, detail: `no published artifact event for ${artifactId}` };
+    }
+    return { ok: true, value: event };
+  });
+}
+
 async function waitForGeneratedArtifactCompletionEvents(sessionId, artifacts, label) {
   const artifactsById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const artifactIds = artifacts.map((artifact) => artifact.id);
@@ -892,6 +921,7 @@ if (!published.publishedAt) throw new Error("Published artifact is missing publi
 if (!published.publicUrl) throw new Error("Published artifact publicUrl is missing");
 assertArtifactHtml(published, "Published");
 assertPublishedArtifactUrl(published.publicUrl, tweaked.id);
+await waitForPublishedArtifactEvent(session.id, tweaked.id, published.publicUrl);
 await assertUrlRenders(published.publicUrl, "published design artifact URL");
 await assertBootstrapDoesNotLeakContent(published.publicUrl, "published design artifact URL");
 
