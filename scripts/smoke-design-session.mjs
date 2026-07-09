@@ -232,6 +232,13 @@ function asPayload(event, label) {
   return payload;
 }
 
+function asObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} is missing`);
+  }
+  return value;
+}
+
 async function assertUrlRenders(url, label) {
   const response = await fetch(url, { redirect: "follow" });
   const body = await response.text();
@@ -377,6 +384,17 @@ if (tweaked.parentArtifactId !== selected.id) {
   throw new Error("Token tweak did not create a child artifact version");
 }
 assertArtifactHtml(tweaked, "Tweaked");
+if (!tweaked.html.includes("--trace-smoke-accent: #0f766e;")) {
+  throw new Error("Token tweak did not patch the requested CSS variable");
+}
+const tweakMetadata = asObject(tweaked.metadata, "Token tweak metadata");
+if (tweakMetadata.source !== "patchDesignArtifactTokens") {
+  throw new Error(`Token tweak source is ${tweakMetadata.source ?? "missing"}`);
+}
+const patchedTokens = asObject(tweakMetadata.patchedTokens, "Token tweak patchedTokens");
+if (patchedTokens["--trace-smoke-accent"] !== "#0f766e") {
+  throw new Error("Token tweak metadata does not include the requested CSS variable");
+}
 
 const exportData = await graphql(EXPORT_DESIGN_ARTIFACT_PDF, { artifactId: tweaked.id });
 if (exportData.exportDesignArtifactPdf.eventType !== "design_export_completed") {

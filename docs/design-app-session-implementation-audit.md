@@ -404,3 +404,8 @@ During this continuation, the hosted `pnpm smoke:design-session` script was also
 to assert the user-content bootstrap serving boundary after publish. Once the public
 artifact URL renders, the smoke fetches that artifact's `/_bootstrap` URL and verifies it
 returns the bootstrap shell without leaking the published artifact content.
+
+During this continuation, the hosted `pnpm smoke:design-session` script was tightened to
+prove token tweaks are deterministic artifact patches. The smoke now verifies the tweaked
+child artifact contains the requested CSS variable and records
+`source: "patchDesignArtifactTokens"` plus the patched token metadata.
