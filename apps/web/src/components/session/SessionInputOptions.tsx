@@ -31,7 +31,7 @@ const EFFORT_LINE_HEIGHT = 16;
 
 function EffortDots({ index, total }: { index: number; total: number }) {
   return (
-    <span className="flex flex-col-reverse items-center gap-[2px]" aria-hidden="true">
+    <span className="flex items-center gap-[3px]" aria-hidden="true">
       {Array.from({ length: total }, (_, i) => (
         <span
           key={i}
@@ -376,13 +376,13 @@ export function SessionInputOptions({
   const ModeIcon = modeConfig.icon;
 
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-1">
+    <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
       <button
         type="button"
         onClick={() => onModeChange(mode)}
         disabled={isActive || isOptimistic}
         className={cn(
-          "relative flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+          "relative flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-[11px] font-medium transition-colors hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed",
           modeConfig.style,
         )}
       >

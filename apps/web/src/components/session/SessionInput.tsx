@@ -141,6 +141,19 @@ export function SessionInput({
     return () => cancelAnimationFrame(frame);
   }, [canSend, isSending, sessionId]);
 
+  // Cmd/Ctrl+L focuses the composer from anywhere in the session view.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      if (e.key !== "l" && e.key !== "L") return;
+      if (!canSend || isSending) return;
+      e.preventDefault();
+      editorRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [canSend, isSending]);
+
   // Apply a starter prompt requested from elsewhere (e.g. the empty-state chips).
   // Do the work synchronously, then consume: `submit()` reads the text we just set
   // straight from the editor, and clearing the request afterward just re-runs this
@@ -440,30 +453,33 @@ export function SessionInput({
 
   return (
     <div className="shrink-0 bg-background px-4 pb-8">
-      {preparing && (
-        <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-          <TraceLoader size={12} showLabel={false} className="shrink-0" />
-          <span>Preparing workspace…</span>
-        </div>
-      )}
       <div className="relative mx-auto w-[90%]">
-        <div className="pointer-events-none absolute inset-x-0 bottom-full px-5">
-          <AnimatePresence initial={false}>
-            {isActive && (
-              <AiLoadingIndicator
-                key="ai-loading-indicator"
-                model={displayModel}
-                startedAt={lastUserMessageAt}
-              />
-            )}
-          </AnimatePresence>
-        </div>
+        {preparing && (
+          <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <TraceLoader size={12} showLabel={false} className="shrink-0" />
+            <span>Preparing workspace…</span>
+          </div>
+        )}
+        <AnimatePresence initial={false}>
+          {isActive && (
+            <AiLoadingIndicator
+              key="ai-loading-indicator"
+              model={displayModel}
+              startedAt={lastUserMessageAt}
+            />
+          )}
+        </AnimatePresence>
         <div
           className={cn(
-            "rounded-2xl border bg-surface-mid px-2 pt-2 shadow-sm transition-colors focus-within:ring-1 focus-within:ring-border",
+            "relative rounded-2xl border bg-surface-mid px-2 pt-2 shadow-sm transition-colors focus-within:ring-1 focus-within:ring-border",
             MODE_CONFIG[mode as InteractionMode].inputBorder,
           )}
         >
+        {!hasContent && (
+          <span className="pointer-events-none absolute right-3 top-2 text-[11px] text-muted-foreground">
+            <kbd className="font-sans">⌘L</kbd> to focus
+          </span>
+        )}
         <ImageAttachmentBar
           attachments={images}
           onRemove={handleRemoveImage}
@@ -486,7 +502,7 @@ export function SessionInput({
             }}
           />
         </div>
-        <div className="flex items-center gap-1 pb-2 pl-1 pr-2">
+        <div className="flex items-center gap-1 pb-2 pl-1 pr-2 pt-2">
           <input
             ref={fileInputRef}
             type="file"

@@ -18,7 +18,7 @@ export const MODE_CONFIG: Record<InteractionMode, ModeConfig> = {
   code: {
     label: "Code",
     icon: Pencil,
-    style: "border-transparent text-foreground",
+    style: "border-transparent text-muted-foreground",
     inputBorder: "border-border focus:ring-accent",
   },
   plan: {

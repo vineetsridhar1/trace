@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import type { Actor } from "@trace/gql";
 import { useMessageField } from "@trace/client-core";
 import { useAuthStore, type AuthState } from "@trace/client-core";
@@ -18,6 +19,7 @@ import { MessageBody } from "./MessageBody";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { useLongPressEvent } from "../../hooks/useLongPressEvent";
 import { textToEditorHtml } from "./message-utils";
+import { consumeJustSent } from "./just-sent";
 
 const EMPTY_REPLIERS: Actor[] = [];
 
@@ -43,6 +45,8 @@ export function ChatMessage({
   const isMobile = useIsMobile();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  // Animate in once if this message was just sent by the current user.
+  const [animateIn] = useState(() => consumeJustSent(messageId));
   const messageRef = useRef<HTMLDivElement>(null);
 
   const repliers = threadRepliers ?? EMPTY_REPLIERS;
@@ -100,8 +104,11 @@ export function ChatMessage({
 
   return (
     <>
-      <div
+      <motion.div
         ref={messageRef}
+        initial={animateIn ? { opacity: 0, y: 8 } : false}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 500, damping: 34 }}
         className={`group relative flex gap-3 px-4 hover:bg-surface-elevated/30 ${isGrouped ? "py-0.5" : "mt-2 pt-1 pb-0.5"} ${isMobile ? "select-none active:bg-surface-elevated/20" : ""}`}
       >
         <MessageActionBar
@@ -145,7 +152,7 @@ export function ChatMessage({
             </div>
           </>
         )}
-      </div>
+      </motion.div>
 
       {isMobile && !editing && (
         <MessageActionsSheet
