@@ -70,6 +70,33 @@ model Repo {
   service layer append events (e.g. `repo_branch_pushed`) so checkpoint/diff state updates
   flow through the normal event stream.
 
+#### Smart-HTTP implementation contract
+
+This is one of the known remaining gaps. The managed-git target is not complete until
+Trace can clone/fetch/push managed repos over git smart-HTTP.
+
+- **Routes**:
+  - `GET /git/:orgId/:repoId.git/info/refs?service=git-upload-pack`
+  - `GET /git/:orgId/:repoId.git/info/refs?service=git-receive-pack`
+  - `POST /git/:orgId/:repoId.git/git-upload-pack`
+  - `POST /git/:orgId/:repoId.git/git-receive-pack`
+- **Process execution**: route handlers validate/auth through the service layer, resolve
+  the bare repo path from `repoId`, and spawn the matching git command in stateless-RPC
+  mode. Do not shell-concatenate untrusted path values; construct paths from validated ids.
+- **Content types**: responses must use the smart-HTTP content types
+  (`application/x-git-upload-pack-advertisement`,
+  `application/x-git-upload-pack-result`,
+  `application/x-git-receive-pack-advertisement`,
+  `application/x-git-receive-pack-result`) and packet-line framing expected by git.
+- **Receive-pack side effects**: after successful pushes, inspect updated refs and call a
+  service method that appends the relevant events. The route itself remains transport
+  plumbing; business logic stays in services.
+- **Auth tokens**: runtime tokens must be scoped to the org/session/repo and expire with
+  the runtime. User clone/export tokens must be short-lived and auditable.
+- **Verification**: an integration test should initialize a managed bare repo, clone it
+  through the HTTP route, commit locally, push through `git-receive-pack`, fetch through
+  `git-upload-pack`, and assert service-layer events/refs updated.
+
 ### Storage
 
 Bare repos live under a single root (`GIT_STORAGE_ROOT`), one directory per repo id.
@@ -96,6 +123,35 @@ Maintenance: periodic `git gc` per repo; per-org storage quota checks on receive
   existing GitHub integration, `git push --mirror` from the managed bare repo, flip
   `provider` to `github`, set `remoteUrl`, retire the managed copy. All PR/webhook machinery
   lights up from that point.
+
+#### Lazy app checkpoint implementation contract
+
+This is one of the known remaining gaps. App sessions may start without a repo, but the
+first checkpoint must make them durable.
+
+- **Before first checkpoint**: `SessionGroup.kind === "app"` may have no `repoId` and no
+  remote. The runtime worktree is still a normal git worktree locally so diffs/checkpoint
+  creation can operate.
+- **First checkpoint service flow**:
+  1. Detect that the app session group has no repo.
+  2. Create a hidden `Repo { provider: managed }` row scoped to the org.
+  3. Create the bare repo directory under `GIT_STORAGE_ROOT` with `git init --bare`.
+  4. Mint or reuse a runtime-scoped token for that repo.
+  5. Ask the bridge/runtime to add the managed remote as `origin` or update the existing
+     origin to the managed URL.
+  6. Commit the checkpoint locally if needed and push the checkpoint branch/ref to the
+     managed remote.
+  7. Persist the repo link on the `SessionGroup`, create the `GitCheckpoint`, append the
+     normal checkpoint events, and broadcast state through subscriptions.
+- **Idempotency**: retries must not create multiple managed repos for the same session
+  group. If repo creation succeeded but push failed, the next retry should reuse the same
+  repo and continue.
+- **Later checkpoints**: skip repo creation and push to the existing managed remote.
+- **Abandoned sessions**: if no checkpoint was ever created, no managed repo exists and
+  nothing needs GC beyond runtime cleanup.
+- **Verification**: tests should prove an app session starts without `repoId`, first
+  checkpoint creates exactly one managed repo and pushes to it, retry is idempotent, and
+  later checkpoint/restore flows use the managed remote.
 
 ### Runtime integration
 
@@ -129,3 +185,17 @@ Detailed in `design-session-experience.md`.
    storage.
 3. **Retention defaults.** How long archived app projects keep their managed repo before GC.
 4. **Quotas.** Per-org storage caps and max repo size on receive-pack.
+
+## Full implementation acceptance
+
+Managed git is complete for the app-session target only when:
+
+- `RepoProvider.managed` exists in Prisma and GraphQL via codegen, with no duplicate local
+  enum definitions.
+- Managed repos are hidden from normal repo pickers/lists but visible to service-layer
+  session/checkpoint code.
+- Smart-HTTP clone/fetch/push works against bare repos under `GIT_STORAGE_ROOT`.
+- Runtime and user git auth tokens are scoped, short-lived where appropriate, and checked
+  through services.
+- App sessions lazily create and push to a managed repo on first checkpoint.
+- Archive/retention cleanup can delete managed bare repos after the configured window.

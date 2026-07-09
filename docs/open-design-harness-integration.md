@@ -80,6 +80,35 @@ model differently per session kind:
   question-form syntax and parse it into Trace's existing `QuestionBlock` /
   `AskUserQuestionBar` so the "quick brief" UX renders natively.
 
+#### Delivery implementation contract
+
+This section is part of the full build target, not just a spike.
+
+- **Single composer API**: expose a Trace-owned helper such as
+  `composeTraceDesignPrompt({ kind, designSystemId, skillIds, userBrief, artifactContext?,
+  elementAnchors?, appStarterContext? })`. Internally it calls the vendored Open Design
+  composer, loads content from `TRACE_DESIGN_CONTENT_DIRS`, and appends the Trace overlay.
+- **Design delivery**: the design generation service must call the configured
+  `LLMAdapter` with the composed prompt as the system/developer prompt and the user brief
+  as the user message. The response must stream into service-layer session events and
+  artifact persistence. Seed/demo artifacts do not satisfy this contract.
+- **App delivery**: the app session bridge must pass the composed prompt to the selected
+  `CodingToolAdapter` through `RunOptions.appendSystemPrompt`; for Claude Code this maps
+  to `--append-system-prompt`. Do not introduce an `OpenDesignAdapter` in the production
+  path.
+- **Overlay responsibilities**:
+  - `design` overlay: self-contained HTML, CSS-variable token block, stable `data-el`
+    anchors, print-ready deck/page guidance, no filesystem assumptions.
+  - `app` overlay: full-stack starter structure, package/script expectations, routing,
+    server/API behavior, simple persistence seam, run/publish/checkpoint expectations,
+    source-location stamping for the element picker.
+- **Events and usage**: prompt composition itself does not create events. The calling
+  service records prompt/run lifecycle, streamed deltas, failures, completions, and
+  token/cost usage through the existing service/event path.
+- **Tests**: snapshot the composed prompt for at least one design artifact run and one app
+  starter run. Add an `LLMAdapter` mock test proving a design generation request consumes
+  the composed prompt and persists the returned artifact.
+
 ### 4. Trace-side plumbing
 
 `designSystemId` / `skillIds` are settings on the `SessionGroup` with a design-system
@@ -148,6 +177,18 @@ repo whose deliverable is the design-system directory — no new infrastructure.
    Next.js + Tailwind + shadcn). The OD content is HTML-artifact-tuned, and this measures
    whether its quality transfers to a full-stack app target. If transfer is weak, the fix
    is an app-flavored overlay skill, not a session-kind change.
+
+## Full implementation acceptance
+
+The harness work is done only when:
+
+- Vendored composer code compiles in `packages/shared` without daemon runtime imports.
+- Content loading works from `TRACE_DESIGN_CONTENT_DIRS` in the server and app runtime.
+- Design generation uses the composed prompt through `LLMAdapter` and no longer relies on
+  fake artifacts.
+- App sessions receive the composed prompt through `RunOptions.appendSystemPrompt`.
+- Prompt snapshots cover both session kinds and make future Open Design rebases reviewable.
+- License/NOTICE/VENDOR metadata ships with the vendored composer and copied content.
 
 ## Risks
 
