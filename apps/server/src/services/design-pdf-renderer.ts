@@ -36,20 +36,34 @@ class BoundedRenderPool {
   ) {}
 
   async run<T>(task: RenderTask<T>): Promise<T> {
-    if (this.active >= this.concurrency) {
-      if (this.queue.length >= this.maxQueueSize) {
-        throw new Error("Design PDF render queue is full");
-      }
-      await new Promise<void>((resolve) => this.queue.push(resolve));
-    }
-
-    this.active += 1;
+    await this.acquireSlot();
     try {
       return await task();
     } finally {
-      this.active -= 1;
-      this.queue.shift()?.();
+      this.releaseSlot();
     }
+  }
+
+  private acquireSlot(): Promise<void> {
+    if (this.active < this.concurrency && this.queue.length === 0) {
+      this.active += 1;
+      return Promise.resolve();
+    }
+    if (this.queue.length >= this.maxQueueSize) {
+      throw new Error("Design PDF render queue is full");
+    }
+    return new Promise<void>((resolve) => {
+      this.queue.push(() => {
+        this.active += 1;
+        resolve();
+      });
+    });
+  }
+
+  private releaseSlot() {
+    this.active -= 1;
+    const next = this.queue.shift();
+    if (next) next();
   }
 }
 

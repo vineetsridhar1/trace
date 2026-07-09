@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import fs from "fs";
+import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { countPdfPages, designPdfRenderer } from "./design-pdf-renderer.js";
 
@@ -38,8 +39,28 @@ function inputPathFrom(args: unknown[]): string {
   return fileArg.slice("file://".length);
 }
 
+function pathArtifactId(outputPath: string): string {
+  return path.basename(outputPath, ".pdf");
+}
+
+async function waitForAssertion(assertion: () => void) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+  throw lastError;
+}
+
 describe("designPdfRenderer", () => {
   const originalExecutable = process.env.TRACE_CHROMIUM_EXECUTABLE;
+  const originalConcurrency = process.env.TRACE_DESIGN_PDF_RENDER_CONCURRENCY;
+  const originalQueueSize = process.env.TRACE_DESIGN_PDF_RENDER_QUEUE_SIZE;
 
   beforeEach(() => {
     process.env.TRACE_CHROMIUM_EXECUTABLE = "/usr/bin/chromium";
@@ -51,6 +72,16 @@ describe("designPdfRenderer", () => {
       delete process.env.TRACE_CHROMIUM_EXECUTABLE;
     } else {
       process.env.TRACE_CHROMIUM_EXECUTABLE = originalExecutable;
+    }
+    if (originalConcurrency === undefined) {
+      delete process.env.TRACE_DESIGN_PDF_RENDER_CONCURRENCY;
+    } else {
+      process.env.TRACE_DESIGN_PDF_RENDER_CONCURRENCY = originalConcurrency;
+    }
+    if (originalQueueSize === undefined) {
+      delete process.env.TRACE_DESIGN_PDF_RENDER_QUEUE_SIZE;
+    } else {
+      process.env.TRACE_DESIGN_PDF_RENDER_QUEUE_SIZE = originalQueueSize;
     }
   });
 
@@ -153,6 +184,50 @@ describe("designPdfRenderer", () => {
         html: "<main>Corrupt</main>",
       }),
     ).rejects.toThrow("Chromium produced a non-PDF export");
+  });
+
+  it("reserves render slots for queued PDF tasks instead of letting later tasks barge", async () => {
+    process.env.TRACE_DESIGN_PDF_RENDER_CONCURRENCY = "1";
+    process.env.TRACE_DESIGN_PDF_RENDER_QUEUE_SIZE = "4";
+    vi.resetModules();
+    const { designPdfRenderer: isolatedRenderer } = await import("./design-pdf-renderer.js");
+    const started: string[] = [];
+    const callbacks: ExecCallback[] = [];
+
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      started.push(pathArtifactId(outputPathFrom(args)));
+      fs.writeFileSync(outputPathFrom(args), Buffer.from("%PDF-1.7\n"));
+      callbacks.push(callbackFrom(args));
+      return null as never;
+    });
+
+    const first = isolatedRenderer.renderHtmlToPdf({
+      artifactId: "artifact-1",
+      html: "<main>First</main>",
+    });
+    const second = isolatedRenderer.renderHtmlToPdf({
+      artifactId: "artifact-2",
+      html: "<main>Second</main>",
+    });
+    const third = isolatedRenderer.renderHtmlToPdf({
+      artifactId: "artifact-3",
+      html: "<main>Third</main>",
+    });
+
+    await waitForAssertion(() => expect(started).toEqual(["artifact-1"]));
+    callbacks[0](null, "", "");
+    await waitForAssertion(() => expect(started).toEqual(["artifact-1", "artifact-2"]));
+    callbacks[1](null, "", "");
+    await waitForAssertion(() =>
+      expect(started).toEqual(["artifact-1", "artifact-2", "artifact-3"]),
+    );
+    callbacks[2](null, "", "");
+
+    await expect(Promise.all([first, second, third])).resolves.toEqual([
+      Buffer.from("%PDF-1.7\n"),
+      Buffer.from("%PDF-1.7\n"),
+      Buffer.from("%PDF-1.7\n"),
+    ]);
   });
 
   it("counts concrete PDF page objects when available", () => {

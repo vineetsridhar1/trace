@@ -614,3 +614,9 @@ page-size and margin options to `exportDesignArtifactPdf` and asserts they round
 the completion event, and it stores/asserts element-anchor bounds on the comment payload.
 That keeps the hosted acceptance check aligned with the documented print-fidelity and
 selection-anchor contracts.
+
+During this audit pass, the design PDF render pool was found to release a queued task by
+resolving its waiter before reserving the slot. A new render could start in that tiny
+gap, exceeding the configured concurrency. The pool now reserves queued slots before
+resuming waiters, and the renderer unit suite covers serial execution with concurrency
+set to one.
