@@ -68,8 +68,10 @@ different success criteria:
   events, Zustand consumes events, and agents use the same service layer as humans.
 - **Generated HTML is untrusted.** Render design artifacts from a dedicated user-content
   domain, never from the Trace app origin.
-- **Managed git is for app sessions.** Design artifacts live in rows/blob storage; app
-  sessions use hidden Trace-managed git repos for durable worktrees and checkpoints.
+- **Managed git is shared durability for generated projects.** App sessions use hidden
+  Trace-managed git repos for durable worktrees and checkpoints. Design sessions should
+  also use hidden managed repos, but server-side: generated HTML artifacts are committed
+  as files without provisioning a cloud runtime.
 
 ## Rejected or Deferred Paths
 
@@ -117,7 +119,10 @@ Required session-level concepts:
   - `title`
   - `contentType`
   - `html` fallback for legacy/generated compatibility
-  - `htmlStorageKey` or equivalent blob reference for new HTML storage
+  - optional `htmlStorageKey` or equivalent blob/cache reference for legacy rows or
+    read-through serving
+  - `repoId`, `repoFilePath`, and `repoCommitSha` for canonical managed-git artifact
+    storage
   - `metadata`
   - `publishedAt`
   - `createdBy`
@@ -135,7 +140,8 @@ A complete design session supports:
 
 - Prompt-first creation.
 - No runtime provisioning.
-- No repo requirement.
+- No user-selected repo requirement.
+- Lazy hidden managed repo after the first successful artifact generation.
 - Multiple parallel HTML artifact variants for a brief.
 - Progressive rendering while generation streams.
 - Artifact lineage: first variants are siblings, iterations are children.
@@ -190,13 +196,42 @@ sufficient for Zustand to upsert entities without refetch.
 
 ### Artifact Storage
 
-- New artifact HTML should be stored through the existing storage/upload adapter under an
-  org-scoped key such as `uploads/{orgId}/design-artifacts/{artifactId}.html`.
-- Store the blob key on the artifact row.
-- Keep legacy `Artifact.html` fallback for existing rows and generated GraphQL
-  compatibility if needed.
-- GraphQL and event payloads should hydrate artifact HTML from storage when required by
-  the client.
+Design artifacts are HTML files, so the durable source should be Trace-managed git rather
+than only database/blob rows. This keeps design sessions lightweight while giving them the
+same versioning, diffability, exportability, and future handoff properties as app
+sessions.
+
+Canonical storage target:
+
+```txt
+artifacts/<artifactId>/index.html
+artifacts/<artifactId>/metadata.json
+artifacts/<artifactId>/tokens.css        # optional extracted token file
+artifacts/<artifactId>/assets/*          # later, if multi-file assets are supported
+```
+
+Rules:
+
+- The `Artifact` row remains the service/query index and stores lineage, prompt,
+  publish state, metadata, and pointers into managed git.
+- Add fields or metadata for `repoId`, `repoFilePath`, and `repoCommitSha` so every
+  artifact version can be resolved to an immutable git blob.
+- The first successful artifact generation lazily creates a hidden managed repo for the
+  design session group if one does not exist.
+- The server writes generated HTML/metadata into a temporary worktree or low-level git
+  object flow, commits it, pushes/updates the managed bare repo, and then emits artifact
+  completion events.
+- A fan-out generation may commit all sibling artifacts in one commit or one commit per
+  artifact. The event payload must still identify each artifact's file path and commit.
+- An iteration creates a new artifact directory/file and a new commit; it does not mutate
+  the parent artifact file.
+- Blob/object storage may still be used as a read-through cache for large HTML or
+  published serving, but managed git is the durable source of truth for generated design
+  files.
+- Keep legacy `Artifact.html` / `htmlStorageKey` fallback for existing rows and generated
+  GraphQL compatibility if already present in the implementation.
+- GraphQL and event payloads should hydrate artifact HTML from managed git or cache when
+  the client needs the body.
 - Generated artifact HTML is untrusted. Sanitize or constrain only as needed for storage
   and serving, while relying on origin isolation for runtime safety.
 
@@ -224,6 +259,8 @@ https://<artifactId>.<TRACE_USER_CONTENT_DOMAIN>/_bootstrap
   messages.
 - Message payloads must include a nonce and validate origins on both sides.
 - Published artifact root URLs serve stored HTML directly only when `publishedAt` is set.
+- Published serving should resolve artifact HTML from the artifact's managed-git
+  `repoCommitSha` + `repoFilePath` or from a cache proven to match that commit.
 - Unpublished root URLs return 404 or equivalent.
 - Authoring overlays are not injected into public published output unless an
   authenticated authoring path explicitly requests them.
@@ -291,7 +328,8 @@ Requirements:
 - Add/finish a service method like
   `exportDesignArtifact({ artifactId, format: "pdf", pageOptions? })`.
 - Use a bounded Playwright/headless-Chromium pool or worker queue.
-- Load stored artifact HTML directly from artifact storage.
+- Load artifact HTML from the artifact's managed-git commit/file pointer, or from a cache
+  proven to match that pointer.
 - Do not pass Trace cookies or credentials into the browser context.
 - Apply the same network/CSP policy as preview.
 - Honor print CSS, deck page structure, page size, margins, and background graphics.
@@ -434,7 +472,12 @@ Graduation:
 
 ## Managed Git
 
-Managed git exists to make app sessions durable without forcing GitHub repo creation.
+Managed git exists to make generated session outputs durable without forcing GitHub repo
+creation. It supports two different write paths:
+
+- **App sessions**: a cloud runtime worktree pushes commits through smart-HTTP.
+- **Design sessions**: the server commits generated HTML artifact files directly into a
+  hidden managed repo. No cloud runtime is involved.
 
 ### Repo Provider
 
@@ -451,6 +494,7 @@ Rules:
 
 - Managed repos are hidden from normal repo lists and pickers.
 - Managed repos are visible to session/checkpoint services.
+- Design managed repos are visible to artifact/export/publish/promotion services.
 - GitHub-specific webhook/PR logic gates on `provider === "github"`.
 - Types come from Prisma/GraphQL codegen. Do not duplicate enums locally.
 
@@ -486,7 +530,35 @@ Requirements:
 - Backup/snapshot runbook.
 - Archive/retention cleanup deletes managed bare repos after the configured window.
 
-### Lazy First Checkpoint
+### Lazy Design Artifact Repo
+
+First successful artifact flow for a design session:
+
+1. Detect design session group has no repo.
+2. Create hidden `Repo { provider: managed }`.
+3. Initialize bare repo under `GIT_STORAGE_ROOT`.
+4. Create a server-side temporary worktree or use a git storage adapter to write blobs.
+5. Write `artifacts/<artifactId>/index.html` and metadata files.
+6. Commit with a subject like `Add design artifact <artifactId>`.
+7. Push/update the managed bare repo.
+8. Persist the repo link on `SessionGroup` and artifact git pointers on `Artifact`.
+9. Append artifact completion events and broadcast state.
+
+Fan-out behavior:
+
+- A fan-out can use one commit containing all sibling artifact files when they complete
+  together.
+- If variants complete independently, separate commits are acceptable.
+- Partial failures must not prevent successful artifact commits.
+
+Retry/idempotency:
+
+- Do not create duplicate managed repos for the same design session group.
+- Do not create duplicate artifact rows/files for the same completed generation attempt.
+- If repo creation succeeded but commit/push failed, retry against the same repo.
+- Abandoned design sessions with no successful artifact create no managed repo.
+
+### Lazy App First Checkpoint
 
 First checkpoint flow for an app session:
 
@@ -606,7 +678,13 @@ Rules:
 
 `docs/design-app-session-implementation-audit.md` says the main server/service/UI paths
 for design and app sessions have been implemented and covered by focused tests in the
-current branch lineage. The remaining proof is hosted end-to-end verification:
+current branch lineage. That audit predates the latest decision that design artifacts
+should also be committed into Trace-managed git. If the current code still stores design
+HTML only in blob/object storage, another implementation pass should migrate the durable
+source to managed git while preserving any existing cache/fallback paths.
+
+After that storage decision is implemented, the remaining proof is hosted end-to-end
+verification:
 
 - `pnpm smoke:design-session`
 - `pnpm smoke:cloud-app-session`
@@ -629,6 +707,9 @@ work end to end.
 
 - Service test: `startSession(kind: design)` creates no runtime/repo.
 - Service test: design generation calls `LLMAdapter` and persists N artifacts.
+- Service/integration test: first successful design artifact creates one hidden managed
+  repo and commits artifact HTML/metadata files.
+- Retry test: a failed design artifact commit/push reuses the same managed repo on retry.
 - Service test: failed one-of-N generation keeps successful siblings visible.
 - Service test: iteration includes parent artifact HTML and anchor/comment context.
 - Store test: design events upsert artifacts/comments/exports.
@@ -639,6 +720,7 @@ work end to end.
 - Integration test: PDF export creates a valid non-empty PDF and emits completion only
   after upload.
 - Route test: published artifact root serves stored HTML; unpublished root does not.
+- Git test: published/exported artifact HTML resolves from the artifact commit pointer.
 - Service/UI test: promotion creates linked coding session with artifact references.
 
 ### Required App Evidence
@@ -701,6 +783,7 @@ Do not call the full goal complete until:
 - PDF export produces real downloadable PDF files.
 - App sessions run real standalone apps on cloud runtimes.
 - App sessions use managed git durability and lazy first-checkpoint repo creation.
+- Design sessions use managed git durability and lazy first-artifact repo creation.
 - Checkpoint restore and publish work for app sessions.
 - Prompt harness composition is wired for both session kinds.
 - Existing coding-session behavior still works.
