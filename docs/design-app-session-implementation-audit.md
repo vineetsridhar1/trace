@@ -122,6 +122,9 @@ Implemented:
 - Published public endpoints render through the endpoint proxy without session auth or
   authoring overlay injection.
 - Checkpoints are persisted as `GitCheckpoint` rows after managed remote push confirmation.
+- First-checkpoint managed repo creation is retry-safe: once the app group is linked to
+  the managed repo, a failed bridge delivery is retried against the same repo instead of
+  creating duplicate hidden repos.
 - Restore by checkpoint provisions from the checkpoint SHA in a fresh session group.
 - App checkpoint restore preserves the source `app` session kind even when the UI starts
   the restore without passing `kind`, and provisions the restored runtime without
@@ -243,3 +246,8 @@ and the starter emitted `data-trace-source` stamps, but the Applications panel w
 consuming the resulting iframe messages. The panel now validates overlay messages against
 the active preview origin and displays selected file:line context or app script errors
 from the preview frame.
+
+During this continuation, lazy managed-repo creation had happy-path coverage but not the
+explicit retry case required by `docs/managed-git-hosting.md`. `session.test.ts` now
+proves that if the first checkpoint links the managed repo but bridge delivery fails, the
+next checkpoint attempt reuses that repo and does not create a duplicate hidden repo.
