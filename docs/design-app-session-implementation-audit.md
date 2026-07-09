@@ -783,3 +783,8 @@ server-side filtering coverage, but no bridge-side regression that internal/syst
 are suppressed before endpoint registration. The container-bridge process tests now prove
 SSH, Docker, database, Open Design daemon, boundary, and out-of-range ports are filtered
 while a forwardable app port is reported.
+
+During this audit continuation, the hosted design smoke's streaming assertions were also
+made less brittle for real model output by raising the session event query window from
+200 to 1000 events, so verbose delta streams do not evict the matching started event from
+the acceptance check.

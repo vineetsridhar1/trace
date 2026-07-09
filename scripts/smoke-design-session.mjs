@@ -99,7 +99,7 @@ const SESSION_EVENTS = `
       organizationId: $organizationId
       scope: { type: session, id: $sessionId }
       types: $types
-      limit: 200
+      limit: 1000
     ) {
       id
       eventType
