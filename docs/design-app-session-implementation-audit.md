@@ -59,6 +59,8 @@ Implemented:
 
 - `startSession(kind: app)` rejects linked repos/source sessions/checkpoint restores at
   initial creation, forces cloud hosting, and provisions a cloud runtime immediately.
+- App sessions with an initial prompt queue that prompt across starter workspace
+  bootstrap and replay it once `workspace_ready` arrives.
 - App prompts receive the Open Design appended system prompt through `RunOptions.appendSystemPrompt`.
 - App sessions start standalone and lazily create/link a hidden managed repo on the first
   checkpoint push flow.
@@ -125,3 +127,9 @@ During the audit, rewritten app checkpoints were found to be able to retain stal
 metadata if the replacement capture was unavailable. The service now persists
 `captureStatus: "unavailable"` with null capture fields on app checkpoint rewrites, and a
 regression test covers that behavior.
+
+During continuation, app sessions with an initial prompt were found to provision and
+bootstrap the starter workspace without necessarily preserving that prompt for replay
+after `workspace_ready`. `startSession(kind: app)` now queues the initial run until the
+workspace is ready, and pending app command replay includes the Open Design app harness
+settings in `appendSystemPrompt`.

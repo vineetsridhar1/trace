@@ -97,6 +97,10 @@ vi.mock("../lib/storage/index.js", () => ({
 
 vi.mock("@trace/shared", () => {
   return {
+    composeTraceDesignPrompt: vi.fn(
+      () =>
+        "Trace app session prompt: full-stack product application; managed remote lazily on the first checkpoint.",
+    ),
     getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
     getDefaultReasoningEffort: vi.fn().mockReturnValue("auto"),
     isSupportedModel: vi.fn().mockReturnValue(true),
@@ -828,6 +832,63 @@ describe("SessionService", () => {
         }),
       );
       expect(managedGitServiceMock.createAppRepo).not.toHaveBeenCalled();
+      await vi.waitFor(() => {
+        expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+          expect.objectContaining({
+            hosting: "cloud",
+            repo: null,
+            bootstrapAppWorkspace: true,
+          }),
+        );
+      });
+    });
+
+    it("queues the initial app prompt until the starter workspace is ready", async () => {
+      const sessionGroup = makeSessionGroup({
+        kind: "app",
+        repoId: null,
+        repo: null,
+        channelId: "channel-1",
+      });
+      const session = makeSession({
+        sessionGroup,
+        hosting: "cloud",
+        repoId: null,
+        repo: null,
+        channelId: "channel-1",
+      });
+
+      prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(makeAgentEnvironment());
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        kind: "app",
+        channelId: "channel-1",
+        prompt: "Build a lightweight CRM approval tracker",
+        designSystemId: "trace-core",
+        designSkillIds: ["forms"],
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: "Build a lightweight CRM approval tracker",
+            }),
+          }),
+        }),
+      );
       await vi.waitFor(() => {
         expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -6736,6 +6797,111 @@ describe("SessionService", () => {
         expect.objectContaining({
           data: expect.objectContaining({ readOnlyWorkspace: false }),
         }),
+      );
+    });
+
+    it("replays a queued app prompt with the app harness after starter bootstrap", async () => {
+      prismaMock.session.findUniqueOrThrow
+        .mockResolvedValueOnce({
+          pendingRun: {
+            type: "run",
+            prompt: "Build a lightweight CRM approval tracker",
+            interactionMode: null,
+            clientSource: null,
+            checkpointContext: null,
+          },
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          readOnlyWorkspace: false,
+          workdir: null,
+        })
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          tool: "claude_code",
+          model: "claude-sonnet-4-20250514",
+          reasoningEffort: "auto",
+          createdBy: { enableClaudeInChrome: false },
+          sessionStatus: "in_progress",
+          workdir: "/home/coder",
+          toolSessionId: null,
+          repoId: null,
+          connection: {
+            state: "connected",
+            adapterType: "provisioned",
+            runtimeInstanceId: "runtime-1",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          sessionGroupId: "group-1",
+          sessionGroup: {
+            kind: "app",
+            designSystemId: "trace-core",
+            designSkillIds: ["forms"],
+          },
+        });
+      prismaMock.session.update
+        .mockResolvedValueOnce(
+          makeSession({
+            repoId: null,
+            repo: null,
+            workdir: "/home/coder",
+            sessionGroup: makeSessionGroup({ repoId: null, repo: null, workdir: "/home/coder" }),
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            agentStatus: "active",
+            sessionStatus: "in_progress",
+            repoId: null,
+            repo: null,
+            workdir: "/home/coder",
+            sessionGroup: makeSessionGroup({
+              kind: "app",
+              repoId: null,
+              repo: null,
+              workdir: "/home/coder",
+            }),
+          }),
+        );
+      prismaMock.sessionGroup.update
+        .mockResolvedValueOnce(
+          makeSessionGroup({ kind: "app", repoId: null, repo: null, workdir: "/home/coder" }),
+        )
+        .mockResolvedValueOnce(
+          makeSessionGroup({ kind: "app", repoId: null, repo: null, workdir: "/home/coder" }),
+        );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.event.findFirst.mockResolvedValue(null);
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-1",
+        label: "Provisioned runtime",
+      });
+
+      await service.workspaceReady("session-1", "/home/coder");
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "run",
+          prompt: expect.stringContaining("Build a lightweight CRM approval tracker"),
+          cwd: "/home/coder",
+          appendSystemPrompt: expect.stringContaining("full-stack product application"),
+        }),
+        expect.objectContaining({
+          expectedHomeRuntimeId: "runtime-1",
+          organizationId: "org-1",
+        }),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          appendSystemPrompt: expect.stringContaining(
+            "managed remote lazily on the first checkpoint",
+          ),
+        }),
+        expect.any(Object),
       );
     });
 

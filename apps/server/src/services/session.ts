@@ -3679,11 +3679,11 @@ export class SessionService {
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
-    const queueInitialRunUntilBridgeAccess =
+    const queueInitialRunUntilWorkspaceReady =
       input.deferInitialRun !== true &&
       needsRuntimeProvisioning &&
       !!input.prompt &&
-      (deferRuntimeSelection || !selectedRuntimeAccessAllowed);
+      (requestedGroupKind === "app" || deferRuntimeSelection || !selectedRuntimeAccessAllowed);
     const harnessSettings = designHarnessSettings(input);
     const initialConnection = sharedConnection
       ? sharedConnection
@@ -3772,7 +3772,7 @@ export class SessionService {
           channelId: resolvedChannelId,
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
-          pendingRun: queueInitialRunUntilBridgeAccess
+          pendingRun: queueInitialRunUntilWorkspaceReady
             ? pendingRunValue([
                 {
                   type: "run",
@@ -6979,7 +6979,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { kind: true } },
+        sessionGroup: { select: { kind: true, designSystemId: true, designSkillIds: true } },
         connection: true,
       },
     });
