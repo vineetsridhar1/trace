@@ -92,6 +92,12 @@ function buildCredentialedManagedRemoteUrl(input: {
   return url.toString();
 }
 
+function jsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 function pktLine(value: string): Buffer {
   const payload = Buffer.from(value, "utf8");
   const length = (payload.length + 4).toString(16).padStart(4, "0");
@@ -165,9 +171,12 @@ async function ensureAuthorizedClient(
 
   const repo = await prisma.repo.findFirst({
     where: { id: repoId, organizationId, provider: "managed" },
-    select: { id: true },
+    select: { id: true, setupConfig: true },
   });
   if (!repo) return null;
+  if (typeof jsonObject(repo.setupConfig).managedGitGarbageCollectedAt === "string") {
+    return null;
+  }
 
   const runtimeAuth = authenticateProvisionedRuntimeToken(token);
   if (runtimeAuth) {
@@ -349,10 +358,13 @@ export const managedGitService = {
   }) {
     const repo = await prisma.repo.findFirst({
       where: { id: input.repoId, organizationId: input.organizationId, provider: "managed" },
-      select: { id: true, name: true, remoteUrl: true },
+      select: { id: true, name: true, remoteUrl: true, setupConfig: true },
     });
     if (!repo) {
       throw new ValidationError("Managed repo not found.");
+    }
+    if (typeof jsonObject(repo.setupConfig).managedGitGarbageCollectedAt === "string") {
+      throw new ValidationError("Managed repo storage has expired.");
     }
     const membership = await prisma.orgMember.findUnique({
       where: {
@@ -380,6 +392,73 @@ export const managedGitService = {
       token: credential.token,
       expiresAt: credential.expiresAt,
     };
+  },
+
+  async deleteExpiredArchivedAppRepos(retentionDays: number): Promise<number> {
+    if (!Number.isFinite(retentionDays) || retentionDays < 0) {
+      throw new ValidationError("Retention days must be a non-negative number.");
+    }
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const repos = await prisma.repo.findMany({
+      where: {
+        provider: "managed",
+        sessionGroups: {
+          some: {
+            kind: "app",
+            archivedAt: { lt: cutoff },
+          },
+          none: {
+            archivedAt: null,
+          },
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        setupConfig: true,
+        sessionGroups: {
+          where: {
+            kind: "app",
+            archivedAt: { lt: cutoff },
+          },
+          select: { id: true },
+        },
+      },
+    });
+
+    let deleted = 0;
+    for (const repo of repos) {
+      const setupConfig = jsonObject(repo.setupConfig);
+      if (typeof setupConfig.managedGitGarbageCollectedAt === "string") continue;
+
+      await fs.promises.rm(managedRepoPath(repo.id), { recursive: true, force: true });
+      const garbageCollectedAt = new Date().toISOString();
+      await prisma.repo.update({
+        where: { id: repo.id },
+        data: {
+          setupConfig: {
+            ...setupConfig,
+            managedGitGarbageCollectedAt: garbageCollectedAt,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await eventService.create({
+        organizationId: repo.organizationId,
+        scopeType: "system",
+        scopeId: repo.id,
+        eventType: "repo_updated",
+        payload: {
+          repoId: repo.id,
+          provider: "managed",
+          managedGitGarbageCollectedAt: garbageCollectedAt,
+          sessionGroupIds: repo.sessionGroups.map((group) => group.id),
+        } as Prisma.InputJsonValue,
+        actorType: "system",
+        actorId: "managed-git",
+      });
+      deleted += 1;
+    }
+    return deleted;
   },
 
   async handleInfoRefs(req: Request, res: Response, params: { orgId: string; repoId: string }) {

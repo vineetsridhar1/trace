@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "events";
 import type { Request, Response } from "express";
+import fs from "fs";
 import jwt from "jsonwebtoken";
 import { PassThrough } from "stream";
 
@@ -209,6 +210,143 @@ describe("managedGitService", () => {
         userId: "user-2",
       }),
     ).rejects.toThrow("Not authorized for this managed repo.");
+  });
+
+  it("rejects managed git user credentials after repo storage is garbage-collected", async () => {
+    prismaMock.repo.findFirst.mockResolvedValueOnce({
+      id: "repo-1",
+      name: "Managed app",
+      remoteUrl: "https://trace.example/git/org-1/repo-1.git",
+      setupConfig: { managedGitGarbageCollectedAt: "2026-07-01T00:00:00.000Z" },
+    });
+
+    await expect(
+      managedGitService.createUserCloneCredential({
+        organizationId: "org-1",
+        repoId: "repo-1",
+        userId: "user-1",
+      }),
+    ).rejects.toThrow("Managed repo storage has expired.");
+    expect(prismaMock.orgMember.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("garbage-collects archived app managed bare repos after the retention window", async () => {
+    const rmSpy = vi.spyOn(fs.promises, "rm").mockResolvedValueOnce(undefined);
+    prismaMock.repo.findMany.mockResolvedValueOnce([
+      {
+        id: "repo-archived",
+        organizationId: "org-1",
+        setupConfig: { appStarter: { framework: "nextjs" } },
+        sessionGroups: [{ id: "group-archived" }],
+      },
+    ]);
+    prismaMock.repo.update.mockResolvedValueOnce({ id: "repo-archived" });
+
+    const count = await managedGitService.deleteExpiredArchivedAppRepos(30);
+
+    expect(count).toBe(1);
+    expect(prismaMock.repo.findMany).toHaveBeenCalledWith({
+      where: {
+        provider: "managed",
+        sessionGroups: {
+          some: {
+            kind: "app",
+            archivedAt: { lt: expect.any(Date) },
+          },
+          none: {
+            archivedAt: null,
+          },
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        setupConfig: true,
+        sessionGroups: {
+          where: {
+            kind: "app",
+            archivedAt: { lt: expect.any(Date) },
+          },
+          select: { id: true },
+        },
+      },
+    });
+    expect(rmSpy).toHaveBeenCalledWith(expect.stringContaining("repo-archived.git"), {
+      recursive: true,
+      force: true,
+    });
+    expect(prismaMock.repo.update).toHaveBeenCalledWith({
+      where: { id: "repo-archived" },
+      data: {
+        setupConfig: expect.objectContaining({
+          appStarter: { framework: "nextjs" },
+          managedGitGarbageCollectedAt: expect.any(String),
+        }),
+      },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      scopeType: "system",
+      scopeId: "repo-archived",
+      eventType: "repo_updated",
+      payload: expect.objectContaining({
+        repoId: "repo-archived",
+        provider: "managed",
+        managedGitGarbageCollectedAt: expect.any(String),
+        sessionGroupIds: ["group-archived"],
+      }),
+      actorType: "system",
+      actorId: "managed-git",
+    });
+  });
+
+  it("skips managed repos whose bare storage was already garbage-collected", async () => {
+    const rmSpy = vi.spyOn(fs.promises, "rm").mockResolvedValue(undefined);
+    prismaMock.repo.findMany.mockResolvedValueOnce([
+      {
+        id: "repo-collected",
+        organizationId: "org-1",
+        setupConfig: { managedGitGarbageCollectedAt: "2026-07-01T00:00:00.000Z" },
+        sessionGroups: [{ id: "group-archived" }],
+      },
+    ]);
+
+    const count = await managedGitService.deleteExpiredArchivedAppRepos(30);
+
+    expect(count).toBe(0);
+    expect(rmSpy).not.toHaveBeenCalled();
+    expect(prismaMock.repo.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects smart HTTP access after repo storage is garbage-collected", async () => {
+    const token = jwt.sign(
+      {
+        tokenType: "managed_git_user",
+        userId: "user-1",
+        organizationId: "org-1",
+        repoId: "repo-1",
+      },
+      resolveJwtSecret(),
+      { expiresIn: 60 },
+    );
+    prismaMock.repo.findFirst.mockResolvedValueOnce({
+      id: "repo-1",
+      setupConfig: { managedGitGarbageCollectedAt: "2026-07-01T00:00:00.000Z" },
+    });
+    const response = makeGitResponse();
+
+    await managedGitService.handleInfoRefs(
+      {
+        query: { service: "git-upload-pack" },
+        headers: { authorization: basicAuth(token) },
+      } as unknown as Request,
+      response as unknown as Response,
+      { orgId: "org-1", repoId: "repo-1" },
+    );
+
+    expect(response.status).toHaveBeenCalledWith(401);
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it("authorizes smart HTTP info refs with user managed git credentials", async () => {
