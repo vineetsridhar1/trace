@@ -517,6 +517,31 @@ async function assertManagedGitCheckpointReachable(repoId, commitSha, sessionId)
     throw new Error(`Managed git remote did not expose checkpoint ${commitSha} on refs/heads/main`);
   }
 
+  const cloneDir = await fsp.mkdtemp(path.join(os.tmpdir(), "trace-managed-git-smoke-"));
+  try {
+    await execFileAsync("git", ["clone", credential.credentialedRemoteUrl, cloneDir], {
+      maxBuffer: 1024 * 1024,
+      timeout: 120_000,
+    });
+    const { stdout: clonedHead } = await execFileAsync("git", ["rev-parse", "HEAD"], {
+      cwd: cloneDir,
+      maxBuffer: 1024 * 1024,
+      timeout: 30_000,
+    });
+    if (clonedHead.trim() !== commitSha) {
+      throw new Error(
+        `Managed git clone HEAD ${clonedHead.trim() || "missing"} did not match checkpoint ${commitSha}`,
+      );
+    }
+    const packageJsonPath = path.join(cloneDir, "package.json");
+    const packageJson = JSON.parse(await fsp.readFile(packageJsonPath, "utf8"));
+    if (!packageJson?.scripts?.dev) {
+      throw new Error("Managed git clone did not contain the app starter package.json");
+    }
+  } finally {
+    await fsp.rm(cloneDir, { recursive: true, force: true });
+  }
+
   await pollUntil("managed git push event", async () => {
     const eventData = await graphql(SESSION_EVENTS, {
       organizationId,

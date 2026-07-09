@@ -743,3 +743,8 @@ rendering but did not explicitly fail if generated artifacts exposed `publishedA
 `publicUrl` before the publish mutation. It now asserts initial artifacts, fan-out
 variants, comment-driven iterations, and token-tweak versions remain unpublished until
 `publishDesignArtifact` runs.
+
+During this audit continuation, the cloud app smoke still used `git ls-remote` as its
+only hosted managed-git durability proof. It now also performs a fresh `git clone` from
+the credentialed managed remote, requires clone `HEAD` to equal the checkpoint SHA, and
+checks the generated app `package.json` exists in the cloned worktree.
