@@ -288,6 +288,7 @@ async function assertUrlRenders(url, label) {
   if (!response.ok) {
     throw new Error(`${label} returned HTTP ${response.status}: ${body.slice(0, 500)}`);
   }
+  assertDesignArtifactHeaders(response, label, { cacheControl: "public, max-age=60" });
   if (!body.includes(expectedText)) {
     throw new Error(`${label} fetch did not contain ${expectedText}`);
   }
@@ -330,11 +331,44 @@ async function assertBootstrapDoesNotLeakContent(url, label) {
   if (!response.ok) {
     throw new Error(`${label} bootstrap returned HTTP ${response.status}: ${body.slice(0, 500)}`);
   }
+  assertDesignArtifactHeaders(response, `${label} bootstrap`, { cacheControl: "no-store" });
   if (!body.includes("trace:artifact:render")) {
     throw new Error(`${label} bootstrap did not return the artifact bootstrap shell`);
   }
   if (body.includes(expectedText)) {
     throw new Error(`${label} bootstrap leaked published artifact content`);
+  }
+}
+
+function assertDesignArtifactHeaders(response, label, { cacheControl }) {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/html")) {
+    throw new Error(`${label} content-type is ${contentType || "missing"}`);
+  }
+
+  const actualCacheControl = response.headers.get("cache-control");
+  if (actualCacheControl !== cacheControl) {
+    throw new Error(`${label} cache-control is ${actualCacheControl ?? "missing"}`);
+  }
+
+  const csp = response.headers.get("content-security-policy") ?? "";
+  for (const directive of ["default-src 'self'", "frame-ancestors *", "base-uri 'none'"]) {
+    if (!csp.includes(directive)) {
+      throw new Error(`${label} CSP is missing ${directive}`);
+    }
+  }
+
+  const expectedHeaders = {
+    "cross-origin-opener-policy": "same-origin",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
+  };
+  for (const [name, expectedValue] of Object.entries(expectedHeaders)) {
+    const actualValue = response.headers.get(name);
+    if (actualValue !== expectedValue) {
+      throw new Error(`${label} ${name} is ${actualValue ?? "missing"}`);
+    }
   }
 }
 

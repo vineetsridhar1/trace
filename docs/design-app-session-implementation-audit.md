@@ -429,3 +429,8 @@ During this continuation, the hosted `pnpm smoke:design-session` script was tigh
 prove generated artifacts came from the LLM/Open Design path. The smoke now checks initial
 and fan-out artifact metadata for `generator: "llm"`, the
 `trace-open-design-v1` prompt composer marker, and the expected service source.
+
+During this continuation, the hosted `pnpm smoke:design-session` script was tightened to
+assert the user-content isolation headers required by the design serving contract. The
+smoke now checks `_bootstrap` and published artifact responses for HTML content type,
+cache mode, CSP shape, COOP, Permissions-Policy, Referrer-Policy, and nosniff headers.
