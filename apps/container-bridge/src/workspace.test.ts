@@ -1,6 +1,12 @@
 import { promisify } from "util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createWorktree, ensureRepo, getRepoPath } from "./workspace.js";
+import {
+  bootstrapAppWorkspace,
+  configureManagedGitRemote,
+  createWorktree,
+  ensureRepo,
+  getRepoPath,
+} from "./workspace.js";
 
 type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void;
 
@@ -10,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   mkdirSync: vi.fn(),
   readdirSync: vi.fn(),
   rmSync: vi.fn(),
+  writeFileSync: vi.fn(),
 }));
 
 vi.mock("child_process", () => {
@@ -34,6 +41,7 @@ vi.mock("fs", () => ({
     mkdirSync: mocks.mkdirSync,
     readdirSync: mocks.readdirSync,
     rmSync: mocks.rmSync,
+    writeFileSync: mocks.writeFileSync,
   },
 }));
 
@@ -55,10 +63,14 @@ function gitArgsAt(index: number): string[] {
 describe("workspace repo setup", () => {
   const originalCacheDir = process.env.TRACE_REPO_CACHE_DIR;
   const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalRuntimeToken = process.env.TRACE_RUNTIME_TOKEN;
+  const originalTraceServerPublicUrl = process.env.TRACE_SERVER_PUBLIC_URL;
 
   beforeEach(() => {
     delete process.env.TRACE_REPO_CACHE_DIR;
     delete process.env.GITHUB_TOKEN;
+    delete process.env.TRACE_RUNTIME_TOKEN;
+    delete process.env.TRACE_SERVER_PUBLIC_URL;
     vi.clearAllMocks();
     mocks.execFile.mockImplementation((...args: unknown[]) => {
       callbackFrom(args)(null, "", "");
@@ -75,6 +87,16 @@ describe("workspace repo setup", () => {
       delete process.env.GITHUB_TOKEN;
     } else {
       process.env.GITHUB_TOKEN = originalGithubToken;
+    }
+    if (originalRuntimeToken === undefined) {
+      delete process.env.TRACE_RUNTIME_TOKEN;
+    } else {
+      process.env.TRACE_RUNTIME_TOKEN = originalRuntimeToken;
+    }
+    if (originalTraceServerPublicUrl === undefined) {
+      delete process.env.TRACE_SERVER_PUBLIC_URL;
+    } else {
+      process.env.TRACE_SERVER_PUBLIC_URL = originalTraceServerPublicUrl;
     }
   });
 
@@ -104,6 +126,106 @@ describe("workspace repo setup", () => {
     await ensureRepo("repo-1", "https://github.com/acme/project.git", undefined, "main");
 
     expect(gitArgsAt(0)).toContain("main");
+  });
+
+  it("injects the runtime token for Trace managed git remotes", async () => {
+    process.env.TRACE_RUNTIME_TOKEN = "runtime-token";
+    process.env.TRACE_SERVER_PUBLIC_URL = "https://trace.example";
+    mocks.existsSync.mockReturnValue(false);
+
+    await ensureRepo("repo-1", "https://trace.example/git/org-1/repo-1.git", "main", "main");
+
+    expect(gitArgsAt(0)).toContain(
+      "https://x-token:runtime-token@trace.example/git/org-1/repo-1.git",
+    );
+  });
+
+  it("configures and pushes a managed remote with the runtime token", async () => {
+    process.env.TRACE_RUNTIME_TOKEN = "runtime-token";
+    process.env.TRACE_SERVER_PUBLIC_URL = "https://trace.example";
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const gitArgs = args[1];
+      callbackFrom(args)(null, Array.isArray(gitArgs) && gitArgs[0] === "remote" ? "" : "", "");
+    });
+
+    await configureManagedGitRemote({
+      workdir: "/home/coder",
+      remoteUrl: "https://trace.example/git/org-1/repo-1.git",
+      branch: "main",
+    });
+
+    expect(mocks.execFile).toHaveBeenNthCalledWith(
+      1,
+      "git",
+      ["remote"],
+      {
+        cwd: "/home/coder",
+      },
+      expect.any(Function),
+    );
+    expect(gitArgsAt(1)).toEqual([
+      "remote",
+      "add",
+      "origin",
+      "https://x-token:runtime-token@trace.example/git/org-1/repo-1.git",
+    ]);
+    expect(gitArgsAt(2)).toEqual(["push", "-u", "origin", "HEAD:main"]);
+  });
+
+  it("replaces an existing origin before pushing a managed remote", async () => {
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const gitArgs = args[1];
+      callbackFrom(args)(
+        null,
+        Array.isArray(gitArgs) && gitArgs[0] === "remote" ? "origin\n" : "",
+        "",
+      );
+    });
+
+    await configureManagedGitRemote({
+      workdir: "/home/coder",
+      remoteUrl: "https://trace.example/git/org-1/repo-1.git",
+      branch: "trace-app",
+    });
+
+    expect(gitArgsAt(1)).toEqual([
+      "remote",
+      "set-url",
+      "origin",
+      "https://trace.example/git/org-1/repo-1.git",
+    ]);
+    expect(gitArgsAt(2)).toEqual(["push", "-u", "origin", "HEAD:trace-app"]);
+  });
+
+  it("bootstraps an app workspace with starter files and an initial commit", async () => {
+    mocks.existsSync.mockReturnValue(false);
+
+    await expect(bootstrapAppWorkspace("/home/coder")).resolves.toEqual({
+      workdir: "/home/coder",
+      branch: "main",
+    });
+
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      "/home/coder/package.json",
+      expect.stringContaining('"next": "15.5.20"'),
+    );
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      "/home/coder/app/page.tsx",
+      expect.stringContaining("Trace app session"),
+    );
+    expect(gitArgsAt(0)).toEqual(["init", "-b", "main"]);
+    expect(gitArgsAt(1)).toEqual(["config", "user.name", "Trace"]);
+    expect(gitArgsAt(2)).toEqual(["config", "user.email", "trace@trace.dev"]);
+    expect(gitArgsAt(3)).toEqual(["add", "."]);
+    expect(gitArgsAt(4)).toEqual(["commit", "-m", "Initialize Trace app"]);
+  });
+
+  it("does not overwrite an existing app workspace git history", async () => {
+    mocks.existsSync.mockImplementation((path: unknown) => String(path).endsWith(".git"));
+
+    await bootstrapAppWorkspace("/home/coder");
+
+    expect(mocks.execFile).not.toHaveBeenCalled();
   });
 
   it("adds a cache reference when the repo cache mirror exists", async () => {

@@ -1,0 +1,1164 @@
+import { execFile } from "node:child_process";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
+
+const serverUrl = requiredEnv("TRACE_SMOKE_SERVER_URL").replace(/\/$/, "");
+const authToken = requiredEnv("TRACE_SMOKE_AUTH_TOKEN");
+const organizationId = requiredEnv("TRACE_SMOKE_ORG_ID");
+const prompt =
+  process.env.TRACE_SMOKE_APP_PROMPT ??
+  [
+    "Build a lightweight CRM approval tracker app.",
+    "Keep the exact text TRACE_SMOKE_APP_READY visible on the home page.",
+    "Use the existing app starter, keep the app runnable on port 3000, and create a checkpoint when done.",
+  ].join(" ");
+const expectedText = process.env.TRACE_SMOKE_EXPECTED_TEXT ?? "TRACE_SMOKE_APP_READY";
+const timeoutMs = readDurationEnv("TRACE_SMOKE_TIMEOUT_MS", 20 * 60 * 1000);
+const pollMs = readDurationEnv("TRACE_SMOKE_POLL_MS", 5000);
+const terminalTimeoutMs = readDurationEnv("TRACE_SMOKE_TERMINAL_TIMEOUT_MS", 60 * 1000);
+const requireCapture = process.env.TRACE_SMOKE_REQUIRE_CAPTURE !== "0";
+const skipBrowser = process.env.TRACE_SMOKE_SKIP_BROWSER === "1";
+
+const chromeCandidates = [
+  process.env.TRACE_CHROMIUM_EXECUTABLE,
+  process.env.CHROMIUM_EXECUTABLE_PATH,
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
+  "/usr/bin/google-chrome",
+  "/usr/bin/google-chrome-stable",
+].filter(Boolean);
+
+const chromeExecutable = skipBrowser
+  ? null
+  : chromeCandidates.find((candidate) => fs.existsSync(candidate));
+
+if (!skipBrowser && !chromeExecutable) {
+  throw new Error(
+    "A Chrome/Chromium binary is required. Set TRACE_CHROMIUM_EXECUTABLE, or set TRACE_SMOKE_SKIP_BROWSER=1 only for non-acceptance debugging.",
+  );
+}
+
+const START_APP_SESSION = `
+  mutation SmokeStartAppSession($input: StartSessionInput!) {
+    startSession(input: $input) {
+      id
+      sessionGroupId
+      tool
+      hosting
+      sessionGroup {
+        id
+        kind
+        repo {
+          id
+          provider
+        }
+      }
+    }
+  }
+`;
+
+const APP_STATE = `
+  query SmokeAppState($sessionGroupId: ID!) {
+    sessionGroup(id: $sessionGroupId) {
+      id
+      kind
+      repo {
+        id
+        provider
+        remoteUrl
+      }
+      sessions {
+        id
+        hosting
+        agentStatus
+        sessionStatus
+      }
+      gitCheckpoints {
+        id
+        repoId
+        commitSha
+        parentShas
+        treeSha
+        subject
+        author
+        committedAt
+        filesChanged
+        captureStatus
+        captureUrl
+        captureContentType
+        capturedAt
+        createdAt
+      }
+    }
+    sessionApplicationProcesses(sessionGroupId: $sessionGroupId) {
+      id
+      sessionGroupId
+      appConfigId
+      processConfigId
+      label
+      status
+      runtimeInstanceId
+      lastError
+    }
+    sessionEndpoints(sessionGroupId: $sessionGroupId) {
+      id
+      sessionGroupId
+      appConfigId
+      processConfigId
+      url
+      label
+      status
+      accessMode
+      targetPort
+    }
+  }
+`;
+
+const REPOS = `
+  query SmokeRepos($organizationId: ID!) {
+    repos(organizationId: $organizationId) {
+      id
+      provider
+      remoteUrl
+    }
+  }
+`;
+
+const PROCESS_LOGS = `
+  query SmokeProcessLogs($processId: ID!, $limit: Int) {
+    sessionApplicationLogs(processId: $processId, limit: $limit) {
+      id
+      stream
+      data
+      sequence
+      timestamp
+    }
+  }
+`;
+
+const SESSION_EVENTS = `
+  query SmokeSessionEvents($organizationId: ID!, $scope: ScopeInput, $types: [String!]) {
+    events(organizationId: $organizationId, scope: $scope, types: $types, limit: 500) {
+      id
+      eventType
+      payload
+      timestamp
+    }
+  }
+`;
+
+const CREATE_PREVIEW = `
+  mutation SmokeCreatePreview($endpointId: ID!) {
+    createSessionEndpointPreview(endpointId: $endpointId) {
+      url
+      expiresAt
+    }
+  }
+`;
+
+const CREATE_MANAGED_GIT_CREDENTIAL = `
+  mutation SmokeCreateManagedGitCredential($repoId: ID!) {
+    createManagedGitCredential(repoId: $repoId) {
+      remoteUrl
+      credentialedRemoteUrl
+      expiresAt
+    }
+  }
+`;
+
+const PUBLISH_APP = `
+  mutation SmokePublishApp($sessionGroupId: ID!) {
+    publishAppSession(sessionGroupId: $sessionGroupId) {
+      id
+      url
+      accessMode
+      status
+    }
+  }
+`;
+
+const OPEN_APP_AS_CODING = `
+  mutation SmokeOpenAppAsCoding($sessionGroupId: ID!) {
+    openAppSessionAsCodingSession(sessionGroupId: $sessionGroupId) {
+      id
+      hosting
+      repo {
+        id
+        provider
+      }
+      sessionGroup {
+        id
+        kind
+        forkedFromSessionGroupId
+      }
+    }
+  }
+`;
+
+const CREATE_TERMINAL = `
+  mutation SmokeCreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {
+    createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {
+      id
+      sessionId
+    }
+  }
+`;
+
+const DESTROY_TERMINAL = `
+  mutation SmokeDestroyTerminal($terminalId: ID!) {
+    destroyTerminal(terminalId: $terminalId)
+  }
+`;
+
+function requiredEnv(name) {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required`);
+  return value;
+}
+
+function readDurationEnv(name, fallback) {
+  const value = process.env[name];
+  if (!value) return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`${name} must be a positive number`);
+  return parsed;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function graphql(query, variables = {}) {
+  const response = await fetch(`${serverUrl}/graphql`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${authToken}`,
+      "x-organization-id": organizationId,
+    },
+    body: JSON.stringify({ query, variables }),
+  });
+  const body = await response.json().catch(() => null);
+  if (!response.ok || body?.errors?.length) {
+    const detail = body?.errors?.map((error) => error.message).join("; ") ?? response.statusText;
+    throw new Error(`GraphQL request failed: ${detail}`);
+  }
+  return body.data;
+}
+
+async function pollUntil(label, fn) {
+  const deadline = Date.now() + timeoutMs;
+  let lastDetail = "not checked yet";
+  while (Date.now() < deadline) {
+    const result = await fn();
+    if (result.ok) return result.value;
+    lastDetail = result.detail ?? lastDetail;
+    process.stdout.write(`Waiting for ${label}: ${lastDetail}\n`);
+    await sleep(pollMs);
+  }
+  throw new Error(`Timed out waiting for ${label}: ${lastDetail}`);
+}
+
+function enabledEndpoint(state) {
+  return (
+    state.sessionEndpoints.find((endpoint) => endpoint.status === "enabled" && endpoint.url) ?? null
+  );
+}
+
+function runningProcess(state) {
+  return state.sessionApplicationProcesses.find((process) => process.status === "running") ?? null;
+}
+
+function isGitSha(value) {
+  return typeof value === "string" && /^[0-9a-f]{40,64}$/i.test(value);
+}
+
+async function appLifecycleEventStatus(sessionId, process, endpoint) {
+  const data = await graphql(SESSION_EVENTS, {
+    organizationId,
+    scope: { type: "session", id: sessionId },
+    types: [
+      "session_application_process_started",
+      "session_endpoint_created",
+      "session_endpoint_forwarding_enabled",
+    ],
+  });
+  const events = data.events ?? [];
+  const processEvent = events.find((event) => {
+    if (event.eventType !== "session_application_process_started") return false;
+    const payload = event.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+    const eventProcess = payload.process;
+    return (
+      eventProcess &&
+      typeof eventProcess === "object" &&
+      !Array.isArray(eventProcess) &&
+      eventProcess.id === process.id &&
+      eventProcess.sessionGroupId === process.sessionGroupId &&
+      eventProcess.runtimeInstanceId === process.runtimeInstanceId
+    );
+  });
+  const createdEvent = events.find((event) => {
+    if (event.eventType !== "session_endpoint_created") return false;
+    const payload = event.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+    const eventEndpoint = payload.endpoint;
+    return (
+      eventEndpoint &&
+      typeof eventEndpoint === "object" &&
+      !Array.isArray(eventEndpoint) &&
+      eventEndpoint.id === endpoint.id &&
+      eventEndpoint.sessionGroupId === endpoint.sessionGroupId &&
+      eventEndpoint.targetPort === 3000
+    );
+  });
+  const forwardingEvent = events.find((event) => {
+    if (event.eventType !== "session_endpoint_forwarding_enabled") return false;
+    const payload = event.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+    const eventEndpoint = payload.endpoint;
+    return (
+      eventEndpoint &&
+      typeof eventEndpoint === "object" &&
+      !Array.isArray(eventEndpoint) &&
+      eventEndpoint.id === endpoint.id &&
+      eventEndpoint.status === "enabled" &&
+      eventEndpoint.accessMode === "private" &&
+      eventEndpoint.sessionGroupId === endpoint.sessionGroupId &&
+      eventEndpoint.appConfigId === process.appConfigId &&
+      eventEndpoint.processConfigId === process.processConfigId
+    );
+  });
+  return {
+    ok: Boolean(processEvent && createdEvent && forwardingEvent),
+    detail: [
+      `processStarted=${Boolean(processEvent)}`,
+      `endpointCreated=${Boolean(createdEvent)}`,
+      `forwardingEnabled=${Boolean(forwardingEvent)}`,
+    ].join(" "),
+  };
+}
+
+async function appState(sessionGroupId) {
+  return graphql(APP_STATE, { sessionGroupId });
+}
+
+async function waitForReadyApp(sessionGroupId, label, options = {}) {
+  const requireCheckpoint = options.requireCheckpoint !== false;
+  const requireManagedRepo = options.requireManagedRepo !== false;
+  const readinessLabel = requireCheckpoint
+    ? `${label} app runtime, endpoint, logs, and checkpoint`
+    : `${label} app runtime, endpoint, and logs`;
+  return pollUntil(readinessLabel, async () => {
+    const state = await appState(sessionGroupId);
+    const group = state.sessionGroup;
+    if (!group) return { ok: false, detail: "session group not found" };
+    if (group.kind !== "app") return { ok: false, detail: `group kind is ${group.kind}` };
+    if (requireManagedRepo && group.repo?.provider !== "managed") {
+      return {
+        ok: false,
+        detail: `repo provider is ${group.repo?.provider ?? "missing"}`,
+      };
+    }
+
+    const process = runningProcess(state);
+    const endpoint = enabledEndpoint(state);
+    if (!process) {
+      const statuses = state.sessionApplicationProcesses.map(
+        (item) => `${item.label}:${item.status}`,
+      );
+      return { ok: false, detail: `no running process (${statuses.join(", ") || "none"})` };
+    }
+    if (!endpoint) {
+      const statuses = state.sessionEndpoints.map((item) => `${item.label}:${item.status}`);
+      return { ok: false, detail: `no enabled endpoint (${statuses.join(", ") || "none"})` };
+    }
+    if (!process.runtimeInstanceId) {
+      return { ok: false, detail: `process ${process.id} has no runtime instance` };
+    }
+    if (endpoint.targetPort !== 3000) {
+      return { ok: false, detail: `endpoint port is ${endpoint.targetPort ?? "missing"}` };
+    }
+    if (endpoint.accessMode !== "private") {
+      return { ok: false, detail: `pre-publish endpoint access is ${endpoint.accessMode}` };
+    }
+
+    const logs = await graphql(PROCESS_LOGS, { processId: process.id, limit: 20 });
+    if (logs.sessionApplicationLogs.length === 0) {
+      return { ok: false, detail: `no logs for process ${process.id}` };
+    }
+    const structuredLog = logs.sessionApplicationLogs.find(
+      (entry) =>
+        (entry.stream === "stdout" || entry.stream === "stderr") &&
+        typeof entry.data === "string" &&
+        entry.data.trim().length > 0 &&
+        typeof entry.sequence === "number" &&
+        typeof entry.timestamp === "string" &&
+        entry.timestamp.length > 0,
+    );
+    if (!structuredLog) {
+      return { ok: false, detail: `no structured runtime log for process ${process.id}` };
+    }
+    const latestSessionId = group.sessions[0]?.id;
+    if (!latestSessionId) {
+      return { ok: false, detail: "session group has no session id for scoped log events" };
+    }
+    const lifecycleEvents = await appLifecycleEventStatus(latestSessionId, process, endpoint);
+    if (!lifecycleEvents.ok) {
+      return {
+        ok: false,
+        detail: `missing lifecycle events for process ${process.id}: ${lifecycleEvents.detail}`,
+      };
+    }
+    const eventData = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "session", id: latestSessionId },
+      types: ["session_application_log_appended"],
+    });
+    const logEvent = (eventData.events ?? []).find((event) => {
+      if (event.eventType !== "session_application_log_appended") return false;
+      const payload = event.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      const logEntry = payload.logEntry;
+      return (
+        logEntry &&
+        typeof logEntry === "object" &&
+        !Array.isArray(logEntry) &&
+        logEntry.processId === process.id &&
+        (logEntry.stream === "stdout" || logEntry.stream === "stderr") &&
+        typeof logEntry.data === "string" &&
+        logEntry.data.trim().length > 0 &&
+        typeof logEntry.sequence === "number" &&
+        typeof logEntry.timestamp === "string" &&
+        logEntry.timestamp.length > 0
+      );
+    });
+    if (!logEvent) {
+      return { ok: false, detail: `no log append event for process ${process.id}` };
+    }
+
+    let checkpoint = null;
+    if (requireCheckpoint) {
+      const checkpoints = group.gitCheckpoints;
+      if (checkpoints.length === 0) return { ok: false, detail: "no checkpoint recorded yet" };
+      checkpoint = checkpoints[0];
+      if (checkpoint.repoId !== group.repo?.id) {
+        return {
+          ok: false,
+          detail: `checkpoint repo is ${checkpoint.repoId ?? "missing"}`,
+        };
+      }
+      if (!isGitSha(checkpoint.commitSha)) {
+        return {
+          ok: false,
+          detail: `checkpoint commit SHA is ${checkpoint.commitSha ?? "missing"}`,
+        };
+      }
+      if (!isGitSha(checkpoint.treeSha)) {
+        return { ok: false, detail: `checkpoint tree SHA is ${checkpoint.treeSha ?? "missing"}` };
+      }
+      if (!Array.isArray(checkpoint.parentShas) || !checkpoint.parentShas.every(isGitSha)) {
+        return { ok: false, detail: "checkpoint parent SHAs are invalid" };
+      }
+      if (typeof checkpoint.subject !== "string" || !checkpoint.subject.trim()) {
+        return { ok: false, detail: "checkpoint subject is missing" };
+      }
+      if (typeof checkpoint.author !== "string" || !checkpoint.author.trim()) {
+        return { ok: false, detail: "checkpoint author is missing" };
+      }
+      if (typeof checkpoint.committedAt !== "string" || !checkpoint.committedAt) {
+        return { ok: false, detail: "checkpoint committedAt is missing" };
+      }
+      if (typeof checkpoint.filesChanged !== "number" || checkpoint.filesChanged < 0) {
+        return { ok: false, detail: `checkpoint filesChanged is ${checkpoint.filesChanged}` };
+      }
+      if (requireCapture && checkpoint.captureStatus !== "captured") {
+        return {
+          ok: false,
+          detail: `checkpoint capture is ${checkpoint.captureStatus ?? "missing"}`,
+        };
+      }
+      if (requireCapture && !checkpoint.captureUrl) {
+        return { ok: false, detail: "checkpoint capture URL is missing" };
+      }
+      if (requireCapture && checkpoint.captureContentType !== "image/png") {
+        return {
+          ok: false,
+          detail: `checkpoint capture content type is ${checkpoint.captureContentType ?? "missing"}`,
+        };
+      }
+      if (requireCapture && !checkpoint.capturedAt) {
+        return { ok: false, detail: "checkpoint capturedAt is missing" };
+      }
+    }
+
+    return { ok: true, value: { state, process, endpoint, checkpoint } };
+  });
+}
+
+async function renderUrl(url, label, options = {}) {
+  const requireFetch = options.requireFetch !== false;
+  const expectOverlay = options.expectOverlay === true;
+  const requireSourceStamp = options.requireSourceStamp === true;
+  if (requireFetch) {
+    const response = await fetch(url, { redirect: "follow" });
+    const html = await response.text();
+    if (!response.ok) {
+      throw new Error(`${label} returned HTTP ${response.status}: ${html.slice(0, 500)}`);
+    }
+    if (!html.includes(expectedText)) {
+      throw new Error(`${label} fetch did not contain ${expectedText}`);
+    }
+    assertOverlayState(html, label, expectOverlay);
+    assertSourceStamp(html, label, requireSourceStamp);
+  }
+
+  if (skipBrowser) {
+    if (!requireFetch) {
+      throw new Error(`${label} requires browser verification; unset TRACE_SMOKE_SKIP_BROWSER`);
+    }
+    return;
+  }
+
+  const profileDir = await fsp.mkdtemp(path.join(os.tmpdir(), "trace-cloud-app-smoke-"));
+  try {
+    const { stdout } = await execFileAsync(
+      chromeExecutable,
+      [
+        "--headless=new",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--no-proxy-server",
+        `--user-data-dir=${profileDir}`,
+        "--virtual-time-budget=5000",
+        "--dump-dom",
+        url,
+      ],
+      { maxBuffer: 20 * 1024 * 1024, timeout: 45_000 },
+    );
+    if (!stdout.includes(expectedText)) {
+      throw new Error(`${label} browser DOM did not contain ${expectedText}`);
+    }
+    assertOverlayState(stdout, `${label} browser DOM`, expectOverlay);
+    assertSourceStamp(stdout, `${label} browser DOM`, requireSourceStamp);
+  } finally {
+    await fsp.rm(profileDir, { recursive: true, force: true });
+  }
+}
+
+async function assertPrivateEndpointRequiresPreviewAuth(url, label) {
+  const response = await fetch(url, { redirect: "follow" });
+  const html = await response.text();
+  if (response.ok) {
+    throw new Error(`${label} raw endpoint URL was publicly fetchable before publish`);
+  }
+  if (response.status !== 401 && response.status !== 403) {
+    throw new Error(`${label} raw endpoint URL returned HTTP ${response.status}`);
+  }
+  if (html.includes(expectedText)) {
+    throw new Error(`${label} raw endpoint URL leaked app HTML before publish`);
+  }
+  assertOverlayState(html, `${label} raw endpoint URL`, false);
+  assertSourceStamp(html, `${label} raw endpoint URL`, false);
+}
+
+function assertOverlayState(html, label, expected) {
+  const hasOverlay = html.includes("data-trace-app-overlay");
+  if (expected && !hasOverlay) {
+    throw new Error(`${label} did not include the authoring overlay`);
+  }
+  if (!expected && hasOverlay) {
+    throw new Error(`${label} unexpectedly included the authoring overlay`);
+  }
+}
+
+function assertSourceStamp(html, label, expected) {
+  const hasSourceStamp = html.includes("data-trace-source=");
+  if (expected && !hasSourceStamp) {
+    throw new Error(`${label} did not include data-trace-source stamps for the element picker`);
+  }
+}
+
+async function assertImageDownload(url, label) {
+  const response = await fetch(url, { redirect: "follow" });
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!response.ok) {
+    throw new Error(`${label} returned HTTP ${response.status}`);
+  }
+  if (bytes.byteLength === 0) {
+    throw new Error(`${label} returned an empty file`);
+  }
+  const contentType = response.headers.get("content-type") ?? "";
+  const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (!contentType.startsWith("image/") && !png && !jpeg) {
+    throw new Error(`${label} did not return image bytes`);
+  }
+}
+
+async function waitForCheckpointEvent(sessionId, checkpoint) {
+  return pollUntil("git checkpoint event", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "session", id: sessionId },
+      types: ["session_output"],
+    });
+    const event = data.events?.find((candidate) => {
+      const payload = candidate.payload;
+      if (
+        candidate.eventType !== "session_output" ||
+        !payload ||
+        typeof payload !== "object" ||
+        Array.isArray(payload) ||
+        payload.type !== "git_checkpoint"
+      ) {
+        return false;
+      }
+      const eventCheckpoint = payload.checkpoint;
+      return (
+        eventCheckpoint &&
+        typeof eventCheckpoint === "object" &&
+        !Array.isArray(eventCheckpoint) &&
+        eventCheckpoint.id === checkpoint.id &&
+        eventCheckpoint.commitSha === checkpoint.commitSha
+      );
+    });
+    if (!event) {
+      return { ok: false, detail: `no git_checkpoint event for ${checkpoint.id}` };
+    }
+    const payload = event.payload;
+    const eventCheckpoint =
+      payload && typeof payload === "object" && !Array.isArray(payload) ? payload.checkpoint : null;
+    if (!eventCheckpoint || typeof eventCheckpoint !== "object" || Array.isArray(eventCheckpoint)) {
+      throw new Error("git_checkpoint event payload is missing checkpoint metadata");
+    }
+    for (const key of ["repoId", "treeSha", "subject", "author", "committedAt"]) {
+      if (eventCheckpoint[key] !== checkpoint[key]) {
+        throw new Error(
+          `git_checkpoint event ${key} is ${eventCheckpoint[key] ?? "missing"}, expected ${checkpoint[key] ?? "missing"}`,
+        );
+      }
+    }
+    if (requireCapture) {
+      for (const key of ["captureStatus", "captureUrl", "captureContentType", "capturedAt"]) {
+        if (eventCheckpoint[key] !== checkpoint[key]) {
+          throw new Error(
+            `git_checkpoint event ${key} is ${eventCheckpoint[key] ?? "missing"}, expected ${checkpoint[key] ?? "missing"}`,
+          );
+        }
+      }
+    }
+    return { ok: true, value: event };
+  });
+}
+
+async function assertManagedGitCheckpointReachable(repoId, commitSha, sessionId) {
+  const data = await graphql(CREATE_MANAGED_GIT_CREDENTIAL, { repoId });
+  const credential = data.createManagedGitCredential;
+  if (!credential?.remoteUrl || !credential.credentialedRemoteUrl) {
+    throw new Error("Managed git credential did not include remote URLs");
+  }
+  if (!credential.remoteUrl.includes(`/git/${organizationId}/${repoId}.git`)) {
+    throw new Error(
+      `Managed git remote URL is not scoped to the app repo: ${credential.remoteUrl}`,
+    );
+  }
+  if (credential.remoteUrl.includes("@") || credential.remoteUrl.includes("x-token:")) {
+    throw new Error("Managed git remote URL leaked credential material");
+  }
+  if (credential.credentialedRemoteUrl === credential.remoteUrl) {
+    throw new Error("Managed git credentialed remote URL did not include credentials");
+  }
+  if (!credential.credentialedRemoteUrl.includes(`/git/${organizationId}/${repoId}.git`)) {
+    throw new Error("Managed git credentialed remote URL is not scoped to the app repo");
+  }
+  if (!credential.expiresAt) {
+    throw new Error("Managed git credential did not include an expiry");
+  }
+  const expiresAtMs = Date.parse(credential.expiresAt);
+  const nowMs = Date.now();
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
+    throw new Error(`Managed git credential expiry is not in the future: ${credential.expiresAt}`);
+  }
+  if (expiresAtMs - nowMs > 10 * 60 * 1000 + 30_000) {
+    throw new Error(`Managed git credential expiry is not short-lived: ${credential.expiresAt}`);
+  }
+
+  let stdout = "";
+  try {
+    ({ stdout } = await execFileAsync(
+      "git",
+      ["ls-remote", credential.credentialedRemoteUrl, "refs/heads/main"],
+      {
+        maxBuffer: 1024 * 1024,
+        timeout: 60_000,
+      },
+    ));
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message.replaceAll(credential.credentialedRemoteUrl, credential.remoteUrl)
+        : String(error);
+    throw new Error(`Managed git ls-remote failed for ${credential.remoteUrl}: ${message}`);
+  }
+
+  if (!stdout.includes(commitSha)) {
+    throw new Error(`Managed git remote did not expose checkpoint ${commitSha} on refs/heads/main`);
+  }
+
+  const cloneDir = await fsp.mkdtemp(path.join(os.tmpdir(), "trace-managed-git-smoke-"));
+  try {
+    await execFileAsync("git", ["clone", credential.credentialedRemoteUrl, cloneDir], {
+      maxBuffer: 1024 * 1024,
+      timeout: 120_000,
+    });
+    const { stdout: clonedHead } = await execFileAsync("git", ["rev-parse", "HEAD"], {
+      cwd: cloneDir,
+      maxBuffer: 1024 * 1024,
+      timeout: 30_000,
+    });
+    if (clonedHead.trim() !== commitSha) {
+      throw new Error(
+        `Managed git clone HEAD ${clonedHead.trim() || "missing"} did not match checkpoint ${commitSha}`,
+      );
+    }
+    const packageJsonPath = path.join(cloneDir, "package.json");
+    const packageJson = JSON.parse(await fsp.readFile(packageJsonPath, "utf8"));
+    if (!packageJson?.scripts?.dev) {
+      throw new Error("Managed git clone did not contain the app starter package.json");
+    }
+  } finally {
+    await fsp.rm(cloneDir, { recursive: true, force: true });
+  }
+
+  await pollUntil("managed git push event", async () => {
+    const eventData = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "system", id: repoId },
+      types: ["repo_branch_pushed"],
+    });
+    const matchingEvent = (eventData.events ?? []).find((event) => {
+      if (event.eventType !== "repo_branch_pushed") return false;
+      const payload = event.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      if (payload.repoId !== repoId || payload.sessionId !== sessionId) return false;
+      const heads = Array.isArray(payload.heads) ? payload.heads : [];
+      return heads.some(
+        (head) =>
+          head &&
+          typeof head === "object" &&
+          head.ref === "refs/heads/main" &&
+          head.branch === "main" &&
+          head.commitSha === commitSha,
+      );
+    });
+    if (!matchingEvent) {
+      return { ok: false, detail: `no repo_branch_pushed event for ${commitSha}` };
+    }
+    return { ok: true, value: matchingEvent };
+  });
+}
+
+async function assertManagedRepoHiddenFromRepoList(repoId) {
+  const data = await graphql(REPOS, { organizationId });
+  const repos = data.repos ?? [];
+  const visibleManagedRepo = repos.find(
+    (repo) => repo.id === repoId || repo.provider === "managed",
+  );
+  if (visibleManagedRepo) {
+    throw new Error(`Managed app repo ${visibleManagedRepo.id} appeared in ordinary repo list`);
+  }
+}
+
+async function createPreviewUrl(endpointId) {
+  const data = await graphql(CREATE_PREVIEW, { endpointId });
+  return data.createSessionEndpointPreview.url;
+}
+
+async function publishApp(sessionGroupId) {
+  const data = await graphql(PUBLISH_APP, { sessionGroupId });
+  const endpoint = data.publishAppSession;
+  if (endpoint.accessMode !== "public") {
+    throw new Error(`Published endpoint access mode is ${endpoint.accessMode}`);
+  }
+  if (!endpoint.url) throw new Error("Published endpoint URL is missing");
+  return endpoint;
+}
+
+async function waitForPublishedEndpointEvent(sessionId, sessionGroupId, endpointId, publicUrl) {
+  return pollUntil("published endpoint access event", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "session", id: sessionId },
+      types: ["session_endpoint_access_updated"],
+    });
+    const event = data.events?.find((candidate) => {
+      if (candidate.eventType !== "session_endpoint_access_updated") return false;
+      const payload = candidate.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+      const endpoint = payload.endpoint;
+      return (
+        payload.sessionGroupId === sessionGroupId &&
+        payload.published === true &&
+        endpoint &&
+        typeof endpoint === "object" &&
+        !Array.isArray(endpoint) &&
+        endpoint.id === endpointId &&
+        endpoint.sessionGroupId === sessionGroupId &&
+        endpoint.accessMode === "public" &&
+        endpoint.status === "enabled" &&
+        endpoint.targetPort === 3000 &&
+        endpoint.url === publicUrl
+      );
+    });
+    if (!event) {
+      return { ok: false, detail: `no public access event for endpoint ${endpointId}` };
+    }
+    return { ok: true, value: event };
+  });
+}
+
+async function openAppAsCodingSession(sessionGroupId, managedRepoId) {
+  const data = await graphql(OPEN_APP_AS_CODING, { sessionGroupId });
+  const codingSession = data.openAppSessionAsCodingSession;
+  if (codingSession.sessionGroup?.kind !== "coding") {
+    throw new Error(
+      `Open-as-coding group kind is ${codingSession.sessionGroup?.kind ?? "missing"}`,
+    );
+  }
+  if (codingSession.sessionGroup?.forkedFromSessionGroupId !== sessionGroupId) {
+    throw new Error("Open-as-coding session did not link back to the app session group");
+  }
+  if (codingSession.repo?.id !== managedRepoId || codingSession.repo?.provider !== "managed") {
+    throw new Error("Open-as-coding session did not use the app managed repo");
+  }
+  return codingSession;
+}
+
+async function waitForCodingHandoffBrief(codingSessionId, sourceGroupId, managedRepoId, commitSha) {
+  return pollUntil("open-as-coding handoff brief", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "session", id: codingSessionId },
+      types: ["session_started"],
+    });
+    const started = data.events?.find((event) => event.eventType === "session_started");
+    const payload = started?.payload;
+    const prompt = payload && typeof payload === "object" ? payload.prompt : null;
+    if (typeof prompt !== "string") {
+      return { ok: false, detail: "session_started prompt not found" };
+    }
+    const requiredParts = [
+      "Continue this standalone app in a coding session.",
+      `Source app session group id: ${sourceGroupId}`,
+      `(${managedRepoId})`,
+      `Latest checkpoint: ${commitSha.slice(0, 7)}`,
+      "preserve the standalone app behavior",
+      "checkpoint durability",
+    ];
+    const missing = requiredParts.filter((part) => !prompt.includes(part));
+    if (missing.length > 0) {
+      return { ok: false, detail: `brief missing ${missing.join(", ")}` };
+    }
+    return { ok: true, value: prompt };
+  });
+}
+
+async function waitForRestoreStartEvent(restoredSession, checkpoint) {
+  return pollUntil("restored app session start event", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "session", id: restoredSession.id },
+      types: ["session_started"],
+    });
+    const started = data.events?.find((event) => event.eventType === "session_started");
+    const payload = started?.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return { ok: false, detail: "session_started payload not found" };
+    }
+    const eventSession = payload.session;
+    const eventGroup = payload.sessionGroup;
+    const sessionMatches =
+      eventSession &&
+      typeof eventSession === "object" &&
+      !Array.isArray(eventSession) &&
+      eventSession.id === restoredSession.id &&
+      eventSession.sessionGroupId === restoredSession.sessionGroupId;
+    const groupMatches =
+      eventGroup &&
+      typeof eventGroup === "object" &&
+      !Array.isArray(eventGroup) &&
+      eventGroup.id === restoredSession.sessionGroupId &&
+      eventGroup.kind === "app";
+    if (
+      !sessionMatches ||
+      !groupMatches ||
+      payload.restoreCheckpointId !== checkpoint.id ||
+      payload.restoreCheckpointSha !== checkpoint.commitSha
+    ) {
+      return {
+        ok: false,
+        detail: [
+          `session=${Boolean(sessionMatches)}`,
+          `group=${Boolean(groupMatches)}`,
+          `restoreCheckpointId=${payload.restoreCheckpointId ?? "missing"}`,
+          `restoreCheckpointSha=${payload.restoreCheckpointSha ?? "missing"}`,
+        ].join(" "),
+      };
+    }
+    return { ok: true, value: started };
+  });
+}
+
+function terminalWebSocketUrl() {
+  const url = new URL(serverUrl);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.pathname = "/terminal";
+  url.search = "";
+  url.searchParams.set("token", authToken);
+  return url.toString();
+}
+
+function websocketMessageText(data) {
+  if (typeof data === "string") return data;
+  if (data instanceof ArrayBuffer) return Buffer.from(data).toString("utf8");
+  if (ArrayBuffer.isView(data)) {
+    return Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("utf8");
+  }
+  return String(data);
+}
+
+async function verifyTerminalWorkdir(sessionId, options = {}) {
+  if (typeof WebSocket !== "function") {
+    throw new Error("Global WebSocket support is required for the terminal smoke");
+  }
+
+  const createData = await graphql(CREATE_TERMINAL, { sessionId, cols: 80, rows: 24 });
+  const terminalId = createData.createTerminal?.id;
+  if (!terminalId) throw new Error("createTerminal did not return a terminal id");
+
+  let ws = null;
+  try {
+    const marker = options.marker ?? "TRACE_SMOKE_TERMINAL_READY:";
+    const expectedHead = options.expectedHead;
+    const command = [
+      "node -e",
+      JSON.stringify(
+        [
+          "const cp=require('node:child_process');",
+          "const p=require('./package.json');",
+          "if (!p.scripts || !p.scripts.dev) process.exit(2);",
+          "const head=cp.execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();",
+          expectedHead
+            ? `if (head !== ${JSON.stringify(expectedHead)}) { console.error('expected ${expectedHead} got '+head); process.exit(3); }`
+            : "",
+          `process.stdout.write(${JSON.stringify(marker)}+process.cwd()+':package-json-ok:'+head+'\\n');`,
+        ].join(" "),
+      ),
+    ].join(" ");
+
+    return await new Promise((resolve, reject) => {
+      let settled = false;
+      let output = "";
+      const timer = setTimeout(() => {
+        fail(new Error(`Terminal command timed out after ${terminalTimeoutMs}ms`));
+      }, terminalTimeoutMs);
+
+      function cleanup() {
+        clearTimeout(timer);
+      }
+
+      function fail(error) {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      }
+
+      function pass(value) {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      }
+
+      ws = new WebSocket(terminalWebSocketUrl());
+      ws.addEventListener("open", () => {
+        ws.send(JSON.stringify({ type: "attach", terminalId }));
+      });
+      ws.addEventListener("error", () => {
+        fail(new Error("Terminal WebSocket failed"));
+      });
+      ws.addEventListener("close", (event) => {
+        if (!settled) {
+          fail(new Error(`Terminal WebSocket closed before verification (${event.code})`));
+        }
+      });
+      ws.addEventListener("message", (event) => {
+        let message;
+        try {
+          message = JSON.parse(websocketMessageText(event.data));
+        } catch {
+          return;
+        }
+        if (message.type === "error") {
+          fail(new Error(`Terminal error: ${message.message ?? "unknown"}`));
+          return;
+        }
+        if (message.type === "ready") {
+          ws.send(JSON.stringify({ type: "input", data: `${command}\n` }));
+          return;
+        }
+        if (message.type !== "output" || typeof message.data !== "string") return;
+
+        output += message.data;
+        if (
+          output.includes(marker) &&
+          output.includes(":package-json-ok") &&
+          (!expectedHead || output.includes(expectedHead))
+        ) {
+          pass(output);
+        }
+      });
+    });
+  } finally {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      ws.close();
+    }
+    await graphql(DESTROY_TERMINAL, { terminalId }).catch((error) => {
+      process.stderr.write(`Failed to destroy terminal ${terminalId}: ${error.message}\n`);
+    });
+  }
+}
+
+async function startAppSession(input) {
+  const data = await graphql(START_APP_SESSION, { input });
+  const session = data.startSession;
+  if (session.tool !== "claude_code") {
+    throw new Error(`Started app session tool is ${session.tool ?? "missing"}`);
+  }
+  if (session.hosting !== "cloud")
+    throw new Error(`Started app session hosting is ${session.hosting}`);
+  if (session.sessionGroup?.kind !== "app") {
+    throw new Error(`Started group kind is ${session.sessionGroup?.kind ?? "missing"}`);
+  }
+  return session;
+}
+
+process.stdout.write("Starting fresh cloud app session smoke...\n");
+const session = await startAppSession({
+  kind: "app",
+  prompt,
+  ...(process.env.TRACE_SMOKE_MODEL ? { model: process.env.TRACE_SMOKE_MODEL } : {}),
+  ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
+  ...(process.env.TRACE_SMOKE_ENVIRONMENT_ID
+    ? { environmentId: process.env.TRACE_SMOKE_ENVIRONMENT_ID }
+    : {}),
+  ...(process.env.TRACE_SMOKE_DESIGN_SYSTEM_ID
+    ? { designSystemId: process.env.TRACE_SMOKE_DESIGN_SYSTEM_ID }
+    : {}),
+  ...(process.env.TRACE_SMOKE_DESIGN_SKILL_IDS
+    ? {
+        designSkillIds: process.env.TRACE_SMOKE_DESIGN_SKILL_IDS.split(",")
+          .map((id) => id.trim())
+          .filter(Boolean),
+      }
+    : {}),
+});
+if (session.sessionGroup?.repo) {
+  throw new Error("Fresh app sessions must start without a repo before the first checkpoint");
+}
+
+const initial = await waitForReadyApp(session.sessionGroupId, "initial");
+const managedRepoId = initial.state.sessionGroup.repo?.id;
+if (!managedRepoId) {
+  throw new Error("Initial app group did not link a managed repo after first checkpoint");
+}
+if (requireCapture) {
+  await assertImageDownload(initial.checkpoint.captureUrl, "checkpoint capture URL");
+}
+await waitForCheckpointEvent(session.id, initial.checkpoint);
+await assertManagedRepoHiddenFromRepoList(managedRepoId);
+await assertManagedGitCheckpointReachable(managedRepoId, initial.checkpoint.commitSha, session.id);
+const codingSession = await openAppAsCodingSession(session.sessionGroupId, managedRepoId);
+await waitForCodingHandoffBrief(
+  codingSession.id,
+  session.sessionGroupId,
+  managedRepoId,
+  initial.checkpoint.commitSha,
+);
+const terminalOutput = await verifyTerminalWorkdir(session.id);
+await assertPrivateEndpointRequiresPreviewAuth(initial.endpoint.url, "private preview endpoint");
+const previewUrl = await createPreviewUrl(initial.endpoint.id);
+await renderUrl(previewUrl, "private preview URL", {
+  requireFetch: false,
+  expectOverlay: true,
+  requireSourceStamp: true,
+});
+
+const publicEndpoint = await publishApp(session.sessionGroupId);
+if (publicEndpoint.id !== initial.endpoint.id) {
+  throw new Error("Published endpoint did not match the primary preview endpoint");
+}
+await waitForPublishedEndpointEvent(
+  session.id,
+  session.sessionGroupId,
+  publicEndpoint.id,
+  publicEndpoint.url,
+);
+await renderUrl(publicEndpoint.url, "published public URL", { expectOverlay: false });
+
+const restored = await startAppSession({
+  restoreCheckpointId: initial.checkpoint.id,
+  ...(process.env.TRACE_SMOKE_MODEL ? { model: process.env.TRACE_SMOKE_MODEL } : {}),
+  ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
+});
+if (restored.sessionGroupId === session.sessionGroupId) {
+  throw new Error("Checkpoint restore reused the source app session group");
+}
+await waitForRestoreStartEvent(restored, initial.checkpoint);
+const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored", {
+  requireCheckpoint: false,
+  requireManagedRepo: true,
+});
+if (restoredReady.state.sessionGroup.repo?.id !== managedRepoId) {
+  throw new Error("Restored app group did not use the source managed repo");
+}
+await assertPrivateEndpointRequiresPreviewAuth(
+  restoredReady.endpoint.url,
+  "restored private preview endpoint",
+);
+const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
+await renderUrl(restoredPreviewUrl, "restored preview URL", {
+  requireFetch: false,
+  expectOverlay: true,
+  requireSourceStamp: true,
+});
+const restoredTerminalOutput = await verifyTerminalWorkdir(restored.id, {
+  marker: "TRACE_SMOKE_RESTORED_TERMINAL_READY:",
+  expectedHead: initial.checkpoint.commitSha,
+});
+
+process.stdout.write(
+  [
+    "Trace cloud app session smoke passed.",
+    `Initial session: ${session.id}`,
+    `Initial group: ${session.sessionGroupId}`,
+    `Checkpoint: ${initial.checkpoint.id} ${initial.checkpoint.commitSha}`,
+    `Terminal: ${terminalOutput.match(/TRACE_SMOKE_TERMINAL_READY:[^\r\n]+/)?.[0] ?? "verified"}`,
+    `Published URL: ${publicEndpoint.url}`,
+    `Coding handoff session: ${codingSession.id}`,
+    `Restored session: ${restored.id}`,
+    `Restored group: ${restored.sessionGroupId}`,
+    `Restored terminal: ${restoredTerminalOutput.match(/TRACE_SMOKE_RESTORED_TERMINAL_READY:[^\r\n]+/)?.[0] ?? "verified"}`,
+  ].join("\n") + "\n",
+);

@@ -103,4 +103,64 @@ describe("buildSessionNodes", () => {
 
     expect(result.nodes).toEqual([{ kind: "event", id: event.id }]);
   });
+
+  it("turns completed design PDF exports into timeline nodes", () => {
+    const event = makeEvent({
+      eventType: "design_export_completed",
+      payload: {
+        artifactId: "artifact-1",
+        exportType: "pdf",
+        status: "completed",
+        fileName: "Dashboard.pdf",
+        fileId: "uploads/org-1/export-1-Dashboard.pdf",
+        fileUrl: "https://files.example/Dashboard.pdf",
+        byteSize: 2048,
+        pageCount: 3,
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([
+      {
+        kind: "design-export",
+        id: event.id,
+        artifactId: "artifact-1",
+        status: "completed",
+        exportType: "pdf",
+        fileId: "uploads/org-1/export-1-Dashboard.pdf",
+        fileName: "Dashboard.pdf",
+        fileUrl: "https://files.example/Dashboard.pdf",
+        byteSize: 2048,
+        pageCount: 3,
+        error: undefined,
+        timestamp: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("turns failed design PDF exports into timeline nodes", () => {
+    const event = makeEvent({
+      eventType: "design_export_completed",
+      payload: {
+        artifactId: "artifact-1",
+        exportType: "pdf",
+        status: "failed",
+        error: "Chromium failed",
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([
+      expect.objectContaining({
+        kind: "design-export",
+        id: event.id,
+        artifactId: "artifact-1",
+        status: "failed",
+        exportType: "pdf",
+        error: "Chromium failed",
+      }),
+    ]);
+  });
 });

@@ -23,6 +23,21 @@ export interface AgentToolResult {
   content: unknown;
 }
 
+export interface DesignExportNode {
+  kind: "design-export";
+  id: string;
+  artifactId: string;
+  status: "completed" | "failed";
+  exportType: string;
+  fileId?: string;
+  fileName?: string;
+  fileUrl?: string;
+  byteSize?: number;
+  pageCount?: number;
+  error?: string;
+  timestamp: string;
+}
+
 export interface BuildSessionNodesResult {
   nodes: SessionNode[];
   completedAgentTools: Map<string, AgentToolResult>;
@@ -76,7 +91,39 @@ export type SessionNode =
       planFilePath: string;
       timestamp: string;
     }
+  | DesignExportNode
   | { kind: "ask-user-question"; id: string; questions: Question[]; timestamp: string };
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function extractDesignExport(event: Event): DesignExportNode | null {
+  if (event.eventType !== "design_export_completed") return null;
+  const payload = asJsonObject(event.payload);
+  const artifactId = stringValue(payload?.artifactId);
+  const status = payload?.status === "failed" ? "failed" : "completed";
+  if (!artifactId) return null;
+
+  return {
+    kind: "design-export",
+    id: event.id,
+    artifactId,
+    status,
+    exportType: stringValue(payload?.exportType) ?? "pdf",
+    fileId: stringValue(payload?.fileId),
+    fileName: stringValue(payload?.fileName),
+    fileUrl: stringValue(payload?.fileUrl),
+    byteSize: numberValue(payload?.byteSize),
+    pageCount: numberValue(payload?.pageCount),
+    error: stringValue(payload?.error),
+    timestamp: event.timestamp,
+  };
+}
 
 /** Extract tool name + file path from a session_output event payload, if it's a Read/Glob/Grep tool call */
 function extractReadGlobInfo(
@@ -271,6 +318,13 @@ export function buildSessionNodes(
 
     // Subagent child events render nested inside their parent's SubagentRow — never as top-level nodes.
     if (event.parentId) {
+      continue;
+    }
+
+    const designExport = extractDesignExport(event);
+    if (designExport) {
+      flushBucket();
+      result.push(designExport);
       continue;
     }
 

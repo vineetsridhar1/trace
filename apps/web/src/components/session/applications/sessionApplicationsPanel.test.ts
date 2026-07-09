@@ -1,0 +1,162 @@
+import { describe, expect, it } from "vitest";
+import {
+  ENABLE_ENDPOINT_MUTATION,
+  appCodingSessionTarget,
+  parseAppTokenPatchInput,
+  parseTrustedAppOverlayMessage,
+  processLogsByProcessId,
+  publishedAppShareUrl,
+} from "./SessionApplicationsPanel";
+import { defaultAppTokenPatchJson } from "./AppTokenTweaksPopover";
+
+describe("parseAppTokenPatchInput", () => {
+  it("accepts JSON object token patches", () => {
+    expect(parseAppTokenPatchInput('{"color":{"primary":"#ef4444"}}')).toEqual({
+      color: { primary: "#ef4444" },
+    });
+  });
+
+  it("rejects non-object token patches", () => {
+    expect(() => parseAppTokenPatchInput("[]")).toThrow("Token patch must be a JSON object.");
+    expect(() => parseAppTokenPatchInput('"bad"')).toThrow("Token patch must be a JSON object.");
+  });
+
+  it("keeps the app token tweak default as valid JSON", () => {
+    expect(parseAppTokenPatchInput(defaultAppTokenPatchJson())).toEqual({
+      color: { primary: "#ef4444" },
+    });
+  });
+});
+
+describe("parseTrustedAppOverlayMessage", () => {
+  const previewUrl = "https://endpointkey.preview.trace.test/__trace_preview_auth?token=secret";
+
+  it("accepts source selections from the current preview origin", () => {
+    expect(
+      parseTrustedAppOverlayMessage(
+        {
+          type: "trace:app:overlay",
+          source: "endpoint-proxy",
+          event: "element-selected",
+          sourceLocation: "app/page.tsx:34",
+          text: "Start building",
+          bounds: { left: 8, top: 16, width: 120, height: 32, x: 0.1, y: 0.2 },
+        },
+        "https://endpointkey.preview.trace.test",
+        previewUrl,
+      ),
+    ).toEqual({
+      kind: "element",
+      sourceLocation: "app/page.tsx:34",
+      text: "Start building",
+      bounds: { left: 8, top: 16, width: 120, height: 32, x: 0.1, y: 0.2 },
+    });
+  });
+
+  it("accepts script errors from the current preview origin", () => {
+    expect(
+      parseTrustedAppOverlayMessage(
+        {
+          type: "trace:app:overlay",
+          source: "endpoint-proxy",
+          event: "error",
+          message: "Boom",
+          stack: "Error: Boom",
+        },
+        "https://endpointkey.preview.trace.test",
+        previewUrl,
+      ),
+    ).toEqual({
+      kind: "error",
+      message: "Boom",
+      stack: "Error: Boom",
+    });
+  });
+
+  it("rejects messages from other origins or non-overlay payloads", () => {
+    expect(
+      parseTrustedAppOverlayMessage(
+        {
+          type: "trace:app:overlay",
+          source: "endpoint-proxy",
+          event: "element-selected",
+          sourceLocation: "app/page.tsx:34",
+        },
+        "https://attacker.test",
+        previewUrl,
+      ),
+    ).toBeNull();
+    expect(
+      parseTrustedAppOverlayMessage(
+        { type: "trace:artifact:element-selected", sourceLocation: "app/page.tsx:34" },
+        "https://endpointkey.preview.trace.test",
+        previewUrl,
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("publishedAppShareUrl", () => {
+  it("returns only public endpoint URLs for publish/share", () => {
+    expect(publishedAppShareUrl({ accessMode: "public", url: "https://app.trace.test" })).toBe(
+      "https://app.trace.test",
+    );
+    expect(
+      publishedAppShareUrl({ accessMode: "private", url: "https://app.trace.test" }),
+    ).toBeNull();
+    expect(publishedAppShareUrl(null)).toBeNull();
+  });
+});
+
+describe("processLogsByProcessId", () => {
+  it("groups event-backed process logs by process id and sorts by sequence", () => {
+    const logs = processLogsByProcessId({
+      "log-2": {
+        id: "log-2",
+        processId: "process-1",
+        stream: "stderr",
+        data: "second",
+        sequence: 2,
+        timestamp: "2026-01-01T00:00:02.000Z",
+      },
+      "log-1": {
+        id: "log-1",
+        processId: "process-1",
+        stream: "stdout",
+        data: "first",
+        sequence: 1,
+        timestamp: "2026-01-01T00:00:01.000Z",
+      },
+      "log-3": {
+        id: "log-3",
+        processId: "process-2",
+        stream: "stdout",
+        data: "other",
+        sequence: 1,
+        timestamp: "2026-01-01T00:00:03.000Z",
+      },
+    });
+
+    expect(logs["process-1"]?.map((entry) => entry.id)).toEqual(["log-1", "log-2"]);
+    expect(logs["process-2"]?.map((entry) => entry.id)).toEqual(["log-3"]);
+  });
+});
+
+describe("ENABLE_ENDPOINT_MUTATION", () => {
+  it("keeps manual forwarding private until publish/share", () => {
+    const source = ENABLE_ENDPOINT_MUTATION.loc?.source.body ?? "";
+
+    expect(source).toContain("accessMode: private");
+    expect(source).not.toContain("accessMode: public");
+  });
+});
+
+describe("appCodingSessionTarget", () => {
+  it("returns navigation ids for app-to-coding handoff sessions", () => {
+    expect(appCodingSessionTarget({ id: "session-1", sessionGroupId: "group-1" })).toEqual({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+    });
+    expect(appCodingSessionTarget(null)).toBeNull();
+  });
+});

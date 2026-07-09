@@ -115,7 +115,7 @@ describe("OrganizationService", () => {
         organizationId: "org-1",
         userId: "00000000-0000-4000-a000-000000000001",
         role: "member",
-    });
+      });
 
     const service = new OrganizationService();
     await expect(
@@ -146,6 +146,40 @@ describe("OrganizationService", () => {
 
     expect(prismaMock.repo.create).not.toHaveBeenCalled();
     expect(prismaMock.channel.create).not.toHaveBeenCalled();
+  });
+
+  it("hides managed repos from ordinary repo lists", async () => {
+    const service = new OrganizationService();
+    prismaMock.repo.findMany.mockResolvedValueOnce([]);
+
+    await service.listRepos("org-1");
+
+    expect(prismaMock.repo.findMany).toHaveBeenCalledWith({
+      where: { organizationId: "org-1", provider: "github" },
+      include: { projects: true, sessions: true },
+    });
+  });
+
+  it("hides managed repos from organization hydration", async () => {
+    const service = new OrganizationService();
+    prismaMock.organization.findUnique.mockResolvedValueOnce({ id: "org-1" });
+
+    await service.getOrganization("org-1", "user-1");
+
+    expect(prismaMock.organization.findUnique).toHaveBeenCalledWith({
+      where: { id: "org-1" },
+      include: {
+        orgMembers: {
+          include: {
+            user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+            organization: { select: { id: true, name: true } },
+          },
+        },
+        repos: { where: { provider: "github" } },
+        projects: true,
+        channels: true,
+      },
+    });
   });
 
   it("creates repos, creates a coding channel, and emits events", async () => {
@@ -362,6 +396,7 @@ describe("OrganizationService", () => {
     expect(prismaMock.repo.create).toHaveBeenCalledWith({
       data: {
         name: "local-only",
+        provider: "github",
         remoteUrl: null,
         defaultBranch: "main",
         organizationId: "org-1",

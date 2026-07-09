@@ -5,6 +5,7 @@ export type {
   EntityState,
   EntityTableMap,
   EntityType,
+  ArtifactEntity,
   SessionEntity,
   SessionGroupEntity,
 } from "./stores/entity.js";
@@ -95,6 +96,7 @@ export { formatSessionConnectionError } from "./session/connection-error.js";
 export type {
   AgentToolResult,
   BuildSessionNodesResult,
+  DesignExportNode,
   ReadGlobItem,
   SessionNode,
 } from "./session/nodes.js";

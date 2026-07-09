@@ -545,10 +545,25 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      if (msg.type === "app_process_ports_detected" && typeof msg.processInstanceId === "string") {
+        const ports = Array.isArray(msg.ports) ? msg.ports : [];
+        void sessionApplicationService
+          .recordDetectedPorts(msg.processInstanceId, bridgeAuth.organizationId, ports)
+          .catch((err: unknown) => {
+            console.error("[bridge] error recording detected app ports:", err);
+          });
+        return;
+      }
+
       if (msg.type === "app_process_log" && typeof msg.processInstanceId === "string") {
         if (typeof msg.data === "string" && (msg.stream === "stdout" || msg.stream === "stderr")) {
           void sessionApplicationService
-            .appendProcessLog(msg.processInstanceId, bridgeAuth.organizationId, msg.stream, msg.data)
+            .appendProcessLog(
+              msg.processInstanceId,
+              bridgeAuth.organizationId,
+              msg.stream,
+              msg.data,
+            )
             .catch((err: unknown) => {
               console.error("[bridge] error appending app process log:", err);
             });
@@ -965,6 +980,13 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         const checkpoint = msg.checkpoint;
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
           await sessionService.recordGitCheckpoint(sessionId, checkpoint);
+        });
+      } else if (msg.type === "managed_git_remote_configured" && msg.sessionId && msg.checkpoint) {
+        const checkpoint = msg.checkpoint;
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
+          await sessionService.recordGitCheckpoint(sessionId, checkpoint, {
+            managedRemoteConfigured: true,
+          });
         });
       }
     } catch (err) {

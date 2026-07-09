@@ -21,6 +21,17 @@ enum SessionGroupVisibility {
   private
 }
 
+enum SessionGroupKind {
+  coding
+  design
+  app
+}
+
+enum RepoProvider {
+  github
+  managed
+}
+
 enum SessionGroupStatus {
   in_progress
   needs_input
@@ -57,6 +68,7 @@ enum Priority {
 enum HostingMode {
   cloud
   local
+  serverless
 }
 
 enum SessionConnectionState {
@@ -258,6 +270,7 @@ enum EventType {
   organization_created
   repo_created
   repo_updated
+  repo_branch_pushed
   channel_created
   channel_updated
   channel_member_added
@@ -308,12 +321,22 @@ enum EventType {
   session_application_process_stopped
   session_application_process_failed
   session_application_log_appended
+  session_app_tokens_updated
   session_endpoint_created
   session_endpoint_forwarding_enabled
   session_endpoint_forwarding_disabled
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  design_generation_started
+  design_generation_failed
+  design_artifact_created
+  design_artifact_updated
+  design_comment_added
+  design_artifact_error
+  design_export_requested
+  design_export_completed
+  design_artifact_promoted
 }
 
 # --- Core Types ---
@@ -376,12 +399,30 @@ type User {
 type Repo {
   id: ID!
   name: String!
+  provider: RepoProvider!
   remoteUrl: String
   defaultBranch: String!
   webhookActive: Boolean!
   applicationConfig: RepoApplicationConfig!
   projects: [Project!]!
   sessions: [Session!]!
+}
+
+type ManagedGitCredential {
+  repoId: ID!
+  remoteUrl: String!
+  credentialedRemoteUrl: String!
+  token: String!
+  expiresAt: DateTime!
+}
+
+input DesignPdfPageOptionsInput {
+  widthPx: Int
+  heightPx: Int
+  marginTopPx: Int
+  marginRightPx: Int
+  marginBottomPx: Int
+  marginLeftPx: Int
 }
 
 type RepoApplicationConfig {
@@ -471,6 +512,7 @@ type ChannelGroup {
 type SessionGroup {
   id: ID!
   name: String!
+  kind: SessionGroupKind!
   slug: String
   forkedFromSessionGroupId: ID
   forkedFromSessionGroup: SessionGroup
@@ -489,8 +531,44 @@ type SessionGroup {
   archivedAt: DateTime
   setupStatus: SetupStatus!
   setupError: String
+  designSystemId: String
+  designSkillIds: [String!]!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type Artifact {
+  id: ID!
+  sessionGroupId: ID!
+  parentArtifactId: ID
+  promptEventId: ID
+  prompt: String
+  title: String!
+  contentType: String!
+  html: String!
+  metadata: JSON
+  publishedAt: DateTime
+  publicUrl: String
+  createdBy: User!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type DesignPromptContentCatalog {
+  designSystems: [DesignSystemOption!]!
+  skills: [DesignSkillOption!]!
+}
+
+type DesignSystemOption {
+  id: ID!
+  name: String
+  description: String
+}
+
+type DesignSkillOption {
+  id: ID!
+  title: String
+  description: String
 }
 
 type Session {
@@ -562,6 +640,11 @@ type GitCheckpoint {
   author: String!
   committedAt: DateTime!
   filesChanged: Int!
+  captureStatus: String
+  captureKey: String
+  captureUrl: String
+  captureContentType: String
+  capturedAt: DateTime
   createdAt: DateTime!
 }
 
@@ -805,6 +888,11 @@ type SessionEndpoint {
   revokedAt: DateTime
 }
 
+type SessionEndpointPreview {
+  url: String!
+  expiresAt: DateTime!
+}
+
 type EndpointTrafficEntry {
   id: ID!
   endpointId: ID!
@@ -1040,6 +1128,7 @@ input ReorderChannelsInput {
 }
 
 input StartSessionInput {
+  kind: SessionGroupKind
   tool: CodingTool
   model: String
   reasoningEffort: String
@@ -1058,6 +1147,8 @@ input StartSessionInput {
   projectId: ID
   prompt: String
   interactionMode: String
+  designSystemId: String
+  designSkillIds: [String!]
 }
 
 input UpdateSessionDefaultsInput {
@@ -1239,6 +1330,8 @@ type Query {
     includeActiveMerged: Boolean
   ): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
+  designArtifacts(sessionGroupId: ID!): [Artifact!]!
+  designPromptContentCatalog: DesignPromptContentCatalog!
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
   mySessions(
@@ -1324,7 +1417,11 @@ type Query {
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
   sessionApplicationProcesses(sessionGroupId: ID!): [SessionApplicationProcess!]!
-  sessionApplicationLogs(processId: ID!, limit: Int, beforeSequence: Int): [SessionApplicationLogEntry!]!
+  sessionApplicationLogs(
+    processId: ID!
+    limit: Int
+    beforeSequence: Int
+  ): [SessionApplicationLogEntry!]!
   sessionEndpoints(sessionGroupId: ID!): [SessionEndpoint!]!
   endpointTraffic(endpointId: ID!, limit: Int, before: DateTime): [EndpointTrafficEntry!]!
   searchUsers(query: String!): [User!]!
@@ -1408,6 +1505,24 @@ type Mutation {
   reorderChannels(input: ReorderChannelsInput!): [Channel!]!
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
+  createDesignArtifact(sessionGroupId: ID!, prompt: String!, html: String): Artifact!
+  generateDesignArtifacts(sessionGroupId: ID!, prompt: String!, directionCount: Int): [Artifact!]!
+  iterateDesignArtifact(
+    artifactId: ID!
+    prompt: String!
+    html: String
+    comparisonArtifactIds: [ID!]
+  ): Artifact!
+  patchDesignArtifactTokens(artifactId: ID!, tokens: JSON!): Artifact!
+  commentDesignArtifact(artifactId: ID!, body: String!, anchor: JSON, sendToAgent: Boolean): Event!
+  reportDesignArtifactError(artifactId: ID!, message: String!, stack: String): Event!
+  publishDesignArtifact(artifactId: ID!): Artifact!
+  exportDesignArtifactPdf(artifactId: ID!, pageOptions: DesignPdfPageOptionsInput): Event!
+  promoteDesignArtifactToCodingSession(
+    artifactId: ID!
+    prompt: String
+    referenceArtifactIds: [ID!]
+  ): Session!
   forkSession(eventId: ID!): Session!
   runSession(id: ID!, prompt: String, interactionMode: String): Session!
   terminateSession(id: ID!): Session!
@@ -1416,6 +1531,11 @@ type Mutation {
   archiveSessionGroup(id: ID!): SessionGroup
   renameSessionGroup(id: ID!, name: String!): SessionGroup!
   updateSessionGroupVisibility(id: ID!, visibility: SessionGroupVisibility!): SessionGroup!
+  updateDesignHarnessSettings(
+    sessionGroupId: ID!
+    designSystemId: String
+    designSkillIds: [String!]
+  ): SessionGroup!
   deleteSessionGroup(id: ID!): Boolean!
   updateSessionConfig(
     sessionId: ID!
@@ -1517,6 +1637,8 @@ type Mutation {
   createOrganization(input: CreateOrganizationInput!): OrgMember!
   createRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
+  createManagedGitCredential(repoId: ID!): ManagedGitCredential!
+  graduateManagedRepoToGitHub(repoId: ID!, remoteUrl: String!): Repo!
   createProject(input: CreateProjectInput!): Project!
   dismissInboxItem(id: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!
@@ -1529,14 +1651,36 @@ type Mutation {
   runSessionGroupSetupScript(sessionGroupId: ID!, scriptId: ID!): Boolean!
   startSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
   stopSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
-  startSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
-  stopSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
-  restartSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
-  enableSessionEndpointForwarding(endpointId: ID!, accessMode: SessionEndpointAccessMode): SessionEndpoint!
+  startSessionProcess(
+    sessionGroupId: ID!
+    appConfigId: ID!
+    processConfigId: ID!
+  ): SessionApplicationProcess!
+  stopSessionProcess(
+    sessionGroupId: ID!
+    appConfigId: ID!
+    processConfigId: ID!
+  ): SessionApplicationProcess!
+  restartSessionProcess(
+    sessionGroupId: ID!
+    appConfigId: ID!
+    processConfigId: ID!
+  ): SessionApplicationProcess!
+  enableSessionEndpointForwarding(
+    endpointId: ID!
+    accessMode: SessionEndpointAccessMode
+  ): SessionEndpoint!
   disableSessionEndpointForwarding(endpointId: ID!): SessionEndpoint!
   rotateSessionEndpoint(endpointId: ID!): SessionEndpoint!
-  updateSessionEndpointTrafficCapture(endpointId: ID!, mode: EndpointTrafficCaptureMode!): SessionEndpoint!
+  updateSessionEndpointTrafficCapture(
+    endpointId: ID!
+    mode: EndpointTrafficCaptureMode!
+  ): SessionEndpoint!
   clearEndpointTraffic(endpointId: ID!): Boolean!
+  patchAppSessionTokens(sessionGroupId: ID!, tokens: JSON!): Event!
+  createSessionEndpointPreview(endpointId: ID!): SessionEndpointPreview!
+  publishAppSession(sessionGroupId: ID!): SessionEndpoint!
+  openAppSessionAsCodingSession(sessionGroupId: ID!, prompt: String): Session!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!

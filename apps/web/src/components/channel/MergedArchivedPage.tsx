@@ -28,6 +28,7 @@ const FILTERED_SESSION_GROUPS_QUERY = gql`
     sessionGroups(channelId: $channelId, archived: $archived, status: $status) {
       id
       name
+      kind
       forkedFromSessionGroupId
       status
       visibility

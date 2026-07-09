@@ -16,6 +16,7 @@ export interface BridgeRunCommand {
   model?: string;
   reasoningEffort?: string;
   enableClaudeInChrome?: boolean;
+  appendSystemPrompt?: string;
   interactionMode?: string;
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
@@ -31,6 +32,7 @@ export interface BridgeSendCommand {
   model?: string;
   reasoningEffort?: string;
   enableClaudeInChrome?: boolean;
+  appendSystemPrompt?: string;
   interactionMode?: string;
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
@@ -67,6 +69,23 @@ export interface BridgeUpgradeWorkspaceCommand {
   defaultBranch: string;
   branch?: string;
   preserveBranchName?: boolean;
+}
+
+export interface BridgeConfigureManagedGitRemoteCommand {
+  type: "configure_managed_git_remote";
+  sessionId: string;
+  repoId: string;
+  repoName: string;
+  repoRemoteUrl: string;
+  branch: string;
+  workdir?: string;
+  checkpoint?: GitCheckpointBridgePayload;
+}
+
+export interface BridgeBootstrapAppWorkspaceCommand {
+  type: "bootstrap_app_workspace";
+  sessionId: string;
+  workdir?: string;
 }
 
 export interface BridgeTerminateCommand {
@@ -357,6 +376,8 @@ export type BridgeCommand =
   | BridgeSendCommand
   | BridgePrepareCommand
   | BridgeUpgradeWorkspaceCommand
+  | BridgeConfigureManagedGitRemoteCommand
+  | BridgeBootstrapAppWorkspaceCommand
   | BridgeTerminateCommand
   | BridgePauseCommand
   | BridgeResumeCommand
@@ -472,12 +493,20 @@ export interface BridgeToolSessionMissing {
   interactionMode?: string;
   checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
+  appendSystemPrompt?: string;
 }
 
 export interface BridgeGitCheckpoint {
   type: "git_checkpoint";
   sessionId: string;
   checkpoint: GitCheckpointBridgePayload;
+}
+
+export interface BridgeManagedGitRemoteConfigured {
+  type: "managed_git_remote_configured";
+  sessionId: string;
+  repoId: string;
+  checkpoint?: GitCheckpointBridgePayload;
 }
 
 /** Sent when a device bridge links a new repo (e.g. via saveRepoPath). Updates server-side registeredRepoIds. */
@@ -734,6 +763,12 @@ export interface BridgeAppProcessStarted {
   bridgeProcessId: string;
 }
 
+export interface BridgeAppProcessPortsDetected {
+  type: "app_process_ports_detected";
+  processInstanceId: string;
+  ports: Array<{ port: number; protocol: "http" }>;
+}
+
 export interface BridgeAppProcessLog {
   type: "app_process_log";
   processInstanceId: string;
@@ -798,6 +833,7 @@ export type BridgeMessage =
   | BridgeToolSessionId
   | BridgeToolSessionMissing
   | BridgeGitCheckpoint
+  | BridgeManagedGitRemoteConfigured
   | BridgeRepoLinked
   | BridgeLinkedCheckoutStatusResult
   | BridgeLinkedCheckoutChangedFileResult
@@ -823,6 +859,7 @@ export type BridgeMessage =
   | BridgeSetupScriptResult
   | BridgeSetupScriptLog
   | BridgeAppProcessStarted
+  | BridgeAppProcessPortsDetected
   | BridgeAppProcessLog
   | BridgeAppProcessExited
   | BridgeAppProcessError

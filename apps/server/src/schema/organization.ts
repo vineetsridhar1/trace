@@ -13,6 +13,7 @@ import { webhookService } from "../services/webhook.js";
 import { orgMemberService } from "../services/org-member.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 import { repoApplicationConfigService } from "../services/repo-application-config.js";
+import { managedGitService } from "../services/managed-git.js";
 export const organizationQueries = {
   organization: (_: unknown, args: { id: string }, ctx: Context) =>
     organizationService.getOrganization(args.id, ctx.userId),
@@ -59,6 +60,27 @@ export const organizationMutations = {
   updateRepo: (_: unknown, args: { id: string; input: UpdateRepoInput }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return organizationService.updateRepo(args.id, orgId, args.input, ctx.actorType, ctx.userId);
+  },
+  createManagedGitCredential: (_: unknown, args: { repoId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return managedGitService.createUserCloneCredential({
+      organizationId: orgId,
+      repoId: args.repoId,
+      userId: ctx.userId,
+    });
+  },
+  graduateManagedRepoToGitHub: (
+    _: unknown,
+    args: { repoId: string; remoteUrl: string },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    return managedGitService.graduateManagedRepoToGitHub({
+      organizationId: orgId,
+      repoId: args.repoId,
+      userId: ctx.userId,
+      remoteUrl: args.remoteUrl,
+    });
   },
   createProject: (_: unknown, args: { input: CreateProjectInput }, ctx: Context) => {
     assertOrgAccess(ctx, args.input.organizationId);

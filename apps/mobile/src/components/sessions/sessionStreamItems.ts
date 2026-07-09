@@ -117,6 +117,15 @@ function describeNode(
         isLast,
         reuse: true,
       };
+    case "design-export":
+      return {
+        identity: `design-export:${node.id}`,
+        key: node.id,
+        itemType: `design-export:${node.status}:${node.exportType}`,
+        timestampLabel: formatTime(node.timestamp),
+        isLast,
+        reuse: true,
+      };
     case "readglob-group": {
       const firstId = node.items[0]?.id ?? "empty";
       const last = node.items[node.items.length - 1];

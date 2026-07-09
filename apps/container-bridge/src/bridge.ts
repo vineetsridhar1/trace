@@ -47,6 +47,8 @@ import {
   resolveExecutable,
 } from "@trace/shared/adapters";
 import {
+  bootstrapAppWorkspace,
+  configureManagedGitRemote,
   ensureRepo,
   createWorktree,
   getWorkspaceSlugs,
@@ -341,6 +343,7 @@ export class ContainerBridge implements IBridgeClient {
           model: cmd.model,
           reasoningEffort: cmd.reasoningEffort,
           enableClaudeInChrome: cmd.enableClaudeInChrome,
+          appendSystemPrompt: cmd.appendSystemPrompt,
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           imageUrls: cmd.imageUrls,
@@ -445,6 +448,66 @@ export class ContainerBridge implements IBridgeClient {
               slugs: [],
               error: err.message,
             });
+          });
+        break;
+      }
+
+      case "configure_managed_git_remote": {
+        const workdir = cmd.workdir ?? this.sessionWorkdirs.get(cmd.sessionId) ?? os.homedir();
+        configureManagedGitRemote({
+          workdir,
+          remoteUrl: cmd.repoRemoteUrl,
+          branch: cmd.branch,
+        })
+          .then(() => {
+            this.send({ type: "repo_linked", repoId: cmd.repoId });
+            this.send({
+              type: "managed_git_remote_configured",
+              sessionId: cmd.sessionId,
+              repoId: cmd.repoId,
+              checkpoint: cmd.checkpoint,
+            });
+            this.send({
+              type: "session_output",
+              sessionId: cmd.sessionId,
+              data: {
+                type: "assistant",
+                message: {
+                  content: [
+                    { type: "text", text: `Managed git remote configured for ${cmd.repoName}.` },
+                  ],
+                },
+              },
+            });
+          })
+          .catch((err: Error) => {
+            this.send({
+              type: "session_output",
+              sessionId: cmd.sessionId,
+              data: {
+                type: "error",
+                message: `Failed to configure managed git remote: ${err.message}`,
+              },
+            });
+          });
+        break;
+      }
+
+      case "bootstrap_app_workspace": {
+        const workdir = cmd.workdir ?? os.homedir();
+        bootstrapAppWorkspace(workdir)
+          .then(({ branch }) => {
+            this.sessionWorkdirs.set(cmd.sessionId, workdir);
+            this.send({ type: "register_session", sessionId: cmd.sessionId });
+            this.send({
+              type: "workspace_ready",
+              sessionId: cmd.sessionId,
+              workdir,
+              branch,
+            });
+          })
+          .catch((err: Error) => {
+            this.send({ type: "workspace_failed", sessionId: cmd.sessionId, error: err.message });
           });
         break;
       }
@@ -569,6 +632,7 @@ export class ContainerBridge implements IBridgeClient {
           command: cmd.command,
           cwd: cmd.cwd,
           env: cmd.env,
+          ports: cmd.ports,
         });
         break;
       }
@@ -812,6 +876,7 @@ export class ContainerBridge implements IBridgeClient {
     model,
     reasoningEffort,
     enableClaudeInChrome,
+    appendSystemPrompt,
     interactionMode,
     toolSessionId,
     imageUrls,
@@ -823,6 +888,7 @@ export class ContainerBridge implements IBridgeClient {
     model?: string;
     reasoningEffort?: string;
     enableClaudeInChrome?: boolean;
+    appendSystemPrompt?: string;
     interactionMode?: string;
     toolSessionId?: string;
     imageUrls?: string[];
@@ -907,6 +973,7 @@ export class ContainerBridge implements IBridgeClient {
         message,
         interactionMode,
         imageUrls,
+        appendSystemPrompt,
       });
       return true;
     };
@@ -999,6 +1066,7 @@ export class ContainerBridge implements IBridgeClient {
       model,
       reasoningEffort,
       enableClaudeInChrome,
+      appendSystemPrompt,
       toolSessionId,
     });
   }

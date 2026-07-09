@@ -182,6 +182,8 @@ export interface RunOptions {
   reasoningEffort?: string;
   /** When true, pass Claude Code's `--chrome` flag to enable Claude in Chrome. */
   enableClaudeInChrome?: boolean;
+  /** Extra system prompt delivered through adapters that support native system-prompt append. */
+  appendSystemPrompt?: string;
   /** Tool-specific session ID for resuming (e.g. Claude Code's --resume flag) */
   toolSessionId?: string;
 }

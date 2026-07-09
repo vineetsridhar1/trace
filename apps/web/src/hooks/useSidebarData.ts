@@ -100,7 +100,10 @@ const SIDEBAR_SESSION_GROUPS_QUERY = gql`
     ) {
       id
       name
+      kind
       slug
+      designSystemId
+      designSkillIds
       status
       visibility
       owner {

@@ -19,6 +19,7 @@ import { uploadRouter } from "./routes/upload.js";
 import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
+import { managedGitRouter } from "./routes/managed-git.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -45,6 +46,8 @@ import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.
 import { endpointProxyService } from "./services/endpoint-proxy.js";
 import { sessionApplicationService } from "./services/session-applications.js";
 import { endpointTrafficRetentionHours } from "./services/endpoint-utils.js";
+import { handleDesignArtifactUserContent } from "./services/design-artifact-serving.js";
+import { managedGitService } from "./services/managed-git.js";
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -54,6 +57,9 @@ const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
 const ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
 const ENDPOINT_TRAFFIC_CLEANUP_LOCK_KEY = "trace:jobs:endpoint-traffic-cleanup";
+const DEFAULT_MANAGED_GIT_ARCHIVE_RETENTION_DAYS = 30;
+const DEFAULT_MANAGED_GIT_ARCHIVE_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const MANAGED_GIT_ARCHIVE_CLEANUP_LOCK_KEY = "trace:jobs:managed-git-archive-cleanup";
 
 function readDurationEnv(name: string, fallbackMs: number): number {
   const raw = process.env[name]?.trim();
@@ -64,6 +70,17 @@ function readDurationEnv(name: string, fallbackMs: number): number {
     return fallbackMs;
   }
   return Math.floor(parsed);
+}
+
+function readNumberEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    console.warn(`[config] ignoring invalid ${name}=${raw}; using ${fallback}`);
+    return fallback;
+  }
+  return parsed;
 }
 
 async function withRedisJobLock<T>(options: {
@@ -155,6 +172,7 @@ async function main() {
     }),
   );
   app.use(cookieParser());
+  app.use(handleDesignArtifactUserContent);
 
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     const endpointKey = endpointProxyService.extractKey(req.headers.host);
@@ -178,6 +196,15 @@ async function main() {
 
   // Local storage PUT accepts raw body — register BEFORE express.json()
   if (localStorageRouter) app.use(localStorageRouter);
+
+  app.use(
+    "/git",
+    express.raw({
+      type: ["application/x-git-upload-pack-request", "application/x-git-receive-pack-request"],
+      limit: "100mb",
+    }),
+    managedGitRouter,
+  );
 
   app.use(express.json());
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -324,7 +351,9 @@ async function main() {
             key: CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY,
             ttlMs: cloudIdleCleanupLockTtlMs,
             run: () =>
-              sessionService.cleanupIdleCloudSessionGroups({ idleAfterMs: cloudIdleCleanupAfterMs }),
+              sessionService.cleanupIdleCloudSessionGroups({
+                idleAfterMs: cloudIdleCleanupAfterMs,
+              }),
           })
             .then((result) => {
               if (!result) {
@@ -384,6 +413,44 @@ async function main() {
         });
       });
   }, ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS);
+
+  const managedGitArchiveRetentionDays = readNumberEnv(
+    "TRACE_MANAGED_GIT_ARCHIVE_RETENTION_DAYS",
+    DEFAULT_MANAGED_GIT_ARCHIVE_RETENTION_DAYS,
+  );
+  const managedGitArchiveCleanupIntervalMs = readDurationEnv(
+    "TRACE_MANAGED_GIT_ARCHIVE_CLEANUP_INTERVAL_MS",
+    DEFAULT_MANAGED_GIT_ARCHIVE_CLEANUP_INTERVAL_MS,
+  );
+  const managedGitArchiveCleanup =
+    managedGitArchiveCleanupIntervalMs > 0
+      ? setInterval(() => {
+          const startedAt = Date.now();
+          void withRedisJobLock({
+            enabled: !localMode,
+            key: MANAGED_GIT_ARCHIVE_CLEANUP_LOCK_KEY,
+            ttlMs: managedGitArchiveCleanupIntervalMs * 2,
+            run: () =>
+              managedGitService.deleteExpiredArchivedAppRepos(managedGitArchiveRetentionDays),
+          })
+            .then((deleted) => {
+              if (deleted && deleted > 0) {
+                console.log(
+                  `[managed-git-archive-cleanup] deleted ${deleted} archived managed repos`,
+                );
+              }
+            })
+            .catch((err: unknown) => {
+              const message = err instanceof Error ? err.message : String(err);
+              console.warn(`[managed-git-archive-cleanup] iteration failed: ${message}`);
+              logAgentEnvironmentTelemetry("managed_git_archive_cleanup.iteration_failed", {
+                durationMs: Date.now() - startedAt,
+                retentionDays: managedGitArchiveRetentionDays,
+                error: message,
+              });
+            });
+        }, managedGitArchiveCleanupIntervalMs)
+      : null;
 
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -478,6 +545,7 @@ async function main() {
               clearInterval(deprovisionReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               clearInterval(endpointTrafficCleanup);
+              if (managedGitArchiveCleanup) clearInterval(managedGitArchiveCleanup);
               bridgeWss.close();
               terminalWss.close();
               await disconnectRedis();

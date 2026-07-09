@@ -96,10 +96,7 @@ describe("ManagedProcessManager", () => {
       messages,
       (message) => message.type === "setup_script_log" && message.data.includes("setup-ok"),
     );
-    const result = await waitFor(
-      messages,
-      (message) => message.type === "setup_script_result",
-    );
+    const result = await waitFor(messages, (message) => message.type === "setup_script_result");
     expect(result).toMatchObject({
       type: "setup_script_result",
       requestId: "setup-1",
@@ -133,6 +130,73 @@ describe("ManagedProcessManager", () => {
     );
     const exit = await waitFor(messages, (message) => message.type === "app_process_exited");
     expect(exit).toMatchObject({ type: "app_process_exited", processInstanceId: "process-1" });
+  });
+
+  it("reports newly detected listening ports for managed app processes", async () => {
+    const messages: BridgeMessage[] = [];
+    const detectPorts = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([5173]);
+    const manager = new ManagedProcessManager(
+      new Map([["session-1", process.cwd()]]),
+      (message) => messages.push(message),
+      detectPorts,
+    );
+
+    void manager.start({
+      requestId: "start-1",
+      processInstanceId: "process-1",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: 'node -e "setInterval(() => {}, 1000)"',
+      cwd: ".",
+    });
+
+    const detected = await waitFor(
+      messages,
+      (message) => message.type === "app_process_ports_detected",
+    );
+    expect(detected).toMatchObject({
+      type: "app_process_ports_detected",
+      processInstanceId: "process-1",
+      ports: [{ port: 5173, protocol: "http" }],
+    });
+
+    manager.stop("process-1");
+    await waitFor(messages, (message) => message.type === "app_process_exited");
+  });
+
+  it("filters system and internal ports before reporting app previews", async () => {
+    const messages: BridgeMessage[] = [];
+    const detectPorts = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([22, 80, 1024, 2375, 2376, 5432, 6379, 7456, 5173, 65536]);
+    const manager = new ManagedProcessManager(
+      new Map([["session-1", process.cwd()]]),
+      (message) => messages.push(message),
+      detectPorts,
+    );
+
+    void manager.start({
+      requestId: "start-1",
+      processInstanceId: "process-1",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: 'node -e "setInterval(() => {}, 1000)"',
+      cwd: ".",
+    });
+
+    const detected = await waitFor(
+      messages,
+      (message) => message.type === "app_process_ports_detected",
+    );
+    expect(detected).toMatchObject({
+      type: "app_process_ports_detected",
+      processInstanceId: "process-1",
+      ports: [{ port: 5173, protocol: "http" }],
+    });
+
+    manager.stop("process-1");
+    await waitFor(messages, (message) => message.type === "app_process_exited");
   });
 
   it("stops the full process tree so ports can be reused", async () => {
@@ -191,6 +255,66 @@ describe("ManagedProcessManager", () => {
       throw new Error("Missing HTTP proxy body");
     }
     expect(Buffer.from(response.bodyBase64, "base64").toString("utf8")).toBe("proxied GET /hello");
+  });
+
+  it("starts an app process, detects its preview port, and proxies rendered HTML", async () => {
+    const messages: BridgeMessage[] = [];
+    const port = await getFreePort();
+    const detectPorts = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([port]);
+    const manager = new ManagedProcessManager(
+      new Map([["session-1", process.cwd()]]),
+      (message) => messages.push(message),
+      detectPorts,
+    );
+
+    manager.start({
+      requestId: "start-1",
+      processInstanceId: "process-1",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: `node -e "require('http').createServer((req,res)=>{res.writeHead(200, {'content-type':'text/html'}); res.end('<main data-trace-source=\\\"app/page.tsx:11\\\">Preview app</main>')}).listen(${port}, '127.0.0.1')"`,
+      cwd: ".",
+    });
+
+    await waitFor(messages, (message) => message.type === "app_process_started");
+    await waitForHttp(port);
+    const detected = await waitFor(
+      messages,
+      (message) => message.type === "app_process_ports_detected",
+    );
+    expect(detected).toMatchObject({
+      type: "app_process_ports_detected",
+      processInstanceId: "process-1",
+      ports: [{ port, protocol: "http" }],
+    });
+
+    manager.proxyHttp({
+      requestId: "http-1",
+      port,
+      method: "GET",
+      path: "/",
+      headers: {},
+    });
+
+    const response = await waitFor(
+      messages,
+      (message) => message.type === "endpoint_http_response",
+    );
+    expect(response).toMatchObject({
+      type: "endpoint_http_response",
+      requestId: "http-1",
+      status: 200,
+    });
+    if (response.type !== "endpoint_http_response" || !response.bodyBase64) {
+      throw new Error("Missing HTTP proxy body");
+    }
+    const body = Buffer.from(response.bodyBase64, "base64").toString("utf8");
+    expect(body).toContain("Preview app");
+    expect(body).toContain('data-trace-source="app/page.tsx:11"');
+
+    manager.stop("process-1");
+    await waitFor(messages, (message) => message.type === "app_process_exited");
+    await waitForPortAvailable(port);
   });
 
   it("rejects unsafe working directories", async () => {

@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
+  composeTraceDesignPrompt,
   hasQuestionBlock,
   hasPlanBlock,
   isSupportedModel,
@@ -65,6 +66,16 @@ import {
   type GitHubRepoRef,
 } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
+import { DESIGN_ARTIFACT_CONTENT_TYPE } from "./design-artifact-html.js";
+import { buildDesignArtifactPublicUrl } from "./design-artifact-serving.js";
+import { storeDesignArtifactHtml } from "./design-artifact-storage.js";
+import { managedGitService } from "./managed-git.js";
+import { loadTraceDesignPromptContent } from "./design-content.js";
+import {
+  buildDesignGenerationCompletedPayload,
+  designGenerationService,
+} from "./design-generation.js";
+import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -110,6 +121,7 @@ type UserSessionDefaults = {
 const SESSION_MOVE_GIT_SYNC_STATUS_TIMEOUT_MS = 5_000;
 const LINKED_CHECKOUT_BRANCH_REFRESH_TIMEOUT_MS = 1_500;
 const FALLBACK_SESSION_TOOL: CodingTool = "claude_code";
+const APP_SESSION_TOOL: CodingTool = "claude_code";
 const LOCAL_TOOL_FALLBACK_ORDER: readonly CodingTool[] = [
   FALLBACK_SESSION_TOOL,
   "codex",
@@ -431,6 +443,144 @@ function getIdleAgentStatus(agentStatus?: AgentStatus | null): AgentStatus {
   return agentStatus === "not_started" ? "not_started" : "done";
 }
 
+const MAX_DESIGN_CHAT_DIRECTIONS = 8;
+
+const DESIGN_COUNT_WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+};
+
+const DESIGN_COUNT_NOUN_PATTERN =
+  "(?:examples?|options?|directions?|variants?|canvases|screens?|concepts?)";
+
+function clampDesignChatDirectionCount(count: number): number {
+  return Math.min(Math.max(Math.floor(count), 1), MAX_DESIGN_CHAT_DIRECTIONS);
+}
+
+function designCountValue(value: string): number | null {
+  const normalized = value.trim().toLowerCase();
+  const numeric = Number.parseInt(normalized, 10);
+  if (Number.isFinite(numeric)) return clampDesignChatDirectionCount(numeric);
+  return DESIGN_COUNT_WORDS[normalized] ?? null;
+}
+
+function extractDesignDirectionCount(text: string): number | null {
+  const normalized = text.toLowerCase();
+  const countBeforeNoun = new RegExp(
+    `\\b(\\d+|${Object.keys(DESIGN_COUNT_WORDS).join("|")})\\s+${DESIGN_COUNT_NOUN_PATTERN}\\b`,
+    "i",
+  );
+  const nounBeforeCount = new RegExp(
+    `\\b${DESIGN_COUNT_NOUN_PATTERN}\\s*[:=]?\\s*(\\d+|${Object.keys(DESIGN_COUNT_WORDS).join("|")})\\b`,
+    "i",
+  );
+
+  const beforeMatch = normalized.match(countBeforeNoun);
+  if (beforeMatch?.[1]) return designCountValue(beforeMatch[1]);
+
+  const afterMatch = normalized.match(nounBeforeCount);
+  if (afterMatch?.[1]) return designCountValue(afterMatch[1]);
+
+  const compactAnswer = normalized.trim().match(/^(\d+|one|two|three|four|five|six|seven|eight)$/);
+  if (compactAnswer?.[1]) return designCountValue(compactAnswer[1]);
+
+  return null;
+}
+
+function shouldSkipDesignQuestions(text: string): boolean {
+  return /\b(?:skip questions|no questions|don't ask|dont ask|just build|go ahead|make it)\b/i.test(
+    text,
+  );
+}
+
+function designJsonObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function pendingDesignPromptFromPayload(payload: unknown): string | null {
+  const record = designJsonObject(payload);
+  const designRequest = designJsonObject(record?.designRequest);
+  if (designRequest?.status !== "pending") return null;
+  const prompt = designRequest.prompt;
+  return typeof prompt === "string" && prompt.trim() ? prompt : null;
+}
+
+function buildDesignChatPrompt(input: { brief: string; answers?: string | null }): string {
+  const answers = input.answers?.trim();
+  if (!answers) return input.brief;
+  return [input.brief, "", "Additional brief answers from the user:", answers].join("\n");
+}
+
+function designClarificationPayload(prompt: string): Prisma.InputJsonValue {
+  return {
+    type: "assistant",
+    message: {
+      content: [
+        {
+          type: "text",
+          text: "I need a few details before creating the design canvases.",
+        },
+        {
+          type: "question",
+          questions: [
+            {
+              header: "Examples",
+              question: "How many distinct design examples should I create?",
+              options: [
+                {
+                  label: "3 examples",
+                  description: "Balanced exploration with manageable review.",
+                },
+                { label: "1 example", description: "Fastest path to one concrete direction." },
+                { label: "6 examples", description: "Broader exploration across more canvases." },
+              ],
+              multiSelect: false,
+            },
+            {
+              header: "Surface",
+              question: "What surface should these canvases target?",
+              options: [
+                { label: "Desktop web app", description: "Optimized for a full product UI." },
+                { label: "Mobile app", description: "Optimized for a phone-sized workflow." },
+                { label: "Landing page", description: "Optimized for a public marketing page." },
+              ],
+              multiSelect: false,
+            },
+            {
+              header: "Fidelity",
+              question: "What level of fidelity should I aim for?",
+              options: [
+                {
+                  label: "High fidelity",
+                  description: "Detailed visuals, spacing, and realistic content.",
+                },
+                { label: "Wireframe", description: "Structure first, minimal styling." },
+                {
+                  label: "Design system",
+                  description: "Conservative, reusable product components.",
+                },
+              ],
+              multiSelect: false,
+            },
+          ],
+        },
+      ],
+    },
+    designRequest: {
+      status: "pending",
+      prompt,
+    },
+  } as Prisma.InputJsonValue;
+}
+
 /** Cast connection data to Prisma-compatible JSON */
 function connJson(data: SessionConnectionData): Prisma.InputJsonValue {
   return data as unknown as Prisma.InputJsonValue;
@@ -541,6 +691,7 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   id: true,
   name: true,
   slug: true,
+  kind: true,
   ownerUserId: true,
   ownerUser: true,
   visibility: true,
@@ -556,6 +707,8 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   archivedAt: true,
   setupStatus: true,
   setupError: true,
+  designSystemId: true,
+  designSkillIds: true,
   forkedFromSessionGroupId: true,
   createdAt: true,
   updatedAt: true,
@@ -718,6 +871,43 @@ function serializeSession(session: {
   };
 }
 
+function serializeArtifact(artifact: {
+  id: string;
+  sessionGroupId: string;
+  parentArtifactId: string | null;
+  organizationId: string;
+  promptEventId: string | null;
+  prompt: string | null;
+  title: string;
+  contentType: string;
+  html: string;
+  htmlStorageKey?: string | null;
+  metadata: Prisma.JsonValue | null;
+  publishedAt: Date | null;
+  createdBy: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: artifact.id,
+    sessionGroupId: artifact.sessionGroupId,
+    parentArtifactId: artifact.parentArtifactId,
+    organizationId: artifact.organizationId,
+    promptEventId: artifact.promptEventId,
+    prompt: artifact.prompt,
+    title: artifact.title,
+    contentType: artifact.contentType,
+    html: artifact.html,
+    htmlStorageKey: artifact.htmlStorageKey ?? null,
+    metadata: artifact.metadata,
+    publishedAt: artifact.publishedAt,
+    publicUrl: buildDesignArtifactPublicUrl(artifact.id, artifact.publishedAt),
+    createdBy: artifact.createdBy,
+    createdAt: artifact.createdAt,
+    updatedAt: artifact.updatedAt,
+  };
+}
+
 function serializeGitCheckpoint(checkpoint: {
   id: string;
   sessionId: string;
@@ -731,6 +921,11 @@ function serializeGitCheckpoint(checkpoint: {
   author: string;
   committedAt: Date;
   filesChanged: number;
+  captureStatus?: string | null;
+  captureKey?: string | null;
+  captureUrl?: string | null;
+  captureContentType?: string | null;
+  capturedAt?: Date | null;
   createdAt: Date;
 }) {
   return {
@@ -746,6 +941,11 @@ function serializeGitCheckpoint(checkpoint: {
     author: checkpoint.author,
     committedAt: checkpoint.committedAt.toISOString(),
     filesChanged: checkpoint.filesChanged,
+    captureStatus: checkpoint.captureStatus ?? null,
+    captureKey: checkpoint.captureKey ?? null,
+    captureUrl: checkpoint.captureUrl ?? null,
+    captureContentType: checkpoint.captureContentType ?? null,
+    capturedAt: checkpoint.capturedAt?.toISOString() ?? null,
     createdAt: checkpoint.createdAt.toISOString(),
   };
 }
@@ -858,6 +1058,29 @@ Do this silently — do not mention it to the user unless they ask or it fails.
 If the user asks you to stop auto-saving or disable auto-save, stop doing this for the rest of the session.
 </system-instruction>`;
 
+function normalizeOptionalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizeStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        .map((item) => item.trim())
+    : [];
+}
+
+function designHarnessSettings(input: {
+  designSystemId?: unknown;
+  designSkillIds?: unknown;
+  skillIds?: unknown;
+}) {
+  return {
+    designSystemId: normalizeOptionalString(input.designSystemId),
+    designSkillIds: normalizeStringList(input.designSkillIds ?? input.skillIds),
+  };
+}
+
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
@@ -869,6 +1092,29 @@ function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolea
   if (hasRepo) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
+}
+
+function appendSystemPromptForSession(session: { sessionGroup?: unknown }): string | undefined {
+  const group = session.sessionGroup;
+  if (!group || typeof group !== "object" || Array.isArray(group)) return undefined;
+  const typedGroup = group as {
+    kind?: string | null;
+    designSystemId?: string | null;
+    designSkillIds?: string[] | null;
+  };
+  return typedGroup.kind === "app"
+    ? composeTraceDesignPrompt({
+        kind: "app",
+        designSystemId: typedGroup.designSystemId ?? null,
+        skillIds: typedGroup.designSkillIds ?? [],
+        content: loadTraceDesignPromptContent({
+          designSystemId: typedGroup.designSystemId ?? null,
+          skillIds: typedGroup.designSkillIds ?? [],
+        }),
+        appStarterContext:
+          "Next.js App Router, Tailwind CSS, shadcn-compatible primitives, pnpm scripts, default port 3000, managed git checkpoints, endpoint publish/share.",
+      })
+    : undefined;
 }
 
 function buildBaseBranchInstruction(baseBranch: string): string {
@@ -1184,6 +1430,28 @@ export function isFullyUnloadedSession(
 }
 
 export class SessionService {
+  private readonly appManagedRepoLocks = new Map<string, Promise<void>>();
+
+  private async withAppManagedRepoLock<T>(
+    sessionGroupId: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.appManagedRepoLocks.get(sessionGroupId) ?? Promise.resolve();
+    const run = previous.catch(() => undefined).then(fn);
+    const sentinel = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.appManagedRepoLocks.set(sessionGroupId, sentinel);
+    try {
+      return await run;
+    } finally {
+      if (this.appManagedRepoLocks.get(sessionGroupId) === sentinel) {
+        this.appManagedRepoLocks.delete(sessionGroupId);
+      }
+    }
+  }
+
   /**
    * Encapsulates the common createRuntime call used by startSession, run, and sendMessage.
    * Resolves repo/branch/hosting and delegates to the session router.
@@ -1203,6 +1471,7 @@ export class SessionService {
     createdById: string;
     organizationId: string;
     readOnly?: boolean;
+    bootstrapAppWorkspace?: boolean;
     adapterType?: RuntimeAdapterType;
     environment?: {
       id: string;
@@ -1254,6 +1523,7 @@ export class SessionService {
         createdById: params.createdById,
         organizationId: params.organizationId,
         readOnly: params.readOnly,
+        bootstrapAppWorkspace: params.bootstrapAppWorkspace,
         onLifecycle: (eventType, update) =>
           this.recordRuntimeLifecycle(params.sessionId, eventType, update),
         onFailed: (error) => this.workspaceFailed(params.sessionId, error),
@@ -2695,6 +2965,75 @@ export class SessionService {
     return result.sessionGroup;
   }
 
+  async updateDesignHarnessSettings(
+    groupId: string,
+    organizationId: string,
+    settings: { designSystemId?: unknown; designSkillIds?: unknown },
+    actorType: ActorType = "system",
+    actorId: string = "system",
+  ) {
+    if (actorId !== "system") {
+      await assertSessionGroupAccess(groupId, actorId, organizationId);
+    }
+
+    const harnessSettings = designHarnessSettings(settings);
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const group = await tx.sessionGroup.findFirst({
+        where: { id: groupId, organizationId },
+        select: {
+          id: true,
+          kind: true,
+          sessions: {
+            select: { id: true },
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            take: 1,
+          },
+        },
+      });
+      if (!group) throw new Error("Session group not found");
+      if (group.kind !== "design" && group.kind !== "app") {
+        throw new ValidationError(
+          "Design harness settings are only available for design and app sessions.",
+        );
+      }
+
+      await tx.sessionGroup.update({
+        where: { id: groupId },
+        data: {
+          designSystemId: harnessSettings.designSystemId,
+          designSkillIds: harnessSettings.designSkillIds,
+        },
+      });
+
+      const sessionGroup = await this.loadSessionGroupSnapshot(groupId, tx);
+      if (!sessionGroup) throw new Error("Session group not found");
+
+      const event = await eventService.create(
+        {
+          organizationId,
+          scopeType: "session",
+          scopeId: group.sessions[0]?.id ?? groupId,
+          eventType: "session_output",
+          payload: {
+            type: "design_harness_settings_updated",
+            sessionGroupId: groupId,
+            designSystemId: harnessSettings.designSystemId,
+            designSkillIds: harnessSettings.designSkillIds,
+            sessionGroup,
+          },
+          actorType,
+          actorId,
+          deferPublish: true,
+        },
+        tx,
+      );
+      return { sessionGroup, event };
+    });
+
+    eventService.publishCreated(result.event);
+    return result.sessionGroup;
+  }
+
   async list(
     organizationId: string,
     userId: string,
@@ -2846,8 +3185,212 @@ export class SessionService {
     });
   }
 
+  private async startDesignSession(input: StartSessionServiceInput) {
+    if (
+      input.repoId ||
+      input.sourceSessionId ||
+      input.restoreCheckpointId ||
+      input.sessionGroupId
+    ) {
+      throw new ValidationError("Design sessions must start as standalone artifact sessions.");
+    }
+    if (input.environmentId || input.runtimeInstanceId || input.hosting) {
+      throw new ValidationError("Design sessions do not use runtimes or hosting options.");
+    }
+
+    const resolvedChannelId = input.channelId ?? undefined;
+    const resolvedChannel = resolvedChannelId
+      ? await prisma.channel.findUnique({
+          where: { id: resolvedChannelId },
+          select: { id: true, organizationId: true },
+        })
+      : null;
+
+    if (resolvedChannelId && !resolvedChannel) {
+      throw new Error("Channel not found");
+    }
+    if (resolvedChannel && resolvedChannel.organizationId !== input.organizationId) {
+      throw new Error("Channel does not belong to this organization");
+    }
+
+    const requestedVisibility = input.visibility ?? "public";
+    const visibility = requestedVisibility === "private" ? "private" : "public";
+    const name = input.name
+      ? input.name.slice(0, MAX_SESSION_NAME_LENGTH)
+      : input.prompt
+        ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
+        : "Untitled design";
+    const harnessSettings = designHarnessSettings(input);
+    const now = new Date();
+
+    let startEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
+    let createdSessionGroupId: string | null = null;
+    const startEventId = input.startEventId ?? randomUUID();
+
+    const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const sessionGroup = await tx.sessionGroup.create({
+        data: {
+          name,
+          kind: "design",
+          organizationId: input.organizationId,
+          ownerUserId: input.createdById,
+          visibility,
+          channelId: resolvedChannelId,
+          connection: Prisma.JsonNull,
+          designSystemId: harnessSettings.designSystemId ?? undefined,
+          designSkillIds: harnessSettings.designSkillIds,
+        },
+        select: SESSION_GROUP_SUMMARY_SELECT,
+      });
+      createdSessionGroupId = sessionGroup.id;
+
+      const session = await tx.session.create({
+        data: {
+          name,
+          agentStatus: "done",
+          sessionStatus: "in_progress",
+          tool: input.tool ?? FALLBACK_SESSION_TOOL,
+          model: input.model ?? undefined,
+          reasoningEffort: input.reasoningEffort ?? undefined,
+          hosting: "serverless",
+          organizationId: input.organizationId,
+          createdById: input.createdById,
+          channelId: resolvedChannelId,
+          sessionGroupId: sessionGroup.id,
+          connection: Prisma.JsonNull,
+          lastUserMessageAt: input.prompt ? now : undefined,
+          lastMessageAt: now,
+        },
+        include: SESSION_INCLUDE,
+      });
+
+      const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
+        { agentStatus: "done", sessionStatus: "in_progress" },
+      ]);
+
+      startEventToPublish = await eventService.create(
+        {
+          id: startEventId,
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: session.id,
+          eventType: "session_started",
+          payload: {
+            session: serializeSession(session),
+            sessionGroup: sessionGroupSnapshot,
+            prompt: input.prompt ?? null,
+            clientSource: normalizeClientSource(input.clientSource),
+            sourceSessionId: null,
+            restoreCheckpointId: null,
+            restoreCheckpointSha: null,
+          } as Prisma.InputJsonValue,
+          actorType: input.actorType ?? "user",
+          actorId: input.createdById,
+          deferPublish: true,
+        },
+        tx,
+      );
+
+      return session;
+    });
+
+    if (startEventToPublish) {
+      eventService.publishCreated(startEventToPublish);
+    }
+    if (createdSessionGroupId) {
+      try {
+        const generated = await designGenerationService.generateHtml({
+          organizationId: input.organizationId,
+          actorId: input.createdById,
+          actorType: input.actorType,
+          sessionId: session.id,
+          sessionGroupId: createdSessionGroupId,
+          prompt: input.prompt ?? name,
+          model: input.model,
+        });
+        const artifactId = randomUUID();
+        const htmlStorageKey = await storeDesignArtifactHtml({
+          organizationId: input.organizationId,
+          artifactId,
+          html: generated.html,
+        });
+        const artifact = await prisma.artifact.create({
+          data: {
+            id: artifactId,
+            sessionGroupId: createdSessionGroupId,
+            organizationId: input.organizationId,
+            createdById: input.createdById,
+            promptEventId: startEventId,
+            prompt: input.prompt ?? null,
+            title: name,
+            contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
+            html: "",
+            htmlStorageKey,
+            metadata: {
+              ...generated.metadata,
+              source: "startSession",
+            },
+          },
+          include: { createdBy: true },
+        });
+        const serializedArtifact = serializeArtifact({ ...artifact, html: generated.html });
+        await eventService.create({
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: session.id,
+          eventType: "design_artifact_created",
+          payload: {
+            artifact: serializedArtifact,
+            sessionGroupId: createdSessionGroupId,
+          } as Prisma.InputJsonValue,
+          actorType: input.actorType ?? "user",
+          actorId: input.createdById,
+        });
+        await eventService.create({
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: session.id,
+          eventType: "session_output",
+          payload: buildDesignGenerationCompletedPayload({
+            generated,
+            sessionGroupId: createdSessionGroupId,
+            prompt: input.prompt ?? name,
+            artifactId: artifact.id,
+          }) as Prisma.InputJsonValue,
+          actorType: input.actorType ?? "user",
+          actorId: input.createdById,
+        });
+      } catch (error) {
+        console.warn(
+          `[design-generation] failed to create initial artifact for session ${session.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
+    return session;
+  }
+
   async start(input: StartSessionServiceInput) {
     validateUploadKeysForOrganization(input.imageKeys, input.organizationId);
+
+    if (input.kind === "design") {
+      return this.startDesignSession(input);
+    }
+    if (input.kind === "app") {
+      if (input.repoId || input.sourceSessionId) {
+        throw new ValidationError("App sessions must start standalone without a linked repo.");
+      }
+      if (input.hosting && input.hosting !== "cloud") {
+        throw new ValidationError("App sessions are cloud-only.");
+      }
+      if (input.deferRuntimeSelection) {
+        throw new ValidationError("App sessions require a cloud runtime at creation.");
+      }
+      input.hosting = "cloud";
+      input.provisionWithoutPrompt = true;
+    }
 
     if (input.restoreCheckpointId && input.sessionGroupId) {
       throw new Error("restoreCheckpointId cannot reuse an existing session group");
@@ -2900,6 +3443,18 @@ export class SessionService {
     if (restoreCheckpoint && !restoreGroup) {
       throw new Error("Checkpoint session group not found");
     }
+    if (input.kind === "app" && restoreGroup && restoreGroup.kind !== "app") {
+      throw new ValidationError("Only app checkpoints can be restored as app sessions.");
+    }
+    if (input.restoreCheckpointId) {
+      input.provisionWithoutPrompt = true;
+    }
+    if (restoreGroup?.kind === "app") {
+      if (input.hosting && input.hosting !== "cloud") {
+        throw new ValidationError("App sessions are cloud-only.");
+      }
+      input.hosting = "cloud";
+    }
 
     const sourceSessionId = input.sourceSessionId ?? restoreCheckpoint?.sessionId ?? null;
 
@@ -2944,6 +3499,13 @@ export class SessionService {
       : input.restoreCheckpointId
         ? null
         : (input.sessionGroupId ?? sourceSession?.sessionGroupId ?? null);
+    const requestedGroupKind =
+      input.kind === "app" || restoreGroup?.kind === "app" ? "app" : "coding";
+    if (requestedGroupKind === "app" && tool !== APP_SESSION_TOOL) {
+      throw new ValidationError(
+        "App sessions currently require Claude Code so the Open Design app harness can be delivered.",
+      );
+    }
     const existingGroup = existingGroupId
       ? await prisma.sessionGroup.findFirst({
           where: { id: existingGroupId, organizationId: input.organizationId },
@@ -2956,6 +3518,9 @@ export class SessionService {
     }
     if (existingGroup) {
       this.assertPrivateGroupOwner(existingGroup, input.createdById);
+      if ((existingGroup.kind ?? "coding") !== requestedGroupKind) {
+        throw new ValidationError("Cannot add a session with a different kind to this group.");
+      }
     }
 
     const resolvedGroup = existingGroup ?? sourceSession?.sessionGroup ?? null;
@@ -2988,7 +3553,9 @@ export class SessionService {
     }
 
     const authoritativeChannelRepoId =
-      resolvedChannel?.type === "coding" ? (resolvedChannel.repoId ?? null) : null;
+      requestedGroupKind === "coding" && resolvedChannel?.type === "coding"
+        ? (resolvedChannel.repoId ?? null)
+        : null;
 
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
       throw new Error("Coding channel sessions must use the channel's linked repo");
@@ -3391,11 +3958,12 @@ export class SessionService {
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
-    const queueInitialRunUntilBridgeAccess =
+    const queueInitialRunUntilWorkspaceReady =
       input.deferInitialRun !== true &&
       needsRuntimeProvisioning &&
       !!input.prompt &&
-      (deferRuntimeSelection || !selectedRuntimeAccessAllowed);
+      (requestedGroupKind === "app" || deferRuntimeSelection || !selectedRuntimeAccessAllowed);
+    const harnessSettings = designHarnessSettings(input);
     const initialConnection = sharedConnection
       ? sharedConnection
       : connJson(
@@ -3431,6 +3999,12 @@ export class SessionService {
             if (existingGroup.branch == null && resolvedBranch !== undefined) {
               nextGroupData.branch = resolvedBranch;
             }
+            if (input.designSystemId !== undefined) {
+              nextGroupData.designSystemId = harnessSettings.designSystemId;
+            }
+            if (input.designSkillIds !== undefined) {
+              nextGroupData.designSkillIds = harnessSettings.designSkillIds;
+            }
             if (Object.keys(nextGroupData).length === 0) {
               return existingGroup;
             }
@@ -3443,6 +4017,7 @@ export class SessionService {
         : await tx.sessionGroup.create({
             data: {
               name,
+              kind: requestedGroupKind,
               organizationId: input.organizationId,
               ownerUserId: input.createdById,
               visibility: newGroupVisibility,
@@ -3451,6 +4026,8 @@ export class SessionService {
               repoId: resolvedRepoId ?? undefined,
               branch: resolvedBranch ?? undefined,
               connection: initialConnection,
+              designSystemId: harnessSettings.designSystemId ?? undefined,
+              designSkillIds: harnessSettings.designSkillIds,
             },
             select: SESSION_GROUP_SUMMARY_SELECT,
           });
@@ -3474,7 +4051,7 @@ export class SessionService {
           channelId: resolvedChannelId,
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
-          pendingRun: queueInitialRunUntilBridgeAccess
+          pendingRun: queueInitialRunUntilWorkspaceReady
             ? pendingRunValue([
                 {
                   type: "run",
@@ -3609,12 +4186,101 @@ export class SessionService {
         createdById: input.createdById,
         organizationId: input.organizationId,
         readOnly: readOnlyWorkspace,
+        bootstrapAppWorkspace: session.sessionGroup?.kind === "app",
         adapterType: requestedEnvironment?.adapterType,
         environment: requestedEnvironment,
       });
     }
 
     return session;
+  }
+
+  async openAppSessionAsCodingSession(input: {
+    sessionGroupId: string;
+    organizationId: string;
+    createdById: string;
+    actorType?: ActorType;
+    prompt?: string | null;
+    clientSource?: string | null;
+  }) {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: input.sessionGroupId, organizationId: input.organizationId },
+      select: {
+        id: true,
+        name: true,
+        kind: true,
+        organizationId: true,
+        ownerUserId: true,
+        visibility: true,
+        repoId: true,
+        branch: true,
+        channelId: true,
+        archivedAt: true,
+        repo: {
+          select: {
+            id: true,
+            name: true,
+            provider: true,
+            remoteUrl: true,
+            defaultBranch: true,
+          },
+        },
+        gitCheckpoints: {
+          select: {
+            id: true,
+            commitSha: true,
+            subject: true,
+            committedAt: true,
+          },
+          orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
+          take: 1,
+        },
+      },
+    });
+
+    if (!group) {
+      throw new Error("Session group not found");
+    }
+    if (!canViewSessionGroup(group, input.createdById)) {
+      throw new AuthorizationError("Not authorized for this session group");
+    }
+    if (group.kind !== "app") {
+      throw new ValidationError("Only app sessions can be opened as coding sessions.");
+    }
+    if (!group.repoId || !group.repo) {
+      throw new ValidationError("Create a checkpoint before opening this app as a coding session.");
+    }
+
+    const latestCheckpoint = group.gitCheckpoints[0] ?? null;
+    const brief = [
+      input.prompt?.trim() || "Continue this standalone app in a coding session.",
+      "",
+      `Source app session: ${group.name}`,
+      `Source app session group id: ${group.id}`,
+      `Managed repo: ${group.repo.name} (${group.repo.id})`,
+      latestCheckpoint
+        ? `Latest checkpoint: ${shortCommitSha(latestCheckpoint.commitSha)} ${latestCheckpoint.subject}`.trim()
+        : null,
+      "",
+      "Work from the managed app repo and preserve the standalone app behavior, live preview setup, endpoint publish flow, token file, and checkpoint durability.",
+    ]
+      .filter((part): part is string => part !== null)
+      .join("\n");
+
+    return this.start({
+      organizationId: input.organizationId,
+      createdById: input.createdById,
+      actorType: input.actorType ?? "user",
+      clientSource: input.clientSource,
+      kind: "coding",
+      tool: APP_SESSION_TOOL,
+      repoId: group.repoId,
+      branch: group.branch ?? group.repo.defaultBranch ?? undefined,
+      prompt: brief,
+      deferRuntimeSelection: true,
+      forkedFromSessionGroupId: group.id,
+      name: `Code ${group.name}`.slice(0, MAX_SESSION_NAME_LENGTH),
+    });
   }
 
   async forkSession(input: {
@@ -3980,6 +4646,7 @@ export class SessionService {
         createdById: updated.createdById,
         organizationId: updated.organizationId,
         readOnly: updated.readOnlyWorkspace,
+        bootstrapAppWorkspace: updated.sessionGroup?.kind === "app",
         adapterType: conn.adapterType,
       });
     }
@@ -4114,6 +4781,7 @@ export class SessionService {
           createdById: session.createdById,
           organizationId: session.organizationId,
           readOnly: session.readOnlyWorkspace,
+          bootstrapAppWorkspace: session.sessionGroup?.kind === "app",
           adapterType: conn.adapterType,
         });
       }
@@ -4182,6 +4850,7 @@ export class SessionService {
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
       enableClaudeInChrome: this.claudeInChromeFlag(session.tool, session.createdBy),
+      appendSystemPrompt: appendSystemPromptForSession(session),
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -4751,6 +5420,7 @@ export class SessionService {
         createdById: session.createdById,
         organizationId: session.organizationId,
         readOnly: session.readOnlyWorkspace,
+        bootstrapAppWorkspace: session.sessionGroup?.kind === "app",
         adapterType: conn.adapterType,
         environment: requestedEnvironment,
       });
@@ -5249,6 +5919,215 @@ export class SessionService {
     return completed;
   }
 
+  private async findPendingDesignPrompt(sessionId: string): Promise<string | null> {
+    const recentOutputs = await prisma.event.findMany({
+      where: { scopeType: "session", scopeId: sessionId, eventType: "session_output" },
+      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+      take: 20,
+      select: { payload: true },
+    });
+
+    for (const output of recentOutputs) {
+      const prompt = pendingDesignPromptFromPayload(output.payload);
+      if (prompt) return prompt;
+    }
+
+    return null;
+  }
+
+  private async askDesignClarifyingQuestions(input: {
+    sessionId: string;
+    organizationId: string;
+    actorId: string;
+    actorType: ActorType;
+    prompt: string;
+  }) {
+    await prisma.session.update({
+      where: { id: input.sessionId },
+      data: {
+        agentStatus: "done",
+        sessionStatus: "needs_input",
+        lastMessageAt: new Date(),
+        ...(input.actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
+      },
+    });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: input.sessionId,
+      eventType: "session_output",
+      payload: designClarificationPayload(input.prompt),
+      actorType: "agent",
+      actorId: input.actorId,
+    });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: input.sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "question_pending",
+        sessionStatus: "needs_input",
+      },
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
+  private async sendDesignSessionMessage(input: {
+    sessionId: string;
+    sessionGroupId: string;
+    organizationId: string;
+    sessionStatus: SessionStatus;
+    text: string;
+    imageKeys?: string[];
+    actorType: ActorType;
+    actorId: string;
+    clientMutationId?: string;
+    clientSource?: string | null;
+  }) {
+    const messageEvent = await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: input.sessionId,
+      eventType: "message_sent",
+      payload: {
+        text: input.text,
+        clientSource: normalizeClientSource(input.clientSource),
+        ...(input.imageKeys?.length
+          ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
+          : {}),
+        ...(input.clientMutationId ? { clientMutationId: input.clientMutationId } : {}),
+      },
+      actorType: input.actorType,
+      actorId: input.actorId,
+    });
+
+    const pendingPrompt =
+      input.sessionStatus === "needs_input"
+        ? await this.findPendingDesignPrompt(input.sessionId)
+        : null;
+    const requestedCount = extractDesignDirectionCount(input.text);
+
+    if (!pendingPrompt && requestedCount == null && !shouldSkipDesignQuestions(input.text)) {
+      await this.askDesignClarifyingQuestions({
+        sessionId: input.sessionId,
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        actorType: input.actorType,
+        prompt: input.text,
+      });
+      return messageEvent;
+    }
+
+    const prompt = buildDesignChatPrompt({
+      brief: pendingPrompt ?? input.text,
+      answers: pendingPrompt ? input.text : null,
+    });
+    const directionCount = requestedCount ?? 3;
+    const runningSessionStatus = getRunningSessionStatus(input.sessionStatus);
+    const sessionGroup = await this.loadSessionGroupSnapshot(input.sessionGroupId);
+
+    await prisma.session.update({
+      where: { id: input.sessionId },
+      data: {
+        agentStatus: "active",
+        sessionStatus: runningSessionStatus,
+        lastMessageAt: new Date(),
+        ...(input.actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
+      },
+    });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: input.sessionId,
+      eventType: "session_resumed",
+      payload: {
+        sessionId: input.sessionId,
+        agentStatus: "active",
+        sessionStatus: runningSessionStatus,
+        clientSource: normalizeClientSource(input.clientSource),
+        ...(sessionGroup ? { sessionGroup } : {}),
+      },
+      actorType: input.actorType,
+      actorId: input.actorId,
+    });
+
+    try {
+      const { artifactService } = await import("./artifact.js");
+      await artifactService.generateDesignArtifacts({
+        sessionGroupId: input.sessionGroupId,
+        organizationId: input.organizationId,
+        actorId: input.actorId,
+        actorType: input.actorType,
+        prompt,
+        directionCount,
+      });
+
+      const idleSessionStatus = getIdleSessionStatus(runningSessionStatus);
+      await prisma.session.update({
+        where: { id: input.sessionId },
+        data: { agentStatus: "done", sessionStatus: idleSessionStatus },
+      });
+
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: input.sessionId,
+        eventType: "session_terminated",
+        payload: {
+          sessionId: input.sessionId,
+          reason: "bridge_complete",
+          agentStatus: "done",
+          sessionStatus: idleSessionStatus,
+          ...(sessionGroup ? { sessionGroup } : {}),
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Design generation failed.";
+      await prisma.session.update({
+        where: { id: input.sessionId },
+        data: { agentStatus: "failed", sessionStatus: runningSessionStatus },
+      });
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: input.sessionId,
+        eventType: "session_output",
+        payload: {
+          type: "assistant",
+          message: {
+            content: [{ type: "text", text: `Design generation failed: ${message}` }],
+          },
+        },
+        actorType: "agent",
+        actorId: input.actorId,
+      });
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: input.sessionId,
+        eventType: "session_terminated",
+        payload: {
+          sessionId: input.sessionId,
+          reason: "design_generation_failed",
+          agentStatus: "failed",
+          sessionStatus: runningSessionStatus,
+          ...(sessionGroup ? { sessionGroup } : {}),
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+    }
+
+    return messageEvent;
+  }
+
   async sendMessage({
     sessionId,
     text,
@@ -5285,7 +6164,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { slug: true } },
+        sessionGroup: { select: { slug: true, kind: true } },
         channel: { select: { baseBranch: true } },
         connection: true,
         pendingRun: true,
@@ -5296,6 +6175,28 @@ export class SessionService {
       },
     });
     validateUploadKeysForOrganization(imageKeys, session.organizationId);
+
+    if (session.sessionGroup?.kind === "design") {
+      if (session.worktreeDeleted) {
+        throw new Error("Cannot send messages: session worktree has been deleted");
+      }
+      if (!session.sessionGroupId) {
+        throw new Error("Design session has no session group.");
+      }
+      return this.sendDesignSessionMessage({
+        sessionId,
+        sessionGroupId: session.sessionGroupId,
+        organizationId: session.organizationId,
+        sessionStatus: session.sessionStatus,
+        text,
+        imageKeys,
+        actorType,
+        actorId,
+        clientMutationId,
+        clientSource,
+      });
+    }
+
     const conn = this.parseConnection(session.connection);
     const allowToolFallback =
       actorType === "user" &&
@@ -5423,6 +6324,7 @@ export class SessionService {
             createdById: session.createdById,
             organizationId: session.organizationId,
             readOnly: session.readOnlyWorkspace,
+            bootstrapAppWorkspace: session.sessionGroup?.kind === "app",
             adapterType: conn.adapterType,
           });
         }
@@ -5553,6 +6455,7 @@ export class SessionService {
       model: activeModel ?? undefined,
       reasoningEffort: activeReasoningEffort ?? undefined,
       enableClaudeInChrome: this.claudeInChromeFlag(activeTool, session.createdBy),
+      appendSystemPrompt: appendSystemPromptForSession(session),
       interactionMode,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -6260,6 +7163,32 @@ export class SessionService {
       }
     }
 
+    if (session.sessionGroup?.kind === "app" && session.sessionGroupId) {
+      try {
+        await sessionApplicationService.startApplication(
+          session.sessionGroupId,
+          "web",
+          session.organizationId,
+          session.createdById,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await eventService.create({
+          organizationId: session.organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "app_preview_start_failed",
+            sessionGroupId: session.sessionGroupId,
+            error: message,
+          } as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        });
+      }
+    }
+
     // If a run was queued while workspace was being prepared, execute it now
     if (pendingRun) {
       const replayResult = await this.deliverPendingCommand(sessionId, pendingRun);
@@ -6648,6 +7577,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
+        sessionGroup: { select: { kind: true, designSystemId: true, designSkillIds: true } },
         connection: true,
       },
     });
@@ -6697,6 +7627,7 @@ export class SessionService {
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
         enableClaudeInChrome: this.claudeInChromeFlag(session.tool, session.createdBy),
+        appendSystemPrompt: appendSystemPromptForSession(session),
         interactionMode: options.interactionMode,
         cwd: session.workdir ?? undefined,
         checkpointContext,
@@ -6742,7 +7673,11 @@ export class SessionService {
     });
   }
 
-  async recordGitCheckpoint(sessionId: string, checkpoint: GitCheckpointBridgePayload) {
+  async recordGitCheckpoint(
+    sessionId: string,
+    checkpoint: GitCheckpointBridgePayload,
+    options: { managedRemoteConfigured?: boolean } = {},
+  ) {
     if (Number.isNaN(new Date(checkpoint.committedAt).getTime())) {
       console.warn(
         `[checkpoint] invalid committedAt for session ${sessionId}: ${checkpoint.committedAt}`,
@@ -6757,9 +7692,189 @@ export class SessionService {
         organizationId: true,
         sessionGroupId: true,
         repoId: true,
+        workdir: true,
+        branch: true,
+        sessionGroup: {
+          select: {
+            id: true,
+            name: true,
+            kind: true,
+            ownerUserId: true,
+            repoId: true,
+            branch: true,
+            repo: {
+              select: {
+                id: true,
+                name: true,
+                provider: true,
+                remoteUrl: true,
+                defaultBranch: true,
+              },
+            },
+          },
+        },
+        repo: {
+          select: {
+            id: true,
+            name: true,
+            provider: true,
+            remoteUrl: true,
+            defaultBranch: true,
+          },
+        },
       },
     });
-    if (!session?.sessionGroupId || !session.repoId) return;
+    if (!session?.sessionGroupId) return;
+
+    let repoId = session.repoId ?? session.sessionGroup?.repoId ?? null;
+    let managedRepo: { id: string; name: string; remoteUrl: string; defaultBranch: string } | null =
+      null;
+
+    if (!repoId && session.sessionGroup?.kind === "app") {
+      return this.withAppManagedRepoLock(session.sessionGroupId, async () => {
+        const current = await prisma.session.findUnique({
+          where: { id: sessionId },
+          select: {
+            id: true,
+            organizationId: true,
+            sessionGroupId: true,
+            repoId: true,
+            workdir: true,
+            branch: true,
+            sessionGroup: {
+              select: {
+                id: true,
+                name: true,
+                kind: true,
+                repoId: true,
+                branch: true,
+                repo: {
+                  select: {
+                    id: true,
+                    name: true,
+                    provider: true,
+                    remoteUrl: true,
+                    defaultBranch: true,
+                  },
+                },
+              },
+            },
+            repo: {
+              select: {
+                id: true,
+                name: true,
+                provider: true,
+                remoteUrl: true,
+                defaultBranch: true,
+              },
+            },
+          },
+        });
+        if (!current?.sessionGroupId || current.sessionGroup?.kind !== "app") return null;
+
+        const currentRepoId = current.repoId ?? current.sessionGroup.repoId ?? null;
+        const currentManagedRepo =
+          current.repo?.provider === "managed"
+            ? current.repo
+            : current.sessionGroup.repo?.provider === "managed"
+              ? current.sessionGroup.repo
+              : null;
+
+        if (currentRepoId && currentManagedRepo) {
+          const branch =
+            current.branch ??
+            current.sessionGroup.branch ??
+            currentManagedRepo.defaultBranch ??
+            managedGitService.defaultBranch;
+          const deliveryResult = sessionRouter.send(sessionId, {
+            type: "configure_managed_git_remote",
+            sessionId,
+            repoId: currentManagedRepo.id,
+            repoName: currentManagedRepo.name,
+            repoRemoteUrl:
+              currentManagedRepo.remoteUrl ??
+              managedGitService.buildManagedRemoteUrl(
+                current.organizationId,
+                currentManagedRepo.id,
+              ),
+            branch,
+            workdir: current.workdir ?? undefined,
+            checkpoint,
+          });
+          if (deliveryResult !== "delivered") {
+            await eventService.create({
+              organizationId: current.organizationId,
+              scopeType: "session",
+              scopeId: sessionId,
+              eventType: "session_output",
+              payload: {
+                type: "managed_git_remote_push_failed",
+                repoId: currentManagedRepo.id,
+                reason: deliveryResult,
+              } as Prisma.InputJsonValue,
+              actorType: "system",
+              actorId: "system",
+            });
+          }
+          return null;
+        }
+
+        if (currentRepoId) return null;
+
+        managedRepo = await managedGitService.createAppRepo({
+          organizationId: current.organizationId,
+          name: current.sessionGroup.name,
+        });
+        repoId = managedRepo.id;
+
+        await prisma.$transaction([
+          prisma.sessionGroup.update({
+            where: { id: current.sessionGroupId },
+            data: {
+              repoId,
+              branch: current.sessionGroup.branch ?? managedRepo.defaultBranch,
+            },
+          }),
+          prisma.session.update({
+            where: { id: sessionId },
+            data: {
+              repoId,
+              branch: current.branch ?? current.sessionGroup.branch ?? managedRepo.defaultBranch,
+            },
+          }),
+        ]);
+
+        const branch = current.branch ?? current.sessionGroup.branch ?? managedRepo.defaultBranch;
+        const deliveryResult = sessionRouter.send(sessionId, {
+          type: "configure_managed_git_remote",
+          sessionId,
+          repoId: managedRepo.id,
+          repoName: managedRepo.name,
+          repoRemoteUrl: managedRepo.remoteUrl,
+          branch,
+          workdir: current.workdir ?? undefined,
+          checkpoint,
+        });
+        if (deliveryResult !== "delivered") {
+          await eventService.create({
+            organizationId: current.organizationId,
+            scopeType: "session",
+            scopeId: sessionId,
+            eventType: "session_output",
+            payload: {
+              type: "managed_git_remote_push_failed",
+              repoId: managedRepo.id,
+              reason: deliveryResult,
+            } as Prisma.InputJsonValue,
+            actorType: "system",
+            actorId: "system",
+          });
+        }
+        return null;
+      });
+    }
+
+    if (!repoId) return;
 
     const existing = await prisma.gitCheckpoint.findUnique({
       where: {
@@ -6769,6 +7884,7 @@ export class SessionService {
         },
       },
     });
+
     const rewrittenCommitSha =
       typeof checkpoint.rewrittenFromCommitSha === "string"
         ? checkpoint.rewrittenFromCommitSha.trim()
@@ -6784,6 +7900,54 @@ export class SessionService {
             },
           })
         : null;
+    if (existing && !rewrittenCheckpoint) return existing;
+
+    const existingManagedRepo =
+      session.repo?.provider === "managed"
+        ? session.repo
+        : session.sessionGroup?.repo?.provider === "managed"
+          ? session.sessionGroup.repo
+          : null;
+    const checkpointNeedsManagedPush =
+      session.sessionGroup?.kind === "app" &&
+      existingManagedRepo &&
+      !options.managedRemoteConfigured &&
+      (checkpoint.trigger === "commit" || checkpoint.trigger === "rewrite");
+    if (checkpointNeedsManagedPush) {
+      const branch =
+        session.branch ??
+        session.sessionGroup?.branch ??
+        existingManagedRepo.defaultBranch ??
+        managedGitService.defaultBranch;
+      const deliveryResult = sessionRouter.send(sessionId, {
+        type: "configure_managed_git_remote",
+        sessionId,
+        repoId: existingManagedRepo.id,
+        repoName: existingManagedRepo.name,
+        repoRemoteUrl:
+          existingManagedRepo.remoteUrl ??
+          managedGitService.buildManagedRemoteUrl(session.organizationId, existingManagedRepo.id),
+        branch,
+        workdir: session.workdir ?? undefined,
+        checkpoint,
+      });
+      if (deliveryResult !== "delivered") {
+        await eventService.create({
+          organizationId: session.organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "managed_git_remote_push_failed",
+            repoId: existingManagedRepo.id,
+            reason: deliveryResult,
+          } as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        });
+      }
+      return null;
+    }
 
     let persisted = existing;
     let didPersistCheckpoint = false;
@@ -6812,7 +7976,7 @@ export class SessionService {
           data: {
             sessionId,
             sessionGroupId: session.sessionGroupId,
-            repoId: session.repoId,
+            repoId,
             promptEventId,
             commitSha: checkpoint.commitSha,
             parentShas: checkpoint.parentShas,
@@ -6829,6 +7993,35 @@ export class SessionService {
     }
 
     if (!persisted) return null;
+
+    if (didPersistCheckpoint && session.sessionGroup?.kind === "app") {
+      const capture = await appCheckpointCaptureService.capture({
+        organizationId: session.organizationId,
+        sessionGroupId: session.sessionGroupId,
+        checkpointId: persisted.id,
+        userId: session.sessionGroup.ownerUserId,
+      });
+      const shouldPersistCapture =
+        capture.captureStatus !== "unavailable" ||
+        checkpoint.trigger === "rewrite" ||
+        persisted.captureStatus != null ||
+        persisted.captureKey != null ||
+        persisted.captureUrl != null ||
+        persisted.captureContentType != null ||
+        persisted.capturedAt != null;
+      if (shouldPersistCapture) {
+        persisted = await prisma.gitCheckpoint.update({
+          where: { id: persisted.id },
+          data: {
+            captureStatus: capture.captureStatus,
+            captureKey: capture.captureKey ?? null,
+            captureUrl: capture.captureUrl ?? null,
+            captureContentType: capture.captureContentType ?? null,
+            capturedAt: capture.capturedAt ?? null,
+          },
+        });
+      }
+    }
 
     if (didPersistCheckpoint) {
       await eventService.create({
@@ -7357,11 +8550,9 @@ export class SessionService {
       const runtimeConnection = this.parseConnection(sourceCloudRuntimeSession.connection);
       const sessionConnection = this.parseConnection(session.connection);
       const runtimeHasBinding =
-        !!runtimeConnection.runtimeInstanceId ||
-        !!runtimeConnection.providerRuntimeId;
+        !!runtimeConnection.runtimeInstanceId || !!runtimeConnection.providerRuntimeId;
       const sessionHasBinding =
-        !!sessionConnection.runtimeInstanceId ||
-        !!sessionConnection.providerRuntimeId;
+        !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
       if (!runtimeHasBinding && sessionHasBinding) {
         sourceCloudRuntimeSession = {
           ...sourceCloudRuntimeSession,
@@ -7486,6 +8677,7 @@ export class SessionService {
         createdById: actorId,
         organizationId: movedSession.organizationId,
         readOnly: movedSession.readOnlyWorkspace,
+        bootstrapAppWorkspace: movedSession.sessionGroup?.kind === "app",
         adapterType: this.parseConnection(movedSession.connection).adapterType,
         environment: targetEnvironment,
       });
@@ -8804,6 +9996,7 @@ export class SessionService {
         repoId: true,
         connection: true,
         sessionGroupId: true,
+        sessionGroup: { select: { kind: true, designSystemId: true, designSkillIds: true } },
       },
     });
 
@@ -8847,6 +10040,7 @@ export class SessionService {
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
       enableClaudeInChrome: this.claudeInChromeFlag(session.tool, session.createdBy),
+      appendSystemPrompt: appendSystemPromptForSession(session),
       interactionMode: pending.interactionMode ?? undefined,
       cwd: session.workdir ?? undefined,
       toolSessionId: session.toolSessionId ?? undefined,
@@ -8860,6 +10054,7 @@ export class SessionService {
       model?: string;
       reasoningEffort?: string;
       enableClaudeInChrome?: boolean;
+      appendSystemPrompt?: string;
       interactionMode?: string;
       cwd?: string;
       toolSessionId?: string;
@@ -9099,16 +10294,13 @@ export class SessionService {
       const cloudSession =
         cloudSessions.find((session) => {
           const sessionConnection = this.parseConnection(session.connection);
-          return (
-            !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId
-          );
+          return !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
         }) ?? cloudSessions[0];
       if (!cloudSession) continue;
       if (!groupHasRuntimeBinding) {
         const sessionConnection = this.parseConnection(cloudSession.connection);
         const sessionHasRuntimeBinding =
-          !!sessionConnection.runtimeInstanceId ||
-          !!sessionConnection.providerRuntimeId;
+          !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
         if (!sessionHasRuntimeBinding) continue;
       }
 
@@ -9171,7 +10363,10 @@ export class SessionService {
         this.destroyRuntimeOptions(cloudSession.id, "idle_session_group_cleanup"),
       );
       // Destroying the runtime kills any forwarded application processes; reflect that.
-      await sessionApplicationService.markSessionGroupRuntimeStopped(group.id, session.organizationId);
+      await sessionApplicationService.markSessionGroupRuntimeStopped(
+        group.id,
+        session.organizationId,
+      );
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

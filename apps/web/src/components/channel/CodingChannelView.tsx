@@ -19,6 +19,7 @@ const SESSION_GROUPS_QUERY = gql`
     sessionGroups(channelId: $channelId, archived: $archived) {
       id
       name
+      kind
       slug
       forkedFromSessionGroupId
       status

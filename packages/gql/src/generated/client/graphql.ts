@@ -83,6 +83,24 @@ export type ApplicationProcessStatus =
   | "stopped"
   | "stopping";
 
+export type Artifact = {
+  __typename?: "Artifact";
+  contentType: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdBy: User;
+  html: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  metadata?: Maybe<Scalars["JSON"]["output"]>;
+  parentArtifactId?: Maybe<Scalars["ID"]["output"]>;
+  prompt?: Maybe<Scalars["String"]["output"]>;
+  promptEventId?: Maybe<Scalars["ID"]["output"]>;
+  publicUrl?: Maybe<Scalars["String"]["output"]>;
+  publishedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  sessionGroupId: Scalars["ID"]["output"];
+  title: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type BranchDiffFile = {
   __typename?: "BranchDiffFile";
   additions: Scalars["Int"]["output"];
@@ -336,6 +354,35 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignPdfPageOptionsInput = {
+  heightPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginBottomPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginLeftPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginRightPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginTopPx?: InputMaybe<Scalars["Int"]["input"]>;
+  widthPx?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type DesignPromptContentCatalog = {
+  __typename?: "DesignPromptContentCatalog";
+  designSystems: Array<DesignSystemOption>;
+  skills: Array<DesignSkillOption>;
+};
+
+export type DesignSkillOption = {
+  __typename?: "DesignSkillOption";
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  title?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type DesignSystemOption = {
+  __typename?: "DesignSystemOption";
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  name?: Maybe<Scalars["String"]["output"]>;
+};
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -396,6 +443,15 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_artifact_created"
+  | "design_artifact_error"
+  | "design_artifact_promoted"
+  | "design_artifact_updated"
+  | "design_comment_added"
+  | "design_export_completed"
+  | "design_export_requested"
+  | "design_generation_failed"
+  | "design_generation_started"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -411,8 +467,10 @@ export type EventType =
   | "queued_messages_cleared"
   | "queued_messages_drained"
   | "queued_messages_reordered"
+  | "repo_branch_pushed"
   | "repo_created"
   | "repo_updated"
+  | "session_app_tokens_updated"
   | "session_application_log_appended"
   | "session_application_process_failed"
   | "session_application_process_started"
@@ -460,6 +518,11 @@ export type EventType =
 export type GitCheckpoint = {
   __typename?: "GitCheckpoint";
   author: Scalars["String"]["output"];
+  captureContentType?: Maybe<Scalars["String"]["output"]>;
+  captureKey?: Maybe<Scalars["String"]["output"]>;
+  captureStatus?: Maybe<Scalars["String"]["output"]>;
+  captureUrl?: Maybe<Scalars["String"]["output"]>;
+  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   commitSha: Scalars["String"]["output"];
   committedAt: Scalars["DateTime"]["output"];
   createdAt: Scalars["DateTime"]["output"];
@@ -478,7 +541,7 @@ export type GitCheckpoint = {
   treeSha: Scalars["String"]["output"];
 };
 
-export type HostingMode = "cloud" | "local";
+export type HostingMode = "cloud" | "local" | "serverless";
 
 export type InboxItem = {
   __typename?: "InboxItem";
@@ -546,6 +609,15 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
+export type ManagedGitCredential = {
+  __typename?: "ManagedGitCredential";
+  credentialedRemoteUrl: Scalars["String"]["output"];
+  expiresAt: Scalars["DateTime"]["output"];
+  remoteUrl: Scalars["String"]["output"];
+  repoId: Scalars["ID"]["output"];
+  token: Scalars["String"]["output"];
+};
+
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -597,6 +669,7 @@ export type Mutation = {
   assignTicket: Ticket;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
+  commentDesignArtifact: Event;
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
   commitSessionGroupFileChanges: Scalars["String"]["output"];
@@ -605,9 +678,12 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createDesignArtifact: Artifact;
+  createManagedGitCredential: ManagedGitCredential;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteAgentEnvironment: Scalars["Boolean"]["output"];
@@ -627,7 +703,11 @@ export type Mutation = {
   editChannelMessage: Message;
   editChatMessage: Message;
   enableSessionEndpointForwarding: SessionEndpoint;
+  exportDesignArtifactPdf: Event;
   forkSession: Session;
+  generateDesignArtifacts: Array<Artifact>;
+  graduateManagedRepoToGitHub: Repo;
+  iterateDesignArtifact: Artifact;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -638,6 +718,12 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  openAppSessionAsCodingSession: Session;
+  patchAppSessionTokens: Event;
+  patchDesignArtifactTokens: Artifact;
+  promoteDesignArtifactToCodingSession: Session;
+  publishAppSession: SessionEndpoint;
+  publishDesignArtifact: Artifact;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -648,6 +734,7 @@ export type Mutation = {
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
+  reportDesignArtifactError: Event;
   requestBridgeAccess: BridgeAccessRequest;
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
@@ -686,6 +773,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateDesignHarnessSettings: SessionGroup;
   updateOrgMemberRole: OrgMember;
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
@@ -735,6 +823,13 @@ export type MutationClearQueuedMessagesArgs = {
   sessionId: Scalars["ID"]["input"];
 };
 
+export type MutationCommentDesignArtifactArgs = {
+  anchor?: InputMaybe<Scalars["JSON"]["input"]>;
+  artifactId: Scalars["ID"]["input"];
+  body: Scalars["String"]["input"];
+  sendToAgent?: InputMaybe<Scalars["Boolean"]["input"]>;
+};
+
 export type MutationCommentOnTicketArgs = {
   text: Scalars["String"]["input"];
   ticketId: Scalars["ID"]["input"];
@@ -775,6 +870,16 @@ export type MutationCreateChatArgs = {
   input: CreateChatInput;
 };
 
+export type MutationCreateDesignArtifactArgs = {
+  html?: InputMaybe<Scalars["String"]["input"]>;
+  prompt: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationCreateManagedGitCredentialArgs = {
+  repoId: Scalars["ID"]["input"];
+};
+
 export type MutationCreateOrganizationArgs = {
   input: CreateOrganizationInput;
 };
@@ -785,6 +890,10 @@ export type MutationCreateProjectArgs = {
 
 export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
+};
+
+export type MutationCreateSessionEndpointPreviewArgs = {
+  endpointId: Scalars["ID"]["input"];
 };
 
 export type MutationCreateTerminalArgs = {
@@ -869,8 +978,31 @@ export type MutationEnableSessionEndpointForwardingArgs = {
   endpointId: Scalars["ID"]["input"];
 };
 
+export type MutationExportDesignArtifactPdfArgs = {
+  artifactId: Scalars["ID"]["input"];
+  pageOptions?: InputMaybe<DesignPdfPageOptionsInput>;
+};
+
 export type MutationForkSessionArgs = {
   eventId: Scalars["ID"]["input"];
+};
+
+export type MutationGenerateDesignArtifactsArgs = {
+  directionCount?: InputMaybe<Scalars["Int"]["input"]>;
+  prompt: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationGraduateManagedRepoToGitHubArgs = {
+  remoteUrl: Scalars["String"]["input"];
+  repoId: Scalars["ID"]["input"];
+};
+
+export type MutationIterateDesignArtifactArgs = {
+  artifactId: Scalars["ID"]["input"];
+  comparisonArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
+  html?: InputMaybe<Scalars["String"]["input"]>;
+  prompt: Scalars["String"]["input"];
 };
 
 export type MutationJoinChannelArgs = {
@@ -922,6 +1054,35 @@ export type MutationMuteScopeArgs = {
   scopeType: Scalars["String"]["input"];
 };
 
+export type MutationOpenAppSessionAsCodingSessionArgs = {
+  prompt?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationPatchAppSessionTokensArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+  tokens: Scalars["JSON"]["input"];
+};
+
+export type MutationPatchDesignArtifactTokensArgs = {
+  artifactId: Scalars["ID"]["input"];
+  tokens: Scalars["JSON"]["input"];
+};
+
+export type MutationPromoteDesignArtifactToCodingSessionArgs = {
+  artifactId: Scalars["ID"]["input"];
+  prompt?: InputMaybe<Scalars["String"]["input"]>;
+  referenceArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
+};
+
+export type MutationPublishAppSessionArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationPublishDesignArtifactArgs = {
+  artifactId: Scalars["ID"]["input"];
+};
+
 export type MutationQueueSessionMessageArgs = {
   attachmentKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   imageKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
@@ -969,6 +1130,12 @@ export type MutationReorderChannelsArgs = {
 export type MutationReorderQueuedMessagesArgs = {
   ids: Array<Scalars["ID"]["input"]>;
   sessionId: Scalars["ID"]["input"];
+};
+
+export type MutationReportDesignArtifactErrorArgs = {
+  artifactId: Scalars["ID"]["input"];
+  message: Scalars["String"]["input"];
+  stack?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type MutationRequestBridgeAccessArgs = {
@@ -1176,6 +1343,12 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateDesignHarnessSettingsArgs = {
+  designSkillIds?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  designSystemId?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1302,6 +1475,8 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  designArtifacts: Array<Artifact>;
+  designPromptContentCatalog: DesignPromptContentCatalog;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
@@ -1403,6 +1578,10 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignArtifactsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryEndpointTrafficArgs = {
@@ -1652,6 +1831,7 @@ export type Repo = {
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   projects: Array<Project>;
+  provider: RepoProvider;
   remoteUrl?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
@@ -1731,6 +1911,8 @@ export type RepoProcessDefinitionInput = {
   required?: InputMaybe<Scalars["Boolean"]["input"]>;
   workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
 };
+
+export type RepoProvider = "github" | "managed";
 
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";
@@ -1889,6 +2071,12 @@ export type SessionEndpoint = {
 
 export type SessionEndpointAccessMode = "private" | "public";
 
+export type SessionEndpointPreview = {
+  __typename?: "SessionEndpointPreview";
+  expiresAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
+
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
 export type SessionEndpoints = {
@@ -1914,10 +2102,13 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  designSkillIds: Array<Scalars["String"]["output"]>;
+  designSystemId?: Maybe<Scalars["String"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
+  kind: SessionGroupKind;
   name: Scalars["String"]["output"];
   owner: User;
   prUrl?: Maybe<Scalars["String"]["output"]>;
@@ -1953,6 +2144,8 @@ export type SessionGroupFileTree = {
   paths: Array<Scalars["String"]["output"]>;
   truncated: Scalars["Boolean"]["output"];
 };
+
+export type SessionGroupKind = "app" | "coding" | "design";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2061,9 +2254,12 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  designSkillIds?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  designSystemId?: InputMaybe<Scalars["String"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
+  kind?: InputMaybe<SessionGroupKind>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   projectId?: InputMaybe<Scalars["ID"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
@@ -2306,6 +2502,7 @@ export type SessionGroupsQuery = {
     __typename?: "SessionGroup";
     id: string;
     name: string;
+    kind: SessionGroupKind;
     slug?: string | null;
     forkedFromSessionGroupId?: string | null;
     status: SessionGroupStatus;
@@ -2373,6 +2570,7 @@ export type FilteredSessionGroupsQuery = {
     __typename?: "SessionGroup";
     id: string;
     name: string;
+    kind: SessionGroupKind;
     forkedFromSessionGroupId?: string | null;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
@@ -2495,6 +2693,155 @@ export type ThreadRepliesQuery = {
       avatarUrl?: string | null;
     };
   }>;
+};
+
+export type DesignArtifactsQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type DesignArtifactsQuery = {
+  __typename?: "Query";
+  designArtifacts: Array<{
+    __typename?: "Artifact";
+    id: string;
+    sessionGroupId: string;
+    parentArtifactId?: string | null;
+    prompt?: string | null;
+    title: string;
+    contentType: string;
+    html: string;
+    metadata?: JsonValue | null;
+    publishedAt?: string | null;
+    publicUrl?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+  }>;
+};
+
+export type IterateDesignArtifactMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+  prompt: Scalars["String"]["input"];
+  comparisonArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]> | Scalars["ID"]["input"]>;
+}>;
+
+export type IterateDesignArtifactMutation = {
+  __typename?: "Mutation";
+  iterateDesignArtifact: { __typename?: "Artifact"; id: string };
+};
+
+export type GenerateDesignArtifactsMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  prompt: Scalars["String"]["input"];
+  directionCount?: InputMaybe<Scalars["Int"]["input"]>;
+}>;
+
+export type GenerateDesignArtifactsMutation = {
+  __typename?: "Mutation";
+  generateDesignArtifacts: Array<{ __typename?: "Artifact"; id: string }>;
+};
+
+export type PatchDesignArtifactTokensMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+  tokens: Scalars["JSON"]["input"];
+}>;
+
+export type PatchDesignArtifactTokensMutation = {
+  __typename?: "Mutation";
+  patchDesignArtifactTokens: { __typename?: "Artifact"; id: string };
+};
+
+export type CommentDesignArtifactMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+  body: Scalars["String"]["input"];
+  anchor?: InputMaybe<Scalars["JSON"]["input"]>;
+  sendToAgent?: InputMaybe<Scalars["Boolean"]["input"]>;
+}>;
+
+export type CommentDesignArtifactMutation = {
+  __typename?: "Mutation";
+  commentDesignArtifact: { __typename?: "Event"; id: string };
+};
+
+export type ReportDesignArtifactErrorMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+  message: Scalars["String"]["input"];
+  stack?: InputMaybe<Scalars["String"]["input"]>;
+}>;
+
+export type ReportDesignArtifactErrorMutation = {
+  __typename?: "Mutation";
+  reportDesignArtifactError: { __typename?: "Event"; id: string };
+};
+
+export type PublishDesignArtifactMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+}>;
+
+export type PublishDesignArtifactMutation = {
+  __typename?: "Mutation";
+  publishDesignArtifact: {
+    __typename?: "Artifact";
+    id: string;
+    publishedAt?: string | null;
+    publicUrl?: string | null;
+  };
+};
+
+export type ExportDesignArtifactPdfMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+  pageOptions?: InputMaybe<DesignPdfPageOptionsInput>;
+}>;
+
+export type ExportDesignArtifactPdfMutation = {
+  __typename?: "Mutation";
+  exportDesignArtifactPdf: { __typename?: "Event"; id: string };
+};
+
+export type PromoteDesignArtifactToCodingSessionMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+  referenceArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]> | Scalars["ID"]["input"]>;
+}>;
+
+export type PromoteDesignArtifactToCodingSessionMutation = {
+  __typename?: "Mutation";
+  promoteDesignArtifactToCodingSession: {
+    __typename?: "Session";
+    id: string;
+    sessionGroupId?: string | null;
+  };
+};
+
+export type DesignPromptContentCatalogQueryVariables = Exact<{ [key: string]: never }>;
+
+export type DesignPromptContentCatalogQuery = {
+  __typename?: "Query";
+  designPromptContentCatalog: {
+    __typename?: "DesignPromptContentCatalog";
+    designSystems: Array<{
+      __typename?: "DesignSystemOption";
+      id: string;
+      name?: string | null;
+      description?: string | null;
+    }>;
+    skills: Array<{
+      __typename?: "DesignSkillOption";
+      id: string;
+      title?: string | null;
+      description?: string | null;
+    }>;
+  };
+};
+
+export type UpdateDesignHarnessSettingsMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  designSystemId?: InputMaybe<Scalars["String"]["input"]>;
+  designSkillIds?: InputMaybe<Array<Scalars["String"]["input"]> | Scalars["String"]["input"]>;
+}>;
+
+export type UpdateDesignHarnessSettingsMutation = {
+  __typename?: "Mutation";
+  updateDesignHarnessSettings: { __typename?: "SessionGroup"; id: string };
 };
 
 export type SessionGroupBranchDiffQueryVariables = Exact<{
@@ -2676,6 +3023,10 @@ export type SessionDetailQuery = {
         author: string;
         committedAt: string;
         filesChanged: number;
+        captureStatus?: string | null;
+        captureUrl?: string | null;
+        captureContentType?: string | null;
+        capturedAt?: string | null;
         createdAt: string;
       }>;
       channel?: { __typename?: "Channel"; id: string } | null;
@@ -2741,6 +3092,10 @@ export type SessionDetailQuery = {
       author: string;
       committedAt: string;
       filesChanged: number;
+      captureStatus?: string | null;
+      captureUrl?: string | null;
+      captureContentType?: string | null;
+      capturedAt?: string | null;
       createdAt: string;
     }>;
     channel?: { __typename?: "Channel"; id: string } | null;
@@ -2767,7 +3122,10 @@ export type SessionGroupDetailQuery = {
     __typename?: "SessionGroup";
     id: string;
     name: string;
+    kind: SessionGroupKind;
     slug?: string | null;
+    designSystemId?: string | null;
+    designSkillIds: Array<string>;
     forkedFromSessionGroupId?: string | null;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
@@ -2791,6 +3149,10 @@ export type SessionGroupDetailQuery = {
       author: string;
       committedAt: string;
       filesChanged: number;
+      captureStatus?: string | null;
+      captureUrl?: string | null;
+      captureContentType?: string | null;
+      capturedAt?: string | null;
       createdAt: string;
     }>;
     repo?: {
@@ -2862,6 +3224,8 @@ export type SessionApplicationsStateQuery = {
   sessionGroup?: {
     __typename?: "SessionGroup";
     id: string;
+    designSystemId?: string | null;
+    designSkillIds: Array<string>;
     repo?: {
       __typename?: "Repo";
       id: string;
@@ -3017,6 +3381,56 @@ export type DisableSessionEndpointForwardingMutationVariables = Exact<{
 export type DisableSessionEndpointForwardingMutation = {
   __typename?: "Mutation";
   disableSessionEndpointForwarding: { __typename?: "SessionEndpoint"; id: string };
+};
+
+export type PublishAppSessionMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type PublishAppSessionMutation = {
+  __typename?: "Mutation";
+  publishAppSession: {
+    __typename?: "SessionEndpoint";
+    id: string;
+    url: string;
+    accessMode: SessionEndpointAccessMode;
+  };
+};
+
+export type OpenAppSessionAsCodingSessionMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type OpenAppSessionAsCodingSessionMutation = {
+  __typename?: "Mutation";
+  openAppSessionAsCodingSession: {
+    __typename?: "Session";
+    id: string;
+    sessionGroupId?: string | null;
+  };
+};
+
+export type PatchAppSessionTokensMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  tokens: Scalars["JSON"]["input"];
+}>;
+
+export type PatchAppSessionTokensMutation = {
+  __typename?: "Mutation";
+  patchAppSessionTokens: { __typename?: "Event"; id: string };
+};
+
+export type CreateSessionEndpointPreviewMutationVariables = Exact<{
+  endpointId: Scalars["ID"]["input"];
+}>;
+
+export type CreateSessionEndpointPreviewMutation = {
+  __typename?: "Mutation";
+  createSessionEndpointPreview: {
+    __typename?: "SessionEndpointPreview";
+    url: string;
+    expiresAt: string;
+  };
 };
 
 export type SessionEndpointTrafficEndpointsQueryVariables = Exact<{
@@ -4004,7 +4418,10 @@ export type SidebarSessionGroupsQuery = {
     __typename?: "SessionGroup";
     id: string;
     name: string;
+    kind: SessionGroupKind;
     slug?: string | null;
+    designSystemId?: string | null;
+    designSkillIds: Array<string>;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
     prUrl?: string | null;
@@ -4306,6 +4723,7 @@ export const SessionGroupsDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
                 { kind: "Field", name: { kind: "Name", value: "forkedFromSessionGroupId" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
@@ -4480,6 +4898,7 @@ export const FilteredSessionGroupsDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "forkedFromSessionGroupId" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
@@ -4854,6 +5273,680 @@ export const ThreadRepliesDocument = {
     },
   ],
 } as unknown as DocumentNode<ThreadRepliesQuery, ThreadRepliesQueryVariables>;
+export const DesignArtifactsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "DesignArtifacts" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designArtifacts" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "parentArtifactId" } },
+                { kind: "Field", name: { kind: "Name", value: "prompt" } },
+                { kind: "Field", name: { kind: "Name", value: "title" } },
+                { kind: "Field", name: { kind: "Name", value: "contentType" } },
+                { kind: "Field", name: { kind: "Name", value: "html" } },
+                { kind: "Field", name: { kind: "Name", value: "metadata" } },
+                { kind: "Field", name: { kind: "Name", value: "publishedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "publicUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "createdBy" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DesignArtifactsQuery, DesignArtifactsQueryVariables>;
+export const IterateDesignArtifactDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "IterateDesignArtifact" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "prompt" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "comparisonArtifactIds" } },
+          type: {
+            kind: "ListType",
+            type: {
+              kind: "NonNullType",
+              type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "iterateDesignArtifact" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "prompt" },
+                value: { kind: "Variable", name: { kind: "Name", value: "prompt" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "comparisonArtifactIds" },
+                value: { kind: "Variable", name: { kind: "Name", value: "comparisonArtifactIds" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<IterateDesignArtifactMutation, IterateDesignArtifactMutationVariables>;
+export const GenerateDesignArtifactsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "GenerateDesignArtifacts" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "prompt" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "directionCount" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "generateDesignArtifacts" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "prompt" },
+                value: { kind: "Variable", name: { kind: "Name", value: "prompt" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "directionCount" },
+                value: { kind: "Variable", name: { kind: "Name", value: "directionCount" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  GenerateDesignArtifactsMutation,
+  GenerateDesignArtifactsMutationVariables
+>;
+export const PatchDesignArtifactTokensDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PatchDesignArtifactTokens" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "tokens" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "JSON" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "patchDesignArtifactTokens" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "tokens" },
+                value: { kind: "Variable", name: { kind: "Name", value: "tokens" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  PatchDesignArtifactTokensMutation,
+  PatchDesignArtifactTokensMutationVariables
+>;
+export const CommentDesignArtifactDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CommentDesignArtifact" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "body" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "anchor" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "JSON" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sendToAgent" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "commentDesignArtifact" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "body" },
+                value: { kind: "Variable", name: { kind: "Name", value: "body" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "anchor" },
+                value: { kind: "Variable", name: { kind: "Name", value: "anchor" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sendToAgent" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sendToAgent" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<CommentDesignArtifactMutation, CommentDesignArtifactMutationVariables>;
+export const ReportDesignArtifactErrorDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ReportDesignArtifactError" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "message" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "stack" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "reportDesignArtifactError" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "message" },
+                value: { kind: "Variable", name: { kind: "Name", value: "message" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "stack" },
+                value: { kind: "Variable", name: { kind: "Name", value: "stack" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  ReportDesignArtifactErrorMutation,
+  ReportDesignArtifactErrorMutationVariables
+>;
+export const PublishDesignArtifactDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PublishDesignArtifact" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "publishDesignArtifact" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "publishedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "publicUrl" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<PublishDesignArtifactMutation, PublishDesignArtifactMutationVariables>;
+export const ExportDesignArtifactPdfDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ExportDesignArtifactPdf" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "pageOptions" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "DesignPdfPageOptionsInput" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "exportDesignArtifactPdf" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "pageOptions" },
+                value: { kind: "Variable", name: { kind: "Name", value: "pageOptions" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  ExportDesignArtifactPdfMutation,
+  ExportDesignArtifactPdfMutationVariables
+>;
+export const PromoteDesignArtifactToCodingSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PromoteDesignArtifactToCodingSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "referenceArtifactIds" } },
+          type: {
+            kind: "ListType",
+            type: {
+              kind: "NonNullType",
+              type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "promoteDesignArtifactToCodingSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "referenceArtifactIds" },
+                value: { kind: "Variable", name: { kind: "Name", value: "referenceArtifactIds" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  PromoteDesignArtifactToCodingSessionMutation,
+  PromoteDesignArtifactToCodingSessionMutationVariables
+>;
+export const DesignPromptContentCatalogDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "DesignPromptContentCatalog" },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designPromptContentCatalog" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "designSystems" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "description" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "skills" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "title" } },
+                      { kind: "Field", name: { kind: "Name", value: "description" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  DesignPromptContentCatalogQuery,
+  DesignPromptContentCatalogQueryVariables
+>;
+export const UpdateDesignHarnessSettingsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "UpdateDesignHarnessSettings" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "designSystemId" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "designSkillIds" } },
+          type: {
+            kind: "ListType",
+            type: {
+              kind: "NonNullType",
+              type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "updateDesignHarnessSettings" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "designSystemId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "designSystemId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "designSkillIds" },
+                value: { kind: "Variable", name: { kind: "Name", value: "designSkillIds" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  UpdateDesignHarnessSettingsMutation,
+  UpdateDesignHarnessSettingsMutationVariables
+>;
 export const SessionGroupBranchDiffDocument = {
   kind: "Document",
   definitions: [
@@ -5461,6 +6554,10 @@ export const SessionDetailDocument = {
                             { kind: "Field", name: { kind: "Name", value: "author" } },
                             { kind: "Field", name: { kind: "Name", value: "committedAt" } },
                             { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
+                            { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
+                            { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
+                            { kind: "Field", name: { kind: "Name", value: "captureContentType" } },
+                            { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
                             { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                           ],
                         },
@@ -5658,6 +6755,10 @@ export const SessionDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "author" } },
                       { kind: "Field", name: { kind: "Name", value: "committedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureContentType" } },
+                      { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },
@@ -5735,7 +6836,10 @@ export const SessionGroupDetailDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "designSystemId" } },
+                { kind: "Field", name: { kind: "Name", value: "designSkillIds" } },
                 { kind: "Field", name: { kind: "Name", value: "forkedFromSessionGroupId" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
@@ -5770,6 +6874,10 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "author" } },
                       { kind: "Field", name: { kind: "Name", value: "committedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureContentType" } },
+                      { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },
@@ -5937,6 +7045,8 @@ export const SessionApplicationsStateDocument = {
               kind: "SelectionSet",
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "designSystemId" } },
+                { kind: "Field", name: { kind: "Name", value: "designSkillIds" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "repo" },
@@ -6441,7 +7551,7 @@ export const EnableSessionEndpointForwardingDocument = {
               {
                 kind: "Argument",
                 name: { kind: "Name", value: "accessMode" },
-                value: { kind: "EnumValue", value: "public" },
+                value: { kind: "EnumValue", value: "private" },
               },
             ],
             selectionSet: {
@@ -6499,6 +7609,195 @@ export const DisableSessionEndpointForwardingDocument = {
 } as unknown as DocumentNode<
   DisableSessionEndpointForwardingMutation,
   DisableSessionEndpointForwardingMutationVariables
+>;
+export const PublishAppSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PublishAppSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "publishAppSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "accessMode" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<PublishAppSessionMutation, PublishAppSessionMutationVariables>;
+export const OpenAppSessionAsCodingSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "OpenAppSessionAsCodingSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "openAppSessionAsCodingSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  OpenAppSessionAsCodingSessionMutation,
+  OpenAppSessionAsCodingSessionMutationVariables
+>;
+export const PatchAppSessionTokensDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PatchAppSessionTokens" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "tokens" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "JSON" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "patchAppSessionTokens" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "tokens" },
+                value: { kind: "Variable", name: { kind: "Name", value: "tokens" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<PatchAppSessionTokensMutation, PatchAppSessionTokensMutationVariables>;
+export const CreateSessionEndpointPreviewDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateSessionEndpointPreview" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createSessionEndpointPreview" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endpointId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "expiresAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateSessionEndpointPreviewMutation,
+  CreateSessionEndpointPreviewMutationVariables
 >;
 export const SessionEndpointTrafficEndpointsDocument = {
   kind: "Document",
@@ -9807,7 +11106,10 @@ export const SidebarSessionGroupsDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "designSystemId" } },
+                { kind: "Field", name: { kind: "Name", value: "designSkillIds" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
                 {

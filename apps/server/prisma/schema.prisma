@@ -43,6 +43,17 @@ enum SessionGroupVisibility {
   private
 }
 
+enum SessionGroupKind {
+  coding
+  design
+  app
+}
+
+enum RepoProvider {
+  github
+  managed
+}
+
 enum TicketStatus {
   backlog
   todo
@@ -62,6 +73,7 @@ enum Priority {
 enum HostingMode {
   cloud
   local
+  serverless
 }
 
 enum BridgeAccessScopeType {
@@ -162,6 +174,7 @@ enum EventType {
   organization_created
   repo_created
   repo_updated
+  repo_branch_pushed
   channel_created
   channel_updated
   channel_member_added
@@ -216,12 +229,22 @@ enum EventType {
   session_application_process_stopped
   session_application_process_failed
   session_application_log_appended
+  session_app_tokens_updated
   session_endpoint_created
   session_endpoint_forwarding_enabled
   session_endpoint_forwarding_disabled
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  design_generation_started
+  design_generation_failed
+  design_artifact_created
+  design_artifact_updated
+  design_comment_added
+  design_artifact_error
+  design_export_requested
+  design_export_completed
+  design_artifact_promoted
 }
 
 enum SessionApplicationProcessStatus {
@@ -279,6 +302,7 @@ model Organization {
   sessionSetupScriptRuns SessionSetupScriptRun[]
   sessionApplicationProcesses SessionApplicationProcess[]
   sessionEndpoints SessionEndpoint[]
+  artifacts Artifact[]
   agentEnvironments AgentEnvironment[]
   orgSecrets    OrgSecret[]
   slackInstalls SlackInstall[]
@@ -368,6 +392,7 @@ model User {
   slackInstalls     SlackInstall[]   @relation("SlackInstallInstaller")
   slackAccounts     SlackAccount[]
   slackChannelBindings SlackChannelBinding[]
+  createdArtifacts  Artifact[]       @relation("ArtifactCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -376,6 +401,7 @@ model User {
 model Repo {
   id             String       @id @default(uuid())
   name           String
+  provider       RepoProvider @default(github)
   remoteUrl      String?
   defaultBranch  String       @default("main")
   setupConfig    Json         @default("{}")
@@ -491,6 +517,7 @@ model ChannelMember {
 model SessionGroup {
   id             String       @id @default(uuid())
   name           String
+  kind           SessionGroupKind @default(coding)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   ownerUserId    String
@@ -514,6 +541,8 @@ model SessionGroup {
   archivedAt      DateTime?
   setupStatus     String      @default("idle")
   setupError      String?
+  designSystemId  String?
+  designSkillIds  String[]    @default([])
 
   sessions Session[]
   gitCheckpoints GitCheckpoint[]
@@ -522,6 +551,7 @@ model SessionGroup {
   setupScriptRuns SessionSetupScriptRun[]
   applicationProcesses SessionApplicationProcess[]
   endpoints SessionEndpoint[]
+  artifacts Artifact[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -532,6 +562,34 @@ model SessionGroup {
   @@index([forkedFromSessionGroupId])
   @@index([channelId, updatedAt])
   @@index([repoId, branch, updatedAt])
+}
+
+model Artifact {
+  id               String       @id @default(uuid())
+  sessionGroupId   String
+  sessionGroup     SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  parentArtifactId String?
+  parentArtifact   Artifact?    @relation("ArtifactLineage", fields: [parentArtifactId], references: [id], onDelete: SetNull)
+  childArtifacts   Artifact[]   @relation("ArtifactLineage")
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  createdById      String
+  createdBy        User         @relation("ArtifactCreator", fields: [createdById], references: [id])
+  promptEventId    String?
+  prompt           String?
+  title            String
+  contentType      String
+  html             String
+  htmlStorageKey   String?
+  metadata         Json?
+  publishedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, sessionGroupId, createdAt])
+  @@index([parentArtifactId])
+  @@index([promptEventId])
 }
 
 model Session {
@@ -590,8 +648,8 @@ model SessionSetupScriptRun {
   organization     Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sessionGroupId   String
   sessionGroup     SessionGroup                @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repoId           String
-  repo             Repo                        @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  repoId           String?
+  repo             Repo?                       @relation(fields: [repoId], references: [id], onDelete: Cascade)
 
   scriptConfigId   String
   label            String
@@ -619,8 +677,8 @@ model SessionApplicationProcess {
   organization       Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sessionGroupId     String
   sessionGroup       SessionGroup                    @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repoId             String
-  repo               Repo                            @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  repoId             String?
+  repo               Repo?                           @relation(fields: [repoId], references: [id], onDelete: Cascade)
 
   appConfigId        String
   processConfigId    String
@@ -669,8 +727,8 @@ model SessionEndpoint {
   organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sessionGroupId           String
   sessionGroup             SessionGroup               @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repoId                   String
-  repo                     Repo                       @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  repoId                   String?
+  repo                     Repo?                      @relation(fields: [repoId], references: [id], onDelete: Cascade)
 
   appConfigId              String
   processConfigId          String
@@ -877,7 +935,12 @@ model GitCheckpoint {
   author         String
   committedAt    DateTime
   filesChanged   Int
-  createdAt      DateTime @default(now())
+  captureStatus      String?
+  captureKey         String?
+  captureUrl         String?
+  captureContentType String?
+  capturedAt         DateTime?
+  createdAt          DateTime @default(now())
 
   sessionGroup SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
   repo         Repo @relation(fields: [repoId], references: [id], onDelete: Cascade)

@@ -77,6 +77,7 @@ export type LLMStopReason = "end_turn" | "tool_use" | "max_tokens" | "stop_seque
 export interface LLMUsage {
   inputTokens: number;
   outputTokens: number;
+  costUsd?: number;
 }
 
 export interface LLMResponse {

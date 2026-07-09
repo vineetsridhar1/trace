@@ -31,6 +31,13 @@ describe("endpoint utils", () => {
     expect(extractEndpointKey("abc123.preview.localhost:4000")).toBe("abc123");
   });
 
+  it("falls back to http for invalid endpoint public URL schemes", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.example.test");
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME", "javascript");
+
+    expect(buildEndpointUrl("abc123")).toBe("http://abc123.preview.example.test");
+  });
+
   it("extracts opaque endpoint keys from wildcard hosts", () => {
     vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.localhost");
 

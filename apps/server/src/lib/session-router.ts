@@ -3,10 +3,12 @@ import type { EventType } from "@trace/gql";
 import { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import type {
+  BridgeBootstrapAppWorkspaceCommand,
   BridgeTerminalCreateCommand,
   BridgeTerminalInputCommand,
   BridgeTerminalResizeCommand,
   BridgeTerminalDestroyCommand,
+  BridgeConfigureManagedGitRemoteCommand,
   BridgeListFilesCommand,
   BridgeReadFileCommand,
   BridgeWriteFileCommand,
@@ -56,6 +58,8 @@ interface BaseSessionCommand {
 
 export type SessionCommand =
   | BaseSessionCommand
+  | BridgeBootstrapAppWorkspaceCommand
+  | BridgeConfigureManagedGitRemoteCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeWriteFileCommand
@@ -1911,6 +1915,7 @@ export class SessionRouter {
     options: SessionAdapterCreateOptions & {
       hosting: string;
       onFailed: (error: string) => void;
+      bootstrapAppWorkspace?: boolean;
       onWorkspaceReady?: (workdir: string) => void;
       onLifecycle?: (
         eventType: RuntimeLifecycleEventType,
@@ -2038,6 +2043,22 @@ export class SessionRouter {
           );
           if (result !== "delivered") {
             options.onFailed(`prepare: ${result}`);
+          }
+          return;
+        }
+
+        if (adapterType === "provisioned" && options.bootstrapAppWorkspace) {
+          const result = this.send(
+            options.sessionId,
+            {
+              type: "bootstrap_app_workspace",
+              sessionId: options.sessionId,
+              workdir: "/home/coder",
+            },
+            { expectedHomeRuntimeId: startResult.runtimeInstanceId },
+          );
+          if (result !== "delivered") {
+            options.onFailed(`bootstrap_app_workspace: ${result}`);
           }
           return;
         }

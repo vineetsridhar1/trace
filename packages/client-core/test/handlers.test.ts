@@ -20,6 +20,11 @@ function resetStores() {
     inboxItems: {},
     messages: {},
     queuedMessages: {},
+    agentEnvironments: {},
+    sessionApplicationProcesses: {},
+    sessionEndpoints: {},
+    sessionApplicationLogs: {},
+    artifacts: {},
     eventsByScope: {},
     _eventIdsByScope: {},
     _sessionIdsByGroup: {},
@@ -167,6 +172,82 @@ describe("handleOrgEvent", () => {
       older.id,
       newer.id,
     ]);
+  });
+
+  it("upserts design artifacts from lifecycle events", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "design_artifact_created",
+        scopeId: "session-1",
+        payload: {
+          artifact: {
+            id: "artifact-1",
+            sessionGroupId: "group-1",
+            parentArtifactId: null,
+            prompt: "Dashboard",
+            title: "Dashboard direction",
+            contentType: "text/html+trace-design",
+            html: "<html></html>",
+            metadata: {},
+            publishedAt: null,
+            publicUrl: null,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().artifacts["artifact-1"]).toMatchObject({
+      id: "artifact-1",
+      sessionGroupId: "group-1",
+      title: "Dashboard direction",
+    });
+  });
+
+  it("keeps design comment events in the scoped bucket for the canvas", () => {
+    const event = makeEvent({
+      eventType: "design_comment_added",
+      scopeId: "session-1",
+      payload: {
+        artifactId: "artifact-1",
+        body: "Tighten the hero spacing",
+        anchor: { type: "element", dataEl: "hero" },
+        sendToAgent: true,
+      },
+    });
+
+    handleOrgEvent(event);
+
+    const bucket = useEntityStore.getState().eventsByScope["session:session-1"];
+    expect(bucket?.[event.id]).toEqual(event);
+    expect(useEntityStore.getState()._eventIdsByScope["session:session-1"]).toEqual([event.id]);
+  });
+
+  it("upserts app process logs from append events", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_application_log_appended",
+        scopeId: "session-1",
+        payload: {
+          logEntry: {
+            id: "log-1",
+            processId: "process-1",
+            stream: "stdout",
+            data: "ready on 3000",
+            sequence: 7,
+            timestamp: "2026-01-01T00:00:01.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionApplicationLogs["log-1"]).toMatchObject({
+      id: "log-1",
+      processId: "process-1",
+      data: "ready on 3000",
+      sequence: 7,
+    });
   });
 
   it("upserts created channels only when the current user is a member", () => {
@@ -634,6 +715,119 @@ describe("handleOrgEvent", () => {
     expect(session.gitCheckpoints[0].id).toBe("ckpt-1");
   });
 
+  it("upserts app process lifecycle events for the applications panel", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_application_process_started",
+        scopeId: "session-1",
+        payload: {
+          process: {
+            id: "process-1",
+            sessionGroupId: "group-1",
+            appConfigId: "web",
+            processConfigId: "dev",
+            label: "Web",
+            status: "running",
+            runtimeInstanceId: "runtime-1",
+            startedAt: "2026-01-01T00:00:00.000Z",
+            stoppedAt: null,
+            exitCode: null,
+            lastError: null,
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionApplicationProcesses["process-1"]).toMatchObject({
+      id: "process-1",
+      sessionGroupId: "group-1",
+      status: "running",
+      runtimeInstanceId: "runtime-1",
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_application_process_failed",
+        scopeId: "session-1",
+        payload: {
+          process: {
+            id: "process-1",
+            sessionGroupId: "group-1",
+            status: "failed",
+            lastError: "dev server exited",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionApplicationProcesses["process-1"]).toMatchObject({
+      id: "process-1",
+      label: "Web",
+      status: "failed",
+      runtimeInstanceId: "runtime-1",
+      lastError: "dev server exited",
+    });
+  });
+
+  it("upserts app endpoint lifecycle events for live preview and publish state", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_endpoint_created",
+        scopeId: "session-1",
+        payload: {
+          endpoint: {
+            id: "endpoint-1",
+            key: "endpointkey1",
+            url: "https://endpointkey1.preview.example",
+            sessionGroupId: "group-1",
+            appConfigId: "web",
+            processConfigId: "dev",
+            portConfigId: "web",
+            label: "Web",
+            targetPort: 3000,
+            status: "disabled",
+            accessMode: "private",
+            trafficCaptureMode: "metadata",
+            enabledAt: null,
+            disabledAt: null,
+            revokedAt: null,
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionEndpoints["endpoint-1"]).toMatchObject({
+      id: "endpoint-1",
+      sessionGroupId: "group-1",
+      status: "disabled",
+      accessMode: "private",
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_endpoint_access_updated",
+        scopeId: "session-1",
+        payload: {
+          endpoint: {
+            id: "endpoint-1",
+            status: "enabled",
+            accessMode: "public",
+            enabledAt: "2026-01-01T00:00:01.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionEndpoints["endpoint-1"]).toMatchObject({
+      id: "endpoint-1",
+      url: "https://endpointkey1.preview.example",
+      label: "Web",
+      status: "enabled",
+      accessMode: "public",
+      enabledAt: "2026-01-01T00:00:01.000Z",
+    });
+  });
+
   it("handles queued message add, update, reorder, and removal events", () => {
     handleOrgEvent(
       makeEvent({
@@ -827,5 +1021,281 @@ describe("handleOrgEvent", () => {
     );
 
     expect(harness.setActiveSessionId).toHaveBeenCalledWith("session-new");
+  });
+});
+
+describe("handleSessionEvent", () => {
+  it("upserts design artifacts from full session events", () => {
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "design_artifact_updated",
+        scopeId: "session-1",
+        payload: {
+          artifact: {
+            id: "artifact-1",
+            sessionGroupId: "group-1",
+            parentArtifactId: null,
+            prompt: "Dashboard",
+            title: "Published dashboard",
+            contentType: "text/html+trace-design",
+            html: "<html></html>",
+            metadata: { published: true },
+            publishedAt: "2026-01-01T00:00:01.000Z",
+            publicUrl: "https://artifact-1.traceusercontent.test/",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:01.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().artifacts["artifact-1"]).toMatchObject({
+      id: "artifact-1",
+      title: "Published dashboard",
+      publicUrl: "https://artifact-1.traceusercontent.test/",
+    });
+  });
+
+  it("upserts app process logs from full session events", () => {
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_application_log_appended",
+        scopeId: "session-1",
+        payload: {
+          logEntry: {
+            id: "log-1",
+            processId: "process-1",
+            stream: "stderr",
+            data: "warning",
+            sequence: 2,
+            timestamp: "2026-01-01T00:00:02.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionApplicationLogs["log-1"]).toMatchObject({
+      id: "log-1",
+      processId: "process-1",
+      stream: "stderr",
+      data: "warning",
+      sequence: 2,
+    });
+  });
+
+  it("upserts app process lifecycle events from full session subscriptions", () => {
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_application_process_started",
+        scopeId: "session-1",
+        payload: {
+          process: {
+            id: "process-1",
+            sessionGroupId: "group-1",
+            appConfigId: "web",
+            processConfigId: "dev",
+            label: "Web",
+            status: "running",
+            runtimeInstanceId: "runtime-1",
+            startedAt: "2026-01-01T00:00:00.000Z",
+            stoppedAt: null,
+            exitCode: null,
+            lastError: null,
+          },
+        },
+      }),
+    );
+
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_application_process_failed",
+        scopeId: "session-1",
+        payload: {
+          process: {
+            id: "process-1",
+            status: "failed",
+            lastError: "dev server exited",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionApplicationProcesses["process-1"]).toMatchObject({
+      id: "process-1",
+      label: "Web",
+      status: "failed",
+      runtimeInstanceId: "runtime-1",
+      lastError: "dev server exited",
+    });
+  });
+
+  it("upserts app endpoint lifecycle events from full session subscriptions", () => {
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_endpoint_created",
+        scopeId: "session-1",
+        payload: {
+          endpoint: {
+            id: "endpoint-1",
+            key: "endpointkey1",
+            url: "https://endpointkey1.preview.example",
+            sessionGroupId: "group-1",
+            appConfigId: "web",
+            processConfigId: "dev",
+            portConfigId: "web",
+            label: "Web",
+            targetPort: 3000,
+            status: "disabled",
+            accessMode: "private",
+            trafficCaptureMode: "metadata",
+            enabledAt: null,
+            disabledAt: null,
+            revokedAt: null,
+          },
+        },
+      }),
+    );
+
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_endpoint_access_updated",
+        scopeId: "session-1",
+        payload: {
+          endpoint: {
+            id: "endpoint-1",
+            status: "enabled",
+            accessMode: "public",
+            enabledAt: "2026-01-01T00:00:01.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionEndpoints["endpoint-1"]).toMatchObject({
+      id: "endpoint-1",
+      url: "https://endpointkey1.preview.example",
+      label: "Web",
+      status: "enabled",
+      accessMode: "public",
+      enabledAt: "2026-01-01T00:00:01.000Z",
+    });
+  });
+
+  it("routes full session git checkpoint output into checkpoint state", () => {
+    useEntityStore.setState({
+      sessions: { "session-1": { id: "session-1", sessionGroupId: "group-1" } as never },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+
+    const checkpoint = {
+      id: "ckpt-1",
+      sessionGroupId: "group-1",
+      commitSha: "abc",
+      committedAt: "2026-01-01T00:00:00.000Z",
+    };
+
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_output",
+        scopeId: "session-1",
+        payload: { type: "git_checkpoint", checkpoint },
+      }),
+    );
+
+    const state = useEntityStore.getState();
+    const session = state.sessions["session-1"] as never as {
+      gitCheckpoints: Array<{ id: string }>;
+    };
+    const group = state.sessionGroups["group-1"] as never as {
+      gitCheckpoints: Array<{ id: string }>;
+    };
+    expect(session.gitCheckpoints.map((item) => item.id)).toEqual(["ckpt-1"]);
+    expect(group.gitCheckpoints.map((item) => item.id)).toEqual(["ckpt-1"]);
+  });
+
+  it("routes full session git checkpoint rewrites into checkpoint state", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          gitCheckpoints: [
+            {
+              id: "ckpt-old",
+              sessionGroupId: "group-1",
+              commitSha: "old",
+              committedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        } as never,
+      },
+      sessionGroups: {
+        "group-1": {
+          id: "group-1",
+          gitCheckpoints: [
+            {
+              id: "ckpt-old",
+              sessionGroupId: "group-1",
+              commitSha: "old",
+              committedAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        } as never,
+      },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+
+    const checkpoint = {
+      id: "ckpt-new",
+      sessionGroupId: "group-1",
+      commitSha: "new",
+      committedAt: "2026-01-01T00:00:01.000Z",
+    };
+
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_output",
+        scopeId: "session-1",
+        payload: { type: "git_checkpoint_rewrite", replacedCommitSha: "old", checkpoint },
+      }),
+    );
+
+    const state = useEntityStore.getState();
+    const session = state.sessions["session-1"] as never as {
+      gitCheckpoints: Array<{ commitSha: string }>;
+    };
+    const group = state.sessionGroups["group-1"] as never as {
+      gitCheckpoints: Array<{ commitSha: string }>;
+    };
+    expect(session.gitCheckpoints.map((item) => item.commitSha)).toEqual(["new"]);
+    expect(group.gitCheckpoints.map((item) => item.commitSha)).toEqual(["new"]);
+  });
+
+  it("keeps design comment events from full session subscriptions for the canvas", () => {
+    const event = makeEvent({
+      eventType: "design_comment_added",
+      scopeId: "session-1",
+      payload: {
+        artifactId: "artifact-1",
+        body: "Pin this to the hero",
+        anchor: { type: "element", dataEl: "hero", text: "Ready" },
+        sendToAgent: false,
+      },
+    });
+
+    handleSessionEvent("session-1", event);
+
+    const bucket = useEntityStore.getState().eventsByScope["session:session-1"];
+    expect(bucket?.[event.id]).toEqual(event);
+    expect(useEntityStore.getState()._eventIdsByScope["session:session-1"]).toEqual([event.id]);
   });
 });

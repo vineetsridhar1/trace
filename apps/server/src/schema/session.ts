@@ -8,6 +8,10 @@ import type {
 } from "@trace/gql";
 import type { CodingTool as CodingToolEnum } from "@prisma/client";
 import { sessionService } from "../services/session.js";
+import { artifactService } from "../services/artifact.js";
+import { listTraceDesignPromptContent } from "../services/design-content.js";
+import { buildDesignArtifactPublicUrl } from "../services/design-artifact-serving.js";
+import { resolveDesignArtifactHtml } from "../services/design-artifact-storage.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { BUILTIN_SLASH_COMMANDS, type BridgeSkillInfo } from "@trace/shared";
@@ -40,6 +44,18 @@ export const sessionQueries = {
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx), ctx.userId);
+  },
+  designArtifacts: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.listForSessionGroup(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      ctx.userId,
+    );
+  },
+  designPromptContentCatalog: (_: unknown, _args: unknown, ctx: Context) => {
+    requireOrgContext(ctx);
+    return listTraceDesignPromptContent();
   },
   sessions: (
     _: unknown,
@@ -299,6 +315,178 @@ export const sessionMutations = {
       clientSource: ctx.clientSource,
     });
   },
+  createDesignArtifact: (
+    _: unknown,
+    args: { sessionGroupId: string; prompt: string; html?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.createDesignArtifact({
+      sessionGroupId: args.sessionGroupId,
+      prompt: args.prompt,
+      html: args.html ?? null,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  generateDesignArtifacts: (
+    _: unknown,
+    args: { sessionGroupId: string; prompt: string; directionCount?: number | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.generateDesignArtifacts({
+      sessionGroupId: args.sessionGroupId,
+      prompt: args.prompt,
+      directionCount: args.directionCount ?? null,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  iterateDesignArtifact: (
+    _: unknown,
+    args: {
+      artifactId: string;
+      prompt: string;
+      html?: string | null;
+      comparisonArtifactIds?: string[] | null;
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.iterateDesignArtifact({
+      artifactId: args.artifactId,
+      prompt: args.prompt,
+      html: args.html ?? null,
+      comparisonArtifactIds: args.comparisonArtifactIds ?? null,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  patchDesignArtifactTokens: (
+    _: unknown,
+    args: { artifactId: string; tokens: unknown },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    if (!args.tokens || typeof args.tokens !== "object" || Array.isArray(args.tokens)) {
+      throw new Error("tokens must be an object");
+    }
+    return artifactService.patchDesignArtifactTokens({
+      artifactId: args.artifactId,
+      tokens: args.tokens as Record<string, unknown>,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  commentDesignArtifact: (
+    _: unknown,
+    args: {
+      artifactId: string;
+      body: string;
+      anchor?: unknown;
+      sendToAgent?: boolean | null;
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    if (args.anchor !== undefined && args.anchor !== null) {
+      if (typeof args.anchor !== "object" || Array.isArray(args.anchor)) {
+        throw new Error("anchor must be an object");
+      }
+    }
+    return artifactService.commentDesignArtifact({
+      artifactId: args.artifactId,
+      body: args.body,
+      anchor: (args.anchor ?? null) as Record<string, unknown> | null,
+      sendToAgent: args.sendToAgent ?? false,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  reportDesignArtifactError: (
+    _: unknown,
+    args: { artifactId: string; message: string; stack?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.reportDesignArtifactError({
+      artifactId: args.artifactId,
+      message: args.message,
+      stack: args.stack ?? null,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  publishDesignArtifact: (_: unknown, args: { artifactId: string }, ctx: Context) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.publishDesignArtifact({
+      artifactId: args.artifactId,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  exportDesignArtifactPdf: (
+    _: unknown,
+    args: {
+      artifactId: string;
+      pageOptions?: {
+        widthPx?: number | null;
+        heightPx?: number | null;
+        marginTopPx?: number | null;
+        marginRightPx?: number | null;
+        marginBottomPx?: number | null;
+        marginLeftPx?: number | null;
+      } | null;
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.exportDesignArtifactPdf({
+      artifactId: args.artifactId,
+      pageOptions: args.pageOptions ?? null,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  promoteDesignArtifactToCodingSession: (
+    _: unknown,
+    args: { artifactId: string; prompt?: string | null; referenceArtifactIds?: string[] | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.promoteDesignArtifactToCodingSession({
+      artifactId: args.artifactId,
+      prompt: args.prompt ?? null,
+      referenceArtifactIds: args.referenceArtifactIds ?? null,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
+  openAppSessionAsCodingSession: (
+    _: unknown,
+    args: { sessionGroupId: string; prompt?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.openAppSessionAsCodingSession({
+      sessionGroupId: args.sessionGroupId,
+      prompt: args.prompt ?? null,
+      organizationId: requireOrgContext(ctx),
+      createdById: ctx.userId,
+      actorType: ctx.actorType,
+      clientSource: ctx.clientSource,
+    });
+  },
   forkSession: (_: unknown, args: { eventId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     if (!ctx.userId) throw new AuthenticationError();
@@ -359,6 +547,26 @@ export const sessionMutations = {
       args.id,
       requireOrgContext(ctx),
       args.visibility,
+      ctx.actorType,
+      ctx.userId,
+    );
+  },
+  updateDesignHarnessSettings: (
+    _: unknown,
+    args: {
+      sessionGroupId: string;
+      designSystemId?: string | null;
+      designSkillIds?: string[] | null;
+    },
+    ctx: Context,
+  ) => {
+    return sessionService.updateDesignHarnessSettings(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      {
+        designSystemId: args.designSystemId ?? null,
+        designSkillIds: args.designSkillIds ?? [],
+      },
       ctx.actorType,
       ctx.userId,
     );
@@ -682,6 +890,26 @@ export const sessionMutations = {
 };
 
 export const sessionTypeResolvers = {
+  Artifact: {
+    html: (artifact: {
+      id: string;
+      organizationId: string;
+      html: string;
+      htmlStorageKey?: string | null;
+    }) => resolveDesignArtifactHtml(artifact),
+    publicUrl: (artifact: {
+      id: string;
+      publishedAt?: Date | string | null;
+      publicUrl?: string | null;
+    }) => {
+      if (artifact.publicUrl) return artifact.publicUrl;
+      const publishedAt =
+        typeof artifact.publishedAt === "string"
+          ? new Date(artifact.publishedAt)
+          : artifact.publishedAt;
+      return buildDesignArtifactPublicUrl(artifact.id, publishedAt ?? null);
+    },
+  },
   SessionGroup: {
     status: async (
       group: {

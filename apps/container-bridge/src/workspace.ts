@@ -1,8 +1,10 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
+import path from "path";
 import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
 import {
+  TRACE_APP_STARTER_FILES,
   assertValidCommitSha,
   branchNamesFromGitRefsOutput,
   generatedTraceWorktreeBranch,
@@ -13,31 +15,55 @@ import type { BridgeWorkspaceWarning } from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
 
-const REPOS_DIR = "/repos";
-const WORKSPACES_DIR = "/workspaces";
+function reposDir(): string {
+  return process.env.TRACE_REPOS_DIR?.trim() || "/repos";
+}
+
+function workspacesDir(): string {
+  return process.env.TRACE_WORKSPACES_DIR?.trim() || "/workspaces";
+}
 
 type EnsureRepoResult = {
   repoPath: string;
   warning?: BridgeWorkspaceWarning;
 };
 
+function withRuntimeAuth(remoteUrl: string): string {
+  const runtimeToken = process.env.TRACE_RUNTIME_TOKEN;
+  const tracePublicUrl = process.env.TRACE_SERVER_PUBLIC_URL;
+  if (!runtimeToken || !tracePublicUrl) return remoteUrl;
+
+  const traceOrigin = new URL(tracePublicUrl);
+  const parsed = new URL(remoteUrl);
+  if (
+    parsed.origin === traceOrigin.origin &&
+    parsed.pathname.startsWith(`${traceOrigin.pathname.replace(/\/$/, "")}/git/`)
+  ) {
+    parsed.username = "x-token";
+    parsed.password = runtimeToken;
+    return parsed.toString();
+  }
+  return remoteUrl;
+}
+
 /** Get the local path for a repo by ID. Returns undefined if not cloned yet. */
 export function getRepoPath(repoId: string): string | undefined {
-  const p = `${REPOS_DIR}/${repoId}`;
+  const p = path.join(reposDir(), repoId);
   return fs.existsSync(p) ? p : undefined;
 }
 
-/** List repoIds that are already cloned on disk at /repos/{repoId}. */
+/** List repoIds that are already cloned on disk in the configured repo root. */
 export function listClonedRepoIds(): string[] {
-  if (!fs.existsSync(REPOS_DIR)) return [];
+  const root = reposDir();
+  if (!fs.existsSync(root)) return [];
   return fs
-    .readdirSync(REPOS_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && fs.existsSync(`${REPOS_DIR}/${entry.name}/.git`))
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(root, entry.name, ".git")))
     .map((entry) => entry.name);
 }
 
 /**
- * Ensure a repo exists at /repos/{repoId}.
+ * Ensure a repo exists in the configured repo root.
  * Clones if missing, fetches if already present.
  */
 export async function ensureRepo(
@@ -46,7 +72,7 @@ export async function ensureRepo(
   branch: string | undefined,
   defaultBranch: string,
 ): Promise<EnsureRepoResult> {
-  const repoPath = `${REPOS_DIR}/${repoId}`;
+  const repoPath = path.join(reposDir(), repoId);
   if (!remoteUrl) {
     throw new Error("Cloud workspaces require a repo remote URL.");
   }
@@ -60,6 +86,8 @@ export async function ensureRepo(
       "https://github.com",
       `https://x-access-token:${githubToken}@github.com`,
     );
+  } else {
+    authUrl = withRuntimeAuth(remoteUrl);
   }
 
   if (fs.existsSync(repoPath)) {
@@ -86,7 +114,7 @@ export async function ensureRepo(
     return { repoPath, warning };
   }
 
-  fs.mkdirSync(REPOS_DIR, { recursive: true });
+  fs.mkdirSync(reposDir(), { recursive: true });
   console.log(`[workspace] cloning ${remoteUrl} into ${repoPath}`);
   try {
     await cloneRepo(repoId, authUrl, repoPath, cloneBranch);
@@ -109,6 +137,53 @@ export async function ensureRepo(
   }
   await detachRepoHead(repoPath);
   return { repoPath };
+}
+
+export async function configureManagedGitRemote(input: {
+  workdir: string;
+  remoteUrl: string;
+  branch: string;
+}): Promise<void> {
+  const authUrl = withRuntimeAuth(input.remoteUrl);
+  const remotes = await execFileAsync("git", ["remote"], { cwd: input.workdir });
+  const hasOrigin = remotes.stdout
+    .split("\n")
+    .map((remote) => remote.trim())
+    .includes("origin");
+
+  if (hasOrigin) {
+    await execFileAsync("git", ["remote", "set-url", "origin", authUrl], { cwd: input.workdir });
+  } else {
+    await execFileAsync("git", ["remote", "add", "origin", authUrl], { cwd: input.workdir });
+  }
+
+  await execFileAsync("git", ["push", "-u", "origin", `HEAD:${input.branch}`], {
+    cwd: input.workdir,
+  });
+}
+
+export async function bootstrapAppWorkspace(
+  workdir: string,
+): Promise<{ workdir: string; branch: string }> {
+  fs.mkdirSync(workdir, { recursive: true });
+
+  for (const [filePath, contents] of Object.entries(TRACE_APP_STARTER_FILES)) {
+    const absolutePath = path.join(workdir, filePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    if (!fs.existsSync(absolutePath)) {
+      fs.writeFileSync(absolutePath, contents);
+    }
+  }
+
+  if (!fs.existsSync(path.join(workdir, ".git"))) {
+    await execFileAsync("git", ["init", "-b", "main"], { cwd: workdir });
+    await execFileAsync("git", ["config", "user.name", "Trace"], { cwd: workdir });
+    await execFileAsync("git", ["config", "user.email", "trace@trace.dev"], { cwd: workdir });
+    await execFileAsync("git", ["add", "."], { cwd: workdir });
+    await execFileAsync("git", ["commit", "-m", "Initialize Trace app"], { cwd: workdir });
+  }
+
+  return { workdir, branch: "main" };
 }
 
 async function cloneRepo(
@@ -185,8 +260,8 @@ async function fetchRef(repoPath: string, ref: string): Promise<void> {
 }
 
 export async function getWorkspaceSlugs(repoId: string): Promise<Set<string>> {
-  const repoPath = `${REPOS_DIR}/${repoId}`;
-  return getUsedSlugs(WORKSPACES_DIR, repoPath);
+  const repoPath = path.join(reposDir(), repoId);
+  return getUsedSlugs(workspacesDir(), repoPath);
 }
 
 async function resolveAvailableWorkspaceSlug(
@@ -194,7 +269,7 @@ async function resolveAvailableWorkspaceSlug(
   requestedSlug: string | undefined,
 ): Promise<string> {
   if (requestedSlug) return requestedSlug;
-  const usedSlugs = await getUsedSlugs(WORKSPACES_DIR, repoPath);
+  const usedSlugs = await getUsedSlugs(workspacesDir(), repoPath);
   return generateAnimalSlug(usedSlugs);
 }
 
@@ -223,7 +298,7 @@ async function resolveBaseRef(
 }
 
 /**
- * Create a worktree from the repo at /repos/{repoId}.
+ * Create a worktree from the repo in the configured repo root.
  * The worktree is keyed by `slug` (an animal name) when provided.
  * Falls back to generating a new animal slug.
  */
@@ -249,11 +324,11 @@ export async function createWorktree({
   /** Pre-assigned animal slug. If absent, one is generated. */
   slug?: string;
 }): Promise<{ workdir: string; branch: string; slug: string }> {
-  const repoPath = `${REPOS_DIR}/${repoId}`;
+  const repoPath = path.join(reposDir(), repoId);
   const worktreeSlug = await resolveAvailableWorkspaceSlug(repoPath, slug);
-  const worktreePath = `${WORKSPACES_DIR}/${worktreeSlug}`;
+  const worktreePath = path.join(workspacesDir(), worktreeSlug);
 
-  fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
+  fs.mkdirSync(workspacesDir(), { recursive: true });
 
   if (checkpointSha) assertValidCommitSha(checkpointSha);
 
@@ -465,11 +540,9 @@ async function setUpstreamIfRemote(
 async function ensureRemoteTracksBranch(repoPath: string, branch: string): Promise<void> {
   const desired = `+refs/heads/${branch}:refs/remotes/origin/${branch}`;
   const wildcard = "+refs/heads/*:refs/remotes/origin/*";
-  const result = await execFileAsync(
-    "git",
-    ["config", "--get-all", "remote.origin.fetch"],
-    { cwd: repoPath },
-  ).catch(() => null);
+  const result = await execFileAsync("git", ["config", "--get-all", "remote.origin.fetch"], {
+    cwd: repoPath,
+  }).catch(() => null);
   // Conservative exact-string match: a non-canonical covering refspec (e.g. a
   // narrower wildcard) would just add a redundant entry, which git dedupes.
   const refspecs = (result?.stdout ?? "")
@@ -486,7 +559,7 @@ async function ensureRemoteTracksBranch(repoPath: string, branch: string): Promi
  * Remove a worktree for a deleted session.
  */
 export async function removeWorktree(repoId: string, worktreePath: string): Promise<void> {
-  const repoPath = `${REPOS_DIR}/${repoId}`;
+  const repoPath = path.join(reposDir(), repoId);
   if (!fs.existsSync(repoPath)) return;
   await execFileAsync("git", ["worktree", "remove", worktreePath, "--force"], { cwd: repoPath });
 }

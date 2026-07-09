@@ -7,6 +7,11 @@ import { sessionRouter } from "../lib/session-router.js";
 import { parseCookieToken, verifyToken } from "../lib/auth.js";
 import { canViewSessionGroup } from "./access.js";
 import {
+  endpointPreviewCookieHeader,
+  endpointPreviewTokenFromCookie,
+  verifyEndpointPreviewToken,
+} from "./endpoint-preview-auth.js";
+import {
   bodyPreview,
   endpointProxyMaxRequestBodyBytes,
   endpointProxyRequestTimeoutMs,
@@ -25,6 +30,7 @@ type PendingHttp = {
   startedAt: number;
   response: ServerResponse;
   timer: ReturnType<typeof setTimeout>;
+  injectAuthoringOverlay: boolean;
 };
 
 type PendingWs = {
@@ -42,6 +48,108 @@ function requestPath(req: IncomingMessage): { path: string; query: string | null
 function authenticatedUserId(req: IncomingMessage): string | null {
   const cookieToken = parseCookieToken(req.headers.cookie);
   return cookieToken ? verifyToken(cookieToken) : null;
+}
+
+function endpointPreviewUserId(
+  req: IncomingMessage,
+  endpoint: { id: string; organizationId: string },
+): string | null {
+  const token = endpointPreviewTokenFromCookie(req.headers.cookie);
+  if (!token) return null;
+  const payload = verifyEndpointPreviewToken(token);
+  if (
+    !payload ||
+    payload.endpointId !== endpoint.id ||
+    payload.organizationId !== endpoint.organizationId
+  ) {
+    return null;
+  }
+  return payload.userId;
+}
+
+function requestUrl(req: IncomingMessage): URL {
+  return new URL(req.url ?? "/", "http://trace-endpoint.local");
+}
+
+function safeRedirectPath(value: string | null): string {
+  if (!value?.startsWith("/") || value.startsWith("//")) return "/";
+  return value;
+}
+
+function shouldInjectHtmlOverlay(
+  headers: Record<string, string | string[]>,
+  body: Buffer,
+): boolean {
+  const contentType = headers["content-type"] ?? headers["Content-Type"];
+  const contentEncoding = headers["content-encoding"] ?? headers["Content-Encoding"];
+  const normalizedContentType = Array.isArray(contentType) ? contentType.join(";") : contentType;
+  return (
+    !contentEncoding &&
+    typeof normalizedContentType === "string" &&
+    /\btext\/html\b/i.test(normalizedContentType) &&
+    body.byteLength > 0
+  );
+}
+
+function appAuthoringOverlayScript(): string {
+  return `<script data-trace-app-overlay>
+(function () {
+  if (window.__traceAppOverlayInstalled) return;
+  window.__traceAppOverlayInstalled = true;
+  function post(message) {
+    var target = window.parent && window.parent !== window ? window.parent : window.opener;
+    if (!target || !target.postMessage) return;
+    target.postMessage(Object.assign({ type: "trace:app:overlay", source: "endpoint-proxy" }, message), "*");
+  }
+  document.addEventListener("click", function (event) {
+    var target = event.target;
+    if (!target || !target.closest) return;
+    var element = target.closest("[data-trace-source]");
+    if (!element) return;
+    var rect = element.getBoundingClientRect();
+    var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1;
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
+    post({
+      event: "element-selected",
+      sourceLocation: element.getAttribute("data-trace-source"),
+      text: (element.textContent || "").trim().slice(0, 500),
+      bounds: {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        x: rect.left / viewportWidth,
+        y: rect.top / viewportHeight
+      }
+    });
+  }, true);
+  window.addEventListener("error", function (event) {
+    post({
+      event: "error",
+      message: event.message || "Application script error",
+      stack: event.error && event.error.stack ? String(event.error.stack) : null
+    });
+  });
+})();</script>`;
+}
+
+function injectAppAuthoringOverlay(
+  headers: Record<string, string | string[]>,
+  body: Buffer,
+): { headers: Record<string, string | string[]>; body: Buffer } {
+  if (!shouldInjectHtmlOverlay(headers, body)) return { headers, body };
+  const html = body.toString("utf8");
+  if (html.includes("data-trace-app-overlay")) return { headers, body };
+  const script = appAuthoringOverlayScript();
+  const nextHtml = /<\/body>/i.test(html)
+    ? html.replace(/<\/body>/i, `${script}</body>`)
+    : `${html}${script}`;
+  const nextHeaders = { ...headers };
+  delete nextHeaders["content-length"];
+  delete nextHeaders["Content-Length"];
+  delete nextHeaders["content-security-policy"];
+  delete nextHeaders["Content-Security-Policy"];
+  return { headers: nextHeaders, body: Buffer.from(nextHtml, "utf8") };
 }
 
 class RequestBodyTooLargeError extends Error {}
@@ -86,12 +194,16 @@ export class EndpointProxyService {
       res.writeHead(410).end("Endpoint revoked");
       return;
     }
+    if (requestUrl(req).pathname === "/__trace_preview_auth") {
+      await this.handlePreviewAuth(req, res, endpoint);
+      return;
+    }
     if (endpoint.status !== "enabled") {
       res.writeHead(503).end("Endpoint unavailable");
       return;
     }
     if (endpoint.accessMode === "private") {
-      const userId = authenticatedUserId(req);
+      const userId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
       if (!userId) {
         res.writeHead(401).end("Authentication required");
         return;
@@ -118,7 +230,12 @@ export class EndpointProxyService {
         },
       },
     });
-    if (!process || process.status !== "running" || !process.runtimeInstanceId) {
+    if (
+      !process ||
+      process.status !== "running" ||
+      !process.runtimeInstanceId ||
+      process.runtimeInstanceId !== endpoint.currentRuntimeInstanceId
+    ) {
       res.writeHead(503).end("Process is not running");
       return;
     }
@@ -197,6 +314,7 @@ export class EndpointProxyService {
       startedAt,
       response: res,
       timer,
+      injectAuthoringOverlay: endpoint.accessMode === "private",
     };
     this.pendingHttp.set(requestId, pending);
     const delivery = sessionRouter.sendToRuntime(
@@ -221,14 +339,25 @@ export class EndpointProxyService {
     }
   }
 
-  resolveHttpResponse(requestId: string, response: { status: number; headers: Record<string, string | string[]>; bodyBase64?: string }) {
+  resolveHttpResponse(
+    requestId: string,
+    response: { status: number; headers: Record<string, string | string[]>; bodyBase64?: string },
+  ) {
     const pending = this.pendingHttp.get(requestId);
     if (!pending) return;
     this.pendingHttp.delete(requestId);
     clearTimeout(pending.timer);
-    const body = response.bodyBase64 ? Buffer.from(response.bodyBase64, "base64") : Buffer.alloc(0);
+    let body: Buffer<ArrayBufferLike> = response.bodyBase64
+      ? Buffer.from(response.bodyBase64, "base64")
+      : Buffer.alloc(0);
+    let headers = forwardableResponseHeaders(response.headers);
+    if (pending.injectAuthoringOverlay) {
+      const injected = injectAppAuthoringOverlay(headers, body);
+      headers = injected.headers;
+      body = injected.body;
+    }
     pending.response.writeHead(response.status, {
-      ...forwardableResponseHeaders(response.headers),
+      ...headers,
       "X-Trace-Endpoint-Id": pending.endpointId,
     });
     pending.response.end(body);
@@ -293,7 +422,7 @@ export class EndpointProxyService {
       return;
     }
     if (endpoint.accessMode === "private") {
-      const userId = authenticatedUserId(req);
+      const userId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
       if (!userId) {
         client.close();
         return;
@@ -316,7 +445,11 @@ export class EndpointProxyService {
         },
       },
     });
-    if (!process?.runtimeInstanceId || process.status !== "running") {
+    if (
+      !process?.runtimeInstanceId ||
+      process.status !== "running" ||
+      process.runtimeInstanceId !== endpoint.currentRuntimeInstanceId
+    ) {
       client.close();
       return;
     }
@@ -369,6 +502,42 @@ export class EndpointProxyService {
       this.pendingWs.delete(requestId);
       client.close();
     }
+  }
+
+  private async handlePreviewAuth(
+    req: IncomingMessage,
+    res: ServerResponse,
+    endpoint: { id: string; organizationId: string; sessionGroupId: string },
+  ) {
+    const url = requestUrl(req);
+    const token = url.searchParams.get("token");
+    const payload = token ? verifyEndpointPreviewToken(token) : null;
+    if (
+      !payload ||
+      payload.endpointId !== endpoint.id ||
+      payload.organizationId !== endpoint.organizationId
+    ) {
+      res.writeHead(401).end("Invalid endpoint preview token");
+      return;
+    }
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: endpoint.sessionGroupId, organizationId: endpoint.organizationId },
+      select: { visibility: true, ownerUserId: true },
+    });
+    if (!group || !canViewSessionGroup(group, payload.userId)) {
+      res.writeHead(403).end("Forbidden");
+      return;
+    }
+    const expiresAt =
+      typeof payload.exp === "number"
+        ? new Date(payload.exp * 1000)
+        : new Date(Date.now() + 60_000);
+    res.writeHead(302, {
+      "Set-Cookie": endpointPreviewCookieHeader(token ?? "", expiresAt),
+      Location: safeRedirectPath(url.searchParams.get("next")),
+      "Cache-Control": "no-store",
+    });
+    res.end();
   }
 
   resolveWebSocketOpened(_requestId: string) {}

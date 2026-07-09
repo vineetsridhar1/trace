@@ -34,6 +34,28 @@ interface CheckpointPanelProps {
   onCheckpointClick?: (sessionId: string, promptEventId: string) => void;
 }
 
+export function buildCheckpointRestoreInput(input: {
+  restoreSession: SessionEntity;
+  sessionGroup: SessionGroupEntity | null | undefined;
+  channelId: string | null | undefined;
+  checkpointId: string;
+}) {
+  const isAppSession = input.sessionGroup?.kind === "app";
+  const restoreRepo = input.restoreSession.repo as { remoteUrl?: string | null } | null | undefined;
+
+  return {
+    ...(isAppSession ? { kind: "app" as const } : {}),
+    tool: isAppSession ? "claude_code" : input.restoreSession.tool,
+    model: input.restoreSession.model ?? undefined,
+    reasoningEffort: input.restoreSession.reasoningEffort ?? undefined,
+    hosting: isAppSession
+      ? "cloud"
+      : resolveSupportedHostingForRepo(input.restoreSession.hosting, restoreRepo),
+    ...(input.channelId ? { channelId: input.channelId } : {}),
+    restoreCheckpointId: input.checkpointId,
+  };
+}
+
 export function CheckpointPanel({
   sessionGroupId,
   activeSessionId,
@@ -101,17 +123,14 @@ export function CheckpointPanel({
 
       setRestoringId(checkpoint.id);
       try {
-        const restoreRepo = restoreSession.repo as { remoteUrl?: string | null } | null | undefined;
         const result = await client
           .mutation(START_SESSION_MUTATION, {
-            input: {
-              tool: restoreSession.tool,
-              model: restoreSession.model ?? undefined,
-              reasoningEffort: restoreSession.reasoningEffort ?? undefined,
-              hosting: resolveSupportedHostingForRepo(restoreSession.hosting, restoreRepo),
+            input: buildCheckpointRestoreInput({
+              restoreSession,
+              sessionGroup,
               channelId: channelId ?? undefined,
-              restoreCheckpointId: checkpoint.id,
-            },
+              checkpointId: checkpoint.id,
+            }),
           })
           .toPromise();
 
@@ -129,7 +148,7 @@ export function CheckpointPanel({
         setRestoringId(null);
       }
     },
-    [channelId, restoreSession],
+    [channelId, restoreSession, sessionGroup],
   );
 
   const requestRestore = useCallback(
@@ -187,6 +206,16 @@ export function CheckpointPanel({
                 )}
               </div>
               <p className="mt-0.5 truncate text-xs text-foreground/80">{checkpoint.subject}</p>
+              {checkpoint.captureStatus === "captured" && checkpoint.captureUrl ? (
+                <div className="mt-2 overflow-hidden rounded border border-border bg-surface-deep">
+                  <img
+                    src={checkpoint.captureUrl}
+                    alt=""
+                    loading="lazy"
+                    className="aspect-video w-full object-cover"
+                  />
+                </div>
+              ) : null}
               <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <span className="truncate">{sessionName}</span>
                 <span>·</span>

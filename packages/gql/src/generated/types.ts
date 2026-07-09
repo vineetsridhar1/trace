@@ -81,6 +81,24 @@ export type ApplicationProcessStatus =
   | "stopped"
   | "stopping";
 
+export type Artifact = {
+  __typename?: "Artifact";
+  contentType: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdBy: User;
+  html: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  metadata?: Maybe<Scalars["JSON"]["output"]>;
+  parentArtifactId?: Maybe<Scalars["ID"]["output"]>;
+  prompt?: Maybe<Scalars["String"]["output"]>;
+  promptEventId?: Maybe<Scalars["ID"]["output"]>;
+  publicUrl?: Maybe<Scalars["String"]["output"]>;
+  publishedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  sessionGroupId: Scalars["ID"]["output"];
+  title: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type BranchDiffFile = {
   __typename?: "BranchDiffFile";
   additions: Scalars["Int"]["output"];
@@ -334,6 +352,35 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignPdfPageOptionsInput = {
+  heightPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginBottomPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginLeftPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginRightPx?: InputMaybe<Scalars["Int"]["input"]>;
+  marginTopPx?: InputMaybe<Scalars["Int"]["input"]>;
+  widthPx?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type DesignPromptContentCatalog = {
+  __typename?: "DesignPromptContentCatalog";
+  designSystems: Array<DesignSystemOption>;
+  skills: Array<DesignSkillOption>;
+};
+
+export type DesignSkillOption = {
+  __typename?: "DesignSkillOption";
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  title?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type DesignSystemOption = {
+  __typename?: "DesignSystemOption";
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  name?: Maybe<Scalars["String"]["output"]>;
+};
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -394,6 +441,15 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_artifact_created"
+  | "design_artifact_error"
+  | "design_artifact_promoted"
+  | "design_artifact_updated"
+  | "design_comment_added"
+  | "design_export_completed"
+  | "design_export_requested"
+  | "design_generation_failed"
+  | "design_generation_started"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -409,8 +465,10 @@ export type EventType =
   | "queued_messages_cleared"
   | "queued_messages_drained"
   | "queued_messages_reordered"
+  | "repo_branch_pushed"
   | "repo_created"
   | "repo_updated"
+  | "session_app_tokens_updated"
   | "session_application_log_appended"
   | "session_application_process_failed"
   | "session_application_process_started"
@@ -458,6 +516,11 @@ export type EventType =
 export type GitCheckpoint = {
   __typename?: "GitCheckpoint";
   author: Scalars["String"]["output"];
+  captureContentType?: Maybe<Scalars["String"]["output"]>;
+  captureKey?: Maybe<Scalars["String"]["output"]>;
+  captureStatus?: Maybe<Scalars["String"]["output"]>;
+  captureUrl?: Maybe<Scalars["String"]["output"]>;
+  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   commitSha: Scalars["String"]["output"];
   committedAt: Scalars["DateTime"]["output"];
   createdAt: Scalars["DateTime"]["output"];
@@ -476,7 +539,7 @@ export type GitCheckpoint = {
   treeSha: Scalars["String"]["output"];
 };
 
-export type HostingMode = "cloud" | "local";
+export type HostingMode = "cloud" | "local" | "serverless";
 
 export type InboxItem = {
   __typename?: "InboxItem";
@@ -544,6 +607,15 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
+export type ManagedGitCredential = {
+  __typename?: "ManagedGitCredential";
+  credentialedRemoteUrl: Scalars["String"]["output"];
+  expiresAt: Scalars["DateTime"]["output"];
+  remoteUrl: Scalars["String"]["output"];
+  repoId: Scalars["ID"]["output"];
+  token: Scalars["String"]["output"];
+};
+
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -595,6 +667,7 @@ export type Mutation = {
   assignTicket: Ticket;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
+  commentDesignArtifact: Event;
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
   commitSessionGroupFileChanges: Scalars["String"]["output"];
@@ -603,9 +676,12 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createDesignArtifact: Artifact;
+  createManagedGitCredential: ManagedGitCredential;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteAgentEnvironment: Scalars["Boolean"]["output"];
@@ -625,7 +701,11 @@ export type Mutation = {
   editChannelMessage: Message;
   editChatMessage: Message;
   enableSessionEndpointForwarding: SessionEndpoint;
+  exportDesignArtifactPdf: Event;
   forkSession: Session;
+  generateDesignArtifacts: Array<Artifact>;
+  graduateManagedRepoToGitHub: Repo;
+  iterateDesignArtifact: Artifact;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -636,6 +716,12 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  openAppSessionAsCodingSession: Session;
+  patchAppSessionTokens: Event;
+  patchDesignArtifactTokens: Artifact;
+  promoteDesignArtifactToCodingSession: Session;
+  publishAppSession: SessionEndpoint;
+  publishDesignArtifact: Artifact;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -646,6 +732,7 @@ export type Mutation = {
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
+  reportDesignArtifactError: Event;
   requestBridgeAccess: BridgeAccessRequest;
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
@@ -684,6 +771,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateDesignHarnessSettings: SessionGroup;
   updateOrgMemberRole: OrgMember;
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
@@ -733,6 +821,13 @@ export type MutationClearQueuedMessagesArgs = {
   sessionId: Scalars["ID"]["input"];
 };
 
+export type MutationCommentDesignArtifactArgs = {
+  anchor?: InputMaybe<Scalars["JSON"]["input"]>;
+  artifactId: Scalars["ID"]["input"];
+  body: Scalars["String"]["input"];
+  sendToAgent?: InputMaybe<Scalars["Boolean"]["input"]>;
+};
+
 export type MutationCommentOnTicketArgs = {
   text: Scalars["String"]["input"];
   ticketId: Scalars["ID"]["input"];
@@ -773,6 +868,16 @@ export type MutationCreateChatArgs = {
   input: CreateChatInput;
 };
 
+export type MutationCreateDesignArtifactArgs = {
+  html?: InputMaybe<Scalars["String"]["input"]>;
+  prompt: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationCreateManagedGitCredentialArgs = {
+  repoId: Scalars["ID"]["input"];
+};
+
 export type MutationCreateOrganizationArgs = {
   input: CreateOrganizationInput;
 };
@@ -783,6 +888,10 @@ export type MutationCreateProjectArgs = {
 
 export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
+};
+
+export type MutationCreateSessionEndpointPreviewArgs = {
+  endpointId: Scalars["ID"]["input"];
 };
 
 export type MutationCreateTerminalArgs = {
@@ -867,8 +976,31 @@ export type MutationEnableSessionEndpointForwardingArgs = {
   endpointId: Scalars["ID"]["input"];
 };
 
+export type MutationExportDesignArtifactPdfArgs = {
+  artifactId: Scalars["ID"]["input"];
+  pageOptions?: InputMaybe<DesignPdfPageOptionsInput>;
+};
+
 export type MutationForkSessionArgs = {
   eventId: Scalars["ID"]["input"];
+};
+
+export type MutationGenerateDesignArtifactsArgs = {
+  directionCount?: InputMaybe<Scalars["Int"]["input"]>;
+  prompt: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationGraduateManagedRepoToGitHubArgs = {
+  remoteUrl: Scalars["String"]["input"];
+  repoId: Scalars["ID"]["input"];
+};
+
+export type MutationIterateDesignArtifactArgs = {
+  artifactId: Scalars["ID"]["input"];
+  comparisonArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
+  html?: InputMaybe<Scalars["String"]["input"]>;
+  prompt: Scalars["String"]["input"];
 };
 
 export type MutationJoinChannelArgs = {
@@ -920,6 +1052,35 @@ export type MutationMuteScopeArgs = {
   scopeType: Scalars["String"]["input"];
 };
 
+export type MutationOpenAppSessionAsCodingSessionArgs = {
+  prompt?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationPatchAppSessionTokensArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+  tokens: Scalars["JSON"]["input"];
+};
+
+export type MutationPatchDesignArtifactTokensArgs = {
+  artifactId: Scalars["ID"]["input"];
+  tokens: Scalars["JSON"]["input"];
+};
+
+export type MutationPromoteDesignArtifactToCodingSessionArgs = {
+  artifactId: Scalars["ID"]["input"];
+  prompt?: InputMaybe<Scalars["String"]["input"]>;
+  referenceArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
+};
+
+export type MutationPublishAppSessionArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationPublishDesignArtifactArgs = {
+  artifactId: Scalars["ID"]["input"];
+};
+
 export type MutationQueueSessionMessageArgs = {
   attachmentKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   imageKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
@@ -967,6 +1128,12 @@ export type MutationReorderChannelsArgs = {
 export type MutationReorderQueuedMessagesArgs = {
   ids: Array<Scalars["ID"]["input"]>;
   sessionId: Scalars["ID"]["input"];
+};
+
+export type MutationReportDesignArtifactErrorArgs = {
+  artifactId: Scalars["ID"]["input"];
+  message: Scalars["String"]["input"];
+  stack?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type MutationRequestBridgeAccessArgs = {
@@ -1174,6 +1341,12 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateDesignHarnessSettingsArgs = {
+  designSkillIds?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  designSystemId?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1300,6 +1473,8 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  designArtifacts: Array<Artifact>;
+  designPromptContentCatalog: DesignPromptContentCatalog;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
@@ -1401,6 +1576,10 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignArtifactsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryEndpointTrafficArgs = {
@@ -1650,6 +1829,7 @@ export type Repo = {
   id: Scalars["ID"]["output"];
   name: Scalars["String"]["output"];
   projects: Array<Project>;
+  provider: RepoProvider;
   remoteUrl?: Maybe<Scalars["String"]["output"]>;
   sessions: Array<Session>;
   webhookActive: Scalars["Boolean"]["output"];
@@ -1729,6 +1909,8 @@ export type RepoProcessDefinitionInput = {
   required?: InputMaybe<Scalars["Boolean"]["input"]>;
   workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
 };
+
+export type RepoProvider = "github" | "managed";
 
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";
@@ -1887,6 +2069,12 @@ export type SessionEndpoint = {
 
 export type SessionEndpointAccessMode = "private" | "public";
 
+export type SessionEndpointPreview = {
+  __typename?: "SessionEndpointPreview";
+  expiresAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
+
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
 export type SessionEndpoints = {
@@ -1912,10 +2100,13 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  designSkillIds: Array<Scalars["String"]["output"]>;
+  designSystemId?: Maybe<Scalars["String"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
+  kind: SessionGroupKind;
   name: Scalars["String"]["output"];
   owner: User;
   prUrl?: Maybe<Scalars["String"]["output"]>;
@@ -1951,6 +2142,8 @@ export type SessionGroupFileTree = {
   paths: Array<Scalars["String"]["output"]>;
   truncated: Scalars["Boolean"]["output"];
 };
+
+export type SessionGroupKind = "app" | "coding" | "design";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2059,9 +2252,12 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  designSkillIds?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  designSystemId?: InputMaybe<Scalars["String"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
+  kind?: InputMaybe<SessionGroupKind>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   projectId?: InputMaybe<Scalars["ID"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;

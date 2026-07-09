@@ -28,6 +28,8 @@ export type {
   BridgeRunCommand,
   BridgeSendCommand,
   BridgePrepareCommand,
+  BridgeConfigureManagedGitRemoteCommand,
+  BridgeBootstrapAppWorkspaceCommand,
   BridgeTerminateCommand,
   BridgePauseCommand,
   BridgeResumeCommand,
@@ -201,10 +203,10 @@ export {
   hasAttachmentKeys,
   hasVisibleUserSessionContent,
 } from "./session-content.js";
-export {
-  PROVISIONED_RUNTIME_PREFIX,
-  isProvisionedRuntimeId,
-} from "./runtime-ids.js";
+export type { TraceDesignPromptContent, TraceDesignPromptInput } from "./design.js";
+export { composeTraceDesignPrompt } from "./design.js";
+export { TRACE_APP_STARTER_FILES } from "./app-starter.js";
+export { PROVISIONED_RUNTIME_PREFIX, isProvisionedRuntimeId } from "./runtime-ids.js";
 export {
   branchNameFromGitRef,
   branchNamesFromGitRefsOutput,

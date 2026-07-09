@@ -46,7 +46,8 @@
     "build": "tsc -b && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
     "dev": "pnpm build && (tsc -b --watch & tsc -p tsconfig.cjs.json --watch & wait)",
     "lint": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke:app-starter": "pnpm build && node scripts/smoke-app-starter.mjs"
   },
   "peerDependencies": {
     "node-pty": "^1.1.0"

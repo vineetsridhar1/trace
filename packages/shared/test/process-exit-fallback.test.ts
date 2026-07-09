@@ -339,6 +339,32 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it("passes appended system prompts to Claude Code without changing stdin prompt delivery", () => {
+    const adapter = new ClaudeCodeAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "Build a lightweight CRM approval tracker",
+      cwd: "/tmp",
+      appendSystemPrompt: "Trace app harness: Next.js starter, managed git checkpoints.",
+      onOutput,
+      onComplete,
+    });
+
+    expect(spawn).toHaveBeenLastCalledWith(
+      "claude",
+      expect.arrayContaining([
+        "--append-system-prompt",
+        "Trace app harness: Next.js starter, managed git checkpoints.",
+      ]),
+      expect.objectContaining({ cwd: "/tmp", stdio: ["pipe", "pipe", "pipe"] }),
+    );
+    expect(spawnedChildren[0].stdin.read()?.toString()).toBe(
+      "Build a lightweight CRM approval tracker",
+    );
+  });
+
   it("emits Claude Code assistant usage incrementally and suppresses duplicate result usage", () => {
     const adapter = new ClaudeCodeAdapter();
     const onOutput = vi.fn();

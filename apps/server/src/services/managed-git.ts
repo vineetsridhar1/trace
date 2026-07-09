@@ -1,0 +1,657 @@
+import { execFile, spawn } from "child_process";
+import { randomUUID } from "crypto";
+import type { Request, Response } from "express";
+import fs from "fs";
+import jwt from "jsonwebtoken";
+import path from "path";
+import { promisify } from "util";
+import { Prisma, type PrismaClient } from "@prisma/client";
+import { prisma } from "../lib/db.js";
+import { AuthorizationError, ValidationError } from "../lib/errors.js";
+import { resolveJwtSecret } from "../lib/jwt-secret.js";
+import { authenticateProvisionedRuntimeToken } from "../lib/runtime-adapters.js";
+import { buildDefaultAppSetupConfig } from "./app-starter-config.js";
+import { visibleSessionGroupWhere } from "./access.js";
+import { apiTokenService } from "./api-token.js";
+import { eventService } from "./event.js";
+import { parseGitHubRepo } from "./github-repo.js";
+import { orgSecretService } from "./org-secret.js";
+
+const execFileAsync = promisify(execFile);
+const DEFAULT_BRANCH = "main";
+const ORG_GITHUB_TOKEN_SECRET_NAME = "GITHUB_TOKEN";
+const USER_TOKEN_TTL_SECONDS = 10 * 60;
+const JWT_SECRET = resolveJwtSecret();
+const GIT_SERVICE_COMMANDS = {
+  "git-upload-pack": "upload-pack",
+  "git-receive-pack": "receive-pack",
+} as const;
+
+type GitService = keyof typeof GIT_SERVICE_COMMANDS;
+type ManagedGitUserTokenPayload = {
+  tokenType: "managed_git_user";
+  userId: string;
+  organizationId: string;
+  repoId: string;
+};
+type ManagedGitAuth =
+  | {
+      kind: "runtime";
+      userId: string;
+      sessionId: string;
+    }
+  | {
+      kind: "user";
+      userId: string;
+      sessionId: null;
+    };
+type ManagedRepoHead = {
+  ref: string;
+  branch: string;
+  commitSha: string;
+};
+type PrismaTx = Omit<
+  PrismaClient,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;
+
+function gitStorageRoot(): string {
+  return process.env.GIT_STORAGE_ROOT?.trim() || path.join(process.cwd(), ".trace-managed-git");
+}
+
+function assertPublicServerUrl(): URL {
+  const raw = process.env.TRACE_SERVER_PUBLIC_URL?.trim();
+  if (!raw) {
+    throw new Error("TRACE_SERVER_PUBLIC_URL is required for managed git remotes");
+  }
+  const url = new URL(raw);
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error("TRACE_SERVER_PUBLIC_URL must use http:// or https://");
+  }
+  return url;
+}
+
+function managedRepoPath(repoId: string): string {
+  if (!/^[a-zA-Z0-9_-]+$/.test(repoId)) {
+    throw new Error("Invalid managed repo id");
+  }
+  return path.join(gitStorageRoot(), `${repoId}.git`);
+}
+
+function buildManagedRemoteUrl(organizationId: string, repoId: string): string {
+  const url = assertPublicServerUrl();
+  url.pathname = `${url.pathname.replace(/\/$/, "")}/git/${organizationId}/${repoId}.git`;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+function buildCredentialedManagedRemoteUrl(input: {
+  organizationId: string;
+  repoId: string;
+  token: string;
+}): string {
+  const url = new URL(buildManagedRemoteUrl(input.organizationId, input.repoId));
+  url.username = "x-token";
+  url.password = input.token;
+  return url.toString();
+}
+
+function buildCredentialedGitHubRemoteUrl(input: {
+  owner: string;
+  repo: string;
+  token: string;
+}): string {
+  const url = new URL(
+    `https://github.com/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}.git`,
+  );
+  url.username = "x-access-token";
+  url.password = input.token;
+  return url.toString();
+}
+
+function jsonObject(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function pktLine(value: string): Buffer {
+  const payload = Buffer.from(value, "utf8");
+  const length = (payload.length + 4).toString(16).padStart(4, "0");
+  return Buffer.concat([Buffer.from(length, "ascii"), payload]);
+}
+
+function parseBasicPassword(header: string | undefined): string | null {
+  if (!header?.startsWith("Basic ")) return null;
+  const encoded = header.slice("Basic ".length).trim();
+  let decoded: string;
+  try {
+    decoded = Buffer.from(encoded, "base64").toString("utf8");
+  } catch {
+    return null;
+  }
+  const separatorIndex = decoded.indexOf(":");
+  if (separatorIndex < 0) return null;
+  return decoded.slice(separatorIndex + 1);
+}
+
+function createManagedGitUserToken(input: {
+  userId: string;
+  organizationId: string;
+  repoId: string;
+  ttlSeconds?: number | null;
+}): { token: string; expiresAt: Date } {
+  const ttlSeconds =
+    typeof input.ttlSeconds === "number" && Number.isFinite(input.ttlSeconds)
+      ? Math.min(Math.max(Math.floor(input.ttlSeconds), 60), USER_TOKEN_TTL_SECONDS)
+      : USER_TOKEN_TTL_SECONDS;
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+  const token = jwt.sign(
+    {
+      tokenType: "managed_git_user",
+      userId: input.userId,
+      organizationId: input.organizationId,
+      repoId: input.repoId,
+    } satisfies ManagedGitUserTokenPayload,
+    JWT_SECRET,
+    { expiresIn: ttlSeconds },
+  );
+  return { token, expiresAt };
+}
+
+function authenticateManagedGitUserToken(token: string): ManagedGitUserTokenPayload | null {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as unknown as ManagedGitUserTokenPayload;
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      payload.tokenType !== "managed_git_user" ||
+      typeof payload.userId !== "string" ||
+      typeof payload.organizationId !== "string" ||
+      typeof payload.repoId !== "string"
+    ) {
+      return null;
+    }
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureAuthorizedClient(
+  req: Request,
+  organizationId: string,
+  repoId: string,
+): Promise<ManagedGitAuth | null> {
+  const token = parseBasicPassword(req.headers.authorization);
+  if (!token) return null;
+
+  const repo = await prisma.repo.findFirst({
+    where: { id: repoId, organizationId, provider: "managed" },
+    select: { id: true, setupConfig: true },
+  });
+  if (!repo) return null;
+  if (typeof jsonObject(repo.setupConfig).managedGitGarbageCollectedAt === "string") {
+    return null;
+  }
+
+  const runtimeAuth = authenticateProvisionedRuntimeToken(token);
+  if (runtimeAuth) {
+    if (runtimeAuth.organizationId !== organizationId) return null;
+    const session = await prisma.session.findFirst({
+      where: {
+        id: runtimeAuth.sessionId,
+        organizationId,
+        OR: [{ repoId }, { sessionGroup: { repoId } }],
+      },
+      select: { id: true },
+    });
+    return session
+      ? { kind: "runtime", userId: runtimeAuth.userId, sessionId: runtimeAuth.sessionId }
+      : null;
+  }
+
+  const userAuth = authenticateManagedGitUserToken(token);
+  if (!userAuth || userAuth.organizationId !== organizationId || userAuth.repoId !== repoId) {
+    return null;
+  }
+  const membership = await prisma.orgMember.findUnique({
+    where: { userId_organizationId: { userId: userAuth.userId, organizationId } },
+    select: { userId: true },
+  });
+  if (!membership) return null;
+  const visibleGroup = await prisma.sessionGroup.findFirst({
+    where: {
+      organizationId,
+      repoId,
+      ...visibleSessionGroupWhere(userAuth.userId),
+    },
+    select: { id: true },
+  });
+  return visibleGroup ? { kind: "user", userId: userAuth.userId, sessionId: null } : null;
+}
+
+async function initBareRepo(repoPath: string): Promise<void> {
+  if (fs.existsSync(repoPath)) return;
+  fs.mkdirSync(path.dirname(repoPath), { recursive: true });
+  await execFileAsync("git", ["init", "--bare", "--initial-branch", DEFAULT_BRANCH, repoPath]);
+}
+
+function parseBareRepoHeads(stdout: string): ManagedRepoHead[] {
+  return stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      const separatorIndex = line.lastIndexOf(":");
+      if (separatorIndex < 0) return [];
+      const ref = line.slice(0, separatorIndex);
+      const commitSha = line.slice(separatorIndex + 1);
+      if (!ref.startsWith("refs/heads/") || !/^[0-9a-f]{40,64}$/i.test(commitSha)) return [];
+      return [
+        {
+          ref,
+          branch: ref.slice("refs/heads/".length),
+          commitSha,
+        },
+      ];
+    });
+}
+
+async function listBareRepoHeads(repoPath: string): Promise<ManagedRepoHead[]> {
+  const { stdout } = await execFileAsync("git", [
+    "--git-dir",
+    repoPath,
+    "for-each-ref",
+    "--format=%(refname):%(objectname)",
+    "refs/heads",
+  ]);
+  return parseBareRepoHeads(stdout);
+}
+
+function runGitHttpService(input: {
+  reqBody?: Buffer;
+  res: Response;
+  service: GitService;
+  repoPath: string;
+  advertiseRefs?: boolean;
+  onSuccess?: () => Promise<void> | void;
+}) {
+  const command = GIT_SERVICE_COMMANDS[input.service];
+  const args = [
+    command,
+    "--stateless-rpc",
+    ...(input.advertiseRefs ? ["--advertise-refs"] : []),
+    input.repoPath,
+  ];
+  const child = spawn("git", args, { stdio: ["pipe", "pipe", "pipe"] });
+  const stderr: Buffer[] = [];
+
+  child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+  child.on("error", (error) => {
+    if (!input.res.headersSent) input.res.status(500);
+    input.res.end(error.message);
+  });
+  child.on("close", (code) => {
+    if (code === 0) {
+      void Promise.resolve(input.onSuccess?.()).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[managed-git] post-receive side effect failed: ${message}`);
+      });
+      return;
+    }
+    if (input.res.writableEnded) return;
+    const message = Buffer.concat(stderr).toString("utf8") || `git ${command} failed`;
+    if (!input.res.headersSent) input.res.status(500);
+    input.res.end(message);
+  });
+
+  if (input.advertiseRefs) {
+    input.res.write(pktLine(`# service=${input.service}\n`));
+    input.res.write(Buffer.from("0000", "ascii"));
+  } else {
+    child.stdin.end(input.reqBody ?? Buffer.alloc(0));
+  }
+  child.stdout.pipe(input.res);
+  if (input.advertiseRefs) child.stdin.end();
+}
+
+export const managedGitService = {
+  defaultBranch: DEFAULT_BRANCH,
+
+  buildManagedRemoteUrl,
+
+  async prepareBareRepo(repoId: string): Promise<string> {
+    const repoPath = managedRepoPath(repoId);
+    await initBareRepo(repoPath);
+    return repoPath;
+  },
+
+  async createAppRepo(input: {
+    organizationId: string;
+    name: string;
+    tx?: PrismaTx;
+  }): Promise<{ id: string; name: string; remoteUrl: string; defaultBranch: string }> {
+    const repoId = randomUUID();
+    const repoName = input.name.trim().slice(0, 80) || "Trace app";
+    const remoteUrl = buildManagedRemoteUrl(input.organizationId, repoId);
+    await this.prepareBareRepo(repoId);
+    const db = input.tx ?? prisma;
+    await db.repo.create({
+      data: {
+        id: repoId,
+        organizationId: input.organizationId,
+        name: repoName,
+        provider: "managed",
+        remoteUrl,
+        defaultBranch: DEFAULT_BRANCH,
+        setupConfig: buildDefaultAppSetupConfig(),
+      },
+    });
+    return { id: repoId, name: repoName, remoteUrl, defaultBranch: DEFAULT_BRANCH };
+  },
+
+  async recordManagedRepoPush(input: {
+    organizationId: string;
+    repoId: string;
+    sessionId?: string | null;
+    actorId?: string | null;
+    repoPath?: string;
+    heads?: ManagedRepoHead[];
+  }) {
+    const heads =
+      input.heads ?? (await listBareRepoHeads(input.repoPath ?? managedRepoPath(input.repoId)));
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "system",
+      scopeId: input.repoId,
+      eventType: "repo_branch_pushed",
+      payload: {
+        repoId: input.repoId,
+        sessionId: input.sessionId ?? null,
+        heads,
+      } as Prisma.InputJsonValue,
+      actorType: "system",
+      actorId: input.actorId ?? "managed-git",
+    });
+  },
+
+  async createUserCloneCredential(input: {
+    organizationId: string;
+    repoId: string;
+    userId: string;
+    ttlSeconds?: number | null;
+  }) {
+    const repo = await prisma.repo.findFirst({
+      where: { id: input.repoId, organizationId: input.organizationId, provider: "managed" },
+      select: { id: true, name: true, remoteUrl: true, setupConfig: true },
+    });
+    if (!repo) {
+      throw new ValidationError("Managed repo not found.");
+    }
+    if (typeof jsonObject(repo.setupConfig).managedGitGarbageCollectedAt === "string") {
+      throw new ValidationError("Managed repo storage has expired.");
+    }
+    const membership = await prisma.orgMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: input.userId,
+          organizationId: input.organizationId,
+        },
+      },
+      select: { userId: true },
+    });
+    if (!membership) {
+      throw new AuthorizationError("Not authorized for this managed repo.");
+    }
+    const visibleGroup = await prisma.sessionGroup.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        repoId: repo.id,
+        ...visibleSessionGroupWhere(input.userId),
+      },
+      select: { id: true },
+    });
+    if (!visibleGroup) {
+      throw new AuthorizationError("Not authorized for this managed repo.");
+    }
+
+    const credential = createManagedGitUserToken(input);
+    const remoteUrl = repo.remoteUrl ?? buildManagedRemoteUrl(input.organizationId, repo.id);
+    return {
+      repoId: repo.id,
+      remoteUrl,
+      credentialedRemoteUrl: buildCredentialedManagedRemoteUrl({
+        organizationId: input.organizationId,
+        repoId: repo.id,
+        token: credential.token,
+      }),
+      token: credential.token,
+      expiresAt: credential.expiresAt,
+    };
+  },
+
+  async graduateManagedRepoToGitHub(input: {
+    organizationId: string;
+    repoId: string;
+    userId: string;
+    remoteUrl: string;
+  }) {
+    const remoteUrl = input.remoteUrl.trim();
+    const githubRepo = parseGitHubRepo(remoteUrl);
+    if (!githubRepo) {
+      throw new ValidationError("Graduation target must be a GitHub remote URL.");
+    }
+
+    const repo = await prisma.repo.findFirst({
+      where: { id: input.repoId, organizationId: input.organizationId, provider: "managed" },
+      select: {
+        id: true,
+        organizationId: true,
+        name: true,
+        defaultBranch: true,
+        setupConfig: true,
+      },
+    });
+    if (!repo) {
+      throw new ValidationError("Managed repo not found.");
+    }
+    if (typeof jsonObject(repo.setupConfig).managedGitGarbageCollectedAt === "string") {
+      throw new ValidationError("Managed repo storage has expired.");
+    }
+
+    const membership = await prisma.orgMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: input.userId,
+          organizationId: input.organizationId,
+        },
+      },
+      select: { userId: true },
+    });
+    if (!membership) {
+      throw new AuthorizationError("Not authorized for this managed repo.");
+    }
+
+    const userTokens = await apiTokenService.getDecryptedTokens(input.userId);
+    const githubToken =
+      userTokens.github ??
+      (await orgSecretService.getDecryptedValueByName(
+        input.organizationId,
+        ORG_GITHUB_TOKEN_SECRET_NAME,
+      ));
+    if (!githubToken) {
+      throw new ValidationError(
+        `No GitHub token configured. Add a personal GitHub API token or ask an org admin to add an org secret named ${ORG_GITHUB_TOKEN_SECRET_NAME}.`,
+      );
+    }
+
+    await execFileAsync("git", [
+      "--git-dir",
+      managedRepoPath(repo.id),
+      "push",
+      "--mirror",
+      buildCredentialedGitHubRemoteUrl({ ...githubRepo, token: githubToken }),
+    ]);
+
+    const graduatedAt = new Date().toISOString();
+    const updated = await prisma.repo.update({
+      where: { id: repo.id },
+      data: {
+        provider: "github",
+        remoteUrl,
+        setupConfig: {
+          ...jsonObject(repo.setupConfig),
+          managedGitGraduatedAt: graduatedAt,
+          managedGitGraduatedRemoteUrl: remoteUrl,
+        } as Prisma.InputJsonValue,
+      },
+      include: { projects: true, sessions: true },
+    });
+
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "system",
+      scopeId: repo.id,
+      eventType: "repo_updated",
+      payload: {
+        repo: {
+          id: updated.id,
+          name: updated.name,
+          provider: updated.provider,
+          remoteUrl: updated.remoteUrl,
+          defaultBranch: updated.defaultBranch,
+          webhookActive: !!updated.webhookId,
+        },
+        managedGitGraduatedAt: graduatedAt,
+      } as Prisma.InputJsonValue,
+      actorType: "user",
+      actorId: input.userId,
+    });
+
+    return updated;
+  },
+
+  async deleteExpiredArchivedAppRepos(retentionDays: number): Promise<number> {
+    if (!Number.isFinite(retentionDays) || retentionDays < 0) {
+      throw new ValidationError("Retention days must be a non-negative number.");
+    }
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+    const repos = await prisma.repo.findMany({
+      where: {
+        provider: "managed",
+        sessionGroups: {
+          some: {
+            kind: "app",
+            archivedAt: { lt: cutoff },
+          },
+          none: {
+            archivedAt: null,
+          },
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        setupConfig: true,
+        sessionGroups: {
+          where: {
+            kind: "app",
+            archivedAt: { lt: cutoff },
+          },
+          select: { id: true },
+        },
+      },
+    });
+
+    let deleted = 0;
+    for (const repo of repos) {
+      const setupConfig = jsonObject(repo.setupConfig);
+      if (typeof setupConfig.managedGitGarbageCollectedAt === "string") continue;
+
+      await fs.promises.rm(managedRepoPath(repo.id), { recursive: true, force: true });
+      const garbageCollectedAt = new Date().toISOString();
+      await prisma.repo.update({
+        where: { id: repo.id },
+        data: {
+          setupConfig: {
+            ...setupConfig,
+            managedGitGarbageCollectedAt: garbageCollectedAt,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await eventService.create({
+        organizationId: repo.organizationId,
+        scopeType: "system",
+        scopeId: repo.id,
+        eventType: "repo_updated",
+        payload: {
+          repoId: repo.id,
+          provider: "managed",
+          managedGitGarbageCollectedAt: garbageCollectedAt,
+          sessionGroupIds: repo.sessionGroups.map((group) => group.id),
+        } as Prisma.InputJsonValue,
+        actorType: "system",
+        actorId: "managed-git",
+      });
+      deleted += 1;
+    }
+    return deleted;
+  },
+
+  async handleInfoRefs(req: Request, res: Response, params: { orgId: string; repoId: string }) {
+    const service = typeof req.query.service === "string" ? req.query.service : "";
+    if (service !== "git-upload-pack" && service !== "git-receive-pack") {
+      res.status(400).json({ error: "Unsupported git service" });
+      return;
+    }
+    const auth = await ensureAuthorizedClient(req, params.orgId, params.repoId);
+    if (!auth) {
+      res.set("WWW-Authenticate", 'Basic realm="Trace managed git"');
+      res.status(401).end("Unauthorized");
+      return;
+    }
+    res.type(`application/x-${service}-advertisement`);
+    res.set("Cache-Control", "no-cache");
+    runGitHttpService({
+      res,
+      service,
+      repoPath: managedRepoPath(params.repoId),
+      advertiseRefs: true,
+    });
+  },
+
+  async handleRpc(
+    req: Request,
+    res: Response,
+    params: { orgId: string; repoId: string; service: GitService },
+  ) {
+    const auth = await ensureAuthorizedClient(req, params.orgId, params.repoId);
+    if (!auth) {
+      res.set("WWW-Authenticate", 'Basic realm="Trace managed git"');
+      res.status(401).end("Unauthorized");
+      return;
+    }
+    const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    res.type(`application/x-${params.service}-result`);
+    res.set("Cache-Control", "no-cache");
+    runGitHttpService({
+      reqBody: body,
+      res,
+      service: params.service,
+      repoPath: managedRepoPath(params.repoId),
+      onSuccess:
+        params.service === "git-receive-pack"
+          ? () =>
+              this.recordManagedRepoPush({
+                organizationId: params.orgId,
+                repoId: params.repoId,
+                sessionId: auth.sessionId,
+                actorId: auth.kind === "user" ? auth.userId : "managed-git",
+                repoPath: managedRepoPath(params.repoId),
+              })
+          : undefined,
+    });
+  },
+};
