@@ -157,6 +157,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
         }`}
       >
         <SidebarProvider className="min-h-0 flex-1">
+          <DesignModeSidebarAutoCollapse />
           <AppSidebar />
 
           <MainContentFrame>
@@ -186,6 +187,22 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
       </div>
     </TooltipProvider>
   );
+}
+
+function DesignModeSidebarAutoCollapse() {
+  const { open, setOpen, openMobile, setOpenMobile } = useSidebar();
+  const activePage = useUIStore((s: UIState) => s.activePage);
+  const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
+  const groupKind = useEntityField("sessionGroups", activeSessionGroupId ?? "", "kind");
+  const isDesignSession = activePage === "main" && groupKind === "design";
+
+  useEffect(() => {
+    if (!isDesignSession) return;
+    if (open) setOpen(false);
+    if (openMobile) setOpenMobile(false);
+  }, [isDesignSession, open, openMobile, setOpen, setOpenMobile]);
+
+  return null;
 }
 
 function MainContentFrame({ children }: { children: ReactNode }) {
