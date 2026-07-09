@@ -333,6 +333,59 @@ async function waitForPromotionEvent(sessionId, artifactId, referenceArtifactIds
   });
 }
 
+async function waitForPdfExportTimelineEvents(sessionId, artifactId, exportPayload) {
+  return pollUntil("PDF export timeline events", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      sessionId,
+      types: ["design_export_requested", "design_export_completed"],
+    });
+    const events = data.events ?? [];
+    const requestedIndex = events.findIndex((event) => {
+      if (event.eventType !== "design_export_requested") return false;
+      const payload = event.payload;
+      return (
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        payload.artifactId === artifactId &&
+        payload.exportType === "pdf" &&
+        payload.status === "requested"
+      );
+    });
+    const completedIndex = events.findIndex((event) => {
+      if (event.eventType !== "design_export_completed") return false;
+      const payload = event.payload;
+      return (
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        payload.artifactId === artifactId &&
+        payload.status === "completed" &&
+        payload.fileId === exportPayload.fileId
+      );
+    });
+    if (requestedIndex < 0 || completedIndex < 0) {
+      return {
+        ok: false,
+        detail: `requested=${requestedIndex >= 0} completed=${completedIndex >= 0}`,
+      };
+    }
+    if (completedIndex <= requestedIndex) {
+      throw new Error("PDF export completed event arrived before the requested event");
+    }
+    const completedPayload = asPayload(events[completedIndex], "PDF export timeline completion");
+    for (const key of ["fileUrl", "fileName", "byteSize", "sessionGroupId"]) {
+      if (completedPayload[key] !== exportPayload[key]) {
+        throw new Error(
+          `PDF export timeline ${key} is ${completedPayload[key] ?? "missing"}, expected ${exportPayload[key] ?? "missing"}`,
+        );
+      }
+    }
+    return { ok: true, value: events };
+  });
+}
+
 async function waitForGeneratedArtifactCompletionEvents(sessionId, artifacts, label) {
   const artifactsById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const artifactIds = artifacts.map((artifact) => artifact.id);
@@ -830,6 +883,7 @@ if (
 ) {
   throw new Error(`PDF export pageCount is ${exportPayload.pageCount}`);
 }
+await waitForPdfExportTimelineEvents(session.id, tweaked.id, exportPayload);
 await assertPdfDownload(exportPayload.fileUrl, "PDF export URL");
 
 const publishData = await graphql(PUBLISH_DESIGN_ARTIFACT, { artifactId: tweaked.id });

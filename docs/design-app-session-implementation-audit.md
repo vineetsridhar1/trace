@@ -836,3 +836,9 @@ The smoke now promotes the tweaked artifact with a secondary generated artifact 
 visual reference, requires the coding-session brief to include the reference section, and
 polls the `design_artifact_promoted` event for both the primary artifact id and
 `referenceArtifactIds`.
+
+During this continuation, the hosted design smoke validated the PDF export mutation
+payload and downloaded file but did not prove the export appeared in the session timeline.
+It now polls the session event stream for `design_export_requested` followed by the
+matching `design_export_completed` event and verifies the completed event carries the
+same file id, URL, name, byte size, and session group metadata used for the download.
