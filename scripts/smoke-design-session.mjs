@@ -167,8 +167,12 @@ const PUBLISH_DESIGN_ARTIFACT = `
 `;
 
 const PROMOTE_DESIGN_ARTIFACT = `
-  mutation SmokePromoteDesignArtifact($artifactId: ID!, $prompt: String) {
-    promoteDesignArtifactToCodingSession(artifactId: $artifactId, prompt: $prompt) {
+  mutation SmokePromoteDesignArtifact($artifactId: ID!, $prompt: String, $referenceArtifactIds: [ID!]) {
+    promoteDesignArtifactToCodingSession(
+      artifactId: $artifactId
+      prompt: $prompt
+      referenceArtifactIds: $referenceArtifactIds
+    ) {
       id
       sessionGroupId
       sessionGroup {
@@ -286,6 +290,49 @@ async function waitForPromotedBrief(sessionId) {
   });
 }
 
+async function waitForPromotionEvent(sessionId, artifactId, referenceArtifactIds, promotedSession) {
+  return pollUntil("design artifact promotion event", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      sessionId,
+      types: ["design_artifact_promoted"],
+    });
+    const promotion = data.events?.find((event) => {
+      if (event.eventType !== "design_artifact_promoted") return false;
+      const payload = event.payload;
+      return (
+        payload &&
+        typeof payload === "object" &&
+        !Array.isArray(payload) &&
+        payload.artifactId === artifactId &&
+        payload.promotedSessionId === promotedSession.id
+      );
+    });
+    if (!promotion) {
+      return { ok: false, detail: `no promotion event for ${artifactId}` };
+    }
+    const payload = asPayload(promotion, "Promotion");
+    const actualReferences = Array.isArray(payload.referenceArtifactIds)
+      ? payload.referenceArtifactIds
+      : [];
+    const missingReferences = referenceArtifactIds.filter((id) => !actualReferences.includes(id));
+    if (missingReferences.length > 0) {
+      throw new Error(
+        `Promotion event is missing reference artifacts ${missingReferences.join(", ")}`,
+      );
+    }
+    if (payload.sessionGroupId !== promotedSession.sessionGroup?.forkedFromSessionGroupId) {
+      throw new Error(`Promotion event source group is ${payload.sessionGroupId ?? "missing"}`);
+    }
+    if (payload.promotedSessionGroupId !== promotedSession.sessionGroupId) {
+      throw new Error(
+        `Promotion event target group is ${payload.promotedSessionGroupId ?? "missing"}`,
+      );
+    }
+    return { ok: true, value: promotion };
+  });
+}
+
 async function waitForGeneratedArtifactCompletionEvents(sessionId, artifacts, label) {
   const artifactsById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const artifactIds = artifacts.map((artifact) => artifact.id);
@@ -349,7 +396,9 @@ async function waitForGeneratedArtifactCompletionEvents(sessionId, artifacts, la
         );
       });
       if (startedIndex < 0) {
-        throw new Error(`${label} generation ${generationId} did not emit design_generation_started`);
+        throw new Error(
+          `${label} generation ${generationId} did not emit design_generation_started`,
+        );
       }
       if (startedIndex >= createdIndex) {
         throw new Error(
@@ -652,7 +701,11 @@ if (directionIndexes.size !== generatedArtifacts.length) {
 if (directionLabels.size !== generatedArtifacts.length) {
   throw new Error("Generated directions did not preserve unique direction labels");
 }
-await waitForGeneratedArtifactCompletionEvents(session.id, generatedArtifacts, "Generated direction");
+await waitForGeneratedArtifactCompletionEvents(
+  session.id,
+  generatedArtifacts,
+  "Generated direction",
+);
 const usage = await waitForDesignUsage(session.id);
 
 const selected = generatedArtifacts[0];
@@ -791,6 +844,7 @@ await assertBootstrapDoesNotLeakContent(published.publicUrl, "published design a
 const promoteData = await graphql(PROMOTE_DESIGN_ARTIFACT, {
   artifactId: tweaked.id,
   prompt: "Implement the smoke-verified design artifact.",
+  referenceArtifactIds: [generatedArtifacts[1].id],
 });
 const promoted = promoteData.promoteDesignArtifactToCodingSession;
 if (promoted.sessionGroup?.kind !== "coding") {
@@ -806,6 +860,10 @@ if (!promotedBrief.includes("Implement the smoke-verified design artifact.")) {
 if (!promotedBrief.includes(expectedText) || !promotedBrief.includes("--trace-smoke-accent")) {
   throw new Error("Promoted coding session brief did not include the selected artifact HTML");
 }
+if (!promotedBrief.includes("Reference artifact 2")) {
+  throw new Error("Promoted coding session brief did not include the secondary reference artifact");
+}
+await waitForPromotionEvent(session.id, tweaked.id, [generatedArtifacts[1].id], promoted);
 
 process.stdout.write(
   [

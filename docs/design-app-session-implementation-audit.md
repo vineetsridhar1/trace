@@ -829,3 +829,10 @@ preview but did not directly prove the restored runtime worktree was checked out
 checkpoint SHA. The smoke now opens a terminal in the restored app session, verifies the
 starter `package.json`, runs `git rev-parse HEAD`, and requires it to equal the original
 checkpoint commit.
+
+During this continuation, the hosted design smoke promoted only a single artifact, so it
+did not exercise the selected-artifact set described by the canvas and promotion docs.
+The smoke now promotes the tweaked artifact with a secondary generated artifact as a
+visual reference, requires the coding-session brief to include the reference section, and
+polls the `design_artifact_promoted` event for both the primary artifact id and
+`referenceArtifactIds`.
