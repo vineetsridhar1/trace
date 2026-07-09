@@ -128,6 +128,16 @@ const CREATE_PREVIEW = `
   }
 `;
 
+const CREATE_MANAGED_GIT_CREDENTIAL = `
+  mutation SmokeCreateManagedGitCredential($repoId: ID!) {
+    createManagedGitCredential(repoId: $repoId) {
+      remoteUrl
+      credentialedRemoteUrl
+      expiresAt
+    }
+  }
+`;
+
 const PUBLISH_APP = `
   mutation SmokePublishApp($sessionGroupId: ID!) {
     publishAppSession(sessionGroupId: $sessionGroupId) {
@@ -350,6 +360,44 @@ async function assertImageDownload(url, label) {
   }
 }
 
+async function assertManagedGitCheckpointReachable(repoId, commitSha) {
+  const data = await graphql(CREATE_MANAGED_GIT_CREDENTIAL, { repoId });
+  const credential = data.createManagedGitCredential;
+  if (!credential?.remoteUrl || !credential.credentialedRemoteUrl) {
+    throw new Error("Managed git credential did not include remote URLs");
+  }
+  if (!credential.remoteUrl.includes(`/git/${organizationId}/${repoId}.git`)) {
+    throw new Error(
+      `Managed git remote URL is not scoped to the app repo: ${credential.remoteUrl}`,
+    );
+  }
+  if (!credential.expiresAt) {
+    throw new Error("Managed git credential did not include an expiry");
+  }
+
+  let stdout = "";
+  try {
+    ({ stdout } = await execFileAsync(
+      "git",
+      ["ls-remote", credential.credentialedRemoteUrl, "refs/heads/main"],
+      {
+        maxBuffer: 1024 * 1024,
+        timeout: 60_000,
+      },
+    ));
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message.replaceAll(credential.credentialedRemoteUrl, credential.remoteUrl)
+        : String(error);
+    throw new Error(`Managed git ls-remote failed for ${credential.remoteUrl}: ${message}`);
+  }
+
+  if (!stdout.includes(commitSha)) {
+    throw new Error(`Managed git remote did not expose checkpoint ${commitSha} on refs/heads/main`);
+  }
+}
+
 async function createPreviewUrl(endpointId) {
   const data = await graphql(CREATE_PREVIEW, { endpointId });
   return data.createSessionEndpointPreview.url;
@@ -513,6 +561,7 @@ if (!managedRepoId) {
 if (requireCapture) {
   await assertImageDownload(initial.checkpoint.captureUrl, "checkpoint capture URL");
 }
+await assertManagedGitCheckpointReachable(managedRepoId, initial.checkpoint.commitSha);
 const terminalOutput = await verifyTerminalWorkdir(session.id);
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
 await renderUrl(previewUrl, "private preview URL", { requireFetch: false, expectOverlay: true });

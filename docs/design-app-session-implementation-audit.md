@@ -434,3 +434,9 @@ During this continuation, the hosted `pnpm smoke:design-session` script was tigh
 assert the user-content isolation headers required by the design serving contract. The
 smoke now checks `_bootstrap` and published artifact responses for HTML content type,
 cache mode, CSP shape, COOP, Permissions-Policy, Referrer-Policy, and nosniff headers.
+
+During this continuation, the hosted `pnpm smoke:cloud-app-session` script was tightened
+to prove the first checkpoint is reachable through managed-git smart HTTP. After the
+first checkpoint links a managed repo, the smoke now creates a short-lived managed-git
+credential, runs `git ls-remote` against the Trace remote, and requires the checkpoint SHA
+on `refs/heads/main`.
