@@ -1,7 +1,10 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { FolderGit2, GitBranch } from "lucide-react";
 import type { GitCheckpoint } from "@trace/gql";
+import { useEntityField } from "@trace/client-core";
+import { useComposerStore } from "../../stores/composer";
+import { ImportWorktreeDialog } from "./ImportWorktreeDialog";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 import { SessionNodeRenderer } from "./SessionNodeRenderer";
 import { CollapsedSessionEventsRow } from "./messages/CollapsedSessionEventsRow";
@@ -19,6 +22,25 @@ function nodeKey(node: SessionListNode): string {
   if (node.kind === "readglob-group") return `rg:${node.items[0].id}`;
   return node.id;
 }
+
+// Height of the gradient fade above the floating composer.
+const BOTTOM_FADE_HEIGHT = 48;
+
+// Starter prompts shown on the session empty state. Clicking one sends it immediately.
+const STARTER_PROMPTS: { label: string; prompt: string }[] = [
+  {
+    label: "Explain this codebase",
+    prompt: "Give me a high-level tour of how this codebase is organized.",
+  },
+  {
+    label: "Summarize recent changes",
+    prompt: "Summarize the most recent changes on this branch.",
+  },
+  {
+    label: "Review the latest commit",
+    prompt: "Review the latest commit and flag anything risky.",
+  },
+];
 
 // Fallback height for rows the browser has not rendered yet (content-visibility
 // placeholder sizing). Once a row has been on screen, `contain-intrinsic-size:
@@ -54,6 +76,8 @@ export interface SessionMessageListProps {
   onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
   messageActionsEventIds?: ReadonlySet<string>;
+  /** Extra scrollable space at the bottom so content clears the floating composer. */
+  scrollPaddingBottom?: number;
 }
 
 export function SessionMessageList({
@@ -77,6 +101,7 @@ export function SessionMessageList({
   onForkSession,
   canForkSession = false,
   messageActionsEventIds,
+  scrollPaddingBottom,
 }: SessionMessageListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const rowsContainerRef = useRef<HTMLDivElement>(null);
@@ -248,6 +273,21 @@ export function SessionMessageList({
     return () => observer.disconnect();
   }, []);
 
+  // When the floating composer height changes (grows to multiple lines, or swaps
+  // to a taller plan/question bar), the reserved bottom padding changes — re-pin
+  // to the bottom if the user was already there so the newest message isn't hidden.
+  const prevScrollPaddingRef = useRef(scrollPaddingBottom);
+  useEffect(() => {
+    if (prevScrollPaddingRef.current === scrollPaddingBottom) return;
+    prevScrollPaddingRef.current = scrollPaddingBottom;
+    const container = scrollContainerRef.current;
+    if (!container || !isNearBottomRef.current) return;
+    const frame = requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [scrollPaddingBottom]);
+
   // Scroll to a specific event when requested (e.g. from checkpoint panel or prompt timeline)
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null);
   const [timelineScrollToEventId, setTimelineScrollToEventId] = useState<string | null>(null);
@@ -352,6 +392,37 @@ export function SessionMessageList({
 
   const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
 
+  // Worktree import entry point (shown on the empty state). Adopting an existing
+  // worktree only applies before a session starts, on local hosting, with a repo.
+  const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
+  const hosting = useEntityField("sessions", sessionId, "hosting") as string | undefined;
+  const sessionRepo = useEntityField("sessions", sessionId, "repo") as
+    | { id?: string; name?: string }
+    | null
+    | undefined;
+  const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
+    | string
+    | undefined;
+  const worktreeAdopted = useEntityField(
+    "sessionGroups",
+    sessionGroupId ?? "",
+    "worktreeAdopted",
+  ) as boolean | undefined;
+  const groupWorkdir = useEntityField("sessionGroups", sessionGroupId ?? "", "workdir") as
+    | string
+    | null
+    | undefined;
+  const groupBranch = useEntityField("sessionGroups", sessionGroupId ?? "", "branch") as
+    | string
+    | null
+    | undefined;
+  const [showImportWorktree, setShowImportWorktree] = useState(false);
+  const requestPrefill = useComposerStore((s) => s.requestPrefill);
+  const canImportWorktree =
+    agentStatus === "not_started" && hosting !== "cloud" && Boolean(sessionRepo?.id);
+  const importedWorktree = Boolean(worktreeAdopted);
+  const repoName = sessionRepo?.name;
+
   const emptyState = (
     <motion.div
       initial={{ opacity: 0 }}
@@ -359,18 +430,74 @@ export function SessionMessageList({
       transition={{ duration: 0.2, ease: "easeOut" }}
       className="absolute inset-0 z-10"
     >
-      <div className="h-full overflow-y-auto bg-background">
-        <div className="relative flex min-h-full items-center justify-center overflow-hidden px-6 py-10">
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-surface-deep/80 to-transparent" />
-          <div className="pointer-events-none absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/5 blur-3xl" />
+      <div
+        className="h-full overflow-y-auto bg-background"
+        style={scrollPaddingBottom ? { paddingBottom: scrollPaddingBottom } : undefined}
+      >
+        <div className="relative flex min-h-full items-center justify-center overflow-hidden px-4 py-10">
+          <div className="relative w-[90%]">
+            {(repoName || groupBranch) && (
+              <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+                {repoName && (
+                  <span className="flex items-center gap-1.5 font-medium text-foreground">
+                    <FolderGit2 size={13} className="text-muted-foreground" />
+                    {repoName}
+                  </span>
+                )}
+                {repoName && groupBranch && <span className="text-border">/</span>}
+                {groupBranch && (
+                  <span className="flex items-center gap-1 font-mono">
+                    <GitBranch size={11} className="shrink-0" />
+                    {groupBranch}
+                  </span>
+                )}
+              </div>
+            )}
 
-          <div className="relative flex max-w-sm flex-col items-center text-center">
-            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-surface-deep text-muted-foreground shadow-sm">
-              <Sparkles size={20} />
-            </div>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Ask the agent to inspect code, make a change, or answer a question to get started.
+            <h2 className="text-base font-semibold tracking-tight text-foreground">
+              What should the agent do?
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Start with a suggestion, or type your own below.
             </p>
+
+            <div className="pointer-events-auto mt-4 flex flex-wrap gap-2">
+              {STARTER_PROMPTS.map(({ label, prompt }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => requestPrefill(sessionId, prompt, true)}
+                  className="group flex h-28 w-full max-w-[230px] flex-1 flex-col items-start overflow-hidden rounded-lg border border-border bg-surface-deep p-3 text-left transition-colors hover:border-accent/40 hover:bg-surface-elevated"
+                >
+                  <span className="line-clamp-4 text-sm leading-snug text-foreground">{label}</span>
+                </button>
+              ))}
+            </div>
+
+            {importedWorktree ? (
+              <div className="pointer-events-auto mt-4 flex flex-col gap-1 rounded-lg border border-border bg-surface-deep px-3 py-2.5">
+                <span className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <FolderGit2 size={14} className="text-muted-foreground" />
+                  Imported from worktree
+                </span>
+                {groupWorkdir && (
+                  <span className="max-w-full truncate pl-6 font-mono text-[11px] text-muted-foreground">
+                    {groupWorkdir}
+                  </span>
+                )}
+              </div>
+            ) : (
+              canImportWorktree && (
+                <button
+                  type="button"
+                  onClick={() => setShowImportWorktree(true)}
+                  className="pointer-events-auto mt-4 flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <FolderGit2 size={13} className="shrink-0" />
+                  Working from an existing checkout? Import from worktree
+                </button>
+              )
+            )}
           </div>
         </div>
       </div>
@@ -379,6 +506,14 @@ export function SessionMessageList({
 
   return (
     <div className="relative h-full">
+      {canImportWorktree && sessionRepo?.id && (
+        <ImportWorktreeDialog
+          sessionId={sessionId}
+          repoId={sessionRepo.id}
+          open={showImportWorktree}
+          onClose={() => setShowImportWorktree(false)}
+        />
+      )}
       {showEmptyState ? emptyState : null}
       {!showEmptyState ? (
         <PromptTimeline
@@ -402,12 +537,21 @@ export function SessionMessageList({
       <div
         ref={scrollContainerRef}
         className="h-full overflow-y-auto px-4"
+        style={
+          scrollPaddingBottom
+            ? {
+                paddingBottom: scrollPaddingBottom,
+                maskImage: `linear-gradient(to bottom, #000 calc(100% - ${scrollPaddingBottom + BOTTOM_FADE_HEIGHT}px), transparent calc(100% - ${scrollPaddingBottom}px))`,
+                WebkitMaskImage: `linear-gradient(to bottom, #000 calc(100% - ${scrollPaddingBottom + BOTTOM_FADE_HEIGHT}px), transparent calc(100% - ${scrollPaddingBottom}px))`,
+              }
+            : undefined
+        }
         onKeyDown={handleUserScrollIntent}
         onPointerDown={handleUserScrollIntent}
         onTouchStart={handleUserScrollIntent}
         onWheel={handleUserScrollIntent}
       >
-        <div className="w-full py-4">
+        <div className="mx-auto w-[90%] py-4">
           {/* Sentinel for infinite scroll - triggers loading older messages */}
           <div ref={sentinelRef} className="h-px w-px" />
 
@@ -475,7 +619,7 @@ const SessionMessageRows = memo(function SessionMessageRows({
   messageActionsEventIds,
 }: SessionMessageRowsProps) {
   return (
-    <div ref={rowsRef} className="w-full px-7">
+    <div ref={rowsRef} className="w-full">
       {nodes.map((node, index) => (
         <div
           key={nodeKey(node)}

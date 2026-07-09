@@ -28,8 +28,6 @@ export function SessionCompactSummaryCell({
   const attached = useAttachedCheckoutForGroup(row.id);
   const isRenaming = renameContext?.renamingGroupId === row.id;
 
-  const subtext = repo && branch ? `${repo.name} / ${branch}` : repo ? repo.name : branch;
-
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col justify-center py-2">
       <div className="flex w-full min-w-0 items-center gap-2">
@@ -57,9 +55,11 @@ export function SessionCompactSummaryCell({
       </div>
       <div className="mt-2.5 flex w-full min-w-0 items-center gap-3 text-[11px] text-muted-foreground">
         <div className="min-w-0 flex-1">
-          {subtext && (
+          {(repo || branch) && (
             <span className="block truncate text-[11px] font-medium text-muted-foreground/90">
-              {subtext}
+              {repo?.name}
+              {repo && branch ? " / " : ""}
+              {branch && <span className="font-mono">{branch}</span>}
             </span>
           )}
         </div>

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   AppWindow,
   Circle,
+  Cloud,
+  Monitor,
   PanelRight,
   History,
   Maximize2,
@@ -32,6 +34,7 @@ interface GroupHeaderProps {
   selectedSessionStatus: string;
   selectedSessionId: string | null;
   selectedAgentStatus?: string;
+  selectedHosting?: string;
   selectedConnection?: Record<string, unknown> | null;
   selectedWorktreeDeleted?: boolean;
   canMoveSession: boolean;
@@ -62,6 +65,7 @@ export function GroupHeader({
   selectedSessionStatus,
   selectedSessionId,
   selectedAgentStatus,
+  selectedHosting,
   selectedConnection,
   selectedWorktreeDeleted,
   canMoveSession,
@@ -112,19 +116,36 @@ export function GroupHeader({
   }, [showHistory]);
 
   const label = sessionStatusLabel[selectedSessionStatus] ?? selectedSessionStatus;
+  const isCloud = selectedHosting === "cloud";
+  const runtimeLabel =
+    typeof selectedConnection?.runtimeLabel === "string" ? selectedConnection.runtimeLabel : null;
 
   return (
     <div className="app-region-drag flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface-mid py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
       {selectedSessionId && (
-        <span
-          className={cn(
-            "flex shrink-0 items-center gap-1.5 text-xs",
-            sessionStatusColor[selectedSessionStatus],
-          )}
-        >
-          <Circle size={6} className="fill-current" />
-          {label}
-        </span>
+        <>
+          <ActionTooltip
+            label={isCloud ? "Cloud" : (runtimeLabel ?? "Local")}
+            className="app-region-no-drag"
+          >
+            <span className="flex shrink-0 items-center justify-center">
+              {isCloud ? (
+                <Cloud size={14} className="text-sky-400" />
+              ) : (
+                <Monitor size={14} className="text-green-400" />
+              )}
+            </span>
+          </ActionTooltip>
+          <span
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 text-xs",
+              sessionStatusColor[selectedSessionStatus],
+            )}
+          >
+            <Circle size={6} className="fill-current" />
+            {label}
+          </span>
+        </>
       )}
 
       <div className="min-w-0 flex-1">

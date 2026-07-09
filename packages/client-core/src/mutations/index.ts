@@ -9,6 +9,17 @@ export const START_SESSION_MUTATION = gql`
   }
 `;
 
+export const IMPORT_WORKTREE_MUTATION = gql`
+  mutation ImportWorktree($sessionId: ID!, $worktreePath: String!, $branch: String) {
+    importWorktree(sessionId: $sessionId, worktreePath: $worktreePath, branch: $branch) {
+      id
+      worktreeAdopted
+      workdir
+      branch
+    }
+  }
+`;
+
 export const FORK_SESSION_MUTATION = gql`
   mutation ForkSession($eventId: ID!) {
     forkSession(eventId: $eventId) {
@@ -696,6 +707,18 @@ export const REPO_BRANCHES_QUERY = gql`
       runtimeInstanceId: $runtimeInstanceId
       sessionGroupId: $sessionGroupId
     )
+  }
+`;
+
+export const REPO_WORKTREES_QUERY = gql`
+  query RepoWorktrees($repoId: ID!, $runtimeInstanceId: ID) {
+    repoWorktrees(repoId: $repoId, runtimeInstanceId: $runtimeInstanceId) {
+      path
+      branch
+      head
+      isMain
+      isTraceManaged
+    }
   }
 `;
 

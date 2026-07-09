@@ -149,7 +149,7 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
       <div className="app-region-drag flex h-12 shrink-0 items-center gap-2 border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
         <h2 className="text-sm font-semibold text-foreground">{channelName ?? "Channel"}</h2>
         {baseBranch && (
-          <span className="flex items-center gap-1 rounded-md bg-surface-elevated px-1.5 py-0.5 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1 rounded-md bg-surface-elevated px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
             <GitBranch size={12} />
             {baseBranch}
           </span>

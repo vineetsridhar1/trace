@@ -80,6 +80,7 @@ const ORG_RELEVANT_OUTPUT_SUBTYPES = new Set([
   "git_checkpoint_rewrite",
   "config_changed",
   "branch_renamed",
+  "worktree_imported",
 ]);
 const DEFAULT_REDIS_EVENT_STREAM_MAXLEN = 10_000;
 const REDIS_EVENT_STREAM_MAXLEN = readPositiveIntegerEnv(

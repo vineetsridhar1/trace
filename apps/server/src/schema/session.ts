@@ -112,6 +112,20 @@ export const sessionQueries = {
       args.sessionGroupId ?? undefined,
     );
   },
+  repoWorktrees: (
+    _: unknown,
+    args: { repoId: string; runtimeInstanceId?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    const orgId = requireOrgContext(ctx);
+    return sessionService.listRepoWorktrees(
+      args.repoId,
+      orgId,
+      ctx.userId,
+      args.runtimeInstanceId ?? undefined,
+    );
+  },
   sessionGroupFiles: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return sessionService.listFiles(args.sessionGroupId, orgId, ctx.userId);
@@ -298,6 +312,20 @@ export const sessionMutations = {
       actorType: ctx.actorType,
       clientSource: ctx.clientSource,
     });
+  },
+  importWorktree: (
+    _: unknown,
+    args: { sessionId: string; worktreePath: string; branch?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.importWorktree(
+      args.sessionId,
+      args.worktreePath,
+      requireOrgContext(ctx),
+      ctx.userId,
+      args.branch ?? undefined,
+    );
   },
   forkSession: (_: unknown, args: { eventId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);

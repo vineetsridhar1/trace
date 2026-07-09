@@ -290,7 +290,7 @@ export function QueuedMessagesList({ sessionId }: { sessionId: string }) {
   if (ids.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-1 px-4 pb-2">
+    <div className="flex flex-col gap-1 bg-background px-4 pb-2">
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">Queued ({ids.length})</span>
         {ids.length > 1 && (

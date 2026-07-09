@@ -623,7 +623,7 @@
   font-size: 0.88em;
   padding: 0.15em 0.35em;
   border-radius: 4px;
-  background: var(--th-code-bg);
+  background: var(--th-surface-mid);
   color: var(--th-primary);
 }
 
@@ -631,7 +631,7 @@
   margin: 0.75em 0;
   padding: 12px 14px;
   border-radius: 6px;
-  background: var(--th-code-bg);
+  background: var(--th-surface-mid);
   border: 1px solid var(--th-edge);
   overflow-x: auto;
 }

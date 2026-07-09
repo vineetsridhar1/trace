@@ -81,6 +81,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       prUrl
       workdir
       worktreeDeleted
+      worktreeAdopted
       gitCheckpoints {
         id
         sessionId
@@ -877,6 +878,7 @@ export function SessionGroupDetailView({
                   selectedSessionIsOptimistic ? null : (selectedSession?.id ?? null)
                 }
                 selectedAgentStatus={selectedSession?.agentStatus}
+                selectedHosting={selectedSession?.hosting}
                 selectedConnection={
                   selectedSession?.connection as Record<string, unknown> | null | undefined
                 }

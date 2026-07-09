@@ -26,6 +26,7 @@ import type {
   BridgeLinkedCheckoutActionResultPayload,
   BridgeSessionGitSyncStatus,
   BridgeListWorkspaceSlugsCommand,
+  BridgeRepoWorktree,
 } from "@trace/shared";
 import { prisma } from "./db.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -142,6 +143,8 @@ export interface SessionAdapterCreateOptions {
   createdById: string;
   organizationId: string;
   readOnly?: boolean;
+  /** Absolute path to an existing worktree to adopt instead of creating one (local only). */
+  adoptWorktreePath?: string;
   adapterType?: RuntimeAdapterType;
   runtimeToken?: string;
   bridgeUrl?: string;
@@ -316,6 +319,15 @@ export class SessionRouter {
   private pendingWorkspaceSlugRequests = new Map<
     string,
     { runtimeId: string; resolve: (slugs: string[]) => void; reject: (err: Error) => void }
+  >();
+  /** Pending worktree list requests: requestId → resolve/reject */
+  private pendingWorktreeListRequests = new Map<
+    string,
+    {
+      runtimeId: string;
+      resolve: (worktrees: BridgeRepoWorktree[]) => void;
+      reject: (err: Error) => void;
+    }
   >();
   /** Pending file list requests: requestId → resolve/reject */
   private pendingFileRequests = new Map<
@@ -1010,6 +1022,68 @@ export class SessionRouter {
       pending.reject(new Error(error));
     } else {
       pending.resolve(slugs);
+    }
+  }
+
+  /** Ask a runtime to list the on-disk git worktrees for a repo. */
+  listRepoWorktrees(
+    runtimeId: string,
+    repoId: string,
+    timeoutMs = 10_000,
+  ): Promise<BridgeRepoWorktree[]> {
+    const requestId = randomUUID();
+    const runtime = this.getRuntime(runtimeId);
+    if (!runtime) {
+      return Promise.reject(new Error("Runtime not available: no_runtime"));
+    }
+    if (runtime.ws.readyState !== runtime.ws.OPEN) {
+      return Promise.reject(new Error("Runtime not available: runtime_disconnected"));
+    }
+
+    const promise = new Promise<BridgeRepoWorktree[]>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingWorktreeListRequests.delete(requestId);
+        reject(new Error("Worktree list request timed out"));
+      }, timeoutMs);
+
+      this.pendingWorktreeListRequests.set(requestId, {
+        runtimeId: runtime.key,
+        resolve: (worktrees) => {
+          clearTimeout(timer);
+          resolve(worktrees);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      });
+    });
+
+    try {
+      runtime.ws.send(JSON.stringify({ type: "list_worktrees", requestId, repoId }));
+    } catch {
+      const pending = this.pendingWorktreeListRequests.get(requestId);
+      this.pendingWorktreeListRequests.delete(requestId);
+      pending?.reject(new Error("Runtime not available: delivery_failed"));
+    }
+
+    return promise;
+  }
+
+  resolveWorktreeListRequest(
+    requestId: string,
+    worktrees: BridgeRepoWorktree[],
+    error?: string,
+    sourceRuntimeId?: string,
+  ): void {
+    const pending = this.pendingWorktreeListRequests.get(requestId);
+    if (!pending) return;
+    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    this.pendingWorktreeListRequests.delete(requestId);
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(worktrees);
     }
   }
 
@@ -2070,6 +2144,7 @@ export class SessionRouter {
               branch: options.branch,
               checkpointSha: options.checkpointSha,
               readOnly: options.readOnly,
+              adoptWorktreePath: options.adoptWorktreePath,
             },
             { expectedHomeRuntimeId: startResult.runtimeInstanceId },
           );

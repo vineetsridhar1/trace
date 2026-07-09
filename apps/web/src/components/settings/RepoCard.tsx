@@ -127,7 +127,7 @@ export function RepoCard({
             ) : (
               <>
                 <p className="text-xs text-muted-foreground">
-                  Default branch: <span className="text-foreground">{defaultBranch}</span>
+                  Default branch: <span className="font-mono text-foreground">{defaultBranch}</span>
                 </p>
                 <button
                   onClick={startEditing}
