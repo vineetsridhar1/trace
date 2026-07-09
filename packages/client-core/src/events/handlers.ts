@@ -60,6 +60,21 @@ const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session
 
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set(["session_output", "message_sent"]);
 
+const APP_PROCESS_EVENT_TYPES: Set<EventType> = new Set([
+  "session_application_process_started",
+  "session_application_process_stopped",
+  "session_application_process_failed",
+]);
+
+const APP_ENDPOINT_EVENT_TYPES: Set<EventType> = new Set([
+  "session_endpoint_created",
+  "session_endpoint_forwarding_enabled",
+  "session_endpoint_forwarding_disabled",
+  "session_endpoint_rotated",
+  "session_endpoint_access_updated",
+  "session_endpoint_traffic_capture_updated",
+]);
+
 function upsertAgentEnvironmentFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
   const environments = payload.agentEnvironments;
   if (Array.isArray(environments)) {
@@ -170,6 +185,28 @@ function upsertApplicationLogFromPayload(batch: StoreBatchWriter, payload: JsonO
   );
 }
 
+function upsertApplicationProcessFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const process = asJsonObject(payload.process);
+  if (!process || typeof process.id !== "string") return;
+  const existing = batch.get("sessionApplicationProcesses", process.id);
+  batch.upsert(
+    "sessionApplicationProcesses",
+    process.id,
+    (existing ? { ...existing, ...process } : process) as unknown as SessionApplicationProcess,
+  );
+}
+
+function upsertEndpointFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const endpoint = asJsonObject(payload.endpoint);
+  if (!endpoint || typeof endpoint.id !== "string") return;
+  const existing = batch.get("sessionEndpoints", endpoint.id);
+  batch.upsert(
+    "sessionEndpoints",
+    endpoint.id,
+    (existing ? { ...existing, ...endpoint } : endpoint) as unknown as SessionEndpoint,
+  );
+}
+
 /**
  * Apply an event from the org-wide subscription to the entity store and
  * fire any registered notification handlers. The pure data work runs
@@ -212,45 +249,16 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
-  const processEventTypes = new Set<EventType>([
-    "session_application_process_started",
-    "session_application_process_stopped",
-    "session_application_process_failed",
-  ]);
-  if (processEventTypes.has(event.eventType)) {
-    const process = asJsonObject(payload.process);
-    if (process && typeof process.id === "string") {
-      const existing = batch.get("sessionApplicationProcesses", process.id);
-      batch.upsert(
-        "sessionApplicationProcesses",
-        process.id,
-        (existing ? { ...existing, ...process } : process) as unknown as SessionApplicationProcess,
-      );
-    }
+  if (APP_PROCESS_EVENT_TYPES.has(event.eventType)) {
+    upsertApplicationProcessFromPayload(batch, payload);
   }
 
   if (event.eventType === "session_application_log_appended") {
     upsertApplicationLogFromPayload(batch, payload);
   }
 
-  const endpointEventTypes = new Set<EventType>([
-    "session_endpoint_created",
-    "session_endpoint_forwarding_enabled",
-    "session_endpoint_forwarding_disabled",
-    "session_endpoint_rotated",
-    "session_endpoint_access_updated",
-    "session_endpoint_traffic_capture_updated",
-  ]);
-  if (endpointEventTypes.has(event.eventType)) {
-    const endpoint = asJsonObject(payload.endpoint);
-    if (endpoint && typeof endpoint.id === "string") {
-      const existing = batch.get("sessionEndpoints", endpoint.id);
-      batch.upsert(
-        "sessionEndpoints",
-        endpoint.id,
-        (existing ? { ...existing, ...endpoint } : endpoint) as unknown as SessionEndpoint,
-      );
-    }
+  if (APP_ENDPOINT_EVENT_TYPES.has(event.eventType)) {
+    upsertEndpointFromPayload(batch, payload);
   }
 
   if (
@@ -769,6 +777,18 @@ export function handleSessionEvent(sessionId: string, event: Event & { id: strin
   if (event.eventType === "session_application_log_appended") {
     const batch = new StoreBatchWriter();
     upsertApplicationLogFromPayload(batch, payload);
+    batch.flush();
+  }
+
+  if (APP_PROCESS_EVENT_TYPES.has(event.eventType)) {
+    const batch = new StoreBatchWriter();
+    upsertApplicationProcessFromPayload(batch, payload);
+    batch.flush();
+  }
+
+  if (APP_ENDPOINT_EVENT_TYPES.has(event.eventType)) {
+    const batch = new StoreBatchWriter();
+    upsertEndpointFromPayload(batch, payload);
     batch.flush();
   }
 

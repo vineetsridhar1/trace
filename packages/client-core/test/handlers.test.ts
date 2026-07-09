@@ -1085,6 +1085,108 @@ describe("handleSessionEvent", () => {
     });
   });
 
+  it("upserts app process lifecycle events from full session subscriptions", () => {
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_application_process_started",
+        scopeId: "session-1",
+        payload: {
+          process: {
+            id: "process-1",
+            sessionGroupId: "group-1",
+            appConfigId: "web",
+            processConfigId: "dev",
+            label: "Web",
+            status: "running",
+            runtimeInstanceId: "runtime-1",
+            startedAt: "2026-01-01T00:00:00.000Z",
+            stoppedAt: null,
+            exitCode: null,
+            lastError: null,
+          },
+        },
+      }),
+    );
+
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_application_process_failed",
+        scopeId: "session-1",
+        payload: {
+          process: {
+            id: "process-1",
+            status: "failed",
+            lastError: "dev server exited",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionApplicationProcesses["process-1"]).toMatchObject({
+      id: "process-1",
+      label: "Web",
+      status: "failed",
+      runtimeInstanceId: "runtime-1",
+      lastError: "dev server exited",
+    });
+  });
+
+  it("upserts app endpoint lifecycle events from full session subscriptions", () => {
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_endpoint_created",
+        scopeId: "session-1",
+        payload: {
+          endpoint: {
+            id: "endpoint-1",
+            key: "endpointkey1",
+            url: "https://endpointkey1.preview.example",
+            sessionGroupId: "group-1",
+            appConfigId: "web",
+            processConfigId: "dev",
+            portConfigId: "web",
+            label: "Web",
+            targetPort: 3000,
+            status: "disabled",
+            accessMode: "private",
+            trafficCaptureMode: "metadata",
+            enabledAt: null,
+            disabledAt: null,
+            revokedAt: null,
+          },
+        },
+      }),
+    );
+
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "session_endpoint_access_updated",
+        scopeId: "session-1",
+        payload: {
+          endpoint: {
+            id: "endpoint-1",
+            status: "enabled",
+            accessMode: "public",
+            enabledAt: "2026-01-01T00:00:01.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionEndpoints["endpoint-1"]).toMatchObject({
+      id: "endpoint-1",
+      url: "https://endpointkey1.preview.example",
+      label: "Web",
+      status: "enabled",
+      accessMode: "public",
+      enabledAt: "2026-01-01T00:00:01.000Z",
+    });
+  });
+
   it("keeps design comment events from full session subscriptions for the canvas", () => {
     const event = makeEvent({
       eventType: "design_comment_added",

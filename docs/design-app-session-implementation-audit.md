@@ -754,3 +754,9 @@ in the canvas but the client-core reducer coverage only asserted artifact upsert
 handler tests now prove `design_comment_added` is retained in the session-scoped event
 bucket from both org-wide and full session subscriptions, matching the event-backed
 comment/pin model.
+
+During this audit continuation, app process and endpoint lifecycle events updated
+Zustand from the org-wide subscription but not from the full session subscription path.
+`handleSessionEvent` now upserts `SessionApplicationProcess` and `SessionEndpoint`
+payloads as well, so live preview, process state, and publish state remain event-backed
+even when the session view receives the canonical scoped event before the org stream.
