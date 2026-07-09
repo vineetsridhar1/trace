@@ -1916,6 +1916,7 @@ export type SessionGroup = {
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
+  kind: SessionGroupKind;
   name: Scalars["String"]["output"];
   owner: User;
   prUrl?: Maybe<Scalars["String"]["output"]>;
@@ -1951,6 +1952,8 @@ export type SessionGroupFileTree = {
   paths: Array<Scalars["String"]["output"]>;
   truncated: Scalars["Boolean"]["output"];
 };
+
+export type SessionGroupKind = "app" | "coding" | "design";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2062,6 +2065,7 @@ export type StartSessionInput = {
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
+  kind?: InputMaybe<SessionGroupKind>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   projectId?: InputMaybe<Scalars["ID"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;

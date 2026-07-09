@@ -7,6 +7,7 @@ import type {
   BridgeTerminalInputCommand,
   BridgeTerminalResizeCommand,
   BridgeTerminalDestroyCommand,
+  BridgePrepareAppCommand,
   BridgeListFilesCommand,
   BridgeReadFileCommand,
   BridgeWriteFileCommand,
@@ -46,6 +47,7 @@ interface BaseSessionCommand {
     | "resume"
     | "send"
     | "prepare"
+    | "prepare_app"
     | "delete"
     | "list_branches"
     | "upgrade_workspace";
@@ -56,6 +58,7 @@ interface BaseSessionCommand {
 
 export type SessionCommand =
   | BaseSessionCommand
+  | BridgePrepareAppCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeWriteFileCommand
@@ -126,6 +129,7 @@ export interface SessionAdapterCreateOptions {
   sessionId: string;
   /** Session group ID — used to key worktrees so all sessions in a group share the same workspace. */
   sessionGroupId?: string;
+  sessionGroupKind?: "coding" | "design" | "app";
   /** Animal slug for the worktree. If set, reuses the existing slug. */
   slug?: string;
   /** Preserve the persisted branch name instead of generating trace/{slug}. */
@@ -2015,6 +2019,23 @@ export class SessionRouter {
           }
 
           await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
+        }
+
+        if (options.sessionGroupKind === "app" && !options.repo) {
+          const result = this.send(
+            options.sessionId,
+            {
+              type: "prepare_app",
+              sessionId: options.sessionId,
+              sessionGroupId: options.sessionGroupId,
+              slug: options.slug,
+            },
+            { expectedHomeRuntimeId: startResult.runtimeInstanceId },
+          );
+          if (result !== "delivered") {
+            options.onFailed(`prepare_app: ${result}`);
+          }
+          return;
         }
 
         if (options.repo) {

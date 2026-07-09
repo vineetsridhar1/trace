@@ -1,5 +1,5 @@
 import type { StartSessionInput, UpdateSessionDefaultsInput, ActorType } from "@trace/gql";
-import type { AgentStatus, SessionStatus, CodingTool } from "@prisma/client";
+import type { AgentStatus, SessionStatus, CodingTool, SessionGroupKind } from "@prisma/client";
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
@@ -68,6 +68,7 @@ import { orgSecretService } from "./org-secret.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
+  kind?: SessionGroupKind | null;
   sessionGroupId?: string | null;
   sourceSessionId?: string | null;
   imageKeys?: string[] | null;
@@ -540,6 +541,7 @@ function buildCheckpointContextFromStartMeta({
 const SESSION_GROUP_SUMMARY_SELECT = {
   id: true,
   name: true,
+  kind: true,
   slug: true,
   ownerUserId: true,
   ownerUser: true,
@@ -858,14 +860,22 @@ Do this silently — do not mention it to the user unless they ask or it fails.
 If the user asks you to stop auto-saving or disable auto-save, stop doing this for the rest of the session.
 </system-instruction>`;
 
+const APP_SESSION_INSTRUCTION = `\n\n<system-instruction>
+This is a Trace app session. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Next.js/Tailwind starter as the source of truth. Add routes, API handlers, persistence seams, and UI in project files. Preserve data-trace-source attributes when adding inspectable UI elements. Run the dev server on port 3000 with host 0.0.0.0, keep logs useful, and make meaningful checkpoints when the app reaches a working state. Sharing the live app is a valid final outcome.
+</system-instruction>`;
+
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
 
 /** Append all system instructions (title, background work, branch, auto-save) to a prompt in the correct order. */
-function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolean }): string {
+function appendPromptInstructions(
+  prompt: string,
+  { hasRepo, sessionGroupKind }: { hasRepo: boolean; sessionGroupKind?: SessionGroupKind | null },
+): string {
   let result = prompt + TITLE_INSTRUCTION;
   result += BACKGROUND_WORK_INSTRUCTION;
+  if (sessionGroupKind === "app") result += APP_SESSION_INSTRUCTION;
   if (hasRepo) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
@@ -1191,6 +1201,7 @@ export class SessionService {
   private provisionRuntime(params: {
     sessionId: string;
     sessionGroupId?: string | null;
+    sessionGroupKind?: SessionGroupKind | null;
     slug?: string | null;
     preserveBranchName?: boolean;
     hosting: string;
@@ -1233,6 +1244,7 @@ export class SessionService {
       sessionRouter.createRuntime({
         sessionId: params.sessionId,
         sessionGroupId: params.sessionGroupId ?? undefined,
+        sessionGroupKind: params.sessionGroupKind ?? undefined,
         slug: slug ?? undefined,
         preserveBranchName: params.preserveBranchName,
         hosting: params.hosting as "cloud" | "local",
@@ -2967,6 +2979,24 @@ export class SessionService {
       this.assertPrivateGroupOwner(resolvedGroup, input.createdById);
     }
     const seedGroup = input.restoreCheckpointId ? restoreGroup : resolvedGroup;
+    const resolvedKind = input.kind ?? seedGroup?.kind ?? "coding";
+    if (existingGroup && input.kind && input.kind !== existingGroup.kind) {
+      throw new ValidationError("Session kind cannot change within an existing session group");
+    }
+    if (resolvedKind === "app") {
+      if (input.sourceSessionId && !input.restoreCheckpointId) {
+        throw new ValidationError("App sessions cannot start from a source session");
+      }
+      if (!existingGroup && !input.restoreCheckpointId && input.repoId) {
+        throw new ValidationError("App sessions cannot start from a linked repo");
+      }
+      if (!existingGroup && !input.restoreCheckpointId && !input.prompt?.trim()) {
+        throw new ValidationError("App sessions require an initial prompt");
+      }
+      if (input.hosting === "local") {
+        throw new ValidationError("App sessions require cloud hosting");
+      }
+    }
     const requestedVisibility = input.visibility ?? "public";
     const newGroupVisibility = requestedVisibility === "private" ? "private" : "public";
     const effectiveGroupVisibility = existingGroup?.visibility ?? newGroupVisibility;
@@ -2989,6 +3019,9 @@ export class SessionService {
 
     const authoritativeChannelRepoId =
       resolvedChannel?.type === "coding" ? (resolvedChannel.repoId ?? null) : null;
+    if (resolvedKind === "app" && authoritativeChannelRepoId && !existingGroup) {
+      throw new ValidationError("App sessions cannot start in a repo-linked coding channel");
+    }
 
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
       throw new Error("Coding channel sessions must use the channel's linked repo");
@@ -3121,8 +3154,9 @@ export class SessionService {
       !!existingGroup?.id &&
       (!!sharedWorkdir || !!sharedRuntimeInstanceId || !!sharedConnectionHasRuntimeSelection);
     const deferRuntimeSelection =
-      input.deferRuntimeSelection === true ||
-      (!input.restoreCheckpointId &&
+      (input.deferRuntimeSelection === true && resolvedKind !== "app") ||
+      (resolvedKind !== "app" &&
+        !input.restoreCheckpointId &&
         !requestedRuntimeSelection &&
         !sharedRuntimeInstanceId &&
         !restoreGroupRuntimeInstanceId);
@@ -3173,7 +3207,7 @@ export class SessionService {
             organizationId: input.organizationId,
             environmentId: input.environmentId ?? null,
             adapterType:
-              input.hosting === "cloud"
+              resolvedKind === "app" || input.hosting === "cloud"
                 ? "provisioned"
                 : input.hosting === "local"
                   ? "local"
@@ -3212,7 +3246,7 @@ export class SessionService {
           : null;
 
     let hosting =
-      input.hosting ??
+      (resolvedKind === "app" ? "cloud" : input.hosting) ??
       (deferRuntimeSelection ? "local" : environmentHosting) ??
       sourceSession?.hosting ??
       (isLocalMode() ? "local" : "cloud");
@@ -3443,6 +3477,7 @@ export class SessionService {
         : await tx.sessionGroup.create({
             data: {
               name,
+              kind: resolvedKind,
               organizationId: input.organizationId,
               ownerUserId: input.createdById,
               visibility: newGroupVisibility,
@@ -3597,6 +3632,7 @@ export class SessionService {
       this.provisionRuntime({
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
+        sessionGroupKind: resolvedKind,
         slug: session.sessionGroup?.slug,
         preserveBranchName: false,
         hosting: session.hosting,
@@ -3969,6 +4005,7 @@ export class SessionService {
       this.provisionRuntime({
         sessionId: updated.id,
         sessionGroupId: updated.sessionGroupId,
+        sessionGroupKind: updated.sessionGroup?.kind,
         slug: updated.sessionGroup?.slug,
         preserveBranchName: false,
         hosting: updated.hosting,
@@ -4103,6 +4140,7 @@ export class SessionService {
         this.provisionRuntime({
           sessionId: id,
           sessionGroupId: session.sessionGroupId,
+          sessionGroupKind: session.sessionGroup?.kind,
           slug: session.sessionGroup?.slug,
           preserveBranchName: false,
           hosting: session.hosting,
@@ -4157,7 +4195,10 @@ export class SessionService {
     // Append system instructions (title, auto-save) to the prompt
     const isFirstRun = !session.toolSessionId;
     if (resolvedPrompt) {
-      resolvedPrompt = appendPromptInstructions(resolvedPrompt, { hasRepo: !!session.repo });
+      resolvedPrompt = appendPromptInstructions(resolvedPrompt, {
+        hasRepo: !!session.repo,
+        sessionGroupKind: session.sessionGroup?.kind,
+      });
     }
 
     // Append base branch instruction when the channel specifies one
@@ -4562,7 +4603,7 @@ export class SessionService {
         hosting: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { slug: true, visibility: true, ownerUserId: true } },
+        sessionGroup: { select: { kind: true, slug: true, visibility: true, ownerUserId: true } },
         channel: { select: { baseBranch: true } },
         connection: true,
         workdir: true,
@@ -4736,6 +4777,7 @@ export class SessionService {
       this.provisionRuntime({
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
+        sessionGroupKind: session.sessionGroup?.kind,
         slug: session.sessionGroup?.slug,
         preserveBranchName: shouldPreserveWorkspaceBranchName({
           slug: session.sessionGroup?.slug,
@@ -5285,7 +5327,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { slug: true } },
+        sessionGroup: { select: { kind: true, slug: true } },
         channel: { select: { baseBranch: true } },
         connection: true,
         pendingRun: true,
@@ -5408,6 +5450,7 @@ export class SessionService {
           this.provisionRuntime({
             sessionId,
             sessionGroupId: session.sessionGroupId,
+            sessionGroupKind: session.sessionGroup?.kind,
             slug: session.sessionGroup?.slug,
             preserveBranchName: shouldPreserveWorkspaceBranchName({
               slug: session.sessionGroup?.slug,
@@ -5519,7 +5562,10 @@ export class SessionService {
     }
 
     // Append system instructions (title, auto-save) to the prompt
-    prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
+    prompt = appendPromptInstructions(prompt, {
+      hasRepo: !!session.repoId,
+      sessionGroupKind: session.sessionGroup?.kind,
+    });
 
     const checkpointContext =
       session.repoId && session.sessionGroupId
@@ -6648,6 +6694,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
+        sessionGroup: { select: { kind: true } },
         connection: true,
       },
     });
@@ -6658,7 +6705,10 @@ export class SessionService {
 
     const context = await buildConversationContext(sessionId);
     let prompt = buildToolSessionRecoveryPrompt(context);
-    prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
+    prompt = appendPromptInstructions(prompt, {
+      hasRepo: !!session.repoId,
+      sessionGroupKind: session.sessionGroup?.kind,
+    });
 
     const promptEvent = await prisma.event.findFirst({
       where: {
@@ -7357,11 +7407,9 @@ export class SessionService {
       const runtimeConnection = this.parseConnection(sourceCloudRuntimeSession.connection);
       const sessionConnection = this.parseConnection(session.connection);
       const runtimeHasBinding =
-        !!runtimeConnection.runtimeInstanceId ||
-        !!runtimeConnection.providerRuntimeId;
+        !!runtimeConnection.runtimeInstanceId || !!runtimeConnection.providerRuntimeId;
       const sessionHasBinding =
-        !!sessionConnection.runtimeInstanceId ||
-        !!sessionConnection.providerRuntimeId;
+        !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
       if (!runtimeHasBinding && sessionHasBinding) {
         sourceCloudRuntimeSession = {
           ...sourceCloudRuntimeSession,
@@ -7470,6 +7518,7 @@ export class SessionService {
       this.provisionRuntime({
         sessionId: movedSession.id,
         sessionGroupId: movedSession.sessionGroupId,
+        sessionGroupKind: movedSession.sessionGroup?.kind,
         slug: movedSession.sessionGroup?.slug,
         preserveBranchName: shouldPreserveWorkspaceBranchName({
           slug: movedSession.sessionGroup?.slug,
@@ -8804,6 +8853,7 @@ export class SessionService {
         repoId: true,
         connection: true,
         sessionGroupId: true,
+        sessionGroup: { select: { kind: true } },
       },
     });
 
@@ -8819,7 +8869,10 @@ export class SessionService {
 
     // Append system instructions (title, auto-save) to the prompt
     if (prompt) {
-      prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
+      prompt = appendPromptInstructions(prompt, {
+        hasRepo: !!session.repoId,
+        sessionGroupKind: session.sessionGroup?.kind,
+      });
     }
 
     const fallbackCheckpointContext =
@@ -9099,16 +9152,13 @@ export class SessionService {
       const cloudSession =
         cloudSessions.find((session) => {
           const sessionConnection = this.parseConnection(session.connection);
-          return (
-            !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId
-          );
+          return !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
         }) ?? cloudSessions[0];
       if (!cloudSession) continue;
       if (!groupHasRuntimeBinding) {
         const sessionConnection = this.parseConnection(cloudSession.connection);
         const sessionHasRuntimeBinding =
-          !!sessionConnection.runtimeInstanceId ||
-          !!sessionConnection.providerRuntimeId;
+          !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
         if (!sessionHasRuntimeBinding) continue;
       }
 
@@ -9171,7 +9221,10 @@ export class SessionService {
         this.destroyRuntimeOptions(cloudSession.id, "idle_session_group_cleanup"),
       );
       // Destroying the runtime kills any forwarded application processes; reflect that.
-      await sessionApplicationService.markSessionGroupRuntimeStopped(group.id, session.organizationId);
+      await sessionApplicationService.markSessionGroupRuntimeStopped(
+        group.id,
+        session.organizationId,
+      );
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

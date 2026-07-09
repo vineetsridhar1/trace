@@ -57,9 +57,7 @@ function getStoredSessionSidebarWidth(): number {
   if (!stored) return DEFAULT_SESSION_SIDEBAR_WIDTH;
 
   const parsed = parseInt(stored, 10);
-  return Number.isFinite(parsed)
-    ? clampSessionSidebarWidth(parsed)
-    : DEFAULT_SESSION_SIDEBAR_WIDTH;
+  return Number.isFinite(parsed) ? clampSessionSidebarWidth(parsed) : DEFAULT_SESSION_SIDEBAR_WIDTH;
 }
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
@@ -67,6 +65,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
     sessionGroup(id: $id) {
       id
       name
+      kind
       slug
       forkedFromSessionGroupId
       status
@@ -183,6 +182,10 @@ export function SessionGroupDetailView({
     | null
     | undefined;
   const groupPrUrl = useEntityField("sessionGroups", sessionGroupId, "prUrl") as
+    | string
+    | null
+    | undefined;
+  const groupKind = useEntityField("sessionGroups", sessionGroupId, "kind") as
     | string
     | null
     | undefined;
@@ -429,6 +432,13 @@ export function SessionGroupDetailView({
       setShowApplicationsSidebar(false);
     }
   }, [showApplicationsSidebar, showApplicationsSidebarTab]);
+
+  useEffect(() => {
+    if (groupKind === "app" && showApplicationsSidebarTab && !showApplicationsSidebar) {
+      setShowApplicationsSidebar(true);
+      setShowSidebar(false);
+    }
+  }, [groupKind, showApplicationsSidebar, showApplicationsSidebarTab]);
 
   const selectedSessionStatus = selectedSession
     ? getDisplaySessionStatus(

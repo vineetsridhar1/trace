@@ -43,6 +43,12 @@ enum SessionGroupVisibility {
   private
 }
 
+enum SessionGroupKind {
+  coding
+  design
+  app
+}
+
 enum TicketStatus {
   backlog
   todo
@@ -258,31 +264,31 @@ enum EndpointTrafficCaptureMode {
 }
 
 model Organization {
-  id       String   @id @default(uuid())
+  id       String @id @default(uuid())
   name     String
-  settings Json     @default("{}")
+  settings Json   @default("{}")
 
-  orgMembers OrgMember[]
-  pushTokens PushToken[]
-  mobilePairingTokens MobilePairingToken[]
-  pairedMobileDevices MobileDevice[]
-  repos    Repo[]
-  projects Project[]
-  bridgeRuntimes BridgeRuntime[]
-  channelGroups ChannelGroup[]
-  channels Channel[]
-  sessionGroups SessionGroup[]
-  sessions Session[]
-  tickets  Ticket[]
-  events        Event[]
-  inboxItems    InboxItem[]
-  sessionSetupScriptRuns SessionSetupScriptRun[]
+  orgMembers                  OrgMember[]
+  pushTokens                  PushToken[]
+  mobilePairingTokens         MobilePairingToken[]
+  pairedMobileDevices         MobileDevice[]
+  repos                       Repo[]
+  projects                    Project[]
+  bridgeRuntimes              BridgeRuntime[]
+  channelGroups               ChannelGroup[]
+  channels                    Channel[]
+  sessionGroups               SessionGroup[]
+  sessions                    Session[]
+  tickets                     Ticket[]
+  events                      Event[]
+  inboxItems                  InboxItem[]
+  sessionSetupScriptRuns      SessionSetupScriptRun[]
   sessionApplicationProcesses SessionApplicationProcess[]
-  sessionEndpoints SessionEndpoint[]
-  agentEnvironments AgentEnvironment[]
-  orgSecrets    OrgSecret[]
-  slackInstalls SlackInstall[]
-  slackChannelBindings SlackChannelBinding[]
+  sessionEndpoints            SessionEndpoint[]
+  agentEnvironments           AgentEnvironment[]
+  orgSecrets                  OrgSecret[]
+  slackInstalls               SlackInstall[]
+  slackChannelBindings        SlackChannelBinding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -333,41 +339,41 @@ model OrgSecret {
 }
 
 model User {
-  id             String       @id @default(uuid())
-  email          String       @unique
-  name           String
-  avatarUrl      String?
-  githubId       Int?         @unique
+  id                            String      @id @default(uuid())
+  email                         String      @unique
+  name                          String
+  avatarUrl                     String?
+  githubId                      Int?        @unique
   defaultSessionTool            CodingTool?
   defaultSessionModel           String?
   defaultSessionReasoningEffort String?
-  autoArchiveMergedSessions      Boolean      @default(true)
-  enableClaudeInChrome           Boolean      @default(false)
+  autoArchiveMergedSessions     Boolean     @default(true)
+  enableClaudeInChrome          Boolean     @default(false)
 
-  orgMemberships    OrgMember[]
-  mobilePairingTokens MobilePairingToken[] @relation("MobilePairingTokenOwner")
-  mobileDevices MobileDevice[] @relation("MobileDeviceOwner")
-  ownedBridgeRuntimes BridgeRuntime[] @relation("BridgeRuntimeOwner")
-  bridgeAccessGrants BridgeAccessGrant[] @relation("BridgeAccessGrantGrantee")
-  grantedBridgeAccessGrants BridgeAccessGrant[] @relation("BridgeAccessGrantGrantedBy")
-  requestedBridgeAccess BridgeAccessRequest[] @relation("BridgeAccessRequestRequester")
-  ownedBridgeAccessRequests BridgeAccessRequest[] @relation("BridgeAccessRequestOwner")
+  orgMemberships               OrgMember[]
+  mobilePairingTokens          MobilePairingToken[]  @relation("MobilePairingTokenOwner")
+  mobileDevices                MobileDevice[]        @relation("MobileDeviceOwner")
+  ownedBridgeRuntimes          BridgeRuntime[]       @relation("BridgeRuntimeOwner")
+  bridgeAccessGrants           BridgeAccessGrant[]   @relation("BridgeAccessGrantGrantee")
+  grantedBridgeAccessGrants    BridgeAccessGrant[]   @relation("BridgeAccessGrantGrantedBy")
+  requestedBridgeAccess        BridgeAccessRequest[] @relation("BridgeAccessRequestRequester")
+  ownedBridgeAccessRequests    BridgeAccessRequest[] @relation("BridgeAccessRequestOwner")
   resolvedBridgeAccessRequests BridgeAccessRequest[] @relation("BridgeAccessRequestResolver")
-  createdSessions   Session[]        @relation("SessionCreator")
-  ownedSessionGroups SessionGroup[]   @relation("SessionGroupOwner")
-  createdTickets    Ticket[]         @relation("TicketCreator")
-  ticketAssignments TicketAssignee[] @relation("TicketAssignees")
-  createdChats      Chat[]           @relation("ChatCreator")
-  ownedChannels     Channel[]        @relation("ChannelOwner")
-  chatMemberships      ChatMember[]
-  channelMemberships   ChannelMember[]
-  participants         Participant[]
-  apiTokens         ApiToken[]
-  pushTokens        PushToken[]
-  queuedMessages    QueuedMessage[]  @relation("QueuedMessageCreator")
-  slackInstalls     SlackInstall[]   @relation("SlackInstallInstaller")
-  slackAccounts     SlackAccount[]
-  slackChannelBindings SlackChannelBinding[]
+  createdSessions              Session[]             @relation("SessionCreator")
+  ownedSessionGroups           SessionGroup[]        @relation("SessionGroupOwner")
+  createdTickets               Ticket[]              @relation("TicketCreator")
+  ticketAssignments            TicketAssignee[]      @relation("TicketAssignees")
+  createdChats                 Chat[]                @relation("ChatCreator")
+  ownedChannels                Channel[]             @relation("ChannelOwner")
+  chatMemberships              ChatMember[]
+  channelMemberships           ChannelMember[]
+  participants                 Participant[]
+  apiTokens                    ApiToken[]
+  pushTokens                   PushToken[]
+  queuedMessages               QueuedMessage[]       @relation("QueuedMessageCreator")
+  slackInstalls                SlackInstall[]        @relation("SlackInstallInstaller")
+  slackAccounts                SlackAccount[]
+  slackChannelBindings         SlackChannelBinding[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -382,14 +388,14 @@ model Repo {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  projects Project[]
-  sessions Session[]
-  sessionGroups SessionGroup[]
-  channels Channel[]
-  gitCheckpoints GitCheckpoint[]
-  sessionSetupScriptRuns SessionSetupScriptRun[]
+  projects                    Project[]
+  sessions                    Session[]
+  sessionGroups               SessionGroup[]
+  channels                    Channel[]
+  gitCheckpoints              GitCheckpoint[]
+  sessionSetupScriptRuns      SessionSetupScriptRun[]
   sessionApplicationProcesses SessionApplicationProcess[]
-  sessionEndpoints SessionEndpoint[]
+  sessionEndpoints            SessionEndpoint[]
 
   webhookId     String?
   webhookSecret String?
@@ -409,9 +415,9 @@ model Project {
   repo           Repo?        @relation(fields: [repoId], references: [id])
   soulFile       String       @default("")
 
-  channels       ChannelProject[]
-  sessions       SessionProject[]
-  tickets        TicketProject[]
+  channels ChannelProject[]
+  sessions SessionProject[]
+  tickets  TicketProject[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -434,29 +440,29 @@ model ChannelGroup {
 }
 
 model Channel {
-  id             String       @id @default(uuid())
+  id             String            @id @default(uuid())
   name           String
-  type           ChannelType  @default(coding)
+  type           ChannelType       @default(coding)
   visibility     ChannelVisibility @default(public)
-  position       Int          @default(0)
+  position       Int               @default(0)
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  organization   Organization      @relation(fields: [organizationId], references: [id])
   ownerId        String?
-  owner          User?        @relation("ChannelOwner", fields: [ownerId], references: [id])
+  owner          User?             @relation("ChannelOwner", fields: [ownerId], references: [id])
   groupId        String?
-  group          ChannelGroup? @relation(fields: [groupId], references: [id])
+  group          ChannelGroup?     @relation(fields: [groupId], references: [id])
   repoId         String?
-  repo           Repo?         @relation(fields: [repoId], references: [id])
+  repo           Repo?             @relation(fields: [repoId], references: [id])
   baseBranch     String?
   setupScript    String?
-  runScripts     Json?          @default("[]")
+  runScripts     Json?             @default("[]")
 
-  projects ChannelProject[]
+  projects      ChannelProject[]
   sessionGroups SessionGroup[]
-  sessions Session[]
-  tickets  Ticket[]
-  members  ChannelMember[]
-  messages Message[]
+  sessions      Session[]
+  tickets       Ticket[]
+  members       ChannelMember[]
+  messages      Message[]
   slackBindings SlackChannelBinding[]
 
   createdAt DateTime @default(now())
@@ -476,12 +482,12 @@ model ChannelProject {
 }
 
 model ChannelMember {
-  channelId       String
-  channel         Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  joinedAt        DateTime @default(now())
-  leftAt          DateTime?
+  channelId String
+  channel   Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
 
   @@id([channelId, userId])
   @@index([userId])
@@ -489,39 +495,40 @@ model ChannelMember {
 }
 
 model SessionGroup {
-  id             String       @id @default(uuid())
-  name           String
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  ownerUserId    String
-  ownerUser      User         @relation("SessionGroupOwner", fields: [ownerUserId], references: [id])
+  id                       String                 @id @default(uuid())
+  name                     String
+  kind                     SessionGroupKind       @default(coding)
+  organizationId           String
+  organization             Organization           @relation(fields: [organizationId], references: [id])
+  ownerUserId              String
+  ownerUser                User                   @relation("SessionGroupOwner", fields: [ownerUserId], references: [id])
   forkedFromSessionGroupId String?
-  forkedFromSessionGroup   SessionGroup?  @relation("SessionGroupForks", fields: [forkedFromSessionGroupId], references: [id])
-  forkedSessionGroups      SessionGroup[] @relation("SessionGroupForks")
-  visibility     SessionGroupVisibility @default(public)
-  channelId      String?
-  channel        Channel?     @relation(fields: [channelId], references: [id])
-  repoId         String?
-  repo           Repo?        @relation(fields: [repoId], references: [id])
-  slug           String?
-  branch         String?
-  workdir        String?
-  connection     Json?
-  prUrl          String?
-  prSyncObservedAt DateTime?
-  prSyncError      String?
-  worktreeDeleted Boolean     @default(false)
-  archivedAt      DateTime?
-  setupStatus     String      @default("idle")
-  setupError      String?
+  forkedFromSessionGroup   SessionGroup?          @relation("SessionGroupForks", fields: [forkedFromSessionGroupId], references: [id])
+  forkedSessionGroups      SessionGroup[]         @relation("SessionGroupForks")
+  visibility               SessionGroupVisibility @default(public)
+  channelId                String?
+  channel                  Channel?               @relation(fields: [channelId], references: [id])
+  repoId                   String?
+  repo                     Repo?                  @relation(fields: [repoId], references: [id])
+  slug                     String?
+  branch                   String?
+  workdir                  String?
+  connection               Json?
+  prUrl                    String?
+  prSyncObservedAt         DateTime?
+  prSyncError              String?
+  worktreeDeleted          Boolean                @default(false)
+  archivedAt               DateTime?
+  setupStatus              String                 @default("idle")
+  setupError               String?
 
-  sessions Session[]
-  gitCheckpoints GitCheckpoint[]
-  bridgeAccessGrants BridgeAccessGrant[]
+  sessions             Session[]
+  gitCheckpoints       GitCheckpoint[]
+  bridgeAccessGrants   BridgeAccessGrant[]
   bridgeAccessRequests BridgeAccessRequest[]
-  setupScriptRuns SessionSetupScriptRun[]
+  setupScriptRuns      SessionSetupScriptRun[]
   applicationProcesses SessionApplicationProcess[]
-  endpoints SessionEndpoint[]
+  endpoints            SessionEndpoint[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -535,46 +542,46 @@ model SessionGroup {
 }
 
 model Session {
-  id             String       @id @default(uuid())
-  name           String
-  agentStatus    AgentStatus   @default(not_started)
-  sessionStatus  SessionStatus @default(in_progress)
-  tool           CodingTool
-  model          String?
-  reasoningEffort String?
-  toolChangedAt      DateTime?
-  lastUserMessageAt  DateTime?
-  lastMessageAt      DateTime?
-  hosting        HostingMode
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  createdById    String
-  createdBy      User         @relation("SessionCreator", fields: [createdById], references: [id])
-  repoId         String?
-  repo           Repo?        @relation(fields: [repoId], references: [id])
-  branch         String?
-  channelId      String?
-  channel        Channel?     @relation(fields: [channelId], references: [id])
-  sessionGroupId String?
-  sessionGroup   SessionGroup? @relation(fields: [sessionGroupId], references: [id])
-  workdir         String?
-  toolSessionId   String?
-  pendingRun      Json?
-  endpoints       Json?
-  connection      Json?
-  prUrl           String?
-  worktreeDeleted Boolean      @default(false)
-  readOnlyWorkspace Boolean    @default(false)
+  id                String        @id @default(uuid())
+  name              String
+  agentStatus       AgentStatus   @default(not_started)
+  sessionStatus     SessionStatus @default(in_progress)
+  tool              CodingTool
+  model             String?
+  reasoningEffort   String?
+  toolChangedAt     DateTime?
+  lastUserMessageAt DateTime?
+  lastMessageAt     DateTime?
+  hosting           HostingMode
+  organizationId    String
+  organization      Organization  @relation(fields: [organizationId], references: [id])
+  createdById       String
+  createdBy         User          @relation("SessionCreator", fields: [createdById], references: [id])
+  repoId            String?
+  repo              Repo?         @relation(fields: [repoId], references: [id])
+  branch            String?
+  channelId         String?
+  channel           Channel?      @relation(fields: [channelId], references: [id])
+  sessionGroupId    String?
+  sessionGroup      SessionGroup? @relation(fields: [sessionGroupId], references: [id])
+  workdir           String?
+  toolSessionId     String?
+  pendingRun        Json?
+  endpoints         Json?
+  connection        Json?
+  prUrl             String?
+  worktreeDeleted   Boolean       @default(false)
+  readOnlyWorkspace Boolean       @default(false)
 
   inputTokens         BigInt @default(0)
   outputTokens        BigInt @default(0)
   cacheReadTokens     BigInt @default(0)
   cacheCreationTokens BigInt @default(0)
-  costUsd             Float @default(0)
+  costUsd             Float  @default(0)
 
-  projects        SessionProject[]
-  queuedMessages  QueuedMessage[]
-  slackThread     SlackThreadSession?
+  projects       SessionProject[]
+  queuedMessages QueuedMessage[]
+  slackThread    SlackThreadSession?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -585,13 +592,13 @@ model Session {
 }
 
 model SessionSetupScriptRun {
-  id               String                      @id @default(uuid())
-  organizationId   String
-  organization     Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sessionGroupId   String
-  sessionGroup     SessionGroup                @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repoId           String
-  repo             Repo                        @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId String
+  sessionGroup   SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repoId         String
+  repo           Repo         @relation(fields: [repoId], references: [id], onDelete: Cascade)
 
   scriptConfigId   String
   label            String
@@ -603,44 +610,44 @@ model SessionSetupScriptRun {
   outputTruncated  Boolean                     @default(false)
   lastError        String?
 
-  startedByUserId  String?
-  startedAt        DateTime                    @default(now())
-  completedAt      DateTime?
-  createdAt        DateTime                    @default(now())
-  updatedAt        DateTime                    @updatedAt
+  startedByUserId String?
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([organizationId, sessionGroupId])
   @@index([sessionGroupId, scriptConfigId, startedAt])
 }
 
 model SessionApplicationProcess {
-  id                 String                          @id @default(uuid())
-  organizationId     String
-  organization       Organization                    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sessionGroupId     String
-  sessionGroup       SessionGroup                    @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repoId             String
-  repo               Repo                            @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId String
+  sessionGroup   SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repoId         String?
+  repo           Repo?        @relation(fields: [repoId], references: [id], onDelete: Cascade)
 
-  appConfigId        String
-  processConfigId    String
-  label              String
-  command            String
-  workingDirectory   String
-  status             SessionApplicationProcessStatus @default(stopped)
-  runtimeInstanceId  String?
-  bridgeProcessId    String?
-  exitCode           Int?
-  lastError          String?
+  appConfigId       String
+  processConfigId   String
+  label             String
+  command           String
+  workingDirectory  String
+  status            SessionApplicationProcessStatus @default(stopped)
+  runtimeInstanceId String?
+  bridgeProcessId   String?
+  exitCode          Int?
+  lastError         String?
 
-  startedByUserId    String?
-  startedAt          DateTime?
-  stoppedAt          DateTime?
-  lastHeartbeatAt    DateTime?
-  createdAt          DateTime                        @default(now())
-  updatedAt          DateTime                        @updatedAt
+  startedByUserId String?
+  startedAt       DateTime?
+  stoppedAt       DateTime?
+  lastHeartbeatAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  logEntries         SessionApplicationLogEntry[]
+  logEntries SessionApplicationLogEntry[]
 
   @@unique([sessionGroupId, appConfigId, processConfigId])
   @@index([organizationId, sessionGroupId])
@@ -653,35 +660,35 @@ model SessionApplicationLogEntry {
   processId      String
   process        SessionApplicationProcess @relation(fields: [processId], references: [id], onDelete: Cascade)
 
-  stream         String
-  data           String
-  sequence       Int
-  timestamp      DateTime                  @default(now())
+  stream    String
+  data      String
+  sequence  Int
+  timestamp DateTime @default(now())
 
   @@index([processId, sequence])
   @@index([organizationId, timestamp])
 }
 
 model SessionEndpoint {
-  id                       String                     @id @default(uuid())
-  key                      String                     @unique
-  organizationId           String
-  organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sessionGroupId           String
-  sessionGroup             SessionGroup               @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repoId                   String
-  repo                     Repo                       @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid())
+  key            String       @unique
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId String
+  sessionGroup   SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repoId         String?
+  repo           Repo?        @relation(fields: [repoId], references: [id], onDelete: Cascade)
 
-  appConfigId              String
-  processConfigId          String
-  portConfigId             String
-  label                    String
-  targetPort               Int
-  protocol                 String                     @default("http")
+  appConfigId     String
+  processConfigId String
+  portConfigId    String
+  label           String
+  targetPort      Int
+  protocol        String @default("http")
 
-  status                   SessionEndpointStatus      @default(disabled)
-  accessMode               SessionEndpointAccessMode  @default(private)
-  trafficCaptureMode       EndpointTrafficCaptureMode @default(metadata)
+  status             SessionEndpointStatus      @default(disabled)
+  accessMode         SessionEndpointAccessMode  @default(private)
+  trafficCaptureMode EndpointTrafficCaptureMode @default(metadata)
 
   currentRuntimeInstanceId String?
   enabledByUserId          String?
@@ -690,10 +697,10 @@ model SessionEndpoint {
   revokedAt                DateTime?
   expiresAt                DateTime?
 
-  createdAt                DateTime                   @default(now())
-  updatedAt                DateTime                   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  trafficEntries           EndpointTrafficEntry[]
+  trafficEntries EndpointTrafficEntry[]
 
   @@unique([sessionGroupId, appConfigId, processConfigId, portConfigId])
   @@index([organizationId, sessionGroupId])
@@ -701,30 +708,30 @@ model SessionEndpoint {
 }
 
 model EndpointTrafficEntry {
-  id                    String          @id @default(uuid())
-  organizationId        String
-  endpointId            String
-  endpoint              SessionEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  id             String          @id @default(uuid())
+  organizationId String
+  endpointId     String
+  endpoint       SessionEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
 
-  startedAt             DateTime        @default(now())
-  completedAt           DateTime?
-  durationMs            Int?
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  durationMs  Int?
 
-  requestMethod         String
-  requestPath           String
-  requestQuery          String?
-  requestHeaders        Json?
-  requestBodyPreview    String?
-  requestBodyBytes      Int?
-  requestTruncated      Boolean         @default(false)
+  requestMethod      String
+  requestPath        String
+  requestQuery       String?
+  requestHeaders     Json?
+  requestBodyPreview String?
+  requestBodyBytes   Int?
+  requestTruncated   Boolean @default(false)
 
-  responseStatus        Int?
-  responseHeaders       Json?
-  responseBodyPreview   String?
-  responseBodyBytes     Int?
-  responseTruncated     Boolean         @default(false)
+  responseStatus      Int?
+  responseHeaders     Json?
+  responseBodyPreview String?
+  responseBodyBytes   Int?
+  responseTruncated   Boolean @default(false)
 
-  error                 String?
+  error String?
 
   @@index([endpointId, startedAt])
   @@index([organizationId, startedAt])
@@ -854,7 +861,7 @@ model Event {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
-  timestamp DateTime @default(now())
+  timestamp      DateTime        @default(now())
   gitCheckpoints GitCheckpoint[] @relation("GitCheckpointPromptEvent")
 
   @@index([organizationId, scopeType, scopeId])
@@ -880,8 +887,8 @@ model GitCheckpoint {
   createdAt      DateTime @default(now())
 
   sessionGroup SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repo         Repo @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  promptEvent  Event @relation("GitCheckpointPromptEvent", fields: [promptEventId], references: [id], onDelete: Restrict)
+  repo         Repo         @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  promptEvent  Event        @relation("GitCheckpointPromptEvent", fields: [promptEventId], references: [id], onDelete: Restrict)
 
   @@unique([sessionGroupId, commitSha])
   @@index([sessionId, committedAt])
@@ -932,18 +939,18 @@ model MobilePairingToken {
 }
 
 model MobileDevice {
-  id             String       @id @default(uuid())
-  ownerUserId    String
-  ownerUser      User         @relation("MobileDeviceOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  id                   String        @id @default(uuid())
+  ownerUserId          String
+  ownerUser            User          @relation("MobileDeviceOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
   pairedOrganizationId String?
   pairedOrganization   Organization? @relation(fields: [pairedOrganizationId], references: [id], onDelete: SetNull)
-  installId      String
-  deviceName     String?
-  platform       PushPlatform?
-  appVersion     String?
-  tokenHash      String       @unique
-  lastSeenAt     DateTime?
-  revokedAt      DateTime?
+  installId            String
+  deviceName           String?
+  platform             PushPlatform?
+  appVersion           String?
+  tokenHash            String        @unique
+  lastSeenAt           DateTime?
+  revokedAt            DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -953,19 +960,19 @@ model MobileDevice {
 }
 
 model BridgeAccessGrant {
-  id               String                @id @default(uuid())
-  bridgeRuntimeId  String
-  bridgeRuntime    BridgeRuntime         @relation(fields: [bridgeRuntimeId], references: [id], onDelete: Cascade)
-  granteeUserId    String
-  granteeUser      User                  @relation("BridgeAccessGrantGrantee", fields: [granteeUserId], references: [id], onDelete: Cascade)
-  grantedByUserId  String
-  grantedByUser    User                  @relation("BridgeAccessGrantGrantedBy", fields: [grantedByUserId], references: [id], onDelete: Cascade)
-  scopeType        BridgeAccessScopeType
-  sessionGroupId   String?
-  sessionGroup     SessionGroup?         @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  capabilities     BridgeAccessCapability[] @default([])
-  expiresAt        DateTime?
-  revokedAt        DateTime?
+  id              String                   @id @default(uuid())
+  bridgeRuntimeId String
+  bridgeRuntime   BridgeRuntime            @relation(fields: [bridgeRuntimeId], references: [id], onDelete: Cascade)
+  granteeUserId   String
+  granteeUser     User                     @relation("BridgeAccessGrantGrantee", fields: [granteeUserId], references: [id], onDelete: Cascade)
+  grantedByUserId String
+  grantedByUser   User                     @relation("BridgeAccessGrantGrantedBy", fields: [grantedByUserId], references: [id], onDelete: Cascade)
+  scopeType       BridgeAccessScopeType
+  sessionGroupId  String?
+  sessionGroup    SessionGroup?            @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  capabilities    BridgeAccessCapability[] @default([])
+  expiresAt       DateTime?
+  revokedAt       DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -976,22 +983,22 @@ model BridgeAccessGrant {
 }
 
 model BridgeAccessRequest {
-  id                 String                    @id @default(uuid())
-  bridgeRuntimeId    String
-  bridgeRuntime      BridgeRuntime             @relation(fields: [bridgeRuntimeId], references: [id], onDelete: Cascade)
-  requesterUserId    String
-  requesterUser      User                      @relation("BridgeAccessRequestRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
-  ownerUserId        String
-  ownerUser          User                      @relation("BridgeAccessRequestOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
-  scopeType          BridgeAccessScopeType
-  sessionGroupId     String?
-  sessionGroup       SessionGroup?             @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  requestedCapabilities BridgeAccessCapability[] @default([])
-  requestedExpiresAt DateTime?
-  status             BridgeAccessRequestStatus @default(pending)
-  resolvedAt         DateTime?
-  resolvedByUserId   String?
-  resolvedByUser     User?                     @relation("BridgeAccessRequestResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  id                    String                    @id @default(uuid())
+  bridgeRuntimeId       String
+  bridgeRuntime         BridgeRuntime             @relation(fields: [bridgeRuntimeId], references: [id], onDelete: Cascade)
+  requesterUserId       String
+  requesterUser         User                      @relation("BridgeAccessRequestRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  ownerUserId           String
+  ownerUser             User                      @relation("BridgeAccessRequestOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  scopeType             BridgeAccessScopeType
+  sessionGroupId        String?
+  sessionGroup          SessionGroup?             @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  requestedCapabilities BridgeAccessCapability[]  @default([])
+  requestedExpiresAt    DateTime?
+  status                BridgeAccessRequestStatus @default(pending)
+  resolvedAt            DateTime?
+  resolvedByUserId      String?
+  resolvedByUser        User?                     @relation("BridgeAccessRequestResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1023,14 +1030,14 @@ model InboxItem {
 }
 
 model Chat {
-  id             String       @id @default(uuid())
-  type           ChatType
-  name           String?
-  dmKey          String?      @unique
-  createdById    String
-  createdBy      User         @relation("ChatCreator", fields: [createdById], references: [id])
+  id          String   @id @default(uuid())
+  type        ChatType
+  name        String?
+  dmKey       String?  @unique
+  createdById String
+  createdBy   User     @relation("ChatCreator", fields: [createdById], references: [id])
 
-  members ChatMember[]
+  members  ChatMember[]
   messages Message[]
 
   createdAt DateTime @default(now())
@@ -1038,23 +1045,23 @@ model Chat {
 }
 
 model Message {
-  id              String       @id @default(uuid())
+  id              String    @id @default(uuid())
   chatId          String?
-  chat            Chat?        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chat            Chat?     @relation(fields: [chatId], references: [id], onDelete: Cascade)
   channelId       String?
-  channel         Channel?     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channel         Channel?  @relation(fields: [channelId], references: [id], onDelete: Cascade)
   actorType       ActorType
   actorId         String
   text            String
   html            String?
   mentions        Json?
   parentMessageId String?
-  parentMessage   Message?     @relation("MessageThread", fields: [parentMessageId], references: [id], onDelete: SetNull)
-  replies         Message[]    @relation("MessageThread")
+  parentMessage   Message?  @relation("MessageThread", fields: [parentMessageId], references: [id], onDelete: SetNull)
+  replies         Message[] @relation("MessageThread")
   editedAt        DateTime?
   deletedAt       DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([chatId, createdAt])
   @@index([channelId, createdAt])
@@ -1063,12 +1070,12 @@ model Message {
 }
 
 model ChatMember {
-  chatId          String
-  chat            Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  joinedAt        DateTime @default(now())
-  leftAt          DateTime?
+  chatId   String
+  chat     Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
 
   @@id([chatId, userId])
   @@index([userId])
@@ -1080,7 +1087,7 @@ model Participant {
   scopeType    ParticipantScope
   scopeId      String
   subscribedAt DateTime         @default(now())
-  mutedAt        DateTime?
+  mutedAt      DateTime?
 
   @@id([userId, scopeType, scopeId])
   @@index([scopeType, scopeId])
@@ -1118,14 +1125,14 @@ model SlackAccount {
 }
 
 model SlackChannelBinding {
-  id              String   @id @default(uuid())
-  slackTeamId     String
-  slackChannelId  String
-  traceChannelId  String
-  organizationId  String
-  boundById       String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(uuid())
+  slackTeamId    String
+  slackChannelId String
+  traceChannelId String
+  organizationId String
+  boundById      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   traceChannel Channel      @relation(fields: [traceChannelId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -1137,7 +1144,7 @@ model SlackChannelBinding {
 }
 
 model SlackSessionDraft {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   slackTeamId    String
   slackChannelId String
   slackThreadTs  String
@@ -1145,8 +1152,8 @@ model SlackSessionDraft {
   organizationId String
   traceChannelId String?
   prompt         String
-  fileRefs       Json     @default("[]")
-  createdAt      DateTime @default(now())
+  fileRefs       Json      @default("[]")
+  createdAt      DateTime  @default(now())
   expiresAt      DateTime?
 
   @@index([slackTeamId, slackChannelId, slackThreadTs])

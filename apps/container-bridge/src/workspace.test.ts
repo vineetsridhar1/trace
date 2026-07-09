@@ -1,6 +1,6 @@
 import { promisify } from "util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createWorktree, ensureRepo, getRepoPath } from "./workspace.js";
+import { createAppWorkspace, createWorktree, ensureRepo, getRepoPath } from "./workspace.js";
 
 type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void;
 
@@ -8,8 +8,10 @@ const mocks = vi.hoisted(() => ({
   execFile: vi.fn(),
   existsSync: vi.fn(),
   mkdirSync: vi.fn(),
+  cpSync: vi.fn(),
   readdirSync: vi.fn(),
   rmSync: vi.fn(),
+  writeFileSync: vi.fn(),
 }));
 
 vi.mock("child_process", () => {
@@ -32,8 +34,10 @@ vi.mock("fs", () => ({
   default: {
     existsSync: mocks.existsSync,
     mkdirSync: mocks.mkdirSync,
+    cpSync: mocks.cpSync,
     readdirSync: mocks.readdirSync,
     rmSync: mocks.rmSync,
+    writeFileSync: mocks.writeFileSync,
   },
 }));
 
@@ -232,6 +236,22 @@ describe("workspace repo setup", () => {
     expect(result).toEqual({ repoPath: "/repos/repo-1" });
     expect(getRepoPath("repo-1")).toBe("/repos/repo-1");
     expect(gitArgsAt(0)).not.toContain("--no-checkout");
+  });
+
+  it("creates a repo-less app workspace with the fallback starter", async () => {
+    mocks.existsSync.mockReturnValue(false);
+    mocks.readdirSync.mockReturnValue([]);
+
+    await expect(
+      createAppWorkspace({ sessionId: "session-1", sessionGroupId: "group-1" }),
+    ).resolves.toEqual({ workdir: "/workspaces/group-1", slug: "group-1" });
+
+    expect(mocks.mkdirSync).toHaveBeenCalledWith("/workspaces", { recursive: true });
+    expect(mocks.mkdirSync).toHaveBeenCalledWith("/workspaces/group-1", { recursive: true });
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      "/workspaces/group-1/.trace/app-starter.json",
+      expect.stringContaining('"kind":"nextjs"'),
+    );
   });
 
   it("creates the requested branch from the default branch when clone reports it missing", async () => {

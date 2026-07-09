@@ -54,6 +54,14 @@ export interface BridgePrepareCommand {
   readOnly?: boolean;
 }
 
+export interface BridgePrepareAppCommand {
+  type: "prepare_app";
+  sessionId: string;
+  sessionGroupId?: string;
+  /** Pre-assigned slug for the generated app workspace. If absent, the bridge generates one. */
+  slug?: string;
+}
+
 export interface BridgeUpgradeWorkspaceCommand {
   type: "upgrade_workspace";
   sessionId: string;
@@ -356,6 +364,7 @@ export type BridgeCommand =
   | BridgeRunCommand
   | BridgeSendCommand
   | BridgePrepareCommand
+  | BridgePrepareAppCommand
   | BridgeUpgradeWorkspaceCommand
   | BridgeTerminateCommand
   | BridgePauseCommand
