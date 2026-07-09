@@ -130,8 +130,9 @@ pnpm smoke:cloud-app-session
 
 The smoke starts a fresh `app` session and asserts it begins without a repo, waits for the
 cloud runtime, process logs, enabled endpoint, managed-git checkpoint, managed repo link,
-and checkpoint capture, downloads the capture image, opens the private preview URL in a
-real browser, publishes the endpoint, opens the public URL unauthenticated, restores the
+and checkpoint capture, downloads the capture image, opens a terminal in the app workdir
+and verifies the generated `package.json`, opens the private preview URL in a real
+browser, publishes the endpoint, opens the public URL unauthenticated, restores the
 checkpoint into a fresh app session, verifies that restore is backed by the managed repo,
 and opens the restored preview. It is strict by default: Chrome/Chromium and checkpoint
 capture are required. `TRACE_SMOKE_SKIP_BROWSER=1` or `TRACE_SMOKE_REQUIRE_CAPTURE=0` may

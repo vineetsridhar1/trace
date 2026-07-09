@@ -182,8 +182,8 @@ The remaining gap found by this audit is:
   generation, fan-out directions, anchored comment, token tweak, PDF export, published
   user-content URL, and promotion into a linked coding session.
 - Run a real cloud `app` session end to end: prompt, starter boot, port detection, preview
-  iframe, checkpoint, restore from checkpoint, capture thumbnail, publish public endpoint,
-  and open the published URL.
+  iframe, terminal in the app workdir, checkpoint, restore from checkpoint, capture
+  thumbnail, publish public endpoint, and open the published URL.
 
 These smokes are executable via `pnpm smoke:design-session` and
 `pnpm smoke:cloud-app-session` against a configured Trace server with
@@ -299,3 +299,9 @@ During this continuation, the hosted smokes were tightened so generated file art
 fetched, not just checked by metadata. The design smoke downloads the exported PDF and
 asserts PDF bytes, and the cloud app smoke downloads the checkpoint capture image when
 capture verification is required.
+
+During this continuation, the cloud app smoke covered the terminal service through unit
+paths but did not verify an app-session terminal in the hosted runtime. The smoke now
+creates a terminal over the `/terminal` WebSocket, runs a command in the app workdir, and
+asserts the generated `package.json` is present before continuing to preview, publish, and
+restore checks.

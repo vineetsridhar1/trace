@@ -20,6 +20,7 @@ const prompt =
 const expectedText = process.env.TRACE_SMOKE_EXPECTED_TEXT ?? "TRACE_SMOKE_APP_READY";
 const timeoutMs = readDurationEnv("TRACE_SMOKE_TIMEOUT_MS", 20 * 60 * 1000);
 const pollMs = readDurationEnv("TRACE_SMOKE_POLL_MS", 5000);
+const terminalTimeoutMs = readDurationEnv("TRACE_SMOKE_TERMINAL_TIMEOUT_MS", 60 * 1000);
 const requireCapture = process.env.TRACE_SMOKE_REQUIRE_CAPTURE !== "0";
 const skipBrowser = process.env.TRACE_SMOKE_SKIP_BROWSER === "1";
 
@@ -135,6 +136,21 @@ const PUBLISH_APP = `
       accessMode
       status
     }
+  }
+`;
+
+const CREATE_TERMINAL = `
+  mutation SmokeCreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {
+    createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {
+      id
+      sessionId
+    }
+  }
+`;
+
+const DESTROY_TERMINAL = `
+  mutation SmokeDestroyTerminal($terminalId: ID!) {
+    destroyTerminal(terminalId: $terminalId)
   }
 `;
 
@@ -336,6 +352,111 @@ async function publishApp(sessionGroupId) {
   return endpoint.url;
 }
 
+function terminalWebSocketUrl() {
+  const url = new URL(serverUrl);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.pathname = "/terminal";
+  url.search = "";
+  url.searchParams.set("token", authToken);
+  return url.toString();
+}
+
+function websocketMessageText(data) {
+  if (typeof data === "string") return data;
+  if (data instanceof ArrayBuffer) return Buffer.from(data).toString("utf8");
+  if (ArrayBuffer.isView(data)) {
+    return Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString("utf8");
+  }
+  return String(data);
+}
+
+async function verifyTerminalWorkdir(sessionId) {
+  if (typeof WebSocket !== "function") {
+    throw new Error("Global WebSocket support is required for the terminal smoke");
+  }
+
+  const createData = await graphql(CREATE_TERMINAL, { sessionId, cols: 80, rows: 24 });
+  const terminalId = createData.createTerminal?.id;
+  if (!terminalId) throw new Error("createTerminal did not return a terminal id");
+
+  let ws = null;
+  try {
+    const marker = "TRACE_SMOKE_TERMINAL_READY:";
+    const command = [
+      "node -e",
+      `"const p=require('./package.json'); if (!p.scripts || !p.scripts.dev) process.exit(2); process.stdout.write('${marker}'+process.cwd()+':package-json-ok\\\\n')"`,
+    ].join(" ");
+
+    return await new Promise((resolve, reject) => {
+      let settled = false;
+      let output = "";
+      const timer = setTimeout(() => {
+        fail(new Error(`Terminal command timed out after ${terminalTimeoutMs}ms`));
+      }, terminalTimeoutMs);
+
+      function cleanup() {
+        clearTimeout(timer);
+      }
+
+      function fail(error) {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      }
+
+      function pass(value) {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      }
+
+      ws = new WebSocket(terminalWebSocketUrl());
+      ws.addEventListener("open", () => {
+        ws.send(JSON.stringify({ type: "attach", terminalId }));
+      });
+      ws.addEventListener("error", () => {
+        fail(new Error("Terminal WebSocket failed"));
+      });
+      ws.addEventListener("close", (event) => {
+        if (!settled) {
+          fail(new Error(`Terminal WebSocket closed before verification (${event.code})`));
+        }
+      });
+      ws.addEventListener("message", (event) => {
+        let message;
+        try {
+          message = JSON.parse(websocketMessageText(event.data));
+        } catch {
+          return;
+        }
+        if (message.type === "error") {
+          fail(new Error(`Terminal error: ${message.message ?? "unknown"}`));
+          return;
+        }
+        if (message.type === "ready") {
+          ws.send(JSON.stringify({ type: "input", data: `${command}\n` }));
+          return;
+        }
+        if (message.type !== "output" || typeof message.data !== "string") return;
+
+        output += message.data;
+        if (output.includes(marker) && output.includes(":package-json-ok")) {
+          pass(output);
+        }
+      });
+    });
+  } finally {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      ws.close();
+    }
+    await graphql(DESTROY_TERMINAL, { terminalId }).catch((error) => {
+      process.stderr.write(`Failed to destroy terminal ${terminalId}: ${error.message}\n`);
+    });
+  }
+}
+
 async function startAppSession(input) {
   const data = await graphql(START_APP_SESSION, { input });
   const session = data.startSession;
@@ -375,6 +496,7 @@ const initial = await waitForReadyApp(session.sessionGroupId, "initial");
 if (requireCapture) {
   await assertImageDownload(initial.checkpoint.captureUrl, "checkpoint capture URL");
 }
+const terminalOutput = await verifyTerminalWorkdir(session.id);
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
 await renderUrl(previewUrl, "private preview URL", { requireFetch: false });
 
@@ -399,6 +521,7 @@ process.stdout.write(
     `Initial session: ${session.id}`,
     `Initial group: ${session.sessionGroupId}`,
     `Checkpoint: ${initial.checkpoint.id} ${initial.checkpoint.commitSha}`,
+    `Terminal: ${terminalOutput.match(/TRACE_SMOKE_TERMINAL_READY:[^\r\n]+/)?.[0] ?? "verified"}`,
     `Published URL: ${publicUrl}`,
     `Restored session: ${restored.id}`,
     `Restored group: ${restored.sessionGroupId}`,
