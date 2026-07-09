@@ -20,7 +20,8 @@ import {
   Upload,
   Wand2,
 } from "lucide-react";
-import type { Artifact } from "@trace/gql";
+import type { Artifact, Event } from "@trace/gql";
+import { useAuthStore } from "@trace/client-core";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
@@ -45,6 +46,19 @@ const DESIGN_ARTIFACTS_QUERY = gql`
         name
         avatarUrl
       }
+    }
+  }
+`;
+
+const DESIGN_SESSION_EVENTS_SUBSCRIPTION = gql`
+  subscription DesignSessionEvents($sessionId: ID!, $organizationId: ID!) {
+    sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {
+      id
+      scopeType
+      scopeId
+      eventType
+      payload
+      timestamp
     }
   }
 `;
@@ -116,6 +130,27 @@ type ArtifactResult = {
   designArtifacts?: Artifact[];
 };
 
+type CanvasArtifact = Pick<
+  Artifact,
+  | "id"
+  | "sessionGroupId"
+  | "parentArtifactId"
+  | "prompt"
+  | "title"
+  | "contentType"
+  | "html"
+  | "metadata"
+  | "publishedAt"
+  | "publicUrl"
+  | "createdAt"
+  | "updatedAt"
+>;
+
+type StreamingArtifact = CanvasArtifact & {
+  streaming: true;
+  generationId: string;
+};
+
 const CARD_WIDTH = 720;
 const CARD_HEIGHT = 520;
 const CARD_GAP = 80;
@@ -130,7 +165,7 @@ type Viewport = {
 };
 
 type ArtifactPlacement = {
-  artifact: Artifact;
+  artifact: CanvasArtifact;
   x: number;
   y: number;
 };
@@ -139,7 +174,7 @@ function clampZoom(value: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
 }
 
-function getArtifactPlacements(artifacts: Artifact[]): ArtifactPlacement[] {
+function getArtifactPlacements(artifacts: CanvasArtifact[]): ArtifactPlacement[] {
   return artifacts.map((artifact, index) => {
     const column = index % 2;
     const row = Math.floor(index / 2);
@@ -210,7 +245,50 @@ function getArtifactPublicUrl(artifact: Artifact) {
   }
 }
 
-function ArtifactCard({ artifact, selected }: { artifact: Artifact; selected: boolean }) {
+function eventPayload(event: Event): Record<string, unknown> | null {
+  return event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+    ? (event.payload as Record<string, unknown>)
+    : null;
+}
+
+function stringField(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function numberField(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function streamingArtifactFromPayload(payload: Record<string, unknown>): StreamingArtifact | null {
+  const generationId = stringField(payload.generationId);
+  const sessionGroupId = stringField(payload.sessionGroupId);
+  const html = stringField(payload.htmlPreview);
+  if (!generationId || !sessionGroupId || !html) return null;
+  const directionIndex = numberField(payload.directionIndex);
+  const directionLabel = stringField(payload.directionLabel);
+  const title =
+    directionLabel ??
+    (directionIndex != null ? `Direction ${directionIndex + 1}` : "Generating design");
+  const now = new Date().toISOString();
+  return {
+    id: `stream:${generationId}`,
+    generationId,
+    streaming: true,
+    sessionGroupId,
+    parentArtifactId: stringField(payload.parentArtifactId),
+    prompt: stringField(payload.prompt),
+    title,
+    contentType: "text/html+trace-design",
+    html,
+    metadata: { streaming: true },
+    publishedAt: null,
+    publicUrl: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function ArtifactCard({ artifact, selected }: { artifact: CanvasArtifact; selected: boolean }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const nonceRef = useRef<string>(createProtocolNonce());
   const bootstrapUrl = useMemo(
@@ -296,8 +374,17 @@ function ArtifactCard({ artifact, selected }: { artifact: Artifact; selected: bo
   );
 }
 
-export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
+export function DesignCanvas({
+  sessionGroupId,
+  sessionId,
+}: {
+  sessionGroupId: string;
+  sessionId?: string | null;
+}) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [streamingArtifacts, setStreamingArtifacts] = useState<Record<string, StreamingArtifact>>(
+    {},
+  );
   const [loading, setLoading] = useState(true);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [viewport, setViewport] = useState<Viewport>({ x: 80, y: 60, scale: 0.8 });
@@ -309,11 +396,23 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
     viewport: Viewport;
   } | null>(null);
 
-  const selectedArtifact = useMemo(
-    () => artifacts.find((artifact) => artifact.id === selectedArtifactId) ?? artifacts[0] ?? null,
-    [artifacts, selectedArtifactId],
+  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const visibleArtifacts = useMemo(
+    () => [...artifacts, ...Object.values(streamingArtifacts)],
+    [artifacts, streamingArtifacts],
   );
-  const placements = useMemo(() => getArtifactPlacements(artifacts), [artifacts]);
+  const selectedArtifact = useMemo(
+    () =>
+      visibleArtifacts.find((artifact) => artifact.id === selectedArtifactId) ??
+      visibleArtifacts[0] ??
+      null,
+    [selectedArtifactId, visibleArtifacts],
+  );
+  const selectedPersistedArtifact = useMemo(
+    () => artifacts.find((artifact) => artifact.id === selectedArtifact?.id) ?? null,
+    [artifacts, selectedArtifact?.id],
+  );
+  const placements = useMemo(() => getArtifactPlacements(visibleArtifacts), [visibleArtifacts]);
 
   const loadArtifacts = useCallback(async () => {
     setLoading(true);
@@ -321,12 +420,47 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
       .query<ArtifactResult>(DESIGN_ARTIFACTS_QUERY, { sessionGroupId })
       .toPromise();
     setArtifacts(result.data?.designArtifacts ?? []);
+    setStreamingArtifacts({});
     setLoading(false);
   }, [sessionGroupId]);
 
   useEffect(() => {
     loadArtifacts();
   }, [loadArtifacts]);
+
+  useEffect(() => {
+    if (!activeOrgId || !sessionId) return;
+
+    const subscription = client
+      .subscription(DESIGN_SESSION_EVENTS_SUBSCRIPTION, {
+        sessionId,
+        organizationId: activeOrgId,
+      })
+      .subscribe((result: { data?: Record<string, unknown> }) => {
+        const event = result.data?.sessionEvents as Event | undefined;
+        if (!event) return;
+        const payload = eventPayload(event);
+        if (!payload) return;
+        if (
+          event.eventType === "session_output" &&
+          (payload.type === "design_generation_delta" ||
+            payload.type === "design_generation_completed")
+        ) {
+          const streamingArtifact = streamingArtifactFromPayload(payload);
+          if (!streamingArtifact) return;
+          setStreamingArtifacts((current) => ({
+            ...current,
+            [streamingArtifact.generationId]: streamingArtifact,
+          }));
+          return;
+        }
+        if (event.eventType === "design_artifact_created") {
+          void loadArtifacts();
+        }
+      });
+
+    return () => subscription.unsubscribe();
+  }, [activeOrgId, loadArtifacts, sessionId]);
 
   const fitCanvas = useCallback(() => {
     const element = canvasRef.current;
@@ -447,15 +581,18 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
   );
 
   const handleIterate = useCallback(() => {
-    if (!selectedArtifact) return;
-    const prompt = window.prompt("Describe the next variant", selectedArtifact.prompt ?? "");
+    if (!selectedPersistedArtifact) return;
+    const prompt = window.prompt(
+      "Describe the next variant",
+      selectedPersistedArtifact.prompt ?? "",
+    );
     if (!prompt?.trim()) return;
     void mutateSelectedArtifact(
       ITERATE_DESIGN_ARTIFACT_MUTATION,
-      { artifactId: selectedArtifact.id, prompt: prompt.trim() },
+      { artifactId: selectedPersistedArtifact.id, prompt: prompt.trim() },
       "Variant created",
     );
-  }, [mutateSelectedArtifact, selectedArtifact]);
+  }, [mutateSelectedArtifact, selectedPersistedArtifact]);
 
   const handleGenerateDirections = useCallback(() => {
     const prompt = window.prompt("Describe the design directions");
@@ -468,24 +605,24 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
   }, [mutateSelectedArtifact, sessionGroupId]);
 
   const handleTweak = useCallback(() => {
-    if (!selectedArtifact) return;
+    if (!selectedPersistedArtifact) return;
     const name = window.prompt("CSS variable name", "--trace-accent");
     if (!name?.trim()) return;
     const value = window.prompt("CSS variable value", "#0f766e");
     if (!value?.trim()) return;
     void mutateSelectedArtifact(
       PATCH_DESIGN_ARTIFACT_TOKENS_MUTATION,
-      { artifactId: selectedArtifact.id, tokens: { [name.trim()]: value.trim() } },
+      { artifactId: selectedPersistedArtifact.id, tokens: { [name.trim()]: value.trim() } },
       "Tweak applied",
     );
-  }, [mutateSelectedArtifact, selectedArtifact]);
+  }, [mutateSelectedArtifact, selectedPersistedArtifact]);
 
   const handlePublish = useCallback(() => {
-    if (!selectedArtifact) return;
+    if (!selectedPersistedArtifact) return;
     void (async () => {
       const result = await client
         .mutation<{ publishDesignArtifact?: Artifact }>(PUBLISH_DESIGN_ARTIFACT_MUTATION, {
-          artifactId: selectedArtifact.id,
+          artifactId: selectedPersistedArtifact.id,
         })
         .toPromise();
       if (result.error) {
@@ -494,7 +631,7 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
       }
       await loadArtifacts();
 
-      const publishedArtifact = result.data?.publishDesignArtifact ?? selectedArtifact;
+      const publishedArtifact = result.data?.publishDesignArtifact ?? selectedPersistedArtifact;
       const publicUrl = getArtifactPublicUrl(publishedArtifact);
       if (publicUrl) {
         void navigator.clipboard?.writeText(publicUrl).catch(() => undefined);
@@ -508,37 +645,37 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
       }
       toast.success("Artifact published");
     })();
-  }, [loadArtifacts, selectedArtifact]);
+  }, [loadArtifacts, selectedPersistedArtifact]);
 
   const handleComment = useCallback(() => {
-    if (!selectedArtifact) return;
+    if (!selectedPersistedArtifact) return;
     const body = window.prompt("Add a comment");
     if (!body?.trim()) return;
     const sendToAgent = window.confirm("Send this comment to the agent for the next iteration?");
     void mutateSelectedArtifact(
       COMMENT_DESIGN_ARTIFACT_MUTATION,
-      { artifactId: selectedArtifact.id, body: body.trim(), sendToAgent },
+      { artifactId: selectedPersistedArtifact.id, body: body.trim(), sendToAgent },
       "Comment added",
     );
-  }, [mutateSelectedArtifact, selectedArtifact]);
+  }, [mutateSelectedArtifact, selectedPersistedArtifact]);
 
   const handleExportPdf = useCallback(() => {
-    if (!selectedArtifact) return;
+    if (!selectedPersistedArtifact) return;
     void mutateSelectedArtifact(
       EXPORT_DESIGN_ARTIFACT_PDF_MUTATION,
-      { artifactId: selectedArtifact.id },
+      { artifactId: selectedPersistedArtifact.id },
       "PDF export queued",
     );
-  }, [mutateSelectedArtifact, selectedArtifact]);
+  }, [mutateSelectedArtifact, selectedPersistedArtifact]);
 
   const handlePromote = useCallback(() => {
-    if (!selectedArtifact) return;
+    if (!selectedPersistedArtifact) return;
     void mutateSelectedArtifact(
       PROMOTE_DESIGN_ARTIFACT_MUTATION,
-      { artifactId: selectedArtifact.id },
+      { artifactId: selectedPersistedArtifact.id },
       "Coding session created",
     );
-  }, [mutateSelectedArtifact, selectedArtifact]);
+  }, [mutateSelectedArtifact, selectedPersistedArtifact]);
 
   return (
     <main
@@ -566,7 +703,7 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
         <button
           type="button"
           onClick={handleIterate}
-          disabled={!selectedArtifact}
+          disabled={!selectedPersistedArtifact}
           className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
           aria-label="Create variant"
           title="Create variant"
@@ -576,7 +713,7 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
         <button
           type="button"
           onClick={handleTweak}
-          disabled={!selectedArtifact}
+          disabled={!selectedPersistedArtifact}
           className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
           aria-label="Tweak tokens"
           title="Tweak tokens"
@@ -586,7 +723,7 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
         <button
           type="button"
           onClick={handleComment}
-          disabled={!selectedArtifact}
+          disabled={!selectedPersistedArtifact}
           className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
           aria-label="Comment"
           title="Comment"
@@ -596,7 +733,7 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
         <button
           type="button"
           onClick={handlePublish}
-          disabled={!selectedArtifact}
+          disabled={!selectedPersistedArtifact}
           className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
           aria-label="Publish"
           title="Publish"
@@ -606,7 +743,7 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
         <button
           type="button"
           onClick={handleExportPdf}
-          disabled={!selectedArtifact}
+          disabled={!selectedPersistedArtifact}
           className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
           aria-label="Export PDF"
           title="Export PDF"
@@ -616,7 +753,7 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
         <button
           type="button"
           onClick={handlePromote}
-          disabled={!selectedArtifact}
+          disabled={!selectedPersistedArtifact}
           className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
           aria-label="Promote to coding session"
           title="Promote to coding session"

@@ -34,6 +34,8 @@ export const HIDDEN_SESSION_PAYLOAD_TYPES = [
   "workspace_ready",
   "session_resumed",
   "session_terminated",
+  "design_generation_delta",
+  "design_generation_completed",
 ] as const;
 
 /** Set version for O(1) client-side lookups in buildSessionNodes */

@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "crypto";
 import { composeTraceDesignPrompt, getDefaultModel, type LLMResponse } from "@trace/shared";
 import { aiService } from "./ai.js";
 import { eventService } from "./event.js";
@@ -18,7 +19,8 @@ function textFromResponse(response: LLMResponse | null): string {
 function extractHtml(text: string): string {
   const trimmed = text.trim();
   const fenced = /```(?:html)?\s*([\s\S]*?)```/i.exec(trimmed);
-  const candidate = (fenced?.[1] ?? trimmed).trim();
+  const withoutOpeningFence = trimmed.replace(/^```(?:html)?\s*/i, "").replace(/```\s*$/i, "");
+  const candidate = (fenced?.[1] ?? withoutOpeningFence).trim();
   if (/<!doctype html/i.test(candidate) || /<html[\s>]/i.test(candidate)) {
     return candidate;
   }
@@ -56,18 +58,30 @@ export const designGenerationService = {
     model?: string | null;
     parentArtifactId?: string | null;
     parentHtml?: string | null;
+    generationId?: string | null;
+    directionIndex?: number | null;
+    directionCount?: number | null;
+    directionLabel?: string | null;
   }): Promise<GeneratedDesignArtifact> {
     const model = input.model ?? DEFAULT_DESIGN_MODEL;
+    const generationId = input.generationId ?? randomUUID();
+    const streamPayloadBase = {
+      generationId,
+      sessionGroupId: input.sessionGroupId,
+      parentArtifactId: input.parentArtifactId ?? null,
+      directionIndex: input.directionIndex ?? null,
+      directionCount: input.directionCount ?? null,
+      directionLabel: input.directionLabel ?? null,
+      model,
+      prompt: input.prompt,
+    };
     await eventService.create({
       organizationId: input.organizationId,
       scopeType: "session",
       scopeId: input.sessionId,
       eventType: "design_generation_started",
       payload: {
-        sessionGroupId: input.sessionGroupId,
-        parentArtifactId: input.parentArtifactId ?? null,
-        model,
-        prompt: input.prompt,
+        ...streamPayloadBase,
       } as Prisma.InputJsonValue,
       actorType: input.actorType ?? "user",
       actorId: input.actorId,
@@ -98,6 +112,20 @@ export const designGenerationService = {
       })) {
         if (event.type === "text_delta") {
           text += event.text;
+          await eventService.create({
+            organizationId: input.organizationId,
+            scopeType: "session",
+            scopeId: input.sessionId,
+            eventType: "session_output",
+            payload: {
+              type: "design_generation_delta",
+              ...streamPayloadBase,
+              delta: event.text,
+              htmlPreview: extractHtml(text),
+            } as Prisma.InputJsonValue,
+            actorType: input.actorType ?? "user",
+            actorId: input.actorId,
+          });
         } else if (event.type === "complete") {
           response = event.response;
         } else if (event.type === "error") {
@@ -112,6 +140,7 @@ export const designGenerationService = {
             generator: "local_fallback",
             source: "designGenerationService",
             promptComposer: "trace-open-design-v1",
+            generationId,
             model,
             fallbackReason: "missing_api_key",
           },
@@ -138,12 +167,27 @@ export const designGenerationService = {
 
     const responseText = text || textFromResponse(response);
     const html = extractHtml(responseText);
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: input.sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "design_generation_completed",
+        ...streamPayloadBase,
+        htmlPreview: html,
+        usage: response?.usage ?? null,
+      } as Prisma.InputJsonValue,
+      actorType: input.actorType ?? "user",
+      actorId: input.actorId,
+    });
     return {
       html,
       metadata: {
         generator: "llm",
         source: "designGenerationService",
         promptComposer: "trace-open-design-v1",
+        generationId,
         model: response?.model ?? model,
         usage: response?.usage ?? null,
       },

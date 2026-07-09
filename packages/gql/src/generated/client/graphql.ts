@@ -2617,6 +2617,24 @@ export type DesignArtifactsQuery = {
   }>;
 };
 
+export type DesignSessionEventsSubscriptionVariables = Exact<{
+  sessionId: Scalars["ID"]["input"];
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type DesignSessionEventsSubscription = {
+  __typename?: "Subscription";
+  sessionEvents: {
+    __typename?: "Event";
+    id: string;
+    scopeType: ScopeType;
+    scopeId: string;
+    eventType: EventType;
+    payload: JsonValue;
+    timestamp: string;
+  };
+};
+
 export type IterateDesignArtifactMutationVariables = Exact<{
   artifactId: Scalars["ID"]["input"];
   prompt: Scalars["String"]["input"];
@@ -5135,6 +5153,69 @@ export const DesignArtifactsDocument = {
     },
   ],
 } as unknown as DocumentNode<DesignArtifactsQuery, DesignArtifactsQueryVariables>;
+export const DesignSessionEventsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "subscription",
+      name: { kind: "Name", value: "DesignSessionEvents" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionEvents" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeType" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeId" } },
+                { kind: "Field", name: { kind: "Name", value: "eventType" } },
+                { kind: "Field", name: { kind: "Name", value: "payload" } },
+                { kind: "Field", name: { kind: "Name", value: "timestamp" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  DesignSessionEventsSubscription,
+  DesignSessionEventsSubscriptionVariables
+>;
 export const IterateDesignArtifactDocument = {
   kind: "Document",
   definitions: [

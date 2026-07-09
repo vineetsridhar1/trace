@@ -28,7 +28,10 @@ describe("designGenerationService", () => {
     aiServiceMock.stream.mockReturnValue(
       (async function* () {
         yield { type: "text_delta", text: "```html\n<!doctype html><html>" };
-        yield { type: "text_delta", text: "<body><main data-el=\"hero\">Hi</main></body></html>\n```" };
+        yield {
+          type: "text_delta",
+          text: '<body><main data-el="hero">Hi</main></body></html>\n```',
+        };
         yield {
           type: "complete",
           response: {
@@ -55,7 +58,7 @@ describe("designGenerationService", () => {
       model: "anthropic/test",
     });
 
-    expect(result.html).toContain("<main data-el=\"hero\">Hi</main>");
+    expect(result.html).toContain('<main data-el="hero">Hi</main>');
     expect(result.metadata).toMatchObject({
       generator: "llm",
       source: "designGenerationService",
@@ -75,6 +78,30 @@ describe("designGenerationService", () => {
         payload: expect.objectContaining({
           sessionGroupId: "group-1",
           model: "anthropic/test",
+        }),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_output",
+        scopeId: "session-1",
+        payload: expect.objectContaining({
+          type: "design_generation_delta",
+          sessionGroupId: "group-1",
+          delta: "```html\n<!doctype html><html>",
+          htmlPreview: expect.stringContaining("<!doctype html><html>"),
+        }),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_output",
+        scopeId: "session-1",
+        payload: expect.objectContaining({
+          type: "design_generation_completed",
+          sessionGroupId: "group-1",
+          htmlPreview: expect.stringContaining('<main data-el="hero">Hi</main>'),
+          usage: { inputTokens: 10, outputTokens: 20 },
         }),
       }),
     );

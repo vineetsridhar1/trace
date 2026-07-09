@@ -317,16 +317,21 @@ export const artifactService = {
     const directionCount = normalizeDirectionCount(input.directionCount);
     const fanoutId = randomUUID();
     const results = await Promise.allSettled(
-      Array.from({ length: directionCount }, (_, index) =>
-        designGenerationService.generateHtml({
+      Array.from({ length: directionCount }, (_, index) => {
+        const label = DESIGN_DIRECTION_LABELS[index] ?? `Direction ${index + 1}`;
+        return designGenerationService.generateHtml({
           organizationId: input.organizationId,
           actorId: input.actorId,
           actorType: input.actorType,
           sessionId,
           sessionGroupId: input.sessionGroupId,
           prompt: buildDirectionPrompt(input.prompt, index, directionCount),
-        }),
-      ),
+          generationId: `${fanoutId}:${index}`,
+          directionIndex: index,
+          directionCount,
+          directionLabel: label,
+        });
+      }),
     );
 
     const artifacts = [];

@@ -59,9 +59,7 @@ function getStoredSessionSidebarWidth(): number {
   if (!stored) return DEFAULT_SESSION_SIDEBAR_WIDTH;
 
   const parsed = parseInt(stored, 10);
-  return Number.isFinite(parsed)
-    ? clampSessionSidebarWidth(parsed)
-    : DEFAULT_SESSION_SIDEBAR_WIDTH;
+  return Number.isFinite(parsed) ? clampSessionSidebarWidth(parsed) : DEFAULT_SESSION_SIDEBAR_WIDTH;
 }
 
 const SESSION_GROUP_DETAIL_QUERY = gql`
@@ -973,7 +971,10 @@ export function SessionGroupDetailView({
                       )}
                     </div>
                     <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-                      <DesignCanvas sessionGroupId={sessionGroupId} />
+                      <DesignCanvas
+                        sessionGroupId={sessionGroupId}
+                        sessionId={selectedSession?.id ?? null}
+                      />
                     </div>
                   </>
                 ) : (
