@@ -99,11 +99,12 @@ const SESSION_EVENTS = `
       organizationId: $organizationId
       scope: { type: session, id: $sessionId }
       types: $types
-      limit: 20
+      limit: 200
     ) {
       id
       eventType
       payload
+      timestamp
     }
   }
 `;
@@ -278,6 +279,71 @@ async function waitForPromotedBrief(sessionId) {
       return { ok: false, detail: "session_started prompt not found" };
     }
     return { ok: true, value: prompt };
+  });
+}
+
+async function waitForGeneratedArtifactCompletionEvents(sessionId, artifacts, label) {
+  const artifactIds = artifacts.map((artifact) => artifact.id);
+  return pollUntil(`${label} artifact completion events`, async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      sessionId,
+      types: ["design_artifact_created", "session_output"],
+    });
+    const events = data.events ?? [];
+    const missing = [];
+
+    for (const artifactId of artifactIds) {
+      const createdIndex = events.findIndex((event) => {
+        if (event.eventType !== "design_artifact_created") return false;
+        const payload = event.payload;
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+        const artifact = payload.artifact;
+        return artifact && typeof artifact === "object" && artifact.id === artifactId;
+      });
+      const completedIndex = events.findIndex((event) => {
+        if (event.eventType !== "session_output") return false;
+        const payload = event.payload;
+        return (
+          payload &&
+          typeof payload === "object" &&
+          !Array.isArray(payload) &&
+          payload.type === "design_generation_completed" &&
+          payload.artifactId === artifactId
+        );
+      });
+      if (createdIndex < 0 || completedIndex < 0) {
+        const missingCreated = createdIndex < 0;
+        const missingCompleted = completedIndex < 0;
+        missing.push(
+          `${artifactId}:${missingCreated ? "created" : ""}${missingCreated && missingCompleted ? "+" : ""}${missingCompleted ? "completed" : ""}`,
+        );
+        continue;
+      }
+      if (completedIndex <= createdIndex) {
+        throw new Error(
+          `${label} completion for ${artifactId} was emitted before the artifact creation event`,
+        );
+      }
+      const completedPayload = asPayload(
+        events[completedIndex],
+        `${label} completion ${artifactId}`,
+      );
+      if (typeof completedPayload.generationId !== "string" || !completedPayload.generationId) {
+        throw new Error(`${label} completion ${artifactId} is missing generationId`);
+      }
+      if (typeof completedPayload.model !== "string" || !completedPayload.model) {
+        throw new Error(`${label} completion ${artifactId} is missing model`);
+      }
+      if (typeof completedPayload.htmlPreview !== "string" || !completedPayload.htmlPreview) {
+        throw new Error(`${label} completion ${artifactId} is missing htmlPreview`);
+      }
+    }
+
+    if (missing.length > 0) {
+      return { ok: false, detail: `missing ${missing.join(", ")}` };
+    }
+    return { ok: true, value: events };
   });
 }
 
@@ -470,6 +536,7 @@ if (session.sessionGroup?.connection) {
 const initialArtifacts = await waitForArtifacts(session.sessionGroupId, 1);
 assertArtifactHtml(initialArtifacts[0], "Initial");
 assertLlmArtifactMetadata(initialArtifacts[0], "Initial", "startSession");
+await waitForGeneratedArtifactCompletionEvents(session.id, [initialArtifacts[0]], "Initial");
 
 const generatedData = await graphql(GENERATE_DESIGN_ARTIFACTS, {
   sessionGroupId: session.sessionGroupId,
@@ -487,6 +554,7 @@ for (const artifact of generatedArtifacts) {
   assertArtifactHtml(artifact, "Generated direction");
   assertLlmArtifactMetadata(artifact, "Generated direction", "generateDesignArtifacts");
 }
+await waitForGeneratedArtifactCompletionEvents(session.id, generatedArtifacts, "Generated direction");
 const usage = await waitForDesignUsage(session.id);
 
 const selected = generatedArtifacts[0];
@@ -530,6 +598,11 @@ const commentIteration = await waitForChildArtifact(
   "comment-driven iteration",
 );
 assertArtifactHtml(commentIteration, "Comment-driven iteration");
+await waitForGeneratedArtifactCompletionEvents(
+  session.id,
+  [commentIteration],
+  "Comment-driven iteration",
+);
 
 const tweakData = await graphql(PATCH_DESIGN_ARTIFACT_TOKENS, {
   artifactId: selected.id,

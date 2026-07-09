@@ -723,3 +723,6 @@ generation service before artifact HTML had been stored and before the `Artifact
 created. Completion is now emitted by the artifact/session persistence paths after the
 durable artifact exists, includes the persisted `artifactId`, and leaves the low-level
 generation service responsible only for started, delta, failure, and usage events.
+The hosted design smoke now also validates that initial generation, fan-out variants, and
+comment-driven iterations emit completion only after the matching
+`design_artifact_created` event.
