@@ -8,7 +8,8 @@ export function endpointPreviewBaseHost(): string {
 }
 
 export function endpointPreviewScheme(): string {
-  return process.env.TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME?.trim() || "http";
+  const scheme = process.env.TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME?.trim().replace(/:$/, "");
+  return scheme === "http" || scheme === "https" ? scheme : "http";
 }
 
 export function endpointProxyRequestTimeoutMs(): number {
@@ -49,7 +50,10 @@ export function extractEndpointKey(hostHeader: string | undefined | null): strin
   const host = hostHeader.split(":")[0]?.toLowerCase();
   const baseHost = endpointPreviewBaseHost().toLowerCase().split(":")[0];
   if (!host || host === baseHost || !host.endsWith(`.${baseHost}`)) return null;
-  const key = host.slice(0, -1 * (`.${baseHost}`).length).split(".").at(-1);
+  const key = host
+    .slice(0, -1 * `.${baseHost}`.length)
+    .split(".")
+    .at(-1);
   return key && /^[a-z0-9-]+$/.test(key) ? key : null;
 }
 

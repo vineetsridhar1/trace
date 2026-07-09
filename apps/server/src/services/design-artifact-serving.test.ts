@@ -83,6 +83,14 @@ describe("design artifact user-content serving", () => {
     );
   });
 
+  it("falls back to https for invalid user-content public URL protocols", () => {
+    vi.stubEnv("TRACE_USER_CONTENT_PROTOCOL", "javascript");
+
+    expect(buildDesignArtifactPublicUrl("artifact-1", new Date("2026-07-09T10:00:00.000Z"))).toBe(
+      "https://artifact-1.traceusercontent.test/",
+    );
+  });
+
   it("passes through non user-content hosts", async () => {
     const response = makeResponse();
     const next = vi.fn();

@@ -35,7 +35,9 @@ export function buildDesignArtifactPublicUrl(artifactId: string, publishedAt?: D
   if (!publishedAt || !ARTIFACT_ID_PATTERN.test(artifactId)) return null;
   const domain = configuredUserContentDomain();
   if (!domain) return null;
-  const protocol = process.env[USER_CONTENT_PROTOCOL_ENV]?.trim().replace(/:$/, "") || "https";
+  const configuredProtocol = process.env[USER_CONTENT_PROTOCOL_ENV]?.trim().replace(/:$/, "");
+  const protocol =
+    configuredProtocol === "http" || configuredProtocol === "https" ? configuredProtocol : "https";
   return `${protocol}://${artifactId}.${domain}/`;
 }
 

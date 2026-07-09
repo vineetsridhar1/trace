@@ -318,3 +318,7 @@ upload, and the focused capture test rejects corrupt screenshot bytes.
 During this continuation, design PDF rendering accepted any non-empty Chromium output
 before upload. The renderer now validates the `%PDF-` signature and rejects corrupt output
 before `design_export_completed` can report a downloadable PDF.
+
+During this continuation, design artifact public URLs and app endpoint preview URLs
+trusted protocol environment variables directly. Both URL builders now accept only
+`http` or `https`, falling back to the safe default for invalid config values.
