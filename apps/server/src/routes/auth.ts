@@ -1,6 +1,5 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
-import type { CookieOptions } from "express";
 import type { PushPlatform } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { prisma } from "../lib/db.js";
@@ -9,7 +8,10 @@ import {
   authenticateAccessToken,
   createBridgeAuthToken,
   getRequestToken,
+  getSessionCookieOptions,
   isExternalLocalModeRequest,
+  setSessionCookie,
+  signSessionToken,
 } from "../lib/auth.js";
 import { isLocalMode } from "../lib/mode.js";
 import {
@@ -116,23 +118,6 @@ function logoutPushToken(req: Request): string | null {
   if (!body || typeof body !== "object") return null;
   const token = (body as { pushToken?: unknown }).pushToken;
   return typeof token === "string" && token.length > 0 ? token : null;
-}
-
-function getSessionCookieOptions(): CookieOptions {
-  const sameSite = process.env.TRACE_AUTH_COOKIE_SAME_SITE?.trim().toLowerCase();
-  const normalizedSameSite =
-    sameSite === "strict" || sameSite === "lax" || sameSite === "none" ? sameSite : "lax";
-  return {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: normalizedSameSite,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    path: "/",
-  };
-}
-
-function setSessionCookie(res: Response, token: string): void {
-  res.cookie("trace_token", token, getSessionCookieOptions());
 }
 
 function readFirstHeader(req: Request, headerName: string): string | null {
@@ -679,7 +664,7 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
       error: "Could not verify GitHub identity. Start GitHub login again.",
     });
   }
-  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
+  const token = signSessionToken(user.id);
   setSessionCookie(res, token);
   await deleteGitHubDeviceAuth(deviceAuthId);
 
