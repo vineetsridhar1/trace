@@ -70,11 +70,20 @@ endpoint (the claudeusercontent.com pattern). Rationale and consequences:
 - **Server-set security headers**: strict CSP (external-fetch allowlist decided centrally),
   Permissions-Policy, COOP. The iframe still carries `sandbox` (now safely with
   `allow-same-origin`) as defense in depth.
-- **A `_bootstrap` document + `postMessage` channel** between frame and canvas handles
-  progressive paint while generation streams, element-picker events, comment-pin
-  rendering, and script-error capture (errors surface to the agent as context).
-- **Preview = publish.** Private artifacts are served with a short-lived signed token;
-  publishing flips the access flag on the same URL. No separate publish pipeline.
+- **Push, don't serve, for preview** (verified claude.ai behavior: navigating to a
+  `_bootstrap` URL directly shows nothing — it's a static shell awaiting `postMessage`).
+  The user-content domain serves only a tiny bootstrap document; the canvas pushes
+  artifact HTML into the frame over `postMessage`. The client already holds the bytes —
+  generation streams in over the session event subscription — so preview needs no server
+  round-trip, paints progressively while streaming, and needs **zero auth on the
+  cookieless user-content domain**: unpublished artifact bytes are simply never fetchable
+  there, and a leaked frame URL is worthless. The same channel carries element-picker
+  events, comment-pin rendering, and script-error capture (errors surface to the agent).
+- **Publish = flip to served mode.** Publishing an artifact makes the same subdomain URL
+  return the stored HTML directly (public flag; optionally signed-token serving later for
+  private "open in new tab"). Preview and publish share the domain and headers, not the
+  delivery path. The PDF render pool reads from artifact storage directly, not through
+  the public URL.
 - **Overlay symmetry**: the picker/comments overlay is injected at this serving layer for
   design artifacts, exactly as the endpoint proxy injects it for app-kind dev servers —
   one overlay script, two injection points.
