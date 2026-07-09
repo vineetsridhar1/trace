@@ -30,14 +30,31 @@ vi.mock("./design-generation.js", () => ({
   },
 }));
 
+vi.mock("./design-pdf-renderer.js", () => ({
+  designPdfRenderer: {
+    renderHtmlToPdf: vi.fn().mockResolvedValue(Buffer.from("%PDF-1.7\n")),
+  },
+}));
+
+vi.mock("../lib/storage/index.js", () => ({
+  storage: {
+    putObject: vi.fn().mockResolvedValue(undefined),
+    getGetUrl: vi.fn().mockResolvedValue("https://files.example/design.pdf"),
+  },
+}));
+
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { designGenerationService } from "./design-generation.js";
+import { designPdfRenderer } from "./design-pdf-renderer.js";
+import { storage } from "../lib/storage/index.js";
 import { artifactService } from "./artifact.js";
 
 const prismaMock = prisma as any;
 const eventServiceMock = eventService as any;
 const designGenerationServiceMock = designGenerationService as any;
+const designPdfRendererMock = designPdfRenderer as any;
+const storageMock = storage as any;
 
 function designArtifact(overrides: Record<string, unknown> = {}) {
   return {
@@ -273,10 +290,10 @@ describe("artifactService", () => {
     expect(artifact.html).toContain("--trace-radius: 8px;");
   });
 
-  it("records PDF export requests without claiming completion", async () => {
+  it("renders, uploads, and emits completed PDF exports", async () => {
     prismaMock.artifact.findFirst.mockResolvedValueOnce(designArtifact());
 
-    await artifactService.exportDesignArtifactPdf({
+    const result = await artifactService.exportDesignArtifactPdf({
       artifactId: "artifact-1",
       organizationId: "org-1",
       actorId: "user-1",
@@ -295,6 +312,60 @@ describe("artifactService", () => {
       actorType: "user",
       actorId: "user-1",
     });
+    expect(designPdfRendererMock.renderHtmlToPdf).toHaveBeenCalledWith({
+      html: expect.stringContaining("--trace-accent"),
+      artifactId: "artifact-1",
+    });
+    expect(storageMock.putObject).toHaveBeenCalledWith(
+      expect.stringMatching(/^uploads\/org-1\/.+-Dashboard\.pdf$/),
+      Buffer.from("%PDF-1.7\n"),
+      "application/pdf",
+    );
+    expect(result).toEqual({ id: "event-1" });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_export_completed",
+        payload: expect.objectContaining({
+          artifactId: "artifact-1",
+          exportType: "pdf",
+          status: "completed",
+          fileName: "Dashboard.pdf",
+          fileKey: expect.stringMatching(/^uploads\/org-1\/.+-Dashboard\.pdf$/),
+          fileUrl: "https://files.example/design.pdf",
+          byteSize: Buffer.from("%PDF-1.7\n").byteLength,
+        }),
+        actorType: "system",
+        actorId: "system",
+      }),
+    );
+  });
+
+  it("emits failed PDF export completions when rendering fails", async () => {
+    prismaMock.artifact.findFirst.mockResolvedValueOnce(designArtifact());
+    designPdfRendererMock.renderHtmlToPdf.mockRejectedValueOnce(new Error("chromium missing"));
+
+    await expect(
+      artifactService.exportDesignArtifactPdf({
+        artifactId: "artifact-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+      }),
+    ).rejects.toThrow("chromium missing");
+
+    expect(storageMock.putObject).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_export_completed",
+        payload: expect.objectContaining({
+          artifactId: "artifact-1",
+          exportType: "pdf",
+          status: "failed",
+          error: "chromium missing",
+        }),
+        actorType: "system",
+        actorId: "system",
+      }),
+    );
   });
 
   it("emits design comments with artifact anchors", async () => {

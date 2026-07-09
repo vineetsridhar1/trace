@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { prisma } from "../lib/db.js";
 import { ValidationError } from "../lib/errors.js";
+import { storage } from "../lib/storage/index.js";
 import { eventService } from "./event.js";
 import { assertSessionGroupAccess } from "./access.js";
 import type { ActorType } from "@trace/gql";
@@ -11,6 +12,7 @@ import {
 } from "./design-artifact-html.js";
 import { designGenerationService } from "./design-generation.js";
 import { buildDesignArtifactPublicUrl } from "./design-artifact-serving.js";
+import { designPdfRenderer } from "./design-pdf-renderer.js";
 import { sessionService } from "./session.js";
 
 function serializeArtifact(artifact: {
@@ -133,6 +135,15 @@ function buildDirectionPrompt(prompt: string, index: number, count: number): str
     `Create variant ${index + 1} of ${count}: ${label}.`,
     "Make this direction meaningfully distinct while preserving the user brief and Trace design artifact requirements.",
   ].join("\n");
+}
+
+function sanitizeFilename(value: string): string {
+  const sanitized = value
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return sanitized || "design";
 }
 
 async function getDesignArtifactForWrite(
@@ -541,8 +552,10 @@ export const artifactService = {
       input.organizationId,
       input.actorId,
     );
+    const fileName = `${sanitizeFilename(artifact.title || "design")}.pdf`;
+    const fileKey = `uploads/${input.organizationId}/${randomUUID()}-${fileName}`;
 
-    return eventService.create({
+    await eventService.create({
       organizationId: input.organizationId,
       scopeType: "session",
       scopeId: sessionId,
@@ -552,12 +565,58 @@ export const artifactService = {
         sessionGroupId: artifact.sessionGroupId,
         exportType: "pdf",
         status: "requested",
-        fileName: `${artifact.title || "design"}.pdf`,
-        note: "PDF export requested. A render worker must emit design_export_completed with the stored file when rendering finishes.",
+        fileName,
       } as Prisma.InputJsonValue,
       actorType: input.actorType ?? "user",
       actorId: input.actorId,
     });
+
+    try {
+      const pdf = await designPdfRenderer.renderHtmlToPdf({
+        html: artifact.html,
+        artifactId: artifact.id,
+      });
+      await storage.putObject(fileKey, pdf, "application/pdf");
+      const fileUrl = await storage.getGetUrl(fileKey, { downloadFilename: fileName });
+
+      return eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "design_export_completed",
+        payload: {
+          artifactId: artifact.id,
+          sessionGroupId: artifact.sessionGroupId,
+          exportType: "pdf",
+          status: "completed",
+          fileName,
+          fileKey,
+          fileUrl,
+          byteSize: pdf.byteLength,
+        } as Prisma.InputJsonValue,
+        actorType: "system",
+        actorId: "system",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "design_export_completed",
+        payload: {
+          artifactId: artifact.id,
+          sessionGroupId: artifact.sessionGroupId,
+          exportType: "pdf",
+          status: "failed",
+          fileName,
+          error: message,
+        } as Prisma.InputJsonValue,
+        actorType: "system",
+        actorId: "system",
+      });
+      throw error;
+    }
   },
 
   async commentDesignArtifact(input: {
