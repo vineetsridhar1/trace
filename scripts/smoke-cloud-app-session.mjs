@@ -99,6 +99,9 @@ const APP_STATE = `
     }
     sessionApplicationProcesses(sessionGroupId: $sessionGroupId) {
       id
+      sessionGroupId
+      appConfigId
+      processConfigId
       label
       status
       runtimeInstanceId
@@ -106,6 +109,9 @@ const APP_STATE = `
     }
     sessionEndpoints(sessionGroupId: $sessionGroupId) {
       id
+      sessionGroupId
+      appConfigId
+      processConfigId
       url
       label
       status
@@ -139,7 +145,7 @@ const PROCESS_LOGS = `
 
 const SESSION_EVENTS = `
   query SmokeSessionEvents($organizationId: ID!, $scope: ScopeInput, $types: [String!]) {
-    events(organizationId: $organizationId, scope: $scope, types: $types, limit: 100) {
+    events(organizationId: $organizationId, scope: $scope, types: $types, limit: 500) {
       id
       eventType
       payload
@@ -274,6 +280,72 @@ function isGitSha(value) {
   return typeof value === "string" && /^[0-9a-f]{40,64}$/i.test(value);
 }
 
+async function appLifecycleEventStatus(sessionId, process, endpoint) {
+  const data = await graphql(SESSION_EVENTS, {
+    organizationId,
+    scope: { type: "session", id: sessionId },
+    types: [
+      "session_application_process_started",
+      "session_endpoint_created",
+      "session_endpoint_forwarding_enabled",
+    ],
+  });
+  const events = data.events ?? [];
+  const processEvent = events.find((event) => {
+    if (event.eventType !== "session_application_process_started") return false;
+    const payload = event.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+    const eventProcess = payload.process;
+    return (
+      eventProcess &&
+      typeof eventProcess === "object" &&
+      !Array.isArray(eventProcess) &&
+      eventProcess.id === process.id &&
+      eventProcess.sessionGroupId === process.sessionGroupId &&
+      eventProcess.runtimeInstanceId === process.runtimeInstanceId
+    );
+  });
+  const createdEvent = events.find((event) => {
+    if (event.eventType !== "session_endpoint_created") return false;
+    const payload = event.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+    const eventEndpoint = payload.endpoint;
+    return (
+      eventEndpoint &&
+      typeof eventEndpoint === "object" &&
+      !Array.isArray(eventEndpoint) &&
+      eventEndpoint.id === endpoint.id &&
+      eventEndpoint.sessionGroupId === endpoint.sessionGroupId &&
+      eventEndpoint.targetPort === 3000
+    );
+  });
+  const forwardingEvent = events.find((event) => {
+    if (event.eventType !== "session_endpoint_forwarding_enabled") return false;
+    const payload = event.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+    const eventEndpoint = payload.endpoint;
+    return (
+      eventEndpoint &&
+      typeof eventEndpoint === "object" &&
+      !Array.isArray(eventEndpoint) &&
+      eventEndpoint.id === endpoint.id &&
+      eventEndpoint.status === "enabled" &&
+      eventEndpoint.accessMode === "private" &&
+      eventEndpoint.sessionGroupId === endpoint.sessionGroupId &&
+      eventEndpoint.appConfigId === process.appConfigId &&
+      eventEndpoint.processConfigId === process.processConfigId
+    );
+  });
+  return {
+    ok: Boolean(processEvent && createdEvent && forwardingEvent),
+    detail: [
+      `processStarted=${Boolean(processEvent)}`,
+      `endpointCreated=${Boolean(createdEvent)}`,
+      `forwardingEnabled=${Boolean(forwardingEvent)}`,
+    ].join(" "),
+  };
+}
+
 async function appState(sessionGroupId) {
   return graphql(APP_STATE, { sessionGroupId });
 }
@@ -337,6 +409,13 @@ async function waitForReadyApp(sessionGroupId, label, options = {}) {
     const latestSessionId = group.sessions[0]?.id;
     if (!latestSessionId) {
       return { ok: false, detail: "session group has no session id for scoped log events" };
+    }
+    const lifecycleEvents = await appLifecycleEventStatus(latestSessionId, process, endpoint);
+    if (!lifecycleEvents.ok) {
+      return {
+        ok: false,
+        detail: `missing lifecycle events for process ${process.id}: ${lifecycleEvents.detail}`,
+      };
     }
     const eventData = await graphql(SESSION_EVENTS, {
       organizationId,

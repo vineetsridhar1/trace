@@ -871,3 +871,9 @@ mutation result and child artifact metadata, but not through the session event s
 drives the canvas timeline. It now also polls `design_artifact_updated` for the tweaked
 artifact id, parent artifact id, session group id, patched token payload, source metadata,
 and hydrated HTML containing the CSS variable patch.
+
+During this audit continuation, the hosted cloud app smoke validated ready app process
+and endpoint rows but did not prove the startup lifecycle events reached the session
+stream. It now requires `session_application_process_started`,
+`session_endpoint_created`, and `session_endpoint_forwarding_enabled` for the running
+process/private port-3000 endpoint before accepting the app as ready.
