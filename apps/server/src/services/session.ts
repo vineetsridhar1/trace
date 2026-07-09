@@ -67,9 +67,9 @@ import {
 import { orgSecretService } from "./org-secret.js";
 import {
   DESIGN_ARTIFACT_CONTENT_TYPE,
-  buildPlaceholderDesignArtifactHtml,
 } from "./design-artifact-html.js";
 import { managedGitService } from "./managed-git.js";
+import { designGenerationService } from "./design-generation.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -2938,10 +2938,10 @@ export class SessionService {
         ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
         : "Untitled design";
     const now = new Date();
-    const html = buildPlaceholderDesignArtifactHtml(input.prompt);
 
     let startEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
-    let artifactEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
+    let createdSessionGroupId: string | null = null;
+    const startEventId = input.startEventId ?? randomUUID();
 
     const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const sessionGroup = await tx.sessionGroup.create({
@@ -2956,6 +2956,7 @@ export class SessionService {
         },
         select: SESSION_GROUP_SUMMARY_SELECT,
       });
+      createdSessionGroupId = sessionGroup.id;
 
       const session = await tx.session.create({
         data: {
@@ -2980,25 +2981,6 @@ export class SessionService {
       const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
         { agentStatus: "done", sessionStatus: "in_progress" },
       ]);
-      const startEventId = input.startEventId ?? randomUUID();
-      const artifact = await tx.artifact.create({
-        data: {
-          sessionGroupId: sessionGroup.id,
-          organizationId: input.organizationId,
-          createdById: input.createdById,
-          promptEventId: startEventId,
-          prompt: input.prompt ?? null,
-          title: name,
-          contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
-          html,
-          metadata: {
-            generator: "placeholder",
-            source: "startSession",
-          },
-        },
-        include: { createdBy: true },
-      });
-      const serializedArtifact = serializeArtifact(artifact);
 
       startEventToPublish = await eventService.create(
         {
@@ -3010,29 +2992,11 @@ export class SessionService {
           payload: {
             session: serializeSession(session),
             sessionGroup: sessionGroupSnapshot,
-            artifact: serializedArtifact,
             prompt: input.prompt ?? null,
             clientSource: normalizeClientSource(input.clientSource),
             sourceSessionId: null,
             restoreCheckpointId: null,
             restoreCheckpointSha: null,
-          } as Prisma.InputJsonValue,
-          actorType: input.actorType ?? "user",
-          actorId: input.createdById,
-          deferPublish: true,
-        },
-        tx,
-      );
-
-      artifactEventToPublish = await eventService.create(
-        {
-          organizationId: input.organizationId,
-          scopeType: "session",
-          scopeId: session.id,
-          eventType: "design_artifact_created",
-          payload: {
-            artifact: serializedArtifact,
-            sessionGroupId: sessionGroup.id,
           } as Prisma.InputJsonValue,
           actorType: input.actorType ?? "user",
           actorId: input.createdById,
@@ -3047,8 +3011,53 @@ export class SessionService {
     if (startEventToPublish) {
       eventService.publishCreated(startEventToPublish);
     }
-    if (artifactEventToPublish) {
-      eventService.publishCreated(artifactEventToPublish);
+    if (createdSessionGroupId) {
+      try {
+        const generated = await designGenerationService.generateHtml({
+          organizationId: input.organizationId,
+          actorId: input.createdById,
+          actorType: input.actorType,
+          sessionId: session.id,
+          sessionGroupId: createdSessionGroupId,
+          prompt: input.prompt ?? name,
+          model: input.model,
+        });
+        const artifact = await prisma.artifact.create({
+          data: {
+            sessionGroupId: createdSessionGroupId,
+            organizationId: input.organizationId,
+            createdById: input.createdById,
+            promptEventId: startEventId,
+            prompt: input.prompt ?? null,
+            title: name,
+            contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
+            html: generated.html,
+            metadata: {
+              ...generated.metadata,
+              source: "startSession",
+            },
+          },
+          include: { createdBy: true },
+        });
+        await eventService.create({
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: session.id,
+          eventType: "design_artifact_created",
+          payload: {
+            artifact: serializeArtifact(artifact),
+            sessionGroupId: createdSessionGroupId,
+          } as Prisma.InputJsonValue,
+          actorType: input.actorType ?? "user",
+          actorId: input.createdById,
+        });
+      } catch (error) {
+        console.warn(
+          `[design-generation] failed to create initial artifact for session ${session.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
     }
 
     return session;

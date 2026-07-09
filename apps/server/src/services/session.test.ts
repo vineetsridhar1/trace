@@ -146,6 +146,15 @@ vi.mock("./managed-git.js", () => ({
   },
 }));
 
+vi.mock("./design-generation.js", () => ({
+  designGenerationService: {
+    generateHtml: vi.fn().mockResolvedValue({
+      html: "<!doctype html><html><body><main data-el=\"generated\">Generated</main></body></html>",
+      metadata: { generator: "llm", model: "test-model" },
+    }),
+  },
+}));
+
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -155,6 +164,7 @@ import { inboxService } from "./inbox.js";
 import { apiTokenService } from "./api-token.js";
 import { GitHubApiError, githubRepoService, parseGitHubRepo } from "./github-repo.js";
 import { managedGitService } from "./managed-git.js";
+import { designGenerationService } from "./design-generation.js";
 import { orgSecretService } from "./org-secret.js";
 import {
   getDefaultModel,
@@ -186,6 +196,9 @@ const apiTokenServiceMock = apiTokenService as unknown as MockedDeep<typeof apiT
 const orgSecretServiceMock = orgSecretService as unknown as MockedDeep<typeof orgSecretService>;
 const githubRepoServiceMock = githubRepoService as unknown as MockedDeep<typeof githubRepoService>;
 const managedGitServiceMock = managedGitService as unknown as MockedDeep<typeof managedGitService>;
+const designGenerationServiceMock = designGenerationService as unknown as MockedDeep<
+  typeof designGenerationService
+>;
 const parseGitHubRepoMock = vi.mocked(parseGitHubRepo);
 const getDefaultModelMock = vi.mocked(getDefaultModel);
 const getDefaultReasoningEffortMock = vi.mocked(getDefaultReasoningEffort);
@@ -812,6 +825,84 @@ describe("SessionService", () => {
         organizationId: "org-1",
         name: "Trace app",
       });
+    });
+
+    it("creates design sessions and generates the initial artifact through the design generator", async () => {
+      const sessionGroup = makeSessionGroup({
+        kind: "design",
+        repoId: null,
+        repo: null,
+        connection: null,
+      });
+      const session = makeSession({
+        sessionGroup,
+        hosting: "local",
+        repoId: null,
+        repo: null,
+        connection: null,
+      });
+      const artifact = {
+        id: "artifact-1",
+        sessionGroupId: "group-1",
+        parentArtifactId: null,
+        promptEventId: "event-start",
+        prompt: "Design a CRM dashboard",
+        title: "Design a CRM dashboard",
+        contentType: "text/html",
+        html: "<!doctype html><html><body>Generated</body></html>",
+        metadata: { generator: "llm" },
+        publishedAt: null,
+        createdBy: { id: "user-1" },
+        createdAt: new Date("2026-07-09T10:00:00.000Z"),
+        updatedAt: new Date("2026-07-09T10:00:00.000Z"),
+      };
+
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+      prismaMock.artifact.create.mockResolvedValueOnce(artifact);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        kind: "design",
+        channelId: "channel-1",
+        prompt: "Design a CRM dashboard",
+        startEventId: "event-start",
+      } as unknown as StartSessionServiceInput);
+
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+      expect(designGenerationServiceMock.generateHtml).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: "org-1",
+          actorId: "user-1",
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+          prompt: "Design a CRM dashboard",
+        }),
+      );
+      expect(prismaMock.artifact.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          sessionGroupId: "group-1",
+          promptEventId: "event-start",
+          html: expect.stringContaining("Generated"),
+          metadata: expect.objectContaining({ generator: "llm", source: "startSession" }),
+        }),
+        include: { createdBy: true },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "design_artifact_created",
+          payload: expect.objectContaining({
+            artifact: expect.objectContaining({ id: "artifact-1" }),
+            sessionGroupId: "group-1",
+          }),
+        }),
+      );
     });
 
     it("creates a new session group for a channel entrypoint", async () => {

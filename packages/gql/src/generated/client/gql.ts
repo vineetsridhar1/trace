@@ -26,7 +26,7 @@ type Documents = {
   "\n  query DesignArtifacts($sessionGroupId: ID!) {\n    designArtifacts(sessionGroupId: $sessionGroupId) {\n      id\n      sessionGroupId\n      parentArtifactId\n      prompt\n      title\n      contentType\n      html\n      metadata\n      publishedAt\n      createdAt\n      updatedAt\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n    }\n  }\n": typeof types.DesignArtifactsDocument;
   "\n  mutation IterateDesignArtifact($artifactId: ID!, $prompt: String!) {\n    iterateDesignArtifact(artifactId: $artifactId, prompt: $prompt) {\n      id\n    }\n  }\n": typeof types.IterateDesignArtifactDocument;
   "\n  mutation PatchDesignArtifactTokens($artifactId: ID!, $tokens: JSON!) {\n    patchDesignArtifactTokens(artifactId: $artifactId, tokens: $tokens) {\n      id\n    }\n  }\n": typeof types.PatchDesignArtifactTokensDocument;
-  "\n  mutation CommentDesignArtifact($artifactId: ID!, $body: String!, $sendToAgent: Boolean) {\n    commentDesignArtifact(\n      artifactId: $artifactId\n      body: $body\n      sendToAgent: $sendToAgent\n    ) {\n      id\n    }\n  }\n": typeof types.CommentDesignArtifactDocument;
+  "\n  mutation CommentDesignArtifact($artifactId: ID!, $body: String!, $sendToAgent: Boolean) {\n    commentDesignArtifact(artifactId: $artifactId, body: $body, sendToAgent: $sendToAgent) {\n      id\n    }\n  }\n": typeof types.CommentDesignArtifactDocument;
   "\n  mutation PublishDesignArtifact($artifactId: ID!) {\n    publishDesignArtifact(artifactId: $artifactId) {\n      id\n      publishedAt\n    }\n  }\n": typeof types.PublishDesignArtifactDocument;
   "\n  mutation ExportDesignArtifactPdf($artifactId: ID!) {\n    exportDesignArtifactPdf(artifactId: $artifactId) {\n      id\n    }\n  }\n": typeof types.ExportDesignArtifactPdfDocument;
   "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!) {\n    promoteDesignArtifactToCodingSession(artifactId: $artifactId) {\n      id\n      sessionGroupId\n    }\n  }\n": typeof types.PromoteDesignArtifactToCodingSessionDocument;
@@ -129,7 +129,7 @@ const documents: Documents = {
     types.IterateDesignArtifactDocument,
   "\n  mutation PatchDesignArtifactTokens($artifactId: ID!, $tokens: JSON!) {\n    patchDesignArtifactTokens(artifactId: $artifactId, tokens: $tokens) {\n      id\n    }\n  }\n":
     types.PatchDesignArtifactTokensDocument,
-  "\n  mutation CommentDesignArtifact($artifactId: ID!, $body: String!, $sendToAgent: Boolean) {\n    commentDesignArtifact(\n      artifactId: $artifactId\n      body: $body\n      sendToAgent: $sendToAgent\n    ) {\n      id\n    }\n  }\n":
+  "\n  mutation CommentDesignArtifact($artifactId: ID!, $body: String!, $sendToAgent: Boolean) {\n    commentDesignArtifact(artifactId: $artifactId, body: $body, sendToAgent: $sendToAgent) {\n      id\n    }\n  }\n":
     types.CommentDesignArtifactDocument,
   "\n  mutation PublishDesignArtifact($artifactId: ID!) {\n    publishDesignArtifact(artifactId: $artifactId) {\n      id\n      publishedAt\n    }\n  }\n":
     types.PublishDesignArtifactDocument,
@@ -375,8 +375,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  mutation CommentDesignArtifact($artifactId: ID!, $body: String!, $sendToAgent: Boolean) {\n    commentDesignArtifact(\n      artifactId: $artifactId\n      body: $body\n      sendToAgent: $sendToAgent\n    ) {\n      id\n    }\n  }\n",
-): (typeof documents)["\n  mutation CommentDesignArtifact($artifactId: ID!, $body: String!, $sendToAgent: Boolean) {\n    commentDesignArtifact(\n      artifactId: $artifactId\n      body: $body\n      sendToAgent: $sendToAgent\n    ) {\n      id\n    }\n  }\n"];
+  source: "\n  mutation CommentDesignArtifact($artifactId: ID!, $body: String!, $sendToAgent: Boolean) {\n    commentDesignArtifact(artifactId: $artifactId, body: $body, sendToAgent: $sendToAgent) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation CommentDesignArtifact($artifactId: ID!, $body: String!, $sendToAgent: Boolean) {\n    commentDesignArtifact(artifactId: $artifactId, body: $body, sendToAgent: $sendToAgent) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

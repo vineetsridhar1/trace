@@ -417,6 +417,8 @@ export type EventType =
   | "design_comment_added"
   | "design_export_completed"
   | "design_export_requested"
+  | "design_generation_failed"
+  | "design_generation_started"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"

@@ -8,6 +8,7 @@ import {
   DESIGN_ARTIFACT_CONTENT_TYPE,
   buildPlaceholderDesignArtifactHtml,
 } from "./design-artifact-html.js";
+import { designGenerationService } from "./design-generation.js";
 import { sessionService } from "./session.js";
 
 function serializeArtifact(artifact: {
@@ -147,6 +148,7 @@ export const artifactService = {
     actorType?: ActorType;
     prompt: string;
     html?: string | null;
+    promptEventId?: string | null;
   }) {
     await assertSessionGroupAccess(input.sessionGroupId, input.actorId, input.organizationId);
 
@@ -175,18 +177,30 @@ export const artifactService = {
       throw new ValidationError("Design session group has no session timeline.");
     }
 
+    const generated = input.html
+      ? null
+      : await designGenerationService.generateHtml({
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          actorType: input.actorType,
+          sessionId,
+          sessionGroupId: input.sessionGroupId,
+          prompt: input.prompt,
+        });
     const title = input.prompt.trim().slice(0, 120) || "Untitled design";
     const artifact = await prisma.artifact.create({
       data: {
         sessionGroupId: input.sessionGroupId,
         organizationId: input.organizationId,
         createdById: input.actorId,
+        promptEventId: input.promptEventId ?? undefined,
         prompt: input.prompt,
         title,
         contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
-        html: input.html ?? buildPlaceholderDesignArtifactHtml(input.prompt),
+        html: input.html ?? generated?.html ?? buildPlaceholderDesignArtifactHtml(input.prompt),
         metadata: {
-          generator: input.html ? "provided" : "placeholder",
+          ...(generated?.metadata ?? {}),
+          generator: input.html ? "provided" : (generated?.metadata.generator ?? "placeholder"),
           source: "createDesignArtifact",
         },
       },
@@ -224,6 +238,18 @@ export const artifactService = {
       input.actorId,
     );
 
+    const generated = input.html
+      ? null
+      : await designGenerationService.generateHtml({
+          organizationId: input.organizationId,
+          actorId: input.actorId,
+          actorType: input.actorType,
+          sessionId,
+          sessionGroupId: parent.sessionGroupId,
+          prompt: input.prompt,
+          parentArtifactId: parent.id,
+          parentHtml: parent.html,
+        });
     const title = input.prompt.trim().slice(0, 120) || parent.title;
     const artifact = await prisma.artifact.create({
       data: {
@@ -234,10 +260,11 @@ export const artifactService = {
         prompt: input.prompt,
         title,
         contentType: DESIGN_ARTIFACT_CONTENT_TYPE,
-        html: input.html ?? buildPlaceholderDesignArtifactHtml(input.prompt),
+        html: input.html ?? generated?.html ?? buildPlaceholderDesignArtifactHtml(input.prompt),
         metadata: {
           ...jsonObject(parent.metadata),
-          generator: input.html ? "provided" : "placeholder",
+          ...(generated?.metadata ?? {}),
+          generator: input.html ? "provided" : (generated?.metadata.generator ?? "placeholder"),
           source: "iterateDesignArtifact",
         },
       },

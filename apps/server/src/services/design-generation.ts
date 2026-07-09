@@ -1,0 +1,161 @@
+import { Prisma } from "@prisma/client";
+import { getDefaultModel, type LLMResponse } from "@trace/shared";
+import { aiService } from "./ai.js";
+import { eventService } from "./event.js";
+import { buildPlaceholderDesignArtifactHtml } from "./design-artifact-html.js";
+import type { ActorType } from "@trace/gql";
+
+const DEFAULT_DESIGN_MODEL = getDefaultModel("claude_code") ?? "anthropic/claude-sonnet-5";
+
+function designSystemPrompt(parentHtml?: string | null): string {
+  return [
+    "You are Trace Design, a product design generator.",
+    "Return one complete, self-contained HTML document and nothing else.",
+    "The artifact must include inline CSS, a :root CSS variable token block, and stable data-el attributes on meaningful elements.",
+    "Do not use external scripts, external stylesheets, remote fonts, or placeholder explanation copy.",
+    "The output should be polished product UI, suitable for rendering directly in an isolated iframe.",
+    parentHtml
+      ? "You are iterating on a previous artifact. Preserve the user's requested continuity while improving the HTML."
+      : "Create a distinct first design direction for the user's brief.",
+  ].join("\n");
+}
+
+function textFromResponse(response: LLMResponse | null): string {
+  if (!response) return "";
+  return response.content
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+}
+
+function extractHtml(text: string): string {
+  const trimmed = text.trim();
+  const fenced = /```(?:html)?\s*([\s\S]*?)```/i.exec(trimmed);
+  const candidate = (fenced?.[1] ?? trimmed).trim();
+  if (/<!doctype html/i.test(candidate) || /<html[\s>]/i.test(candidate)) {
+    return candidate;
+  }
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trace design artifact</title>
+</head>
+<body>
+${candidate}
+</body>
+</html>`;
+}
+
+function isMissingKeyError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /^No \w+ API key configured/.test(message);
+}
+
+export type GeneratedDesignArtifact = {
+  html: string;
+  metadata: Record<string, unknown>;
+};
+
+export const designGenerationService = {
+  async generateHtml(input: {
+    organizationId: string;
+    actorId: string;
+    actorType?: ActorType;
+    sessionId: string;
+    sessionGroupId: string;
+    prompt: string;
+    model?: string | null;
+    parentArtifactId?: string | null;
+    parentHtml?: string | null;
+  }): Promise<GeneratedDesignArtifact> {
+    const model = input.model ?? DEFAULT_DESIGN_MODEL;
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: input.sessionId,
+      eventType: "design_generation_started",
+      payload: {
+        sessionGroupId: input.sessionGroupId,
+        parentArtifactId: input.parentArtifactId ?? null,
+        model,
+        prompt: input.prompt,
+      } as Prisma.InputJsonValue,
+      actorType: input.actorType ?? "user",
+      actorId: input.actorId,
+    });
+
+    let text = "";
+    let response: LLMResponse | null = null;
+    try {
+      for await (const event of aiService.stream({
+        organizationId: input.organizationId,
+        userId: input.actorId,
+        model,
+        system: designSystemPrompt(input.parentHtml),
+        maxTokens: 8192,
+        temperature: 0.8,
+        messages: [
+          {
+            role: "user",
+            content: [
+              input.parentHtml
+                ? `Brief:\n${input.prompt}\n\nPrevious artifact HTML:\n${input.parentHtml}`
+                : input.prompt,
+            ].join("\n"),
+          },
+        ],
+      })) {
+        if (event.type === "text_delta") {
+          text += event.text;
+        } else if (event.type === "complete") {
+          response = event.response;
+        } else if (event.type === "error") {
+          throw event.error;
+        }
+      }
+    } catch (error) {
+      if (isMissingKeyError(error)) {
+        return {
+          html: buildPlaceholderDesignArtifactHtml(input.prompt),
+          metadata: {
+            generator: "local_fallback",
+            source: "designGenerationService",
+            model,
+            fallbackReason: "missing_api_key",
+          },
+        };
+      }
+
+      const message = error instanceof Error ? error.message : String(error);
+      await eventService.create({
+        organizationId: input.organizationId,
+        scopeType: "session",
+        scopeId: input.sessionId,
+        eventType: "design_generation_failed",
+        payload: {
+          sessionGroupId: input.sessionGroupId,
+          parentArtifactId: input.parentArtifactId ?? null,
+          model,
+          error: message,
+        } as Prisma.InputJsonValue,
+        actorType: input.actorType ?? "user",
+        actorId: input.actorId,
+      });
+      throw error;
+    }
+
+    const responseText = text || textFromResponse(response);
+    const html = extractHtml(responseText);
+    return {
+      html,
+      metadata: {
+        generator: "llm",
+        source: "designGenerationService",
+        model: response?.model ?? model,
+        usage: response?.usage ?? null,
+      },
+    };
+  },
+};

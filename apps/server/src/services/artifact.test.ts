@@ -21,12 +21,23 @@ vi.mock("./session.js", () => ({
   },
 }));
 
+vi.mock("./design-generation.js", () => ({
+  designGenerationService: {
+    generateHtml: vi.fn().mockResolvedValue({
+      html: "<!doctype html><html><body><main data-el=\"generated\">Generated</main></body></html>",
+      metadata: { generator: "llm", model: "test-model" },
+    }),
+  },
+}));
+
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
+import { designGenerationService } from "./design-generation.js";
 import { artifactService } from "./artifact.js";
 
 const prismaMock = prisma as any;
 const eventServiceMock = eventService as any;
+const designGenerationServiceMock = designGenerationService as any;
 
 function designArtifact(overrides: Record<string, unknown> = {}) {
   return {
@@ -64,6 +75,80 @@ function designArtifact(overrides: Record<string, unknown> = {}) {
 describe("artifactService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("generates design artifact HTML when caller does not provide HTML", async () => {
+    const parent = designArtifact();
+    prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+      id: "group-1",
+      kind: "design",
+      sessions: [{ id: "session-1" }],
+    });
+    prismaMock.artifact.create.mockImplementationOnce(
+      async (args: { data: Record<string, unknown> }) => ({
+        ...parent,
+        ...args.data,
+        id: "artifact-generated",
+        parentArtifactId: null,
+        createdBy: parent.createdBy,
+        createdAt: new Date("2026-07-09T10:01:00.000Z"),
+        updatedAt: new Date("2026-07-09T10:01:00.000Z"),
+      }),
+    );
+
+    const artifact = await artifactService.createDesignArtifact({
+      sessionGroupId: "group-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      prompt: "Make a generated dashboard",
+    });
+
+    expect(designGenerationServiceMock.generateHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        actorId: "user-1",
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        prompt: "Make a generated dashboard",
+      }),
+    );
+    expect(artifact.html).toContain("Generated");
+    expect(artifact.metadata).toMatchObject({
+      generator: "llm",
+      source: "createDesignArtifact",
+    });
+  });
+
+  it("generates iterations with parent HTML context", async () => {
+    const parent = designArtifact();
+    prismaMock.artifact.findFirst.mockResolvedValueOnce(parent);
+    prismaMock.artifact.create.mockImplementationOnce(
+      async (args: { data: Record<string, unknown> }) => ({
+        ...parent,
+        ...args.data,
+        id: "artifact-child",
+        createdBy: parent.createdBy,
+        createdAt: new Date("2026-07-09T10:01:00.000Z"),
+        updatedAt: new Date("2026-07-09T10:01:00.000Z"),
+      }),
+    );
+
+    const artifact = await artifactService.iterateDesignArtifact({
+      artifactId: "artifact-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      prompt: "Make it denser",
+    });
+
+    expect(designGenerationServiceMock.generateHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parentArtifactId: "artifact-1",
+        parentHtml: parent.html,
+        sessionId: "session-1",
+      }),
+    );
+    expect(artifact.parentArtifactId).toBe("artifact-1");
+    expect(artifact.html).toContain("Generated");
   });
 
   it("patches provided CSS tokens without dropping existing root variables", async () => {

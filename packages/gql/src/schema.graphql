@@ -325,6 +325,8 @@ enum EventType {
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  design_generation_started
+  design_generation_failed
   design_artifact_created
   design_artifact_updated
   design_comment_added
