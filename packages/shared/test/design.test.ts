@@ -2,6 +2,56 @@ import { describe, expect, it } from "vitest";
 import { composeTraceDesignPrompt } from "../src/design.js";
 
 describe("composeTraceDesignPrompt", () => {
+  it("snapshots the design artifact prompt contract", () => {
+    const prompt = composeTraceDesignPrompt({
+      kind: "design",
+      userBrief: "Create a project dashboard.",
+      designSystemId: "trace-core",
+      skillIds: ["dashboard"],
+      content: {
+        designSystem: {
+          id: "trace-core",
+          name: "Trace Core",
+          manifest: { id: "trace-core", name: "Trace Core" },
+          design: "Use compact operational layouts.",
+          tokensCss: ":root { --trace-primary: #2563eb; }",
+          usage: "Prefer dense tables for admin workflows.",
+          componentsManifest: { components: ["Button"] },
+        },
+        skills: [
+          {
+            id: "dashboard",
+            title: "Dashboard",
+            body: "Prioritize scannable metrics and durable table affordances.",
+          },
+        ],
+      },
+    });
+
+    expect(prompt).toMatchSnapshot();
+  });
+
+  it("snapshots the app starter prompt contract", () => {
+    const prompt = composeTraceDesignPrompt({
+      kind: "app",
+      userBrief: "Build a lightweight CRM.",
+      appStarterContext: "Next.js App Router, Tailwind CSS, shadcn-compatible primitives.",
+      designSystemId: "trace-core",
+      skillIds: ["forms"],
+      content: {
+        skills: [
+          {
+            id: "forms",
+            title: "Forms",
+            body: "Use explicit labels and validation messages.",
+          },
+        ],
+      },
+    });
+
+    expect(prompt).toMatchSnapshot();
+  });
+
   it("includes the design artifact contract for initial variants", () => {
     const prompt = composeTraceDesignPrompt({
       kind: "design",

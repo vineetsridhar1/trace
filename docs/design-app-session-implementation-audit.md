@@ -338,3 +338,8 @@ existing session suite but lacked a direct guard against app harness leakage. Th
 workspace upgrade regression now proves a normal coding session still replays its queued
 prompt with `appendSystemPrompt: undefined`, while app replay keeps the Open Design app
 harness.
+
+During this continuation, the Open Design prompt composer had targeted substring tests
+but no rebase-review snapshots for the full composed prompts. `packages/shared` now
+snapshots one design artifact prompt and one app starter prompt, covering the vendored
+composer output plus the Trace overlays for both delivery paths.
