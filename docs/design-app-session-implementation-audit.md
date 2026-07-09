@@ -516,3 +516,9 @@ zoom controls called out by the canvas spec. Each design artifact preview now ha
 desktop, tablet, and mobile frame modes plus card-level zoom controls independent of the
 overall canvas pan/zoom. Focused web tests cover the stable frame dimensions and preview
 zoom bounds.
+
+During this audit pass, the deterministic design-token tweak path still used blocking
+browser prompts instead of the Tweaks panel called out by the canvas spec. The canvas now
+uses a `DesignTweaksPopover` with CSS-variable/value inputs, client-side token validation,
+and the existing service-layer `patchDesignArtifactTokens` mutation. Focused web tests
+cover token patch validation.

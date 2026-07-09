@@ -18,7 +18,6 @@ import {
   Minimize2,
   Monitor,
   Plus,
-  SlidersHorizontal,
   Smartphone,
   Tablet,
   Upload,
@@ -37,6 +36,7 @@ import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { DesignHarnessSettingsPopover } from "./DesignHarnessSettingsPopover";
+import { DesignTweaksPopover } from "./DesignTweaksPopover";
 import { navigateToSession } from "../../stores/ui";
 
 const DESIGN_ARTIFACTS_QUERY = gql`
@@ -1137,18 +1137,17 @@ export function DesignCanvas({
     );
   }, [mutateSelectedArtifact, sessionGroupId]);
 
-  const handleTweak = useCallback(() => {
-    if (!selectedPersistedArtifact) return;
-    const name = window.prompt("CSS variable name", "--trace-accent");
-    if (!name?.trim()) return;
-    const value = window.prompt("CSS variable value", "#0f766e");
-    if (!value?.trim()) return;
-    void mutateSelectedArtifact(
-      PATCH_DESIGN_ARTIFACT_TOKENS_MUTATION,
-      { artifactId: selectedPersistedArtifact.id, tokens: { [name.trim()]: value.trim() } },
-      "Tweak applied",
-    );
-  }, [mutateSelectedArtifact, selectedPersistedArtifact]);
+  const handleTweak = useCallback(
+    async (tokens: Record<string, string>) => {
+      if (!selectedPersistedArtifact) return;
+      await mutateSelectedArtifact(
+        PATCH_DESIGN_ARTIFACT_TOKENS_MUTATION,
+        { artifactId: selectedPersistedArtifact.id, tokens },
+        "Tweak applied",
+      );
+    },
+    [mutateSelectedArtifact, selectedPersistedArtifact],
+  );
 
   const handlePublish = useCallback(() => {
     if (!selectedPersistedArtifact) return;
@@ -1273,16 +1272,7 @@ export function DesignCanvas({
         >
           <Wand2 size={14} />
         </button>
-        <button
-          type="button"
-          onClick={handleTweak}
-          disabled={!selectedPersistedArtifact}
-          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
-          aria-label="Tweak tokens"
-          title="Tweak tokens"
-        >
-          <SlidersHorizontal size={14} />
-        </button>
+        <DesignTweaksPopover disabled={!selectedPersistedArtifact} onApply={handleTweak} />
         <button
           type="button"
           onClick={handleComment}
