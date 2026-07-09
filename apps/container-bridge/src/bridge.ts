@@ -49,6 +49,7 @@ import {
 import {
   ensureRepo,
   createWorktree,
+  createAppWorkspace,
   getWorkspaceSlugs,
   removeWorktree,
   getRepoPath,
@@ -446,6 +447,27 @@ export class ContainerBridge implements IBridgeClient {
               error: err.message,
             });
           });
+        break;
+      }
+
+      case "prepare_app": {
+        const { sessionId, sessionGroupId, slug } = cmd;
+        (async () => {
+          try {
+            const { workdir, slug: workspaceSlug } = await createAppWorkspace({
+              sessionId,
+              sessionGroupId,
+              slug,
+            });
+            this.sessionWorkdirs.set(sessionId, workdir);
+            this.send({ type: "register_session", sessionId });
+            this.send({ type: "workspace_ready", sessionId, workdir, slug: workspaceSlug });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`[container-bridge] app workspace failed for ${sessionId}:`, message);
+            this.send({ type: "workspace_failed", sessionId, error: message });
+          }
+        })();
         break;
       }
 

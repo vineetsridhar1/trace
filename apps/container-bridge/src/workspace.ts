@@ -15,6 +15,7 @@ const execFileAsync = promisify(execFile);
 
 const REPOS_DIR = "/repos";
 const WORKSPACES_DIR = "/workspaces";
+const APP_STARTER_DIR = process.env.TRACE_APP_STARTER_DIR ?? "/opt/trace/app-starter";
 
 type EnsureRepoResult = {
   repoPath: string;
@@ -328,6 +329,190 @@ export async function createWorktree({
   return { workdir: worktreePath, branch: branchName, slug: worktreeSlug };
 }
 
+export async function createAppWorkspace({
+  sessionId: _sessionId,
+  sessionGroupId,
+  slug,
+}: {
+  sessionId: string;
+  sessionGroupId?: string;
+  slug?: string;
+}): Promise<{ workdir: string; slug: string }> {
+  fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
+  const usedSlugs = new Set(
+    fs
+      .readdirSync(WORKSPACES_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name),
+  );
+  const workspaceSlug = slug ?? sessionGroupId ?? generateAnimalSlug(usedSlugs);
+  const workdir = `${WORKSPACES_DIR}/${workspaceSlug}`;
+
+  if (!fs.existsSync(workdir)) {
+    fs.mkdirSync(workdir, { recursive: true });
+    if (fs.existsSync(APP_STARTER_DIR)) {
+      fs.cpSync(APP_STARTER_DIR, workdir, {
+        recursive: true,
+        force: false,
+        errorOnExist: false,
+        filter: (source) => !source.includes("/node_modules/") && !source.endsWith("/node_modules"),
+      });
+    } else {
+      writeFallbackAppStarter(workdir);
+    }
+  }
+
+  return { workdir, slug: workspaceSlug };
+}
+
+function writeFallbackAppStarter(workdir: string): void {
+  fs.mkdirSync(`${workdir}/app/api/notes`, { recursive: true });
+  fs.mkdirSync(`${workdir}/.trace`, { recursive: true });
+  fs.writeFileSync(
+    `${workdir}/package.json`,
+    JSON.stringify(
+      {
+        scripts: {
+          dev: "next dev -H 0.0.0.0 -p 3000",
+          build: "next build",
+          lint: "next lint",
+          typecheck: "tsc --noEmit",
+          smoke: "next build",
+        },
+        dependencies: {
+          "@types/node": "latest",
+          "@types/react": "latest",
+          "@types/react-dom": "latest",
+          next: "latest",
+          react: "latest",
+          "react-dom": "latest",
+          typescript: "latest",
+        },
+        devDependencies: {
+          autoprefixer: "latest",
+          postcss: "latest",
+          tailwindcss: "latest",
+        },
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  fs.writeFileSync(`${workdir}/.trace/app-starter.json`, JSON.stringify({ kind: "nextjs" }) + "\n");
+  fs.writeFileSync(
+    `${workdir}/app/page.tsx`,
+    `export default function Home() {
+  return (
+    <main className="min-h-screen bg-zinc-950 px-8 py-10 text-zinc-50">
+      <section className="mx-auto flex max-w-3xl flex-col gap-6">
+        <p className="text-sm text-emerald-300">Trace app session</p>
+        <h1 className="text-4xl font-semibold tracking-tight">Build from here</h1>
+        <p className="text-zinc-300">
+          This starter is ready for full-stack changes. Add routes, API handlers, persistence,
+          and UI in the app directory, then run pnpm dev.
+        </p>
+      </section>
+    </main>
+  );
+}
+`,
+  );
+  fs.writeFileSync(
+    `${workdir}/app/layout.tsx`,
+    `import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "Trace App",
+  description: "Generated in a Trace app session",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+`,
+  );
+  fs.writeFileSync(
+    `${workdir}/app/api/notes/route.ts`,
+    `const notes: Array<{ id: string; text: string }> = [];
+
+export async function GET() {
+  return Response.json({ notes });
+}
+
+export async function POST(request: Request) {
+  const body = (await request.json()) as { text?: unknown };
+  const note = { id: crypto.randomUUID(), text: String(body.text ?? "") };
+  notes.push(note);
+  return Response.json({ note }, { status: 201 });
+}
+`,
+  );
+  fs.writeFileSync(
+    `${workdir}/app/globals.css`,
+    `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+`,
+  );
+  fs.writeFileSync(
+    `${workdir}/tailwind.config.ts`,
+    `import type { Config } from "tailwindcss";
+
+const config: Config = {
+  content: ["./app/**/*.{js,ts,jsx,tsx}", "./components/**/*.{js,ts,jsx,tsx}"],
+  theme: { extend: {} },
+  plugins: [],
+};
+
+export default config;
+`,
+  );
+  fs.writeFileSync(
+    `${workdir}/postcss.config.js`,
+    `module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } };\n`,
+  );
+  fs.writeFileSync(
+    `${workdir}/tsconfig.json`,
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: "es5",
+          lib: ["dom", "dom.iterable", "esnext"],
+          allowJs: true,
+          skipLibCheck: true,
+          strict: true,
+          noEmit: true,
+          esModuleInterop: true,
+          module: "esnext",
+          moduleResolution: "bundler",
+          resolveJsonModule: true,
+          isolatedModules: true,
+          jsx: "preserve",
+          incremental: true,
+          plugins: [{ name: "next" }],
+        },
+        include: ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+        exclude: ["node_modules"],
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+}
+
 async function getCurrentBranch(worktreePath: string): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync("git", ["symbolic-ref", "--short", "-q", "HEAD"], {
@@ -465,11 +650,9 @@ async function setUpstreamIfRemote(
 async function ensureRemoteTracksBranch(repoPath: string, branch: string): Promise<void> {
   const desired = `+refs/heads/${branch}:refs/remotes/origin/${branch}`;
   const wildcard = "+refs/heads/*:refs/remotes/origin/*";
-  const result = await execFileAsync(
-    "git",
-    ["config", "--get-all", "remote.origin.fetch"],
-    { cwd: repoPath },
-  ).catch(() => null);
+  const result = await execFileAsync("git", ["config", "--get-all", "remote.origin.fetch"], {
+    cwd: repoPath,
+  }).catch(() => null);
   // Conservative exact-string match: a non-canonical covering refspec (e.g. a
   // narrower wildcard) would just add a redundant entry, which git dedupes.
   const refspecs = (result?.stdout ?? "")

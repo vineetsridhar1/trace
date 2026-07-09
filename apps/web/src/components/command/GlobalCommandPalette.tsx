@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import {
   ChevronRight,
+  AppWindow,
   Code,
   GitBranch,
   Hash,
@@ -26,7 +27,7 @@ import {
   type RegisteredCommand,
 } from "../../stores/command-registry";
 import { features } from "../../lib/features";
-import { createQuickSession } from "../../lib/create-quick-session";
+import { createAppSession, createQuickSession } from "../../lib/create-quick-session";
 import { isLocalMode } from "../../lib/runtime-mode";
 
 interface PaletteItem {
@@ -194,6 +195,17 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       search: "settings preferences go to",
       icon: <Settings size={16} />,
       onSelect: () => setActivePage("settings"),
+    });
+    list.push({
+      key: "new-app-session",
+      group: "Actions",
+      label: "New app session",
+      search: "new app session full stack create vibe code",
+      icon: <AppWindow size={16} />,
+      onSelect: () => {
+        const prompt = window.prompt("What full-stack app should Trace build?");
+        if (prompt) void createAppSession(prompt);
+      },
     });
 
     for (const [group, commands] of registeredGroups) {

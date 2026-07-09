@@ -1948,6 +1948,7 @@ export type SessionGroup = {
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
+  kind: SessionGroupKind;
   name: Scalars["String"]["output"];
   owner: User;
   prUrl?: Maybe<Scalars["String"]["output"]>;
@@ -1985,6 +1986,8 @@ export type SessionGroupFileTree = {
   paths: Array<Scalars["String"]["output"]>;
   truncated: Scalars["Boolean"]["output"];
 };
+
+export type SessionGroupKind = "app" | "coding" | "design";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2096,6 +2099,7 @@ export type StartSessionInput = {
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
+  kind?: InputMaybe<SessionGroupKind>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   projectId?: InputMaybe<Scalars["ID"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
@@ -2801,6 +2805,7 @@ export type SessionGroupDetailQuery = {
     __typename?: "SessionGroup";
     id: string;
     name: string;
+    kind: SessionGroupKind;
     slug?: string | null;
     forkedFromSessionGroupId?: string | null;
     status: SessionGroupStatus;
@@ -5774,6 +5779,7 @@ export const SessionGroupDetailDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "slug" } },
                 { kind: "Field", name: { kind: "Name", value: "forkedFromSessionGroupId" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
