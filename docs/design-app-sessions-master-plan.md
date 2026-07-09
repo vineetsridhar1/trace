@@ -51,10 +51,10 @@ different success criteria:
 ## Key Decisions
 
 - **Design sessions use a managed workspace too.** They should feel almost like coding
-  sessions under the hood: a Trace-managed git remote, a materialized bridge worktree
-  folder, files written there, commits/checkpoints pushed back, and cleanup when deleted.
-  The difference is that design renders HTML artifact files instead of running a dev
-  server.
+  sessions under the hood: a Trace-managed git remote, a materialized bridge working
+  directory, files written there, commits/checkpoints pushed back, and cleanup when
+  deleted. The difference is that design renders HTML artifact files instead of running a
+  dev server.
 - **Design sessions use a canvas.** The primary workspace is a pan/zoom surface where
   multiple AI-generated artifact options can exist side by side.
 - **Design sessions promote to coding sessions by default.** A selected artifact becomes
@@ -71,9 +71,10 @@ different success criteria:
 - **Generated HTML is untrusted.** Render design artifacts from a dedicated user-content
   domain, never from the Trace app origin.
 - **Managed git is shared durability for generated projects.** App and design sessions
-  both use hidden Trace-managed git repos and bridge worktrees. App sessions run a
-  full-stack dev server from that worktree; design sessions render generated HTML files
-  from that worktree.
+  both use one hidden Trace-managed git repo and one bridge working directory per
+  session group. They do not need git worktree or branch fan-out because there is only one
+  active generated project per session group. App sessions run a full-stack dev server
+  from that directory; design sessions render generated HTML files from it.
 
 ## Rejected or Deferred Paths
 
@@ -146,10 +147,10 @@ A complete design session supports:
 
 - Prompt-first creation.
 - No user-selected repo requirement.
-- Managed design worktree folder materialized on the bridge/session runtime, similar to a
-  coding session worktree.
+- Managed design working directory materialized on the bridge/session runtime, similar to
+  a coding session checkout but without branch/worktree fan-out.
 - Hidden managed repo created at session start or before the first artifact write; the
-  worktree remote points at the Trace managed git server.
+  working directory remote points at the Trace managed git server.
 - Multiple parallel HTML artifact variants for a brief.
 - AI-authored canvas organization: section titles, explanatory descriptions, frame labels,
   and grouped artifact canvases, similar to Claude Design's "Current" /
@@ -213,10 +214,10 @@ Design sessions should be nearly identical to coding/app sessions for workspace
 durability:
 
 - Starting a design session creates or reserves a hidden Trace-managed repo.
-- The bridge/session adapter materializes a worktree folder for the design group, similar
-  to a coding session checkout.
-- The worktree remote is set to the Trace managed git URL.
-- The design generation service writes generated files into that worktree:
+- The bridge/session adapter materializes one working directory for the design group,
+  similar to a coding session checkout but without extra git worktrees or branches.
+- The working directory remote is set to the Trace managed git URL.
+- The design generation service writes generated files into that working directory:
   - `canvas/source.html` or `canvas/source.jsx` for full-board source when present
   - `canvas/layout.json` for section/artboard placement
   - `artifacts/<artifactId>/index.html`
@@ -224,9 +225,9 @@ durability:
   - optional token/assets files
 - The service commits and pushes after successful generation, iteration, tweak, publish
   metadata updates, or layout changes.
-- If the design session is deleted or archived past retention, the bridge worktree folder
-  can be deleted. The managed repo follows the same retention/GC policy as other managed
-  repos.
+- If the design session is deleted or archived past retention, the bridge working
+  directory can be deleted. The managed repo follows the same retention/GC policy as
+  other managed repos.
 - There is no dev server requirement. Preview renders the HTML files through the
   user-content iframe/bootstrap path, not through port detection.
 - There is no terminal/process/logs requirement for v1 unless a later "advanced design
@@ -260,11 +261,11 @@ Rules:
   publish state, metadata, and pointers into managed git.
 - Add fields or metadata for `repoId`, `repoFilePath`, and `repoCommitSha` so every
   artifact version can be resolved to an immutable git blob.
-- The design session creates or reserves a hidden managed repo and bridge worktree before
-  the first artifact write.
-- The service writes generated HTML/metadata into that design worktree through the
-  bridge/session adapter or a server-owned workspace adapter for hosted runs, commits it,
-  pushes/updates the managed bare repo, and then emits artifact completion events.
+- The design session creates or reserves a hidden managed repo and bridge working
+  directory before the first artifact write.
+- The service writes generated HTML/metadata into that design working directory through
+  the bridge/session adapter or a server-owned workspace adapter for hosted runs, commits
+  it, pushes/updates the managed bare repo, and then emits artifact completion events.
 - A fan-out generation may commit all sibling artifacts in one commit or one commit per
   artifact. The event payload must still identify each artifact's file path and commit.
 - An iteration creates a new artifact directory/file and a new commit; it does not mutate
@@ -479,7 +480,7 @@ Requirements:
 
 ### PDF Export
 
-Design PDF export is server-owned so export works even when the bridge worktree has been
+Design PDF export is server-owned so export works even when the bridge folder has been
 cleaned up or is not currently connected. The renderer reads from the managed repo/cache,
 not from a live app process.
 
@@ -567,7 +568,7 @@ Preferred v1 starter:
 Starter application:
 
 - The runtime image should contain the starter, for example `/opt/trace/app-starter`.
-- The bridge copies the starter into an empty app worktree.
+- The bridge copies the starter into the app working directory.
 - If absent, install dependencies or use prewarmed dependencies.
 - Commit an initial starter checkpoint when appropriate.
 - The agent then modifies a real project instead of scaffolding from zero.
@@ -633,12 +634,12 @@ Graduation:
 ## Managed Git
 
 Managed git exists to make generated session outputs durable without forcing GitHub repo
-creation. It supports the same core worktree/remote shape across session kinds:
+creation. It supports the same core working-directory/remote shape across session kinds:
 
-- **App sessions**: a cloud runtime worktree pushes commits through smart-HTTP.
-- **Design sessions**: a bridge/session worktree contains generated HTML artifact files
-  and pushes commits through the same managed remote. No app server or port detection is
-  required.
+- **App sessions**: a cloud runtime working directory pushes commits through smart-HTTP.
+- **Design sessions**: a bridge/session working directory contains generated HTML artifact
+  files and pushes commits through the same managed remote. No app server or port
+  detection is required.
 
 ### Repo Provider
 
@@ -684,6 +685,11 @@ Requirements:
 ### Storage and Lifecycle
 
 - Bare repos live under `GIT_STORAGE_ROOT`.
+- Design and app managed repos use one main/default branch by default. Do not create
+  per-session branches or git worktrees for v1 because each generated session group owns
+  exactly one project.
+- Checkpoints are commits on that default branch, addressed by commit SHA. Restore can
+  clone/check out a commit into a fresh working directory when needed.
 - v1 can use a durable mounted volume with one writer.
 - Add a small storage adapter seam for path/init/delete.
 - Periodic `git gc`.
@@ -693,14 +699,14 @@ Requirements:
 
 ### Design Workspace Repo
 
-Design sessions should use the same worktree/remote pattern as coding sessions, with a
-different renderer:
+Design sessions should use the same working-directory/remote pattern as coding sessions,
+with a different renderer:
 
 1. Start `SessionGroup.kind === "design"`.
 2. Create or reserve hidden `Repo { provider: managed }`.
 3. Initialize the managed bare repo under `GIT_STORAGE_ROOT`.
-4. Ask the bridge/session adapter to create a design worktree folder for the group.
-5. Set that worktree's `origin` to the Trace managed git URL.
+4. Ask the bridge/session adapter to create a design working directory for the group.
+5. Set that directory's `origin` to the Trace managed git URL.
 6. Generate or update artifact files in that folder.
 7. Commit with subjects like `Add design artifact <artifactId>` or
    `Update design canvas layout`.
@@ -709,7 +715,7 @@ different renderer:
 10. Append artifact/layout completion events and broadcast state.
 
 The bridge folder is disposable. If the design session is deleted, archived past
-retention, or the runtime/bridge cleanup runs, delete the local worktree folder. The
+retention, or the runtime/bridge cleanup runs, delete the local working directory. The
 managed repo remains the durable copy until retention GC deletes it.
 
 Fan-out behavior:
@@ -737,7 +743,7 @@ First checkpoint flow for an app session:
 4. Mint/reuse runtime-scoped token.
 5. Ask bridge/runtime to add or update `origin` to the managed URL.
 6. Commit locally if needed.
-7. Push checkpoint branch/ref.
+7. Push the default branch after the checkpoint commit.
 8. Persist repo link on `SessionGroup`.
 9. Create `GitCheckpoint`.
 10. Append events and broadcast state.
@@ -850,10 +856,11 @@ Rules:
 `docs/design-app-session-implementation-audit.md` says the main server/service/UI paths
 for design and app sessions have been implemented and covered by focused tests in the
 current branch lineage. That audit predates the latest decision that design artifacts
-should use the same managed repo + bridge worktree pattern as coding/app sessions. If the
+should use the same managed repo + bridge working-directory pattern as coding/app sessions. If the
 current code still stores design HTML only in blob/object storage or commits it only from
 server-side temporary state, another implementation pass should migrate the durable
-source to a managed design worktree while preserving any existing cache/fallback paths.
+source to a managed design working directory while preserving any existing cache/fallback
+paths.
 
 After that storage decision is implemented, the remaining proof is hosted end-to-end
 verification:
@@ -878,8 +885,8 @@ work end to end.
 ### Required Design Evidence
 
 - Service/bridge test: `startSession(kind: design)` creates or reserves a hidden managed
-  repo and materializes a bridge worktree, but does not start an app dev server or port
-  detection flow.
+  repo and materializes a bridge working directory on the default branch, but does not
+  start an app dev server or port detection flow.
 - Service test: design generation calls `LLMAdapter` and persists N artifacts.
 - Service/store test: design generation can persist AI-authored canvas sections with
   titles, descriptions, and artifact membership.
@@ -887,7 +894,7 @@ work end to end.
 - Parser/service test: a board source using `DesignCanvas`/section/artboard-style markup
   normalizes into `CanvasSection` and `Artifact` state.
 - Service/integration test: design artifact generation writes HTML/metadata files into
-  the design worktree and pushes them to the managed remote.
+  the design working directory and pushes them to the managed remote.
 - Retry test: failed design bridge setup or commit/push reuses the same managed repo on
   retry, and deleted bridge folders can be recloned from the remote.
 - Service test: failed one-of-N generation keeps successful siblings visible.
@@ -932,11 +939,11 @@ TRACE_SMOKE_ORG_ID=<organization-id> \
 pnpm smoke:design-session
 ```
 
-The design smoke must start a fresh design session, verify a hidden managed repo and
-design worktree are created without starting an app dev server, wait for model-generated
-artifacts, create fan-out variants, add anchored comment, tweak tokens, export and
-download a PDF, publish and open the public URL, delete/recreate the bridge worktree from
-the managed remote, and promote to coding.
+The design smoke must start a fresh design session, verify a hidden managed repo and one
+bridge working directory on the default branch are created without starting an app dev
+server, wait for model-generated artifacts, create fan-out variants, add anchored
+comment, tweak tokens, export and download a PDF, publish and open the public URL,
+delete/recreate the bridge folder from the managed remote, and promote to coding.
 
 App:
 
@@ -968,8 +975,9 @@ Do not call the full goal complete until:
 - PDF export produces real downloadable PDF files.
 - App sessions run real standalone apps on cloud runtimes.
 - App sessions use managed git durability and lazy first-checkpoint repo creation.
-- Design sessions use managed git durability with a bridge worktree, and deleting the
-  bridge folder does not lose artifacts because the managed remote can recreate it.
+- Design sessions use managed git durability with one bridge working directory on the
+  default branch, and deleting the bridge folder does not lose artifacts because the
+  managed remote can recreate it.
 - Checkpoint restore and publish work for app sessions.
 - Prompt harness composition is wired for both session kinds.
 - Existing coding-session behavior still works.
