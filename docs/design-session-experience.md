@@ -56,12 +56,37 @@ param; the model streams a self-contained HTML artifact back. Consequences:
 - Sessions/timeline still work as today — prompts, streams, and completions are session
   events; a design session is a session with no runtime attached.
 
+### Artifact serving: user-content domain
+
+Artifacts render in iframes pointed at a **wildcard user-content domain** —
+`https://<artifactId>.<trace-usercontent-domain>/` — served by the server's artifact read
+endpoint (the claudeusercontent.com pattern). Rationale and consequences:
+
+- **Real origin isolation.** AI-generated HTML/JS is untrusted; a unique subdomain per
+  artifact gives each one a genuine origin — full web platform inside (localStorage,
+  scripts), hard isolation from the Trace app and from other artifacts. (`srcdoc` alone
+  either cripples artifacts — no `allow-same-origin` — or inherits our origin, which is a
+  hole. It remains a dev-mode fallback only.)
+- **Server-set security headers**: strict CSP (external-fetch allowlist decided centrally),
+  Permissions-Policy, COOP. The iframe still carries `sandbox` (now safely with
+  `allow-same-origin`) as defense in depth.
+- **A `_bootstrap` document + `postMessage` channel** between frame and canvas handles
+  progressive paint while generation streams, element-picker events, comment-pin
+  rendering, and script-error capture (errors surface to the agent as context).
+- **Preview = publish.** Private artifacts are served with a short-lived signed token;
+  publishing flips the access flag on the same URL. No separate publish pipeline.
+- **Overlay symmetry**: the picker/comments overlay is injected at this serving layer for
+  design artifacts, exactly as the endpoint proxy injects it for app-kind dev servers —
+  one overlay script, two injection points.
+- Ops: wildcard DNS + TLS on a dedicated domain (never a subdomain of the app domain —
+  cookie scoping is the point); can share infrastructure with the endpoint-proxy URLs.
+
 ### The canvas
 
 The workspace is a pan/zoom spatial surface (Figma mental model):
 
-- **Cards** are artifacts — each a sandboxed iframe (`srcdoc`, `sandbox`, strict CSP)
-  rendering stored HTML client-side. Variants sit side-by-side; iterations stack as
+- **Cards** are artifacts — each an iframe on its user-content origin (see above),
+  rendering stored HTML. Variants sit side-by-side; iterations stack as
   lineage (expandable history per card). Device-frame and zoom per card.
 - **Selection drives the composer.** Select a card → prompts iterate on it ("darker,
   same layout"); select two → comparative prompts ("merge A's header with B's palette");
@@ -139,9 +164,10 @@ Frontend (`apps/web/src/components/design/`):
 Server:
 - `SessionGroup.kind` (`coding | design | app`) + `StartSessionInput.kind`
 - Design kind: `Artifact` entity (lineage DAG, blob refs), generation service on
-  `LLMAdapter` (streaming, parallel variants), artifact read/public endpoints,
-  token-patch method (CSS-variable string edit), headless-Chromium render pool (PDF +
-  card thumbnails), `design_export_completed` + `design_comment_added` events
+  `LLMAdapter` (streaming, parallel variants), user-content-domain artifact serving
+  (wildcard subdomains, `_bootstrap` + `postMessage`, signed-token access, overlay
+  injection), token-patch method (CSS-variable string edit), headless-Chromium render
+  pool (PDF + card thumbnails), `design_export_completed` + `design_comment_added` events
 - App kind: cloud-only enforcement, port-detection endpoint auto-registration, checkpoint
   captures, bridge token-file write, `RunOptions.appendSystemPrompt`
 - Vendored Open Design composer + overlay in `packages/shared` (used by both delivery
