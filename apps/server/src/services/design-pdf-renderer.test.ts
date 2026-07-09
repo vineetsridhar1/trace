@@ -1,4 +1,5 @@
 import { execFile } from "child_process";
+import { EventEmitter } from "events";
 import fs from "fs";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -45,13 +46,13 @@ function pathArtifactId(outputPath: string): string {
 
 async function waitForAssertion(assertion: () => void) {
   let lastError: unknown;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     try {
       assertion();
       return;
     } catch (error) {
       lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }
   throw lastError;
@@ -185,6 +186,31 @@ describe("designPdfRenderer", () => {
         html: "<main>Corrupt</main>",
       }),
     ).rejects.toThrow("Chromium produced a non-PDF export");
+  });
+
+  it("returns a stable PDF even if Chromium keeps running after print output exists", async () => {
+    const child = Object.assign(new EventEmitter(), {
+      killed: false,
+      exitCode: null as number | null,
+      signalCode: null as NodeJS.Signals | null,
+      kill: vi.fn(function kill(this: { killed: boolean }, signal?: NodeJS.Signals) {
+        this.killed = true;
+        setTimeout(() => child.emit("close", null, signal ?? "SIGTERM"), 0);
+        return true;
+      }),
+    });
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      fs.writeFileSync(outputPathFrom(args), Buffer.from("%PDF-1.7\n"));
+      return child as never;
+    });
+
+    const pdf = await designPdfRenderer.renderHtmlToPdf({
+      artifactId: "artifact-1",
+      html: "<main>Printable</main>",
+    });
+
+    expect(pdf).toEqual(Buffer.from("%PDF-1.7\n"));
+    expect(child.kill).toHaveBeenCalledWith("SIGTERM");
   });
 
   it("reserves render slots for queued PDF tasks instead of letting later tasks barge", async () => {

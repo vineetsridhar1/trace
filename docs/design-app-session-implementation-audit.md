@@ -799,3 +799,16 @@ During this audit continuation, the user-content artifact host set isolation hea
 bootstrap and published responses, but not for 404/405 responses on valid artifact
 subdomains. All user-content-domain error responses now set the same CSP, COOP/COEP,
 Permissions-Policy, Referrer-Policy, nosniff, and `no-store` cache boundary.
+
+During this audit continuation, the hosted cloud app smoke verified that "open as coding"
+created a linked coding session on the managed repo, but not that the coding session's
+initial brief carried the app handoff context. It now polls the coding session's
+`session_started` event and requires the source app group id, managed repo id, latest
+checkpoint short SHA, standalone-app preservation instruction, and checkpoint durability
+instruction in the prompt.
+
+During this audit pass, the real-Chrome PDF renderer integration revealed that Chrome can
+write a valid PDF and then keep its profile process alive long enough to hit the test
+timeout. The renderer now treats a stable valid PDF file as completion, terminates the
+headless process before temp-profile cleanup, and has unit plus integration coverage for
+that behavior.

@@ -613,6 +613,35 @@ async function openAppAsCodingSession(sessionGroupId, managedRepoId) {
   return codingSession;
 }
 
+async function waitForCodingHandoffBrief(codingSessionId, sourceGroupId, managedRepoId, commitSha) {
+  return pollUntil("open-as-coding handoff brief", async () => {
+    const data = await graphql(SESSION_EVENTS, {
+      organizationId,
+      scope: { type: "session", id: codingSessionId },
+      types: ["session_started"],
+    });
+    const started = data.events?.find((event) => event.eventType === "session_started");
+    const payload = started?.payload;
+    const prompt = payload && typeof payload === "object" ? payload.prompt : null;
+    if (typeof prompt !== "string") {
+      return { ok: false, detail: "session_started prompt not found" };
+    }
+    const requiredParts = [
+      "Continue this standalone app in a coding session.",
+      `Source app session group id: ${sourceGroupId}`,
+      `(${managedRepoId})`,
+      `Latest checkpoint: ${commitSha.slice(0, 7)}`,
+      "preserve the standalone app behavior",
+      "checkpoint durability",
+    ];
+    const missing = requiredParts.filter((part) => !prompt.includes(part));
+    if (missing.length > 0) {
+      return { ok: false, detail: `brief missing ${missing.join(", ")}` };
+    }
+    return { ok: true, value: prompt };
+  });
+}
+
 function terminalWebSocketUrl() {
   const url = new URL(serverUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -767,6 +796,12 @@ if (requireCapture) {
 await assertManagedRepoHiddenFromRepoList(managedRepoId);
 await assertManagedGitCheckpointReachable(managedRepoId, initial.checkpoint.commitSha, session.id);
 const codingSession = await openAppAsCodingSession(session.sessionGroupId, managedRepoId);
+await waitForCodingHandoffBrief(
+  codingSession.id,
+  session.sessionGroupId,
+  managedRepoId,
+  initial.checkpoint.commitSha,
+);
 const terminalOutput = await verifyTerminalWorkdir(session.id);
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
 await renderUrl(previewUrl, "private preview URL", {

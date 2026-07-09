@@ -2,12 +2,11 @@ import { execFile } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { promisify } from "util";
 
-const execFileAsync = promisify(execFile);
 const DEFAULT_RENDER_TIMEOUT_MS = 30_000;
 const DEFAULT_RENDER_CONCURRENCY = 2;
 const DEFAULT_RENDER_QUEUE_SIZE = 16;
+const PDF_OUTPUT_POLL_INTERVAL_MS = 100;
 
 type RenderTask<T> = () => Promise<T>;
 
@@ -80,7 +79,11 @@ function chromiumExecutable(): string {
   );
 }
 
-function chromeArgs(input: { inputPath: string; outputPath: string; userDataDir: string }): string[] {
+function chromeArgs(input: {
+  inputPath: string;
+  outputPath: string;
+  userDataDir: string;
+}): string[] {
   return [
     "--headless=new",
     "--disable-gpu",
@@ -151,6 +154,150 @@ function isPdf(buffer: Buffer): boolean {
   return buffer.byteLength >= 5 && buffer.subarray(0, 5).toString("latin1") === "%PDF-";
 }
 
+async function readStablePdf(
+  outputPath: string,
+  previousSize: number | null,
+): Promise<Buffer | null> {
+  let stat: fs.Stats;
+  try {
+    stat = await fs.promises.stat(outputPath);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+  if (stat.size === 0 || stat.size !== previousSize) {
+    return null;
+  }
+  const pdf = await fs.promises.readFile(outputPath);
+  return isPdf(pdf) ? pdf : null;
+}
+
+function renderWithChromium(input: {
+  executable: string;
+  args: string[];
+  outputPath: string;
+  timeoutMs: number;
+}): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
+    let settled = false;
+    let lastObservedSize: number | null = null;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const child = execFile(
+      input.executable,
+      input.args,
+      { timeout: input.timeoutMs, maxBuffer: 1024 * 1024 },
+      (error) => {
+        if (settled) return;
+        if (error) {
+          settleReject(error);
+          return;
+        }
+        void readFinalPdf().then(settleResolve, settleReject);
+      },
+    );
+
+    function clearTimers() {
+      if (pollTimer) clearTimeout(pollTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      pollTimer = null;
+      timeoutTimer = null;
+    }
+
+    function terminateChild(): Promise<void> {
+      if (
+        !child ||
+        typeof child.kill !== "function" ||
+        child.killed ||
+        child.exitCode !== null ||
+        child.signalCode !== null
+      ) {
+        return Promise.resolve();
+      }
+      return new Promise<void>((resolve) => {
+        let resolved = false;
+        let killTimer: ReturnType<typeof setTimeout> | null = null;
+        const done = () => {
+          if (resolved) return;
+          resolved = true;
+          if (killTimer) clearTimeout(killTimer);
+          resolve();
+        };
+        child.once("exit", done);
+        child.once("close", done);
+        child.kill("SIGTERM");
+        killTimer = setTimeout(() => {
+          if (!child.killed && child.exitCode === null && child.signalCode === null) {
+            child.kill("SIGKILL");
+          }
+          setTimeout(done, 500);
+        }, 1_000);
+      });
+    }
+
+    function settleResolve(pdf: Buffer) {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      void terminateChild().then(
+        () => resolve(pdf),
+        () => resolve(pdf),
+      );
+    }
+
+    function settleReject(error: unknown) {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      void terminateChild().then(
+        () => reject(error),
+        () => reject(error),
+      );
+    }
+
+    async function readFinalPdf(): Promise<Buffer> {
+      const pdf = await fs.promises.readFile(input.outputPath);
+      if (pdf.byteLength === 0) {
+        throw new Error("Chromium produced an empty PDF");
+      }
+      if (!isPdf(pdf)) {
+        throw new Error("Chromium produced a non-PDF export");
+      }
+      return pdf;
+    }
+
+    async function pollForOutput() {
+      if (settled) return;
+      try {
+        const stat = await fs.promises.stat(input.outputPath).catch((error: unknown) => {
+          if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+            return null;
+          }
+          throw error;
+        });
+        const stablePdf =
+          stat && stat.size > 0 ? await readStablePdf(input.outputPath, lastObservedSize) : null;
+        lastObservedSize = stat?.size ?? null;
+        if (stablePdf) {
+          settleResolve(stablePdf);
+          return;
+        }
+        pollTimer = setTimeout(() => void pollForOutput(), PDF_OUTPUT_POLL_INTERVAL_MS);
+      } catch (error) {
+        settleReject(error);
+      }
+    }
+
+    timeoutTimer = setTimeout(() => {
+      settleReject(new Error(`Chromium PDF render timed out after ${input.timeoutMs}ms`));
+    }, input.timeoutMs);
+    pollTimer = setTimeout(() => void pollForOutput(), PDF_OUTPUT_POLL_INTERVAL_MS);
+  });
+}
+
 export function countPdfPages(pdf: Buffer): number | null {
   const text = pdf.toString("latin1");
   const matches = text.match(/\/Type\s*\/Page\b/g);
@@ -177,25 +324,15 @@ export const designPdfRenderer = {
           wrapPrintHtml(input.html, input.pageOptions ?? null),
           "utf8",
         );
-        await execFileAsync(
-          chromiumExecutable(),
-          chromeArgs({ inputPath, outputPath, userDataDir }),
-          {
-            timeout: readPositiveInt(
-              process.env.TRACE_DESIGN_PDF_RENDER_TIMEOUT_MS,
-              DEFAULT_RENDER_TIMEOUT_MS,
-            ),
-            maxBuffer: 1024 * 1024,
-          },
-        );
-        const pdf = await fs.promises.readFile(outputPath);
-        if (pdf.byteLength === 0) {
-          throw new Error("Chromium produced an empty PDF");
-        }
-        if (!isPdf(pdf)) {
-          throw new Error("Chromium produced a non-PDF export");
-        }
-        return pdf;
+        return await renderWithChromium({
+          executable: chromiumExecutable(),
+          args: chromeArgs({ inputPath, outputPath, userDataDir }),
+          outputPath,
+          timeoutMs: readPositiveInt(
+            process.env.TRACE_DESIGN_PDF_RENDER_TIMEOUT_MS,
+            DEFAULT_RENDER_TIMEOUT_MS,
+          ),
+        });
       } finally {
         await fs.promises.rm(workdir, { recursive: true, force: true });
       }
