@@ -4491,6 +4491,7 @@ export class SessionService {
         sessionStatus: true,
         worktreeDeleted: true,
         sessionGroupId: true,
+        tool: true,
       },
     });
 
@@ -4513,6 +4514,7 @@ export class SessionService {
       where: { id },
       data: {
         agentStatus: newAgentStatus,
+        ...(current.tool === "codex" ? { toolSessionId: null } : {}),
         ...(newSessionStatus !== current.sessionStatus ? { sessionStatus: newSessionStatus } : {}),
       },
       include: SESSION_INCLUDE,

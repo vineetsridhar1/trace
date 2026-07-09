@@ -502,6 +502,11 @@ export class ContainerBridge implements IBridgeClient {
         if (adapter) {
           this.cancelRun(cmd.sessionId);
           adapter.abort();
+          if (adapter instanceof CodexAdapter) {
+            this.adapters.delete(cmd.sessionId);
+            this.reportedToolSessionIds.delete(cmd.sessionId);
+            this.pendingInputToolUseIds.delete(cmd.sessionId);
+          }
         }
         break;
       }
