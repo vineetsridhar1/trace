@@ -794,3 +794,8 @@ initial prompts after starter bootstrap, but not for ordinary follow-up messages
 app runtime is ready. `session.test.ts` now proves follow-up app messages compose the
 Open Design app prompt with the session group's design system and skills, then deliver it
 through `RunOptions.appendSystemPrompt`.
+
+During this audit continuation, the user-content artifact host set isolation headers for
+bootstrap and published responses, but not for 404/405 responses on valid artifact
+subdomains. All user-content-domain error responses now set the same CSP, COOP/COEP,
+Permissions-Policy, Referrer-Policy, nosniff, and `no-store` cache boundary.

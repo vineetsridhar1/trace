@@ -220,6 +220,7 @@ export async function handleDesignArtifactUserContent(
   }
 
   if (req.method !== "GET" && req.method !== "HEAD") {
+    setDesignArtifactHeaders(res, { bootstrap: true });
     res.status(405).end("Method not allowed");
     return;
   }
@@ -232,6 +233,7 @@ export async function handleDesignArtifactUserContent(
   }
 
   if (path !== "/") {
+    setDesignArtifactHeaders(res, { bootstrap: true });
     res.status(404).end("Not found");
     return;
   }
@@ -251,6 +253,7 @@ export async function handleDesignArtifactUserContent(
   });
 
   if (!artifact) {
+    setDesignArtifactHeaders(res, { bootstrap: true });
     res.status(404).end("Not found");
     return;
   }

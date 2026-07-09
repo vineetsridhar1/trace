@@ -51,6 +51,20 @@ function makeResponse(): MockResponse {
   return response;
 }
 
+function expectNoStoreIsolationHeaders(response: MockResponse) {
+  expect(response.set).toHaveBeenCalledWith(
+    expect.objectContaining({
+      "Cache-Control": "no-store",
+      "Content-Security-Policy": expect.stringContaining("default-src 'self'"),
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "credentialless",
+      "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    }),
+  );
+}
+
 function makeRequest(input: { host: string; path?: string; method?: string }) {
   return {
     headers: { host: input.host },
@@ -116,17 +130,7 @@ describe("design artifact user-content serving", () => {
     );
 
     expect(next).not.toHaveBeenCalled();
-    expect(response.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        "Cache-Control": "no-store",
-        "Content-Security-Policy": expect.stringContaining("default-src 'self'"),
-        "Cross-Origin-Opener-Policy": "same-origin",
-        "Cross-Origin-Embedder-Policy": "credentialless",
-        "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
-        "Referrer-Policy": "no-referrer",
-        "X-Content-Type-Options": "nosniff",
-      }),
-    );
+    expectNoStoreIsolationHeaders(response);
     expect(response.type).toHaveBeenCalledWith("html");
     expect(response.send).toHaveBeenCalledWith(buildDesignArtifactBootstrapHtml());
     expect(prismaMock.artifact.findFirst).not.toHaveBeenCalled();
@@ -160,6 +164,36 @@ describe("design artifact user-content serving", () => {
     expect(html).toContain('type: "trace:artifact:rendered", pinCount: pinCount');
   });
 
+  it("isolates rejected user-content methods", async () => {
+    const response = makeResponse();
+
+    await handleDesignArtifactUserContent(
+      makeRequest({ host: "artifact-1.traceusercontent.test", method: "POST" }),
+      response as unknown as express.Response,
+      vi.fn(),
+    );
+
+    expectNoStoreIsolationHeaders(response);
+    expect(response.status).toHaveBeenCalledWith(405);
+    expect(response.end).toHaveBeenCalledWith("Method not allowed");
+    expect(prismaMock.artifact.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("isolates missing user-content paths", async () => {
+    const response = makeResponse();
+
+    await handleDesignArtifactUserContent(
+      makeRequest({ host: "artifact-1.traceusercontent.test", path: "/asset.js" }),
+      response as unknown as express.Response,
+      vi.fn(),
+    );
+
+    expectNoStoreIsolationHeaders(response);
+    expect(response.status).toHaveBeenCalledWith(404);
+    expect(response.end).toHaveBeenCalledWith("Not found");
+    expect(prismaMock.artifact.findFirst).not.toHaveBeenCalled();
+  });
+
   it("404s unpublished or missing artifacts", async () => {
     prismaMock.artifact.findFirst.mockResolvedValueOnce(null);
     const response = makeResponse();
@@ -178,6 +212,7 @@ describe("design artifact user-content serving", () => {
       },
       select: { id: true, organizationId: true, html: true, htmlStorageKey: true },
     });
+    expectNoStoreIsolationHeaders(response);
     expect(response.status).toHaveBeenCalledWith(404);
     expect(response.end).toHaveBeenCalledWith("Not found");
   });
