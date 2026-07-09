@@ -595,3 +595,9 @@ During this audit pass, app preview URL creation was found to mint signed previe
 credentials for disabled endpoints. The proxy still refused those requests later, but the
 service contract now fails earlier: `createEndpointPreview` requires an enabled,
 non-revoked endpoint before returning the iframe-auth URL used by app preview.
+
+During this audit pass, design artifact user-content responses were found to set COOP but
+not COEP even though the serving contract calls for origin isolation on the cookieless
+artifact domain. Bootstrap and published artifact responses now include
+`Cross-Origin-Embedder-Policy: credentialless`, and the hosted design smoke requires that
+header alongside CSP, COOP, permissions, referrer, cache, and nosniff checks.

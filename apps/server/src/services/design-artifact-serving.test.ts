@@ -121,6 +121,7 @@ describe("design artifact user-content serving", () => {
         "Cache-Control": "no-store",
         "Content-Security-Policy": expect.stringContaining("default-src 'self'"),
         "Cross-Origin-Opener-Policy": "same-origin",
+        "Cross-Origin-Embedder-Policy": "credentialless",
         "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
         "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",

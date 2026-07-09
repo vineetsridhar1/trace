@@ -393,6 +393,7 @@ function assertDesignArtifactHeaders(response, label, { cacheControl }) {
 
   const expectedHeaders = {
     "cross-origin-opener-policy": "same-origin",
+    "cross-origin-embedder-policy": "credentialless",
     "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",

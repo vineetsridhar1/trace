@@ -201,6 +201,7 @@ function setDesignArtifactHeaders(res: express.Response, options: { bootstrap: b
     "Content-Security-Policy":
       "default-src 'self' https: data: blob:; script-src 'unsafe-inline' 'unsafe-eval' https: data: blob:; style-src 'unsafe-inline' https:; img-src https: data: blob:; font-src https: data:; connect-src https:; frame-ancestors *; base-uri 'none'; form-action 'none'",
     "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Embedder-Policy": "credentialless",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
