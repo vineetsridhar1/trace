@@ -625,3 +625,9 @@ During this audit pass, app checkpoint captures still launched Chromium directly
 each checkpoint thumbnail. The capture path now uses its own bounded queue controlled by
 `TRACE_APP_CAPTURE_CONCURRENCY` and `TRACE_APP_CAPTURE_QUEUE_SIZE`, and the focused test
 suite proves queued captures reserve slots and run serially when concurrency is one.
+
+During this audit pass, design artifact script errors were captured from the
+user-content `_bootstrap` frame but only surfaced as local toasts. The canvas now reports
+deduplicated preview errors through `reportDesignArtifactError`, and the service layer
+emits `design_artifact_error` session events with artifact id, session group id, message,
+and optional stack so agents and clients see the same failure signal.

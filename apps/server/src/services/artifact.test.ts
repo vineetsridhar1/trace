@@ -648,6 +648,48 @@ describe("artifactService", () => {
     );
   });
 
+  it("emits design artifact script errors as session events", async () => {
+    prismaMock.artifact.findFirst.mockResolvedValueOnce(designArtifact());
+
+    await artifactService.reportDesignArtifactError({
+      artifactId: "artifact-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      message: " ReferenceError: chart is not defined ",
+      stack: " ReferenceError stack ",
+    });
+
+    expect(eventServiceMock.create).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      scopeType: "session",
+      scopeId: "session-1",
+      eventType: "design_artifact_error",
+      payload: {
+        artifactId: "artifact-1",
+        sessionGroupId: "group-1",
+        parentArtifactId: null,
+        message: "ReferenceError: chart is not defined",
+        stack: "ReferenceError stack",
+      },
+      actorType: "user",
+      actorId: "user-1",
+    });
+  });
+
+  it("rejects empty design artifact script errors", async () => {
+    await expect(
+      artifactService.reportDesignArtifactError({
+        artifactId: "artifact-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+        message: " ",
+      }),
+    ).rejects.toThrow("Artifact error message is required.");
+
+    expect(prismaMock.artifact.findFirst).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
   it("promotes a stored design artifact into a deferred coding session", async () => {
     const htmlStorageKey = "uploads/org-1/design-artifacts/artifact-1.html";
     storageObjects.set(

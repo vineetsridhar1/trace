@@ -409,6 +409,21 @@ export const sessionMutations = {
       actorType: ctx.actorType,
     });
   },
+  reportDesignArtifactError: (
+    _: unknown,
+    args: { artifactId: string; message: string; stack?: string | null },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return artifactService.reportDesignArtifactError({
+      artifactId: args.artifactId,
+      message: args.message,
+      stack: args.stack ?? null,
+      organizationId: requireOrgContext(ctx),
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
   publishDesignArtifact: (_: unknown, args: { artifactId: string }, ctx: Context) => {
     if (!ctx.userId) throw new AuthenticationError();
     return artifactService.publishDesignArtifact({

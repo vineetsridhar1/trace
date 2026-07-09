@@ -241,6 +241,7 @@ enum EventType {
   design_artifact_created
   design_artifact_updated
   design_comment_added
+  design_artifact_error
   design_export_requested
   design_export_completed
   design_artifact_promoted

@@ -5,6 +5,7 @@ import {
   buildDesignArtifactBootstrapUrl,
   buildDesignArtifactPublicUrlFromOrigin,
   clampDesignPreviewScale,
+  designArtifactErrorReport,
   designCommentsForPreview,
   designCommentFromEvent,
   getDesignArtifactPreviewMode,
@@ -144,6 +145,26 @@ describe("design canvas anchors", () => {
     expect(url).toBe(
       "https://artifact-1.traceusercontent.test/_bootstrap?parentOrigin=https%3A%2F%2Fapp.trace.test&nonce=nonce-1",
     );
+  });
+
+  it("normalizes design preview script error reports for the service layer", () => {
+    expect(
+      designArtifactErrorReport({
+        artifactId: "artifact-1",
+        message: " ReferenceError: chart is not defined ",
+        stack: " stack trace ",
+      }),
+    ).toEqual({
+      artifactId: "artifact-1",
+      message: "ReferenceError: chart is not defined",
+      stack: "stack trace",
+    });
+
+    expect(designArtifactErrorReport({ artifactId: "artifact-1", message: " " })).toEqual({
+      artifactId: "artifact-1",
+      message: "Artifact preview error",
+      stack: null,
+    });
   });
 
   it("builds published artifact URLs from user-content origin unless server supplies one", () => {

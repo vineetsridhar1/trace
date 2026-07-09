@@ -333,6 +333,7 @@ enum EventType {
   design_artifact_created
   design_artifact_updated
   design_comment_added
+  design_artifact_error
   design_export_requested
   design_export_completed
   design_artifact_promoted
@@ -1514,6 +1515,7 @@ type Mutation {
   ): Artifact!
   patchDesignArtifactTokens(artifactId: ID!, tokens: JSON!): Artifact!
   commentDesignArtifact(artifactId: ID!, body: String!, anchor: JSON, sendToAgent: Boolean): Event!
+  reportDesignArtifactError(artifactId: ID!, message: String!, stack: String): Event!
   publishDesignArtifact(artifactId: ID!): Artifact!
   exportDesignArtifactPdf(artifactId: ID!, pageOptions: DesignPdfPageOptionsInput): Event!
   promoteDesignArtifactToCodingSession(

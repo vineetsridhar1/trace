@@ -442,6 +442,7 @@ export type EventType =
   | "chat_member_removed"
   | "chat_renamed"
   | "design_artifact_created"
+  | "design_artifact_error"
   | "design_artifact_promoted"
   | "design_artifact_updated"
   | "design_comment_added"
@@ -731,6 +732,7 @@ export type Mutation = {
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
+  reportDesignArtifactError: Event;
   requestBridgeAccess: BridgeAccessRequest;
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
@@ -1126,6 +1128,12 @@ export type MutationReorderChannelsArgs = {
 export type MutationReorderQueuedMessagesArgs = {
   ids: Array<Scalars["ID"]["input"]>;
   sessionId: Scalars["ID"]["input"];
+};
+
+export type MutationReportDesignArtifactErrorArgs = {
+  artifactId: Scalars["ID"]["input"];
+  message: Scalars["String"]["input"];
+  stack?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type MutationRequestBridgeAccessArgs = {

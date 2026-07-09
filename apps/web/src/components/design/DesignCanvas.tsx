@@ -117,6 +117,14 @@ const COMMENT_DESIGN_ARTIFACT_MUTATION = gql`
   }
 `;
 
+const REPORT_DESIGN_ARTIFACT_ERROR_MUTATION = gql`
+  mutation ReportDesignArtifactError($artifactId: ID!, $message: String!, $stack: String) {
+    reportDesignArtifactError(artifactId: $artifactId, message: $message, stack: $stack) {
+      id
+    }
+  }
+`;
+
 const PUBLISH_DESIGN_ARTIFACT_MUTATION = gql`
   mutation PublishDesignArtifact($artifactId: ID!) {
     publishDesignArtifact(artifactId: $artifactId) {
@@ -435,6 +443,18 @@ export function getDesignArtifactPreviewMode(
   return srcDocFallbackEnabled ? "srcdoc" : "unavailable";
 }
 
+export function designArtifactErrorReport(input: {
+  artifactId: string;
+  message?: string | null;
+  stack?: string | null;
+}) {
+  return {
+    artifactId: input.artifactId,
+    message: input.message?.trim() || "Artifact preview error",
+    stack: input.stack?.trim() || null,
+  };
+}
+
 function eventPayload(event: Event): Record<string, unknown> | null {
   return event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
     ? (event.payload as Record<string, unknown>)
@@ -673,6 +693,7 @@ function ArtifactCard({
   const [previewScale, setPreviewScale] = useState(0.55);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const nonceRef = useRef<string>(createProtocolNonce());
+  const reportedErrorKeysRef = useRef<Set<string>>(new Set());
   const frame = getDesignPreviewDeviceFrame(device);
   const bootstrapUrl = useMemo(
     () => getArtifactBootstrapUrl(artifact.id, nonceRef.current),
@@ -716,13 +737,27 @@ function ArtifactCard({
         type?: string;
         nonce?: string;
         message?: string;
+        stack?: string;
         anchor?: unknown;
       } | null;
       if (!data || data.nonce !== nonceRef.current) return;
       if (data.type === "trace:artifact:ready") {
         postArtifactHtml();
       } else if (data.type === "trace:artifact:error") {
-        toast.error(data.message ?? "Artifact preview error");
+        const report = designArtifactErrorReport({
+          artifactId: artifact.id,
+          message: data.message,
+          stack: data.stack,
+        });
+        toast.error(report.message);
+        const reportKey = `${report.message}\n${report.stack ?? ""}`;
+        if (!reportedErrorKeysRef.current.has(reportKey)) {
+          reportedErrorKeysRef.current.add(reportKey);
+          void client
+            .mutation(REPORT_DESIGN_ARTIFACT_ERROR_MUTATION, report)
+            .toPromise()
+            .catch(() => undefined);
+        }
       } else if (data.type === "trace:artifact:element-selected") {
         const anchor = normalizeDesignAnchor(data.anchor);
         if (!anchor) return;

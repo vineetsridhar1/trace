@@ -444,6 +444,7 @@ export type EventType =
   | "chat_member_removed"
   | "chat_renamed"
   | "design_artifact_created"
+  | "design_artifact_error"
   | "design_artifact_promoted"
   | "design_artifact_updated"
   | "design_comment_added"
@@ -733,6 +734,7 @@ export type Mutation = {
   reorderChannelGroups: Array<ChannelGroup>;
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
+  reportDesignArtifactError: Event;
   requestBridgeAccess: BridgeAccessRequest;
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
@@ -1128,6 +1130,12 @@ export type MutationReorderChannelsArgs = {
 export type MutationReorderQueuedMessagesArgs = {
   ids: Array<Scalars["ID"]["input"]>;
   sessionId: Scalars["ID"]["input"];
+};
+
+export type MutationReportDesignArtifactErrorArgs = {
+  artifactId: Scalars["ID"]["input"];
+  message: Scalars["String"]["input"];
+  stack?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type MutationRequestBridgeAccessArgs = {
@@ -2753,6 +2761,17 @@ export type CommentDesignArtifactMutationVariables = Exact<{
 export type CommentDesignArtifactMutation = {
   __typename?: "Mutation";
   commentDesignArtifact: { __typename?: "Event"; id: string };
+};
+
+export type ReportDesignArtifactErrorMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+  message: Scalars["String"]["input"];
+  stack?: InputMaybe<Scalars["String"]["input"]>;
+}>;
+
+export type ReportDesignArtifactErrorMutation = {
+  __typename?: "Mutation";
+  reportDesignArtifactError: { __typename?: "Event"; id: string };
 };
 
 export type PublishDesignArtifactMutationVariables = Exact<{
@@ -5582,6 +5601,72 @@ export const CommentDesignArtifactDocument = {
     },
   ],
 } as unknown as DocumentNode<CommentDesignArtifactMutation, CommentDesignArtifactMutationVariables>;
+export const ReportDesignArtifactErrorDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ReportDesignArtifactError" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "message" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "stack" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "reportDesignArtifactError" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "message" },
+                value: { kind: "Variable", name: { kind: "Name", value: "message" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "stack" },
+                value: { kind: "Variable", name: { kind: "Name", value: "stack" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  ReportDesignArtifactErrorMutation,
+  ReportDesignArtifactErrorMutationVariables
+>;
 export const PublishDesignArtifactDocument = {
   kind: "Document",
   definitions: [

@@ -823,6 +823,42 @@ export const artifactService = {
     return commentEvent;
   },
 
+  async reportDesignArtifactError(input: {
+    artifactId: string;
+    organizationId: string;
+    actorId: string;
+    actorType?: ActorType;
+    message: string;
+    stack?: string | null;
+  }) {
+    const message = input.message.trim();
+    if (!message) {
+      throw new ValidationError("Artifact error message is required.");
+    }
+    const { artifact, sessionId } = await getDesignArtifactForWrite(
+      input.artifactId,
+      input.organizationId,
+      input.actorId,
+    );
+    const stack = input.stack?.trim() || null;
+
+    return eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "design_artifact_error",
+      payload: {
+        artifactId: artifact.id,
+        sessionGroupId: artifact.sessionGroupId,
+        parentArtifactId: artifact.parentArtifactId,
+        message,
+        stack,
+      } as Prisma.InputJsonValue,
+      actorType: input.actorType ?? "user",
+      actorId: input.actorId,
+    });
+  },
+
   async promoteDesignArtifactToCodingSession(input: {
     artifactId: string;
     organizationId: string;
