@@ -77,7 +77,32 @@ No `open_design` enum value, no new adapter, no daemon. Design sessions run plai
 
 `designSystemId` / `skillIds` are design-session settings on the `SessionGroup`, passed
 through the run command into `RunOptions`. UI: design-system picker in the design shell.
-Org-custom `DESIGN.md` directories mount alongside the shipped content later.
+
+### Org design systems and repo extraction (explicitly out of scope, explicitly enabled)
+
+Not in v1, but a committed future direction: **extract a design system from an org's
+connected product repo** (read its tailwind config, tokens, components → emit a standard
+design-system directory), so design sessions produce prototypes that look like the org's
+product, not a preset. Prior art: Open Design's refresh/migration plugins and the
+static-prompt repo's system-extraction skills.
+
+Three v1 commitments keep this cheap to add later — none of them speculative code, just
+constraints on what we build anyway:
+
+1. **Format stability.** Org-custom systems are the same directory format as shipped
+   content (`manifest.json` + `DESIGN.md` + `tokens.css` + …). Extraction later just
+   *produces* such a directory; the composer and picker don't change.
+2. **Multi-root loader.** The content loader takes a list of roots
+   (`TRACE_DESIGN_CONTENT_DIRS`), not a single baked-in path — image content and an
+   org-content mount read identically. Trivial now, painful to retrofit.
+3. **A durable org home.** Org design systems need org-scoped storage the runtime can
+   fetch at session start; the natural fit is a managed repo per org (`provider: managed`,
+   same machinery as design projects — see `managed-git-hosting.md`), which also gives
+   versioning and review of brand changes for free. Decide the exact home when the feature
+   lands; v1 just avoids assuming content is image-only.
+
+The extraction flow itself, when built, is just a session: an agent run over the connected
+repo whose deliverable is the design-system directory — no new infrastructure.
 
 ## What we give up, and the mitigation
 

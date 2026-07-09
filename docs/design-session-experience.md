@@ -92,7 +92,11 @@ What this buys beyond raw quality:
 - **`DESIGN.md` as the org's brand system** — a design session can bind the org's own
   `DESIGN.md` (or one of the 150 presets), which is how outputs stop looking like every
   other AI-generated app. This pairs naturally with `trace.tokens.json`: `DESIGN.md`
-  states intent, tokens carry the concrete values the Tweaks panel manipulates.
+  states intent, tokens carry the concrete values the Tweaks panel manipulates. Future
+  (out of v1 scope, deliberately enabled): extracting a design system from an org's
+  connected product repo, so prototypes match the org's real product — see the
+  org-design-systems section of `open-design-harness-integration.md` for the v1
+  constraints that keep this addable.
 - **Critique loop** — the self-assessment pass before emitting fits the checkpoint model:
   critique runs before the checkpoint/capture, so versions in the strip are already
   vetted.
