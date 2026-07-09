@@ -506,6 +506,10 @@ if (session.sessionGroup?.repo) {
 }
 
 const initial = await waitForReadyApp(session.sessionGroupId, "initial");
+const managedRepoId = initial.state.sessionGroup.repo?.id;
+if (!managedRepoId) {
+  throw new Error("Initial app group did not link a managed repo after first checkpoint");
+}
 if (requireCapture) {
   await assertImageDownload(initial.checkpoint.captureUrl, "checkpoint capture URL");
 }
@@ -521,10 +525,16 @@ const restored = await startAppSession({
   ...(process.env.TRACE_SMOKE_MODEL ? { model: process.env.TRACE_SMOKE_MODEL } : {}),
   ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
 });
+if (restored.sessionGroupId === session.sessionGroupId) {
+  throw new Error("Checkpoint restore reused the source app session group");
+}
 const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored", {
   requireCheckpoint: false,
   requireManagedRepo: true,
 });
+if (restoredReady.state.sessionGroup.repo?.id !== managedRepoId) {
+  throw new Error("Restored app group did not use the source managed repo");
+}
 const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
 await renderUrl(restoredPreviewUrl, "restored preview URL", {
   requireFetch: false,

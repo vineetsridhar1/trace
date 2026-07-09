@@ -409,3 +409,8 @@ During this continuation, the hosted `pnpm smoke:design-session` script was tigh
 prove token tweaks are deterministic artifact patches. The smoke now verifies the tweaked
 child artifact contains the requested CSS variable and records
 `source: "patchDesignArtifactTokens"` plus the patched token metadata.
+
+During this continuation, the hosted `pnpm smoke:cloud-app-session` script was tightened
+to prove checkpoint restore uses managed-git durability correctly. After the first
+checkpoint links a managed repo, the smoke now verifies restore creates a fresh app
+session group and that the restored group is bound to the same managed repo.
