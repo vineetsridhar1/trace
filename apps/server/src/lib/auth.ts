@@ -1,5 +1,5 @@
 import type { ExpressContextFunctionArgument } from "@as-integrations/express5";
-import type { Request } from "express";
+import type { CookieOptions, Request, Response } from "express";
 import type { IncomingHttpHeaders } from "http";
 import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
@@ -32,6 +32,11 @@ const JWT_SECRET = resolveJwtSecret();
 const BRIDGE_AUTH_TOKEN_TTL_SECONDS = 5 * 60;
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR =
   "External local-mode access requires a paired mobile token";
+const SESSION_COOKIE_NAME = "trace_token";
+const SESSION_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+// Sliding expiry: when an authenticated request presents a session token older
+// than this, we re-issue a fresh one so active users never hit the fixed TTL.
+const SESSION_REFRESH_THRESHOLD_SECONDS = 24 * 60 * 60;
 
 type SessionTokenPayload = {
   userId: string;
@@ -86,6 +91,55 @@ function parseSessionToken(token: string): SessionTokenPayload | null {
   } catch {
     return null;
   }
+}
+
+export function signSessionToken(userId: string): string {
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: SESSION_TOKEN_TTL_SECONDS });
+}
+
+export function getSessionCookieOptions(): CookieOptions {
+  const sameSite = process.env.TRACE_AUTH_COOKIE_SAME_SITE?.trim().toLowerCase();
+  const normalizedSameSite =
+    sameSite === "strict" || sameSite === "lax" || sameSite === "none" ? sameSite : "lax";
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: normalizedSameSite,
+    maxAge: SESSION_TOKEN_TTL_SECONDS * 1000,
+    path: "/",
+  };
+}
+
+export function setSessionCookie(res: Response, token: string): void {
+  res.cookie(SESSION_COOKIE_NAME, token, getSessionCookieOptions());
+}
+
+/**
+ * Sliding-window refresh. If the presented token is a still-valid session JWT
+ * older than SESSION_REFRESH_THRESHOLD_SECONDS, mint a fresh one and re-set the
+ * cookie so active users never hit the fixed TTL. No-op for bridge/mobile
+ * tokens (which fail JWT verification or are not session tokens) and for tokens
+ * younger than the threshold, so it re-issues at most once per threshold window.
+ */
+export function refreshSessionCookieIfNeeded(res: Response, token: string): void {
+  let decoded: unknown;
+  try {
+    decoded = jwt.verify(token, JWT_SECRET);
+  } catch {
+    return;
+  }
+  if (!decoded || typeof decoded !== "object") return;
+  const payload = decoded as { userId?: unknown; tokenType?: unknown; iat?: unknown };
+  if (
+    payload.tokenType === "bridge_auth" ||
+    typeof payload.userId !== "string" ||
+    typeof payload.iat !== "number"
+  ) {
+    return;
+  }
+  const ageSeconds = Math.floor(Date.now() / 1000) - payload.iat;
+  if (ageSeconds < SESSION_REFRESH_THRESHOLD_SECONDS) return;
+  setSessionCookie(res, signSessionToken(payload.userId));
 }
 
 export function parseCookieToken(cookieHeader?: string): string | undefined {
@@ -399,7 +453,10 @@ async function buildAuthenticatedContext(input: ContextBuildInput): Promise<Cont
   };
 }
 
-export async function buildContext({ req }: ExpressContextFunctionArgument): Promise<Context> {
+export async function buildContext({
+  req,
+  res,
+}: ExpressContextFunctionArgument): Promise<Context> {
   const token = getRequestToken(req);
   const orgHeader = req.headers["x-organization-id"];
   const requestedOrgId = Array.isArray(orgHeader) ? orgHeader[0] : orgHeader;
@@ -408,12 +465,23 @@ export async function buildContext({ req }: ExpressContextFunctionArgument): Pro
     throw new AuthenticationError(EXTERNAL_LOCAL_MODE_AUTH_ERROR);
   }
 
-  return buildAuthenticatedContext({
+  const context = await buildAuthenticatedContext({
     token,
     request: req,
     requestedOrgId,
     clientSource: readClientSource(req.headers),
   });
+
+  // Slide the session's expiry forward for cookie-based sessions so active
+  // users stay logged in. Only for session JWTs presented via cookie —
+  // bearer/mobile callers manage their own token lifecycle (a bearer request
+  // sets the authorization header; refreshSessionCookieIfNeeded also no-ops on
+  // any non-session-JWT token).
+  if (token && !req.headers.authorization) {
+    refreshSessionCookieIfNeeded(res, token);
+  }
+
+  return context;
 }
 
 export async function buildWsContext(
