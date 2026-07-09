@@ -837,6 +837,84 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
+  it("bootstraps provisioned app workspaces before marking them ready", async () => {
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession(input) {
+        return {
+          runtimeInstanceId: input.runtimeInstanceId ?? "runtime-1",
+          runtimeLabel: "Provisioned runtime",
+          status: "connected",
+        };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopping" };
+      },
+      async getStatus() {
+        return { status: "provisioning" };
+      },
+    };
+    const router = new SessionRouter(new RuntimeAdapterRegistry([provisionedAdapter]));
+    const workspaceReady = vi.fn();
+    const lifecycleEvents: Array<{ eventType: string; runtimeInstanceId?: string }> = [];
+
+    router.createRuntime({
+      sessionId: "session-1",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      environment: {
+        id: "env-1",
+        name: "Provisioned",
+        adapterType: "provisioned",
+        config: { startupTimeoutSeconds: 5 },
+      },
+      tool: "codex",
+      repo: null,
+      bootstrapAppWorkspace: true,
+      createdById: "user-1",
+      organizationId: "org-1",
+      onLifecycle: (eventType, update) => {
+        lifecycleEvents.push({ eventType, runtimeInstanceId: update?.runtimeInstanceId });
+      },
+      onWorkspaceReady: workspaceReady,
+      onFailed: vi.fn(),
+    });
+
+    await vi.waitFor(() => {
+      expect(lifecycleEvents[0]?.runtimeInstanceId).toMatch(/^runtime_/);
+    });
+    const runtimeInstanceId = lifecycleEvents[0]?.runtimeInstanceId;
+    if (!runtimeInstanceId) throw new Error("Expected runtime instance ID");
+    const ws = makeWs();
+    router.registerRuntime({
+      id: runtimeInstanceId,
+      label: "Provisioned runtime",
+      ws,
+      hostingMode: "cloud",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    router.bindSession("session-1", runtimeInstanceId);
+
+    await vi.waitFor(() => {
+      expect(ws.send).toHaveBeenCalledWith(
+        expect.stringContaining('"type":"bootstrap_app_workspace"'),
+      );
+    });
+    expect(workspaceReady).not.toHaveBeenCalled();
+    expect(JSON.parse((ws.send as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0])).toEqual(
+      {
+        type: "bootstrap_app_workspace",
+        sessionId: "session-1",
+        workdir: "/home/coder",
+      },
+    );
+  });
+
   it("times out startup using environment config and emits timed_out", async () => {
     vi.useFakeTimers();
     const provisionedStop = vi.fn().mockResolvedValue({ ok: true, status: "stopping" });

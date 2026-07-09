@@ -1262,6 +1262,7 @@ export class SessionService {
     createdById: string;
     organizationId: string;
     readOnly?: boolean;
+    bootstrapAppWorkspace?: boolean;
     adapterType?: RuntimeAdapterType;
     environment?: {
       id: string;
@@ -1313,6 +1314,7 @@ export class SessionService {
         createdById: params.createdById,
         organizationId: params.organizationId,
         readOnly: params.readOnly,
+        bootstrapAppWorkspace: params.bootstrapAppWorkspace,
         onLifecycle: (eventType, update) =>
           this.recordRuntimeLifecycle(params.sessionId, eventType, update),
         onFailed: (error) => this.workspaceFailed(params.sessionId, error),
@@ -3853,6 +3855,7 @@ export class SessionService {
         createdById: input.createdById,
         organizationId: input.organizationId,
         readOnly: readOnlyWorkspace,
+        bootstrapAppWorkspace: session.sessionGroup?.kind === "app",
         adapterType: requestedEnvironment?.adapterType,
         environment: requestedEnvironment,
       });
@@ -4224,6 +4227,7 @@ export class SessionService {
         createdById: updated.createdById,
         organizationId: updated.organizationId,
         readOnly: updated.readOnlyWorkspace,
+        bootstrapAppWorkspace: updated.sessionGroup?.kind === "app",
         adapterType: conn.adapterType,
       });
     }
@@ -4358,6 +4362,7 @@ export class SessionService {
           createdById: session.createdById,
           organizationId: session.organizationId,
           readOnly: session.readOnlyWorkspace,
+          bootstrapAppWorkspace: session.sessionGroup?.kind === "app",
           adapterType: conn.adapterType,
         });
       }
@@ -4996,6 +5001,7 @@ export class SessionService {
         createdById: session.createdById,
         organizationId: session.organizationId,
         readOnly: session.readOnlyWorkspace,
+        bootstrapAppWorkspace: session.sessionGroup?.kind === "app",
         adapterType: conn.adapterType,
         environment: requestedEnvironment,
       });
@@ -5668,6 +5674,7 @@ export class SessionService {
             createdById: session.createdById,
             organizationId: session.organizationId,
             readOnly: session.readOnlyWorkspace,
+            bootstrapAppWorkspace: session.sessionGroup?.kind === "app",
             adapterType: conn.adapterType,
           });
         }
@@ -7803,6 +7810,7 @@ export class SessionService {
         createdById: actorId,
         organizationId: movedSession.organizationId,
         readOnly: movedSession.readOnlyWorkspace,
+        bootstrapAppWorkspace: movedSession.sessionGroup?.kind === "app",
         adapterType: this.parseConnection(movedSession.connection).adapterType,
         environment: targetEnvironment,
       });

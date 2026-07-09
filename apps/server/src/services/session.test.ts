@@ -813,6 +813,15 @@ describe("SessionService", () => {
         }),
       );
       expect(managedGitServiceMock.createAppRepo).not.toHaveBeenCalled();
+      await vi.waitFor(() => {
+        expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+          expect.objectContaining({
+            hosting: "cloud",
+            repo: null,
+            bootstrapAppWorkspace: true,
+          }),
+        );
+      });
     });
 
     it("creates design sessions and generates the initial artifact through the design generator", async () => {

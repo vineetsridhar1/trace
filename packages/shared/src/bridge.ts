@@ -81,6 +81,12 @@ export interface BridgeConfigureManagedGitRemoteCommand {
   workdir?: string;
 }
 
+export interface BridgeBootstrapAppWorkspaceCommand {
+  type: "bootstrap_app_workspace";
+  sessionId: string;
+  workdir?: string;
+}
+
 export interface BridgeTerminateCommand {
   type: "terminate";
   sessionId: string;
@@ -370,6 +376,7 @@ export type BridgeCommand =
   | BridgePrepareCommand
   | BridgeUpgradeWorkspaceCommand
   | BridgeConfigureManagedGitRemoteCommand
+  | BridgeBootstrapAppWorkspaceCommand
   | BridgeTerminateCommand
   | BridgePauseCommand
   | BridgeResumeCommand

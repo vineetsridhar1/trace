@@ -47,6 +47,7 @@ import {
   resolveExecutable,
 } from "@trace/shared/adapters";
 import {
+  bootstrapAppWorkspace,
   configureManagedGitRemote,
   ensureRepo,
   createWorktree,
@@ -482,6 +483,25 @@ export class ContainerBridge implements IBridgeClient {
                 message: `Failed to configure managed git remote: ${err.message}`,
               },
             });
+          });
+        break;
+      }
+
+      case "bootstrap_app_workspace": {
+        const workdir = cmd.workdir ?? os.homedir();
+        bootstrapAppWorkspace(workdir)
+          .then(({ branch }) => {
+            this.sessionWorkdirs.set(cmd.sessionId, workdir);
+            this.send({ type: "register_session", sessionId: cmd.sessionId });
+            this.send({
+              type: "workspace_ready",
+              sessionId: cmd.sessionId,
+              workdir,
+              branch,
+            });
+          })
+          .catch((err: Error) => {
+            this.send({ type: "workspace_failed", sessionId: cmd.sessionId, error: err.message });
           });
         break;
       }

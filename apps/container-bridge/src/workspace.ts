@@ -1,8 +1,10 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
+import path from "path";
 import { generateAnimalSlug, getUsedSlugs } from "@trace/shared/animal-names";
 import {
+  TRACE_APP_STARTER_FILES,
   assertValidCommitSha,
   branchNamesFromGitRefsOutput,
   generatedTraceWorktreeBranch,
@@ -152,6 +154,30 @@ export async function configureManagedGitRemote(input: {
   await execFileAsync("git", ["push", "-u", "origin", `HEAD:${input.branch}`], {
     cwd: input.workdir,
   });
+}
+
+export async function bootstrapAppWorkspace(
+  workdir: string,
+): Promise<{ workdir: string; branch: string }> {
+  fs.mkdirSync(workdir, { recursive: true });
+
+  for (const [filePath, contents] of Object.entries(TRACE_APP_STARTER_FILES)) {
+    const absolutePath = path.join(workdir, filePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    if (!fs.existsSync(absolutePath)) {
+      fs.writeFileSync(absolutePath, contents);
+    }
+  }
+
+  if (!fs.existsSync(path.join(workdir, ".git"))) {
+    await execFileAsync("git", ["init", "-b", "main"], { cwd: workdir });
+    await execFileAsync("git", ["config", "user.name", "Trace"], { cwd: workdir });
+    await execFileAsync("git", ["config", "user.email", "trace@trace.dev"], { cwd: workdir });
+    await execFileAsync("git", ["add", "."], { cwd: workdir });
+    await execFileAsync("git", ["commit", "-m", "Initialize Trace app"], { cwd: workdir });
+  }
+
+  return { workdir, branch: "main" };
 }
 
 async function cloneRepo(

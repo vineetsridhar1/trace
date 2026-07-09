@@ -1227,6 +1227,14 @@ export class BridgeClient implements IBridgeClient {
         });
         break;
       }
+      case "bootstrap_app_workspace": {
+        this.send({
+          type: "workspace_failed",
+          sessionId: cmd.sessionId,
+          error: "App workspace bootstrap is only supported by cloud app sessions.",
+        });
+        break;
+      }
       case "list_workspace_slugs": {
         const repoConfig = getRepoConfig(cmd.repoId);
         const repoPath = repoConfig?.path;

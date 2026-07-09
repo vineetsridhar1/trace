@@ -1,6 +1,12 @@
 import { promisify } from "util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { configureManagedGitRemote, createWorktree, ensureRepo, getRepoPath } from "./workspace.js";
+import {
+  bootstrapAppWorkspace,
+  configureManagedGitRemote,
+  createWorktree,
+  ensureRepo,
+  getRepoPath,
+} from "./workspace.js";
 
 type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void;
 
@@ -10,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   mkdirSync: vi.fn(),
   readdirSync: vi.fn(),
   rmSync: vi.fn(),
+  writeFileSync: vi.fn(),
 }));
 
 vi.mock("child_process", () => {
@@ -34,6 +41,7 @@ vi.mock("fs", () => ({
     mkdirSync: mocks.mkdirSync,
     readdirSync: mocks.readdirSync,
     rmSync: mocks.rmSync,
+    writeFileSync: mocks.writeFileSync,
   },
 }));
 
@@ -187,6 +195,37 @@ describe("workspace repo setup", () => {
       "https://trace.example/git/org-1/repo-1.git",
     ]);
     expect(gitArgsAt(2)).toEqual(["push", "-u", "origin", "HEAD:trace-app"]);
+  });
+
+  it("bootstraps an app workspace with starter files and an initial commit", async () => {
+    mocks.existsSync.mockReturnValue(false);
+
+    await expect(bootstrapAppWorkspace("/home/coder")).resolves.toEqual({
+      workdir: "/home/coder",
+      branch: "main",
+    });
+
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      "/home/coder/package.json",
+      expect.stringContaining('"next": "latest"'),
+    );
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      "/home/coder/app/page.tsx",
+      expect.stringContaining("Trace app session"),
+    );
+    expect(gitArgsAt(0)).toEqual(["init", "-b", "main"]);
+    expect(gitArgsAt(1)).toEqual(["config", "user.name", "Trace"]);
+    expect(gitArgsAt(2)).toEqual(["config", "user.email", "trace@trace.dev"]);
+    expect(gitArgsAt(3)).toEqual(["add", "."]);
+    expect(gitArgsAt(4)).toEqual(["commit", "-m", "Initialize Trace app"]);
+  });
+
+  it("does not overwrite an existing app workspace git history", async () => {
+    mocks.existsSync.mockImplementation((path: unknown) => String(path).endsWith(".git"));
+
+    await bootstrapAppWorkspace("/home/coder");
+
+    expect(mocks.execFile).not.toHaveBeenCalled();
   });
 
   it("adds a cache reference when the repo cache mirror exists", async () => {
