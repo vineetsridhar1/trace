@@ -5,7 +5,13 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import express from "express";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+
+const storageEnv = vi.hoisted(() => {
+  const originalStorageMode = process.env.STORAGE_MODE;
+  process.env.STORAGE_MODE = "local";
+  return { originalStorageMode };
+});
 
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
@@ -160,6 +166,14 @@ async function dumpChromeDom(input: {
 describe("design artifact user-content browser integration", () => {
   const originalDomain = process.env.TRACE_USER_CONTENT_DOMAIN;
   const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
+
+  afterAll(() => {
+    if (storageEnv.originalStorageMode === undefined) {
+      delete process.env.STORAGE_MODE;
+    } else {
+      process.env.STORAGE_MODE = storageEnv.originalStorageMode;
+    }
+  });
 
   afterEach(() => {
     vi.clearAllMocks();

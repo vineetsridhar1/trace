@@ -369,3 +369,9 @@ design canvas with only a toast.
 During this continuation, app publish/share now gives explicit user feedback after a
 successful publish. The Applications panel copies only a public endpoint URL, shows an
 `App published` success toast, and includes an Open action for the shared endpoint.
+
+During this continuation, the design user-content browser integration test was found to
+import the storage singleton in default S3 mode, which made the local acceptance check
+fail before reaching the browser smoke unless S3 credentials were present. The test now
+forces local storage before import so it remains runnable in clean local environments,
+with browser execution still gated by `TRACE_RUN_DESIGN_BOOTSTRAP_BROWSER_SMOKE=1`.
