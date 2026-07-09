@@ -772,3 +772,8 @@ did not require the direction metadata that the canvas uses to explain variants.
 asserts each generated artifact carries the expected `directionIndex`, `directionCount`,
 and a unique non-empty `directionLabel` through the real GraphQL/service/storage path,
 and that each completion event preserves the same fan-out identity.
+
+During this audit continuation, the hosted design smoke also proved durable completion
+events but not the streaming lifecycle promised by the design-session docs. It now
+requires every smoke-generated artifact to have a matching `design_generation_started`
+event and at least one `design_generation_delta` event before the durable completion.

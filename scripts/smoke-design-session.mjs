@@ -293,7 +293,7 @@ async function waitForGeneratedArtifactCompletionEvents(sessionId, artifacts, la
     const data = await graphql(SESSION_EVENTS, {
       organizationId,
       sessionId,
-      types: ["design_artifact_created", "session_output"],
+      types: ["design_generation_started", "design_artifact_created", "session_output"],
     });
     const events = data.events ?? [];
     const missing = [];
@@ -336,6 +336,43 @@ async function waitForGeneratedArtifactCompletionEvents(sessionId, artifacts, la
       );
       if (typeof completedPayload.generationId !== "string" || !completedPayload.generationId) {
         throw new Error(`${label} completion ${artifactId} is missing generationId`);
+      }
+      const generationId = completedPayload.generationId;
+      const startedIndex = events.findIndex((event) => {
+        if (event.eventType !== "design_generation_started") return false;
+        const payload = event.payload;
+        return (
+          payload &&
+          typeof payload === "object" &&
+          !Array.isArray(payload) &&
+          payload.generationId === generationId
+        );
+      });
+      if (startedIndex < 0) {
+        throw new Error(`${label} generation ${generationId} did not emit design_generation_started`);
+      }
+      if (startedIndex >= createdIndex) {
+        throw new Error(
+          `${label} generation ${generationId} started after artifact creation was emitted`,
+        );
+      }
+      const deltaIndex = events.findIndex((event) => {
+        if (event.eventType !== "session_output") return false;
+        const payload = event.payload;
+        return (
+          payload &&
+          typeof payload === "object" &&
+          !Array.isArray(payload) &&
+          payload.type === "design_generation_delta" &&
+          payload.generationId === generationId &&
+          typeof payload.htmlPreview === "string"
+        );
+      });
+      if (deltaIndex < 0) {
+        throw new Error(`${label} generation ${generationId} did not emit streamed deltas`);
+      }
+      if (deltaIndex >= completedIndex) {
+        throw new Error(`${label} generation ${generationId} delta arrived after completion`);
       }
       if (typeof completedPayload.model !== "string" || !completedPayload.model) {
         throw new Error(`${label} completion ${artifactId} is missing model`);
