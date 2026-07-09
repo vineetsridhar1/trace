@@ -2,7 +2,7 @@
 
 Status: design exploration (2026-07-08). Decision: Trace hosts its own git provider for
 projects that shouldn't require an external GitHub repo (starting with `app`-kind
-sessions — the Replit-style app builder; the `design` kind stores artifacts, not git, see
+sessions — the standalone app builder; the `design` kind stores artifacts, not git, see
 `design-session-experience.md`).
 
 ## Problem
@@ -12,10 +12,10 @@ truth — it is the **durability layer**: cloud runtimes are ephemeral Fly machi
 (`restart.policy: "no"`), the worktree lives only on the machine, and `GitCheckpoint` rows
 store only commit SHAs. A workspace survives solely because the agent pushes to the remote.
 
-For a Replit-style `app` session ("prompt your way to an app, see it render live"), forcing
-repo creation in the user's GitHub is wrong: random experiments would litter their account,
-and the create-a-repo ceremony kills the "just start prompting" flow. But without *some*
-remote, the project dies with the machine.
+For a standalone `app` session ("prompt your way to a running app, see it render live"),
+forcing repo creation in the user's GitHub is wrong: random experiments would litter their
+account, and the create-a-repo ceremony kills the "just start prompting" flow. But without
+*some* remote, the project dies with the machine.
 
 ## Decision
 
@@ -110,13 +110,14 @@ Almost nothing changes on the runtime side:
 ## Session kinds (follow-on)
 
 `SessionGroup.kind: coding | design | app` selects the UI shell and creation flow.
-**Managed git hosting is motivated by the `app` kind**: a Replit-style app builder (React
-starter on a cloud runtime, dev server picked up via listening-port detection →
-auto-enabled `SessionEndpoint` → iframe preview), standalone (no `repoId` at creation),
-getting its managed repo lazily at the first checkpoint. The `design` kind (canvas
-artifact tool) runs **no runtime and no repo at all** — artifacts are entities in object
-storage with lineage rows, generated via the `LLMAdapter`. Detailed in
-`design-session-experience.md`.
+**Managed git hosting is motivated by the `app` kind**: a standalone app builder
+(full-stack starter, likely Next.js + Tailwind + shadcn, on a cloud runtime; dev server
+picked up via listening-port detection → auto-enabled `SessionEndpoint` → iframe
+preview), standalone (no `repoId` at creation), getting its managed repo lazily at the
+first checkpoint. The `design` kind (project design canvas) runs **no runtime and no repo
+at all** — artifacts are entities in object storage with lineage rows, generated via the
+`LLMAdapter`, and primarily promote into coding sessions for project implementation.
+Detailed in `design-session-experience.md`.
 
 ## Open questions
 

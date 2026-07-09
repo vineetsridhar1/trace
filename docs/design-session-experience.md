@@ -12,19 +12,25 @@ it):
 What started as one "web design session" is two products sharing one foundation, shipped
 as two `SessionGroup.kind`s:
 
-- **`design` — the artifact canvas** (Claude Design shape, Figma-like surface). Output is
-  the artifact itself: screens, mockups, decks as self-contained HTML, laid out on a
-  spatial canvas where the AI generates **multiple options in parallel**. You compare,
-  comment, iterate, export (PDF), and hand off as *intent*. **No cloud machine, no coding
-  agent** — generation is direct model calls through the `LLMAdapter`; rendering is
-  origin-isolated iframes on a user-content domain.
-- **`app` — the app builder** (Replit shape). Output is a running application: React
-  starter on a cloud runtime, dev server + HMR, live endpoint preview, graduation to a
-  code session on the same worktree.
+- **`design` — the project design canvas** (Claude Design shape, Figma-like surface).
+  Output is the artifact itself: screens, mockups, decks, and visual directions as
+  self-contained HTML, laid out on a spatial canvas where the AI generates **multiple
+  options in parallel**. You compare, comment, iterate, export (PDF), and hand off as
+  *project intent*. **No cloud machine, no coding agent** — generation is direct model
+  calls through the `LLMAdapter`; rendering is origin-isolated iframes on a user-content
+  domain. The primary graduation path is **Promote to coding session**: the chosen
+  artifact(s) become the brief/reference for implementation in an existing or newly
+  linked product repo.
+- **`app` — the standalone app builder** (Replit shape). Output is a running
+  application: a full-stack app starter on a cloud runtime, dev server + HMR, live
+  endpoint preview, logs/terminal, checkpoints, and publish/share. These are standalone
+  apps first — not project design artifacts — with managed git as invisible durability.
 
-The boundary case is deliberate: **Promote to app session** takes a chosen design artifact
-and starts a linked `app` session whose first agent task is porting the mockup into the
-React starter. A visible transition between kinds (links in the flat entity model), not an
+The boundary case is deliberate: **Promote to coding session** takes a chosen design
+artifact and starts a linked coding session whose first agent task is implementing the
+design in project code. **Start app session from design** can exist later as an explicit
+fork when the user wants a standalone runnable app, but it is not the default graduation
+path. A visible transition between kinds (links in the flat entity model), not an
 invisible mid-session stack swap.
 
 Sequencing: **design kind first** — it now needs no runtime infrastructure at all (no
@@ -124,8 +130,10 @@ The workspace is a pan/zoom spatial surface (Figma mental model):
   same service method. v1: PDF only.
 - **Publish/share**: artifacts are already stored server-side — a public artifact URL is
   a read endpoint with an access flag. Spotlight presentation mode later.
-- **Promote to app session**: selected artifact(s) become the brief + visual reference of
-  a linked `app` session.
+- **Promote to coding session**: selected artifact(s) become the brief + visual reference
+  of a linked coding session for project implementation.
+- **Start standalone app**: optional later bridge that uses selected artifact(s) as the
+  brief/reference for a new `app` session.
 
 Every version is trivially "live" forever — cards render stored HTML; nothing to
 materialize, no machine to keep warm. Retention/GC is a row + blob policy, even simpler
@@ -133,24 +141,31 @@ than the managed-repo clock.
 
 ## The `app` kind
 
-Unchanged from the prior spec — this is where cloud machines earn their keep:
+This is where cloud machines earn their keep. Unlike `design`, an `app` session is for
+building and running a standalone application end-to-end:
 
 - **Cloud-only, enforced at `startSession`** (forces `hosting: cloud`, `provisioned`
   environment, no `repoId`); the disposable machine justifies the permissive auto-run
   sandbox. Local support remains a later adapter-level project.
-- **Agent-run bootstrap**: React + Vite + Tailwind + shadcn starter in the runtime image
-  (`trace.tokens.json`, source-location Vite plugin, pre-warmed node_modules); agent
-  scaffolds and runs it; **port auto-detection** (bridge watches listening ports,
-  denylisted system ports) auto-creates and enables the `SessionEndpoint`; preview pane
-  lights up.
+- **Agent-run bootstrap**: default to a full-stack starter rather than a static design
+  artifact. Strong candidate/default: **Next.js + Tailwind + shadcn**, because app
+  sessions should support frontend, routes, server actions/API routes, simple persistence
+  adapters, auth-ready scaffolding, and deployable standalone output. Keep the starter
+  template pluggable by session kind; do not expose a stack picker in v1 unless there is a
+  clear product need.
+- **Run the app**: agent scaffolds and starts the dev server; **port auto-detection**
+  (bridge watches listening ports, denylisted system ports) auto-creates and enables the
+  `SessionEndpoint`; preview pane lights up with HMR, logs, and terminal available.
 - **Lazy managed repo** at first checkpoint; versions = `GitCheckpoint`s; HEAD live via
   dev server, older versions as captures (shared headless Chromium); restore via
   `restoreCheckpointId`.
 - **Element picker** reads `data-trace-source="src/components/ApprovalTable.tsx:42"`
   stamps for component identity + file:line.
 - **Tweaks** = service-layer token-file write through the bridge; HMR reflects <1s.
-- **Graduation**: "To code session" in the same `SessionGroup` (shared worktree); push to
-  GitHub offered, not required. **Publish v1**: endpoint `accessMode: public`.
+- **Distribution**: standalone app sessions publish/share their running app. **Publish
+  v1**: endpoint `accessMode: public`; later, production deploy/export can graduate from
+  the managed repo. "Open as coding session" remains available when the user wants
+  deeper code work, but it is not the core success path.
 - Harness delivery: composed prompt via `RunOptions.appendSystemPrompt` →
   `--append-system-prompt` on plain `claude_code`.
 
@@ -200,9 +215,9 @@ captures), listening-port detection in the container bridge.
    variants, lineage/versions.
 2. **Design magic**: element chips, comments, Tweaks (CSS-var patch), PDF export (render
    pool), publish/share.
-3. **App kind**: cloud runtime path — starter kit, port auto-detection, endpoint iframe
-   preview + auth, captures, picker Vite plugin, lazy managed repo, graduation,
-   Promote-to-app from design sessions.
+3. **App kind**: cloud runtime path — full-stack starter kit (Next.js candidate/default),
+   port auto-detection, endpoint iframe preview + auth, logs/terminal, captures, picker
+   source mapping, lazy managed repo, publish/share.
 4. **Distribution**: real deploy (app), Spotlight mode, review statuses, PPTX/video
    exports if demanded.
 

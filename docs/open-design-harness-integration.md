@@ -71,8 +71,10 @@ model differently per session kind:
   variants are parallel calls sharing the composed prefix (prompt-cache friendly).
 - **`app` kind (cloud runtime)**: the bridge does the same composition and passes it via
   a new `RunOptions.appendSystemPrompt` → `--append-system-prompt` on plain
-  `claude_code`. Other tool adapters can support the same option later; that's the whole
-  multi-tool story.
+  `claude_code`. The app overlay must be full-stack-app oriented (starter/project
+  structure, routing, server/API behavior, persistence seams, run/publish expectations),
+  not HTML-artifact oriented. Other tool adapters can support the same option later;
+  that's the whole multi-tool story.
 - Discovery behavior: compose with the API-project variant (equivalent of
   `skipDiscoveryBrief` — first message is the brief). Later, keep the interactive
   question-form syntax and parse it into Trace's existing `QuestionBlock` /
@@ -142,10 +144,10 @@ repo whose deliverable is the design-system directory — no new infrastructure.
    text alone; if the gap is small, v1 can ship (b) while the port proceeds. Its
    review-flavored skills (AI-trope detection, a11y audit) are cherry-pick candidates for
    our content dir regardless.
-5. When the `app` kind lands: re-run the A/B/C in the React starter context — the OD
-   content is HTML-artifact-tuned, and this measures whether its quality transfers to a
-   component target. If transfer is weak, the fix is a React-flavored overlay skill, not
-   a stack change.
+5. When the `app` kind lands: re-run the A/B/C in the app starter context (likely
+   Next.js + Tailwind + shadcn). The OD content is HTML-artifact-tuned, and this measures
+   whether its quality transfers to a full-stack app target. If transfer is weak, the fix
+   is an app-flavored overlay skill, not a session-kind change.
 
 ## Risks
 
