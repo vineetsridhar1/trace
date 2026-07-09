@@ -620,3 +620,8 @@ resolving its waiter before reserving the slot. A new render could start in that
 gap, exceeding the configured concurrency. The pool now reserves queued slots before
 resuming waiters, and the renderer unit suite covers serial execution with concurrency
 set to one.
+
+During this audit pass, app checkpoint captures still launched Chromium directly for
+each checkpoint thumbnail. The capture path now uses its own bounded queue controlled by
+`TRACE_APP_CAPTURE_CONCURRENCY` and `TRACE_APP_CAPTURE_QUEUE_SIZE`, and the focused test
+suite proves queued captures reserve slots and run serially when concurrency is one.

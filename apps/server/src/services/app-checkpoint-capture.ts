@@ -13,6 +13,57 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_CAPTURE_TIMEOUT_MS = 30_000;
 const DEFAULT_CAPTURE_WIDTH = 1440;
 const DEFAULT_CAPTURE_HEIGHT = 900;
+const DEFAULT_CAPTURE_CONCURRENCY = 2;
+const DEFAULT_CAPTURE_QUEUE_SIZE = 16;
+
+type CaptureTask<T> = () => Promise<T>;
+
+class BoundedCapturePool {
+  private active = 0;
+  private readonly queue: Array<() => void> = [];
+
+  constructor(
+    private readonly concurrency = readPositiveInt(
+      process.env.TRACE_APP_CAPTURE_CONCURRENCY,
+      DEFAULT_CAPTURE_CONCURRENCY,
+    ),
+    private readonly maxQueueSize = readPositiveInt(
+      process.env.TRACE_APP_CAPTURE_QUEUE_SIZE,
+      DEFAULT_CAPTURE_QUEUE_SIZE,
+    ),
+  ) {}
+
+  async run<T>(task: CaptureTask<T>): Promise<T> {
+    await this.acquireSlot();
+    try {
+      return await task();
+    } finally {
+      this.releaseSlot();
+    }
+  }
+
+  private acquireSlot(): Promise<void> {
+    if (this.active < this.concurrency && this.queue.length === 0) {
+      this.active += 1;
+      return Promise.resolve();
+    }
+    if (this.queue.length >= this.maxQueueSize) {
+      throw new Error("App checkpoint capture queue is full");
+    }
+    return new Promise<void>((resolve) => {
+      this.queue.push(() => {
+        this.active += 1;
+        resolve();
+      });
+    });
+  }
+
+  private releaseSlot() {
+    this.active -= 1;
+    const next = this.queue.shift();
+    if (next) next();
+  }
+}
 
 export type AppCheckpointCaptureResult = {
   captureStatus: "captured" | "unavailable" | "failed";
@@ -97,43 +148,47 @@ function endpointCaptureUrl(input: {
   return url.toString();
 }
 
+const capturePool = new BoundedCapturePool();
+
 export async function renderEndpointScreenshot(input: {
   url: string;
   checkpointId: string;
 }): Promise<Buffer> {
-  const workdir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "trace-app-capture-"));
-  const outputPath = path.join(workdir, `${input.checkpointId}.png`);
-  const userDataDir = path.join(workdir, "profile");
+  return capturePool.run(async () => {
+    const workdir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "trace-app-capture-"));
+    const outputPath = path.join(workdir, `${input.checkpointId}.png`);
+    const userDataDir = path.join(workdir, "profile");
 
-  try {
-    await execFileAsync(
-      chromiumExecutable(),
-      screenshotArgs({
-        url: input.url,
-        outputPath,
-        userDataDir,
-        width: readPositiveInt(process.env.TRACE_APP_CAPTURE_WIDTH, DEFAULT_CAPTURE_WIDTH),
-        height: readPositiveInt(process.env.TRACE_APP_CAPTURE_HEIGHT, DEFAULT_CAPTURE_HEIGHT),
-      }),
-      {
-        timeout: readPositiveInt(
-          process.env.TRACE_APP_CAPTURE_TIMEOUT_MS,
-          DEFAULT_CAPTURE_TIMEOUT_MS,
-        ),
-        maxBuffer: 1024 * 1024,
-      },
-    );
-    const screenshot = await fs.promises.readFile(outputPath);
-    if (screenshot.byteLength === 0) {
-      throw new Error("Chromium produced an empty app checkpoint capture");
+    try {
+      await execFileAsync(
+        chromiumExecutable(),
+        screenshotArgs({
+          url: input.url,
+          outputPath,
+          userDataDir,
+          width: readPositiveInt(process.env.TRACE_APP_CAPTURE_WIDTH, DEFAULT_CAPTURE_WIDTH),
+          height: readPositiveInt(process.env.TRACE_APP_CAPTURE_HEIGHT, DEFAULT_CAPTURE_HEIGHT),
+        }),
+        {
+          timeout: readPositiveInt(
+            process.env.TRACE_APP_CAPTURE_TIMEOUT_MS,
+            DEFAULT_CAPTURE_TIMEOUT_MS,
+          ),
+          maxBuffer: 1024 * 1024,
+        },
+      );
+      const screenshot = await fs.promises.readFile(outputPath);
+      if (screenshot.byteLength === 0) {
+        throw new Error("Chromium produced an empty app checkpoint capture");
+      }
+      if (!isPng(screenshot)) {
+        throw new Error("Chromium produced a non-PNG app checkpoint capture");
+      }
+      return screenshot;
+    } finally {
+      await fs.promises.rm(workdir, { recursive: true, force: true });
     }
-    if (!isPng(screenshot)) {
-      throw new Error("Chromium produced a non-PNG app checkpoint capture");
-    }
-    return screenshot;
-  } finally {
-    await fs.promises.rm(workdir, { recursive: true, force: true });
-  }
+  });
 }
 
 export const appCheckpointCaptureService = {

@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import fs from "fs";
+import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void;
@@ -49,6 +50,24 @@ function screenshotPathFrom(args: unknown[]): string {
   );
   if (!screenshotArg) throw new Error("Screenshot output arg missing");
   return screenshotArg.slice("--screenshot=".length);
+}
+
+function pathCheckpointId(outputPath: string): string {
+  return path.basename(outputPath, ".png");
+}
+
+async function waitForAssertion(assertion: () => void) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+  throw lastError;
 }
 
 describe("appCheckpointCaptureService", () => {
@@ -136,6 +155,53 @@ describe("appCheckpointCaptureService", () => {
       }),
     ).rejects.toThrow("Chromium produced a non-PNG app checkpoint capture");
     expect(storageMock.putObject).not.toHaveBeenCalled();
+  });
+
+  it("reserves capture slots for queued checkpoint screenshots", async () => {
+    vi.stubEnv("TRACE_APP_CAPTURE_CONCURRENCY", "1");
+    vi.stubEnv("TRACE_APP_CAPTURE_QUEUE_SIZE", "4");
+    vi.resetModules();
+    const { renderEndpointScreenshot: isolatedRenderEndpointScreenshot } = await import(
+      "./app-checkpoint-capture.js"
+    );
+    const started: string[] = [];
+    const callbacks: ExecCallback[] = [];
+
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      const outputPath = screenshotPathFrom(args);
+      started.push(pathCheckpointId(outputPath));
+      fs.writeFileSync(outputPath, pngBytes);
+      callbacks.push(callbackFrom(args));
+      return null as never;
+    });
+
+    const first = isolatedRenderEndpointScreenshot({
+      url: "https://endpoint.preview.test",
+      checkpointId: "checkpoint-1",
+    });
+    const second = isolatedRenderEndpointScreenshot({
+      url: "https://endpoint.preview.test",
+      checkpointId: "checkpoint-2",
+    });
+    const third = isolatedRenderEndpointScreenshot({
+      url: "https://endpoint.preview.test",
+      checkpointId: "checkpoint-3",
+    });
+
+    await waitForAssertion(() => expect(started).toEqual(["checkpoint-1"]));
+    callbacks[0](null, "", "");
+    await waitForAssertion(() => expect(started).toEqual(["checkpoint-1", "checkpoint-2"]));
+    callbacks[1](null, "", "");
+    await waitForAssertion(() =>
+      expect(started).toEqual(["checkpoint-1", "checkpoint-2", "checkpoint-3"]),
+    );
+    callbacks[2](null, "", "");
+
+    await expect(Promise.all([first, second, third])).resolves.toEqual([
+      pngBytes,
+      pngBytes,
+      pngBytes,
+    ]);
   });
 
   it("marks capture unavailable when no endpoint is enabled", async () => {
