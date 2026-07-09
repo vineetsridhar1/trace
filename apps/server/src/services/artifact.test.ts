@@ -655,4 +655,53 @@ describe("artifactService", () => {
       }),
     );
   });
+
+  it("promotes additional selected artifacts as coding-session visual references", async () => {
+    const primary = designArtifact({
+      id: "artifact-1",
+      title: "Primary dashboard",
+      prompt: "Make a dashboard",
+      html: "<!doctype html><html><body>Primary</body></html>",
+    });
+    const reference = designArtifact({
+      id: "artifact-2",
+      title: "Reference dashboard",
+      prompt: "Make it editorial",
+      html: "<!doctype html><html><body>Reference</body></html>",
+      metadata: { directionLabel: "Bold editorial direction" },
+    });
+    prismaMock.artifact.findFirst.mockResolvedValueOnce(primary);
+    prismaMock.artifact.findMany.mockResolvedValueOnce([reference]);
+    sessionServiceMock.start.mockResolvedValueOnce({
+      id: "session-promoted",
+      sessionGroupId: "group-promoted",
+    });
+
+    await artifactService.promoteDesignArtifactToCodingSession({
+      artifactId: "artifact-1",
+      referenceArtifactIds: ["artifact-2"],
+      organizationId: "org-1",
+      actorId: "user-1",
+    });
+
+    expect(sessionServiceMock.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining("Reference artifact 2: Reference dashboard"),
+      }),
+    );
+    expect(sessionServiceMock.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining("<!doctype html><html><body>Reference</body></html>"),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_artifact_promoted",
+        payload: expect.objectContaining({
+          artifactId: "artifact-1",
+          referenceArtifactIds: ["artifact-2"],
+        }),
+      }),
+    );
+  });
 });

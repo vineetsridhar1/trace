@@ -528,3 +528,10 @@ though the docs call for app sessions to reuse the same preview/tweaks chrome. T
 Applications panel now opens an `AppTokenTweaksPopover` for `trace.tokens.json` patches,
 keeps the existing `patchAppSessionTokens` service path, and has focused coverage that
 the default patch payload remains valid JSON.
+
+During this audit pass, design promotion still only sent one artifact into the coding
+session even though the canvas and docs support selected artifacts as a set. Promotion now
+accepts `referenceArtifactIds`, validates them against the same design session, includes
+their hydrated HTML in the coding-session brief, records them in
+`design_artifact_promoted`, and the canvas passes the secondary selected artifact when
+two-card selection is active.

@@ -778,23 +778,42 @@ export const artifactService = {
     actorId: string;
     actorType?: ActorType;
     prompt?: string | null;
+    referenceArtifactIds?: string[] | null;
   }) {
     const { artifact, sessionId } = await getDesignArtifactForWrite(
       input.artifactId,
       input.organizationId,
       input.actorId,
     );
+    const referenceArtifacts = await getComparisonArtifactsForIteration({
+      artifactIds: input.referenceArtifactIds,
+      parentArtifactId: artifact.id,
+      sessionGroupId: artifact.sessionGroupId,
+      organizationId: input.organizationId,
+    });
+    const referenceSections = referenceArtifacts.flatMap((reference, index) => [
+      "",
+      `Reference artifact ${index + 2}: ${reference.title}`,
+      reference.prompt ? `Original design brief: ${reference.prompt}` : null,
+      "",
+      "```html",
+      reference.html,
+      "```",
+    ]);
     const brief = [
       input.prompt?.trim() || "Implement this design artifact in the product codebase.",
       "",
-      `Artifact: ${artifact.title}`,
+      `Primary artifact: ${artifact.title}`,
       artifact.prompt ? `Original design brief: ${artifact.prompt}` : null,
       "",
-      "Use the HTML below as the visual reference. Preserve the layout, interaction intent, typography, spacing, and token structure where it fits the target product.",
+      referenceArtifacts.length > 0
+        ? "Use the primary artifact as the implementation target and the additional selected artifacts as visual references. Preserve layout, interaction intent, typography, spacing, and token structure where they fit the target product."
+        : "Use the HTML below as the visual reference. Preserve the layout, interaction intent, typography, spacing, and token structure where it fits the target product.",
       "",
       "```html",
       await resolveDesignArtifactHtml(artifact),
       "```",
+      ...referenceSections,
     ]
       .filter((part): part is string => part !== null)
       .join("\n");
@@ -818,6 +837,7 @@ export const artifactService = {
       eventType: "design_artifact_promoted",
       payload: {
         artifactId: artifact.id,
+        referenceArtifactIds: referenceArtifacts.map((reference) => reference.id),
         sessionGroupId: artifact.sessionGroupId,
         promotedSessionId: promotedSession.id,
         promotedSessionGroupId: promotedSession.sessionGroupId,

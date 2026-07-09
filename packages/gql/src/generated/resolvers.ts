@@ -1055,6 +1055,7 @@ export type MutationPatchDesignArtifactTokensArgs = {
 export type MutationPromoteDesignArtifactToCodingSessionArgs = {
   artifactId: Scalars["ID"]["input"];
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+  referenceArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
 };
 
 export type MutationPublishAppSessionArgs = {

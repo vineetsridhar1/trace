@@ -429,13 +429,14 @@ export const sessionMutations = {
   },
   promoteDesignArtifactToCodingSession: (
     _: unknown,
-    args: { artifactId: string; prompt?: string | null },
+    args: { artifactId: string; prompt?: string | null; referenceArtifactIds?: string[] | null },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
     return artifactService.promoteDesignArtifactToCodingSession({
       artifactId: args.artifactId,
       prompt: args.prompt ?? null,
+      referenceArtifactIds: args.referenceArtifactIds ?? null,
       organizationId: requireOrgContext(ctx),
       actorId: ctx.userId,
       actorType: ctx.actorType,

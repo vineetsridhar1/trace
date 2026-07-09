@@ -1506,7 +1506,11 @@ type Mutation {
   commentDesignArtifact(artifactId: ID!, body: String!, anchor: JSON, sendToAgent: Boolean): Event!
   publishDesignArtifact(artifactId: ID!): Artifact!
   exportDesignArtifactPdf(artifactId: ID!): Event!
-  promoteDesignArtifactToCodingSession(artifactId: ID!, prompt: String): Session!
+  promoteDesignArtifactToCodingSession(
+    artifactId: ID!
+    prompt: String
+    referenceArtifactIds: [ID!]
+  ): Session!
   forkSession(eventId: ID!): Session!
   runSession(id: ID!, prompt: String, interactionMode: String): Session!
   terminateSession(id: ID!): Session!

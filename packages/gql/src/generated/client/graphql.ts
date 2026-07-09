@@ -1054,6 +1054,7 @@ export type MutationPatchDesignArtifactTokensArgs = {
 export type MutationPromoteDesignArtifactToCodingSessionArgs = {
   artifactId: Scalars["ID"]["input"];
   prompt?: InputMaybe<Scalars["String"]["input"]>;
+  referenceArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
 };
 
 export type MutationPublishAppSessionArgs = {
@@ -2763,6 +2764,7 @@ export type ExportDesignArtifactPdfMutation = {
 
 export type PromoteDesignArtifactToCodingSessionMutationVariables = Exact<{
   artifactId: Scalars["ID"]["input"];
+  referenceArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]> | Scalars["ID"]["input"]>;
 }>;
 
 export type PromoteDesignArtifactToCodingSessionMutation = {
@@ -5654,6 +5656,17 @@ export const PromoteDesignArtifactToCodingSessionDocument = {
             type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
           },
         },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "referenceArtifactIds" } },
+          type: {
+            kind: "ListType",
+            type: {
+              kind: "NonNullType",
+              type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+            },
+          },
+        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -5666,6 +5679,11 @@ export const PromoteDesignArtifactToCodingSessionDocument = {
                 kind: "Argument",
                 name: { kind: "Name", value: "artifactId" },
                 value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "referenceArtifactIds" },
+                value: { kind: "Variable", name: { kind: "Name", value: "referenceArtifactIds" } },
               },
             ],
             selectionSet: {

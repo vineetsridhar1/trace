@@ -30,7 +30,7 @@ type Documents = {
   "\n  mutation CommentDesignArtifact(\n    $artifactId: ID!\n    $body: String!\n    $anchor: JSON\n    $sendToAgent: Boolean\n  ) {\n    commentDesignArtifact(\n      artifactId: $artifactId\n      body: $body\n      anchor: $anchor\n      sendToAgent: $sendToAgent\n    ) {\n      id\n    }\n  }\n": typeof types.CommentDesignArtifactDocument;
   "\n  mutation PublishDesignArtifact($artifactId: ID!) {\n    publishDesignArtifact(artifactId: $artifactId) {\n      id\n      publishedAt\n      publicUrl\n    }\n  }\n": typeof types.PublishDesignArtifactDocument;
   "\n  mutation ExportDesignArtifactPdf($artifactId: ID!) {\n    exportDesignArtifactPdf(artifactId: $artifactId) {\n      id\n    }\n  }\n": typeof types.ExportDesignArtifactPdfDocument;
-  "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!) {\n    promoteDesignArtifactToCodingSession(artifactId: $artifactId) {\n      id\n      sessionGroupId\n    }\n  }\n": typeof types.PromoteDesignArtifactToCodingSessionDocument;
+  "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!, $referenceArtifactIds: [ID!]) {\n    promoteDesignArtifactToCodingSession(\n      artifactId: $artifactId\n      referenceArtifactIds: $referenceArtifactIds\n    ) {\n      id\n      sessionGroupId\n    }\n  }\n": typeof types.PromoteDesignArtifactToCodingSessionDocument;
   "\n  query DesignPromptContentCatalog {\n    designPromptContentCatalog {\n      designSystems {\n        id\n        name\n        description\n      }\n      skills {\n        id\n        title\n        description\n      }\n    }\n  }\n": typeof types.DesignPromptContentCatalogDocument;
   "\n  mutation UpdateDesignHarnessSettings(\n    $sessionGroupId: ID!\n    $designSystemId: String\n    $designSkillIds: [String!]\n  ) {\n    updateDesignHarnessSettings(\n      sessionGroupId: $sessionGroupId\n      designSystemId: $designSystemId\n      designSkillIds: $designSkillIds\n    ) {\n      id\n    }\n  }\n": typeof types.UpdateDesignHarnessSettingsDocument;
   "\n  query SessionGroupBranchDiff($sessionGroupId: ID!) {\n    sessionGroupBranchDiff(sessionGroupId: $sessionGroupId) {\n      path\n      status\n      additions\n      deletions\n    }\n  }\n": typeof types.SessionGroupBranchDiffDocument;
@@ -143,7 +143,7 @@ const documents: Documents = {
     types.PublishDesignArtifactDocument,
   "\n  mutation ExportDesignArtifactPdf($artifactId: ID!) {\n    exportDesignArtifactPdf(artifactId: $artifactId) {\n      id\n    }\n  }\n":
     types.ExportDesignArtifactPdfDocument,
-  "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!) {\n    promoteDesignArtifactToCodingSession(artifactId: $artifactId) {\n      id\n      sessionGroupId\n    }\n  }\n":
+  "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!, $referenceArtifactIds: [ID!]) {\n    promoteDesignArtifactToCodingSession(\n      artifactId: $artifactId\n      referenceArtifactIds: $referenceArtifactIds\n    ) {\n      id\n      sessionGroupId\n    }\n  }\n":
     types.PromoteDesignArtifactToCodingSessionDocument,
   "\n  query DesignPromptContentCatalog {\n    designPromptContentCatalog {\n      designSystems {\n        id\n        name\n        description\n      }\n      skills {\n        id\n        title\n        description\n      }\n    }\n  }\n":
     types.DesignPromptContentCatalogDocument,
@@ -417,8 +417,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!) {\n    promoteDesignArtifactToCodingSession(artifactId: $artifactId) {\n      id\n      sessionGroupId\n    }\n  }\n",
-): (typeof documents)["\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!) {\n    promoteDesignArtifactToCodingSession(artifactId: $artifactId) {\n      id\n      sessionGroupId\n    }\n  }\n"];
+  source: "\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!, $referenceArtifactIds: [ID!]) {\n    promoteDesignArtifactToCodingSession(\n      artifactId: $artifactId\n      referenceArtifactIds: $referenceArtifactIds\n    ) {\n      id\n      sessionGroupId\n    }\n  }\n",
+): (typeof documents)["\n  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!, $referenceArtifactIds: [ID!]) {\n    promoteDesignArtifactToCodingSession(\n      artifactId: $artifactId\n      referenceArtifactIds: $referenceArtifactIds\n    ) {\n      id\n      sessionGroupId\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

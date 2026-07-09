@@ -136,8 +136,11 @@ const EXPORT_DESIGN_ARTIFACT_PDF_MUTATION = gql`
 `;
 
 const PROMOTE_DESIGN_ARTIFACT_MUTATION = gql`
-  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!) {
-    promoteDesignArtifactToCodingSession(artifactId: $artifactId) {
+  mutation PromoteDesignArtifactToCodingSession($artifactId: ID!, $referenceArtifactIds: [ID!]) {
+    promoteDesignArtifactToCodingSession(
+      artifactId: $artifactId
+      referenceArtifactIds: $referenceArtifactIds
+    ) {
       id
       sessionGroupId
     }
@@ -1207,10 +1210,17 @@ export function DesignCanvas({
   const handlePromote = useCallback(() => {
     if (!selectedPersistedArtifact) return;
     void (async () => {
+      const referenceArtifactIds = promptDefaultArtifacts
+        .slice(1)
+        .map((artifact) => artifact.id)
+        .filter((artifactId) => artifactId !== selectedPersistedArtifact.id);
       const result = await client
         .mutation<{
           promoteDesignArtifactToCodingSession?: { id: string; sessionGroupId: string };
-        }>(PROMOTE_DESIGN_ARTIFACT_MUTATION, { artifactId: selectedPersistedArtifact.id })
+        }>(PROMOTE_DESIGN_ARTIFACT_MUTATION, {
+          artifactId: selectedPersistedArtifact.id,
+          referenceArtifactIds: referenceArtifactIds.length > 0 ? referenceArtifactIds : null,
+        })
         .toPromise();
       if (result.error) {
         toast.error("Design action failed", { description: result.error.message });
@@ -1228,7 +1238,7 @@ export function DesignCanvas({
       toast.success("Coding session created");
       navigateToSession(null, target.sessionGroupId, target.sessionId);
     })();
-  }, [selectedPersistedArtifact]);
+  }, [promptDefaultArtifacts, selectedPersistedArtifact]);
 
   return (
     <main
