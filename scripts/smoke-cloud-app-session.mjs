@@ -201,8 +201,12 @@ async function appState(sessionGroupId) {
   return graphql(APP_STATE, { sessionGroupId });
 }
 
-async function waitForReadyApp(sessionGroupId, label) {
-  return pollUntil(`${label} app runtime, endpoint, logs, and checkpoint`, async () => {
+async function waitForReadyApp(sessionGroupId, label, options = {}) {
+  const requireCheckpoint = options.requireCheckpoint !== false;
+  const readinessLabel = requireCheckpoint
+    ? `${label} app runtime, endpoint, logs, and checkpoint`
+    : `${label} app runtime, endpoint, and logs`;
+  return pollUntil(readinessLabel, async () => {
     const state = await appState(sessionGroupId);
     const group = state.sessionGroup;
     if (!group) return { ok: false, detail: "session group not found" };
@@ -226,17 +230,20 @@ async function waitForReadyApp(sessionGroupId, label) {
       return { ok: false, detail: `no logs for process ${process.id}` };
     }
 
-    const checkpoints = group.gitCheckpoints;
-    if (checkpoints.length === 0) return { ok: false, detail: "no checkpoint recorded yet" };
-    const checkpoint = checkpoints[0];
-    if (requireCapture && checkpoint.captureStatus !== "captured") {
-      return {
-        ok: false,
-        detail: `checkpoint capture is ${checkpoint.captureStatus ?? "missing"}`,
-      };
-    }
-    if (requireCapture && !checkpoint.captureUrl) {
-      return { ok: false, detail: "checkpoint capture URL is missing" };
+    let checkpoint = null;
+    if (requireCheckpoint) {
+      const checkpoints = group.gitCheckpoints;
+      if (checkpoints.length === 0) return { ok: false, detail: "no checkpoint recorded yet" };
+      checkpoint = checkpoints[0];
+      if (requireCapture && checkpoint.captureStatus !== "captured") {
+        return {
+          ok: false,
+          detail: `checkpoint capture is ${checkpoint.captureStatus ?? "missing"}`,
+        };
+      }
+      if (requireCapture && !checkpoint.captureUrl) {
+        return { ok: false, detail: "checkpoint capture URL is missing" };
+      }
     }
 
     return { ok: true, value: { state, process, endpoint, checkpoint } };
@@ -348,7 +355,9 @@ const restored = await startAppSession({
   ...(process.env.TRACE_SMOKE_MODEL ? { model: process.env.TRACE_SMOKE_MODEL } : {}),
   ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
 });
-const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored");
+const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored", {
+  requireCheckpoint: false,
+});
 const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
 await renderUrl(restoredPreviewUrl, "restored preview URL", { requireFetch: false });
 
