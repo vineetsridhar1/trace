@@ -4,11 +4,13 @@ import {
   buildDesignIterationPromptDefault,
   buildDesignArtifactBootstrapUrl,
   buildDesignArtifactPublicUrlFromOrigin,
+  clampDesignPreviewScale,
   designCommentsForPreview,
   designCommentFromEvent,
   getDesignArtifactPreviewMode,
   getArtifactPlacements,
   getArtifactLineageStrip,
+  getDesignPreviewDeviceFrame,
   normalizeDesignAnchor,
   promotedSessionTarget,
   streamingArtifactsFromEvents,
@@ -221,6 +223,15 @@ describe("design canvas anchors", () => {
         makeCanvasArtifact("direction-b"),
       ]),
     ).toContain("Merge direction-a with direction-b");
+  });
+
+  it("defines stable per-card preview frames and zoom bounds", () => {
+    expect(getDesignPreviewDeviceFrame("desktop")).toMatchObject({ width: 1280, height: 900 });
+    expect(getDesignPreviewDeviceFrame("tablet")).toMatchObject({ width: 820, height: 1080 });
+    expect(getDesignPreviewDeviceFrame("mobile")).toMatchObject({ width: 390, height: 844 });
+    expect(clampDesignPreviewScale(0.1)).toBe(0.35);
+    expect(clampDesignPreviewScale(1.5)).toBe(1.25);
+    expect(clampDesignPreviewScale(0.8)).toBe(0.8);
   });
 
   it("shows failed design generations as visible canvas artifacts", () => {

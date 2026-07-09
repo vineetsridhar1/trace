@@ -510,3 +510,9 @@ accepts `comparisonArtifactIds`, validates them against the same design session 
 hydrates stored comparison HTML, and passes comparison artifact metadata/HTML into the
 Open Design prompt context. Focused server tests cover the service validation handoff and
 the composed LLM prompt content.
+
+During this audit pass, artifact cards still lacked the per-card device frame and preview
+zoom controls called out by the canvas spec. Each design artifact preview now has
+desktop, tablet, and mobile frame modes plus card-level zoom controls independent of the
+overall canvas pan/zoom. Focused web tests cover the stable frame dimensions and preview
+zoom bounds.

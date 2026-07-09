@@ -16,8 +16,11 @@ import {
   MessageSquare,
   Minus,
   Minimize2,
+  Monitor,
   Plus,
   SlidersHorizontal,
+  Smartphone,
+  Tablet,
   Upload,
   Wand2,
 } from "lucide-react";
@@ -204,8 +207,29 @@ export type ArtifactPlacement = {
   y: number;
 };
 
+export type DesignPreviewDevice = "desktop" | "tablet" | "mobile";
+
+const DESIGN_PREVIEW_DEVICES: Array<{
+  id: DesignPreviewDevice;
+  label: string;
+  width: number;
+  height: number;
+}> = [
+  { id: "desktop", label: "Desktop", width: 1280, height: 900 },
+  { id: "tablet", label: "Tablet", width: 820, height: 1080 },
+  { id: "mobile", label: "Mobile", width: 390, height: 844 },
+];
+
 function clampZoom(value: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+}
+
+export function getDesignPreviewDeviceFrame(device: DesignPreviewDevice) {
+  return DESIGN_PREVIEW_DEVICES.find((item) => item.id === device) ?? DESIGN_PREVIEW_DEVICES[0];
+}
+
+export function clampDesignPreviewScale(value: number): number {
+  return Math.min(1.25, Math.max(0.35, value));
 }
 
 export function getArtifactPlacements(artifacts: CanvasArtifact[]): ArtifactPlacement[] {
@@ -612,8 +636,11 @@ function ArtifactCard({
   comments: DesignComment[];
   onAnchorSelected: (artifactId: string, anchor: DesignAnchor) => void;
 }) {
+  const [device, setDevice] = useState<DesignPreviewDevice>("desktop");
+  const [previewScale, setPreviewScale] = useState(0.55);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const nonceRef = useRef<string>(createProtocolNonce());
+  const frame = getDesignPreviewDeviceFrame(device);
   const bootstrapUrl = useMemo(
     () => getArtifactBootstrapUrl(artifact.id, nonceRef.current),
     [artifact.id],
@@ -697,22 +724,100 @@ function ArtifactCard({
           </span>
         </div>
       </div>
+      <div className="flex h-8 shrink-0 items-center justify-between border-b px-2">
+        <div className="flex overflow-hidden rounded-md border border-border">
+          {DESIGN_PREVIEW_DEVICES.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setDevice(item.id)}
+              className={cn(
+                "inline-flex h-6 w-7 items-center justify-center border-r text-muted-foreground last:border-r-0 hover:text-foreground",
+                item.id === device ? "bg-primary/10 text-primary" : undefined,
+              )}
+              aria-label={`${item.label} preview`}
+              title={`${item.label} preview`}
+            >
+              {item.id === "desktop" ? (
+                <Monitor size={13} />
+              ) : item.id === "tablet" ? (
+                <Tablet size={13} />
+              ) : (
+                <Smartphone size={13} />
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center overflow-hidden rounded-md border border-border">
+          <button
+            type="button"
+            onClick={() => setPreviewScale((value) => clampDesignPreviewScale(value - 0.1))}
+            className="inline-flex h-6 w-7 items-center justify-center border-r text-muted-foreground hover:text-foreground"
+            aria-label="Zoom preview out"
+            title="Zoom preview out"
+          >
+            <Minus size={12} />
+          </button>
+          <div className="w-10 text-center text-[11px] tabular-nums text-muted-foreground">
+            {Math.round(previewScale * 100)}%
+          </div>
+          <button
+            type="button"
+            onClick={() => setPreviewScale((value) => clampDesignPreviewScale(value + 0.1))}
+            className="inline-flex h-6 w-7 items-center justify-center border-l text-muted-foreground hover:text-foreground"
+            aria-label="Zoom preview in"
+            title="Zoom preview in"
+          >
+            <Plus size={12} />
+          </button>
+        </div>
+      </div>
       {bootstrapUrl && previewMode === "bootstrap" ? (
-        <iframe
-          ref={iframeRef}
-          title={artifact.title}
-          src={bootstrapUrl}
-          sandbox="allow-scripts allow-same-origin"
-          className="min-h-0 flex-1 bg-white"
-          onLoad={postArtifactHtml}
-        />
+        <div className="min-h-0 flex-1 overflow-auto bg-muted/30 p-4">
+          <div
+            className="mx-auto overflow-hidden rounded-md border border-border bg-white shadow-sm"
+            style={{
+              width: frame.width * previewScale,
+              height: frame.height * previewScale,
+            }}
+          >
+            <iframe
+              ref={iframeRef}
+              title={artifact.title}
+              src={bootstrapUrl}
+              sandbox="allow-scripts allow-same-origin"
+              className="h-full w-full origin-top-left bg-white"
+              style={{
+                width: frame.width,
+                height: frame.height,
+                transform: `scale(${previewScale})`,
+              }}
+              onLoad={postArtifactHtml}
+            />
+          </div>
+        </div>
       ) : previewMode === "srcdoc" ? (
-        <iframe
-          title={artifact.title}
-          srcDoc={artifact.html}
-          sandbox="allow-scripts"
-          className="min-h-0 flex-1 bg-white"
-        />
+        <div className="min-h-0 flex-1 overflow-auto bg-muted/30 p-4">
+          <div
+            className="mx-auto overflow-hidden rounded-md border border-border bg-white shadow-sm"
+            style={{
+              width: frame.width * previewScale,
+              height: frame.height * previewScale,
+            }}
+          >
+            <iframe
+              title={artifact.title}
+              srcDoc={artifact.html}
+              sandbox="allow-scripts"
+              className="h-full w-full origin-top-left bg-white"
+              style={{
+                width: frame.width,
+                height: frame.height,
+                transform: `scale(${previewScale})`,
+              }}
+            />
+          </div>
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center bg-muted/20 px-6 text-center text-sm leading-6 text-muted-foreground">
           Configure VITE_TRACE_USER_CONTENT_ORIGIN to preview design artifacts.
