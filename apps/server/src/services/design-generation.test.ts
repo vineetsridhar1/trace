@@ -47,7 +47,7 @@ describe("designGenerationService", () => {
       outputTokens: BigInt(20),
       cacheReadTokens: BigInt(0),
       cacheCreationTokens: BigInt(0),
-      costUsd: 0,
+      costUsd: 1.12,
     });
   });
 
@@ -69,7 +69,7 @@ describe("designGenerationService", () => {
               },
             ],
             stopReason: "end_turn",
-            usage: { inputTokens: 10, outputTokens: 20 },
+            usage: { inputTokens: 10, outputTokens: 20, costUsd: 1.12 },
             model: "anthropic/test",
           },
         };
@@ -91,7 +91,7 @@ describe("designGenerationService", () => {
       source: "designGenerationService",
       promptComposer: "trace-open-design-v1",
       model: "anthropic/test",
-      usage: { inputTokens: 10, outputTokens: 20 },
+      usage: { inputTokens: 10, outputTokens: 20, costUsd: 1.12 },
     });
     expect(aiServiceMock.stream).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -139,7 +139,7 @@ describe("designGenerationService", () => {
           type: "design_generation_completed",
           sessionGroupId: "group-1",
           htmlPreview: expect.stringContaining('<main data-el="hero">Hi</main>'),
-          usage: { inputTokens: 10, outputTokens: 20 },
+          usage: { inputTokens: 10, outputTokens: 20, costUsd: 1.12 },
         }),
       }),
     );
@@ -148,6 +148,7 @@ describe("designGenerationService", () => {
       data: {
         inputTokens: { increment: 10 },
         outputTokens: { increment: 20 },
+        costUsd: { increment: 1.12 },
       },
       select: {
         inputTokens: true,
@@ -167,7 +168,7 @@ describe("designGenerationService", () => {
           outputTokens: 20,
           cacheReadTokens: 0,
           cacheCreationTokens: 0,
-          costUsd: 0,
+          costUsd: 1.12,
         }),
       }),
     );

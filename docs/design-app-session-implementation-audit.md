@@ -570,3 +570,10 @@ context on `trace:app:overlay` element-selection messages, the Applications pane
 preserves that optional geometry, local endpoint-proxy browser coverage asserts
 source/text/bounds are posted from a real private preview, and the hosted cloud app smoke
 now requires `data-trace-source` stamps in the private preview DOM.
+
+During this audit pass, design generation usage accounting was found to preserve token
+counts but ignore reported LLM cost, which meant design sessions could not fully populate
+the existing token/cost badge when an LLM adapter supplied cost metadata. `LLMUsage` now
+allows optional `costUsd`, `recordDesignUsage` increments `Session.costUsd` alongside
+tokens, and focused design-generation coverage verifies the emitted `usage_updated`
+event carries the accumulated cost.

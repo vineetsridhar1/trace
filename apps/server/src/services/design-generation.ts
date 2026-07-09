@@ -54,13 +54,15 @@ async function recordDesignUsage(input: {
 }): Promise<void> {
   const inputTokens = input.usage?.inputTokens ?? 0;
   const outputTokens = input.usage?.outputTokens ?? 0;
-  if (inputTokens === 0 && outputTokens === 0) return;
+  const costUsd = input.usage?.costUsd ?? 0;
+  if (inputTokens === 0 && outputTokens === 0 && costUsd === 0) return;
 
   const updated = await prisma.session.update({
     where: { id: input.sessionId },
     data: {
       inputTokens: { increment: inputTokens },
       outputTokens: { increment: outputTokens },
+      costUsd: { increment: costUsd },
     },
     select: {
       inputTokens: true,
