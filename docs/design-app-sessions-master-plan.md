@@ -128,6 +128,10 @@ Required session-level concepts:
   - `createdBy`
   - timestamps
 - `DesignComment`: comment/pin entity or event payload tied to artifact/version anchors.
+- `CanvasSection`: AI-authored section/group on the design canvas with title,
+  description, order, position, and child artifact/frame ids. This can be a first-class
+  table/entity or a structured field in design session metadata, but it must be
+  event-backed and addressable.
 - `Repo.provider`: `github | managed`.
 - `GitCheckpoint`: existing checkpoint model, extended with capture metadata for app
   sessions when available.
@@ -143,6 +147,9 @@ A complete design session supports:
 - No user-selected repo requirement.
 - Lazy hidden managed repo after the first successful artifact generation.
 - Multiple parallel HTML artifact variants for a brief.
+- AI-authored canvas organization: section titles, explanatory descriptions, frame labels,
+  and grouped artifact canvases, similar to Claude Design's "Current" /
+  "Action needed" layout.
 - Progressive rendering while generation streams.
 - Artifact lineage: first variants are siblings, iterations are children.
 - Canvas pan/zoom, selection, focus mode, and lineage expansion.
@@ -184,6 +191,8 @@ Expected events include:
 - `design_artifact_delta`
 - `design_artifact_created`
 - `design_artifact_updated`
+- `design_canvas_section_created`
+- `design_canvas_section_updated`
 - `design_generation_failed`
 - `design_comment_added`
 - `design_export_requested`
@@ -208,6 +217,7 @@ artifacts/<artifactId>/index.html
 artifacts/<artifactId>/metadata.json
 artifacts/<artifactId>/tokens.css        # optional extracted token file
 artifacts/<artifactId>/assets/*          # later, if multi-file assets are supported
+canvas/layout.json                       # section/group layout and artifact placement
 ```
 
 Rules:
@@ -225,6 +235,8 @@ Rules:
   artifact. The event payload must still identify each artifact's file path and commit.
 - An iteration creates a new artifact directory/file and a new commit; it does not mutate
   the parent artifact file.
+- Canvas sections and placement metadata are committed with the artifacts so the managed
+  repo can reconstruct the whole design board, not only individual HTML files.
 - Blob/object storage may still be used as a read-through cache for large HTML or
   published serving, but managed git is the durable source of truth for generated design
   files.
@@ -280,19 +292,75 @@ Suggested message protocol:
 
 ### Canvas UI
 
-Design mode should preserve existing primitives:
+Design mode should preserve existing primitives while letting the AI author the canvas
+structure itself:
 
 - Use the existing session chat component, narrowed as a left rail.
 - Hide the design/coding tab strip in design mode.
 - Auto-collapse the global app sidebar in design mode.
 - Hide irrelevant repo/application chrome for design groups.
-- Render artifact cards on the right-side canvas.
+- Render AI-authored sections on the right-side canvas. A section has a large title,
+  explanatory description, optional frame/group labels, and one or more artifact cards
+  underneath.
+- Render artifact cards inside their section/group, not only as a flat list.
+- The AI can create sections like "Current", "Exploration 1", "Action needed", "Final
+  direction", or any task-specific grouping that helps explain the design work.
+- The AI can add short descriptions that explain why each section exists and what changed
+  in the artifacts below it.
 - Support pan, wheel/trackpad scroll, zoom in/out, fit to canvas, and focus mode.
 - Keep zoom responsive enough for natural canvas navigation.
 - Cards render artifact iframes, status, title, created time, comments, export/publish
   actions, and generation failure state.
+- Section titles/descriptions and card placement are event-backed state. Do not bake them
+  into the HTML artifact itself as the only source of truth.
+- Users should be able to select a section, a frame label, or an artifact card as prompt
+  context.
 - Element selection should use `data-el` anchors inside artifact HTML.
 - Comments/pins belong to the artifact version they were created on.
+
+### AI-Authored Canvas Sections
+
+The model should be able to return both artifact HTML and canvas organization metadata.
+This is the behavior shown in Claude Design: the AI creates narrative sections with a
+heading, a short explanation, and grouped canvases underneath.
+
+Suggested section shape:
+
+```ts
+type DesignCanvasSection = {
+  id: string;
+  sessionGroupId: string;
+  title: string;
+  description?: string;
+  order: number;
+  x: number;
+  y: number;
+  width?: number;
+  artifactIds: string[];
+  groups?: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    artifactIds: string[];
+  }>;
+};
+```
+
+Generation contract:
+
+- Initial generation can create one or more sections, not just artifacts.
+- A "current vs proposed" prompt should produce a "Current" section plus one or more
+  proposal sections.
+- A multi-option prompt should produce separate named sections or grouped frames for each
+  direction when that communicates the design better than a flat row.
+- Section title/description text is model-authored but editable/regenerable through the
+  service layer.
+- Section metadata is persisted in service state and committed to
+  `canvas/layout.json` in the design managed repo.
+- Section updates emit events so other clients see the canvas reorganize in real time.
+- PDF/export/publish can target a single artifact, a section, or the whole canvas later;
+  v1 PDF may remain artifact-only if section export is not implemented yet, but the data
+  model should not prevent section export.
 
 ### Token Tweaks
 
@@ -628,6 +696,8 @@ Design overlay:
 - Self-contained HTML.
 - `:root` CSS variables.
 - Stable `data-el` ids.
+- Canvas section metadata: concise title, explanatory description, artifact/frame labels,
+  and intended placement/grouping for each generated artifact.
 - Print-ready deck structure when applicable.
 - No external network unless policy allows it.
 - No filesystem assumptions.
@@ -707,6 +777,9 @@ work end to end.
 
 - Service test: `startSession(kind: design)` creates no runtime/repo.
 - Service test: design generation calls `LLMAdapter` and persists N artifacts.
+- Service/store test: design generation can persist AI-authored canvas sections with
+  titles, descriptions, and artifact membership.
+- UI test: canvas renders sections with headings/descriptions and grouped artifact cards.
 - Service/integration test: first successful design artifact creates one hidden managed
   repo and commits artifact HTML/metadata files.
 - Retry test: a failed design artifact commit/push reuses the same managed repo on retry.
@@ -780,6 +853,7 @@ Do not call the full goal complete until:
 - All mutating behavior flows through services and events.
 - Design generation uses real `LLMAdapter` output, not placeholders.
 - Design artifact preview/publish uses the user-content domain in production.
+- Design canvas renders AI-authored section titles/descriptions and grouped canvases.
 - PDF export produces real downloadable PDF files.
 - App sessions run real standalone apps on cloud runtimes.
 - App sessions use managed git durability and lazy first-checkpoint repo creation.
