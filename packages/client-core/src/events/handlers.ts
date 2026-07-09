@@ -15,6 +15,7 @@ import type {
   SessionApplicationProcess,
   SessionEndpoint,
   SessionStatus,
+  Artifact,
 } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
@@ -146,6 +147,17 @@ function isCurrentUserSession(session: SessionEntity | undefined): session is Se
   return !!currentUserId && session?.createdBy?.id === currentUserId;
 }
 
+function upsertArtifactFromPayload(batch: StoreBatchWriter, payload: JsonObject): void {
+  const artifact = asJsonObject(payload.artifact);
+  if (!artifact || typeof artifact.id !== "string") return;
+  const existing = batch.get("artifacts", artifact.id);
+  batch.upsert(
+    "artifacts",
+    artifact.id,
+    (existing ? { ...existing, ...artifact } : artifact) as unknown as Artifact,
+  );
+}
+
 /**
  * Apply an event from the org-wide subscription to the entity store and
  * fire any registered notification handlers. The pure data work runs
@@ -223,6 +235,13 @@ export function handleOrgEvent(event: Event): void {
         (existing ? { ...existing, ...endpoint } : endpoint) as unknown as SessionEndpoint,
       );
     }
+  }
+
+  if (
+    event.eventType === "design_artifact_created" ||
+    event.eventType === "design_artifact_updated"
+  ) {
+    upsertArtifactFromPayload(batch, payload);
   }
 
   // Chat events
@@ -722,6 +741,15 @@ export function handleSessionEvent(sessionId: string, event: Event & { id: strin
   upsertSessionEventWithOptimisticResolution(sessionId, event);
 
   const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
+  if (
+    event.eventType === "design_artifact_created" ||
+    event.eventType === "design_artifact_updated"
+  ) {
+    const batch = new StoreBatchWriter();
+    upsertArtifactFromPayload(batch, payload);
+    batch.flush();
+  }
+
   if (event.eventType === "session_output" && event.scopeType === ("session" satisfies ScopeType)) {
     const batch = new StoreBatchWriter();
     routeSessionOutput({ event, payload, batch, ui: getOrgEventUIBindings() });

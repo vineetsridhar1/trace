@@ -18,6 +18,7 @@ import type {
   AgentEnvironment,
   SessionApplicationProcess,
   SessionEndpoint,
+  Artifact,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -31,6 +32,8 @@ export type SessionGroupEntity = SessionGroup & {
   _sortTimestamp?: string;
   _optimistic?: boolean;
 };
+
+export type ArtifactEntity = Artifact;
 
 /** Entity types that the store manages, keyed by ID */
 export type EntityTableMap = {
@@ -50,6 +53,7 @@ export type EntityTableMap = {
   agentEnvironments: AgentEnvironment;
   sessionApplicationProcesses: SessionApplicationProcess;
   sessionEndpoints: SessionEndpoint;
+  artifacts: ArtifactEntity;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -117,6 +121,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   agentEnvironments: {},
   sessionApplicationProcesses: {},
   sessionEndpoints: {},
+  artifacts: {},
   eventsByScope: {},
   _eventIdsByScope: {},
   _sessionIdsByGroup: {},
@@ -356,6 +361,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       agentEnvironments: {},
       sessionApplicationProcesses: {},
       sessionEndpoints: {},
+      artifacts: {},
       eventsByScope: {},
       _eventIdsByScope: {},
       _sessionIdsByGroup: {},
@@ -689,6 +695,7 @@ const ENTITY_KEYS: EntityType[] = [
   "agentEnvironments",
   "sessionApplicationProcesses",
   "sessionEndpoints",
+  "artifacts",
 ];
 
 function getMessageEntityScopeKey(

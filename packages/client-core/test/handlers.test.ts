@@ -20,6 +20,7 @@ function resetStores() {
     inboxItems: {},
     messages: {},
     queuedMessages: {},
+    artifacts: {},
     eventsByScope: {},
     _eventIdsByScope: {},
     _sessionIdsByGroup: {},
@@ -167,6 +168,37 @@ describe("handleOrgEvent", () => {
       older.id,
       newer.id,
     ]);
+  });
+
+  it("upserts design artifacts from lifecycle events", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "design_artifact_created",
+        scopeId: "session-1",
+        payload: {
+          artifact: {
+            id: "artifact-1",
+            sessionGroupId: "group-1",
+            parentArtifactId: null,
+            prompt: "Dashboard",
+            title: "Dashboard direction",
+            contentType: "text/html+trace-design",
+            html: "<html></html>",
+            metadata: {},
+            publishedAt: null,
+            publicUrl: null,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().artifacts["artifact-1"]).toMatchObject({
+      id: "artifact-1",
+      sessionGroupId: "group-1",
+      title: "Dashboard direction",
+    });
   });
 
   it("upserts created channels only when the current user is a member", () => {
@@ -827,5 +859,39 @@ describe("handleOrgEvent", () => {
     );
 
     expect(harness.setActiveSessionId).toHaveBeenCalledWith("session-new");
+  });
+});
+
+describe("handleSessionEvent", () => {
+  it("upserts design artifacts from full session events", () => {
+    handleSessionEvent(
+      "session-1",
+      makeEvent({
+        eventType: "design_artifact_updated",
+        scopeId: "session-1",
+        payload: {
+          artifact: {
+            id: "artifact-1",
+            sessionGroupId: "group-1",
+            parentArtifactId: null,
+            prompt: "Dashboard",
+            title: "Published dashboard",
+            contentType: "text/html+trace-design",
+            html: "<html></html>",
+            metadata: { published: true },
+            publishedAt: "2026-01-01T00:00:01.000Z",
+            publicUrl: "https://artifact-1.traceusercontent.test/",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:01.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().artifacts["artifact-1"]).toMatchObject({
+      id: "artifact-1",
+      title: "Published dashboard",
+      publicUrl: "https://artifact-1.traceusercontent.test/",
+    });
   });
 });

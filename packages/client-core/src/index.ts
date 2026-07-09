@@ -5,6 +5,7 @@ export type {
   EntityState,
   EntityTableMap,
   EntityType,
+  ArtifactEntity,
   SessionEntity,
   SessionGroupEntity,
 } from "./stores/entity.js";

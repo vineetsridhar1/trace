@@ -21,7 +21,13 @@ import {
   Wand2,
 } from "lucide-react";
 import type { Artifact, Event } from "@trace/gql";
-import { useAuthStore } from "@trace/client-core";
+import {
+  eventScopeKey,
+  useEntitiesByIds,
+  useEntityIds,
+  useEntityStore,
+  useScopedEvents,
+} from "@trace/client-core";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
@@ -46,19 +52,6 @@ const DESIGN_ARTIFACTS_QUERY = gql`
         name
         avatarUrl
       }
-    }
-  }
-`;
-
-const DESIGN_SESSION_EVENTS_SUBSCRIPTION = gql`
-  subscription DesignSessionEvents($sessionId: ID!, $organizationId: ID!) {
-    sessionEvents(sessionId: $sessionId, organizationId: $organizationId) {
-      id
-      scopeType
-      scopeId
-      eventType
-      payload
-      timestamp
     }
   }
 `;
@@ -352,6 +345,47 @@ function streamingArtifactFromPayload(payload: Record<string, unknown>): Streami
   };
 }
 
+function artifactGenerationId(artifact: CanvasArtifact): string | null {
+  const metadata = objectField(artifact.metadata);
+  return stringField(metadata?.generationId);
+}
+
+function commentsByArtifact(events: Record<string, Event>): Record<string, DesignComment[]> {
+  const comments: Record<string, DesignComment[]> = {};
+  for (const event of Object.values(events)) {
+    const comment = designCommentFromEvent(event);
+    if (!comment) continue;
+    comments[comment.artifactId] = [...(comments[comment.artifactId] ?? []), comment];
+  }
+  return comments;
+}
+
+function streamingArtifactsFromEvents(
+  events: Record<string, Event>,
+  persistedArtifacts: CanvasArtifact[],
+): Record<string, StreamingArtifact> {
+  const persistedGenerationIds = new Set(
+    persistedArtifacts
+      .map((artifact) => artifactGenerationId(artifact))
+      .filter((id): id is string => id !== null),
+  );
+  const streaming: Record<string, StreamingArtifact> = {};
+  for (const event of Object.values(events)) {
+    const payload = eventPayload(event);
+    if (
+      !payload ||
+      event.eventType !== "session_output" ||
+      (payload.type !== "design_generation_delta" && payload.type !== "design_generation_completed")
+    ) {
+      continue;
+    }
+    const artifact = streamingArtifactFromPayload(payload);
+    if (!artifact || persistedGenerationIds.has(artifact.generationId)) continue;
+    streaming[artifact.generationId] = artifact;
+  }
+  return streaming;
+}
+
 function anchorLabel(anchor: DesignAnchor | null): string {
   if (!anchor) return "Artifact";
   if (anchor.type === "artifact") return "Artifact";
@@ -491,16 +525,9 @@ export function DesignCanvas({
   sessionGroupId: string;
   sessionId?: string | null;
 }) {
-  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
-  const [streamingArtifacts, setStreamingArtifacts] = useState<Record<string, StreamingArtifact>>(
-    {},
-  );
   const [loading, setLoading] = useState(true);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [selectedAnchors, setSelectedAnchors] = useState<Record<string, DesignAnchor>>({});
-  const [commentsByArtifactId, setCommentsByArtifactId] = useState<Record<string, DesignComment[]>>(
-    {},
-  );
   const [viewport, setViewport] = useState<Viewport>({ x: 80, y: 60, scale: 0.8 });
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
@@ -510,7 +537,28 @@ export function DesignCanvas({
     viewport: Viewport;
   } | null>(null);
 
-  const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const upsertMany = useEntityStore((state) => state.upsertMany);
+  const filterArtifactForGroup = useCallback(
+    (artifact: Artifact) => artifact.sessionGroupId === sessionGroupId,
+    [sessionGroupId],
+  );
+  const sortArtifactsByCreation = useCallback(
+    (a: Artifact, b: Artifact) =>
+      a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+    [],
+  );
+  const artifactIds = useEntityIds("artifacts", filterArtifactForGroup, sortArtifactsByCreation);
+  const artifactEntities = useEntitiesByIds("artifacts", artifactIds);
+  const artifacts = useMemo(
+    () => artifactEntities.filter((artifact): artifact is Artifact => artifact !== null),
+    [artifactEntities],
+  );
+  const scopedEvents = useScopedEvents(sessionId ? eventScopeKey("session", sessionId) : "");
+  const commentsByArtifactId = useMemo(() => commentsByArtifact(scopedEvents), [scopedEvents]);
+  const streamingArtifacts = useMemo(
+    () => streamingArtifactsFromEvents(scopedEvents, artifacts),
+    [artifacts, scopedEvents],
+  );
   const visibleArtifacts = useMemo(
     () => [...artifacts, ...Object.values(streamingArtifacts)],
     [artifacts, streamingArtifacts],
@@ -531,61 +579,21 @@ export function DesignCanvas({
     ? (selectedAnchors[selectedPersistedArtifact.id] ?? null)
     : null;
 
-  const loadArtifacts = useCallback(async () => {
+  const hydrateArtifacts = useCallback(async () => {
     setLoading(true);
     const result = await client
       .query<ArtifactResult>(DESIGN_ARTIFACTS_QUERY, { sessionGroupId })
       .toPromise();
-    setArtifacts(result.data?.designArtifacts ?? []);
-    setStreamingArtifacts({});
+    const fetched = result.data?.designArtifacts ?? [];
+    if (fetched.length > 0) {
+      upsertMany("artifacts", fetched);
+    }
     setLoading(false);
-  }, [sessionGroupId]);
+  }, [sessionGroupId, upsertMany]);
 
   useEffect(() => {
-    loadArtifacts();
-  }, [loadArtifacts]);
-
-  useEffect(() => {
-    if (!activeOrgId || !sessionId) return;
-
-    const subscription = client
-      .subscription(DESIGN_SESSION_EVENTS_SUBSCRIPTION, {
-        sessionId,
-        organizationId: activeOrgId,
-      })
-      .subscribe((result: { data?: Record<string, unknown> }) => {
-        const event = result.data?.sessionEvents as Event | undefined;
-        if (!event) return;
-        const payload = eventPayload(event);
-        if (!payload) return;
-        if (
-          event.eventType === "session_output" &&
-          (payload.type === "design_generation_delta" ||
-            payload.type === "design_generation_completed")
-        ) {
-          const streamingArtifact = streamingArtifactFromPayload(payload);
-          if (!streamingArtifact) return;
-          setStreamingArtifacts((current) => ({
-            ...current,
-            [streamingArtifact.generationId]: streamingArtifact,
-          }));
-          return;
-        }
-        if (event.eventType === "design_artifact_created") {
-          void loadArtifacts();
-          return;
-        }
-        const comment = designCommentFromEvent(event);
-        if (comment) {
-          setCommentsByArtifactId((current) => ({
-            ...current,
-            [comment.artifactId]: [...(current[comment.artifactId] ?? []), comment],
-          }));
-        }
-      });
-
-    return () => subscription.unsubscribe();
-  }, [activeOrgId, loadArtifacts, sessionId]);
+    void hydrateArtifacts();
+  }, [hydrateArtifacts]);
 
   const fitCanvas = useCallback(() => {
     const element = canvasRef.current;
@@ -706,9 +714,8 @@ export function DesignCanvas({
         return;
       }
       toast.success(successMessage);
-      await loadArtifacts();
     },
-    [loadArtifacts],
+    [],
   );
 
   const handleIterate = useCallback(() => {
@@ -760,7 +767,6 @@ export function DesignCanvas({
         toast.error("Design action failed", { description: result.error.message });
         return;
       }
-      await loadArtifacts();
 
       const publishedArtifact = result.data?.publishDesignArtifact ?? selectedPersistedArtifact;
       const publicUrl = getArtifactPublicUrl(publishedArtifact);
@@ -776,7 +782,7 @@ export function DesignCanvas({
       }
       toast.success("Artifact published");
     })();
-  }, [loadArtifacts, selectedPersistedArtifact]);
+  }, [selectedPersistedArtifact]);
 
   const handleComment = useCallback(() => {
     if (!selectedPersistedArtifact) return;
