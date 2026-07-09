@@ -347,7 +347,12 @@ export const sessionMutations = {
   },
   iterateDesignArtifact: (
     _: unknown,
-    args: { artifactId: string; prompt: string; html?: string | null },
+    args: {
+      artifactId: string;
+      prompt: string;
+      html?: string | null;
+      comparisonArtifactIds?: string[] | null;
+    },
     ctx: Context,
   ) => {
     if (!ctx.userId) throw new AuthenticationError();
@@ -355,6 +360,7 @@ export const sessionMutations = {
       artifactId: args.artifactId,
       prompt: args.prompt,
       html: args.html ?? null,
+      comparisonArtifactIds: args.comparisonArtifactIds ?? null,
       organizationId: requireOrgContext(ctx),
       actorId: ctx.userId,
       actorType: ctx.actorType,

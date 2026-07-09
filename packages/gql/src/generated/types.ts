@@ -985,6 +985,7 @@ export type MutationGraduateManagedRepoToGitHubArgs = {
 
 export type MutationIterateDesignArtifactArgs = {
   artifactId: Scalars["ID"]["input"];
+  comparisonArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   html?: InputMaybe<Scalars["String"]["input"]>;
   prompt: Scalars["String"]["input"];
 };

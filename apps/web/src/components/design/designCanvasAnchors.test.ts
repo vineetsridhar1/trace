@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { Event } from "@trace/gql";
 import {
+  buildDesignIterationPromptDefault,
   buildDesignArtifactBootstrapUrl,
   buildDesignArtifactPublicUrlFromOrigin,
   designCommentsForPreview,
   designCommentFromEvent,
   getDesignArtifactPreviewMode,
   getArtifactPlacements,
+  getArtifactLineageStrip,
   normalizeDesignAnchor,
   promotedSessionTarget,
   streamingArtifactsFromEvents,
+  updateDesignArtifactSelection,
   type DesignComment,
 } from "./DesignCanvas";
 
@@ -175,6 +178,49 @@ describe("design canvas anchors", () => {
     expect(placements[0]?.y).toBe(0);
     expect(placements[1]?.y).toBe(0);
     expect(placements[1]?.x).toBeGreaterThan(placements[0]?.x ?? 0);
+  });
+
+  it("keeps focus-mode lineage to the selected artifact branch", () => {
+    const artifacts = [
+      makeCanvasArtifact("direction-a"),
+      makeCanvasArtifact("direction-b"),
+      makeCanvasArtifact("a-child", "direction-a"),
+      makeCanvasArtifact("a-grandchild", "a-child"),
+      makeCanvasArtifact("b-child", "direction-b"),
+    ];
+
+    expect(getArtifactLineageStrip(artifacts, "a-child").map((artifact) => artifact.id)).toEqual([
+      "direction-a",
+      "a-child",
+      "a-grandchild",
+    ]);
+    expect(getArtifactLineageStrip(artifacts, "missing")).toEqual([]);
+  });
+
+  it("tracks single and comparative artifact selection", () => {
+    expect(updateDesignArtifactSelection([], "direction-a", false)).toEqual(["direction-a"]);
+    expect(updateDesignArtifactSelection(["direction-a"], "direction-b", true)).toEqual([
+      "direction-a",
+      "direction-b",
+    ]);
+    expect(
+      updateDesignArtifactSelection(["direction-a", "direction-b"], "direction-c", true),
+    ).toEqual(["direction-b", "direction-c"]);
+    expect(
+      updateDesignArtifactSelection(["direction-a", "direction-b"], "direction-a", true),
+    ).toEqual(["direction-b"]);
+  });
+
+  it("builds comparative prompt defaults for two selected artifacts", () => {
+    expect(buildDesignIterationPromptDefault([makeCanvasArtifact("direction-a")])).toBe(
+      "Prompt for direction-a",
+    );
+    expect(
+      buildDesignIterationPromptDefault([
+        makeCanvasArtifact("direction-a"),
+        makeCanvasArtifact("direction-b"),
+      ]),
+    ).toContain("Merge direction-a with direction-b");
   });
 
   it("shows failed design generations as visible canvas artifacts", () => {

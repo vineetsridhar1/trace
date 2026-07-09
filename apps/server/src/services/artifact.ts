@@ -191,6 +191,48 @@ async function getDesignArtifactForWrite(
   return { artifact: await hydrateDesignArtifactHtml(artifact), sessionId };
 }
 
+async function getComparisonArtifactsForIteration(input: {
+  artifactIds?: string[] | null;
+  parentArtifactId: string;
+  sessionGroupId: string;
+  organizationId: string;
+}) {
+  const uniqueIds = [
+    ...new Set((input.artifactIds ?? []).filter((id) => id !== input.parentArtifactId)),
+  ];
+  if (uniqueIds.length === 0) return [];
+
+  const artifacts = await prisma.artifact.findMany({
+    where: {
+      id: { in: uniqueIds },
+      organizationId: input.organizationId,
+      sessionGroupId: input.sessionGroupId,
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+  if (artifacts.length !== uniqueIds.length) {
+    throw new ValidationError("Comparison artifacts must belong to the same design session.");
+  }
+
+  const hydrated = await Promise.all(
+    artifacts.map((artifact) => hydrateDesignArtifactHtml(artifact)),
+  );
+  const artifactById = new Map(hydrated.map((artifact) => [artifact.id, artifact]));
+  return uniqueIds.map((artifactId) => {
+    const artifact = artifactById.get(artifactId);
+    if (!artifact) {
+      throw new ValidationError("Comparison artifacts must belong to the same design session.");
+    }
+    return {
+      id: artifact.id,
+      title: artifact.title,
+      prompt: artifact.prompt,
+      metadata: jsonObject(artifact.metadata),
+      html: artifact.html,
+    };
+  });
+}
+
 async function createStoredArtifact(input: {
   id?: string;
   sessionGroupId: string;
@@ -436,12 +478,19 @@ export const artifactService = {
     prompt: string;
     html?: string | null;
     elementAnchors?: Array<Record<string, unknown>> | null;
+    comparisonArtifactIds?: string[] | null;
   }) {
     const { artifact: parent, sessionId } = await getDesignArtifactForWrite(
       input.artifactId,
       input.organizationId,
       input.actorId,
     );
+    const comparisonArtifacts = await getComparisonArtifactsForIteration({
+      artifactIds: input.comparisonArtifactIds,
+      parentArtifactId: parent.id,
+      sessionGroupId: parent.sessionGroupId,
+      organizationId: input.organizationId,
+    });
 
     const providedHtml = input.html?.trim() ? input.html : null;
     const generated = providedHtml
@@ -456,6 +505,7 @@ export const artifactService = {
           parentArtifactId: parent.id,
           parentHtml: parent.html,
           elementAnchors: input.elementAnchors ?? null,
+          comparisonArtifacts,
         });
     const title = input.prompt.trim().slice(0, 120) || parent.title;
     const artifactHtml = providedHtml ?? generated?.html;
@@ -475,6 +525,7 @@ export const artifactService = {
         ...(generated?.metadata ?? {}),
         generator: providedHtml ? "provided" : (generated?.metadata.generator ?? "llm"),
         source: "iterateDesignArtifact",
+        comparisonArtifactIds: comparisonArtifacts.map((artifact) => artifact.id),
       },
     });
     const hydratedArtifact = await hydrateDesignArtifactHtml(artifact);

@@ -987,6 +987,7 @@ export type MutationGraduateManagedRepoToGitHubArgs = {
 
 export type MutationIterateDesignArtifactArgs = {
   artifactId: Scalars["ID"]["input"];
+  comparisonArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   html?: InputMaybe<Scalars["String"]["input"]>;
   prompt: Scalars["String"]["input"];
 };
@@ -2696,6 +2697,7 @@ export type DesignArtifactsQuery = {
 export type IterateDesignArtifactMutationVariables = Exact<{
   artifactId: Scalars["ID"]["input"];
   prompt: Scalars["String"]["input"];
+  comparisonArtifactIds?: InputMaybe<Array<Scalars["ID"]["input"]> | Scalars["ID"]["input"]>;
 }>;
 
 export type IterateDesignArtifactMutation = {
@@ -5309,6 +5311,17 @@ export const IterateDesignArtifactDocument = {
             type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
           },
         },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "comparisonArtifactIds" } },
+          type: {
+            kind: "ListType",
+            type: {
+              kind: "NonNullType",
+              type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+            },
+          },
+        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -5326,6 +5339,11 @@ export const IterateDesignArtifactDocument = {
                 kind: "Argument",
                 name: { kind: "Name", value: "prompt" },
                 value: { kind: "Variable", name: { kind: "Name", value: "prompt" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "comparisonArtifactIds" },
+                value: { kind: "Variable", name: { kind: "Name", value: "comparisonArtifactIds" } },
               },
             ],
             selectionSet: {

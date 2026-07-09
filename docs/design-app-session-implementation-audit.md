@@ -495,3 +495,18 @@ documented lineage UX. Root artifacts and fan-out directions now lay out as side
 columns, while child iterations stay in their parent column and stack vertically as a
 lineage strip; focused web tests cover sibling variants, nested iterations, and orphaned
 parent references.
+
+During this audit pass, the design canvas was found to still lack the documented focus
+mode and two-artifact comparative selection behavior. The canvas now supports single
+selection, shift/meta/ctrl two-card selection for comparative iteration prompts, a real
+focus layout for the selected artifact, and a version strip derived from that artifact's
+lineage branch. Focused web tests cover selection semantics, lineage-strip ordering, and
+comparative prompt defaults.
+
+During this audit pass, comparative selection was also found to be UI-only: design
+iteration accepted only the primary artifact, so the LLM prompt could not receive the
+selected comparison artifact HTML required by the docs. `iterateDesignArtifact` now
+accepts `comparisonArtifactIds`, validates them against the same design session group,
+hydrates stored comparison HTML, and passes comparison artifact metadata/HTML into the
+Open Design prompt context. Focused server tests cover the service validation handoff and
+the composed LLM prompt content.

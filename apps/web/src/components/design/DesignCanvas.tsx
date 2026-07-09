@@ -15,6 +15,7 @@ import {
   Maximize2,
   MessageSquare,
   Minus,
+  Minimize2,
   Plus,
   SlidersHorizontal,
   Upload,
@@ -60,8 +61,16 @@ const DESIGN_ARTIFACTS_QUERY = gql`
 `;
 
 const ITERATE_DESIGN_ARTIFACT_MUTATION = gql`
-  mutation IterateDesignArtifact($artifactId: ID!, $prompt: String!) {
-    iterateDesignArtifact(artifactId: $artifactId, prompt: $prompt) {
+  mutation IterateDesignArtifact(
+    $artifactId: ID!
+    $prompt: String!
+    $comparisonArtifactIds: [ID!]
+  ) {
+    iterateDesignArtifact(
+      artifactId: $artifactId
+      prompt: $prompt
+      comparisonArtifactIds: $comparisonArtifactIds
+    ) {
       id
     }
   }
@@ -136,7 +145,7 @@ type ArtifactResult = {
   designArtifacts?: Artifact[];
 };
 
-type CanvasArtifact = Pick<
+export type CanvasArtifact = Pick<
   Artifact,
   | "id"
   | "sessionGroupId"
@@ -234,6 +243,73 @@ export function getArtifactPlacements(artifacts: CanvasArtifact[]): ArtifactPlac
   });
 
   return placements;
+}
+
+export function updateDesignArtifactSelection(
+  currentSelection: string[],
+  artifactId: string,
+  additive: boolean,
+): string[] {
+  if (!additive) return [artifactId];
+  if (currentSelection.includes(artifactId)) {
+    return currentSelection.filter((selectedId) => selectedId !== artifactId);
+  }
+  return [...currentSelection, artifactId].slice(-2);
+}
+
+export function getArtifactLineageStrip(
+  artifacts: CanvasArtifact[],
+  selectedArtifactId: string | null,
+): CanvasArtifact[] {
+  if (!selectedArtifactId) return [];
+  const byId = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
+  const selected = byId.get(selectedArtifactId);
+  if (!selected) return [];
+
+  const ancestorIds: string[] = [];
+  const seen = new Set<string>([selected.id]);
+  let cursor = selected;
+  while (cursor.parentArtifactId) {
+    const parent = byId.get(cursor.parentArtifactId);
+    if (!parent || seen.has(parent.id)) break;
+    ancestorIds.unshift(parent.id);
+    seen.add(parent.id);
+    cursor = parent;
+  }
+
+  const childrenByParentId = new Map<string, CanvasArtifact[]>();
+  for (const artifact of artifacts) {
+    if (!artifact.parentArtifactId || !byId.has(artifact.parentArtifactId)) continue;
+    childrenByParentId.set(artifact.parentArtifactId, [
+      ...(childrenByParentId.get(artifact.parentArtifactId) ?? []),
+      artifact,
+    ]);
+  }
+
+  const lineageIds = [...ancestorIds, selected.id];
+  const appendDescendants = (artifactId: string) => {
+    for (const child of childrenByParentId.get(artifactId) ?? []) {
+      if (seen.has(child.id)) continue;
+      seen.add(child.id);
+      lineageIds.push(child.id);
+      appendDescendants(child.id);
+    }
+  };
+  appendDescendants(selected.id);
+
+  return lineageIds
+    .map((artifactId) => byId.get(artifactId))
+    .filter((artifact): artifact is CanvasArtifact => artifact !== undefined);
+}
+
+export function buildDesignIterationPromptDefault(selectedArtifacts: CanvasArtifact[]): string {
+  if (selectedArtifacts.length >= 2) {
+    const [primary, comparison] = selectedArtifacts;
+    return `Merge ${primary?.title ?? "the first direction"} with ${
+      comparison?.title ?? "the second direction"
+    }. Keep the strongest structure from the first and the strongest visual system from the second.`;
+  }
+  return selectedArtifacts[0]?.prompt ?? "";
 }
 
 function getCanvasBounds(placements: ArtifactPlacement[]) {
@@ -666,7 +742,8 @@ export function DesignCanvas({
   sessionId?: string | null;
 }) {
   const [loading, setLoading] = useState(true);
-  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
+  const [selectedArtifactIds, setSelectedArtifactIds] = useState<string[]>([]);
+  const [focusModeArtifactId, setFocusModeArtifactId] = useState<string | null>(null);
   const [selectedAnchors, setSelectedAnchors] = useState<Record<string, DesignAnchor>>({});
   const [viewport, setViewport] = useState<Viewport>({ x: 80, y: 60, scale: 0.8 });
   const canvasRef = useRef<HTMLDivElement | null>(null);
@@ -711,6 +788,7 @@ export function DesignCanvas({
     () => [...artifacts, ...Object.values(streamingArtifacts)],
     [artifacts, streamingArtifacts],
   );
+  const selectedArtifactId = selectedArtifactIds.at(-1) ?? null;
   const selectedArtifact = useMemo(
     () =>
       visibleArtifacts.find((artifact) => artifact.id === selectedArtifactId) ??
@@ -719,10 +797,43 @@ export function DesignCanvas({
     [selectedArtifactId, visibleArtifacts],
   );
   const selectedPersistedArtifact = useMemo(
-    () => artifacts.find((artifact) => artifact.id === selectedArtifact?.id) ?? null,
-    [artifacts, selectedArtifact?.id],
+    () =>
+      selectedArtifactId
+        ? (artifacts.find((artifact) => artifact.id === selectedArtifactId) ?? null)
+        : null,
+    [artifacts, selectedArtifactId],
+  );
+  const selectedPersistedArtifacts = useMemo(
+    () =>
+      selectedArtifactIds
+        .map((artifactId) => artifacts.find((artifact) => artifact.id === artifactId))
+        .filter((artifact): artifact is Artifact => artifact !== undefined),
+    [artifacts, selectedArtifactIds],
+  );
+  const promptDefaultArtifacts = useMemo(
+    () =>
+      selectedPersistedArtifact
+        ? [
+            selectedPersistedArtifact,
+            ...selectedPersistedArtifacts.filter(
+              (artifact) => artifact.id !== selectedPersistedArtifact.id,
+            ),
+          ]
+        : [],
+    [selectedPersistedArtifact, selectedPersistedArtifacts],
   );
   const placements = useMemo(() => getArtifactPlacements(visibleArtifacts), [visibleArtifacts]);
+  const focusArtifact = useMemo(
+    () =>
+      visibleArtifacts.find((artifact) => artifact.id === focusModeArtifactId) ??
+      selectedArtifact ??
+      null,
+    [focusModeArtifactId, selectedArtifact, visibleArtifacts],
+  );
+  const focusLineage = useMemo(
+    () => getArtifactLineageStrip(visibleArtifacts, focusArtifact?.id ?? null),
+    [focusArtifact?.id, visibleArtifacts],
+  );
   const selectedAnchor = selectedPersistedArtifact
     ? (selectedAnchors[selectedPersistedArtifact.id] ?? null)
     : null;
@@ -845,9 +956,25 @@ export function DesignCanvas({
   }, []);
 
   const handleAnchorSelected = useCallback((artifactId: string, anchor: DesignAnchor) => {
-    setSelectedArtifactId(artifactId);
+    setSelectedArtifactIds([artifactId]);
     setSelectedAnchors((current) => ({ ...current, [artifactId]: anchor }));
     toast.success("Element selected", { description: anchorLabel(anchor) });
+  }, []);
+
+  const selectArtifact = useCallback((artifactId: string, additive: boolean) => {
+    setSelectedArtifactIds((current) =>
+      updateDesignArtifactSelection(current, artifactId, additive),
+    );
+  }, []);
+
+  const enterFocusMode = useCallback(() => {
+    if (!selectedPersistedArtifact) return;
+    setFocusModeArtifactId(selectedPersistedArtifact.id);
+    setSelectedArtifactIds([selectedPersistedArtifact.id]);
+  }, [selectedPersistedArtifact]);
+
+  const exitFocusMode = useCallback(() => {
+    setFocusModeArtifactId(null);
   }, []);
 
   const mutateSelectedArtifact = useCallback(
@@ -869,16 +996,31 @@ export function DesignCanvas({
   const handleIterate = useCallback(() => {
     if (!selectedPersistedArtifact) return;
     const prompt = window.prompt(
-      "Describe the next variant",
-      selectedPersistedArtifact.prompt ?? "",
+      selectedPersistedArtifacts.length >= 2
+        ? "Describe the comparative variant"
+        : "Describe the next variant",
+      buildDesignIterationPromptDefault(promptDefaultArtifacts),
     );
     if (!prompt?.trim()) return;
+    const comparisonArtifactIds = promptDefaultArtifacts
+      .slice(1)
+      .map((artifact) => artifact.id)
+      .filter((artifactId) => artifactId !== selectedPersistedArtifact.id);
     void mutateSelectedArtifact(
       ITERATE_DESIGN_ARTIFACT_MUTATION,
-      { artifactId: selectedPersistedArtifact.id, prompt: prompt.trim() },
+      {
+        artifactId: selectedPersistedArtifact.id,
+        prompt: prompt.trim(),
+        comparisonArtifactIds: comparisonArtifactIds.length > 0 ? comparisonArtifactIds : null,
+      },
       "Variant created",
     );
-  }, [mutateSelectedArtifact, selectedPersistedArtifact]);
+  }, [
+    mutateSelectedArtifact,
+    promptDefaultArtifacts,
+    selectedPersistedArtifact,
+    selectedPersistedArtifacts.length,
+  ]);
 
   const handleGenerateDirections = useCallback(() => {
     const prompt = window.prompt("Describe the design directions");
@@ -1013,6 +1155,9 @@ export function DesignCanvas({
         >
           <Wand2 size={14} />
         </button>
+        <div className="inline-flex h-8 items-center border-r px-2 text-xs tabular-nums text-muted-foreground">
+          {selectedArtifactIds.length === 0 ? "None" : `${selectedArtifactIds.length} selected`}
+        </div>
         <button
           type="button"
           onClick={handleIterate}
@@ -1075,6 +1220,16 @@ export function DesignCanvas({
         </button>
         <button
           type="button"
+          onClick={focusModeArtifactId ? exitFocusMode : enterFocusMode}
+          disabled={!selectedPersistedArtifact && !focusModeArtifactId}
+          className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground disabled:opacity-40"
+          aria-label={focusModeArtifactId ? "Exit focus mode" : "Focus artifact"}
+          title={focusModeArtifactId ? "Exit focus mode" : "Focus artifact"}
+        >
+          {focusModeArtifactId ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+        </button>
+        <button
+          type="button"
           onClick={() => zoomBy(0.75)}
           className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground"
           aria-label="Zoom out"
@@ -1109,6 +1264,50 @@ export function DesignCanvas({
           <Loader2 size={16} className="mr-2 animate-spin" />
           Loading artifacts
         </div>
+      ) : focusModeArtifactId && focusArtifact ? (
+        <div
+          className="absolute inset-0 min-h-0 p-4 pt-14"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <div className="flex h-full min-h-0 gap-3">
+            <aside className="flex w-48 shrink-0 flex-col overflow-hidden border-r pr-3">
+              <div className="mb-2 px-1 text-xs font-medium text-muted-foreground">Versions</div>
+              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+                {focusLineage.map((artifact, index) => (
+                  <button
+                    key={artifact.id}
+                    type="button"
+                    onClick={() => {
+                      setFocusModeArtifactId(artifact.id);
+                      setSelectedArtifactIds([artifact.id]);
+                    }}
+                    className={cn(
+                      "min-h-10 rounded-md border px-2 py-1.5 text-left text-xs transition-colors",
+                      artifact.id === focusArtifact.id
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-background text-muted-foreground hover:text-foreground",
+                    )}
+                    title={artifact.title}
+                  >
+                    <span className="block text-[10px] uppercase text-muted-foreground">
+                      v{index + 1}
+                    </span>
+                    <span className="block truncate">{artifact.title}</span>
+                  </button>
+                ))}
+              </div>
+            </aside>
+            <div className="min-w-0 flex-1">
+              <ArtifactCard
+                artifact={focusArtifact}
+                selected
+                selectedAnchor={selectedAnchors[focusArtifact.id] ?? null}
+                comments={commentsByArtifactId[focusArtifact.id] ?? []}
+                onAnchorSelected={handleAnchorSelected}
+              />
+            </div>
+          </div>
+        </div>
       ) : selectedArtifact ? (
         <div
           className="absolute left-0 top-0 origin-top-left will-change-transform"
@@ -1125,11 +1324,16 @@ export function DesignCanvas({
                 height: CARD_HEIGHT,
                 transform: `translate3d(${placement.x}px, ${placement.y}px, 0)`,
               }}
-              onClick={() => setSelectedArtifactId(placement.artifact.id)}
+              onClick={(event) =>
+                selectArtifact(
+                  placement.artifact.id,
+                  event.shiftKey || event.metaKey || event.ctrlKey,
+                )
+              }
             >
               <ArtifactCard
                 artifact={placement.artifact}
-                selected={selectedArtifact.id === placement.artifact.id}
+                selected={selectedArtifactIds.includes(placement.artifact.id)}
                 selectedAnchor={selectedAnchors[placement.artifact.id] ?? null}
                 comments={commentsByArtifactId[placement.artifact.id] ?? []}
                 onAnchorSelected={handleAnchorSelected}

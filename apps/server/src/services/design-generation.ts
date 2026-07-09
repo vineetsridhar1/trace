@@ -94,10 +94,51 @@ export type GeneratedDesignArtifact = {
   metadata: Record<string, unknown>;
 };
 
+export type DesignComparisonArtifact = {
+  id: string;
+  title: string;
+  prompt: string | null;
+  metadata: Record<string, unknown>;
+  html: string;
+};
+
 function stringList(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
     : [];
+}
+
+function buildArtifactContext(input: {
+  parentHtml?: string | null;
+  directionLabel?: string | null;
+  comparisonArtifacts?: DesignComparisonArtifact[] | null;
+}): string | null {
+  const parts: string[] = [];
+  if (input.parentHtml) {
+    parts.push(`Previous artifact HTML:\n${input.parentHtml}`);
+  } else if (input.directionLabel) {
+    parts.push(`Generate design direction: ${input.directionLabel}.`);
+  }
+
+  if (input.comparisonArtifacts?.length) {
+    parts.push(
+      [
+        "Selected comparison artifacts:",
+        ...input.comparisonArtifacts.map((artifact, index) =>
+          [
+            `Comparison ${index + 1}: ${artifact.title} (${artifact.id})`,
+            artifact.prompt ? `Prompt: ${artifact.prompt}` : null,
+            `Metadata: ${JSON.stringify(artifact.metadata)}`,
+            `HTML:\n${artifact.html}`,
+          ]
+            .filter((line): line is string => line !== null)
+            .join("\n"),
+        ),
+      ].join("\n\n"),
+    );
+  }
+
+  return parts.length > 0 ? parts.join("\n\n") : null;
 }
 
 export const designGenerationService = {
@@ -116,6 +157,7 @@ export const designGenerationService = {
     directionCount?: number | null;
     directionLabel?: string | null;
     elementAnchors?: Array<Record<string, unknown>> | null;
+    comparisonArtifacts?: DesignComparisonArtifact[] | null;
   }): Promise<GeneratedDesignArtifact> {
     const model = input.model ?? DEFAULT_DESIGN_MODEL;
     const generationId = input.generationId ?? randomUUID();
@@ -126,11 +168,11 @@ export const designGenerationService = {
     const designSystemId = group?.designSystemId ?? null;
     const skillIds = stringList(group?.designSkillIds);
     const content = loadTraceDesignPromptContent({ designSystemId, skillIds });
-    const artifactContext = input.parentHtml
-      ? `Previous artifact HTML:\n${input.parentHtml}`
-      : input.directionLabel
-        ? `Generate design direction: ${input.directionLabel}.`
-        : null;
+    const artifactContext = buildArtifactContext({
+      parentHtml: input.parentHtml,
+      directionLabel: input.directionLabel,
+      comparisonArtifacts: input.comparisonArtifacts ?? null,
+    });
     const streamPayloadBase = {
       generationId,
       sessionGroupId: input.sessionGroupId,
@@ -250,6 +292,8 @@ export const designGenerationService = {
         designSystemId,
         skillIds,
         usage: response?.usage ?? null,
+        comparisonArtifactIds:
+          input.comparisonArtifacts?.map((artifact) => artifact.id).filter(Boolean) ?? [],
       },
     };
   },

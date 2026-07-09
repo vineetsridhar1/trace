@@ -333,6 +333,59 @@ describe("artifactService", () => {
     expect(artifact.html).toContain("Generated");
   });
 
+  it("passes same-session comparison artifacts into design iteration generation", async () => {
+    const parent = designArtifact();
+    const comparison = designArtifact({
+      id: "artifact-2",
+      title: "Alternate dashboard",
+      prompt: "Make an alternate dashboard",
+      html: "<!doctype html><html><body>Alternate</body></html>",
+      metadata: { directionLabel: "Alternate" },
+    });
+    prismaMock.artifact.findFirst.mockResolvedValueOnce(parent);
+    prismaMock.artifact.findMany.mockResolvedValueOnce([comparison]);
+    prismaMock.artifact.create.mockImplementationOnce(
+      async (args: { data: Record<string, unknown> }) => ({
+        ...parent,
+        ...args.data,
+        id: "artifact-child",
+        createdBy: parent.createdBy,
+        createdAt: new Date("2026-07-09T10:01:00.000Z"),
+        updatedAt: new Date("2026-07-09T10:01:00.000Z"),
+      }),
+    );
+
+    await artifactService.iterateDesignArtifact({
+      artifactId: "artifact-1",
+      organizationId: "org-1",
+      actorId: "user-1",
+      prompt: "Merge the best parts",
+      comparisonArtifactIds: ["artifact-2"],
+    });
+
+    expect(prismaMock.artifact.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { in: ["artifact-2"] },
+          organizationId: "org-1",
+          sessionGroupId: "group-1",
+        }),
+      }),
+    );
+    expect(designGenerationServiceMock.generateHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        comparisonArtifacts: [
+          expect.objectContaining({
+            id: "artifact-2",
+            title: "Alternate dashboard",
+            html: "<!doctype html><html><body>Alternate</body></html>",
+            metadata: { directionLabel: "Alternate" },
+          }),
+        ],
+      }),
+    );
+  });
+
   it("does not create an artifact iteration when generation returns no HTML", async () => {
     const parent = designArtifact();
     prismaMock.artifact.findFirst.mockResolvedValueOnce(parent);

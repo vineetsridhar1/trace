@@ -173,6 +173,52 @@ describe("designGenerationService", () => {
     );
   });
 
+  it("includes selected comparison artifacts in the design system prompt", async () => {
+    aiServiceMock.stream.mockReturnValue(
+      (async function* () {
+        yield {
+          type: "complete",
+          response: {
+            content: [
+              {
+                type: "text",
+                text: "<!doctype html><html><body>merged</body></html>",
+              },
+            ],
+            stopReason: "end_turn",
+            usage: { inputTokens: 1, outputTokens: 2 },
+            model: "anthropic/test",
+          },
+        };
+      })(),
+    );
+
+    await designGenerationService.generateHtml({
+      organizationId: "org-1",
+      actorId: "user-1",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      prompt: "Merge these directions",
+      parentArtifactId: "artifact-1",
+      parentHtml: "<!doctype html><html><body>Primary</body></html>",
+      comparisonArtifacts: [
+        {
+          id: "artifact-2",
+          title: "Editorial direction",
+          prompt: "Make it editorial",
+          metadata: { directionLabel: "Bold editorial direction" },
+          html: "<!doctype html><html><body>Editorial</body></html>",
+        },
+      ],
+    });
+
+    const streamInput = aiServiceMock.stream.mock.calls[0]?.[0] as { system?: string } | undefined;
+    expect(streamInput?.system).toContain("Previous artifact HTML");
+    expect(streamInput?.system).toContain("Selected comparison artifacts");
+    expect(streamInput?.system).toContain("Editorial direction");
+    expect(streamInput?.system).toContain("<!doctype html><html><body>Editorial</body></html>");
+  });
+
   it("emits generation failure events for model errors", async () => {
     aiServiceMock.stream.mockReturnValue(
       (async function* () {
