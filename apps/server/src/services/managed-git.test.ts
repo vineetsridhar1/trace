@@ -223,6 +223,7 @@ describe("managedGitService", () => {
       remoteUrl: "https://trace.example/git/org-1/repo-1.git",
     });
     prismaMock.orgMember.findUnique.mockResolvedValueOnce({ userId: "user-1" });
+    prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({ id: "group-1" });
 
     const credential = await managedGitService.createUserCloneCredential({
       organizationId: "org-1",
@@ -241,6 +242,32 @@ describe("managedGitService", () => {
       organizationId: "org-1",
       repoId: "repo-1",
     });
+    expect(prismaMock.sessionGroup.findFirst).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+        repoId: "repo-1",
+        OR: [{ visibility: "public" }, { ownerUserId: "user-1" }],
+      },
+      select: { id: true },
+    });
+  });
+
+  it("rejects managed git user credentials when no linked app session group is visible", async () => {
+    prismaMock.repo.findFirst.mockResolvedValueOnce({
+      id: "repo-1",
+      name: "Managed app",
+      remoteUrl: "https://trace.example/git/org-1/repo-1.git",
+    });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ userId: "user-2" });
+    prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      managedGitService.createUserCloneCredential({
+        organizationId: "org-1",
+        repoId: "repo-1",
+        userId: "user-2",
+      }),
+    ).rejects.toThrow("Not authorized for this managed repo.");
   });
 
   it("rejects managed git user credentials for non-members", async () => {
@@ -508,6 +535,9 @@ describe("managedGitService", () => {
     prismaMock.orgMember.findUnique
       .mockResolvedValueOnce({ userId: "user-1" })
       .mockResolvedValueOnce({ userId: "user-1" });
+    prismaMock.sessionGroup.findFirst
+      .mockResolvedValueOnce({ id: "group-1" })
+      .mockResolvedValueOnce({ id: "group-1" });
     const credential = await managedGitService.createUserCloneCredential({
       organizationId: "org-1",
       repoId: "repo-1",
@@ -532,6 +562,40 @@ describe("managedGitService", () => {
       ["upload-pack", "--stateless-rpc", "--advertise-refs", expect.stringContaining("repo-1.git")],
       { stdio: ["pipe", "pipe", "pipe"] },
     );
+  });
+
+  it("rejects smart HTTP user tokens when the linked app group is no longer visible", async () => {
+    prismaMock.repo.findFirst
+      .mockResolvedValueOnce({
+        id: "repo-1",
+        name: "Managed app",
+        remoteUrl: "https://trace.example/git/org-1/repo-1.git",
+      })
+      .mockResolvedValueOnce({ id: "repo-1", setupConfig: {} });
+    prismaMock.orgMember.findUnique
+      .mockResolvedValueOnce({ userId: "user-1" })
+      .mockResolvedValueOnce({ userId: "user-1" });
+    prismaMock.sessionGroup.findFirst
+      .mockResolvedValueOnce({ id: "group-1" })
+      .mockResolvedValueOnce(null);
+    const credential = await managedGitService.createUserCloneCredential({
+      organizationId: "org-1",
+      repoId: "repo-1",
+      userId: "user-1",
+    });
+    const response = makeGitResponse();
+
+    await managedGitService.handleInfoRefs(
+      {
+        query: { service: "git-upload-pack" },
+        headers: { authorization: basicAuth(credential.token) },
+      } as unknown as Request,
+      response as unknown as Response,
+      { orgId: "org-1", repoId: "repo-1" },
+    );
+
+    expect(response.status).toHaveBeenCalledWith(401);
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it("authorizes smart HTTP info refs with a provisioned runtime token bound to the repo", async () => {

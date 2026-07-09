@@ -601,3 +601,9 @@ not COEP even though the serving contract calls for origin isolation on the cook
 artifact domain. Bootstrap and published artifact responses now include
 `Cross-Origin-Embedder-Policy: credentialless`, and the hosted design smoke requires that
 header alongside CSP, COOP, permissions, referrer, cache, and nosniff checks.
+
+During this audit pass, user managed-git credentials were found to authorize any org
+member for a hidden managed repo. Managed app repos now require both org membership and
+visibility of a session group linked to that repo before minting clone/export credentials,
+and smart-HTTP user-token auth re-checks the same session-group visibility before serving
+git-upload-pack or git-receive-pack.

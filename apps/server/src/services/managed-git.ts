@@ -11,6 +11,7 @@ import { AuthorizationError, ValidationError } from "../lib/errors.js";
 import { resolveJwtSecret } from "../lib/jwt-secret.js";
 import { authenticateProvisionedRuntimeToken } from "../lib/runtime-adapters.js";
 import { buildDefaultAppSetupConfig } from "./app-starter-config.js";
+import { visibleSessionGroupWhere } from "./access.js";
 import { apiTokenService } from "./api-token.js";
 import { eventService } from "./event.js";
 import { parseGitHubRepo } from "./github-repo.js";
@@ -219,7 +220,16 @@ async function ensureAuthorizedClient(
     where: { userId_organizationId: { userId: userAuth.userId, organizationId } },
     select: { userId: true },
   });
-  return membership ? { kind: "user", userId: userAuth.userId, sessionId: null } : null;
+  if (!membership) return null;
+  const visibleGroup = await prisma.sessionGroup.findFirst({
+    where: {
+      organizationId,
+      repoId,
+      ...visibleSessionGroupWhere(userAuth.userId),
+    },
+    select: { id: true },
+  });
+  return visibleGroup ? { kind: "user", userId: userAuth.userId, sessionId: null } : null;
 }
 
 async function initBareRepo(repoPath: string): Promise<void> {
@@ -393,6 +403,17 @@ export const managedGitService = {
       select: { userId: true },
     });
     if (!membership) {
+      throw new AuthorizationError("Not authorized for this managed repo.");
+    }
+    const visibleGroup = await prisma.sessionGroup.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        repoId: repo.id,
+        ...visibleSessionGroupWhere(input.userId),
+      },
+      select: { id: true },
+    });
+    if (!visibleGroup) {
       throw new AuthorizationError("Not authorized for this managed repo.");
     }
 
