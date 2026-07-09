@@ -354,3 +354,9 @@ During this continuation, the web quick-start helper was also updated to send
 `tool: "claude_code"` explicitly for app sessions. This keeps the app launch button from
 falling through to a user's non-Claude default tool while preserving coding-session repo
 inheritance/deferred runtime behavior and design-session serverless creation.
+
+During this continuation, the checkpoint restore panel was updated to build restore
+inputs by session kind. App checkpoint restores now send `kind: "app"`, force cloud
+hosting, and pin `tool: "claude_code"` so older or inconsistent app sessions cannot
+restore through a tool that drops the app harness; coding checkpoint restores keep their
+original tool and hosting behavior.
