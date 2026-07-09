@@ -69,6 +69,7 @@ import {
   DESIGN_ARTIFACT_CONTENT_TYPE,
   buildPlaceholderDesignArtifactHtml,
 } from "./design-artifact-html.js";
+import { managedGitService } from "./managed-git.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -3071,6 +3072,11 @@ export class SessionService {
       }
       input.hosting = "cloud";
       input.provisionWithoutPrompt = true;
+      const managedRepo = await managedGitService.createAppRepo({
+        organizationId: input.organizationId,
+        name: input.name ?? input.prompt ?? "Trace app",
+      });
+      input.repoId = managedRepo.id;
     }
 
     if (input.restoreCheckpointId && input.sessionGroupId) {

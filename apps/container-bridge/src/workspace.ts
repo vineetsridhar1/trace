@@ -60,6 +60,21 @@ export async function ensureRepo(
       "https://github.com",
       `https://x-access-token:${githubToken}@github.com`,
     );
+  } else {
+    const runtimeToken = process.env.TRACE_RUNTIME_TOKEN;
+    const tracePublicUrl = process.env.TRACE_SERVER_PUBLIC_URL;
+    if (runtimeToken && tracePublicUrl) {
+      const traceOrigin = new URL(tracePublicUrl);
+      const parsed = new URL(remoteUrl);
+      if (
+        parsed.origin === traceOrigin.origin &&
+        parsed.pathname.startsWith(`${traceOrigin.pathname.replace(/\/$/, "")}/git/`)
+      ) {
+        parsed.username = "x-token";
+        parsed.password = runtimeToken;
+        authUrl = parsed.toString();
+      }
+    }
   }
 
   if (fs.existsSync(repoPath)) {
@@ -465,11 +480,9 @@ async function setUpstreamIfRemote(
 async function ensureRemoteTracksBranch(repoPath: string, branch: string): Promise<void> {
   const desired = `+refs/heads/${branch}:refs/remotes/origin/${branch}`;
   const wildcard = "+refs/heads/*:refs/remotes/origin/*";
-  const result = await execFileAsync(
-    "git",
-    ["config", "--get-all", "remote.origin.fetch"],
-    { cwd: repoPath },
-  ).catch(() => null);
+  const result = await execFileAsync("git", ["config", "--get-all", "remote.origin.fetch"], {
+    cwd: repoPath,
+  }).catch(() => null);
   // Conservative exact-string match: a non-canonical covering refspec (e.g. a
   // narrower wildcard) would just add a redundant entry, which git dedupes.
   const refspecs = (result?.stdout ?? "")

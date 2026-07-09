@@ -19,6 +19,7 @@ import { uploadRouter } from "./routes/upload.js";
 import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
+import { managedGitRouter } from "./routes/managed-git.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -178,6 +179,15 @@ async function main() {
 
   // Local storage PUT accepts raw body — register BEFORE express.json()
   if (localStorageRouter) app.use(localStorageRouter);
+
+  app.use(
+    "/git",
+    express.raw({
+      type: ["application/x-git-upload-pack-request", "application/x-git-receive-pack-request"],
+      limit: "100mb",
+    }),
+    managedGitRouter,
+  );
 
   app.use(express.json());
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {

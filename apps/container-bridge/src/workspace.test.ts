@@ -55,10 +55,14 @@ function gitArgsAt(index: number): string[] {
 describe("workspace repo setup", () => {
   const originalCacheDir = process.env.TRACE_REPO_CACHE_DIR;
   const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalRuntimeToken = process.env.TRACE_RUNTIME_TOKEN;
+  const originalTraceServerPublicUrl = process.env.TRACE_SERVER_PUBLIC_URL;
 
   beforeEach(() => {
     delete process.env.TRACE_REPO_CACHE_DIR;
     delete process.env.GITHUB_TOKEN;
+    delete process.env.TRACE_RUNTIME_TOKEN;
+    delete process.env.TRACE_SERVER_PUBLIC_URL;
     vi.clearAllMocks();
     mocks.execFile.mockImplementation((...args: unknown[]) => {
       callbackFrom(args)(null, "", "");
@@ -75,6 +79,16 @@ describe("workspace repo setup", () => {
       delete process.env.GITHUB_TOKEN;
     } else {
       process.env.GITHUB_TOKEN = originalGithubToken;
+    }
+    if (originalRuntimeToken === undefined) {
+      delete process.env.TRACE_RUNTIME_TOKEN;
+    } else {
+      process.env.TRACE_RUNTIME_TOKEN = originalRuntimeToken;
+    }
+    if (originalTraceServerPublicUrl === undefined) {
+      delete process.env.TRACE_SERVER_PUBLIC_URL;
+    } else {
+      process.env.TRACE_SERVER_PUBLIC_URL = originalTraceServerPublicUrl;
     }
   });
 
@@ -104,6 +118,18 @@ describe("workspace repo setup", () => {
     await ensureRepo("repo-1", "https://github.com/acme/project.git", undefined, "main");
 
     expect(gitArgsAt(0)).toContain("main");
+  });
+
+  it("injects the runtime token for Trace managed git remotes", async () => {
+    process.env.TRACE_RUNTIME_TOKEN = "runtime-token";
+    process.env.TRACE_SERVER_PUBLIC_URL = "https://trace.example";
+    mocks.existsSync.mockReturnValue(false);
+
+    await ensureRepo("repo-1", "https://trace.example/git/org-1/repo-1.git", "main", "main");
+
+    expect(gitArgsAt(0)).toContain(
+      "https://x-token:runtime-token@trace.example/git/org-1/repo-1.git",
+    );
   });
 
   it("adds a cache reference when the repo cache mirror exists", async () => {

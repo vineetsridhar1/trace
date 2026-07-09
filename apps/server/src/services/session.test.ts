@@ -135,6 +135,17 @@ vi.mock("./github-repo.js", async () => {
   };
 });
 
+vi.mock("./managed-git.js", () => ({
+  managedGitService: {
+    createAppRepo: vi.fn().mockResolvedValue({
+      id: "repo-managed-1",
+      name: "Managed app",
+      remoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
+      defaultBranch: "main",
+    }),
+  },
+}));
+
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -143,6 +154,7 @@ import { runtimeAccessService } from "./runtime-access.js";
 import { inboxService } from "./inbox.js";
 import { apiTokenService } from "./api-token.js";
 import { GitHubApiError, githubRepoService, parseGitHubRepo } from "./github-repo.js";
+import { managedGitService } from "./managed-git.js";
 import { orgSecretService } from "./org-secret.js";
 import {
   getDefaultModel,
@@ -173,6 +185,7 @@ const inboxServiceMock = inboxService as unknown as MockedDeep<typeof inboxServi
 const apiTokenServiceMock = apiTokenService as unknown as MockedDeep<typeof apiTokenService>;
 const orgSecretServiceMock = orgSecretService as unknown as MockedDeep<typeof orgSecretService>;
 const githubRepoServiceMock = githubRepoService as unknown as MockedDeep<typeof githubRepoService>;
+const managedGitServiceMock = managedGitService as unknown as MockedDeep<typeof managedGitService>;
 const parseGitHubRepoMock = vi.mocked(parseGitHubRepo);
 const getDefaultModelMock = vi.mocked(getDefaultModel);
 const getDefaultReasoningEffortMock = vi.mocked(getDefaultReasoningEffort);
@@ -736,22 +749,32 @@ describe("SessionService", () => {
       expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
-    it("creates app sessions as standalone cloud groups", async () => {
+    it("creates app sessions with an internal managed repo", async () => {
+      const managedRepo = {
+        id: "repo-managed-1",
+        name: "Managed app",
+        remoteUrl: "https://trace.example/git/org-1/repo-managed-1.git",
+        defaultBranch: "main",
+      };
       const sessionGroup = makeSessionGroup({
         kind: "app",
-        repoId: null,
-        repo: null,
+        repoId: managedRepo.id,
+        repo: managedRepo,
         channelId: "channel-1",
       });
       const session = makeSession({
         sessionGroup,
         hosting: "cloud",
-        repoId: null,
-        repo: null,
+        repoId: managedRepo.id,
+        repo: managedRepo,
         channelId: "channel-1",
       });
 
       prismaMock.agentEnvironment.findFirst.mockResolvedValueOnce(makeAgentEnvironment());
+      prismaMock.repo.findFirst.mockResolvedValueOnce({
+        id: managedRepo.id,
+        remoteUrl: managedRepo.remoteUrl,
+      });
       prismaMock.channel.findUnique.mockResolvedValueOnce({
         id: "channel-1",
         organizationId: "org-1",
@@ -773,7 +796,7 @@ describe("SessionService", () => {
         data: expect.objectContaining({
           kind: "app",
           channelId: "channel-1",
-          repoId: undefined,
+          repoId: managedRepo.id,
         }),
         select: expect.any(Object),
       });
@@ -781,10 +804,14 @@ describe("SessionService", () => {
         expect.objectContaining({
           data: expect.objectContaining({
             hosting: "cloud",
-            repoId: undefined,
+            repoId: managedRepo.id,
           }),
         }),
       );
+      expect(managedGitServiceMock.createAppRepo).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        name: "Trace app",
+      });
     });
 
     it("creates a new session group for a channel entrypoint", async () => {
