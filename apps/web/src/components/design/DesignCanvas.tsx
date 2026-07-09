@@ -258,7 +258,7 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
 
     setViewport((current) => {
       if (event.ctrlKey || event.metaKey) {
-        const nextScale = clampZoom(current.scale * Math.exp(-event.deltaY * 0.002));
+        const nextScale = clampZoom(current.scale * Math.exp(-event.deltaY * 0.006));
         const worldX = (pointerX - current.x) / current.scale;
         const worldY = (pointerY - current.y) / current.scale;
         return {
@@ -372,7 +372,7 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
         >
           <button
             type="button"
-            onClick={() => zoomBy(0.85)}
+            onClick={() => zoomBy(0.75)}
             className="inline-flex h-8 w-8 items-center justify-center border-r text-muted-foreground hover:text-foreground"
             aria-label="Zoom out"
             title="Zoom out"
@@ -384,7 +384,7 @@ export function DesignCanvas({ sessionGroupId }: { sessionGroupId: string }) {
           </div>
           <button
             type="button"
-            onClick={() => zoomBy(1.15)}
+            onClick={() => zoomBy(1.25)}
             className="inline-flex h-8 w-8 items-center justify-center border-l border-r text-muted-foreground hover:text-foreground"
             aria-label="Zoom in"
             title="Zoom in"
