@@ -203,6 +203,7 @@ async function appState(sessionGroupId) {
 
 async function waitForReadyApp(sessionGroupId, label, options = {}) {
   const requireCheckpoint = options.requireCheckpoint !== false;
+  const requireManagedRepo = options.requireManagedRepo !== false;
   const readinessLabel = requireCheckpoint
     ? `${label} app runtime, endpoint, logs, and checkpoint`
     : `${label} app runtime, endpoint, and logs`;
@@ -211,6 +212,12 @@ async function waitForReadyApp(sessionGroupId, label, options = {}) {
     const group = state.sessionGroup;
     if (!group) return { ok: false, detail: "session group not found" };
     if (group.kind !== "app") return { ok: false, detail: `group kind is ${group.kind}` };
+    if (requireManagedRepo && group.repo?.provider !== "managed") {
+      return {
+        ok: false,
+        detail: `repo provider is ${group.repo?.provider ?? "missing"}`,
+      };
+    }
 
     const process = runningProcess(state);
     const endpoint = enabledEndpoint(state);
@@ -235,6 +242,7 @@ async function waitForReadyApp(sessionGroupId, label, options = {}) {
       const checkpoints = group.gitCheckpoints;
       if (checkpoints.length === 0) return { ok: false, detail: "no checkpoint recorded yet" };
       checkpoint = checkpoints[0];
+      if (!checkpoint.commitSha) return { ok: false, detail: "checkpoint commit SHA is missing" };
       if (requireCapture && checkpoint.captureStatus !== "captured") {
         return {
           ok: false,
@@ -342,6 +350,9 @@ const session = await startAppSession({
       }
     : {}),
 });
+if (session.sessionGroup?.repo) {
+  throw new Error("Fresh app sessions must start without a repo before the first checkpoint");
+}
 
 const initial = await waitForReadyApp(session.sessionGroupId, "initial");
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
@@ -357,6 +368,7 @@ const restored = await startAppSession({
 });
 const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored", {
   requireCheckpoint: false,
+  requireManagedRepo: true,
 });
 const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
 await renderUrl(restoredPreviewUrl, "restored preview URL", { requireFetch: false });
