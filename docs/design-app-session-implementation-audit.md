@@ -770,4 +770,5 @@ keeping the checkpoint panel event-backed when scoped events arrive first.
 During this audit continuation, the hosted design smoke counted fan-out directions but
 did not require the direction metadata that the canvas uses to explain variants. It now
 asserts each generated artifact carries the expected `directionIndex`, `directionCount`,
-and a unique non-empty `directionLabel` through the real GraphQL/service/storage path.
+and a unique non-empty `directionLabel` through the real GraphQL/service/storage path,
+and that each completion event preserves the same fan-out identity.

@@ -287,6 +287,7 @@ async function waitForPromotedBrief(sessionId) {
 }
 
 async function waitForGeneratedArtifactCompletionEvents(sessionId, artifacts, label) {
+  const artifactsById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const artifactIds = artifacts.map((artifact) => artifact.id);
   return pollUntil(`${label} artifact completion events`, async () => {
     const data = await graphql(SESSION_EVENTS, {
@@ -341,6 +342,23 @@ async function waitForGeneratedArtifactCompletionEvents(sessionId, artifacts, la
       }
       if (typeof completedPayload.htmlPreview !== "string" || !completedPayload.htmlPreview) {
         throw new Error(`${label} completion ${artifactId} is missing htmlPreview`);
+      }
+      const artifact = artifactsById.get(artifactId);
+      const metadata = asObject(artifact?.metadata, `${label} artifact ${artifactId} metadata`);
+      if (completedPayload.directionIndex !== metadata.directionIndex) {
+        throw new Error(
+          `${label} completion ${artifactId} directionIndex is ${completedPayload.directionIndex ?? "missing"}, expected ${metadata.directionIndex ?? "missing"}`,
+        );
+      }
+      if (completedPayload.directionCount !== metadata.directionCount) {
+        throw new Error(
+          `${label} completion ${artifactId} directionCount is ${completedPayload.directionCount ?? "missing"}, expected ${metadata.directionCount ?? "missing"}`,
+        );
+      }
+      if (completedPayload.directionLabel !== metadata.directionLabel) {
+        throw new Error(
+          `${label} completion ${artifactId} directionLabel is ${completedPayload.directionLabel ?? "missing"}, expected ${metadata.directionLabel ?? "missing"}`,
+        );
       }
     }
 
