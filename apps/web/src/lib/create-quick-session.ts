@@ -34,17 +34,24 @@ export async function createQuickSession(
   const channelRepoId = getChannelRepoId(channelId);
   const kind = options.kind ?? "coding";
   const isCoding = kind === "coding";
+  const tool = kind === "app" ? "claude_code" : undefined;
 
   try {
+    const input = {
+      kind,
+      ...(tool ? { tool } : {}),
+      ...(isCoding
+        ? {
+            deferRuntimeSelection: true,
+            ...(channelRepoId ? { repoId: channelRepoId } : {}),
+          }
+        : {}),
+      channelId,
+      visibility: options.visibility,
+    };
     const result = await client
       .mutation(START_SESSION_MUTATION, {
-        input: {
-          kind,
-          ...(isCoding ? { deferRuntimeSelection: true } : {}),
-          channelId,
-          repoId: isCoding ? (channelRepoId ?? undefined) : undefined,
-          visibility: options.visibility,
-        },
+        input,
       })
       .toPromise();
 

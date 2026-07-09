@@ -349,3 +349,8 @@ During this continuation, app sessions were found to rely on
 real CLI option. `SessionService.start` now rejects app sessions that resolve to any
 other tool, including unsupported user defaults, so the Open Design app harness cannot be
 silently dropped.
+
+During this continuation, the web quick-start helper was also updated to send
+`tool: "claude_code"` explicitly for app sessions. This keeps the app launch button from
+falling through to a user's non-Claude default tool while preserving coding-session repo
+inheritance/deferred runtime behavior and design-session serverless creation.
