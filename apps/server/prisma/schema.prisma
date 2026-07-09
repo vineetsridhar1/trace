@@ -228,6 +228,7 @@ enum EventType {
   session_application_process_stopped
   session_application_process_failed
   session_application_log_appended
+  session_app_tokens_updated
   session_endpoint_created
   session_endpoint_forwarding_enabled
   session_endpoint_forwarding_disabled

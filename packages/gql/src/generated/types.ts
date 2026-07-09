@@ -438,6 +438,7 @@ export type EventType =
   | "repo_branch_pushed"
   | "repo_created"
   | "repo_updated"
+  | "session_app_tokens_updated"
   | "session_application_log_appended"
   | "session_application_process_failed"
   | "session_application_process_started"
@@ -679,6 +680,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  patchAppSessionTokens: Event;
   patchDesignArtifactTokens: Artifact;
   promoteDesignArtifactToCodingSession: Session;
   publishAppSession: SessionEndpoint;
@@ -1002,6 +1004,11 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationPatchAppSessionTokensArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+  tokens: Scalars["JSON"]["input"];
 };
 
 export type MutationPatchDesignArtifactTokensArgs = {

@@ -169,6 +169,21 @@ export const sessionApplicationMutations = {
       requireOrgContext(ctx),
       requireUser(ctx),
     ),
+  patchAppSessionTokens: (
+    _parent: unknown,
+    args: { sessionGroupId: string; tokens: unknown },
+    ctx: Context,
+  ) => {
+    if (!args.tokens || typeof args.tokens !== "object" || Array.isArray(args.tokens)) {
+      throw new Error("tokens must be an object");
+    }
+    return sessionApplicationService.patchAppTokens(
+      args.sessionGroupId,
+      args.tokens as Record<string, unknown>,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    );
+  },
   createSessionEndpointPreview: (_parent: unknown, args: { endpointId: string }, ctx: Context) =>
     sessionApplicationService.createEndpointPreview(
       args.endpointId,

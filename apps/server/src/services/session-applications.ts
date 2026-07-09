@@ -25,6 +25,7 @@ export const PROCESS_LOG_RETAINED_ROWS = 500;
 const PROCESS_LOG_PRUNE_INTERVAL = 50;
 const PROCESS_LOG_PRUNE_BATCH = 200;
 const PROCESS_LOG_TRUNCATION_SUFFIX = "\n[trace] log chunk truncated";
+const APP_TOKENS_PATH = "trace.tokens.json";
 
 type ManagedSessionGroup = {
   id: string;
@@ -56,6 +57,38 @@ function connectionRuntimeInstanceId(connection: Prisma.JsonValue): string | nul
   return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
     ? runtimeInstanceId
     : null;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergeJsonObjects(
+  current: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...current };
+  for (const [key, value] of Object.entries(patch)) {
+    if (isJsonObject(value) && isJsonObject(next[key])) {
+      next[key] = mergeJsonObjects(next[key], value);
+    } else {
+      next[key] = value;
+    }
+  }
+  return next;
+}
+
+function parseTokenFile(content: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new ValidationError("App token file is not valid JSON.");
+  }
+  if (!isJsonObject(parsed)) {
+    throw new ValidationError("App token file must contain a JSON object.");
+  }
+  return parsed;
 }
 
 function publicProcess(process: PrismaSessionApplicationProcess) {
@@ -676,6 +709,57 @@ export class SessionApplicationService {
     await this.assertCanManage(endpoint.sessionGroupId, organizationId, userId);
     await prisma.endpointTrafficEntry.deleteMany({ where: { endpointId: endpoint.id } });
     return true;
+  }
+
+  async patchAppTokens(
+    sessionGroupId: string,
+    tokens: Record<string, unknown>,
+    organizationId: string,
+    userId: string,
+  ) {
+    if (!isJsonObject(tokens)) {
+      throw new ValidationError("tokens must be an object");
+    }
+    const { group, sessionId, runtimeId } = await this.resolveCloudRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+    );
+    if (group.kind !== "app") {
+      throw new ValidationError("App token tweaks require an app session.");
+    }
+
+    const currentContent = await sessionRouter.readFile(
+      runtimeId,
+      sessionId,
+      APP_TOKENS_PATH,
+      group.workdir ?? group.sessions[0]?.workdir ?? undefined,
+    );
+    const currentTokens = parseTokenFile(currentContent);
+    const nextTokens = mergeJsonObjects(currentTokens, tokens);
+    const nextContent = `${JSON.stringify(nextTokens, null, 2)}\n`;
+
+    await sessionRouter.writeFile(
+      runtimeId,
+      sessionId,
+      APP_TOKENS_PATH,
+      nextContent,
+      group.workdir ?? group.sessions[0]?.workdir ?? undefined,
+    );
+
+    return eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_app_tokens_updated",
+      payload: {
+        sessionGroupId,
+        path: APP_TOKENS_PATH,
+        tokens: tokens as Prisma.InputJsonValue,
+      } as Prisma.InputJsonValue,
+      actorType: "user",
+      actorId: userId,
+    });
   }
 
   async publishAppSession(sessionGroupId: string, organizationId: string, userId: string) {

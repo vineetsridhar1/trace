@@ -8,7 +8,9 @@ vi.mock("../lib/db.js", async () => {
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     getRuntime: vi.fn(),
+    readFile: vi.fn(),
     sendToRuntime: vi.fn().mockReturnValue("delivered"),
+    writeFile: vi.fn(),
   },
 }));
 
@@ -31,7 +33,9 @@ import { verifyEndpointPreviewToken } from "./endpoint-preview-auth.js";
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const sessionRouterMock = sessionRouter as unknown as {
   getRuntime: ReturnType<typeof vi.fn>;
+  readFile: ReturnType<typeof vi.fn>;
   sendToRuntime: ReturnType<typeof vi.fn>;
+  writeFile: ReturnType<typeof vi.fn>;
 };
 const eventServiceMock = eventService as unknown as { create: ReturnType<typeof vi.fn> };
 
@@ -97,6 +101,8 @@ describe("SessionApplicationService", () => {
       ws: { readyState: 1, OPEN: 1 },
     });
     sessionRouterMock.sendToRuntime.mockReturnValue("delivered");
+    sessionRouterMock.readFile.mockResolvedValue("{}");
+    sessionRouterMock.writeFile.mockResolvedValue(undefined);
     prismaMock.sessionEndpoint.findUnique.mockResolvedValue(null);
     prismaMock.sessionEndpoint.create.mockResolvedValue({
       id: "endpoint-1",
@@ -624,6 +630,83 @@ describe("SessionApplicationService", () => {
       endpointId: "endpoint-1",
     });
     expect(preview.expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("patches app token files through the live cloud bridge", async () => {
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      id: "group-1",
+      organizationId: "org-1",
+      kind: "app",
+      ownerUserId: "user-1",
+      visibility: "public",
+      repoId: null,
+      workdir: "/home/coder",
+      repo: null,
+      sessions: [
+        {
+          id: "session-1",
+          workdir: "/home/coder",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ],
+    });
+    sessionRouterMock.readFile.mockResolvedValueOnce(
+      JSON.stringify({
+        color: {
+          background: "#ffffff",
+          primary: "#2563eb",
+        },
+        radius: {
+          card: "8px",
+        },
+      }),
+    );
+    eventServiceMock.create.mockResolvedValueOnce({ id: "event-1" });
+
+    const event = await new SessionApplicationService().patchAppTokens(
+      "group-1",
+      { color: { primary: "#ef4444" } },
+      "org-1",
+      "user-1",
+    );
+
+    expect(event).toEqual({ id: "event-1" });
+    expect(sessionRouterMock.readFile).toHaveBeenCalledWith(
+      "runtime-1",
+      "session-1",
+      "trace.tokens.json",
+      "/home/coder",
+    );
+    expect(sessionRouterMock.writeFile).toHaveBeenCalledWith(
+      "runtime-1",
+      "session-1",
+      "trace.tokens.json",
+      `${JSON.stringify(
+        {
+          color: {
+            background: "#ffffff",
+            primary: "#ef4444",
+          },
+          radius: {
+            card: "8px",
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "/home/coder",
+    );
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_app_tokens_updated",
+        scopeId: "session-1",
+        payload: expect.objectContaining({
+          sessionGroupId: "group-1",
+          path: "trace.tokens.json",
+          tokens: { color: { primary: "#ef4444" } },
+        }),
+      }),
+    );
   });
 
   it("rejects publish for non-app sessions", async () => {
