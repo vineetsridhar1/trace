@@ -164,6 +164,41 @@ describe("ManagedProcessManager", () => {
     await waitFor(messages, (message) => message.type === "app_process_exited");
   });
 
+  it("filters system and internal ports before reporting app previews", async () => {
+    const messages: BridgeMessage[] = [];
+    const detectPorts = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([22, 80, 1024, 2375, 2376, 5432, 6379, 7456, 5173, 65536]);
+    const manager = new ManagedProcessManager(
+      new Map([["session-1", process.cwd()]]),
+      (message) => messages.push(message),
+      detectPorts,
+    );
+
+    void manager.start({
+      requestId: "start-1",
+      processInstanceId: "process-1",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: 'node -e "setInterval(() => {}, 1000)"',
+      cwd: ".",
+    });
+
+    const detected = await waitFor(
+      messages,
+      (message) => message.type === "app_process_ports_detected",
+    );
+    expect(detected).toMatchObject({
+      type: "app_process_ports_detected",
+      processInstanceId: "process-1",
+      ports: [{ port: 5173, protocol: "http" }],
+    });
+
+    manager.stop("process-1");
+    await waitFor(messages, (message) => message.type === "app_process_exited");
+  });
+
   it("stops the full process tree so ports can be reused", async () => {
     const messages: BridgeMessage[] = [];
     const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>

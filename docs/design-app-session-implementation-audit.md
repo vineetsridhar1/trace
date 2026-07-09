@@ -777,3 +777,9 @@ During this audit continuation, the hosted design smoke also proved durable comp
 events but not the streaming lifecycle promised by the design-session docs. It now
 requires every smoke-generated artifact to have a matching `design_generation_started`
 event and at least one `design_generation_delta` event before the durable completion.
+
+During this audit continuation, app port detection had positive bridge coverage and
+server-side filtering coverage, but no bridge-side regression that internal/system ports
+are suppressed before endpoint registration. The container-bridge process tests now prove
+SSH, Docker, database, Open Design daemon, boundary, and out-of-range ports are filtered
+while a forwardable app port is reported.
