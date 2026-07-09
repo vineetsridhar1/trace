@@ -59,9 +59,15 @@ describe("designGenerationService", () => {
     expect(result.metadata).toMatchObject({
       generator: "llm",
       source: "designGenerationService",
+      promptComposer: "trace-open-design-v1",
       model: "anthropic/test",
       usage: { inputTokens: 10, outputTokens: 20 },
     });
+    expect(aiServiceMock.stream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("origin-isolated user-content iframe"),
+      }),
+    );
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "design_generation_started",

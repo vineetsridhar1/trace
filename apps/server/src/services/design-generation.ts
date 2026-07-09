@@ -1,24 +1,11 @@
 import { Prisma } from "@prisma/client";
-import { getDefaultModel, type LLMResponse } from "@trace/shared";
+import { composeTraceDesignPrompt, getDefaultModel, type LLMResponse } from "@trace/shared";
 import { aiService } from "./ai.js";
 import { eventService } from "./event.js";
 import { buildPlaceholderDesignArtifactHtml } from "./design-artifact-html.js";
 import type { ActorType } from "@trace/gql";
 
 const DEFAULT_DESIGN_MODEL = getDefaultModel("claude_code") ?? "anthropic/claude-sonnet-5";
-
-function designSystemPrompt(parentHtml?: string | null): string {
-  return [
-    "You are Trace Design, a product design generator.",
-    "Return one complete, self-contained HTML document and nothing else.",
-    "The artifact must include inline CSS, a :root CSS variable token block, and stable data-el attributes on meaningful elements.",
-    "Do not use external scripts, external stylesheets, remote fonts, or placeholder explanation copy.",
-    "The output should be polished product UI, suitable for rendering directly in an isolated iframe.",
-    parentHtml
-      ? "You are iterating on a previous artifact. Preserve the user's requested continuity while improving the HTML."
-      : "Create a distinct first design direction for the user's brief.",
-  ].join("\n");
-}
 
 function textFromResponse(response: LLMResponse | null): string {
   if (!response) return "";
@@ -93,7 +80,9 @@ export const designGenerationService = {
         organizationId: input.organizationId,
         userId: input.actorId,
         model,
-        system: designSystemPrompt(input.parentHtml),
+        system: composeTraceDesignPrompt({
+          parentHtml: input.parentHtml,
+        }),
         maxTokens: 8192,
         temperature: 0.8,
         messages: [
@@ -122,6 +111,7 @@ export const designGenerationService = {
           metadata: {
             generator: "local_fallback",
             source: "designGenerationService",
+            promptComposer: "trace-open-design-v1",
             model,
             fallbackReason: "missing_api_key",
           },
@@ -153,6 +143,7 @@ export const designGenerationService = {
       metadata: {
         generator: "llm",
         source: "designGenerationService",
+        promptComposer: "trace-open-design-v1",
         model: response?.model ?? model,
         usage: response?.usage ?? null,
       },
