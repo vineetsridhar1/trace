@@ -61,6 +61,8 @@ Implemented:
 - Managed smart-HTTP runtime auth is wired for Trace-managed remotes.
 - The app starter config targets Next.js App Router, Tailwind, shadcn-compatible UI, pnpm,
   and port 3000.
+- The generated app starter pins its framework/dependency versions and has a smoke script
+  that installs, lints, typechecks, and builds the exact emitted files.
 - The container bridge detects app process ports and reports them to the server.
 - Detected HTTP ports create/enable `SessionEndpoint` rows for live preview.
 - Logs, process state, endpoint preview, terminal, checkpoint panel, and publish/share
@@ -88,6 +90,7 @@ Verified:
 - `@trace/web lint`
 - `@trace/web build`
 - `@trace/shared build`
+- `@trace/shared smoke:app-starter`
 
 ## Remaining Verification Gap
 

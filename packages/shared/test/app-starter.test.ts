@@ -31,19 +31,22 @@ describe("TRACE_APP_STARTER_FILES", () => {
       dev: "next dev",
       build: "next build",
       start: "next start",
+      lint: "eslint .",
       typecheck: "tsc --noEmit",
     });
     expect(pkg.dependencies).toMatchObject({
-      next: "latest",
-      react: "latest",
-      "react-dom": "latest",
-      "lucide-react": "latest",
-      "@radix-ui/react-slot": "latest",
+      next: "15.5.20",
+      react: "19.2.7",
+      "react-dom": "19.2.7",
+      "lucide-react": "1.23.0",
+      "@radix-ui/react-slot": "1.3.0",
     });
     expect(pkg.devDependencies).toMatchObject({
-      tailwindcss: "latest",
-      "@tailwindcss/postcss": "latest",
-      typescript: "latest",
+      tailwindcss: "4.3.2",
+      "@tailwindcss/postcss": "4.3.2",
+      eslint: "8.57.1",
+      "eslint-config-next": "15.5.20",
+      typescript: "5.7.3",
     });
   });
 
@@ -51,6 +54,7 @@ describe("TRACE_APP_STARTER_FILES", () => {
     expect(TRACE_APP_STARTER_FILES["components.json"]).toContain(
       "https://ui.shadcn.com/schema.json",
     );
+    expect(TRACE_APP_STARTER_FILES[".eslintrc.json"]).toContain("next/core-web-vitals");
     expect(TRACE_APP_STARTER_FILES["components/ui/button.tsx"]).toContain(
       "class-variance-authority",
     );

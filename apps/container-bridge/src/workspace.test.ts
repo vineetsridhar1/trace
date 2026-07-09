@@ -207,7 +207,7 @@ describe("workspace repo setup", () => {
 
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
       "/home/coder/package.json",
-      expect.stringContaining('"next": "latest"'),
+      expect.stringContaining('"next": "15.5.20"'),
     );
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
       "/home/coder/app/page.tsx",

@@ -16,26 +16,28 @@ This managed repository stores a standalone Trace app session.
         dev: "next dev",
         build: "next build",
         start: "next start",
-        lint: "next lint",
+        lint: "eslint .",
         typecheck: "tsc --noEmit",
       },
       dependencies: {
-        "@radix-ui/react-slot": "latest",
-        "class-variance-authority": "latest",
-        clsx: "latest",
-        "lucide-react": "latest",
-        next: "latest",
-        react: "latest",
-        "react-dom": "latest",
-        "tailwind-merge": "latest",
+        "@radix-ui/react-slot": "1.3.0",
+        "class-variance-authority": "0.7.1",
+        clsx: "2.1.1",
+        "lucide-react": "1.23.0",
+        next: "15.5.20",
+        react: "19.2.7",
+        "react-dom": "19.2.7",
+        "tailwind-merge": "3.6.0",
       },
       devDependencies: {
-        "@tailwindcss/postcss": "latest",
-        "@types/node": "latest",
-        "@types/react": "latest",
-        "@types/react-dom": "latest",
-        tailwindcss: "latest",
-        typescript: "latest",
+        "@tailwindcss/postcss": "4.3.2",
+        "@types/node": "24.5.2",
+        "@types/react": "19.2.17",
+        "@types/react-dom": "19.2.3",
+        eslint: "8.57.1",
+        "eslint-config-next": "15.5.20",
+        tailwindcss: "4.3.2",
+        typescript: "5.7.3",
       },
     },
     null,
@@ -47,6 +49,14 @@ This managed repository stores a standalone Trace app session.
 const nextConfig: NextConfig = {};
 
 export default nextConfig;
+`,
+  ".eslintrc.json": `${JSON.stringify(
+    {
+      extends: ["next/core-web-vitals", "next/typescript"],
+    },
+    null,
+    2,
+  )}
 `,
   "tsconfig.json": `${JSON.stringify(
     {
