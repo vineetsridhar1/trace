@@ -81,11 +81,24 @@ export function buildDesignArtifactBootstrapHtml() {
         if (!target || !target.closest) return;
         var el = target.closest("[data-el]");
         if (!el) return;
+        var rect = el.getBoundingClientRect();
+        var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1;
+        var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
         postToParent({
           type: "trace:artifact:element-selected",
           anchor: {
+            type: "element",
             id: el.getAttribute("data-el"),
+            dataEl: el.getAttribute("data-el"),
             text: (el.textContent || "").trim().slice(0, 500),
+            bounds: {
+              left: rect.left,
+              top: rect.top,
+              width: rect.width,
+              height: rect.height,
+              x: rect.left / viewportWidth,
+              y: rect.top / viewportHeight,
+            },
           },
         });
       }, true);

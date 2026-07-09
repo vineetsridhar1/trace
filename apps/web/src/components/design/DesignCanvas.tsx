@@ -179,6 +179,14 @@ export type DesignAnchor = {
   text?: string;
   x?: number;
   y?: number;
+  bounds?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    x?: number;
+    y?: number;
+  };
 };
 
 export type DesignComment = {
@@ -456,6 +464,26 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function normalizeAnchorBounds(value: unknown): DesignAnchor["bounds"] | undefined {
+  const bounds = objectField(value);
+  if (!bounds) return undefined;
+  const left = numberField(bounds.left);
+  const top = numberField(bounds.top);
+  const width = numberField(bounds.width);
+  const height = numberField(bounds.height);
+  if (left == null || top == null || width == null || height == null) return undefined;
+  const x = numberField(bounds.x);
+  const y = numberField(bounds.y);
+  return {
+    left,
+    top,
+    width,
+    height,
+    ...(x != null ? { x } : {}),
+    ...(y != null ? { y } : {}),
+  };
+}
+
 export function normalizeDesignAnchor(value: unknown): DesignAnchor | null {
   const anchor = objectField(value);
   if (!anchor) return null;
@@ -465,6 +493,7 @@ export function normalizeDesignAnchor(value: unknown): DesignAnchor | null {
   const text = stringField(anchor.text);
   const x = numberField(anchor.x);
   const y = numberField(anchor.y);
+  const bounds = normalizeAnchorBounds(anchor.bounds);
   if (type === "element" && !dataEl) return null;
 
   return {
@@ -472,6 +501,7 @@ export function normalizeDesignAnchor(value: unknown): DesignAnchor | null {
     ...(dataEl ? { dataEl } : {}),
     ...(text ? { text } : {}),
     ...(type === "artifact" && x != null && y != null ? { x, y } : {}),
+    ...(type === "element" && bounds ? { bounds } : {}),
   };
 }
 

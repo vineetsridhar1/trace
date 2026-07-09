@@ -556,3 +556,10 @@ though the design docs require no runtime/hosting. `HostingMode` now includes
 `serverless`, design session creation persists that mode, and the hosted design smoke
 requires fresh design sessions to report `hosting: "serverless"` while still proving no
 repo and no runtime connection are attached.
+
+During this audit pass, authoring preview element selection still emitted only the
+`data-el` id and text snippet even though the design docs require bounding-box context for
+selected element anchors. The user-content bootstrap now includes a `bounds` object from
+`getBoundingClientRect()` with pixel and normalized viewport coordinates, the design
+canvas preserves those bounds through anchor normalization/comment payloads, and focused
+server/web tests cover the protocol and normalization behavior.

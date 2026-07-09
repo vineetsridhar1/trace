@@ -20,10 +20,17 @@ import {
 
 describe("design canvas anchors", () => {
   it("normalizes bootstrap element-selected anchors", () => {
-    expect(normalizeDesignAnchor({ id: "hero-title", text: "Welcome" })).toEqual({
+    expect(
+      normalizeDesignAnchor({
+        id: "hero-title",
+        text: "Welcome",
+        bounds: { left: 12, top: 24, width: 320, height: 80, x: 0.1, y: 0.2 },
+      }),
+    ).toEqual({
       type: "element",
       dataEl: "hero-title",
       text: "Welcome",
+      bounds: { left: 12, top: 24, width: 320, height: 80, x: 0.1, y: 0.2 },
     });
   });
 
@@ -40,7 +47,12 @@ describe("design canvas anchors", () => {
       payload: {
         artifactId: "artifact-1",
         body: "Tighten the header spacing.",
-        anchor: { type: "element", dataEl: "hero-title", text: "Hero" },
+        anchor: {
+          type: "element",
+          dataEl: "hero-title",
+          text: "Hero",
+          bounds: { left: 10, top: 20, width: 100, height: 40 },
+        },
         sendToAgent: true,
       },
       actor: {
@@ -60,6 +72,7 @@ describe("design canvas anchors", () => {
         type: "element",
         dataEl: "hero-title",
         text: "Hero",
+        bounds: { left: 10, top: 20, width: 100, height: 40 },
       },
       sendToAgent: true,
       timestamp: "2026-07-09T10:00:00.000Z",
@@ -90,7 +103,12 @@ describe("design canvas anchors", () => {
       id: "event-2",
       artifactId: "artifact-1",
       body: "Tighten the headline",
-      anchor: normalizeDesignAnchor({ type: "element", dataEl: "hero-title", text: "Hero" }),
+      anchor: normalizeDesignAnchor({
+        type: "element",
+        dataEl: "hero-title",
+        text: "Hero",
+        bounds: { left: 10, top: 20, width: 100, height: 40 },
+      }),
       sendToAgent: true,
       timestamp: "2026-07-09T10:00:00.000Z",
     };
@@ -99,7 +117,12 @@ describe("design canvas anchors", () => {
       {
         id: "event-2",
         body: "Tighten the headline",
-        anchor: { type: "element", dataEl: "hero-title", text: "Hero" },
+        anchor: {
+          type: "element",
+          dataEl: "hero-title",
+          text: "Hero",
+          bounds: { left: 10, top: 20, width: 100, height: 40 },
+        },
       },
     ]);
   });

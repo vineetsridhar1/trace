@@ -140,6 +140,11 @@ describe("design artifact user-content serving", () => {
     expect(html).toContain("trace:artifact:render");
     expect(html).toContain("trace:artifact:error");
     expect(html).toContain("trace:artifact:element-selected");
+    expect(html).toContain("var rect = el.getBoundingClientRect()");
+    expect(html).toContain("dataEl: el.getAttribute(\"data-el\")");
+    expect(html).toContain("bounds: {");
+    expect(html).toContain("x: rect.left / viewportWidth");
+    expect(html).toContain("y: rect.top / viewportHeight");
     expect(html).not.toContain("{{artifact");
   });
 
