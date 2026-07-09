@@ -399,3 +399,8 @@ prove send-comment-to-agent behavior. After adding a `design_comment_added` even
 `sendToAgent: true`, the smoke now polls for a child artifact whose `parentArtifactId`
 matches the commented artifact and verifies that generated iteration HTML before moving
 on to token tweak, PDF export, publish, and promotion.
+
+During this continuation, the hosted `pnpm smoke:design-session` script was also tightened
+to assert the user-content bootstrap serving boundary after publish. Once the public
+artifact URL renders, the smoke fetches that artifact's `/_bootstrap` URL and verifies it
+returns the bootstrap shell without leaking the published artifact content.

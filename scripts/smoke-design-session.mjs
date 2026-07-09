@@ -270,6 +270,24 @@ async function assertUrlRenders(url, label) {
   }
 }
 
+async function assertBootstrapDoesNotLeakContent(url, label) {
+  const bootstrapUrl = new URL(url);
+  bootstrapUrl.pathname = "/_bootstrap";
+  bootstrapUrl.search = "";
+  bootstrapUrl.hash = "";
+  const response = await fetch(bootstrapUrl, { redirect: "follow" });
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`${label} bootstrap returned HTTP ${response.status}: ${body.slice(0, 500)}`);
+  }
+  if (!body.includes("trace:artifact:render")) {
+    throw new Error(`${label} bootstrap did not return the artifact bootstrap shell`);
+  }
+  if (body.includes(expectedText)) {
+    throw new Error(`${label} bootstrap leaked published artifact content`);
+  }
+}
+
 async function assertPdfDownload(url, label) {
   const response = await fetch(url, { redirect: "follow" });
   const bytes = new Uint8Array(await response.arrayBuffer());
@@ -382,6 +400,7 @@ if (!published.publishedAt) throw new Error("Published artifact is missing publi
 if (!published.publicUrl) throw new Error("Published artifact publicUrl is missing");
 assertArtifactHtml(published, "Published");
 await assertUrlRenders(published.publicUrl, "published design artifact URL");
+await assertBootstrapDoesNotLeakContent(published.publicUrl, "published design artifact URL");
 
 const promoteData = await graphql(PROMOTE_DESIGN_ARTIFACT, {
   artifactId: tweaked.id,
