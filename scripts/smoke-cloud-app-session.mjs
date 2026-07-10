@@ -238,7 +238,6 @@ async function waitForReadyApp(sessionGroupId, label) {
     if (requireCapture && !checkpoint.captureUrl) {
       return { ok: false, detail: "checkpoint capture URL is missing" };
     }
-
     return { ok: true, value: { state, process, endpoint, checkpoint } };
   });
 }
@@ -289,11 +288,6 @@ async function renderUrl(url, label, options = {}) {
   }
 }
 
-async function createPreviewUrl(endpointId) {
-  const data = await graphql(CREATE_PREVIEW, { endpointId });
-  return data.createSessionEndpointPreview.url;
-}
-
 async function publishApp(sessionGroupId) {
   const data = await graphql(PUBLISH_APP, { sessionGroupId });
   const endpoint = data.publishAppSession;
@@ -302,6 +296,11 @@ async function publishApp(sessionGroupId) {
   }
   if (!endpoint.url) throw new Error("Published endpoint URL is missing");
   return endpoint.url;
+}
+
+async function createPreviewUrl(endpointId) {
+  const data = await graphql(CREATE_PREVIEW, { endpointId });
+  return data.createSessionEndpointPreview.url;
 }
 
 async function startAppSession(input) {
@@ -339,7 +338,6 @@ const session = await startAppSession({
 const initial = await waitForReadyApp(session.sessionGroupId, "initial");
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
 await renderUrl(previewUrl, "private preview URL", { requireFetch: false });
-
 const publicUrl = await publishApp(session.sessionGroupId);
 await renderUrl(publicUrl, "published public URL");
 
@@ -350,7 +348,9 @@ const restored = await startAppSession({
 });
 const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored");
 const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
-await renderUrl(restoredPreviewUrl, "restored preview URL", { requireFetch: false });
+await renderUrl(restoredPreviewUrl, "restored private preview URL", { requireFetch: false });
+const restoredPublicUrl = await publishApp(restored.sessionGroupId);
+await renderUrl(restoredPublicUrl, "restored public URL");
 
 process.stdout.write(
   [

@@ -459,6 +459,11 @@ export type EventType =
 export type GitCheckpoint = {
   __typename?: "GitCheckpoint";
   author: Scalars["String"]["output"];
+  captureContentType?: Maybe<Scalars["String"]["output"]>;
+  captureKey?: Maybe<Scalars["String"]["output"]>;
+  captureStatus?: Maybe<Scalars["String"]["output"]>;
+  captureUrl?: Maybe<Scalars["String"]["output"]>;
+  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   commitSha: Scalars["String"]["output"];
   committedAt: Scalars["DateTime"]["output"];
   createdAt: Scalars["DateTime"]["output"];
@@ -607,6 +612,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteAgentEnvironment: Scalars["Boolean"]["output"];
@@ -639,6 +645,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  publishAppSession: SessionEndpoint;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -788,6 +795,10 @@ export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
 };
 
+export type MutationCreateSessionEndpointPreviewArgs = {
+  endpointId: Scalars["ID"]["input"];
+};
+
 export type MutationCreateTerminalArgs = {
   cols: Scalars["Int"]["input"];
   rows: Scalars["Int"]["input"];
@@ -927,6 +938,10 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationPublishAppSessionArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationQueueSessionMessageArgs = {
@@ -1916,6 +1931,12 @@ export type SessionEndpoint = {
 };
 
 export type SessionEndpointAccessMode = "private" | "public";
+
+export type SessionEndpointPreview = {
+  __typename?: "SessionEndpointPreview";
+  expiresAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
 
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 

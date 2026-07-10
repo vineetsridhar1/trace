@@ -187,6 +187,14 @@ export function CheckpointPanel({
                 )}
               </div>
               <p className="mt-0.5 truncate text-xs text-foreground/80">{checkpoint.subject}</p>
+              {checkpoint.captureUrl ? (
+                <img
+                  src={checkpoint.captureUrl}
+                  alt={`Preview at ${shortSha(checkpoint.commitSha)}`}
+                  loading="lazy"
+                  className="mt-2 aspect-video w-full rounded border border-border/60 object-cover"
+                />
+              ) : null}
               <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <span className="truncate">{sessionName}</span>
                 <span>·</span>

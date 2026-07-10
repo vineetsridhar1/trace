@@ -461,6 +461,11 @@ export type EventType =
 export type GitCheckpoint = {
   __typename?: "GitCheckpoint";
   author: Scalars["String"]["output"];
+  captureContentType?: Maybe<Scalars["String"]["output"]>;
+  captureKey?: Maybe<Scalars["String"]["output"]>;
+  captureStatus?: Maybe<Scalars["String"]["output"]>;
+  captureUrl?: Maybe<Scalars["String"]["output"]>;
+  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   commitSha: Scalars["String"]["output"];
   committedAt: Scalars["DateTime"]["output"];
   createdAt: Scalars["DateTime"]["output"];
@@ -609,6 +614,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteAgentEnvironment: Scalars["Boolean"]["output"];
@@ -641,6 +647,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  publishAppSession: SessionEndpoint;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -790,6 +797,10 @@ export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
 };
 
+export type MutationCreateSessionEndpointPreviewArgs = {
+  endpointId: Scalars["ID"]["input"];
+};
+
 export type MutationCreateTerminalArgs = {
   cols: Scalars["Int"]["input"];
   rows: Scalars["Int"]["input"];
@@ -929,6 +940,10 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationPublishAppSessionArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationQueueSessionMessageArgs = {
@@ -1919,6 +1934,12 @@ export type SessionEndpoint = {
 
 export type SessionEndpointAccessMode = "private" | "public";
 
+export type SessionEndpointPreview = {
+  __typename?: "SessionEndpointPreview";
+  expiresAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
+
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
 export type SessionEndpoints = {
@@ -2714,6 +2735,9 @@ export type SessionDetailQuery = {
         author: string;
         committedAt: string;
         filesChanged: number;
+        captureStatus?: string | null;
+        captureUrl?: string | null;
+        capturedAt?: string | null;
         createdAt: string;
       }>;
       channel?: { __typename?: "Channel"; id: string } | null;
@@ -2779,6 +2803,9 @@ export type SessionDetailQuery = {
       author: string;
       committedAt: string;
       filesChanged: number;
+      captureStatus?: string | null;
+      captureUrl?: string | null;
+      capturedAt?: string | null;
       createdAt: string;
     }>;
     channel?: { __typename?: "Channel"; id: string } | null;
@@ -2831,6 +2858,9 @@ export type SessionGroupDetailQuery = {
       author: string;
       committedAt: string;
       filesChanged: number;
+      captureStatus?: string | null;
+      captureUrl?: string | null;
+      capturedAt?: string | null;
       createdAt: string;
     }>;
     repo?: {
@@ -2891,6 +2921,15 @@ export type SessionGroupDetailQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   } | null;
+};
+
+export type CreateSessionEndpointPreviewMutationVariables = Exact<{
+  endpointId: Scalars["ID"]["input"];
+}>;
+
+export type CreateSessionEndpointPreviewMutation = {
+  __typename?: "Mutation";
+  createSessionEndpointPreview: { __typename?: "SessionEndpointPreview"; url: string };
 };
 
 export type SessionApplicationsStateQueryVariables = Exact<{
@@ -3057,6 +3096,15 @@ export type DisableSessionEndpointForwardingMutationVariables = Exact<{
 export type DisableSessionEndpointForwardingMutation = {
   __typename?: "Mutation";
   disableSessionEndpointForwarding: { __typename?: "SessionEndpoint"; id: string };
+};
+
+export type PublishAppSessionMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type PublishAppSessionMutation = {
+  __typename?: "Mutation";
+  publishAppSession: { __typename?: "SessionEndpoint"; id: string };
 };
 
 export type SessionEndpointTrafficEndpointsQueryVariables = Exact<{
@@ -5505,6 +5553,9 @@ export const SessionDetailDocument = {
                             { kind: "Field", name: { kind: "Name", value: "author" } },
                             { kind: "Field", name: { kind: "Name", value: "committedAt" } },
                             { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
+                            { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
+                            { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
+                            { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
                             { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                           ],
                         },
@@ -5702,6 +5753,9 @@ export const SessionDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "author" } },
                       { kind: "Field", name: { kind: "Name", value: "committedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },
@@ -5816,6 +5870,9 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "author" } },
                       { kind: "Field", name: { kind: "Name", value: "committedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "filesChanged" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },
@@ -5949,6 +6006,49 @@ export const SessionGroupDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupDetailQuery, SessionGroupDetailQueryVariables>;
+export const CreateSessionEndpointPreviewDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateSessionEndpointPreview" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createSessionEndpointPreview" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endpointId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "url" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateSessionEndpointPreviewMutation,
+  CreateSessionEndpointPreviewMutationVariables
+>;
 export const SessionApplicationsStateDocument = {
   kind: "Document",
   definitions: [
@@ -6546,6 +6646,46 @@ export const DisableSessionEndpointForwardingDocument = {
   DisableSessionEndpointForwardingMutation,
   DisableSessionEndpointForwardingMutationVariables
 >;
+export const PublishAppSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "PublishAppSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "publishAppSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<PublishAppSessionMutation, PublishAppSessionMutationVariables>;
 export const SessionEndpointTrafficEndpointsDocument = {
   kind: "Document",
   definitions: [

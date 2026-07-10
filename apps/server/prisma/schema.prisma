@@ -895,6 +895,11 @@ model GitCheckpoint {
   author         String
   committedAt    DateTime
   filesChanged   Int
+  captureStatus      String?
+  captureKey         String?
+  captureUrl         String?
+  captureContentType String?
+  capturedAt         DateTime?
   createdAt      DateTime @default(now())
 
   sessionGroup SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)

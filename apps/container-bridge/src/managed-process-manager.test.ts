@@ -149,6 +149,7 @@ describe("ManagedProcessManager", () => {
       sessionId: "session-1",
       command: `node -e "require('http').createServer((req,res)=>res.end('ok')).listen(${port}, '127.0.0.1')"`,
       cwd: ".",
+      ports: [port],
     });
 
     await waitFor(messages, (message) => message.type === "app_process_started");

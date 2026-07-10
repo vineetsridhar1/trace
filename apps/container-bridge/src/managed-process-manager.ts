@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import http from "http";
 import path from "path";
+import net from "net";
 import WebSocket from "ws";
 import type { BridgeMessage } from "@trace/shared";
 
@@ -54,6 +55,42 @@ function signalProcessTree(child: ChildProcessWithoutNullStreams, signal: NodeJS
   }
 }
 
+function waitForListeningPort(
+  child: ChildProcessWithoutNullStreams,
+  ports: number[],
+  timeoutMs = 5 * 60_000,
+): Promise<void> {
+  if (ports.length === 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    const probe = () => {
+      if (child.exitCode !== null || child.killed) {
+        reject(new Error("App process exited before opening its configured port"));
+        return;
+      }
+      let pending = ports.length;
+      let settled = false;
+      for (const port of ports) {
+        const socket = net.createConnection({ host: "127.0.0.1", port });
+        socket.once("connect", () => {
+          if (settled) return;
+          settled = true;
+          socket.destroy();
+          resolve();
+        });
+        socket.once("error", () => {
+          pending -= 1;
+          if (!settled && pending === 0) {
+            if (Date.now() >= deadline) reject(new Error("Timed out waiting for app port"));
+            else setTimeout(probe, 250).unref();
+          }
+        });
+      }
+    };
+    probe();
+  });
+}
+
 export class ManagedProcessManager {
   private processes = new Map<string, ManagedProcess>();
   private sockets = new Map<string, WebSocket>();
@@ -71,6 +108,7 @@ export class ManagedProcessManager {
     command: string;
     cwd: string;
     env?: Record<string, string>;
+    ports?: number[];
   }) {
     const baseWorkdir = this.sessionWorkdirs.get(options.sessionId);
     if (!baseWorkdir) {
@@ -132,12 +170,26 @@ export class ManagedProcessManager {
           signal: signal ?? undefined,
         });
       });
-      this.send({
-        type: "app_process_started",
-        requestId: options.requestId,
-        processInstanceId: options.processInstanceId,
-        bridgeProcessId,
-      });
+      void waitForListeningPort(child, options.ports ?? [])
+        .then(() => {
+          if (!this.processes.has(options.processInstanceId)) return;
+          this.send({
+            type: "app_process_started",
+            requestId: options.requestId,
+            processInstanceId: options.processInstanceId,
+            bridgeProcessId,
+          });
+        })
+        .catch((error: unknown) => {
+          if (!this.processes.has(options.processInstanceId)) return;
+          this.stop(options.processInstanceId);
+          this.send({
+            type: "app_process_error",
+            requestId: options.requestId,
+            processInstanceId: options.processInstanceId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
     } catch (error) {
       this.send({
         type: "app_process_error",
@@ -213,7 +265,10 @@ export class ManagedProcessManager {
         });
         appendOutput(chunk);
       };
-      const prelude = Buffer.from(`[trace] Running setup script in ${cwd}\n$ ${options.command}\n`, "utf8");
+      const prelude = Buffer.from(
+        `[trace] Running setup script in ${cwd}\n$ ${options.command}\n`,
+        "utf8",
+      );
       this.send({
         type: "setup_script_log",
         requestId: options.requestId,
@@ -286,7 +341,11 @@ export class ManagedProcessManager {
       req.destroy(new Error("Proxy request timed out"));
     });
     req.on("error", (error) => {
-      this.send({ type: "endpoint_http_error", requestId: options.requestId, error: error.message });
+      this.send({
+        type: "endpoint_http_error",
+        requestId: options.requestId,
+        error: error.message,
+      });
     });
     if (body) req.write(body);
     req.end();
@@ -302,7 +361,9 @@ export class ManagedProcessManager {
       headers: options.headers,
     });
     this.sockets.set(options.requestId, socket);
-    socket.on("open", () => this.send({ type: "endpoint_ws_opened", requestId: options.requestId }));
+    socket.on("open", () =>
+      this.send({ type: "endpoint_ws_opened", requestId: options.requestId }),
+    );
     socket.on("message", (data) => {
       const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer);
       this.send({
@@ -322,7 +383,12 @@ export class ManagedProcessManager {
     });
     socket.on("error", (error) => {
       this.sockets.delete(options.requestId);
-      this.send({ type: "endpoint_ws_closed", requestId: options.requestId, code: 1011, reason: error.message });
+      this.send({
+        type: "endpoint_ws_closed",
+        requestId: options.requestId,
+        code: 1011,
+        reason: error.message,
+      });
     });
   }
 

@@ -20,6 +20,7 @@ const EMPTY_APPLICATION_CONFIG: RepoApplicationConfig = {
 const ID_RE = /^[a-z0-9_-]+$/;
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HTTP_PROTOCOLS = new Set(["http"]);
+const DENIED_FORWARD_PORTS = new Set([2375, 2376]);
 
 function record(value: unknown): JsonRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -45,7 +46,9 @@ function requiredString(value: unknown, field: string): string {
 
 function validateId(id: string, field: string): string {
   if (!ID_RE.test(id)) {
-    throw new ValidationError(`${field} must use lowercase letters, numbers, hyphen, or underscore`);
+    throw new ValidationError(
+      `${field} must use lowercase letters, numbers, hyphen, or underscore`,
+    );
   }
   return id;
 }
@@ -112,6 +115,9 @@ function normalizePort(value: unknown): RepoPortDefinition {
   const port = input.port;
   if (!Number.isInteger(port) || (port as number) < 1 || (port as number) > 65535) {
     throw new ValidationError("Port must be an integer from 1 to 65535");
+  }
+  if ((port as number) < 1024 || DENIED_FORWARD_PORTS.has(port as number)) {
+    throw new ValidationError("System and container-management ports cannot be forwarded");
   }
   const protocol = optionalString(input.protocol)?.trim() || "http";
   if (!HTTP_PROTOCOLS.has(protocol)) {

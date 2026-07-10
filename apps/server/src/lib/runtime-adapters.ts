@@ -594,6 +594,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       bootstrapEnv: {
         TRACE_SESSION_ID: input.sessionId,
         TRACE_ORG_ID: input.organizationId,
+        TRACE_SERVER_PUBLIC_URL: process.env.TRACE_SERVER_PUBLIC_URL?.trim() ?? "",
         TRACE_RUNTIME_INSTANCE_ID: runtimeInstanceId,
         TRACE_RUNTIME_TOKEN: runtimeToken.token,
         TRACE_BRIDGE_URL: bridgeUrl,

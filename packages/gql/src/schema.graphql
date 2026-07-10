@@ -588,6 +588,11 @@ type GitCheckpoint {
   author: String!
   committedAt: DateTime!
   filesChanged: Int!
+  captureStatus: String
+  captureKey: String
+  captureUrl: String
+  captureContentType: String
+  capturedAt: DateTime
   createdAt: DateTime!
 }
 
@@ -829,6 +834,11 @@ type SessionEndpoint {
   enabledAt: DateTime
   disabledAt: DateTime
   revokedAt: DateTime
+}
+
+type SessionEndpointPreview {
+  url: String!
+  expiresAt: DateTime!
 }
 
 type EndpointTrafficEntry {
@@ -1592,6 +1602,8 @@ type Mutation {
     mode: EndpointTrafficCaptureMode!
   ): SessionEndpoint!
   clearEndpointTraffic(endpointId: ID!): Boolean!
+  createSessionEndpointPreview(endpointId: ID!): SessionEndpointPreview!
+  publishAppSession(sessionGroupId: ID!): SessionEndpoint!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!

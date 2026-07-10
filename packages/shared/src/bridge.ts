@@ -11,6 +11,7 @@ export interface BridgeRunCommand {
   type: "run";
   sessionId: string;
   prompt?: string;
+  appendSystemPrompt?: string;
   cwd?: string;
   tool?: string;
   model?: string;
@@ -26,6 +27,7 @@ export interface BridgeSendCommand {
   type: "send";
   sessionId: string;
   prompt: string;
+  appendSystemPrompt?: string;
   cwd?: string;
   tool?: string;
   model?: string;

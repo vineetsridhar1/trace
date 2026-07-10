@@ -14,7 +14,7 @@ import type { BridgeWorkspaceWarning } from "@trace/shared";
 const execFileAsync = promisify(execFile);
 
 const REPOS_DIR = "/repos";
-const WORKSPACES_DIR = "/workspaces";
+const WORKSPACES_DIR = process.env.TRACE_WORKSPACES_DIR ?? "/workspaces";
 const APP_STARTER_DIR = process.env.TRACE_APP_STARTER_DIR ?? "/opt/trace/app-starter";
 
 type EnsureRepoResult = {
@@ -399,10 +399,12 @@ function writeFallbackAppStarter(workdir: string): void {
   fs.mkdirSync(`${workdir}/app/api/notes`, { recursive: true });
   fs.mkdirSync(`${workdir}/.trace`, { recursive: true });
   fs.mkdirSync(`${workdir}/lib`, { recursive: true });
+  fs.mkdirSync(`${workdir}/components/ui`, { recursive: true });
   fs.writeFileSync(
     `${workdir}/package.json`,
     JSON.stringify(
       {
+        private: true,
         scripts: {
           dev: "next dev -H 0.0.0.0 -p 3000",
           build: "next build",
@@ -414,6 +416,7 @@ function writeFallbackAppStarter(workdir: string): void {
           "@types/node": "^22.0.0",
           "@types/react": "^19.0.0",
           "@types/react-dom": "^19.0.0",
+          "class-variance-authority": "^0.7.0",
           clsx: "^2.1.0",
           next: "^15.5.0",
           react: "^19.0.0",
@@ -426,6 +429,32 @@ function writeFallbackAppStarter(workdir: string): void {
           postcss: "^8.5.0",
           tailwindcss: "^3.4.0",
         },
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  fs.writeFileSync(
+    `${workdir}/.gitignore`,
+    `node_modules
+.next
+.env
+.env.*
+!.env.example
+data
+*.log
+`,
+  );
+  fs.writeFileSync(
+    `${workdir}/components.json`,
+    JSON.stringify(
+      {
+        $schema: "https://ui.shadcn.com/schema.json",
+        style: "new-york",
+        rsc: true,
+        tsx: true,
+        tailwind: { css: "app/globals.css", baseColor: "neutral", cssVariables: true },
+        aliases: { components: "@/components", utils: "@/lib/utils", ui: "@/components/ui" },
       },
       null,
       2,
@@ -461,6 +490,31 @@ import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+`,
+  );
+  fs.writeFileSync(
+    `${workdir}/components/ui/button.tsx`,
+    `import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "@/lib/utils";
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        default: "bg-zinc-50 text-zinc-950 hover:bg-zinc-200",
+        outline: "border border-zinc-700 hover:bg-zinc-900",
+      },
+      size: { default: "h-9 px-4 py-2", sm: "h-8 px-3" },
+    },
+    defaultVariants: { variant: "default", size: "default" },
+  },
+);
+
+export function Button({ className, variant, size, ...props }: React.ComponentProps<"button"> & VariantProps<typeof buttonVariants>) {
+  return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />;
 }
 `,
   );
@@ -545,6 +599,8 @@ export default config;
           esModuleInterop: true,
           module: "esnext",
           moduleResolution: "bundler",
+          baseUrl: ".",
+          paths: { "@/*": ["./*"] },
           resolveJsonModule: true,
           isolatedModules: true,
           jsx: "preserve",

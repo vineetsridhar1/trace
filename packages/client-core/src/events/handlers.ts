@@ -13,6 +13,7 @@ import type {
   Repo,
   ScopeType,
   SessionApplicationProcess,
+  SessionApplicationLogEntry,
   SessionEndpoint,
   SessionStatus,
 } from "@trace/gql";
@@ -204,6 +205,17 @@ export function handleOrgEvent(event: Event): void {
         "sessionApplicationProcesses",
         process.id,
         (existing ? { ...existing, ...process } : process) as unknown as SessionApplicationProcess,
+      );
+    }
+  }
+
+  if (event.eventType === "session_application_log_appended") {
+    const logEntry = asJsonObject(payload.logEntry);
+    if (logEntry && typeof logEntry.id === "string") {
+      batch.upsert(
+        "sessionApplicationLogs",
+        logEntry.id,
+        logEntry as unknown as SessionApplicationLogEntry,
       );
     }
   }

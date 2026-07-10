@@ -13,6 +13,7 @@ import { eventService } from "./event.js";
 import { orgSecretService } from "./org-secret.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
 import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
+import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
 
 import type { RepoEnvVar } from "@trace/gql";
 
@@ -628,6 +629,63 @@ export class SessionApplicationService {
     return true;
   }
 
+  async createEndpointPreview(endpointId: string, organizationId: string, userId: string) {
+    const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
+      where: { id: endpointId, organizationId },
+      select: { id: true, sessionGroupId: true, status: true, revokedAt: true, key: true },
+    });
+    await this.assertCanView(endpoint.sessionGroupId, organizationId, userId);
+    if (endpoint.revokedAt || endpoint.status === "revoked") {
+      throw new ValidationError("Endpoint has been revoked");
+    }
+    const credential = createEndpointPreviewToken({ userId, organizationId, endpointId });
+    const url = new URL(buildEndpointUrl(endpoint.key));
+    url.pathname = "/__trace_preview_auth";
+    url.searchParams.set("token", credential.token);
+    url.searchParams.set("next", "/");
+    return { url: url.toString(), expiresAt: credential.expiresAt };
+  }
+
+  async publishAppSession(sessionGroupId: string, organizationId: string, userId: string) {
+    const group = await prisma.sessionGroup.findFirstOrThrow({
+      where: { id: sessionGroupId, organizationId },
+      select: {
+        id: true,
+        kind: true,
+        ownerUserId: true,
+        sessions: { select: { id: true }, orderBy: { updatedAt: "desc" }, take: 1 },
+      },
+    });
+    await this.assertCanManage(group.id, organizationId, userId, group);
+    if (group.kind !== "app") {
+      throw new ValidationError("Only app sessions can be published");
+    }
+    const endpoint = await prisma.sessionEndpoint.findFirst({
+      where: { sessionGroupId, organizationId, status: "enabled" },
+      orderBy: [{ appConfigId: "asc" }, { processConfigId: "asc" }, { portConfigId: "asc" }],
+    });
+    if (!endpoint) throw new ValidationError("Start the app preview before publishing");
+
+    const updated = await prisma.sessionEndpoint.update({
+      where: { id: endpoint.id },
+      data: {
+        accessMode: "public",
+        enabledByUserId: userId,
+        enabledAt: endpoint.enabledAt ?? new Date(),
+      },
+    });
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: group.sessions[0]?.id ?? sessionGroupId,
+      eventType: "session_endpoint_forwarding_enabled",
+      payload: { endpoint: publicEndpoint(updated), sessionGroupId, published: true },
+      actorType: "user",
+      actorId: userId,
+    });
+    return updated;
+  }
+
   // Reflect a destroyed runtime (archive, idle cleanup, container loss): mark
   // every live process for the group stopped and disable its endpoints, emitting
   // the same per-entity events the UI already consumes.
@@ -895,6 +953,20 @@ export class SessionApplicationService {
         await pruneProcessLogs(tx, processId);
       }
       return created;
+    });
+    await eventService.create({
+      organizationId: process.organizationId,
+      scopeType: "session",
+      scopeId: process.sessionGroupId,
+      eventType: "session_application_log_appended",
+      payload: {
+        logEntry: {
+          ...entry,
+          timestamp: entry.timestamp.toISOString(),
+        },
+      },
+      actorType: "system",
+      actorId: "bridge",
     });
     return entry;
   }

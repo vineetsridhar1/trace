@@ -337,6 +337,7 @@ export class ContainerBridge implements IBridgeClient {
         this.runPrompt({
           sessionId: cmd.sessionId,
           prompt: cmd.prompt ?? "",
+          appendSystemPrompt: cmd.appendSystemPrompt,
           cwd: cmd.cwd ?? os.homedir(),
           tool: cmd.tool,
           model: cmd.model,
@@ -595,6 +596,7 @@ export class ContainerBridge implements IBridgeClient {
           command: cmd.command,
           cwd: cmd.cwd,
           env: cmd.env,
+          ports: cmd.ports.map((port) => port.port),
         });
         break;
       }
@@ -833,6 +835,7 @@ export class ContainerBridge implements IBridgeClient {
   private async runPrompt({
     sessionId,
     prompt,
+    appendSystemPrompt,
     cwd,
     tool,
     model,
@@ -844,6 +847,7 @@ export class ContainerBridge implements IBridgeClient {
   }: {
     sessionId: string;
     prompt: string;
+    appendSystemPrompt?: string;
     cwd: string;
     tool?: string;
     model?: string;
@@ -895,6 +899,7 @@ export class ContainerBridge implements IBridgeClient {
 
     // Prepend file paths to prompt so all adapters see them
     let finalPrompt = prompt;
+    if (appendSystemPrompt) finalPrompt = `${finalPrompt}\n\n${appendSystemPrompt}`;
     if (imagePaths?.length) {
       const refs = imagePaths.map((p) => `[Attached file: ${p}]`).join("\n");
       finalPrompt = `${refs}\n\n${prompt}`;
@@ -939,6 +944,7 @@ export class ContainerBridge implements IBridgeClient {
 
     adapter.run({
       prompt: finalPrompt,
+      appendSystemPrompt,
       cwd,
       onOutput: (output) => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;

@@ -127,6 +127,10 @@ vi.mock("./managed-git.js", () => ({
   },
 }));
 
+vi.mock("./app-checkpoint-capture.js", () => ({
+  appCheckpointCaptureService: { capture: vi.fn() },
+}));
+
 vi.mock("./github-repo.js", async () => {
   const actual = await vi.importActual<typeof import("./github-repo.js")>("./github-repo.js");
   return {
@@ -152,6 +156,7 @@ import { apiTokenService } from "./api-token.js";
 import { GitHubApiError, githubRepoService, parseGitHubRepo } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
+import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
@@ -181,6 +186,9 @@ const inboxServiceMock = inboxService as unknown as MockedDeep<typeof inboxServi
 const apiTokenServiceMock = apiTokenService as unknown as MockedDeep<typeof apiTokenService>;
 const orgSecretServiceMock = orgSecretService as unknown as MockedDeep<typeof orgSecretService>;
 const managedGitServiceMock = managedGitService as unknown as MockedDeep<typeof managedGitService>;
+const appCheckpointCaptureServiceMock = appCheckpointCaptureService as unknown as MockedDeep<
+  typeof appCheckpointCaptureService
+>;
 const githubRepoServiceMock = githubRepoService as unknown as MockedDeep<typeof githubRepoService>;
 const parseGitHubRepoMock = vi.mocked(parseGitHubRepo);
 const getDefaultModelMock = vi.mocked(getDefaultModel);
@@ -366,6 +374,7 @@ describe("SessionService", () => {
       createdAt: new Date("2026-07-09T00:00:00.000Z"),
       updatedAt: new Date("2026-07-09T00:00:00.000Z"),
     });
+    appCheckpointCaptureServiceMock.capture.mockResolvedValue({ captureStatus: "unavailable" });
     githubRepoServiceMock.listFiles.mockResolvedValue([]);
     githubRepoServiceMock.listFileTree.mockResolvedValue({ paths: [], truncated: false });
     githubRepoServiceMock.listDirectoryEntries.mockResolvedValue([]);
@@ -2628,6 +2637,65 @@ describe("SessionService", () => {
               id: "checkpoint-1",
               promptEventId: "prompt-1",
               commitSha: "abcdef1234567890",
+            }),
+          }),
+        }),
+      );
+    });
+
+    it("captures and emits a validated app checkpoint preview", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        repoId: "repo-1",
+        sessionGroup: { kind: "app", ownerUserId: "user-1" },
+      });
+      prismaMock.gitCheckpoint.findUnique.mockResolvedValueOnce(null);
+      prismaMock.event.findFirst.mockResolvedValueOnce({ id: "prompt-1" });
+      const checkpoint = makeGitCheckpoint({ promptEventId: "prompt-1" });
+      prismaMock.gitCheckpoint.create.mockResolvedValueOnce(checkpoint);
+      appCheckpointCaptureServiceMock.capture.mockResolvedValueOnce({
+        captureStatus: "captured",
+        captureKey: "uploads/org-1/app-checkpoints/checkpoint-1.png",
+        captureUrl: "https://files.example/checkpoint-1.png",
+        captureContentType: "image/png",
+        capturedAt: new Date("2026-07-09T00:00:00.000Z"),
+      });
+      prismaMock.gitCheckpoint.update.mockResolvedValueOnce({
+        ...checkpoint,
+        captureStatus: "captured",
+        captureKey: "uploads/org-1/app-checkpoints/checkpoint-1.png",
+        captureUrl: "https://files.example/checkpoint-1.png",
+        captureContentType: "image/png",
+        capturedAt: new Date("2026-07-09T00:00:00.000Z"),
+      });
+
+      await service.recordGitCheckpoint("session-1", {
+        trigger: "commit",
+        command: "git commit",
+        observedAt: "2026-07-09T00:00:00.000Z",
+        commitSha: "abcdef1234567890",
+        parentShas: [],
+        treeSha: "feedface12345678",
+        subject: "Build app",
+        author: "Agent <agent@trace.local>",
+        committedAt: "2026-07-09T00:00:00.000Z",
+        filesChanged: 4,
+      });
+
+      expect(appCheckpointCaptureServiceMock.capture).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        checkpointId: "checkpoint-1",
+        userId: "user-1",
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            checkpoint: expect.objectContaining({
+              captureStatus: "captured",
+              captureContentType: "image/png",
             }),
           }),
         }),

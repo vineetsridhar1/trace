@@ -67,6 +67,7 @@ import {
 } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
+import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -750,6 +751,11 @@ function serializeGitCheckpoint(checkpoint: {
   author: string;
   committedAt: Date;
   filesChanged: number;
+  captureStatus?: string | null;
+  captureKey?: string | null;
+  captureUrl?: string | null;
+  captureContentType?: string | null;
+  capturedAt?: Date | null;
   createdAt: Date;
 }) {
   return {
@@ -765,6 +771,11 @@ function serializeGitCheckpoint(checkpoint: {
     author: checkpoint.author,
     committedAt: checkpoint.committedAt.toISOString(),
     filesChanged: checkpoint.filesChanged,
+    captureStatus: checkpoint.captureStatus ?? null,
+    captureKey: checkpoint.captureKey ?? null,
+    captureUrl: checkpoint.captureUrl ?? null,
+    captureContentType: checkpoint.captureContentType ?? null,
+    capturedAt: checkpoint.capturedAt?.toISOString() ?? null,
     createdAt: checkpoint.createdAt.toISOString(),
   };
 }
@@ -892,7 +903,6 @@ function appendPromptInstructions(
 ): string {
   let result = prompt + TITLE_INSTRUCTION;
   result += BACKGROUND_WORK_INSTRUCTION;
-  if (sessionGroupKind === "app") result += APP_SESSION_INSTRUCTION;
   if (hasRepo && sessionGroupKind !== "app") result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
@@ -4333,6 +4343,8 @@ export class SessionService {
       type: "run" as const,
       sessionId: id,
       prompt: resolvedPrompt ?? undefined,
+      appendSystemPrompt:
+        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
@@ -5709,6 +5721,8 @@ export class SessionService {
       type: "send" as const,
       sessionId,
       prompt,
+      appendSystemPrompt:
+        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
       tool: activeTool,
       model: activeModel ?? undefined,
       reasoningEffort: activeReasoningEffort ?? undefined,
@@ -6882,6 +6896,8 @@ export class SessionService {
         type: "send",
         sessionId,
         prompt,
+        appendSystemPrompt:
+          session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
         tool: session.tool,
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
@@ -6946,6 +6962,7 @@ export class SessionService {
         organizationId: true,
         sessionGroupId: true,
         repoId: true,
+        sessionGroup: { select: { kind: true, ownerUserId: true } },
       },
     });
     if (!session?.sessionGroupId || !session.repoId) return;
@@ -7018,6 +7035,25 @@ export class SessionService {
     }
 
     if (!persisted) return null;
+
+    if (didPersistCheckpoint && session.sessionGroup?.kind === "app") {
+      const capture = await appCheckpointCaptureService.capture({
+        organizationId: session.organizationId,
+        sessionGroupId: session.sessionGroupId,
+        checkpointId: persisted.id,
+        userId: session.sessionGroup.ownerUserId,
+      });
+      persisted = await prisma.gitCheckpoint.update({
+        where: { id: persisted.id },
+        data: {
+          captureStatus: capture.captureStatus,
+          captureKey: capture.captureKey ?? null,
+          captureUrl: capture.captureUrl ?? null,
+          captureContentType: capture.captureContentType ?? null,
+          capturedAt: capture.capturedAt ?? null,
+        },
+      });
+    }
 
     if (didPersistCheckpoint) {
       await eventService.create({
@@ -9177,6 +9213,8 @@ export class SessionService {
       type: pending.type,
       sessionId,
       prompt: prompt ?? undefined,
+      appendSystemPrompt:
+        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
@@ -9190,6 +9228,7 @@ export class SessionService {
       type: "run" | "send";
       sessionId: string;
       prompt?: string;
+      appendSystemPrompt?: string;
       tool: CodingTool;
       model?: string;
       reasoningEffort?: string;

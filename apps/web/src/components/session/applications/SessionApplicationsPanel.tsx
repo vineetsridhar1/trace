@@ -26,6 +26,7 @@ import { client } from "../../../lib/urql";
 import { useUIStore } from "../../../stores/ui";
 import { Button, buttonVariants } from "../../ui/button";
 import { TraceLoader } from "../../ui/trace-loader";
+import { AppPreview } from "./AppPreview";
 
 const APPLICATIONS_STATE_QUERY = gql`
   query SessionApplicationsState($sessionGroupId: ID!) {
@@ -211,6 +212,14 @@ const DISABLE_ENDPOINT_MUTATION = gql`
   }
 `;
 
+const PUBLISH_APP_MUTATION = gql`
+  mutation PublishAppSession($sessionGroupId: ID!) {
+    publishAppSession(sessionGroupId: $sessionGroupId) {
+      id
+    }
+  }
+`;
+
 export function SessionApplicationsPanel({
   sessionGroupId,
   onOpenTraffic,
@@ -238,12 +247,10 @@ export function SessionApplicationsPanel({
   const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
+  const processLogTable = useEntityStore((s) => s.sessionApplicationLogs);
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
-  const [processLogsById, setProcessLogsById] = useState<
-    Record<string, SessionApplicationLogEntry[]>
-  >({});
   const [refreshingProcessLogIds, setRefreshingProcessLogIds] = useState<Record<string, boolean>>(
     {},
   );
@@ -303,11 +310,9 @@ export function SessionApplicationsPanel({
     if (result.error) {
       throw new Error(result.error.message);
     }
-    setProcessLogsById((current) => ({
-      ...current,
-      [processId]:
-        (result.data?.sessionApplicationLogs as SessionApplicationLogEntry[] | undefined) ?? [],
-    }));
+    const entries =
+      (result.data?.sessionApplicationLogs as SessionApplicationLogEntry[] | undefined) ?? [];
+    useEntityStore.getState().upsertMany("sessionApplicationLogs", entries);
   }, []);
 
   const refreshProcessLogs = useCallback(
@@ -337,22 +342,18 @@ export function SessionApplicationsPanel({
     }
   }, [loadProcessLogs, processes]);
 
-  useEffect(() => {
-    const activeProcesses = processes.filter(
-      (process) =>
-        process.status === "starting" ||
-        process.status === "running" ||
-        process.status === "stopping",
-    );
-    if (activeProcesses.length === 0) return;
-    const interval = window.setInterval(() => {
-      void refresh();
-      for (const process of activeProcesses) {
-        void loadProcessLogs(process.id).catch(() => undefined);
-      }
-    }, 1500);
-    return () => window.clearInterval(interval);
-  }, [loadProcessLogs, processes, refresh]);
+  const processLogsById = useMemo(() => {
+    const processIds = new Set(processes.map((process) => process.id));
+    const grouped: Record<string, SessionApplicationLogEntry[]> = {};
+    for (const entry of Object.values(processLogTable)) {
+      if (!processIds.has(entry.processId)) continue;
+      (grouped[entry.processId] ??= []).push(entry);
+    }
+    for (const entries of Object.values(grouped)) {
+      entries.sort((a, b) => a.sequence - b.sequence);
+    }
+    return grouped;
+  }, [processLogTable, processes]);
 
   const endpoints = useMemo(
     () =>
@@ -376,6 +377,10 @@ export function SessionApplicationsPanel({
     }
     return map;
   }, [endpoints]);
+  const primaryAppEndpoint =
+    groupKind === "app"
+      ? endpoints.find((endpoint) => endpoint.status === "enabled" && endpoint.url)
+      : undefined;
 
   const latestSetupRunByScript = useMemo(() => {
     const map = new Map<string, SessionSetupScriptRun>();
@@ -479,6 +484,7 @@ export function SessionApplicationsPanel({
         </Button>
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-auto px-3 py-3">
+        {primaryAppEndpoint ? <AppPreview endpointId={primaryAppEndpoint.id} /> : null}
         {error && (
           <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {error}
@@ -846,9 +852,7 @@ export function SessionApplicationsPanel({
                                   onClick={() =>
                                     void run(`publish:${endpoint.id}`, () =>
                                       client
-                                        .mutation(ENABLE_ENDPOINT_MUTATION, {
-                                          endpointId: endpoint.id,
-                                        })
+                                        .mutation(PUBLISH_APP_MUTATION, { sessionGroupId })
                                         .toPromise(),
                                     )
                                   }

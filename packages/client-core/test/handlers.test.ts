@@ -20,6 +20,9 @@ function resetStores() {
     inboxItems: {},
     messages: {},
     queuedMessages: {},
+    sessionApplicationProcesses: {},
+    sessionApplicationLogs: {},
+    sessionEndpoints: {},
     eventsByScope: {},
     _eventIdsByScope: {},
     _sessionIdsByGroup: {},
@@ -850,5 +853,29 @@ describe("handleOrgEvent", () => {
     );
 
     expect(harness.setActiveSessionId).toHaveBeenCalledWith("session-new");
+  });
+
+  it("upserts streamed app process logs without a refetch", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_application_log_appended",
+        scopeId: "group-1",
+        payload: {
+          logEntry: {
+            id: "log-1",
+            processId: "process-1",
+            stream: "stdout",
+            data: "ready\n",
+            sequence: 1,
+            timestamp: "2026-07-09T00:00:00.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionApplicationLogs["log-1"]).toMatchObject({
+      processId: "process-1",
+      data: "ready\n",
+    });
   });
 });
