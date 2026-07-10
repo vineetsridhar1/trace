@@ -179,7 +179,6 @@ export class CodexAdapter implements CodingToolAdapter {
   private process: ChildProcess | null = null;
   private cwd: string | null = null;
   private threadId: string | null = null;
-  private resultEmitted = false;
   private interactionMode: "code" | "plan" | "ask" | undefined;
   private lastTextContent: string | null = null;
   private processGeneration = 0;
@@ -199,7 +198,6 @@ export class CodexAdapter implements CodingToolAdapter {
     interactionMode,
   }: RunOptions) {
     this.cwd = cwd;
-    this.resultEmitted = false;
     this.interactionMode = interactionMode;
     this.lastTextContent = null;
     this.sawErrorEvent = false;
@@ -292,14 +290,12 @@ export class CodexAdapter implements CodingToolAdapter {
           message: { content: [{ type: "plan", content: this.lastTextContent }] },
         });
       }
-      if (!this.resultEmitted) {
-        const exitError = code !== 0 && code !== null;
-        const isError = exitError || this.sawErrorEvent;
-        if (exitError && stderrChunks.length > 0) {
-          onOutput({ type: "error", message: stderrChunks.join("\n") });
-        }
-        onOutput({ type: "result", subtype: isError ? "error" : "success" });
+      const exitError = code !== 0 && code !== null;
+      const isError = exitError || this.sawErrorEvent;
+      if (exitError && stderrChunks.length > 0) {
+        onOutput({ type: "error", message: stderrChunks.join("\n") });
       }
+      onOutput({ type: "result", subtype: isError ? "error" : "success" });
       onComplete();
       this.process = null;
     };
@@ -369,22 +365,18 @@ export class CodexAdapter implements CodingToolAdapter {
     }
 
     if (eventType === "turn.completed") {
-      this.resultEmitted = true;
       // token_count events already streamed this turn's usage and estimated cost
-      // incrementally, so the completion event must not re-add either or it
-      // double-counts. Only contribute usage/cost here when nothing streamed.
+      // incrementally, so the completion event must not re-add either. A Codex
+      // process can complete multiple turns (for example, while running a goal),
+      // so this event must not be treated as the end of the run.
       if (this.emittedIncrementalUsage) {
-        onOutput({ type: "result", subtype: this.sawErrorEvent ? "error" : "success" });
         return;
       }
       const usage = parseCodexUsage(data);
       const costUsd = parseCodexCost(data, usage, this.model);
-      onOutput({
-        type: "result",
-        subtype: this.sawErrorEvent ? "error" : "success",
-        ...(usage ? { usage } : {}),
-        ...(costUsd != null ? { costUsd } : {}),
-      });
+      if (usage) {
+        onOutput({ type: "usage", usage, ...(costUsd != null ? { costUsd } : {}) });
+      }
       return;
     }
 
