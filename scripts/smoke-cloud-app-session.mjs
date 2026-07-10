@@ -414,17 +414,28 @@ await renderUrl(previewUrl, "private preview URL", { requireFetch: false });
 const publicUrl = await publishApp(session.sessionGroupId);
 await renderUrl(publicUrl, "published public URL");
 
-const restored = await startAppSession({
-  restoreCheckpointId: initial.checkpoint.id,
-  ...(process.env.TRACE_SMOKE_MODEL ? { model: process.env.TRACE_SMOKE_MODEL } : {}),
-  ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
-});
-const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored");
-await verifyRuntimeTerminal(restored.id);
-const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
-await renderUrl(restoredPreviewUrl, "restored private preview URL", { requireFetch: false });
-const restoredPublicUrl = await publishApp(restored.sessionGroupId);
-await renderUrl(restoredPublicUrl, "restored public URL");
+// Checkpoint revert/resume is currently out of scope for app-session QA.
+// TRACE_SMOKE_SKIP_RESTORE=1 skips the restore leg (loudly); leave it unset to
+// exercise the full flow once restore lineage is back in scope.
+const skipRestore = process.env.TRACE_SMOKE_SKIP_RESTORE === "1";
+let restored = null;
+if (skipRestore) {
+  process.stdout.write(
+    "SKIPPED: restore leg (TRACE_SMOKE_SKIP_RESTORE=1) — checkpoint restore is NOT verified by this run.\n",
+  );
+} else {
+  restored = await startAppSession({
+    restoreCheckpointId: initial.checkpoint.id,
+    ...(process.env.TRACE_SMOKE_MODEL ? { model: process.env.TRACE_SMOKE_MODEL } : {}),
+    ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
+  });
+  const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored");
+  await verifyRuntimeTerminal(restored.id);
+  const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
+  await renderUrl(restoredPreviewUrl, "restored private preview URL", { requireFetch: false });
+  const restoredPublicUrl = await publishApp(restored.sessionGroupId);
+  await renderUrl(restoredPublicUrl, "restored public URL");
+}
 
 process.stdout.write(
   [
@@ -433,7 +444,8 @@ process.stdout.write(
     `Initial group: ${session.sessionGroupId}`,
     `Checkpoint: ${initial.checkpoint.id} ${initial.checkpoint.commitSha}`,
     `Published URL: ${publicUrl}`,
-    `Restored session: ${restored.id}`,
-    `Restored group: ${restored.sessionGroupId}`,
+    ...(restored
+      ? [`Restored session: ${restored.id}`, `Restored group: ${restored.sessionGroupId}`]
+      : ["Restore leg: SKIPPED"]),
   ].join("\n") + "\n",
 );
