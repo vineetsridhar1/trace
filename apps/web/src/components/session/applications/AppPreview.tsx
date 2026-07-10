@@ -17,6 +17,8 @@ const CREATE_PREVIEW_MUTATION = gql`
   }
 `;
 
+const INITIAL_FRAME_RETRY_MS = 4_000;
+
 export function AppPreview({
   endpointId,
   fill = false,
@@ -54,6 +56,12 @@ export function AppPreview({
       active = false;
     };
   }, [endpointId, requestRevision]);
+
+  useEffect(() => {
+    if (!url || frameLoaded) return;
+    const timeout = window.setTimeout(reload, INITIAL_FRAME_RETRY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [frameLoaded, frameRevision, reload, url]);
 
   if (error) {
     if (desktopViewport) {

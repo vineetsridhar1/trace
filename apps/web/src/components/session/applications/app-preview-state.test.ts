@@ -10,6 +10,20 @@ describe("appPreviewReducer", () => {
     });
   });
 
+  it("keeps the initial skeleton while retrying a frame that never loaded", () => {
+    const waiting = appPreviewReducer(initialAppPreviewState, {
+      type: "request-succeeded",
+      url: "https://preview.test/auth-1",
+    });
+
+    expect(appPreviewReducer(waiting, { type: "reload" })).toMatchObject({
+      url: "https://preview.test/auth-1",
+      frameLoaded: false,
+      refreshing: true,
+      requestRevision: 1,
+    });
+  });
+
   it("preserves a loaded frame throughout a manual refresh", () => {
     const loaded = appPreviewReducer(
       appPreviewReducer(initialAppPreviewState, {
