@@ -27,10 +27,12 @@ export function UserProfileCard({
 }: UserProfileCardProps) {
   const name = useEntityField("users", userId, "name");
   const avatarUrl = useEntityField("users", userId, "avatarUrl");
-  const email = useEntityField("users", userId, "email");
+  const email = useEntityField("users", userId, "email") as string | undefined;
   const displayName = (name as string | undefined) ?? fallbackName ?? "Unknown";
   const displayAvatar = (avatarUrl as string | undefined) ?? fallbackAvatarUrl ?? undefined;
-  const displayEmail = email as string | undefined;
+  // Local-mode accounts get synthetic <slug>-<hex>@trace.local addresses; they
+  // are internal identifiers, not contact info, so keep them off the card.
+  const displayEmail = email?.toLowerCase().endsWith("@trace.local") ? undefined : email;
   const avatar = displayAvatar ? (
     <img
       src={displayAvatar}
@@ -53,7 +55,6 @@ export function UserProfileCard({
         <EntityPreviewCard
           media={avatar}
           title={displayName}
-          subtitle={displayEmail}
           description={displayEmail}
           footer={footer}
         />

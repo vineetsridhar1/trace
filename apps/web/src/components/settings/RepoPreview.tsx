@@ -11,7 +11,7 @@ export function RepoPreview({ repo }: { repo: DetectedRepo }) {
     <div className="space-y-1.5 rounded-lg border border-border bg-surface-deep p-3">
       <div className="flex items-center justify-between gap-3">
         <span className="min-w-0 truncate text-sm font-medium text-foreground">{repo.name}</span>
-        <span className="shrink-0 text-xs text-muted-foreground">{repo.defaultBranch}</span>
+        <span className="shrink-0 font-mono text-xs text-muted-foreground">{repo.defaultBranch}</span>
       </div>
       {isTruncated ? (
         <Tooltip>

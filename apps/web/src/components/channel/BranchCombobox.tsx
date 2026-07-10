@@ -87,7 +87,7 @@ export function BranchCombobox({
           !value && "text-muted-foreground",
         )}
       >
-        <span className="truncate">{displayValue}</span>
+        <span className="truncate font-mono">{displayValue}</span>
         <ChevronsUpDown size={14} className="shrink-0 text-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent className="w-(--anchor-width) p-0" align="start">
@@ -126,7 +126,7 @@ export function BranchCombobox({
                 size={14}
                 className={cn("shrink-0", value === branch ? "opacity-100" : "opacity-0")}
               />
-              <span className="truncate">{branch}</span>
+              <span className="truncate font-mono">{branch}</span>
             </button>
           ))}
         </div>

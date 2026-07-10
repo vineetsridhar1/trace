@@ -51,6 +51,7 @@ export interface ChatEditorHandle {
   focus: () => void;
   submit: (options?: ChatEditorSubmitOptions) => Promise<boolean>;
   getText: () => string;
+  setText: (text: string) => void;
   clear: () => void;
 }
 
@@ -163,6 +164,16 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     }
     setValue("");
     onChangeRef.current?.("", "");
+  }, []);
+
+  const replaceEditorText = useCallback((text: string) => {
+    const editor = quillRef.current?.getEditor();
+    if (!editor) return;
+    editor.setText(text, "user");
+    editor.setSelection(editor.getLength(), 0, "silent");
+    const nextHtml = editor.root.innerHTML;
+    setValue(nextHtml);
+    onChangeRef.current?.(editor.getText().replace(/\n$/, ""), nextHtml);
   }, []);
 
   const isMentionMenuOpen = useCallback(() => {
@@ -330,11 +341,12 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
         const editor = quillRef.current?.getEditor();
         return editor?.getText().trim() ?? "";
       },
+      setText: replaceEditorText,
       clear: () => {
         clearEditor();
       },
     }),
-    [clearEditor, submit],
+    [clearEditor, replaceEditorText, submit],
   );
 
   const handleKeyDown = useCallback(

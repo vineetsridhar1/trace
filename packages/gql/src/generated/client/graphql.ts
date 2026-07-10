@@ -629,6 +629,8 @@ export type Mutation = {
   editChatMessage: Message;
   enableSessionEndpointForwarding: SessionEndpoint;
   forkSession: Session;
+  /** Adopt an existing local worktree into a not-yet-started session's group (local hosting only). */
+  importWorktree: SessionGroup;
   joinChannel: Channel;
   leaveChannel: Channel;
   leaveChat: Chat;
@@ -872,6 +874,12 @@ export type MutationEnableSessionEndpointForwardingArgs = {
 
 export type MutationForkSessionArgs = {
   eventId: Scalars["ID"]["input"];
+};
+
+export type MutationImportWorktreeArgs = {
+  branch?: InputMaybe<Scalars["String"]["input"]>;
+  sessionId: Scalars["ID"]["input"];
+  worktreePath: Scalars["String"]["input"];
 };
 
 export type MutationJoinChannelArgs = {
@@ -1320,6 +1328,8 @@ export type Query = {
   projects: Array<Project>;
   repo?: Maybe<Repo>;
   repoBranches: Array<Scalars["String"]["output"]>;
+  /** Existing on-disk worktrees of a repo on a local runtime, available to import. */
+  repoWorktrees: Array<RepoWorktree>;
   repos: Array<Repo>;
   searchMessages: Array<MessageSearchHit>;
   searchSessions: SessionSearchResults;
@@ -1479,6 +1489,11 @@ export type QueryRepoBranchesArgs = {
   repoId: Scalars["ID"]["input"];
   runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type QueryRepoWorktreesArgs = {
+  repoId: Scalars["ID"]["input"];
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type QueryReposArgs = {
@@ -1753,6 +1768,17 @@ export type RepoSetupScriptInput = {
   workingDirectory?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+/** An existing git worktree of a repo on a local runtime, offered for import. */
+export type RepoWorktree = {
+  __typename?: "RepoWorktree";
+  branch?: Maybe<Scalars["String"]["output"]>;
+  head?: Maybe<Scalars["String"]["output"]>;
+  isMain: Scalars["Boolean"]["output"];
+  /** True when the worktree is already managed by Trace (not a candidate for import). */
+  isTraceManaged: Scalars["Boolean"]["output"];
+  path: Scalars["String"]["output"];
+};
+
 export type ScopeInput = {
   id: Scalars["ID"]["input"];
   type: ScopeType;
@@ -1934,6 +1960,8 @@ export type SessionGroup = {
   updatedAt: Scalars["DateTime"]["output"];
   visibility: SessionGroupVisibility;
   workdir?: Maybe<Scalars["String"]["output"]>;
+  /** True when the workspace is a user-owned worktree imported into Trace. */
+  worktreeAdopted: Scalars["Boolean"]["output"];
   worktreeDeleted: Scalars["Boolean"]["output"];
 };
 
@@ -2080,6 +2108,8 @@ export type StartSessionInput = {
   ticketId?: InputMaybe<Scalars["ID"]["input"]>;
   tool?: InputMaybe<CodingTool>;
   visibility?: InputMaybe<SessionGroupVisibility>;
+  /** Absolute path to an existing local worktree to adopt instead of creating one. Local hosting only. */
+  worktreePath?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type Subscription = {
@@ -2780,6 +2810,7 @@ export type SessionGroupDetailQuery = {
     prUrl?: string | null;
     workdir?: string | null;
     worktreeDeleted: boolean;
+    worktreeAdopted: boolean;
     setupStatus: SetupStatus;
     setupError?: string | null;
     createdAt: string;
@@ -5764,6 +5795,7 @@ export const SessionGroupDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "workdir" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                { kind: "Field", name: { kind: "Name", value: "worktreeAdopted" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "gitCheckpoints" },

@@ -15,6 +15,7 @@ import {
   type GitCheckpointContext,
   type BridgeSessionGitSyncStatus,
   type BridgeWorkspaceWarning,
+  type BridgeRepoWorktree,
 } from "@trace/shared";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
@@ -123,6 +124,19 @@ const ORG_GITHUB_TOKEN_SECRET_NAME = "GITHUB_TOKEN";
 function normalizeClientSource(source: string | null | undefined): string | null {
   const trimmed = source?.trim();
   return trimmed ? trimmed : null;
+}
+
+/**
+ * Normalize an adopted worktree path for dedup and storage: trim and strip any
+ * trailing path separators so `/wt` and `/wt/` map to the same key. Mirrors the
+ * bridge's `path.resolve` normalization closely enough for absolute paths, so the
+ * "one active group per worktree" check stays consistent with the stored workdir.
+ */
+function normalizeWorktreePath(input: string | null | undefined): string | null {
+  const trimmed = input?.trim();
+  if (!trimmed) return null;
+  const stripped = trimmed.replace(/[/\\]+$/, "");
+  return stripped.length > 0 ? stripped : trimmed;
 }
 
 function assertCloudRepoRemoteAvailable(
@@ -289,6 +303,7 @@ type GroupWorkspaceStatePatch = {
   connection?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | null;
   prUrl?: string | null;
   worktreeDeleted?: boolean;
+  worktreeAdopted?: boolean;
   repoId?: string | null;
   branch?: string | null;
   slug?: string | null;
@@ -553,6 +568,7 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   connection: true,
   prUrl: true,
   worktreeDeleted: true,
+  worktreeAdopted: true,
   archivedAt: true,
   setupStatus: true,
   setupError: true,
@@ -1203,6 +1219,8 @@ export class SessionService {
     createdById: string;
     organizationId: string;
     readOnly?: boolean;
+    /** Adopt an existing local worktree at this path instead of creating one. */
+    adoptWorktreePath?: string | null;
     adapterType?: RuntimeAdapterType;
     environment?: {
       id: string;
@@ -1215,6 +1233,24 @@ export class SessionService {
 
     void (async () => {
       const environment = params.environment ?? (await this.resolveProvisioningEnvironment(params));
+      // Resolve adoption: an explicit path (initial import) wins; otherwise a
+      // previously-adopted group re-adopts its persisted worktree so re-provisioning
+      // never creates a fresh Trace worktree. Adopted workspaces preserve their
+      // branch name across provisions.
+      let adoptWorktreePath = params.adoptWorktreePath ?? undefined;
+      let preserveBranchName = params.preserveBranchName;
+      if (!adoptWorktreePath && params.hosting === "local" && params.sessionGroupId) {
+        const group = await prisma.sessionGroup.findUnique({
+          where: { id: params.sessionGroupId },
+          select: { worktreeAdopted: true, workdir: true },
+        });
+        if (group?.worktreeAdopted && group.workdir) {
+          adoptWorktreePath = group.workdir;
+        }
+      }
+      if (adoptWorktreePath) {
+        preserveBranchName = true;
+      }
       let slug = params.slug ?? undefined;
       if (!slug && params.sessionGroupId && params.repo?.id) {
         const runtimeUsedSlugs = await this.loadRuntimeWorkspaceSlugs({
@@ -1234,7 +1270,7 @@ export class SessionService {
         sessionId: params.sessionId,
         sessionGroupId: params.sessionGroupId ?? undefined,
         slug: slug ?? undefined,
-        preserveBranchName: params.preserveBranchName,
+        preserveBranchName,
         hosting: params.hosting as "cloud" | "local",
         adapterType: params.adapterType,
         environment,
@@ -1254,6 +1290,7 @@ export class SessionService {
         createdById: params.createdById,
         organizationId: params.organizationId,
         readOnly: params.readOnly,
+        adoptWorktreePath,
         onLifecycle: (eventType, update) =>
           this.recordRuntimeLifecycle(params.sessionId, eventType, update),
         onFailed: (error) => this.workspaceFailed(params.sessionId, error),
@@ -3222,6 +3259,38 @@ export class SessionService {
     if (hosting === "cloud" && !requestedEnvironment && !reuseExistingGroupRuntimeSelection) {
       throw new Error("No enabled cloud agent environment is configured");
     }
+
+    // Importing an existing on-disk worktree: adopt it as the workspace instead
+    // of creating a Trace-managed one. Local hosting only, always a fresh group,
+    // and at most one active group may own a given worktree.
+    const adoptWorktreePath = normalizeWorktreePath(input.worktreePath);
+    if (adoptWorktreePath) {
+      if (hosting !== "local") {
+        throw new ValidationError("Importing an existing worktree requires local hosting");
+      }
+      if (!resolvedRepoId) {
+        throw new ValidationError("Importing an existing worktree requires a repo");
+      }
+      if (existingGroupId) {
+        throw new ValidationError("Importing an existing worktree starts a new session group");
+      }
+      const conflictingGroup = await prisma.sessionGroup.findFirst({
+        where: {
+          organizationId: input.organizationId,
+          repoId: resolvedRepoId,
+          workdir: adoptWorktreePath,
+          worktreeAdopted: true,
+          worktreeDeleted: false,
+          archivedAt: null,
+        },
+        select: { id: true },
+      });
+      if (conflictingGroup) {
+        throw new ValidationError(
+          "This worktree is already imported by another session group",
+        );
+      }
+    }
     let runtimeLabel: string | undefined;
     if (
       input.environmentId &&
@@ -3387,7 +3456,8 @@ export class SessionService {
 
     // Ask-mode sessions skip worktree creation (read-only against repo root).
     // Checkpoint restores always need a worktree to reset to a specific SHA.
-    const readOnlyWorkspace = input.interactionMode === "ask" && !input.restoreCheckpointId;
+    const readOnlyWorkspace =
+      input.interactionMode === "ask" && !input.restoreCheckpointId && !adoptWorktreePath;
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
@@ -3451,6 +3521,11 @@ export class SessionService {
               repoId: resolvedRepoId ?? undefined,
               branch: resolvedBranch ?? undefined,
               connection: initialConnection,
+              // Adopting an existing worktree: record the path and flag the group
+              // so re-provisioning re-adopts it and teardown never removes it.
+              ...(adoptWorktreePath
+                ? { workdir: adoptWorktreePath, worktreeAdopted: true }
+                : {}),
             },
             select: SESSION_GROUP_SUMMARY_SELECT,
           });
@@ -3609,6 +3684,7 @@ export class SessionService {
         createdById: input.createdById,
         organizationId: input.organizationId,
         readOnly: readOnlyWorkspace,
+        adoptWorktreePath,
         adapterType: requestedEnvironment?.adapterType,
         environment: requestedEnvironment,
       });
@@ -7819,6 +7895,141 @@ export class SessionService {
     return sessionRouter.listBranches(runtimeId, repoId);
   }
 
+  /**
+   * List existing on-disk worktrees of a repo on a local runtime, so a session
+   * can be started against one instead of creating a fresh Trace worktree.
+   * Local hosting only — cloud runtimes have no user-owned worktrees.
+   */
+  async listRepoWorktrees(
+    repoId: string,
+    organizationId: string,
+    userId: string,
+    runtimeInstanceId?: string,
+  ): Promise<BridgeRepoWorktree[]> {
+    await this.assertRepoExists(repoId, organizationId);
+    let runtimeId = runtimeInstanceId;
+    if (runtimeId) {
+      await this.assertRuntimeAccess({ userId, organizationId, runtimeInstanceId: runtimeId });
+      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+      if (!runtime) throw new Error("Requested runtime not found");
+      if (runtime.hostingMode !== "local") {
+        throw new ValidationError("Worktree import is only available for local runtimes");
+      }
+      runtimeId = runtime.key;
+    } else {
+      const accessibleRuntimeIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
+        userId,
+        organizationId,
+      });
+      const runtime = sessionRouter
+        .listRuntimes()
+        .find(
+          (runtime) =>
+            runtime.organizationId === organizationId &&
+            runtime.hostingMode === "local" &&
+            accessibleRuntimeIds.has(runtime.id) &&
+            runtime.registeredRepoIds.includes(repoId),
+        );
+      runtimeId = runtime?.key;
+    }
+    if (!runtimeId) throw new Error("Repo not cloned on any connected local runtime");
+    const worktrees = await sessionRouter.listRepoWorktrees(runtimeId, repoId);
+    // Only importable worktrees: hide Trace-managed ones and the repo's main
+    // checkout (a session must never adopt the user's primary working tree).
+    return worktrees.filter((worktree) => !worktree.isTraceManaged && !worktree.isMain);
+  }
+
+  /**
+   * Adopt an existing on-disk worktree into an existing session's group instead
+   * of creating a new session. The group is flagged so the next run adopts the
+   * worktree as-is (workspace is provisioned lazily on first run). Local hosting
+   * only, and only before the session has started.
+   */
+  async importWorktree(
+    sessionId: string,
+    worktreePath: string,
+    organizationId: string,
+    userId: string,
+    branch?: string,
+  ) {
+    const trimmedPath = normalizeWorktreePath(worktreePath);
+    if (!trimmedPath) throw new ValidationError("A worktree path is required");
+    const adoptedBranch = branch?.trim() || undefined;
+
+    const session = await prisma.session.findFirst({
+      where: { id: sessionId, organizationId },
+      select: {
+        id: true,
+        sessionGroup: {
+          select: {
+            id: true,
+            repoId: true,
+            archivedAt: true,
+            ownerUserId: true,
+            visibility: true,
+            sessions: { select: { agentStatus: true, hosting: true } },
+          },
+        },
+      },
+    });
+    const group = session?.sessionGroup;
+    if (!group) throw new ValidationError("Session not found");
+    if (!canViewSessionGroup(group, userId)) {
+      throw new AuthorizationError("Not authorized for this session");
+    }
+    if (group.archivedAt) throw new ValidationError("Cannot import into an archived session");
+    if (!group.repoId) throw new ValidationError("Importing a worktree requires a repo");
+    if (group.sessions.some((s) => s.hosting === "cloud")) {
+      throw new ValidationError("Importing a worktree requires local hosting");
+    }
+    if (group.sessions.some((s) => s.agentStatus !== "not_started")) {
+      throw new ValidationError("Can only import a worktree before the session has started");
+    }
+
+    // At most one active group may own a given worktree.
+    const conflictingGroup = await prisma.sessionGroup.findFirst({
+      where: {
+        organizationId,
+        repoId: group.repoId,
+        workdir: trimmedPath,
+        worktreeAdopted: true,
+        worktreeDeleted: false,
+        archivedAt: null,
+        id: { not: group.id },
+      },
+      select: { id: true },
+    });
+    if (conflictingGroup) {
+      throw new ValidationError("This worktree is already imported by another session");
+    }
+
+    // Record the worktree's current branch up front so the session shows which
+    // worktree it adopted immediately; provisioning re-confirms it on first run.
+    const sessionGroup = await this.syncGroupWorkspaceState(group.id, {
+      workdir: trimmedPath,
+      worktreeAdopted: true,
+      worktreeDeleted: false,
+      ...(adoptedBranch ? { branch: adoptedBranch } : {}),
+    });
+
+    // Events are the source of truth: broadcast the adopted group so every
+    // client updates its store (no client reads the mutation result).
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "worktree_imported",
+        sessionGroup,
+      },
+      actorType: "user",
+      actorId: userId,
+    });
+
+    return sessionGroup;
+  }
+
   async getLinkedCheckoutStatus(
     sessionGroupId: string,
     repoId: string,
@@ -8513,6 +8724,10 @@ export class SessionService {
     if (Object.prototype.hasOwnProperty.call(patch, "worktreeDeleted")) {
       groupData.worktreeDeleted = patch.worktreeDeleted ?? false;
       sessionData.worktreeDeleted = patch.worktreeDeleted ?? false;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, "worktreeAdopted")) {
+      groupData.worktreeAdopted = patch.worktreeAdopted ?? false;
     }
 
     if (Object.prototype.hasOwnProperty.call(patch, "setupStatus")) {

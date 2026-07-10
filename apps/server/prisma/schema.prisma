@@ -518,6 +518,10 @@ model SessionGroup {
   prSyncObservedAt DateTime?
   prSyncError      String?
   worktreeDeleted Boolean     @default(false)
+  // When true, workdir points at a user-owned worktree adopted via "import from
+  // worktree" rather than a Trace-created one. Re-provisioning re-adopts the same
+  // path, and teardown never removes it.
+  worktreeAdopted Boolean     @default(false)
   archivedAt      DateTime?
   setupStatus     String      @default("idle")
   setupError      String?

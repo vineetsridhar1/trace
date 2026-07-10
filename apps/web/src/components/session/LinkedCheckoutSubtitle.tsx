@@ -46,7 +46,7 @@ export function LinkedCheckoutSubtitle({ state }: Props) {
         </p>
       ) : isAttachedToThisGroup && summaryBranch ? (
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {targetDisplayLabel} following {summaryBranch}
+          {targetDisplayLabel} following <span className="font-mono">{summaryBranch}</span>
           {syncedCommitSha ? ` at ${syncedCommitSha.slice(0, 7)}` : ""}
           {autoSyncEnabled ? "" : " (auto-sync paused)"}
           {hasUncommittedChanges ? " (has live changes)" : ""}

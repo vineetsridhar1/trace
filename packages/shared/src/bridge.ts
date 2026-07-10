@@ -52,6 +52,13 @@ export interface BridgePrepareCommand {
   preserveBranchName?: boolean;
   checkpointSha?: string;
   readOnly?: boolean;
+  /**
+   * Absolute path to an existing on-disk worktree of this repo to adopt as the
+   * session workspace instead of creating a fresh Trace-managed worktree. When
+   * set, the bridge validates the path belongs to the repo, uses its current
+   * branch, and never resets or removes it. Takes precedence over readOnly.
+   */
+  adoptWorktreePath?: string;
 }
 
 export interface BridgeUpgradeWorkspaceCommand {
@@ -99,6 +106,12 @@ export interface BridgeListBranchesCommand {
 
 export interface BridgeListWorkspaceSlugsCommand {
   type: "list_workspace_slugs";
+  requestId: string;
+  repoId: string;
+}
+
+export interface BridgeListWorktreesCommand {
+  type: "list_worktrees";
   requestId: string;
   repoId: string;
 }
@@ -363,6 +376,7 @@ export type BridgeCommand =
   | BridgeDeleteCommand
   | BridgeListBranchesCommand
   | BridgeListWorkspaceSlugsCommand
+  | BridgeListWorktreesCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeWriteFileCommand
@@ -618,6 +632,27 @@ export interface BridgeFilesResult {
   error?: string;
 }
 
+/** A git worktree of a linked repo, reported by the bridge for adoption. */
+export interface BridgeRepoWorktree {
+  /** Absolute path to the worktree directory. */
+  path: string;
+  /** Checked-out branch, or null when detached. */
+  branch: string | null;
+  /** HEAD commit SHA. */
+  head: string | null;
+  /** True for the repo's primary (root) worktree. */
+  isMain: boolean;
+  /** True when the worktree lives under Trace's managed sessions directory. */
+  isTraceManaged: boolean;
+}
+
+export interface BridgeWorktreesResult {
+  type: "worktrees_result";
+  requestId: string;
+  worktrees: BridgeRepoWorktree[];
+  error?: string;
+}
+
 export interface BridgeFileContentResult {
   type: "file_content_result";
   requestId: string;
@@ -807,6 +842,7 @@ export type BridgeMessage =
   | BridgeSessionPrStatus
   | BridgeBranchesResult
   | BridgeWorkspaceSlugsResult
+  | BridgeWorktreesResult
   | BridgeFilesResult
   | BridgeFileContentResult
   | BridgeFileWriteResult
@@ -843,6 +879,57 @@ export function parseBranchOutput(stdout: string): string[] {
     .map((b) => b.replace(/^origin\//, ""))
     .filter((b) => b !== "HEAD" && !b.includes(" -> "));
   return [...new Set(branches)];
+}
+
+/**
+ * Parse `git worktree list --porcelain` output into structured worktree records.
+ * `traceManagedPrefix` is the absolute path under which Trace creates its own
+ * worktrees (e.g. `~/trace/sessions/{repoId}`); entries at or under it are flagged
+ * as Trace-managed so callers can distinguish user-owned worktrees.
+ */
+export function parseWorktreeListPorcelain(
+  stdout: string,
+  traceManagedPrefix: string,
+  pathSep = "/",
+): BridgeRepoWorktree[] {
+  const worktrees: BridgeRepoWorktree[] = [];
+  let current: Partial<BridgeRepoWorktree> & { detached?: boolean } = {};
+  const flush = () => {
+    if (typeof current.path !== "string") return;
+    const isTraceManaged =
+      current.path === traceManagedPrefix ||
+      current.path.startsWith(traceManagedPrefix + pathSep);
+    worktrees.push({
+      path: current.path,
+      branch: current.branch ?? null,
+      head: current.head ?? null,
+      isMain: current.isMain ?? false,
+      isTraceManaged,
+    });
+    current = {};
+  };
+  for (const rawLine of stdout.split("\n")) {
+    const line = rawLine.replace(/\r$/, "");
+    if (line === "") {
+      flush();
+      continue;
+    }
+    if (line.startsWith("worktree ")) {
+      // A new record — flush any in-progress one (porcelain separates with blank
+      // lines, but be defensive about missing separators).
+      flush();
+      current.path = line.slice("worktree ".length);
+      current.isMain = worktrees.length === 0;
+    } else if (line.startsWith("HEAD ")) {
+      current.head = line.slice("HEAD ".length);
+    } else if (line.startsWith("branch ")) {
+      current.branch = line.slice("branch ".length).replace(/^refs\/heads\//, "");
+    } else if (line === "detached") {
+      current.detached = true;
+    }
+  }
+  flush();
+  return worktrees;
 }
 
 /** Directories to skip when walking a filesystem tree. */

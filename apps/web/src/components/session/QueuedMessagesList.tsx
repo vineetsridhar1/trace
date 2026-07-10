@@ -114,7 +114,7 @@ function QueuedMessageItem({ id }: { id: string }) {
     <div
       ref={setNodeRef}
       style={style}
-      className="group flex items-center gap-2 rounded-md bg-surface-deep pr-3 py-1.5 text-sm text-muted-foreground"
+      className="group flex items-center gap-2 rounded-lg border border-border bg-surface-mid pr-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-surface-elevated/40"
     >
       <button
         ref={setActivatorNodeRef}
@@ -272,28 +272,30 @@ export function QueuedMessagesList({ sessionId }: { sessionId: string }) {
   if (ids.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-1 px-4 pb-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Queued ({ids.length})</span>
-        {ids.length > 1 && (
-          <button
-            onClick={handleClearAll}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Trash2 size={12} />
-            Clear all
-          </button>
-        )}
+    <div className="bg-background px-4 pb-2">
+      <div className="mx-auto flex w-[90%] flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Queued ({ids.length})</span>
+          {ids.length > 1 && (
+            <button
+              onClick={handleClearAll}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Trash2 size={12} />
+              Clear all
+            </button>
+          )}
+        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col gap-1">
+              {ids.map((id) => (
+                <QueuedMessageItem key={id} id={id} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       </div>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col gap-1">
-            {ids.map((id) => (
-              <QueuedMessageItem key={id} id={id} />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
     </div>
   );
 }

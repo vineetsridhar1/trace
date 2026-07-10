@@ -29,7 +29,7 @@ function ChannelRow({ channelId, onClick }: { channelId: string; onClick: () => 
         <div className="text-sm font-medium text-foreground">{name}</div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {repo && <span>{repo.name}</span>}
-          {baseBranch && <span>{baseBranch}</span>}
+          {baseBranch && <span className="font-mono">{baseBranch}</span>}
         </div>
       </div>
       <ArrowLeft size={14} className="rotate-180 text-muted-foreground" />
