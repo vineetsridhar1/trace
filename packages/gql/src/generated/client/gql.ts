@@ -40,7 +40,7 @@ type Documents = {
   "\n  mutation RunSessionGroupSetupScript($sessionGroupId: ID!, $scriptId: ID!) {\n    runSessionGroupSetupScript(sessionGroupId: $sessionGroupId, scriptId: $scriptId)\n  }\n": typeof types.RunSessionGroupSetupScriptDocument;
   "\n  mutation StartSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {\n    startSessionProcess(\n      sessionGroupId: $sessionGroupId\n      appConfigId: $appConfigId\n      processConfigId: $processConfigId\n    ) {\n      id\n    }\n  }\n": typeof types.StartSessionProcessDocument;
   "\n  mutation StopSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {\n    stopSessionProcess(\n      sessionGroupId: $sessionGroupId\n      appConfigId: $appConfigId\n      processConfigId: $processConfigId\n    ) {\n      id\n    }\n  }\n": typeof types.StopSessionProcessDocument;
-  "\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {\n      id\n    }\n  }\n": typeof types.EnableSessionEndpointForwardingDocument;
+  "\n  mutation EnableSessionEndpointForwarding(\n    $endpointId: ID!\n    $accessMode: SessionEndpointAccessMode!\n  ) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: $accessMode) {\n      id\n    }\n  }\n": typeof types.EnableSessionEndpointForwardingDocument;
   "\n  mutation DisableSessionEndpointForwarding($endpointId: ID!) {\n    disableSessionEndpointForwarding(endpointId: $endpointId) {\n      id\n    }\n  }\n": typeof types.DisableSessionEndpointForwardingDocument;
   "\n  mutation PublishAppSession($sessionGroupId: ID!) {\n    publishAppSession(sessionGroupId: $sessionGroupId) {\n      id\n    }\n  }\n": typeof types.PublishAppSessionDocument;
   "\n  query SessionEndpointTrafficEndpoints($sessionGroupId: ID!) {\n    sessionEndpoints(sessionGroupId: $sessionGroupId) {\n      id\n      key\n      url\n      sessionGroupId\n      appConfigId\n      processConfigId\n      portConfigId\n      label\n      targetPort\n      status\n      accessMode\n      trafficCaptureMode\n      enabledAt\n      disabledAt\n      revokedAt\n    }\n  }\n": typeof types.SessionEndpointTrafficEndpointsDocument;
@@ -152,7 +152,7 @@ const documents: Documents = {
     types.StartSessionProcessDocument,
   "\n  mutation StopSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {\n    stopSessionProcess(\n      sessionGroupId: $sessionGroupId\n      appConfigId: $appConfigId\n      processConfigId: $processConfigId\n    ) {\n      id\n    }\n  }\n":
     types.StopSessionProcessDocument,
-  "\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {\n      id\n    }\n  }\n":
+  "\n  mutation EnableSessionEndpointForwarding(\n    $endpointId: ID!\n    $accessMode: SessionEndpointAccessMode!\n  ) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: $accessMode) {\n      id\n    }\n  }\n":
     types.EnableSessionEndpointForwardingDocument,
   "\n  mutation DisableSessionEndpointForwarding($endpointId: ID!) {\n    disableSessionEndpointForwarding(endpointId: $endpointId) {\n      id\n    }\n  }\n":
     types.DisableSessionEndpointForwardingDocument,
@@ -444,8 +444,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {\n      id\n    }\n  }\n",
-): (typeof documents)["\n  mutation EnableSessionEndpointForwarding($endpointId: ID!) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {\n      id\n    }\n  }\n"];
+  source: "\n  mutation EnableSessionEndpointForwarding(\n    $endpointId: ID!\n    $accessMode: SessionEndpointAccessMode!\n  ) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: $accessMode) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation EnableSessionEndpointForwarding(\n    $endpointId: ID!\n    $accessMode: SessionEndpointAccessMode!\n  ) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: $accessMode) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

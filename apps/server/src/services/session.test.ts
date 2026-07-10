@@ -552,6 +552,31 @@ describe("SessionService", () => {
     });
   });
 
+  describe("listAppGroups", () => {
+    it("lists only non-archived app-kind groups visible to the user", async () => {
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        makeSessionGroup({
+          id: "group-app",
+          kind: "app",
+          sessions: [makeSession({ id: "session-app" })],
+        }),
+      ]);
+
+      const result = await service.listAppGroups("org-1", "user-1");
+
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith({
+        where: {
+          organizationId: "org-1",
+          kind: "app",
+          archivedAt: null,
+          AND: [{ OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] }],
+        },
+        include: expect.any(Object),
+      });
+      expect(result.map((group) => group.id)).toEqual(["group-app"]);
+    });
+  });
+
   describe("listByUser", () => {
     it("filters merged and archived groups when requested", async () => {
       prismaMock.session.findMany.mockResolvedValueOnce([]);

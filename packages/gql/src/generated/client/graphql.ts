@@ -1315,6 +1315,11 @@ export type PushPlatform = "android" | "ios";
 export type Query = {
   __typename?: "Query";
   agentEnvironments: Array<AgentEnvironment>;
+  /**
+   * App-kind session groups for the org. Apps have no channel, so this is their
+   * listing surface (the sidebar Apps section).
+   */
+  appSessionGroups: Array<SessionGroup>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   bridgeRuntimeAccess: BridgeRuntimeAccess;
@@ -1378,6 +1383,10 @@ export type Query = {
 
 export type QueryAgentEnvironmentsArgs = {
   orgId: Scalars["ID"]["input"];
+};
+
+export type QueryAppSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryAvailableRuntimesArgs = {
@@ -3082,6 +3091,7 @@ export type StopSessionProcessMutation = {
 
 export type EnableSessionEndpointForwardingMutationVariables = Exact<{
   endpointId: Scalars["ID"]["input"];
+  accessMode: SessionEndpointAccessMode;
 }>;
 
 export type EnableSessionEndpointForwardingMutation = {
@@ -6571,6 +6581,14 @@ export const EnableSessionEndpointForwardingDocument = {
             type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
           },
         },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "accessMode" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "SessionEndpointAccessMode" } },
+          },
+        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -6587,7 +6605,7 @@ export const EnableSessionEndpointForwardingDocument = {
               {
                 kind: "Argument",
                 name: { kind: "Name", value: "accessMode" },
-                value: { kind: "EnumValue", value: "public" },
+                value: { kind: "Variable", name: { kind: "Name", value: "accessMode" } },
               },
             ],
             selectionSet: {

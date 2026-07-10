@@ -889,7 +889,7 @@ If the user asks you to stop auto-saving or disable auto-save, stop doing this f
 </system-instruction>`;
 
 const APP_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace app session in its own isolated cloud runtime. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Next.js/Tailwind/shadcn-compatible starter as the source of truth. Add routes, API handlers, persistence, and UI in project files. You may install npm packages, use sudo to install OS packages, and run backing services; Redis is preinstalled. Use supplied database environment variables when present, and keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. Run the dev server on port 3000 with host 0.0.0.0, keep logs useful, and commit and push meaningful checkpoints to the configured managed origin when the app reaches a working state. Sharing the live app is a valid final outcome.
+This is a Trace app session in its own isolated cloud runtime. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Next.js/Tailwind/shadcn-compatible starter as the source of truth. Add routes, API handlers, persistence, and UI in project files. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running: connect to Postgres with the DATABASE_URL environment variable (a ready "app" database), and keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. Run the dev server on port 3000 with host 0.0.0.0, keep logs useful, and commit and push meaningful checkpoints to the configured managed origin when the app reaches a working state. Sharing the live app is a valid final outcome.
 </system-instruction>`;
 
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
@@ -2490,6 +2490,42 @@ export class SessionService {
       select: { id: true },
     });
     if (!repo) throw new Error("Repo not found");
+  }
+
+  /**
+   * App-kind session groups for the org. Apps have no channel, so channel-scoped
+   * listGroups never surfaces them; this backs the sidebar Apps section.
+   */
+  async listAppGroups(organizationId: string, userId: string) {
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        organizationId,
+        kind: "app",
+        archivedAt: null,
+        AND: [visibleSessionGroupWhere(userId)],
+      },
+      include: SESSION_GROUP_INCLUDE,
+    });
+
+    type SessionGroupWithSessions = SessionGroupSummary & {
+      sessions: SessionWithTimestamps[];
+    };
+
+    return (groups as SessionGroupWithSessions[])
+      .map((group) => {
+        const sessions = sortSessionsByRecency<SessionWithTimestamps>(group.sessions);
+        return {
+          ...buildSessionGroupSnapshot(group, sessions),
+          sessions,
+        };
+      })
+      .sort((a, b) => {
+        const aLatest = a.sessions[0];
+        const bLatest = b.sessions[0];
+        const aTs = aLatest?.lastMessageAt ?? aLatest?.updatedAt ?? a.updatedAt;
+        const bTs = bLatest?.lastMessageAt ?? bLatest?.updatedAt ?? b.updatedAt;
+        return bTs.getTime() - aTs.getTime();
+      });
   }
 
   async listGroups(

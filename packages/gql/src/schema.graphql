@@ -1277,6 +1277,11 @@ type Query {
     status: SessionGroupStatus
     includeActiveMerged: Boolean
   ): [SessionGroup!]!
+  """
+  App-kind session groups for the org. Apps have no channel, so this is their
+  listing surface (the sidebar Apps section).
+  """
+  appSessionGroups(organizationId: ID!): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session

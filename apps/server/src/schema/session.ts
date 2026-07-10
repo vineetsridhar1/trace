@@ -39,6 +39,10 @@ export const sessionQueries = {
       includeActiveMerged: args.includeActiveMerged ?? undefined,
     });
   },
+  appSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    assertOrgAccess(ctx, args.organizationId);
+    return sessionService.listAppGroups(args.organizationId, ctx.userId);
+  },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx), ctx.userId);
   },

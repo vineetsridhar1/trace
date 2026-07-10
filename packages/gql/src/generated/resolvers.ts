@@ -1316,6 +1316,11 @@ export type PushPlatform = "android" | "ios";
 export type Query = {
   __typename?: "Query";
   agentEnvironments: Array<AgentEnvironment>;
+  /**
+   * App-kind session groups for the org. Apps have no channel, so this is their
+   * listing surface (the sidebar Apps section).
+   */
+  appSessionGroups: Array<SessionGroup>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   bridgeRuntimeAccess: BridgeRuntimeAccess;
@@ -1379,6 +1384,10 @@ export type Query = {
 
 export type QueryAgentEnvironmentsArgs = {
   orgId: Scalars["ID"]["input"];
+};
+
+export type QueryAppSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryAvailableRuntimesArgs = {
@@ -3880,6 +3889,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryAgentEnvironmentsArgs, "orgId">
+  >;
+  appSessionGroups?: Resolver<
+    Array<ResolversTypes["SessionGroup"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryAppSessionGroupsArgs, "organizationId">
   >;
   availableRuntimes?: Resolver<
     Array<ResolversTypes["SessionRuntimeInstance"]>,

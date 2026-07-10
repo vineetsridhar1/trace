@@ -1,0 +1,9 @@
+node_modules
+.next
+.env
+.env.*
+!.env.example
+data
+*.log
+
+next-env.d.ts
