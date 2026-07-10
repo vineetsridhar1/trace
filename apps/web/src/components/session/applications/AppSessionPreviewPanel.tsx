@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
-import type { SessionEndpoint } from "@trace/gql";
+import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import { useEntityStore } from "@trace/client-core";
 import { client } from "../../../lib/urql";
 import { AppPreview } from "./AppPreview";
 import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
+import { findReadyPreviewEndpoint } from "./app-preview-readiness";
 
 const APP_PREVIEW_ENDPOINTS_QUERY = gql`
-  query AppPreviewEndpoints($sessionGroupId: ID!) {
+  query AppPreviewState($sessionGroupId: ID!) {
     sessionEndpoints(sessionGroupId: $sessionGroupId) {
       id
       sessionGroupId
@@ -24,11 +25,25 @@ const APP_PREVIEW_ENDPOINTS_QUERY = gql`
       disabledAt
       revokedAt
     }
+    sessionApplicationProcesses(sessionGroupId: $sessionGroupId) {
+      id
+      sessionGroupId
+      appConfigId
+      processConfigId
+      label
+      status
+      runtimeInstanceId
+      startedAt
+      stoppedAt
+      exitCode
+      lastError
+    }
   }
 `;
 
 export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: string }) {
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
+  const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +56,9 @@ export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: str
       if (result.error) throw new Error(result.error.message);
       const endpoints = (result.data?.sessionEndpoints as SessionEndpoint[] | undefined) ?? [];
       upsertMany("sessionEndpoints", endpoints);
+      const processes =
+        (result.data?.sessionApplicationProcesses as SessionApplicationProcess[] | undefined) ?? [];
+      upsertMany("sessionApplicationProcesses", processes);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to load the app preview");
     }
@@ -52,13 +70,12 @@ export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: str
 
   const endpoint = useMemo(
     () =>
-      Object.values(endpointTable).find(
-        (candidate) =>
-          candidate.sessionGroupId === sessionGroupId &&
-          candidate.status === "enabled" &&
-          candidate.url,
+      findReadyPreviewEndpoint(
+        sessionGroupId,
+        Object.values(endpointTable),
+        Object.values(processTable),
       ),
-    [endpointTable, sessionGroupId],
+    [endpointTable, processTable, sessionGroupId],
   );
 
   if (endpoint) return <AppPreview endpointId={endpoint.id} fill desktopViewport />;
