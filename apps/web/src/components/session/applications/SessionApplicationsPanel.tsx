@@ -223,6 +223,14 @@ const PUBLISH_APP_MUTATION = gql`
   }
 `;
 
+const CREATE_PREVIEW_MUTATION = gql`
+  mutation CreateSessionEndpointPreview($endpointId: ID!) {
+    createSessionEndpointPreview(endpointId: $endpointId) {
+      url
+    }
+  }
+`;
+
 export function SessionApplicationsPanel({
   sessionGroupId,
   onOpenTraffic,
@@ -432,6 +440,37 @@ export function SessionApplicationsPanel({
       setError(url);
     }
   };
+
+  // Private endpoints require the short-lived preview cookie, which a bare URL
+  // doesn't carry. Mint an authenticated /__trace_preview_auth URL for private
+  // endpoints (it sets the cookie then redirects); public endpoints need no auth.
+  const resolveEndpointUrl = useCallback(
+    async (endpoint: { id: string; url?: string | null; accessMode?: string | null }) => {
+      const bare = typeof endpoint.url === "string" ? endpoint.url : "";
+      if (endpoint.accessMode !== "private") return bare;
+      const result = await client
+        .mutation(CREATE_PREVIEW_MUTATION, { endpointId: endpoint.id })
+        .toPromise();
+      return (result.data?.createSessionEndpointPreview?.url as string | undefined) ?? bare;
+    },
+    [],
+  );
+
+  const openEndpoint = useCallback(
+    async (endpoint: { id: string; url?: string | null; accessMode?: string | null }) => {
+      const url = await resolveEndpointUrl(endpoint);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+    },
+    [resolveEndpointUrl],
+  );
+
+  const copyEndpoint = useCallback(
+    async (endpoint: { id: string; url?: string | null; accessMode?: string | null }) => {
+      const url = await resolveEndpointUrl(endpoint);
+      if (url) await copyEndpointUrl(url);
+    },
+    [resolveEndpointUrl],
+  );
 
   const toggleSetupLogs = (scriptId: string) => {
     setOpenSetupLogIds((current) => ({ ...current, [scriptId]: !current[scriptId] }));
@@ -761,15 +800,14 @@ export function SessionApplicationsPanel({
                                   </span>
                                 </p>
                                 {endpointEnabled && endpointUrl ? (
-                                  <a
-                                    href={endpointUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="block truncate text-[11px] text-primary underline-offset-4 hover:underline"
+                                  <button
+                                    type="button"
+                                    onClick={() => void openEndpoint(endpoint)}
+                                    className="block max-w-full truncate text-left text-[11px] text-primary underline-offset-4 hover:underline"
                                     title={endpointUrl}
                                   >
                                     {endpointUrl}
-                                  </a>
+                                  </button>
                                 ) : (
                                   <p className="text-[11px] text-muted-foreground">
                                     Forwarding disabled
@@ -829,27 +867,23 @@ export function SessionApplicationsPanel({
                               >
                                 {endpointEnabled ? <Square size={14} /> : <Power size={14} />}
                               </Button>
-                              <a
-                                className={cn(
-                                  buttonVariants({ variant: "ghost", size: "icon-sm" }),
-                                  !canOpen && "pointer-events-none opacity-50",
-                                )}
-                                href={canOpen ? endpointUrl : undefined}
-                                target="_blank"
-                                rel="noreferrer"
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
                                 title={`Open ${endpoint.label}`}
-                                aria-disabled={!canOpen}
                                 aria-label={`Open ${endpoint.label}`}
+                                disabled={!canOpen}
+                                onClick={() => void openEndpoint(endpoint)}
                               >
                                 <ExternalLink size={14} />
-                              </a>
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
                                 title={`Copy ${endpoint.label} URL`}
                                 aria-label={`Copy ${endpoint.label} URL`}
                                 disabled={!endpointUrl}
-                                onClick={() => void copyEndpointUrl(endpointUrl)}
+                                onClick={() => void copyEndpoint(endpoint)}
                               >
                                 <Copy size={14} />
                               </Button>
