@@ -142,6 +142,21 @@ export function forwardableRequestHeaders(
   return forwarded;
 }
 
+export function webSocketProtocols(
+  headers: Record<string, string | string[] | undefined>,
+): string[] {
+  const value = headers["sec-websocket-protocol"];
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return [
+    ...new Set(
+      values
+        .flatMap((entry) => entry.split(","))
+        .map((protocol) => protocol.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
 // Strip hop-by-hop headers from the application's response before relaying it
 // back to the caller; the proxy manages framing itself.
 export function forwardableResponseHeaders(

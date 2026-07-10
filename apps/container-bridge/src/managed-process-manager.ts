@@ -418,10 +418,12 @@ export class ManagedProcessManager {
     port: number;
     path: string;
     headers: Record<string, string | string[]>;
+    protocols?: string[];
   }) {
-    const socket = new WebSocket(`ws://127.0.0.1:${options.port}${options.path}`, {
-      headers: options.headers,
-    });
+    const url = `ws://127.0.0.1:${options.port}${options.path}`;
+    const socket = options.protocols?.length
+      ? new WebSocket(url, options.protocols, { headers: options.headers })
+      : new WebSocket(url, { headers: options.headers });
     this.sockets.set(options.requestId, socket);
     socket.on("open", () =>
       this.send({ type: "endpoint_ws_opened", requestId: options.requestId }),

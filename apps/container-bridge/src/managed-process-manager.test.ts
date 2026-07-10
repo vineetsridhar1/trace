@@ -1,6 +1,7 @@
 import http from "http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BridgeMessage } from "@trace/shared";
+import { WebSocketServer } from "ws";
 import { ManagedProcessManager } from "./managed-process-manager.js";
 
 function waitFor(messages: BridgeMessage[], predicate: (message: BridgeMessage) => boolean) {
@@ -255,6 +256,33 @@ describe("ManagedProcessManager", () => {
       status: 200,
     });
     expect(messages.some((message) => message.type === "endpoint_http_error")).toBe(false);
+  });
+
+  it("forwards websocket subprotocols required by Vite HMR", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map(), (message) => messages.push(message));
+    const server = http.createServer();
+    const webSocketServer = new WebSocketServer({ server });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Missing test server port");
+    const protocol = new Promise<string>((resolve) => {
+      webSocketServer.once("connection", (socket) => resolve(socket.protocol));
+    });
+
+    manager.openWebSocket({
+      requestId: "ws-hmr",
+      port: address.port,
+      path: "/",
+      headers: {},
+      protocols: ["vite-hmr"],
+    });
+
+    await waitFor(messages, (message) => message.type === "endpoint_ws_opened");
+    expect(await protocol).toBe("vite-hmr");
+    manager.destroyAll();
+    await new Promise<void>((resolve) => webSocketServer.close(() => resolve()));
   });
 
   it("rejects unsafe working directories", async () => {

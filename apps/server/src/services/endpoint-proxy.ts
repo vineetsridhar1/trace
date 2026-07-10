@@ -21,6 +21,7 @@ import {
   sanitizeHeaders,
   shouldCaptureBodies,
   shouldCaptureHeaders,
+  webSocketProtocols,
 } from "./endpoint-utils.js";
 
 type PendingHttp = {
@@ -430,6 +431,7 @@ export class EndpointProxyService {
         port: endpoint.targetPort,
         path: `${path}${query ? `?${query}` : ""}`,
         headers: forwardableRequestHeaders(req.headers, { websocket: true }),
+        protocols: webSocketProtocols(req.headers),
       },
       endpoint.organizationId,
     );

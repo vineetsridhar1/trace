@@ -8,6 +8,7 @@ import {
   forwardableResponseHeaders,
   generateEndpointKey,
   sanitizeHeaders,
+  webSocketProtocols,
 } from "./endpoint-utils.js";
 
 describe("endpoint utils", () => {
@@ -101,6 +102,14 @@ describe("endpoint utils", () => {
         { websocket: true },
       ),
     ).toEqual({ "x-app": "ok" });
+  });
+
+  it("extracts websocket subprotocols before stripping handshake headers", () => {
+    expect(
+      webSocketProtocols({
+        "sec-websocket-protocol": "vite-hmr, graphql-transport-ws, vite-hmr",
+      }),
+    ).toEqual(["vite-hmr", "graphql-transport-ws"]);
   });
 
   it("strips hop-by-hop headers from upstream responses", () => {

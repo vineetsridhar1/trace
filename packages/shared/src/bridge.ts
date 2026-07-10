@@ -364,6 +364,7 @@ export interface BridgeEndpointWebSocketOpenCommand {
   port: number;
   path: string;
   headers: Record<string, string | string[]>;
+  protocols?: string[];
 }
 
 export interface BridgeEndpointWebSocketDataCommand {

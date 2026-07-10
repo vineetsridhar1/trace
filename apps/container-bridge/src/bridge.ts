@@ -624,6 +624,7 @@ export class ContainerBridge implements IBridgeClient {
           port: cmd.port,
           path: cmd.path,
           headers: cmd.headers,
+          protocols: cmd.protocols,
         });
         break;
       }
