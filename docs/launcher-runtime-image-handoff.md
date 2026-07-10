@@ -77,8 +77,8 @@ TRACE_RUNTIME_IMAGE=registry.acme.com/trace-runtime:platform-tools
 
 ## Required Runtime Environment
 
-The launcher still needs to inject the Trace bootstrap environment values from the start-session
-request:
+The launcher must inject every entry in the start-session request's `bootstrapEnv` object into the
+runtime container. That object always contains the Trace bootstrap values:
 
 ```txt
 TRACE_SESSION_ID
@@ -87,6 +87,11 @@ TRACE_RUNTIME_INSTANCE_ID
 TRACE_RUNTIME_TOKEN
 TRACE_BRIDGE_URL
 ```
+
+It can also contain organization-secret-backed runtime variables configured on the Agent
+Environment, such as `DATABASE_URL`. Trace decrypts only the explicitly selected secrets for that
+environment and sends their values inside `bootstrapEnv`; the launcher must not log or persist
+those values.
 
 It should also pass through tool and repo values when present:
 

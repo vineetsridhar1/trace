@@ -15,6 +15,7 @@ const prompt =
   [
     "Build a lightweight CRM approval tracker app.",
     "Keep the exact text TRACE_SMOKE_APP_READY visible on the home page.",
+    "Start the preinstalled Redis server and use it from the app for a small cache or health check.",
     "Use the existing app starter, keep the app runnable on port 3000, and create a checkpoint when done.",
   ].join(" ");
 const expectedText = process.env.TRACE_SMOKE_EXPECTED_TEXT ?? "TRACE_SMOKE_APP_READY";
@@ -123,6 +124,14 @@ const CREATE_PREVIEW = `
     createSessionEndpointPreview(endpointId: $endpointId) {
       url
       expiresAt
+    }
+  }
+`;
+
+const CREATE_TERMINAL = `
+  mutation SmokeCreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) {
+    createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) {
+      id
     }
   }
 `;
@@ -303,6 +312,69 @@ async function createPreviewUrl(endpointId) {
   return data.createSessionEndpointPreview.url;
 }
 
+async function verifyRuntimeTerminal(sessionId, { requireRedis = false } = {}) {
+  const data = await graphql(CREATE_TERMINAL, { sessionId, cols: 100, rows: 30 });
+  const terminalId = data.createTerminal.id;
+  const terminalUrl = new URL(serverUrl);
+  terminalUrl.protocol = terminalUrl.protocol === "https:" ? "wss:" : "ws:";
+  terminalUrl.pathname = "/terminal";
+  terminalUrl.search = new URLSearchParams({ token: authToken }).toString();
+
+  await new Promise((resolve, reject) => {
+    const socket = new WebSocket(terminalUrl);
+    let output = "";
+    let finished = false;
+    const timer = setTimeout(
+      () => finish(new Error("Timed out verifying app runtime terminal")),
+      30_000,
+    );
+
+    function finish(error) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      socket.close();
+      if (error) reject(error);
+      else resolve();
+    }
+
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({ type: "attach", terminalId }));
+    });
+    socket.addEventListener("message", (event) => {
+      const message = JSON.parse(String(event.data));
+      if (message.type === "ready") {
+        const checks = ["test -f .trace/app-starter.json"];
+        if (requireRedis) checks.push('test "$(redis-cli ping)" = PONG');
+        socket.send(
+          JSON.stringify({
+            type: "input",
+            data: `${checks.join(" && ")} && printf "TRACE_SMOKE_TERMINAL_READY:%s\\n" "$PWD"; exit $?\n`,
+          }),
+        );
+      } else if (message.type === "output") {
+        output += message.data;
+      } else if (message.type === "error") {
+        finish(new Error(`Terminal verification failed: ${message.message}`));
+      } else if (message.type === "exit") {
+        if (message.exitCode !== 0) {
+          finish(new Error(`Terminal command exited ${message.exitCode}: ${output.slice(-1000)}`));
+        } else if (!output.includes("TRACE_SMOKE_TERMINAL_READY:")) {
+          finish(
+            new Error(`Terminal output was missing the workdir marker: ${output.slice(-1000)}`),
+          );
+        } else {
+          finish();
+        }
+      }
+    });
+    socket.addEventListener("error", () => finish(new Error("Terminal WebSocket failed")));
+    socket.addEventListener("close", () => {
+      if (!finished) finish(new Error(`Terminal WebSocket closed early: ${output.slice(-1000)}`));
+    });
+  });
+}
+
 async function startAppSession(input) {
   const data = await graphql(START_APP_SESSION, { input });
   const session = data.startSession;
@@ -336,6 +408,7 @@ const session = await startAppSession({
 });
 
 const initial = await waitForReadyApp(session.sessionGroupId, "initial");
+await verifyRuntimeTerminal(session.id, { requireRedis: true });
 const previewUrl = await createPreviewUrl(initial.endpoint.id);
 await renderUrl(previewUrl, "private preview URL", { requireFetch: false });
 const publicUrl = await publishApp(session.sessionGroupId);
@@ -347,6 +420,7 @@ const restored = await startAppSession({
   ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
 });
 const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored");
+await verifyRuntimeTerminal(restored.id);
 const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
 await renderUrl(restoredPreviewUrl, "restored private preview URL", { requireFetch: false });
 const restoredPublicUrl = await publishApp(restored.sessionGroupId);
