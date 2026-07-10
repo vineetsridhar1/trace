@@ -2941,6 +2941,100 @@ export type CreateSessionEndpointPreviewMutation = {
   createSessionEndpointPreview: { __typename?: "SessionEndpointPreview"; url: string };
 };
 
+export type AppPreviewStateQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type AppPreviewStateQuery = {
+  __typename?: "Query";
+  sessionEndpoints: Array<{
+    __typename?: "SessionEndpoint";
+    id: string;
+    sessionGroupId: string;
+    appConfigId: string;
+    processConfigId: string;
+    portConfigId: string;
+    label: string;
+    targetPort: number;
+    url: string;
+    status: SessionEndpointStatus;
+    accessMode: SessionEndpointAccessMode;
+    trafficCaptureMode: EndpointTrafficCaptureMode;
+    enabledAt?: string | null;
+    disabledAt?: string | null;
+    revokedAt?: string | null;
+  }>;
+  sessionApplicationProcesses: Array<{
+    __typename?: "SessionApplicationProcess";
+    id: string;
+    sessionGroupId: string;
+    appConfigId: string;
+    processConfigId: string;
+    label: string;
+    status: ApplicationProcessStatus;
+    runtimeInstanceId?: string | null;
+    startedAt?: string | null;
+    stoppedAt?: string | null;
+    exitCode?: number | null;
+    lastError?: string | null;
+  }>;
+};
+
+export type SessionEndpointTrafficEndpointsQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type SessionEndpointTrafficEndpointsQuery = {
+  __typename?: "Query";
+  sessionEndpoints: Array<{
+    __typename?: "SessionEndpoint";
+    id: string;
+    key: string;
+    url: string;
+    sessionGroupId: string;
+    appConfigId: string;
+    processConfigId: string;
+    portConfigId: string;
+    label: string;
+    targetPort: number;
+    status: SessionEndpointStatus;
+    accessMode: SessionEndpointAccessMode;
+    trafficCaptureMode: EndpointTrafficCaptureMode;
+    enabledAt?: string | null;
+    disabledAt?: string | null;
+    revokedAt?: string | null;
+  }>;
+};
+
+export type EndpointTrafficTabQueryVariables = Exact<{
+  endpointId: Scalars["ID"]["input"];
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+}>;
+
+export type EndpointTrafficTabQuery = {
+  __typename?: "Query";
+  endpointTraffic: Array<{
+    __typename?: "EndpointTrafficEntry";
+    id: string;
+    endpointId: string;
+    startedAt: string;
+    durationMs?: number | null;
+    requestMethod: string;
+    requestPath: string;
+    responseStatus?: number | null;
+    error?: string | null;
+  }>;
+};
+
+export type ClearEndpointTrafficTabMutationVariables = Exact<{
+  endpointId: Scalars["ID"]["input"];
+}>;
+
+export type ClearEndpointTrafficTabMutation = {
+  __typename?: "Mutation";
+  clearEndpointTraffic: boolean;
+};
+
 export type SessionApplicationsStateQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
 }>;
@@ -3115,61 +3209,6 @@ export type PublishAppSessionMutationVariables = Exact<{
 export type PublishAppSessionMutation = {
   __typename?: "Mutation";
   publishAppSession: { __typename?: "SessionEndpoint"; id: string };
-};
-
-export type SessionEndpointTrafficEndpointsQueryVariables = Exact<{
-  sessionGroupId: Scalars["ID"]["input"];
-}>;
-
-export type SessionEndpointTrafficEndpointsQuery = {
-  __typename?: "Query";
-  sessionEndpoints: Array<{
-    __typename?: "SessionEndpoint";
-    id: string;
-    key: string;
-    url: string;
-    sessionGroupId: string;
-    appConfigId: string;
-    processConfigId: string;
-    portConfigId: string;
-    label: string;
-    targetPort: number;
-    status: SessionEndpointStatus;
-    accessMode: SessionEndpointAccessMode;
-    trafficCaptureMode: EndpointTrafficCaptureMode;
-    enabledAt?: string | null;
-    disabledAt?: string | null;
-    revokedAt?: string | null;
-  }>;
-};
-
-export type EndpointTrafficTabQueryVariables = Exact<{
-  endpointId: Scalars["ID"]["input"];
-  limit?: InputMaybe<Scalars["Int"]["input"]>;
-}>;
-
-export type EndpointTrafficTabQuery = {
-  __typename?: "Query";
-  endpointTraffic: Array<{
-    __typename?: "EndpointTrafficEntry";
-    id: string;
-    endpointId: string;
-    startedAt: string;
-    durationMs?: number | null;
-    requestMethod: string;
-    requestPath: string;
-    responseStatus?: number | null;
-    error?: string | null;
-  }>;
-};
-
-export type ClearEndpointTrafficTabMutationVariables = Exact<{
-  endpointId: Scalars["ID"]["input"];
-}>;
-
-export type ClearEndpointTrafficTabMutation = {
-  __typename?: "Mutation";
-  clearEndpointTraffic: boolean;
 };
 
 export type SessionGroupFileTreeQueryVariables = Exact<{
@@ -3519,6 +3558,37 @@ export type CreateDmMutationVariables = Exact<{
 export type CreateDmMutation = {
   __typename?: "Mutation";
   createChat: { __typename?: "Chat"; id: string };
+};
+
+export type AppSessionGroupsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type AppSessionGroupsQuery = {
+  __typename?: "Query";
+  appSessionGroups: Array<{
+    __typename?: "SessionGroup";
+    id: string;
+    name: string;
+    slug?: string | null;
+    kind: SessionGroupKind;
+    status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
+    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+    sessions: Array<{
+      __typename?: "Session";
+      id: string;
+      sessionGroupId?: string | null;
+      agentStatus: AgentStatus;
+      sessionStatus: SessionStatus;
+      prUrl?: string | null;
+      worktreeDeleted: boolean;
+      lastMessageAt?: string | null;
+      lastUserMessageAt?: string | null;
+      updatedAt: string;
+      createdAt: string;
+    }>;
+  }>;
 };
 
 export type AllChannelsQueryVariables = Exact<{
@@ -6059,6 +6129,245 @@ export const CreateSessionEndpointPreviewDocument = {
   CreateSessionEndpointPreviewMutation,
   CreateSessionEndpointPreviewMutationVariables
 >;
+export const AppPreviewStateDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "AppPreviewState" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionEndpoints" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "portConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "targetPort" } },
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "accessMode" } },
+                { kind: "Field", name: { kind: "Name", value: "trafficCaptureMode" } },
+                { kind: "Field", name: { kind: "Name", value: "enabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "disabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "revokedAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionApplicationProcesses" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "stoppedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "exitCode" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<AppPreviewStateQuery, AppPreviewStateQueryVariables>;
+export const SessionEndpointTrafficEndpointsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionEndpointTrafficEndpoints" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionEndpoints" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "key" } },
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "portConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "targetPort" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "accessMode" } },
+                { kind: "Field", name: { kind: "Name", value: "trafficCaptureMode" } },
+                { kind: "Field", name: { kind: "Name", value: "enabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "disabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "revokedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SessionEndpointTrafficEndpointsQuery,
+  SessionEndpointTrafficEndpointsQueryVariables
+>;
+export const EndpointTrafficTabDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "EndpointTrafficTab" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "endpointTraffic" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endpointId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "limit" },
+                value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "endpointId" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "durationMs" } },
+                { kind: "Field", name: { kind: "Name", value: "requestMethod" } },
+                { kind: "Field", name: { kind: "Name", value: "requestPath" } },
+                { kind: "Field", name: { kind: "Name", value: "responseStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "error" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<EndpointTrafficTabQuery, EndpointTrafficTabQueryVariables>;
+export const ClearEndpointTrafficTabDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ClearEndpointTrafficTab" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "clearEndpointTraffic" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endpointId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  ClearEndpointTrafficTabMutation,
+  ClearEndpointTrafficTabMutationVariables
+>;
 export const SessionApplicationsStateDocument = {
   kind: "Document",
   definitions: [
@@ -6704,163 +7013,6 @@ export const PublishAppSessionDocument = {
     },
   ],
 } as unknown as DocumentNode<PublishAppSessionMutation, PublishAppSessionMutationVariables>;
-export const SessionEndpointTrafficEndpointsDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "SessionEndpointTrafficEndpoints" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sessionEndpoints" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "key" } },
-                { kind: "Field", name: { kind: "Name", value: "url" } },
-                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "portConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "label" } },
-                { kind: "Field", name: { kind: "Name", value: "targetPort" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "accessMode" } },
-                { kind: "Field", name: { kind: "Name", value: "trafficCaptureMode" } },
-                { kind: "Field", name: { kind: "Name", value: "enabledAt" } },
-                { kind: "Field", name: { kind: "Name", value: "disabledAt" } },
-                { kind: "Field", name: { kind: "Name", value: "revokedAt" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  SessionEndpointTrafficEndpointsQuery,
-  SessionEndpointTrafficEndpointsQueryVariables
->;
-export const EndpointTrafficTabDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "EndpointTrafficTab" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "limit" } },
-          type: { kind: "NamedType", name: { kind: "Name", value: "Int" } },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "endpointTraffic" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "endpointId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "limit" },
-                value: { kind: "Variable", name: { kind: "Name", value: "limit" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "endpointId" } },
-                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "durationMs" } },
-                { kind: "Field", name: { kind: "Name", value: "requestMethod" } },
-                { kind: "Field", name: { kind: "Name", value: "requestPath" } },
-                { kind: "Field", name: { kind: "Name", value: "responseStatus" } },
-                { kind: "Field", name: { kind: "Name", value: "error" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<EndpointTrafficTabQuery, EndpointTrafficTabQueryVariables>;
-export const ClearEndpointTrafficTabDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "ClearEndpointTrafficTab" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "clearEndpointTraffic" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "endpointId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
-              },
-            ],
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  ClearEndpointTrafficTabMutation,
-  ClearEndpointTrafficTabMutationVariables
->;
 export const SessionGroupFileTreeDocument = {
   kind: "Document",
   definitions: [
@@ -8074,6 +8226,80 @@ export const CreateDmDocument = {
     },
   ],
 } as unknown as DocumentNode<CreateDmMutation, CreateDmMutationVariables>;
+export const AppSessionGroupsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "AppSessionGroups" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "appSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "connection" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessions" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<AppSessionGroupsQuery, AppSessionGroupsQueryVariables>;
 export const AllChannelsDocument = {
   kind: "Document",
   definitions: [

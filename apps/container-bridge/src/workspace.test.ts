@@ -238,8 +238,8 @@ describe("workspace repo setup", () => {
     expect(gitArgsAt(0)).not.toContain("--no-checkout");
   });
 
-  it("creates a repo-less app workspace with the fallback starter", async () => {
-    mocks.existsSync.mockReturnValue(false);
+  it("creates a repo-less app workspace from the bundled starter", async () => {
+    mocks.existsSync.mockImplementation((path) => String(path).endsWith("/app-starter"));
     mocks.readdirSync.mockReturnValue([]);
 
     await expect(
@@ -253,25 +253,10 @@ describe("workspace repo setup", () => {
 
     expect(mocks.mkdirSync).toHaveBeenCalledWith("/workspaces", { recursive: true });
     expect(mocks.mkdirSync).toHaveBeenCalledWith("/workspaces/group-1", { recursive: true });
-    expect(mocks.writeFileSync).toHaveBeenCalledWith(
-      "/workspaces/group-1/.trace/app-starter.json",
-      expect.stringContaining('"kind":"vite-react-node"'),
-    );
-    expect(mocks.writeFileSync).toHaveBeenCalledWith(
-      "/workspaces/group-1/package.json",
-      expect.stringContaining('"dev": "tsx watch --clear-screen=false server.ts"'),
-    );
-    expect(mocks.writeFileSync).toHaveBeenCalledWith(
-      "/workspaces/group-1/package.json",
-      expect.stringContaining('"pg": "^8.22.0"'),
-    );
-    expect(mocks.writeFileSync).toHaveBeenCalledWith(
-      "/workspaces/group-1/server.ts",
-      expect.stringContaining("server: { hmr: { server }, middlewareMode: true }"),
-    );
-    expect(mocks.writeFileSync).toHaveBeenCalledWith(
-      "/workspaces/group-1/server.ts",
-      expect.stringContaining("APP_CORS_ALLOWED_ORIGINS"),
+    expect(mocks.cpSync).toHaveBeenCalledWith(
+      expect.stringMatching(/app-starter$/),
+      "/workspaces/group-1",
+      expect.objectContaining({ recursive: true }),
     );
   });
 

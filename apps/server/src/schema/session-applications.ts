@@ -2,7 +2,6 @@ import type { EndpointTrafficCaptureMode, SessionEndpointAccessMode } from "@pri
 import type { Context } from "../context.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { requireOrgContext } from "../lib/require-org.js";
-import { prisma } from "../lib/db.js";
 import { buildEndpointUrl } from "../services/endpoint-utils.js";
 import { sessionApplicationService } from "../services/session-applications.js";
 
@@ -192,14 +191,6 @@ export const sessionApplicationTypeResolvers = {
       sessionGroupId: string;
       appConfigId: string;
       processConfigId: string;
-    }) =>
-      prisma.sessionEndpoint.findMany({
-        where: {
-          sessionGroupId: process.sessionGroupId,
-          appConfigId: process.appConfigId,
-          processConfigId: process.processConfigId,
-        },
-        orderBy: { portConfigId: "asc" },
-      }),
+    }) => sessionApplicationService.listProcessEndpoints(process),
   },
 };

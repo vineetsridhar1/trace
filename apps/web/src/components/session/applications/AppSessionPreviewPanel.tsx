@@ -41,8 +41,6 @@ const APP_PREVIEW_ENDPOINTS_QUERY = gql`
   }
 `;
 
-const PREVIEW_READINESS_POLL_MS = 1_500;
-
 export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: string }) {
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
@@ -79,21 +77,6 @@ export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: str
       ),
     [endpointTable, processTable, sessionGroupId],
   );
-
-  useEffect(() => {
-    if (endpoint) return;
-    let cancelled = false;
-    let timeout: number;
-    const poll = async () => {
-      await refresh();
-      if (!cancelled) timeout = window.setTimeout(() => void poll(), PREVIEW_READINESS_POLL_MS);
-    };
-    timeout = window.setTimeout(() => void poll(), PREVIEW_READINESS_POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
-  }, [endpoint, refresh]);
 
   if (endpoint)
     return (

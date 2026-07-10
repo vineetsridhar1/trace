@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useReducer } from "react";
 import { RotateCw } from "lucide-react";
-import { gql } from "@urql/core";
 import { client } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
 import { TraceLoader } from "@/components/ui/trace-loader";
@@ -8,14 +7,7 @@ import { cn } from "@/lib/utils";
 import { AppPreviewCanvas } from "./AppPreviewCanvas";
 import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
 import { appPreviewReducer, initialAppPreviewState } from "./app-preview-state";
-
-const CREATE_PREVIEW_MUTATION = gql`
-  mutation CreateSessionEndpointPreview($endpointId: ID!) {
-    createSessionEndpointPreview(endpointId: $endpointId) {
-      url
-    }
-  }
-`;
+import { CREATE_PREVIEW_MUTATION } from "./session-applications-operations";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
 
@@ -76,7 +68,9 @@ export function AppPreview({
           fill ? "h-full" : "aspect-video",
         )}
       >
-        <p className="px-2 text-center text-xs text-destructive">{error}</p>
+        <p aria-live="polite" className="px-2 text-center text-xs text-destructive">
+          {error}
+        </p>
         <Button size="sm" variant="outline" onClick={reload}>
           <RotateCw className="mr-1 size-3" />
           Retry
@@ -112,6 +106,7 @@ export function AppPreview({
         onClick={reload}
         disabled={refreshing}
         title="Reload preview"
+        aria-label="Reload preview"
         className="absolute right-2 top-2 z-10 size-7 opacity-80 hover:opacity-100"
       >
         <RotateCw className={cn("size-3", refreshing && "animate-spin")} />

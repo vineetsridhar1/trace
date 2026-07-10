@@ -908,4 +908,35 @@ describe("handleOrgEvent", () => {
       data: "ready\n",
     });
   });
+
+  it("upserts setup script runs without a refetch", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_setup_script_started",
+        scopeId: "group-1",
+        payload: {
+          setupScriptRun: {
+            id: "run-1",
+            sessionGroupId: "group-1",
+            scriptConfigId: "install",
+            label: "Install",
+            command: "pnpm install",
+            workingDirectory: ".",
+            status: "running",
+            exitCode: null,
+            outputPreview: "Queued",
+            outputTruncated: false,
+            lastError: null,
+            startedAt: "2026-07-09T00:00:00.000Z",
+            completedAt: null,
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionSetupScriptRuns["run-1"]).toMatchObject({
+      scriptConfigId: "install",
+      status: "running",
+    });
+  });
 });

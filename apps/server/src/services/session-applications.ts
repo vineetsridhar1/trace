@@ -103,6 +103,38 @@ function publicProcess(process: PrismaSessionApplicationProcess) {
   };
 }
 
+function publicSetupRun(run: {
+  id: string;
+  sessionGroupId: string;
+  scriptConfigId: string;
+  label: string;
+  command: string;
+  workingDirectory: string;
+  status: string;
+  exitCode: number | null;
+  outputPreview: string | null;
+  outputTruncated: boolean;
+  lastError: string | null;
+  startedAt: Date;
+  completedAt: Date | null;
+}) {
+  return {
+    id: run.id,
+    sessionGroupId: run.sessionGroupId,
+    scriptConfigId: run.scriptConfigId,
+    label: run.label,
+    command: run.command,
+    workingDirectory: run.workingDirectory,
+    status: run.status,
+    exitCode: run.exitCode,
+    outputPreview: run.outputPreview,
+    outputTruncated: run.outputTruncated,
+    lastError: run.lastError,
+    startedAt: run.startedAt.toISOString(),
+    completedAt: run.completedAt?.toISOString() ?? null,
+  };
+}
+
 function publicEndpoint(endpoint: {
   id: string;
   key: string;
@@ -187,6 +219,21 @@ export class SessionApplicationService {
     });
   }
 
+  async listProcessEndpoints(process: {
+    sessionGroupId: string;
+    appConfigId: string;
+    processConfigId: string;
+  }) {
+    return prisma.sessionEndpoint.findMany({
+      where: {
+        sessionGroupId: process.sessionGroupId,
+        appConfigId: process.appConfigId,
+        processConfigId: process.processConfigId,
+      },
+      orderBy: { portConfigId: "asc" },
+    });
+  }
+
   async listTraffic(
     endpointId: string,
     organizationId: string,
@@ -243,7 +290,7 @@ export class SessionApplicationService {
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_setup_script_started",
-      payload: { setupScriptRun: run },
+      payload: { setupScriptRun: publicSetupRun(run) },
       actorType: "user",
       actorId: userId,
     });
@@ -262,13 +309,22 @@ export class SessionApplicationService {
       organizationId,
     );
     if (delivery !== "delivered") {
-      await prisma.sessionSetupScriptRun.update({
+      const failedRun = await prisma.sessionSetupScriptRun.update({
         where: { id: run.id },
         data: {
           status: "failed",
           completedAt: new Date(),
           lastError: `Runtime not available: ${delivery}`,
         },
+      });
+      await eventService.create({
+        organizationId,
+        scopeType: "session",
+        scopeId: sessionId,
+        eventType: "session_setup_script_failed",
+        payload: { setupScriptRun: publicSetupRun(failedRun) },
+        actorType: "system",
+        actorId: "bridge",
       });
       throw new Error(`Runtime not available: ${delivery}`);
     }
@@ -819,23 +875,7 @@ export class SessionApplicationService {
         run.status === "completed"
           ? "session_setup_script_completed"
           : "session_setup_script_failed",
-      payload: {
-        setupScriptRun: {
-          id: run.id,
-          sessionGroupId: run.sessionGroupId,
-          scriptConfigId: run.scriptConfigId,
-          label: run.label,
-          command: run.command,
-          workingDirectory: run.workingDirectory,
-          status: run.status,
-          exitCode: run.exitCode,
-          outputPreview: run.outputPreview,
-          outputTruncated: run.outputTruncated,
-          lastError: run.lastError,
-          startedAt: run.startedAt.toISOString(),
-          completedAt: run.completedAt?.toISOString() ?? null,
-        },
-      },
+      payload: { setupScriptRun: publicSetupRun(run) },
       actorType: "system",
       actorId: "bridge",
     });

@@ -15,6 +15,7 @@ import type {
   SessionApplicationProcess,
   SessionApplicationLogEntry,
   SessionEndpoint,
+  SessionSetupScriptRun,
   SessionStatus,
 } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
@@ -216,6 +217,23 @@ export function handleOrgEvent(event: Event): void {
         "sessionApplicationLogs",
         logEntry.id,
         logEntry as unknown as SessionApplicationLogEntry,
+      );
+    }
+  }
+
+  const setupRunEventTypes = new Set<EventType>([
+    "session_setup_script_started",
+    "session_setup_script_completed",
+    "session_setup_script_failed",
+  ]);
+  if (setupRunEventTypes.has(event.eventType)) {
+    const run = asJsonObject(payload.setupScriptRun);
+    if (run && typeof run.id === "string") {
+      const existing = batch.get("sessionSetupScriptRuns", run.id);
+      batch.upsert(
+        "sessionSetupScriptRuns",
+        run.id,
+        (existing ? { ...existing, ...run } : run) as unknown as SessionSetupScriptRun,
       );
     }
   }

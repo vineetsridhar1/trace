@@ -25,7 +25,8 @@ export function NewAppSessionDialog() {
     if (!trimmed || submitting) return;
     setSubmitting(true);
     try {
-      await createAppSession(trimmed);
+      const created = await createAppSession(trimmed);
+      if (!created) return;
       setOpen(false);
       setPrompt("");
     } finally {
@@ -43,14 +44,19 @@ export function NewAppSessionDialog() {
     >
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle>New app session</DialogTitle>
+          <DialogTitle>New App Session</DialogTitle>
           <DialogDescription>
-            Describe the full-stack app you want Trace to build. It runs in its own cloud
-            workspace — it can install packages, run services, and connect to a database.
+            Describe the full-stack app you want Trace to build. It runs in its own cloud workspace
+            — it can install packages, run services, and connect to a database.
           </DialogDescription>
         </DialogHeader>
+        <label htmlFor="new-app-prompt" className="sr-only">
+          App description
+        </label>
         <Textarea
-          autoFocus
+          id="new-app-prompt"
+          name="app-description"
+          autoComplete="off"
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
           onKeyDown={(event) => {
@@ -59,7 +65,7 @@ export function NewAppSessionDialog() {
               void submit();
             }
           }}
-          placeholder="e.g. A habit tracker with a Postgres-backed API and a calendar view"
+          placeholder="Describe your app…"
           className="min-h-28"
         />
         <DialogFooter>
@@ -67,7 +73,7 @@ export function NewAppSessionDialog() {
             Cancel
           </Button>
           <Button onClick={() => void submit()} disabled={!prompt.trim() || submitting}>
-            {submitting ? "Creating…" : "Build app"}
+            {submitting ? "Creating…" : "Build App"}
           </Button>
         </DialogFooter>
       </DialogContent>
