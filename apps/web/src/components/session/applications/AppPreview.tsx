@@ -5,6 +5,7 @@ import { client } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
 import { TraceLoader } from "@/components/ui/trace-loader";
 import { cn } from "@/lib/utils";
+import { DesktopAppPreviewFrame } from "./DesktopAppPreviewFrame";
 
 const CREATE_PREVIEW_MUTATION = gql`
   mutation CreateSessionEndpointPreview($endpointId: ID!) {
@@ -14,7 +15,15 @@ const CREATE_PREVIEW_MUTATION = gql`
   }
 `;
 
-export function AppPreview({ endpointId, fill = false }: { endpointId: string; fill?: boolean }) {
+export function AppPreview({
+  endpointId,
+  fill = false,
+  desktopViewport = false,
+}: {
+  endpointId: string;
+  fill?: boolean;
+  desktopViewport?: boolean;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Re-minting the preview also refreshes the short-lived auth cookie, so the
@@ -64,6 +73,9 @@ export function AppPreview({ endpointId, fill = false }: { endpointId: string; f
         <TraceLoader size={14} showLabel={false} />
       </div>
     );
+  }
+  if (desktopViewport) {
+    return <DesktopAppPreviewFrame url={url} reloadNonce={reloadNonce} onReload={reload} />;
   }
   return (
     <div className={cn("relative", fill && "h-full")}>

@@ -67,7 +67,7 @@ export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: str
     [endpointTable, sessionGroupId],
   );
 
-  if (endpoint) return <AppPreview endpointId={endpoint.id} fill />;
+  if (endpoint) return <AppPreview endpointId={endpoint.id} fill desktopViewport />;
 
   return (
     <div className="flex h-full items-center justify-center bg-surface-deep px-6">

@@ -658,6 +658,11 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
         TRACE_RUNTIME_INSTANCE_ID: runtimeInstanceId,
         TRACE_RUNTIME_TOKEN: runtimeToken.token,
         TRACE_BRIDGE_URL: bridgeUrl,
+        // The app is served through the `<key>.<previewHost>` proxy origin, not
+        // the container's localhost. Dev servers (e.g. Next 15) otherwise flag
+        // requests from that origin as cross-origin and block /_next/HMR/API
+        // calls. Hand the starter the wildcard preview host to allow.
+        TRACE_ALLOWED_DEV_ORIGINS: `*.${(process.env.TRACE_ENDPOINT_PREVIEW_BASE_HOST?.trim() || "preview.localhost").split(":")[0]}`,
       },
       metadata: {
         requestedBy: input.actorId,
