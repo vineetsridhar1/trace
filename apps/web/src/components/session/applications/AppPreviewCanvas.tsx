@@ -7,7 +7,7 @@ import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
 import { AppPreviewFrameControls } from "./AppPreviewFrameControls";
 
 const CANVAS_GUTTER = 32;
-const FRAME_MARGIN = 3;
+const FRAME_MARGIN = 8;
 const MIN_VIEWPORT_WIDTH = 320;
 const MIN_VIEWPORT_HEIGHT = 480;
 
@@ -173,7 +173,7 @@ export function AppPreviewCanvas({
           <div className="absolute inset-0 flex items-center justify-center p-8">
             <div
               className={cn(
-                "relative shrink-0 overflow-visible rounded-lg bg-border p-[3px] shadow-2xl",
+                "relative shrink-0 overflow-visible rounded-lg rounded-tl-none bg-background p-2 shadow-2xl",
                 resizing && "select-none",
               )}
               style={{
