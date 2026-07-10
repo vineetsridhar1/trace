@@ -28,12 +28,7 @@ const CODEX_MODELS: readonly ModelOption[] = [
   { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
   { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
   { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
-  { value: "gpt-5.4", label: "GPT-5.4" },
-  { value: "gpt-5.3-codex", label: "GPT-5.3 Codex" },
-  { value: "gpt-5.2-codex", label: "GPT-5.2 Codex" },
-  { value: "gpt-5.2", label: "GPT-5.2" },
-  { value: "gpt-5.1-codex-max", label: "GPT-5.1 Codex Max" },
-  { value: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini" },
+  { value: "gpt-5.5", label: "GPT-5.5" },
 ];
 
 // The OpenAI API (`openai/`) does not expose the Codex `sol/terra/luna` variants

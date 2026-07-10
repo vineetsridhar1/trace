@@ -42,7 +42,8 @@ describe("model catalog", () => {
       label: "GPT-5.6 Luna",
     });
     expect(isSupportedModel("codex", "gpt-5.6-sol")).toBe(true);
-    expect(isSupportedModel("codex", "gpt-5.5")).toBe(false);
+    expect(isSupportedModel("codex", "gpt-5.5")).toBe(true);
+    expect(isSupportedModel("codex", "gpt-5.4")).toBe(false);
   });
 
   it("exposes Pi-backed API and subscription models and defaults to API OpenAI", () => {
