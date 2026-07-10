@@ -1,5 +1,6 @@
 import { Monitor, RotateCw, Smartphone } from "lucide-react";
 import { Button } from "../../ui/button";
+import { AppPreviewLoadingBar } from "./AppPreviewLoadingBar";
 
 /**
  * Loading state shown once the app server is ready to serve and the preview is
@@ -19,21 +20,6 @@ export function AppPreviewCanvasLoader({
 }) {
   return (
     <div className="flex h-full flex-col bg-surface-deep">
-      <style>
-        {`
-          .app-preview-loading-bar {
-            animation: app-preview-loading-bar 1.5s ease-in-out infinite;
-          }
-          @keyframes app-preview-loading-bar {
-            0% { transform: translateX(-110%); }
-            100% { transform: translateX(320%); }
-          }
-          @media (prefers-reduced-motion: reduce) {
-            .app-preview-loading-bar { animation: none; opacity: .6; }
-          }
-        `}
-      </style>
-
       {/* Toolbar — mirrors AppPreviewCanvas so the swap to the live frame is seamless. */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
         <span className="text-xs tabular-nums text-muted-foreground/40">—— × ——</span>
@@ -63,13 +49,7 @@ export function AppPreviewCanvasLoader({
           </div>
 
           {/* Indeterminate loading bar under the address bar */}
-          <div className="h-0.5 w-full overflow-hidden bg-border/40">
-            {!error ? (
-              <div className="app-preview-loading-bar h-full w-1/3 rounded-full bg-primary/80" />
-            ) : (
-              <div className="h-full w-full bg-destructive/50" />
-            )}
-          </div>
+          <AppPreviewLoadingBar error={Boolean(error)} />
 
           {/* Content */}
           <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">

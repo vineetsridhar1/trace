@@ -84,14 +84,6 @@ export function AppPreview({
       </div>
     );
   }
-  if (!url) {
-    if (desktopViewport) return <AppPreviewCanvasLoader message="Connecting to preview…" />;
-    return (
-      <div className={cn("flex items-center justify-center", fill ? "h-full" : "aspect-video")}>
-        <TraceLoader size={14} showLabel={false} />
-      </div>
-    );
-  }
   if (desktopViewport) {
     return (
       <AppPreviewCanvas
@@ -103,6 +95,13 @@ export function AppPreview({
         onLoad={() => dispatch({ type: "frame-loaded" })}
         onReload={reload}
       />
+    );
+  }
+  if (!url) {
+    return (
+      <div className={cn("flex items-center justify-center", fill ? "h-full" : "aspect-video")}>
+        <TraceLoader size={14} showLabel={false} />
+      </div>
     );
   }
   return (

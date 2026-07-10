@@ -24,7 +24,7 @@ describe("appPreviewReducer", () => {
     });
   });
 
-  it("shows the loading overlay again when a manual refresh remounts the frame", () => {
+  it("shows the loading line again when a manual refresh remounts the frame", () => {
     const loaded = appPreviewReducer(
       appPreviewReducer(initialAppPreviewState, {
         type: "request-succeeded",
@@ -42,7 +42,7 @@ describe("appPreviewReducer", () => {
     });
 
     // Once the fresh URL arrives the iframe remounts (new frameRevision), so the
-    // loaded flag resets and the loading overlay covers the blank frame.
+    // loaded flag resets and the loading line appears above the blank frame.
     expect(
       appPreviewReducer(refreshing, {
         type: "request-succeeded",

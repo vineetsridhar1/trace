@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { Monitor, RotateCw, Smartphone } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { Button } from "../../ui/button";
-import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
 import { AppPreviewFrameControls } from "./AppPreviewFrameControls";
+import { AppPreviewLoadingBar } from "./AppPreviewLoadingBar";
 
 const CANVAS_GUTTER = 32;
 const FRAME_MARGIN = 8;
@@ -33,7 +32,7 @@ export function AppPreviewCanvas({
   onLoad,
   onReload,
 }: {
-  url: string;
+  url: string | null;
   frameRevision: number;
   loaded: boolean;
   refreshing: boolean;
@@ -182,24 +181,31 @@ export function AppPreviewCanvas({
               }}
             >
               <AppPreviewFrameControls url={url} status={status} />
-              <div className="size-full overflow-hidden rounded-md bg-background">
-                <iframe
-                  key={frameRevision}
-                  src={url}
-                  title="Live app preview"
-                  onLoad={onLoad}
-                  className={cn(
-                    "block origin-top-left border-0 bg-background",
-                    !loaded && "opacity-0",
-                    resizing && "pointer-events-none",
-                  )}
-                  style={{
-                    width: viewportSize.width,
-                    height: viewportSize.height,
-                    transform: `scale(${scale})`,
-                  }}
-                  sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
-                />
+              {!loaded ? (
+                <div className="absolute left-2 right-2 top-1.5 z-20">
+                  <AppPreviewLoadingBar />
+                </div>
+              ) : null}
+              <div className="size-full overflow-hidden rounded-md bg-muted/20">
+                {url ? (
+                  <iframe
+                    key={frameRevision}
+                    src={url}
+                    title="Live app preview"
+                    onLoad={onLoad}
+                    className={cn(
+                      "block origin-top-left border-0 bg-background",
+                      !loaded && "opacity-0",
+                      resizing && "pointer-events-none",
+                    )}
+                    style={{
+                      width: viewportSize.width,
+                      height: viewportSize.height,
+                      transform: `scale(${scale})`,
+                    }}
+                    sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
+                  />
+                ) : null}
               </div>
               <button
                 type="button"
@@ -215,19 +221,6 @@ export function AppPreviewCanvas({
           </div>
         ) : null}
       </div>
-      <AnimatePresence>
-        {!loaded ? (
-          <motion.div
-            key="preview-skeleton"
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="absolute inset-0 z-20"
-          >
-            <AppPreviewCanvasLoader message="Loading app…" />
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
     </div>
   );
 }

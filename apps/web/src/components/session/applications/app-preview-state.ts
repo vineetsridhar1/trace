@@ -44,9 +44,8 @@ export function appPreviewReducer(
       return {
         ...state,
         error: null,
-        // Reset so the loading overlay reappears while the freshly-mounted
-        // iframe (new frameRevision) fetches — otherwise a reload shows the
-        // blank iframe with no loader.
+        // Reset so the frame's loading line reappears while the freshly-mounted
+        // iframe (new frameRevision) fetches.
         frameLoaded: false,
         frameRevision: state.frameRevision + 1,
         refreshing: false,

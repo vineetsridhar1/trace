@@ -1,6 +1,6 @@
 import { ExternalLink } from "lucide-react";
 
-export function AppPreviewFrameControls({ url, status }: { url: string; status: string }) {
+export function AppPreviewFrameControls({ url, status }: { url: string | null; status: string }) {
   return (
     <div className="absolute bottom-full left-0 z-10 flex h-7 items-center gap-1.5 rounded-t-lg bg-background pl-2.5 pr-2 text-[11px] font-medium capitalize text-foreground">
       <span
@@ -9,7 +9,7 @@ export function AppPreviewFrameControls({ url, status }: { url: string; status: 
       />
       <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
       {status}
-      {status === "running" ? (
+      {status === "running" && url ? (
         <a
           href={url}
           target="_blank"
