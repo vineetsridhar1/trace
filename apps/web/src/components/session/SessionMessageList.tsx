@@ -113,6 +113,7 @@ export function SessionMessageList({
   const hasScrolledInitiallyRef = useRef(false);
   const pendingTimelineAnchorRef = useRef<string | null>(null);
   const currentIndexFrameRef = useRef<number | null>(null);
+  const previousTouchYRef = useRef<number | null>(null);
 
   const gitCheckpointsByPromptEventId = useMemo(() => {
     const byPromptEventId = new Map<string, GitCheckpoint[]>();
@@ -390,6 +391,49 @@ export function SessionMessageList({
     setScrollIntentVersion((version) => version + 1);
   }, []);
 
+  const handleWheel = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      handleUserScrollIntent();
+      if (event.deltaY < 0) {
+        isNearBottomRef.current = false;
+      }
+    },
+    [handleUserScrollIntent],
+  );
+
+  const handleTouchStart = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      handleUserScrollIntent();
+      previousTouchYRef.current = event.touches[0]?.clientY ?? null;
+    },
+    [handleUserScrollIntent],
+  );
+
+  const handleTouchMove = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const currentY = event.touches[0]?.clientY;
+    const previousY = previousTouchYRef.current;
+    if (currentY == null) return;
+    if (previousY != null && currentY > previousY) {
+      isNearBottomRef.current = false;
+    }
+    previousTouchYRef.current = currentY;
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      handleUserScrollIntent();
+      if (
+        event.key === "ArrowUp" ||
+        event.key === "PageUp" ||
+        event.key === "Home" ||
+        (event.key === " " && event.shiftKey)
+      ) {
+        isNearBottomRef.current = false;
+      }
+    },
+    [handleUserScrollIntent],
+  );
+
   const showEmptyState = !initialLoading && nodes.length === 0 && !loadingOlder;
 
   // Worktree import entry point (shown on the empty state). Adopting an existing
@@ -546,10 +590,11 @@ export function SessionMessageList({
               }
             : undefined
         }
-        onKeyDown={handleUserScrollIntent}
+        onKeyDown={handleKeyDown}
         onPointerDown={handleUserScrollIntent}
-        onTouchStart={handleUserScrollIntent}
-        onWheel={handleUserScrollIntent}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onWheel={handleWheel}
       >
         <div className="mx-auto w-[90%] py-4">
           {/* Sentinel for infinite scroll - triggers loading older messages */}
