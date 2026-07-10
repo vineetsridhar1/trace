@@ -56,7 +56,7 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
-  it("emits Codex turn usage on the result event", () => {
+  it("emits Codex turn usage without ending the run", () => {
     const adapter = new CodexAdapter();
     const onOutput = vi.fn();
     const onComplete = vi.fn();
@@ -82,11 +82,8 @@ describe("coding tool adapter process exit fallback", () => {
         cost_usd: 0.0123,
       })}\n`,
     );
-    spawnedChildren[0].emit("close", 0);
-
     expect(onOutput).toHaveBeenCalledWith({
-      type: "result",
-      subtype: "success",
+      type: "usage",
       usage: {
         inputTokens: 60,
         outputTokens: 25,
@@ -95,7 +92,12 @@ describe("coding tool adapter process exit fallback", () => {
       },
       costUsd: 0.0123,
     });
-    expect(onOutput).toHaveBeenCalledTimes(1);
+    expect(onOutput).not.toHaveBeenCalledWith({ type: "result", subtype: "success" });
+    expect(onComplete).not.toHaveBeenCalled();
+
+    spawnedChildren[0].emit("close", 0);
+
+    expect(onOutput).toHaveBeenLastCalledWith({ type: "result", subtype: "success" });
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
@@ -127,8 +129,7 @@ describe("coding tool adapter process exit fallback", () => {
     );
 
     expect(onOutput).toHaveBeenCalledWith({
-      type: "result",
-      subtype: "success",
+      type: "usage",
       usage: {
         inputTokens: 60,
         outputTokens: 25,
@@ -275,9 +276,10 @@ describe("coding tool adapter process exit fallback", () => {
       },
       costUsd: 0.00395,
     });
-    // The completion event must carry neither usage nor cost — both were
-    // already streamed by the token_count event.
-    expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
+    // The completion event must emit nothing — usage and cost were already
+    // streamed, and only process exit ends the run.
+    expect(onOutput).toHaveBeenCalledTimes(1);
+    expect(onComplete).not.toHaveBeenCalled();
     const usageCalls = onOutput.mock.calls.filter(
       ([event]) => event.type === "usage" || (event.type === "result" && event.usage),
     );
@@ -307,8 +309,7 @@ describe("coding tool adapter process exit fallback", () => {
     );
 
     expect(onOutput).toHaveBeenCalledWith({
-      type: "result",
-      subtype: "success",
+      type: "usage",
       usage: {
         inputTokens: 50,
         outputTokens: 20,
@@ -316,6 +317,30 @@ describe("coding tool adapter process exit fallback", () => {
         cacheCreationTokens: 4,
       },
     });
+  });
+
+  it("does not end a Codex run when multiple turns complete", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "/goal finish the task",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stdout.write(`${JSON.stringify({ type: "turn.completed" })}\n`);
+    spawnedChildren[0].stdout.write(`${JSON.stringify({ type: "turn.completed" })}\n`);
+
+    expect(onOutput).not.toHaveBeenCalled();
+    expect(onComplete).not.toHaveBeenCalled();
+
+    spawnedChildren[0].emit("close", 0);
+
+    expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "success" });
+    expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
   it("completes a Claude Code run when the process exits but stdout never closes", () => {
