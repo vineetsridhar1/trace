@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { isAppCloudReady } from "./app-session-readiness";
+import { isAppCanvasReady } from "./app-session-readiness";
 
-describe("isAppCloudReady", () => {
-  it("keeps the canvas hidden while the selected session is provisioning", () => {
-    expect(isAppCloudReady("provisioning", "connected")).toBe(false);
+describe("isAppCanvasReady", () => {
+  it("keeps the canvas hidden until the AI starts working", () => {
+    expect(isAppCanvasReady("not_started", "connected", "connected")).toBe(false);
+    expect(isAppCanvasReady("preparing", "connected", "connected")).toBe(false);
   });
 
-  it("reveals the canvas when the selected session connects", () => {
-    expect(isAppCloudReady("connected", "provisioning")).toBe(true);
-    expect(isAppCloudReady("degraded", "connected")).toBe(true);
+  it("reveals the canvas when the AI is active and its cloud is ready", () => {
+    expect(isAppCanvasReady("active", "connected", "provisioning")).toBe(true);
+    expect(isAppCanvasReady("active", "degraded", "connected")).toBe(true);
+    expect(isAppCanvasReady("active", "provisioning", "connected")).toBe(false);
   });
 
-  it("falls back to group readiness when session state is unavailable", () => {
-    expect(isAppCloudReady(undefined, "connected")).toBe(true);
-    expect(isAppCloudReady(null, "booting")).toBe(false);
+  it("restores the canvas after an AI run has finished", () => {
+    expect(isAppCanvasReady("done", undefined, "connected")).toBe(true);
+    expect(isAppCanvasReady("failed", null, "connected")).toBe(true);
+    expect(isAppCanvasReady("stopped", null, "booting")).toBe(false);
   });
 });

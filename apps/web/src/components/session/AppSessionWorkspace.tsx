@@ -9,7 +9,7 @@ export function AppSessionWorkspace({
   onScrollComplete,
   onForkSession,
   canForkSession,
-  cloudReady,
+  canvasReady,
   canvas,
 }: {
   sessionId: string | null;
@@ -17,14 +17,14 @@ export function AppSessionWorkspace({
   onScrollComplete: () => void;
   onForkSession: (eventId: string) => void;
   canForkSession: boolean;
-  cloudReady: boolean;
+  canvasReady: boolean;
   canvas: ReactNode;
 }) {
-  const [canvasRevealed, setCanvasRevealed] = useState(cloudReady);
+  const [canvasRevealed, setCanvasRevealed] = useState(canvasReady);
 
   useEffect(() => {
-    if (cloudReady) setCanvasRevealed(true);
-  }, [cloudReady]);
+    if (canvasReady) setCanvasRevealed(true);
+  }, [canvasReady]);
 
   return (
     <div className="flex h-full min-h-0 overflow-hidden">
