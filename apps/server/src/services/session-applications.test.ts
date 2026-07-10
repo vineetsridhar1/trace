@@ -223,6 +223,7 @@ describe("SessionApplicationService", () => {
       "org-1",
       "stdout",
       "late log",
+      "runtime-1",
     );
 
     expect(entry).toBeNull();
@@ -248,6 +249,7 @@ describe("SessionApplicationService", () => {
       "org-1",
       "stdout",
       "x".repeat(PROCESS_LOG_ENTRY_MAX_CHARS + 1024),
+      "runtime-1",
     );
 
     expect(entry?.data.length).toBe(PROCESS_LOG_ENTRY_MAX_CHARS);
@@ -280,7 +282,13 @@ describe("SessionApplicationService", () => {
       { id: "stale-2" },
     ]);
 
-    await new SessionApplicationService().appendProcessLog("process-1", "org-1", "stderr", "line\n");
+    await new SessionApplicationService().appendProcessLog(
+      "process-1",
+      "org-1",
+      "stderr",
+      "line\n",
+      "runtime-1",
+    );
 
     expect(prismaMock.sessionApplicationLogEntry.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -362,26 +370,33 @@ describe("SessionApplicationService", () => {
     prismaMock.sessionApplicationProcess.findFirst.mockResolvedValue(null);
 
     await expect(
-      new SessionApplicationService().markProcessRunning("missing-process", "org-1", "bridge-process"),
+      new SessionApplicationService().markProcessRunning(
+        "missing-process",
+        "org-1",
+        "bridge-process",
+        "runtime-1",
+      ),
     ).resolves.toBeNull();
     await expect(
-      new SessionApplicationService().markProcessExited("missing-process", "org-1", 0),
+      new SessionApplicationService().markProcessExited("missing-process", "org-1", 0, null, "runtime-1"),
     ).resolves.toBeNull();
 
     expect(prismaMock.sessionApplicationProcess.update).not.toHaveBeenCalled();
     expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
-  it("scopes bridge-driven process updates to the reporting runtime's org", async () => {
+  it("scopes bridge-driven process updates to the reporting runtime's org and instance", async () => {
     prismaMock.sessionApplicationProcess.findFirst.mockResolvedValue(null);
 
-    await new SessionApplicationService().markProcessRunning("process-1", "org-1", "bridge-1");
-    await new SessionApplicationService().markProcessExited("process-1", "org-1", 0);
+    await new SessionApplicationService().markProcessRunning("process-1", "org-1", "bridge-1", "runtime-1");
+    await new SessionApplicationService().markProcessExited("process-1", "org-1", 0, null, "runtime-1");
 
     expect(prismaMock.sessionApplicationProcess.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "process-1", organizationId: "org-1" } }),
+      expect.objectContaining({
+        where: { id: "process-1", organizationId: "org-1", runtimeInstanceId: "runtime-1" },
+      }),
     );
-    // A foreign org never matches, so the row is never updated.
+    // A foreign org or runtime never matches, so the row is never updated.
     expect(prismaMock.sessionApplicationProcess.update).not.toHaveBeenCalled();
   });
 });

@@ -74,7 +74,10 @@ export const resolvers = {
   ...bridgeAccessTypeResolvers,
 
   User: {
-    organizations: (user: { id: string }) => orgMemberService.getUserOrgs(user.id),
+    // Only expose org memberships for the viewer themselves — other users'
+    // memberships would disclose org names/ids across tenants.
+    organizations: (user: { id: string }, _args: unknown, ctx: Context) =>
+      user.id === ctx.userId ? orgMemberService.getUserOrgs(user.id) : [],
   },
 
   Event: {

@@ -1,7 +1,8 @@
 import type { Context } from "../context.js";
 import type { AddChannelMemberInput, CreateChannelInput, UpdateChannelInput } from "@trace/gql";
 import { channelService } from "../services/channel.js";
-import { assertChannelAccess } from "../services/access.js";
+import { assertChannelAccess, isActiveChannelMember } from "../services/access.js";
+import { filterAsyncIterator } from "../lib/async-iterator.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import { organizationService } from "../services/organization.js";
@@ -129,7 +130,12 @@ export const channelSubscriptions = {
         throw new Error("Not authorized for this organization");
       }
       await assertChannelAccess(args.channelId, ctx.userId, orgId);
-      return pubsub.asyncIterator(topics.channelEvents(args.channelId));
+      // Re-check membership per event so revocation applies mid-stream,
+      // matching chatEvents.
+      return filterAsyncIterator(
+        pubsub.asyncIterator<unknown>(topics.channelEvents(args.channelId)),
+        () => isActiveChannelMember(args.channelId, ctx.userId, orgId),
+      );
     },
   },
 };
