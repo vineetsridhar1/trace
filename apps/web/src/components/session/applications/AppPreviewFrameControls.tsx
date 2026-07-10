@@ -1,6 +1,4 @@
 import { ExternalLink } from "lucide-react";
-import { buttonVariants } from "../../ui/button";
-import { cn } from "../../../lib/utils";
 
 export function AppPreviewFrameControls({ url, status }: { url: string; status: string }) {
   return (
@@ -17,12 +15,8 @@ export function AppPreviewFrameControls({ url, status }: { url: string; status: 
           rel="noopener noreferrer"
           aria-label="Open preview in a new tab"
           title="Open preview in a new tab"
-          className={cn(
-            buttonVariants({ variant: "ghost", size: "xs" }),
-            "ml-1 h-6 border-l border-border px-1.5 capitalize",
-          )}
+          className="ml-0.5 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Open
           <ExternalLink size={12} />
         </a>
       ) : null}
