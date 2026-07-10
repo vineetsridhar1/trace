@@ -123,6 +123,7 @@ vi.mock("./org-secret.js", () => ({
 vi.mock("./managed-git.js", () => ({
   managedGitService: {
     createManagedRepo: vi.fn(),
+    deleteManagedRepo: vi.fn(),
     mintAccessToken: vi.fn(),
   },
 }));
@@ -6856,6 +6857,34 @@ describe("SessionService", () => {
           }),
         }),
       );
+    });
+  });
+
+  describe("deleteGroup", () => {
+    it("deletes an app group's managed git repo", async () => {
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "app-group",
+          kind: "app",
+          organizationId: "org-1",
+          repoId: "managed-repo-1",
+        }),
+      );
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "app-group",
+        visibility: "public",
+        ownerUserId: "user-1",
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([]);
+
+      await service.deleteGroup("app-group", "org-1", "user", "user-1");
+
+      expect(managedGitServiceMock.deleteManagedRepo).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        repoId: "managed-repo-1",
+        actorType: "user",
+        actorId: "user-1",
+      });
     });
   });
 

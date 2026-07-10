@@ -4677,6 +4677,15 @@ export class SessionService {
       });
     }
 
+    if (group.kind === "app" && group.repoId) {
+      await managedGitService.deleteManagedRepo({
+        organizationId,
+        repoId: group.repoId,
+        actorType,
+        actorId,
+      });
+    }
+
     return true;
   }
 

@@ -172,6 +172,36 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState()._eventIdsByScope["session:session-1"]).toEqual([event.id]);
   });
 
+  it("clears navigation when the active session group is deleted", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": { id: "session-1", sessionGroupId: "group-1" } as never,
+      },
+      sessionGroups: {
+        "group-1": { id: "group-1" } as never,
+      },
+    });
+    const harness = installBindings({
+      activeSessionId: "session-1",
+      activeSessionGroupId: "group-1",
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_deleted",
+        scopeId: "session-1",
+        payload: {
+          sessionGroupId: "group-1",
+          deletedSessionGroupId: "group-1",
+        },
+      }),
+    );
+
+    expect(harness.setActiveSessionId).toHaveBeenCalledWith(null);
+    expect(harness.setActiveSessionGroupId).toHaveBeenCalledWith(null);
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toBeUndefined();
+  });
+
   it("keeps scoped event ids ordered by timestamp", () => {
     const newer = makeEvent({
       eventType: "session_output",

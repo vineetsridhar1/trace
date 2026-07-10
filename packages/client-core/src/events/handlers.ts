@@ -480,6 +480,7 @@ export function handleOrgEvent(event: Event): void {
 
     if (deletedSessionGroupId && ui.getActiveSessionGroupId() === deletedSessionGroupId) {
       ui.setActiveSessionId(null);
+      ui.setActiveSessionGroupId(null);
     } else if (ui.getActiveSessionId() === deletedId) {
       const allSessions = batch.getAll("sessions");
       const remaining = Object.values(allSessions)

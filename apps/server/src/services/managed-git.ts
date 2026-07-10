@@ -157,6 +157,33 @@ class ManagedGitService {
     });
   }
 
+  /** Delete a managed repo row and its bare git storage. */
+  async deleteManagedRepo(input: {
+    organizationId: string;
+    repoId: string;
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<boolean> {
+    const repo = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
+      const managedRepo = await tx.repo.findFirst({
+        where: {
+          id: input.repoId,
+          organizationId: input.organizationId,
+          provider: "managed",
+        },
+        select: { id: true },
+      });
+      if (!managedRepo) return null;
+      await tx.repo.delete({ where: { id: managedRepo.id } });
+      return managedRepo;
+    });
+    if (!repo) return false;
+
+    await gitStorage.deleteRepo(input.organizationId, repo.id);
+    return true;
+  }
+
   async mintAccessToken(input: MintAccessTokenInput): Promise<{ token: string; expiresAt: Date }> {
     if (input.capabilities.length === 0) {
       throw new ValidationError("A managed git token needs at least one capability");

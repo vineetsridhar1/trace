@@ -1,17 +1,14 @@
-import { useEffect, useMemo } from "react";
-import { AppWindow, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AppWindow, Plus, Trash2 } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Session, SessionGroup } from "@trace/gql";
-import {
-  useEntityStore,
-  type SessionEntity,
-  type SessionGroupEntity,
-} from "@trace/client-core";
+import { useEntityStore, type SessionEntity, type SessionGroupEntity } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { useCommandPaletteStore } from "../../stores/command-palette";
 import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
+import { DeleteAppDialog } from "./DeleteAppDialog";
 import { useAppSessionGroupRow } from "./useAppSessionGroupRow";
 
 const APP_SESSION_GROUPS_QUERY = gql`
@@ -133,27 +130,44 @@ export function AppsSection({
   );
 }
 
-function AppSessionItem({
-  group,
-  isActive,
-}: {
-  group: SessionGroupEntity;
-  isActive: boolean;
-}) {
+function AppSessionItem({ group, isActive }: { group: SessionGroupEntity; isActive: boolean }) {
   const row = useAppSessionGroupRow(group);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const name = group.name ?? "Untitled app";
 
   return (
-    <button
-      type="button"
-      onClick={() => navigateToSessionGroup(null, group.id)}
-      title={group.name ?? "App"}
-      className={cn(
-        "flex h-7 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-xs leading-none transition-colors",
-        isActive ? "bg-white/10 text-foreground" : "text-foreground hover:bg-white/10",
-      )}
-    >
-      <SessionStatusIndicator row={row} size={6} showDonePulse={false} />
-      <span className="min-w-0 flex-1 truncate">{group.name ?? "Untitled app"}</span>
-    </button>
+    <>
+      <div
+        className={cn(
+          "group/app-item relative flex h-7 min-w-0 items-center rounded-md transition-colors",
+          isActive ? "bg-white/10 text-foreground" : "text-foreground hover:bg-white/10",
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => navigateToSessionGroup(null, group.id)}
+          title={name}
+          className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1.5 pr-7 text-left text-xs leading-none"
+        >
+          <SessionStatusIndicator row={row} size={6} showDonePulse={false} />
+          <span className="min-w-0 flex-1 truncate">{name}</span>
+        </button>
+        <button
+          type="button"
+          title={`Delete ${name}`}
+          aria-label={`Delete ${name}`}
+          onClick={() => setDeleteOpen(true)}
+          className="pointer-events-none absolute right-1 flex size-5 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover/app-item:pointer-events-auto group-hover/app-item:opacity-100 group-focus-within/app-item:pointer-events-auto group-focus-within/app-item:opacity-100"
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
+      <DeleteAppDialog
+        appId={group.id}
+        appName={name}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+      />
+    </>
   );
 }
