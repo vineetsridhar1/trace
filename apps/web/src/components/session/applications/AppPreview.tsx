@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useReducer } from "react";
 import { RotateCw } from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "@/lib/urql";
@@ -7,6 +7,7 @@ import { TraceLoader } from "@/components/ui/trace-loader";
 import { cn } from "@/lib/utils";
 import { AppPreviewCanvas } from "./AppPreviewCanvas";
 import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
+import { appPreviewReducer, initialAppPreviewState } from "./app-preview-state";
 
 const CREATE_PREVIEW_MUTATION = gql`
   mutation CreateSessionEndpointPreview($endpointId: ID!) {
@@ -25,36 +26,34 @@ export function AppPreview({
   fill?: boolean;
   desktopViewport?: boolean;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [frameLoaded, setFrameLoaded] = useState(false);
-  // Re-minting the preview also refreshes the short-lived auth cookie, so the
-  // reload button doubles as re-auth when the preview session expires.
-  const [reloadNonce, setReloadNonce] = useState(0);
+  const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
+  const { error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
 
   const reload = useCallback(() => {
-    setUrl(null);
-    setError(null);
-    setFrameLoaded(false);
-    setReloadNonce((nonce) => nonce + 1);
+    dispatch({ type: "reload" });
   }, []);
 
   useEffect(() => {
     let active = true;
-    setUrl(null);
-    setFrameLoaded(false);
     void client
       .mutation(CREATE_PREVIEW_MUTATION, { endpointId })
       .toPromise()
       .then((result) => {
         if (!active) return;
-        if (result.error) setError(result.error.message);
-        else setUrl(result.data?.createSessionEndpointPreview?.url ?? null);
+        const nextUrl = result.data?.createSessionEndpointPreview?.url;
+        if (result.error || !nextUrl) {
+          dispatch({
+            type: "request-failed",
+            error: result.error?.message ?? "Failed to load the app preview",
+          });
+          return;
+        }
+        dispatch({ type: "request-succeeded", url: nextUrl });
       });
     return () => {
       active = false;
     };
-  }, [endpointId, reloadNonce]);
+  }, [endpointId, requestRevision]);
 
   if (error) {
     if (desktopViewport) {
@@ -87,9 +86,10 @@ export function AppPreview({
     return (
       <AppPreviewCanvas
         url={url}
-        reloadNonce={reloadNonce}
+        frameRevision={frameRevision}
         loaded={frameLoaded}
-        onLoad={() => setFrameLoaded(true)}
+        refreshing={refreshing}
+        onLoad={() => dispatch({ type: "frame-loaded" })}
         onReload={reload}
       />
     );
@@ -100,16 +100,17 @@ export function AppPreview({
         size="icon"
         variant="outline"
         onClick={reload}
+        disabled={refreshing}
         title="Reload preview"
         className="absolute right-2 top-2 z-10 size-7 opacity-80 hover:opacity-100"
       >
-        <RotateCw className="size-3" />
+        <RotateCw className={cn("size-3", refreshing && "animate-spin")} />
       </Button>
       <iframe
-        key={reloadNonce}
+        key={frameRevision}
         src={url}
         title="Live app preview"
-        onLoad={() => setFrameLoaded(true)}
+        onLoad={() => dispatch({ type: "frame-loaded" })}
         className={cn(
           "w-full bg-background",
           fill ? "h-full border-0" : "aspect-video rounded-md border border-border",

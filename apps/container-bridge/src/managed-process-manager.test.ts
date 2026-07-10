@@ -229,6 +229,34 @@ describe("ManagedProcessManager", () => {
     expect(Buffer.from(response.bodyBase64, "base64").toString("utf8")).toBe("proxied GET /hello");
   });
 
+  it("retries safe requests while a watched dev server restarts", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map(), (message) => messages.push(message));
+    const port = await getFreePort();
+    const server = http.createServer((_req, res) => res.end("restarted"));
+    servers.push(server);
+
+    manager.proxyHttp({
+      requestId: "http-restart",
+      port,
+      method: "GET",
+      path: "/",
+      headers: {},
+    });
+    setTimeout(() => server.listen(port, "127.0.0.1"), 150);
+
+    const response = await waitFor(
+      messages,
+      (message) => message.type === "endpoint_http_response",
+    );
+    expect(response).toMatchObject({
+      type: "endpoint_http_response",
+      requestId: "http-restart",
+      status: 200,
+    });
+    expect(messages.some((message) => message.type === "endpoint_http_error")).toBe(false);
+  });
+
   it("rejects unsafe working directories", async () => {
     const messages: BridgeMessage[] = [];
     const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>

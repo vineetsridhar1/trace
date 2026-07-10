@@ -24,14 +24,16 @@ function roundedSize(size: Size): Size {
 
 export function AppPreviewCanvas({
   url,
-  reloadNonce,
+  frameRevision,
   loaded,
+  refreshing,
   onLoad,
   onReload,
 }: {
   url: string;
-  reloadNonce: number;
+  frameRevision: number;
   loaded: boolean;
+  refreshing: boolean;
   onLoad: () => void;
   onReload: () => void;
 }) {
@@ -151,8 +153,14 @@ export function AppPreviewCanvas({
             <Smartphone size={13} />
           </Button>
         </div>
-        <Button size="icon-xs" variant="ghost" onClick={onReload} title="Reload preview">
-          <RotateCw size={13} />
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          onClick={onReload}
+          disabled={refreshing}
+          title="Reload preview"
+        >
+          <RotateCw size={13} className={cn(refreshing && "animate-spin")} />
         </Button>
       </div>
 
@@ -168,7 +176,7 @@ export function AppPreviewCanvas({
             >
               <div className="size-full overflow-hidden rounded-[inherit]">
                 <iframe
-                  key={reloadNonce}
+                  key={frameRevision}
                   src={url}
                   title="Live app preview"
                   onLoad={onLoad}

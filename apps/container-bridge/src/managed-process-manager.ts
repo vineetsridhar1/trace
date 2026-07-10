@@ -16,6 +16,9 @@ type ManagedProcess = {
 
 const MAX_LOG_CHUNK_BYTES = 16 * 1024;
 const MAX_SETUP_OUTPUT_BYTES = 64 * 1024;
+const PROXY_CONNECT_RETRY_DELAYS_MS = [100, 200, 400, 800] as const;
+const RETRYABLE_PROXY_ERROR_CODES = new Set(["ECONNREFUSED", "ECONNRESET"]);
+const RETRYABLE_PROXY_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 function safeRelativeCwd(baseWorkdir: string, cwd: string): string {
   const relative = cwd.trim() || ".";
@@ -361,41 +364,53 @@ export class ManagedProcessManager {
     bodyBase64?: string;
   }) {
     const body = options.bodyBase64 ? Buffer.from(options.bodyBase64, "base64") : undefined;
-    const req = http.request(
-      {
-        host: "127.0.0.1",
-        port: options.port,
-        method: options.method,
-        path: options.path,
-        headers: options.headers,
-        timeout: 60_000,
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (chunk: Buffer) => chunks.push(chunk));
-        res.on("end", () => {
-          this.send({
-            type: "endpoint_http_response",
-            requestId: options.requestId,
-            status: res.statusCode ?? 502,
-            headers: res.headers as Record<string, string | string[]>,
-            bodyBase64: Buffer.concat(chunks).toString("base64"),
+    const request = (attempt: number) => {
+      const req = http.request(
+        {
+          host: "127.0.0.1",
+          port: options.port,
+          method: options.method,
+          path: options.path,
+          headers: options.headers,
+          timeout: 60_000,
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk: Buffer) => chunks.push(chunk));
+          res.on("end", () => {
+            this.send({
+              type: "endpoint_http_response",
+              requestId: options.requestId,
+              status: res.statusCode ?? 502,
+              headers: res.headers as Record<string, string | string[]>,
+              bodyBase64: Buffer.concat(chunks).toString("base64"),
+            });
           });
-        });
-      },
-    );
-    req.on("timeout", () => {
-      req.destroy(new Error("Proxy request timed out"));
-    });
-    req.on("error", (error) => {
-      this.send({
-        type: "endpoint_http_error",
-        requestId: options.requestId,
-        error: error.message,
+        },
+      );
+      req.on("timeout", () => {
+        req.destroy(new Error("Proxy request timed out"));
       });
-    });
-    if (body) req.write(body);
-    req.end();
+      req.on("error", (error: NodeJS.ErrnoException) => {
+        const retryDelay = PROXY_CONNECT_RETRY_DELAYS_MS[attempt];
+        if (
+          retryDelay !== undefined &&
+          RETRYABLE_PROXY_METHODS.has(options.method.toUpperCase()) &&
+          RETRYABLE_PROXY_ERROR_CODES.has(error.code ?? "")
+        ) {
+          setTimeout(() => request(attempt + 1), retryDelay);
+          return;
+        }
+        this.send({
+          type: "endpoint_http_error",
+          requestId: options.requestId,
+          error: error.message,
+        });
+      });
+      if (body) req.write(body);
+      req.end();
+    };
+    request(0);
   }
 
   openWebSocket(options: {
