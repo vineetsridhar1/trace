@@ -5,7 +5,7 @@ import { client } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
 import { TraceLoader } from "@/components/ui/trace-loader";
 import { cn } from "@/lib/utils";
-import { DesktopAppPreviewFrame } from "./DesktopAppPreviewFrame";
+import { AppPreviewCanvas } from "./AppPreviewCanvas";
 
 const CREATE_PREVIEW_MUTATION = gql`
   mutation CreateSessionEndpointPreview($endpointId: ID!) {
@@ -75,7 +75,7 @@ export function AppPreview({
     );
   }
   if (desktopViewport) {
-    return <DesktopAppPreviewFrame url={url} reloadNonce={reloadNonce} onReload={reload} />;
+    return <AppPreviewCanvas url={url} reloadNonce={reloadNonce} onReload={reload} />;
   }
   return (
     <div className={cn("relative", fill && "h-full")}>
