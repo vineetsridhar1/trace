@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Monitor, RotateCw, Smartphone } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { Button } from "../../ui/button";
+import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
 
 const CANVAS_GUTTER = 32;
 const MIN_VIEWPORT_WIDTH = 320;
@@ -23,10 +25,14 @@ function roundedSize(size: Size): Size {
 export function AppPreviewCanvas({
   url,
   reloadNonce,
+  loaded,
+  onLoad,
   onReload,
 }: {
   url: string;
   reloadNonce: number;
+  loaded: boolean;
+  onLoad: () => void;
   onReload: () => void;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -116,7 +122,7 @@ export function AppPreviewCanvas({
   }, []);
 
   return (
-    <div className="flex h-full flex-col bg-surface-deep">
+    <div className="relative flex h-full flex-col bg-surface-deep">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
         <span className="text-xs tabular-nums text-muted-foreground">
           {viewportSize.width} × {viewportSize.height}
@@ -165,8 +171,10 @@ export function AppPreviewCanvas({
                   key={reloadNonce}
                   src={url}
                   title="Live app preview"
+                  onLoad={onLoad}
                   className={cn(
                     "block origin-top-left border-0 bg-background",
+                    !loaded && "opacity-0",
                     resizing && "pointer-events-none",
                   )}
                   style={{
@@ -191,6 +199,19 @@ export function AppPreviewCanvas({
           </div>
         ) : null}
       </div>
+      <AnimatePresence>
+        {!loaded ? (
+          <motion.div
+            key="preview-skeleton"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="absolute inset-0 z-20"
+          >
+            <AppPreviewCanvasSkeleton />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

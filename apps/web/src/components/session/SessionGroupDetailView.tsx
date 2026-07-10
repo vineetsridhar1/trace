@@ -422,6 +422,13 @@ export function SessionGroupDetailView({
   }, [groupSessions, sessionGroupId, addTerminal]);
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
   const isAppGroup = groupKind === "app";
+  const selectedConnection = selectedSession?.connection as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const appCloudReady = [groupConnection?.state, selectedConnection?.state].some(
+    (state) => state === "connected" || state === "degraded",
+  );
   const showApplicationsSidebarTab = selectedSession?.hosting === "cloud";
   const activeTerminal = terminals.find((t) => t.id === activeTerminalId) ?? null;
 
@@ -951,6 +958,7 @@ export function SessionGroupDetailView({
                       onScrollComplete={handleScrollComplete}
                       onForkSession={handleOpenForkDialog}
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
+                      cloudReady={appCloudReady}
                       canvas={
                         <SessionGroupContentArea
                           sessionGroupId={sessionGroupId}

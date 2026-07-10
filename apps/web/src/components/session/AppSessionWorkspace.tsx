@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { cn } from "../../lib/utils";
 import { SessionDetailView } from "./SessionDetailView";
 
 export function AppSessionWorkspace({
@@ -7,6 +9,7 @@ export function AppSessionWorkspace({
   onScrollComplete,
   onForkSession,
   canForkSession,
+  cloudReady,
   canvas,
 }: {
   sessionId: string | null;
@@ -14,11 +17,25 @@ export function AppSessionWorkspace({
   onScrollComplete: () => void;
   onForkSession: (eventId: string) => void;
   canForkSession: boolean;
+  cloudReady: boolean;
   canvas: ReactNode;
 }) {
+  const [canvasRevealed, setCanvasRevealed] = useState(cloudReady);
+
+  useEffect(() => {
+    if (cloudReady) setCanvasRevealed(true);
+  }, [cloudReady]);
+
   return (
     <div className="flex h-full min-h-0 overflow-hidden">
-      <aside className="h-full w-[clamp(22rem,33vw,34rem)] shrink-0 border-r border-border bg-background">
+      <motion.aside
+        layout
+        transition={{ type: "spring", stiffness: 280, damping: 32 }}
+        className={cn(
+          "h-full shrink-0 bg-background",
+          canvasRevealed ? "w-[clamp(22rem,33vw,34rem)] border-r border-border" : "w-full",
+        )}
+      >
         {sessionId ? (
           <SessionDetailView
             key={sessionId}
@@ -34,8 +51,21 @@ export function AppSessionWorkspace({
             Loading messages…
           </div>
         )}
-      </aside>
-      <main className="min-w-0 flex-1 bg-surface-deep">{canvas}</main>
+      </motion.aside>
+      <AnimatePresence initial={false}>
+        {canvasRevealed ? (
+          <motion.main
+            key="app-canvas"
+            initial={{ opacity: 0, x: 48 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 48 }}
+            transition={{ type: "spring", stiffness: 240, damping: 30 }}
+            className="min-w-0 flex-1 bg-surface-deep"
+          >
+            {canvas}
+          </motion.main>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

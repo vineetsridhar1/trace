@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { TraceLoader } from "@/components/ui/trace-loader";
 import { cn } from "@/lib/utils";
 import { AppPreviewCanvas } from "./AppPreviewCanvas";
+import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
 
 const CREATE_PREVIEW_MUTATION = gql`
   mutation CreateSessionEndpointPreview($endpointId: ID!) {
@@ -26,6 +27,7 @@ export function AppPreview({
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [frameLoaded, setFrameLoaded] = useState(false);
   // Re-minting the preview also refreshes the short-lived auth cookie, so the
   // reload button doubles as re-auth when the preview session expires.
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -33,11 +35,14 @@ export function AppPreview({
   const reload = useCallback(() => {
     setUrl(null);
     setError(null);
+    setFrameLoaded(false);
     setReloadNonce((nonce) => nonce + 1);
   }, []);
 
   useEffect(() => {
     let active = true;
+    setUrl(null);
+    setFrameLoaded(false);
     void client
       .mutation(CREATE_PREVIEW_MUTATION, { endpointId })
       .toPromise()
@@ -52,6 +57,9 @@ export function AppPreview({
   }, [endpointId, reloadNonce]);
 
   if (error) {
+    if (desktopViewport) {
+      return <AppPreviewCanvasSkeleton error={error} onRetry={reload} />;
+    }
     return (
       <div
         className={cn(
@@ -68,6 +76,7 @@ export function AppPreview({
     );
   }
   if (!url) {
+    if (desktopViewport) return <AppPreviewCanvasSkeleton />;
     return (
       <div className={cn("flex items-center justify-center", fill ? "h-full" : "aspect-video")}>
         <TraceLoader size={14} showLabel={false} />
@@ -75,7 +84,15 @@ export function AppPreview({
     );
   }
   if (desktopViewport) {
-    return <AppPreviewCanvas url={url} reloadNonce={reloadNonce} onReload={reload} />;
+    return (
+      <AppPreviewCanvas
+        url={url}
+        reloadNonce={reloadNonce}
+        loaded={frameLoaded}
+        onLoad={() => setFrameLoaded(true)}
+        onReload={reload}
+      />
+    );
   }
   return (
     <div className={cn("relative", fill && "h-full")}>
@@ -92,6 +109,7 @@ export function AppPreview({
         key={reloadNonce}
         src={url}
         title="Live app preview"
+        onLoad={() => setFrameLoaded(true)}
         className={cn(
           "w-full bg-background",
           fill ? "h-full border-0" : "aspect-video rounded-md border border-border",
