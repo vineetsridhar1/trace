@@ -80,6 +80,15 @@ describe("endpoint utils", () => {
     expect(forwardableRequestHeaders({ cookie: "trace_token=secret" })).toEqual({});
   });
 
+  it("strips the endpoint preview cookie before forwarding", () => {
+    expect(
+      forwardableRequestHeaders({
+        cookie: "__trace_endpoint_preview=jwt; app_sid=keep",
+      }),
+    ).toEqual({ cookie: "app_sid=keep" });
+    expect(forwardableRequestHeaders({ cookie: "__trace_endpoint_preview=jwt" })).toEqual({});
+  });
+
   it("drops websocket handshake headers when forwarding upgrades", () => {
     expect(
       forwardableRequestHeaders(

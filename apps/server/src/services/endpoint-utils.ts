@@ -102,13 +102,18 @@ const WS_HANDSHAKE_HEADERS = new Set([
   "sec-websocket-protocol",
 ]);
 
-// The Trace session lives in a single cookie. Strip only that pair so the
-// proxied application keeps its own cookies but never receives Trace credentials.
+// Trace credentials live in the session cookie plus __trace_-prefixed cookies
+// (e.g. the endpoint preview cookie). Strip those pairs so the proxied
+// application keeps its own cookies but never receives Trace credentials.
 function stripTraceSessionCookie(value: string): string | null {
   const kept = value
     .split(";")
     .map((part) => part.trim())
-    .filter((part) => part && part.split("=")[0]?.trim().toLowerCase() !== TRACE_SESSION_COOKIE);
+    .filter((part) => {
+      if (!part) return false;
+      const name = part.split("=")[0]?.trim().toLowerCase() ?? "";
+      return name !== TRACE_SESSION_COOKIE && !name.startsWith("__trace_");
+    });
   return kept.length ? kept.join("; ") : null;
 }
 
