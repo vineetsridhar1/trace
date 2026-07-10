@@ -72,14 +72,14 @@ describe("composeTraceDesignPrompt", () => {
     const prompt = composeTraceDesignPrompt({
       kind: "app",
       userBrief: "Build a lightweight CRM.",
-      appStarterContext: "Next.js + Tailwind + shadcn, port 3000.",
+      appStarterContext: "Vite + React + Node + Tailwind + shadcn, port 3000.",
       designSystemId: "trace-core",
       skillIds: ["forms"],
     });
 
     expect(prompt).toContain("full-stack product application");
     expect(prompt).toContain("Build a lightweight CRM.");
-    expect(prompt).toContain("Next.js + Tailwind + shadcn");
+    expect(prompt).toContain("Vite + React + Node + Tailwind + shadcn");
     expect(prompt).toContain("data-trace-source");
     expect(prompt).toContain("managed remote lazily on the first checkpoint");
   });

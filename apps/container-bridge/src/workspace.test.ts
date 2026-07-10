@@ -255,7 +255,15 @@ describe("workspace repo setup", () => {
     expect(mocks.mkdirSync).toHaveBeenCalledWith("/workspaces/group-1", { recursive: true });
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
       "/workspaces/group-1/.trace/app-starter.json",
-      expect.stringContaining('"kind":"nextjs"'),
+      expect.stringContaining('"kind":"vite-react-node"'),
+    );
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      "/workspaces/group-1/package.json",
+      expect.stringContaining('"dev": "tsx watch --clear-screen=false server.ts"'),
+    );
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      "/workspaces/group-1/server.ts",
+      expect.stringContaining("server: { hmr: { server }, middlewareMode: true }"),
     );
   });
 

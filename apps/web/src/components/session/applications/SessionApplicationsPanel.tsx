@@ -141,7 +141,7 @@ const DEFAULT_APP_CONFIG: RepoApplicationConfig = {
         {
           id: "dev",
           name: "Dev server",
-          command: "pnpm install && pnpm dev",
+          command: "pnpm install --prefer-offline && pnpm dev",
           workingDirectory: ".",
           required: true,
           env: [],

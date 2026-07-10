@@ -54,7 +54,7 @@ const DEFAULT_APP_SESSION_CONFIG = repoApplicationConfigService.normalize({
         {
           id: "dev",
           name: "Dev server",
-          command: "pnpm install && pnpm dev",
+          command: "pnpm install --prefer-offline && pnpm dev",
           workingDirectory: ".",
           required: true,
           env: [],

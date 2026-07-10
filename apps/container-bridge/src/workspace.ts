@@ -399,38 +399,43 @@ export async function createAppWorkspace({
 }
 
 function writeFallbackAppStarter(workdir: string): void {
-  fs.mkdirSync(`${workdir}/app/api/notes`, { recursive: true });
   fs.mkdirSync(`${workdir}/.trace`, { recursive: true });
-  fs.mkdirSync(`${workdir}/lib`, { recursive: true });
-  fs.mkdirSync(`${workdir}/components/ui`, { recursive: true });
+  fs.mkdirSync(`${workdir}/src/lib`, { recursive: true });
+  fs.mkdirSync(`${workdir}/src/components/ui`, { recursive: true });
   fs.writeFileSync(
     `${workdir}/package.json`,
     JSON.stringify(
       {
         private: true,
+        type: "module",
         scripts: {
-          dev: "next dev -H 0.0.0.0 -p 3000",
-          build: "next build",
-          lint: "next lint",
+          dev: "tsx watch --clear-screen=false server.ts",
+          build: "vite build",
+          start: "NODE_ENV=production tsx server.ts",
+          lint: "tsc --noEmit",
           typecheck: "tsc --noEmit",
-          smoke: "next build",
+          smoke: "vite build",
         },
         dependencies: {
-          "@types/node": "^22.0.0",
-          "@types/react": "^19.0.0",
-          "@types/react-dom": "^19.0.0",
           "class-variance-authority": "^0.7.0",
           clsx: "^2.1.0",
-          next: "^15.5.0",
+          express: "^5.1.0",
           react: "^19.0.0",
           "react-dom": "^19.0.0",
           "tailwind-merge": "^3.0.0",
-          typescript: "^5.7.0",
         },
         devDependencies: {
+          "@types/express": "^5.0.0",
+          "@types/node": "^22.0.0",
+          "@types/react": "^19.0.0",
+          "@types/react-dom": "^19.0.0",
+          "@vitejs/plugin-react": "^4.3.0",
           autoprefixer: "^10.4.0",
           postcss: "^8.5.0",
           tailwindcss: "^3.4.0",
+          tsx: "^4.19.0",
+          typescript: "^5.7.0",
+          vite: "^6.0.0",
         },
       },
       null,
@@ -440,7 +445,8 @@ function writeFallbackAppStarter(workdir: string): void {
   fs.writeFileSync(
     `${workdir}/.gitignore`,
     `node_modules
-.next
+dist
+.vite
 .env
 .env.*
 !.env.example
@@ -454,31 +460,34 @@ data
       {
         $schema: "https://ui.shadcn.com/schema.json",
         style: "new-york",
-        rsc: true,
+        rsc: false,
         tsx: true,
-        tailwind: { css: "app/globals.css", baseColor: "neutral", cssVariables: true },
+        tailwind: { css: "src/index.css", baseColor: "neutral", cssVariables: true },
         aliases: { components: "@/components", utils: "@/lib/utils", ui: "@/components/ui" },
       },
       null,
       2,
     ) + "\n",
   );
-  fs.writeFileSync(`${workdir}/.trace/app-starter.json`, JSON.stringify({ kind: "nextjs" }) + "\n");
+  fs.writeFileSync(
+    `${workdir}/.trace/app-starter.json`,
+    JSON.stringify({ kind: "vite-react-node" }) + "\n",
+  );
   fs.writeFileSync(
     `${workdir}/trace.tokens.json`,
     JSON.stringify({ color: { background: "#09090b", foreground: "#fafafa" } }, null, 2) + "\n",
   );
   fs.writeFileSync(
-    `${workdir}/app/page.tsx`,
-    `export default function Home() {
+    `${workdir}/src/App.tsx`,
+    `export function App() {
   return (
     <main className="min-h-screen bg-zinc-950 px-8 py-10 text-zinc-50">
-      <section data-trace-source="app/page.tsx:4" className="mx-auto flex max-w-3xl flex-col gap-6">
+      <section data-trace-source="src/App.tsx:4" className="mx-auto flex max-w-3xl flex-col gap-6">
         <p className="text-sm text-emerald-300">Trace app session</p>
         <h1 className="text-4xl font-semibold tracking-tight">Build from here</h1>
         <p className="text-zinc-300">
-          This starter is ready for full-stack changes. Add routes, API handlers, persistence,
-          and UI in the app directory, then run pnpm dev.
+          This Vite and Node starter is ready for fast full-stack iteration. Edit the React UI in
+          src, add API routes in server.ts, and changes will appear automatically.
         </p>
       </section>
     </main>
@@ -487,7 +496,7 @@ data
 `,
   );
   fs.writeFileSync(
-    `${workdir}/lib/utils.ts`,
+    `${workdir}/src/lib/utils.ts`,
     `import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -497,7 +506,7 @@ export function cn(...inputs: ClassValue[]) {
 `,
   );
   fs.writeFileSync(
-    `${workdir}/components/ui/button.tsx`,
+    `${workdir}/src/components/ui/button.tsx`,
     `import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
@@ -522,42 +531,21 @@ export function Button({ className, variant, size, ...props }: React.ComponentPr
 `,
   );
   fs.writeFileSync(
-    `${workdir}/app/layout.tsx`,
-    `import type { Metadata } from "next";
-import "./globals.css";
+    `${workdir}/src/main.tsx`,
+    `import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { App } from "./App";
+import "./index.css";
 
-export const metadata: Metadata = {
-  title: "Trace App",
-  description: "Generated in a Trace app session",
-};
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>{children}</body>
-    </html>
-  );
-}
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
 `,
   );
   fs.writeFileSync(
-    `${workdir}/app/api/notes/route.ts`,
-    `const notes: Array<{ id: string; text: string }> = [];
-
-export async function GET() {
-  return Response.json({ notes });
-}
-
-export async function POST(request: Request) {
-  const body = (await request.json()) as { text?: unknown };
-  const note = { id: crypto.randomUUID(), text: String(body.text ?? "") };
-  notes.push(note);
-  return Response.json({ note }, { status: 201 });
-}
-`,
-  );
-  fs.writeFileSync(
-    `${workdir}/app/globals.css`,
+    `${workdir}/src/index.css`,
     `@tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -572,11 +560,27 @@ body {
 `,
   );
   fs.writeFileSync(
+    `${workdir}/index.html`,
+    `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trace App</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+`,
+  );
+  fs.writeFileSync(
     `${workdir}/tailwind.config.ts`,
     `import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: ["./app/**/*.{js,ts,jsx,tsx}", "./components/**/*.{js,ts,jsx,tsx}"],
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: { extend: {} },
   plugins: [],
 };
@@ -585,23 +589,60 @@ export default config;
 `,
   );
   fs.writeFileSync(
-    `${workdir}/postcss.config.js`,
+    `${workdir}/postcss.config.cjs`,
     `module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } };\n`,
   );
-  // Served via the Trace preview proxy (`<key>.<previewHost>`), a different
-  // origin than the container's localhost. Allow it so Next's dev server
-  // doesn't block /_next/HMR/API requests as cross-origin. Trace injects the
-  // exact wildcard host via TRACE_ALLOWED_DEV_ORIGINS.
   fs.writeFileSync(
-    `${workdir}/next.config.js`,
-    `const injected = (process.env.TRACE_ALLOWED_DEV_ORIGINS || "")
-  .split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
+    `${workdir}/vite.config.ts`,
+    `import { fileURLToPath, URL } from "node:url";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
-module.exports = {
-  allowedDevOrigins: [...injected, "*.preview.localhost", "*.preview.gettrace.org"],
-};
+export default defineConfig({
+  plugins: [react()],
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  server: { allowedHosts: true },
+});
+`,
+  );
+  fs.writeFileSync(
+    `${workdir}/server.ts`,
+    `import crypto from "node:crypto";
+import { createServer as createHttpServer } from "node:http";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import express from "express";
+
+const app = express();
+const server = createHttpServer(app);
+const port = Number(process.env.PORT ?? 3000);
+const root = dirname(fileURLToPath(import.meta.url));
+const notes: Array<{ id: string; text: string }> = [];
+
+app.use(express.json());
+app.get("/api/notes", (_request, response) => response.json({ notes }));
+app.post("/api/notes", (request, response) => {
+  const body = request.body as { text?: unknown };
+  const note = { id: crypto.randomUUID(), text: String(body.text ?? "") };
+  notes.push(note);
+  response.status(201).json({ note });
+});
+
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(join(root, "dist")));
+  app.use((_request, response) => response.sendFile(join(root, "dist", "index.html")));
+} else {
+  const { createServer: createViteServer } = await import("vite");
+  const vite = await createViteServer({
+    appType: "spa",
+    server: { hmr: { server }, middlewareMode: true },
+  });
+  app.use(vite.middlewares);
+}
+
+server.listen(port, "0.0.0.0", () => {
+  console.log(\`Trace app ready at http://0.0.0.0:\${port}\`);
+});
 `,
   );
   fs.writeFileSync(
@@ -609,24 +650,22 @@ module.exports = {
     JSON.stringify(
       {
         compilerOptions: {
-          target: "es5",
-          lib: ["dom", "dom.iterable", "esnext"],
-          allowJs: true,
+          target: "ES2022",
+          lib: ["DOM", "DOM.Iterable", "ES2022"],
           skipLibCheck: true,
           strict: true,
           noEmit: true,
           esModuleInterop: true,
-          module: "esnext",
-          moduleResolution: "bundler",
+          module: "ESNext",
+          moduleResolution: "Bundler",
           baseUrl: ".",
-          paths: { "@/*": ["./*"] },
+          paths: { "@/*": ["./src/*"] },
           resolveJsonModule: true,
           isolatedModules: true,
-          jsx: "preserve",
-          incremental: true,
-          plugins: [{ name: "next" }],
+          jsx: "react-jsx",
+          types: ["node", "vite/client"],
         },
-        include: ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+        include: ["src", "server.ts", "vite.config.ts", "tailwind.config.ts"],
         exclude: ["node_modules"],
       },
       null,

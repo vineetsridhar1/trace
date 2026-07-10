@@ -4,14 +4,14 @@ export function composeTraceOverlay(input: OpenDesignPromptInput): string {
   if (input.kind === "app") {
     return [
       "# Trace App Session Overlay",
-      "The workspace starts from the Trace app starter: Next.js App Router, Tailwind CSS, shadcn-compatible primitives, pnpm scripts, and Trace app metadata.",
+      "The workspace starts from the Trace app starter: Vite, React, a Node server, Tailwind CSS, shadcn-compatible primitives, pnpm scripts, and Trace app metadata.",
       "Build a working full-stack product application, not a static mock or landing page.",
       "Run pnpm install before first use if dependencies are missing.",
       "You may install additional npm packages and use sudo for required OS packages in this isolated cloud runtime.",
       "Use supplied database environment variables such as DATABASE_URL when present, keep credentials out of git, and implement real server-side persistence when the brief needs it.",
       "Redis is preinstalled; start and use it when caching, queues, or ephemeral coordination help the application.",
       "Run pnpm build or an equivalent verification before declaring the app done.",
-      "Start the preview with pnpm dev --hostname 0.0.0.0 and keep it running so Trace can detect port 3000.",
+      "Start the preview with pnpm dev and keep it running so Trace can detect port 3000.",
       'Stamp meaningful interactive UI with data-trace-source="path:line" when practical so the app preview picker can map elements back to code.',
       "Create meaningful git commits as app milestones; Trace creates the managed remote lazily on the first checkpoint and pushes HEAD there.",
       "Treat publish/share as exposing the running app endpoint, not generating a design artifact.",
