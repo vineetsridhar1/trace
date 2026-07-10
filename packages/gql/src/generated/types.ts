@@ -460,8 +460,7 @@ export type GitCheckpoint = {
   __typename?: "GitCheckpoint";
   author: Scalars["String"]["output"];
   captureContentType?: Maybe<Scalars["String"]["output"]>;
-  captureKey?: Maybe<Scalars["String"]["output"]>;
-  captureStatus?: Maybe<Scalars["String"]["output"]>;
+  captureStatus?: Maybe<GitCheckpointCaptureStatus>;
   captureUrl?: Maybe<Scalars["String"]["output"]>;
   capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   commitSha: Scalars["String"]["output"];
@@ -481,6 +480,8 @@ export type GitCheckpoint = {
   subject: Scalars["String"]["output"];
   treeSha: Scalars["String"]["output"];
 };
+
+export type GitCheckpointCaptureStatus = "captured" | "failed" | "pending" | "unavailable";
 
 export type HostingMode = "cloud" | "local";
 

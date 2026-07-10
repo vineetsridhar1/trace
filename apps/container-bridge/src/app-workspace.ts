@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import fs from "fs";
+import path from "path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "util";
 import { assertValidCommitSha } from "@trace/shared";
@@ -19,11 +20,17 @@ function appStarterDir(): string {
 }
 
 // Remove a standalone app workspace directory (created by createAppWorkspace).
-// The slug defaults to the sessionGroupId. Guarded to stay under WORKSPACES_DIR.
-export function removeAppWorkspace(slug: string): void {
-  if (!slug || slug.includes("/") || slug.includes("..")) return;
-  const workdir = `${WORKSPACES_DIR}/${slug}`;
-  fs.rmSync(workdir, { recursive: true, force: true });
+// Takes the actual workdir path (the server persists it as session.workdir and
+// sends it on delete; the bridge also tracks it in sessionWorkdirs) so we delete
+// the real slug directory rather than guessing from the sessionGroupId. Only a
+// direct child of WORKSPACES_DIR is removed — this guards traversal and rejects
+// worktree paths (/repos/...) so it is safe to call for any session. Async so
+// the recursive delete of node_modules never blocks the bridge event loop.
+export async function removeAppWorkspace(workdir: string): Promise<void> {
+  if (!workdir) return;
+  const resolved = path.resolve(workdir);
+  if (path.dirname(resolved) !== path.resolve(WORKSPACES_DIR)) return;
+  await fs.promises.rm(resolved, { recursive: true, force: true });
 }
 
 export async function createAppWorkspace({

@@ -15,6 +15,7 @@ vi.mock("../lib/session-router.js", () => ({
 vi.mock("./event.js", () => ({
   eventService: {
     create: vi.fn(),
+    publishEphemeral: vi.fn(),
   },
 }));
 
@@ -32,7 +33,10 @@ const sessionRouterMock = sessionRouter as unknown as {
   getRuntime: ReturnType<typeof vi.fn>;
   sendToRuntime: ReturnType<typeof vi.fn>;
 };
-const eventServiceMock = eventService as unknown as { create: ReturnType<typeof vi.fn> };
+const eventServiceMock = eventService as unknown as {
+  create: ReturnType<typeof vi.fn>;
+  publishEphemeral: ReturnType<typeof vi.fn>;
+};
 
 function mockGroup() {
   prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValue({
@@ -252,7 +256,6 @@ describe("SessionApplicationService", () => {
       id: "group-1",
       kind: "app",
       ownerUserId: "user-1",
-      sessions: [{ id: "session-1" }],
     });
     prismaMock.sessionEndpoint.findFirst.mockResolvedValueOnce({
       id: "endpoint-1",
@@ -298,7 +301,7 @@ describe("SessionApplicationService", () => {
     expect(endpoint.accessMode).toBe("public");
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        scopeId: "session-1",
+        scopeId: "group-1",
         payload: expect.objectContaining({ published: true }),
       }),
     );
@@ -349,11 +352,15 @@ describe("SessionApplicationService", () => {
         }),
       }),
     );
-    expect(eventServiceMock.create).toHaveBeenCalledWith(
+    // Log lines are published (ephemeral), not persisted as Event rows.
+    expect(eventServiceMock.publishEphemeral).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "session_application_log_appended",
         payload: expect.objectContaining({ logEntry: expect.objectContaining({ id: "log-1" }) }),
       }),
+    );
+    expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "session_application_log_appended" }),
     );
   });
 

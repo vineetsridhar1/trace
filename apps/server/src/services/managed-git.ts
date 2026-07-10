@@ -180,7 +180,15 @@ class ManagedGitService {
     });
     if (!repo) return false;
 
-    await gitStorage.deleteRepo(input.organizationId, repo.id);
+    // The row is the source of truth and is already gone; a storage-delete
+    // failure must not fail the surrounding group deletion. Worst case is a
+    // leaked bare dir, which is far less harmful than a half-deleted group.
+    await gitStorage.deleteRepo(input.organizationId, repo.id).catch((error) => {
+      console.warn(
+        `[managed-git] failed to delete bare storage for repo ${repo.id}:`,
+        error instanceof Error ? error.message : String(error),
+      );
+    });
     return true;
   }
 

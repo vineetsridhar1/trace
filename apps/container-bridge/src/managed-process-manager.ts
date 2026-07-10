@@ -47,7 +47,13 @@ const SENSITIVE_ENV_EXACT = new Set(["TRACE_RUNTIME_TOKEN", "GITHUB_TOKEN"]);
 function isSensitiveEnvName(name: string): boolean {
   if (SENSITIVE_ENV_EXACT.has(name)) return true;
   const upper = name.toUpperCase();
-  return upper.endsWith("_TOKEN") || upper.includes("SECRET") || upper.includes("PRIVATE_KEY");
+  return (
+    upper.endsWith("_TOKEN") ||
+    upper.endsWith("_API_KEY") ||
+    upper.endsWith("_KEY") ||
+    upper.includes("SECRET") ||
+    upper.includes("PRIVATE_KEY")
+  );
 }
 
 function childEnv(env?: Record<string, string>): NodeJS.ProcessEnv {
@@ -140,6 +146,26 @@ export class ManagedProcessManager {
     this.endpointForwarder = new EndpointForwarder(send);
   }
 
+  // Serialize all lifecycle transitions for a processInstanceId onto one chain.
+  // start/stop/destroy must not interleave: without this, a stop arriving during
+  // a restart's await of the old child's exit would see an empty map entry and
+  // no-op, leaving the freshly-spawned child running after the user's last
+  // action was stop; likewise two starts could spawn concurrently and orphan a
+  // process holding the port.
+  private enqueue(key: string, task: () => Promise<void>): Promise<void> {
+    const prev = this.startLocks.get(key) ?? Promise.resolve();
+    const run = prev.then(task, task);
+    const tail = run.then(
+      () => {},
+      () => {},
+    );
+    this.startLocks.set(key, tail);
+    void tail.then(() => {
+      if (this.startLocks.get(key) === tail) this.startLocks.delete(key);
+    });
+    return tail;
+  }
+
   start(options: {
     requestId: string;
     processInstanceId: string;
@@ -150,23 +176,7 @@ export class ManagedProcessManager {
     env?: Record<string, string>;
     ports?: number[];
   }) {
-    // Serialize starts per processInstanceId. Without this, a second start
-    // arriving during `startReplacing`'s await of the previous child's exit
-    // would spawn concurrently and leave an orphaned process holding the port.
-    const key = options.processInstanceId;
-    const prev = this.startLocks.get(key) ?? Promise.resolve();
-    const run = prev.then(
-      () => this.startReplacing(options),
-      () => this.startReplacing(options),
-    );
-    const tail = run.then(
-      () => {},
-      () => {},
-    );
-    this.startLocks.set(key, tail);
-    void tail.then(() => {
-      if (this.startLocks.get(key) === tail) this.startLocks.delete(key);
-    });
+    this.enqueue(options.processInstanceId, () => this.startReplacing(options));
   }
 
   /**
@@ -286,24 +296,41 @@ export class ManagedProcessManager {
   }
 
   stop(processInstanceId: string): void {
+    void this.enqueue(processInstanceId, async () => this.killEntry(processInstanceId));
+  }
+
+  // SIGTERM then SIGKILL the current child. Runs inside the per-id lock so it
+  // always observes the entry as of "now" (after any in-flight start settled).
+  private killEntry(processInstanceId: string): void {
     const managed = this.processes.get(processInstanceId);
     if (!managed) return;
-    signalProcessTree(managed.child, "SIGTERM");
+    const { child } = managed;
+    signalProcessTree(child, "SIGTERM");
     setTimeout(() => {
-      if (this.processes.has(processInstanceId)) {
-        signalProcessTree(managed.child, "SIGKILL");
+      // Identity check: only escalate if THIS child is still the live entry —
+      // a stop→exit→restart within the grace window must not kill the new pid.
+      if (this.processes.get(processInstanceId)?.child === child) {
+        signalProcessTree(child, "SIGKILL");
       }
     }, 5_000).unref();
   }
 
   destroyForSessionGroup(sessionGroupId: string): void {
-    for (const process of this.processes.values()) {
-      if (process.sessionGroupId === sessionGroupId) this.stop(process.processInstanceId);
+    // Cover both running processes and in-flight starts (whose map entry does
+    // not exist yet but whose lock key is live), so a delete arriving during a
+    // start can't let the new process slip through after teardown.
+    const keys = new Set<string>([...this.processes.keys(), ...this.startLocks.keys()]);
+    for (const key of keys) {
+      void this.enqueue(key, async () => {
+        if (this.processes.get(key)?.sessionGroupId === sessionGroupId) this.killEntry(key);
+      });
     }
   }
 
   destroyAll(): void {
-    for (const processInstanceId of this.processes.keys()) this.stop(processInstanceId);
+    for (const key of new Set<string>([...this.processes.keys(), ...this.startLocks.keys()])) {
+      this.stop(key);
+    }
     this.endpointForwarder.destroy();
   }
 
@@ -335,14 +362,13 @@ export class ManagedProcessManager {
       });
       const chunks: Buffer[] = [];
       let settled = false;
-      let timeout: ReturnType<typeof setTimeout>;
       const finish = (result: { exitCode: number; output?: string; error?: string }): void => {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
         this.send({ type: "setup_script_result", requestId: options.requestId, ...result });
       };
-      timeout = setTimeout(() => {
+      const timeout = setTimeout(() => {
         signalProcessTree(child, "SIGKILL");
         finish({
           exitCode: 1,

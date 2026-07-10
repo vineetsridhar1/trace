@@ -907,6 +907,9 @@ describe("handleOrgEvent", () => {
       processId: "process-1",
       data: "ready\n",
     });
+    // The log entity lives in its own capped table; it must NOT also be stored
+    // in the uncapped scoped-event log.
+    expect(useEntityStore.getState().eventsByScope["session:group-1"]).toBeUndefined();
   });
 
   it("upserts setup script runs without a refetch", () => {

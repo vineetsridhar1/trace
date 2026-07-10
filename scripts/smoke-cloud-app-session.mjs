@@ -147,6 +147,23 @@ const PUBLISH_APP = `
   }
 `;
 
+const DISABLE_ENDPOINT = `
+  mutation SmokeDisableEndpoint($endpointId: ID!) {
+    disableSessionEndpointForwarding(endpointId: $endpointId) {
+      id
+      status
+    }
+  }
+`;
+
+const ARCHIVE_SESSION_GROUP = `
+  mutation SmokeArchiveSessionGroup($id: ID!) {
+    archiveSessionGroup(id: $id) {
+      id
+    }
+  }
+`;
+
 function requiredEnv(name) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is required`);
@@ -187,7 +204,14 @@ async function pollUntil(label, fn) {
   const deadline = Date.now() + timeoutMs;
   let lastDetail = "not checked yet";
   while (Date.now() < deadline) {
-    const result = await fn();
+    let result;
+    try {
+      result = await fn();
+    } catch (error) {
+      // Transient network errors / 5xx during the long poll are non-terminal:
+      // record and retry rather than aborting the whole run.
+      result = { ok: false, detail: `transient error: ${error.message}` };
+    }
     if (result.ok) return result.value;
     lastDetail = result.detail ?? lastDetail;
     process.stdout.write(`Waiting for ${label}: ${lastDetail}\n`);
@@ -254,13 +278,13 @@ async function waitForReadyApp(sessionGroupId, label) {
 async function renderUrl(url, label, options = {}) {
   const requireFetch = options.requireFetch !== false;
   if (requireFetch) {
+    // The starter is a Vite/React app, so the marker is client-rendered and
+    // will not appear in the raw HTML. Assert on status only here; the
+    // headless-Chrome DOM check below verifies the rendered content.
     const response = await fetch(url, { redirect: "follow" });
     const html = await response.text();
     if (!response.ok) {
       throw new Error(`${label} returned HTTP ${response.status}: ${html.slice(0, 500)}`);
-    }
-    if (!html.includes(expectedText)) {
-      throw new Error(`${label} fetch did not contain ${expectedText}`);
     }
   }
 
@@ -304,7 +328,7 @@ async function publishApp(sessionGroupId) {
     throw new Error(`Published endpoint access mode is ${endpoint.accessMode}`);
   }
   if (!endpoint.url) throw new Error("Published endpoint URL is missing");
-  return endpoint.url;
+  return { id: endpoint.id, url: endpoint.url };
 }
 
 async function createPreviewUrl(endpointId) {
@@ -386,66 +410,92 @@ async function startAppSession(input) {
   return session;
 }
 
-process.stdout.write("Starting fresh cloud app session smoke...\n");
-const session = await startAppSession({
-  kind: "app",
-  prompt,
-  ...(process.env.TRACE_SMOKE_MODEL ? { model: process.env.TRACE_SMOKE_MODEL } : {}),
-  ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
-  ...(process.env.TRACE_SMOKE_ENVIRONMENT_ID
-    ? { environmentId: process.env.TRACE_SMOKE_ENVIRONMENT_ID }
-    : {}),
-  ...(process.env.TRACE_SMOKE_DESIGN_SYSTEM_ID
-    ? { designSystemId: process.env.TRACE_SMOKE_DESIGN_SYSTEM_ID }
-    : {}),
-  ...(process.env.TRACE_SMOKE_DESIGN_SKILL_IDS
-    ? {
-        designSkillIds: process.env.TRACE_SMOKE_DESIGN_SKILL_IDS.split(",")
-          .map((id) => id.trim())
-          .filter(Boolean),
-      }
-    : {}),
-});
+const keepResources = process.env.TRACE_SMOKE_KEEP === "1";
 
-const initial = await waitForReadyApp(session.sessionGroupId, "initial");
-await verifyRuntimeTerminal(session.id, { requireRedis: true });
-const previewUrl = await createPreviewUrl(initial.endpoint.id);
-await renderUrl(previewUrl, "private preview URL", { requireFetch: false });
-const publicUrl = await publishApp(session.sessionGroupId);
-await renderUrl(publicUrl, "published public URL");
+// Resources the script creates; tracked before the try so the finally block can
+// tear them down regardless of where the flow fails.
+const createdSessionGroupIds = [];
+const publishedEndpointIds = [];
 
-// Checkpoint revert/resume is currently out of scope for app-session QA.
-// TRACE_SMOKE_SKIP_RESTORE=1 skips the restore leg (loudly); leave it unset to
-// exercise the full flow once restore lineage is back in scope.
-const skipRestore = process.env.TRACE_SMOKE_SKIP_RESTORE === "1";
-let restored = null;
-if (skipRestore) {
-  process.stdout.write(
-    "SKIPPED: restore leg (TRACE_SMOKE_SKIP_RESTORE=1) — checkpoint restore is NOT verified by this run.\n",
-  );
-} else {
-  restored = await startAppSession({
-    restoreCheckpointId: initial.checkpoint.id,
-    ...(process.env.TRACE_SMOKE_MODEL ? { model: process.env.TRACE_SMOKE_MODEL } : {}),
-    ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
-  });
-  const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored");
-  await verifyRuntimeTerminal(restored.id);
-  const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
-  await renderUrl(restoredPreviewUrl, "restored private preview URL", { requireFetch: false });
-  const restoredPublicUrl = await publishApp(restored.sessionGroupId);
-  await renderUrl(restoredPublicUrl, "restored public URL");
+async function teardown() {
+  if (keepResources) {
+    process.stdout.write("TRACE_SMOKE_KEEP=1 — leaving created resources in place for debugging.\n");
+    return;
+  }
+  for (const endpointId of publishedEndpointIds) {
+    try {
+      await graphql(DISABLE_ENDPOINT, { endpointId });
+    } catch (error) {
+      process.stdout.write(`Teardown: failed to disable endpoint ${endpointId}: ${error.message}\n`);
+    }
+  }
+  for (const groupId of createdSessionGroupIds) {
+    try {
+      await graphql(ARCHIVE_SESSION_GROUP, { id: groupId });
+    } catch (error) {
+      process.stdout.write(`Teardown: failed to archive session group ${groupId}: ${error.message}\n`);
+    }
+  }
 }
 
-process.stdout.write(
-  [
-    "Trace cloud app session smoke passed.",
-    `Initial session: ${session.id}`,
-    `Initial group: ${session.sessionGroupId}`,
-    `Checkpoint: ${initial.checkpoint.id} ${initial.checkpoint.commitSha}`,
-    `Published URL: ${publicUrl}`,
-    ...(restored
-      ? [`Restored session: ${restored.id}`, `Restored group: ${restored.sessionGroupId}`]
-      : ["Restore leg: SKIPPED"]),
-  ].join("\n") + "\n",
-);
+try {
+  process.stdout.write("Starting fresh cloud app session smoke...\n");
+  const session = await startAppSession({
+    kind: "app",
+    prompt,
+    ...(process.env.TRACE_SMOKE_MODEL ? { model: process.env.TRACE_SMOKE_MODEL } : {}),
+    ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
+    ...(process.env.TRACE_SMOKE_ENVIRONMENT_ID
+      ? { environmentId: process.env.TRACE_SMOKE_ENVIRONMENT_ID }
+      : {}),
+  });
+  createdSessionGroupIds.push(session.sessionGroupId);
+
+  const initial = await waitForReadyApp(session.sessionGroupId, "initial");
+  await verifyRuntimeTerminal(session.id, { requireRedis: true });
+  const previewUrl = await createPreviewUrl(initial.endpoint.id);
+  await renderUrl(previewUrl, "private preview URL", { requireFetch: false });
+  const published = await publishApp(session.sessionGroupId);
+  publishedEndpointIds.push(published.id);
+  await renderUrl(published.url, "published public URL");
+
+  // Checkpoint revert/resume is currently out of scope for app-session QA.
+  // TRACE_SMOKE_SKIP_RESTORE=1 skips the restore leg (loudly); leave it unset to
+  // exercise the full flow once restore lineage is back in scope.
+  const skipRestore = process.env.TRACE_SMOKE_SKIP_RESTORE === "1";
+  let restored = null;
+  if (skipRestore) {
+    process.stdout.write(
+      "SKIPPED: restore leg (TRACE_SMOKE_SKIP_RESTORE=1) — checkpoint restore is NOT verified by this run.\n",
+    );
+  } else {
+    restored = await startAppSession({
+      restoreCheckpointId: initial.checkpoint.id,
+      ...(process.env.TRACE_SMOKE_MODEL ? { model: process.env.TRACE_SMOKE_MODEL } : {}),
+      ...(process.env.TRACE_SMOKE_TOOL ? { tool: process.env.TRACE_SMOKE_TOOL } : {}),
+    });
+    createdSessionGroupIds.push(restored.sessionGroupId);
+    const restoredReady = await waitForReadyApp(restored.sessionGroupId, "restored");
+    await verifyRuntimeTerminal(restored.id);
+    const restoredPreviewUrl = await createPreviewUrl(restoredReady.endpoint.id);
+    await renderUrl(restoredPreviewUrl, "restored private preview URL", { requireFetch: false });
+    const restoredPublished = await publishApp(restored.sessionGroupId);
+    publishedEndpointIds.push(restoredPublished.id);
+    await renderUrl(restoredPublished.url, "restored public URL");
+  }
+
+  process.stdout.write(
+    [
+      "Trace cloud app session smoke passed.",
+      `Initial session: ${session.id}`,
+      `Initial group: ${session.sessionGroupId}`,
+      `Checkpoint: ${initial.checkpoint.id} ${initial.checkpoint.commitSha}`,
+      `Published URL: ${published.url}`,
+      ...(restored
+        ? [`Restored session: ${restored.id}`, `Restored group: ${restored.sessionGroupId}`]
+        : ["Restore leg: SKIPPED"]),
+    ].join("\n") + "\n",
+  );
+} finally {
+  await teardown();
+}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import type { SessionGroupEntity } from "@trace/client-core";
+import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
@@ -8,15 +8,16 @@ import { DeleteAppDialog } from "./DeleteAppDialog";
 import { useAppSessionGroupRow } from "./useAppSessionGroupRow";
 
 export function AppSessionItem({
-  group,
+  groupId,
   isActive,
 }: {
-  group: SessionGroupEntity;
+  groupId: string;
   isActive: boolean;
 }) {
-  const row = useAppSessionGroupRow(group);
+  const row = useAppSessionGroupRow(groupId);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const name = group.name ?? "Untitled app";
+  const groupName = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
+  const name = groupName ?? "Untitled app";
 
   return (
     <>
@@ -28,7 +29,7 @@ export function AppSessionItem({
       >
         <button
           type="button"
-          onClick={() => navigateToSessionGroup(null, group.id)}
+          onClick={() => navigateToSessionGroup(null, groupId)}
           title={name}
           className="flex h-full min-w-0 flex-1 cursor-pointer touch-manipulation items-center gap-2 rounded-md px-1.5 pr-7 text-left text-xs leading-none focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -46,7 +47,7 @@ export function AppSessionItem({
         </button>
       </div>
       <DeleteAppDialog
-        appId={group.id}
+        appId={groupId}
         appName={name}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}

@@ -57,7 +57,7 @@ export function SessionApplicationsPanel({
                 key={script.id}
                 script={script}
                 latestRun={state.latestSetupRunByScript.get(script.id)}
-                pending={state.pendingKey === script.id}
+                pending={state.isPending(script.id)}
                 onRun={() => state.runSetup(script.id)}
               />
             ))}
@@ -80,9 +80,9 @@ export function SessionApplicationsPanel({
                       endpoints={state.endpointsByProcess.get(key) ?? []}
                       groupKind={state.groupKind}
                       logEntries={process ? (state.processLogsById[process.id] ?? []) : []}
-                      pendingKey={state.pendingKey}
+                      isPending={state.isPending}
                       process={process}
-                      processPending={state.pendingKey === key}
+                      processPending={state.isPending(key)}
                       refreshingLogs={process ? Boolean(state.refreshingLogIds[process.id]) : false}
                       onCopyEndpoint={(endpoint) => void state.copyEndpoint(endpoint)}
                       onOpenEndpoint={(endpoint) => void state.openEndpoint(endpoint)}

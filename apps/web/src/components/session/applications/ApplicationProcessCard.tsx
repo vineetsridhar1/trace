@@ -16,7 +16,7 @@ export function ApplicationProcessCard({
   endpoints,
   groupKind,
   logEntries,
-  pendingKey,
+  isPending,
   processPending,
   process,
   refreshingLogs,
@@ -32,7 +32,7 @@ export function ApplicationProcessCard({
   endpoints: SessionEndpoint[];
   groupKind: string | null | undefined;
   logEntries: SessionApplicationLogEntry[];
-  pendingKey: string | null;
+  isPending: (key: string) => boolean;
   processPending: boolean;
   process?: SessionApplicationProcess;
   refreshingLogs: boolean;
@@ -93,7 +93,7 @@ export function ApplicationProcessCard({
           key={endpoint.id}
           endpoint={endpoint}
           isAppGroup={groupKind === "app"}
-          pendingKey={pendingKey}
+          isPending={isPending}
           processRunning={running}
           onCopy={() => onCopyEndpoint(endpoint)}
           onOpen={() => onOpenEndpoint(endpoint)}

@@ -6,6 +6,10 @@ type SendFn = (message: BridgeMessage) => void;
 const CONNECT_RETRY_DELAYS_MS = [100, 200, 400, 800] as const;
 const RETRYABLE_ERROR_CODES = new Set(["ECONNREFUSED", "ECONNRESET"]);
 const RETRYABLE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+// Responses are buffered whole (single-shot proxy — no streaming protocol yet),
+// so cap the buffer. Without this a streaming/SSE endpoint that never ends grows
+// `chunks` without bound and OOM-kills every session sharing the runtime.
+const MAX_RESPONSE_BYTES = 25 * 1024 * 1024;
 
 export class EndpointForwarder {
   private sockets = new Map<string, WebSocket>();
@@ -38,8 +42,26 @@ export class EndpointForwarder {
         },
         (response) => {
           const chunks: Buffer[] = [];
-          response.on("data", (chunk: Buffer) => chunks.push(chunk));
+          let total = 0;
+          let overflowed = false;
+          response.on("data", (chunk: Buffer) => {
+            if (overflowed) return;
+            total += chunk.length;
+            if (total > MAX_RESPONSE_BYTES) {
+              overflowed = true;
+              response.destroy();
+              req.destroy();
+              this.send({
+                type: "endpoint_http_error",
+                requestId: options.requestId,
+                error: "Response body exceeds proxy limit",
+              });
+              return;
+            }
+            chunks.push(chunk);
+          });
           response.on("end", () => {
+            if (overflowed) return;
             this.send({
               type: "endpoint_http_response",
               requestId: options.requestId,
@@ -127,7 +149,18 @@ export class EndpointForwarder {
   closeWebSocket(requestId: string, code?: number, reason?: string): void {
     const socket = this.sockets.get(requestId);
     if (!socket) return;
-    socket.close(code, reason);
+    // Delete first: `ws.close()` throws RangeError for reserved codes (1005/1006)
+    // that the upstream server may report, and the old code left the entry (and
+    // the upstream socket) dangling when it threw. Fall back to a bare close.
     this.sockets.delete(requestId);
+    try {
+      socket.close(code, reason);
+    } catch {
+      try {
+        socket.close();
+      } catch {
+        // already closing/closed
+      }
+    }
   }
 }

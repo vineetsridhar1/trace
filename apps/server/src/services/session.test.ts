@@ -6888,6 +6888,7 @@ describe("SessionService", () => {
         ownerUserId: "user-1",
       });
       prismaMock.session.findMany.mockResolvedValueOnce([]);
+      prismaMock.sessionGroup.count.mockResolvedValueOnce(0);
 
       await service.deleteGroup("app-group", "org-1", "user", "user-1");
 
@@ -6897,6 +6898,29 @@ describe("SessionService", () => {
         actorType: "user",
         actorId: "user-1",
       });
+    });
+
+    it("keeps a managed git repo still shared by another group", async () => {
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
+        makeSessionGroup({
+          id: "app-group",
+          kind: "app",
+          organizationId: "org-1",
+          repoId: "managed-repo-1",
+        }),
+      );
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "app-group",
+        visibility: "public",
+        ownerUserId: "user-1",
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([]);
+      // A restored sibling group still references the repo.
+      prismaMock.sessionGroup.count.mockResolvedValueOnce(1);
+
+      await service.deleteGroup("app-group", "org-1", "user", "user-1");
+
+      expect(managedGitServiceMock.deleteManagedRepo).not.toHaveBeenCalled();
     });
   });
 

@@ -54,8 +54,12 @@ type PendingWs = {
 
 function requestPath(req: IncomingMessage): { path: string; query: string | null } {
   const raw = req.url ?? "/";
-  const [path, query] = raw.split("?", 2);
-  return { path: path || "/", query: query ?? null };
+  // Split on the FIRST "?" only — a literal "?" is legal inside a query string
+  // (RFC 3986), so `split("?", 2)` would silently drop everything after it.
+  const i = raw.indexOf("?");
+  const path = i === -1 ? raw : raw.slice(0, i);
+  const query = i === -1 ? null : raw.slice(i + 1);
+  return { path: path || "/", query };
 }
 
 function authenticatedUserId(req: IncomingMessage): string | null {
@@ -72,6 +76,30 @@ function endpointPreviewUserId(
   return payload?.endpointId === endpoint.id && payload.organizationId === endpoint.organizationId
     ? payload.userId
     : null;
+}
+
+// Private preview access requires the caller to (1) resolve to a user via a
+// Trace session cookie or an endpoint-preview cookie, (2) be a member of the
+// endpoint's org, and (3) be able to view the backing session group. The plain
+// session cookie authenticates a user across ANY org, so the org-membership
+// check is essential: without it a user from another org holding the endpoint
+// key could reach a private preview (the group's default visibility is public).
+async function authorizePrivateAccess(
+  req: IncomingMessage,
+  endpoint: { id: string; organizationId: string; sessionGroupId: string },
+): Promise<boolean> {
+  const userId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
+  if (!userId) return false;
+  const membership = await prisma.orgMember.findUnique({
+    where: { userId_organizationId: { userId, organizationId: endpoint.organizationId } },
+    select: { userId: true },
+  });
+  if (!membership) return false;
+  const group = await prisma.sessionGroup.findFirst({
+    where: { id: endpoint.sessionGroupId, organizationId: endpoint.organizationId },
+    select: { visibility: true, ownerUserId: true },
+  });
+  return !!group && canViewSessionGroup(group, userId);
 }
 
 function requestUrl(req: IncomingMessage): URL {
@@ -99,7 +127,7 @@ function injectAuthoringOverlay(
   if (html.includes("data-trace-app-overlay")) return { headers, body };
   const script = `<script data-trace-app-overlay>(function(){
 var TRACE_ORIGIN=${JSON.stringify(TRACE_APP_ORIGIN)};
-function post(event,payload){if(window.parent&&window.parent!==window)window.parent.postMessage({type:"trace:app:overlay",event:event,...payload},TRACE_ORIGIN)}
+function post(event,payload){if(TRACE_ORIGIN!=="*"&&window.parent&&window.parent!==window)window.parent.postMessage({type:"trace:app:overlay",event:event,...payload},TRACE_ORIGIN)}
 document.addEventListener("click",function(e){var el=e.target&&e.target.closest&&e.target.closest("[data-trace-source]");if(el)post("element-selected",{sourceLocation:el.getAttribute("data-trace-source"),text:(el.textContent||"").trim().slice(0,500)})},true);
 window.addEventListener("error",function(e){post("error",{message:e.message||"Application script error",stack:e.error&&e.error.stack?String(e.error.stack):null})});
 })();</script>`;
@@ -109,6 +137,10 @@ window.addEventListener("error",function(e){post("error",{message:e.message||"Ap
   const nextHeaders = { ...headers };
   delete nextHeaders["content-length"];
   delete nextHeaders["Content-Length"];
+  // Intentionally drop the app's CSP so the injected inline overlay script runs.
+  // This only affects private previews (an isolated origin serving the org's own
+  // in-development app), so it weakens that untrusted app's own defense-in-depth
+  // rather than any Trace-origin protection.
   delete nextHeaders["content-security-policy"];
   delete nextHeaders["Content-Security-Policy"];
   return { headers: nextHeaders, body: nextBody };
@@ -175,16 +207,7 @@ export class EndpointProxyService {
         res.writeHead(403).end("Cross-origin request forbidden");
         return;
       }
-      const userId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
-      if (!userId) {
-        res.writeHead(401).end("Authentication required");
-        return;
-      }
-      const group = await prisma.sessionGroup.findFirst({
-        where: { id: endpoint.sessionGroupId, organizationId: endpoint.organizationId },
-        select: { visibility: true, ownerUserId: true },
-      });
-      if (!group || !canViewSessionGroup(group, userId)) {
+      if (!(await authorizePrivateAccess(req, endpoint))) {
         res.writeHead(403).end("Forbidden");
         return;
       }
@@ -424,16 +447,7 @@ export class EndpointProxyService {
         client.close(1008, "Cross-origin request forbidden");
         return;
       }
-      const userId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
-      if (!userId) {
-        client.close();
-        return;
-      }
-      const group = await prisma.sessionGroup.findFirst({
-        where: { id: endpoint.sessionGroupId, organizationId: endpoint.organizationId },
-        select: { visibility: true, ownerUserId: true },
-      });
-      if (!group || !canViewSessionGroup(group, userId)) {
+      if (!(await authorizePrivateAccess(req, endpoint))) {
         client.close();
         return;
       }

@@ -445,8 +445,10 @@ export class SessionApplicationService {
       scopeId: sessionId,
       eventType: "session_application_process_started",
       payload: { process: publicProcess(process) },
-      actorType: "user",
-      actorId: userId,
+      // Auto-start on workspace-ready is a system action; don't attribute it to
+      // the session creator in the immutable log.
+      actorType: options?.asSystem ? "system" : "user",
+      actorId: options?.asSystem ? "system" : userId,
     });
 
     const delivery = sessionRouter.sendToRuntime(
@@ -724,7 +726,6 @@ export class SessionApplicationService {
         id: true,
         kind: true,
         ownerUserId: true,
-        sessions: { select: { id: true }, orderBy: { updatedAt: "desc" }, take: 1 },
       },
     });
     await this.assertCanManage(group.id, organizationId, userId, group);
@@ -748,7 +749,9 @@ export class SessionApplicationService {
     await eventService.create({
       organizationId,
       scopeType: "session",
-      scopeId: group.sessions[0]?.id ?? sessionGroupId,
+      // Scope to the group like every other endpoint event (enable/disable/
+      // rotate) so client scope partitioning stays consistent.
+      scopeId: sessionGroupId,
       eventType: "session_endpoint_forwarding_enabled",
       payload: { endpoint: publicEndpoint(updated), sessionGroupId, published: true },
       actorType: "user",
@@ -1027,7 +1030,10 @@ export class SessionApplicationService {
       }
       return created;
     });
-    await eventService.create({
+    // Publish-only (not persisted): log lines are high-volume and already live
+    // in the pruned sessionApplicationLogEntry table. Persisting an Event per
+    // chunk would grow the append-only event log without bound.
+    eventService.publishEphemeral({
       organizationId: process.organizationId,
       scopeType: "session",
       scopeId: process.sessionGroupId,

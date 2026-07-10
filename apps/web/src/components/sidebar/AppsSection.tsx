@@ -117,7 +117,7 @@ export function AppsSection({
           {appGroups.map((group) => (
             <AppSessionItem
               key={group.id}
-              group={group}
+              groupId={group.id}
               isActive={group.id === activeSessionGroupId}
             />
           ))}

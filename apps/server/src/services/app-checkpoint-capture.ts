@@ -16,7 +16,12 @@ let activeCaptures = 0;
 const captureWaiters: Array<() => void> = [];
 
 async function withCaptureSlot<T>(operation: () => Promise<T>): Promise<T> {
-  if (activeCaptures >= MAX_CONCURRENT_CAPTURES) {
+  // Re-check after every wakeup: a fresh caller can claim the slot freed by a
+  // finishing capture before the woken waiter's microtask runs, so an `if`
+  // here would over-admit (3 concurrent for MAX=2). The loop re-queues the
+  // waiter if the slot was taken; a waiter only blocks while a capture is
+  // active, so the freeing capture's release is guaranteed to wake it.
+  while (activeCaptures >= MAX_CONCURRENT_CAPTURES) {
     await new Promise<void>((resolve) => captureWaiters.push(resolve));
   }
   activeCaptures += 1;

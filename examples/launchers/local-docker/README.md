@@ -66,7 +66,7 @@ In the web app: **Settings → Agent Environments → New**, adapter type **prov
 
 Optionally set a `DATABASE_URL` runtime env on the environment to point at an external database; if
 you don't, the image entrypoint starts a local Postgres and exports a default `DATABASE_URL`
-(`postgresql:///app`).
+(`postgresql://user:pass@localhost:5432/app`).
 
 ## 5. Run the e2e flow
 

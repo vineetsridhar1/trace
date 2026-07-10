@@ -7,7 +7,7 @@ import { displayApplicationStatus } from "./session-applications-operations";
 export function EndpointCard({
   endpoint,
   isAppGroup,
-  pendingKey,
+  isPending,
   processRunning,
   onCopy,
   onOpen,
@@ -17,7 +17,7 @@ export function EndpointCard({
 }: {
   endpoint: SessionEndpoint;
   isAppGroup: boolean;
-  pendingKey: string | null;
+  isPending: (key: string) => boolean;
   processRunning: boolean;
   onCopy: () => void;
   onOpen: () => void;
@@ -66,7 +66,7 @@ export function EndpointCard({
           size="icon-sm"
           title={enabled ? `Disable ${endpoint.label}` : `Enable ${endpoint.label}`}
           aria-label={enabled ? `Disable ${endpoint.label}` : `Enable ${endpoint.label}`}
-          disabled={pendingKey === endpoint.id || (!enabled && !processRunning)}
+          disabled={isPending(endpoint.id) || (!enabled && !processRunning)}
           onClick={onToggle}
         >
           {enabled ? <Square size={14} /> : <Power size={14} />}
@@ -96,7 +96,7 @@ export function EndpointCard({
             variant="outline"
             size="sm"
             title={`Publish ${endpoint.label}`}
-            disabled={pendingKey === `publish:${endpoint.id}`}
+            disabled={isPending(`publish:${endpoint.id}`)}
             onClick={onPublish}
           >
             <Globe size={13} />

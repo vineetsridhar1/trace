@@ -220,6 +220,13 @@ enum RepoProvider {
   managed
 }
 
+enum GitCheckpointCaptureStatus {
+  pending
+  captured
+  unavailable
+  failed
+}
+
 enum InboxItemType {
   plan
   question
@@ -588,8 +595,7 @@ type GitCheckpoint {
   author: String!
   committedAt: DateTime!
   filesChanged: Int!
-  captureStatus: String
-  captureKey: String
+  captureStatus: GitCheckpointCaptureStatus
   captureUrl: String
   captureContentType: String
   capturedAt: DateTime

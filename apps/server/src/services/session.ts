@@ -1243,6 +1243,9 @@ export class SessionService {
     checkpointSha?: string | null;
     createdById: string;
     organizationId: string;
+    /** Actor that initiated provisioning; defaults to a user actor. Agents are
+     * first-class, so the managed-git runtime token must be minted for them. */
+    actorType?: ActorType;
     readOnly?: boolean;
     /** Adopt an existing local worktree at this path instead of creating one. */
     adoptWorktreePath?: string | null;
@@ -1305,7 +1308,7 @@ export class SessionService {
                   sessionId: params.sessionId,
                   subject: runtimeInstanceId,
                   capabilities: ["read", "write"],
-                  actorType: "user",
+                  actorType: params.actorType ?? "user",
                   actorId: params.createdById,
                 });
                 const authenticatedUrl = new URL(params.repo!.remoteUrl!);
@@ -3158,6 +3161,12 @@ export class SessionService {
     ) {
       throw new Error("Source session repo does not match the channel's linked repo");
     }
+    // A restore must stay on the checkpoint's repo. Allowing an explicit
+    // input.repoId to override it produces a group whose provisioning fails at
+    // token mint (e.g. attaching a GitHub repoId to a managed-repo checkpoint).
+    if (restoreCheckpoint?.repoId && input.repoId && input.repoId !== restoreCheckpoint.repoId) {
+      throw new Error("Restored session must use the checkpoint's repo");
+    }
 
     let resolvedRepoId =
       authoritativeChannelRepoId ??
@@ -3835,6 +3844,7 @@ export class SessionService {
         branch: resolvedBranch,
         checkpointSha: input.checkpointSha ?? restoreCheckpoint?.commitSha,
         createdById: input.createdById,
+        actorType: input.actorType,
         organizationId: input.organizationId,
         readOnly: readOnlyWorkspace,
         adoptWorktreePath,
@@ -4707,12 +4717,22 @@ export class SessionService {
     }
 
     if (group.kind === "app" && group.repoId) {
-      await managedGitService.deleteManagedRepo({
-        organizationId,
-        repoId: group.repoId,
-        actorType,
-        actorId,
+      // A restored app group shares the source group's managed repo, so this
+      // repo can be referenced by more than one group. Only delete the repo
+      // (and its bare storage + cascaded checkpoints) when no other group
+      // still points at it — otherwise deleting this group would destroy a
+      // live sibling's source and history.
+      const otherReferences = await prisma.sessionGroup.count({
+        where: { repoId: group.repoId, id: { not: groupId } },
       });
+      if (otherReferences === 0) {
+        await managedGitService.deleteManagedRepo({
+          organizationId,
+          repoId: group.repoId,
+          actorType,
+          actorId,
+        });
+      }
     }
 
     return true;

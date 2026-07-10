@@ -561,23 +561,32 @@ export class ContainerBridge implements IBridgeClient {
         this.sessionRunSequence.delete(cmd.sessionId);
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
+        // Capture the workdir before dropping it from the map — the app
+        // workspace lives at this path (a slug dir under WORKSPACES_DIR).
+        const appWorkdir =
+          (typeof cmd.workdir === "string" ? cmd.workdir : null) ??
+          this.sessionWorkdirs.get(cmd.sessionId) ??
+          null;
         this.sessionWorkdirs.delete(cmd.sessionId);
         this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
 
-        // App sessions run managed dev-server processes and a standalone
-        // workspace keyed by sessionGroupId; stop the processes and remove the
-        // workspace so a deleted app doesn't leak a running server or disk.
+        // App sessions run managed dev-server processes (keyed by
+        // sessionGroupId) and a standalone workspace at the slug directory.
+        // Stop the processes and remove the workspace so a deleted app doesn't
+        // leak a running server or disk. removeAppWorkspace only removes a
+        // direct child of WORKSPACES_DIR, so it is a safe no-op for worktree
+        // sessions whose workdir lives elsewhere.
         if (cmd.sessionGroupId) {
           this.managedProcessManager.destroyForSessionGroup(cmd.sessionGroupId);
-          try {
-            removeAppWorkspace(cmd.sessionGroupId);
-          } catch (err) {
+        }
+        if (appWorkdir) {
+          removeAppWorkspace(appWorkdir).catch((err: unknown) => {
             console.warn(
-              `[container-bridge] failed to remove app workspace ${cmd.sessionGroupId}:`,
+              `[container-bridge] failed to remove app workspace ${appWorkdir}:`,
               err instanceof Error ? err.message : String(err),
             );
-          }
+          });
         }
 
         // Clean up worktree for this session only — skip for read-only sessions (no worktree to remove)
@@ -918,13 +927,16 @@ export class ContainerBridge implements IBridgeClient {
       }
     }
 
-    // Prepend file paths to prompt so all adapters see them
+    // Prepend file paths to the prompt so all adapters see them, then append
+    // the system suffix last. The refs line must build on finalPrompt (not the
+    // original prompt) or the appended instruction is lost whenever an image is
+    // attached — the dominant "make it look like this screenshot" flow.
     let finalPrompt = prompt;
-    if (appendSystemPrompt) finalPrompt = `${finalPrompt}\n\n${appendSystemPrompt}`;
     if (imagePaths?.length) {
       const refs = imagePaths.map((p) => `[Attached file: ${p}]`).join("\n");
-      finalPrompt = `${refs}\n\n${prompt}`;
+      finalPrompt = `${refs}\n\n${finalPrompt}`;
     }
+    if (appendSystemPrompt) finalPrompt = `${finalPrompt}\n\n${appendSystemPrompt}`;
 
     // Single owner of temp-image lifetime so we don't leak files when the
     // adapter ends via the pending-input branch (which doesn't always fire
@@ -965,7 +977,6 @@ export class ContainerBridge implements IBridgeClient {
 
     adapter.run({
       prompt: finalPrompt,
-      appendSystemPrompt,
       cwd,
       onOutput: (output) => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;

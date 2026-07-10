@@ -36,16 +36,18 @@ export function useSessionApplicationActions({
   const setActivePage = useUIStore((state) => state.setActivePage);
   const setSettingsInitialTab = useUIStore((state) => state.setSettingsInitialTab);
   const [refreshingLogIds, setRefreshingLogIds] = useState<Record<string, boolean>>({});
-  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [pendingKeys, setPendingKeys] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
 
   const reportError = useCallback((cause: unknown) => {
     setError(cause instanceof Error ? cause.message : String(cause));
   }, []);
 
+  const isPending = useCallback((key: string) => pendingKeys.has(key), [pendingKeys]);
+
   const execute = useCallback(
     async (key: string, action: () => Promise<unknown>) => {
-      setPendingKey(key);
+      setPendingKeys((current) => new Set(current).add(key));
       setError(null);
       try {
         const result = await action();
@@ -54,7 +56,11 @@ export function useSessionApplicationActions({
       } catch (cause) {
         reportError(cause);
       } finally {
-        setPendingKey(null);
+        setPendingKeys((current) => {
+          const next = new Set(current);
+          next.delete(key);
+          return next;
+        });
       }
     },
     [reportError],
@@ -70,7 +76,7 @@ export function useSessionApplicationActions({
 
   return {
     error,
-    pendingKey,
+    isPending,
     refreshingLogIds,
     reportError,
     refreshProcessLogs: async (processId: string) => {
@@ -114,8 +120,21 @@ export function useSessionApplicationActions({
         client.mutation(PUBLISH_APP_MUTATION, { sessionGroupId }).toPromise(),
       ),
     openEndpoint: async (endpoint: EndpointReference) => {
-      const url = await resolveEndpointUrl(endpoint);
-      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      // Open the tab synchronously in the click handler so Safari keeps the
+      // user-gesture chain; resolving a private endpoint's URL is a mutation
+      // round-trip that would otherwise get the popup blocked.
+      const opened = window.open("about:blank", "_blank");
+      try {
+        const url = await resolveEndpointUrl(endpoint);
+        if (url && opened) {
+          opened.location.href = url;
+        } else {
+          opened?.close();
+        }
+      } catch (cause) {
+        opened?.close();
+        reportError(cause);
+      }
     },
     copyEndpoint: async (endpoint: EndpointReference) => {
       const url = await resolveEndpointUrl(endpoint);
@@ -124,7 +143,7 @@ export function useSessionApplicationActions({
         await navigator.clipboard.writeText(url);
         setError(null);
       } catch {
-        setError(url);
+        setError(`Couldn't copy link — ${url}`);
       }
     },
     openRepositorySettings: () => {

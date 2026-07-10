@@ -174,7 +174,6 @@ export function isMissingToolSessionError(message: string): boolean {
 
 export interface RunOptions {
   prompt: string;
-  appendSystemPrompt?: string;
   cwd: string;
   onOutput: OutputCallback;
   onComplete: () => void;

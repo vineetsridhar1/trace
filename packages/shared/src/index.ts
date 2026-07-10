@@ -206,8 +206,6 @@ export {
   hasAttachmentKeys,
   hasVisibleUserSessionContent,
 } from "./session-content.js";
-export type { TraceDesignPromptContent, TraceDesignPromptInput } from "./design.js";
-export { composeTraceDesignPrompt } from "./design.js";
 export { PROVISIONED_RUNTIME_PREFIX, isProvisionedRuntimeId } from "./runtime-ids.js";
 export {
   branchNameFromGitRef,

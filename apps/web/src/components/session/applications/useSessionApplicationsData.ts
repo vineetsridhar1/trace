@@ -57,10 +57,19 @@ export function useSessionApplicationsData(sessionGroupId: string) {
       | undefined;
     if (group?.id) {
       const existing = useEntityStore.getState().sessionGroups[group.id];
+      // The query only selects `id` + a partial `repo` ({ id, applicationConfig }),
+      // so a shallow spread would clobber the stored repo's other fields
+      // (name/remoteUrl/defaultBranch/provider). Deep-merge the nested repo.
       upsert(
         "sessionGroups",
         group.id,
-        (existing ? { ...existing, ...group } : group) as SessionGroupEntity,
+        (existing
+          ? {
+              ...existing,
+              ...group,
+              repo: group.repo ? { ...existing.repo, ...group.repo } : existing.repo,
+            }
+          : group) as SessionGroupEntity,
       );
     }
     if (result.data?.sessionApplicationProcesses) {
@@ -110,9 +119,23 @@ export function useSessionApplicationsData(sessionGroupId: string) {
     [sessionGroupId, setupRunTable],
   );
 
+  // Depend on a stable key derived from the group's process IDs, not the
+  // `processes` array identity — otherwise any process upsert anywhere refires
+  // the log fetch for every process in this group.
+  const processIdsKey = useMemo(
+    () =>
+      processes
+        .map((process) => process.id)
+        .sort()
+        .join(","),
+    [processes],
+  );
   useEffect(() => {
-    for (const process of processes) void loadProcessLogs(process.id).catch(() => undefined);
-  }, [loadProcessLogs, processes]);
+    if (!processIdsKey) return;
+    for (const processId of processIdsKey.split(",")) {
+      void loadProcessLogs(processId).catch(() => undefined);
+    }
+  }, [loadProcessLogs, processIdsKey]);
 
   const processLogsById = useMemo(() => {
     const processIds = new Set(processes.map((process) => process.id));

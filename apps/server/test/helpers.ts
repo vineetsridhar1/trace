@@ -213,6 +213,7 @@ export function createPrismaMock() {
       findUnique: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      count: vi.fn(),
     },
     sessionSetupScriptRun: {
       create: vi.fn(),

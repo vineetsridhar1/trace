@@ -48,6 +48,7 @@ export function CheckpointPanel({
   );
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [pendingCheckpoint, setPendingCheckpoint] = useState<GitCheckpoint | null>(null);
+  const [failedCaptureIds, setFailedCaptureIds] = useState<Set<string>>(() => new Set());
   const highlightRef = useRef<HTMLDivElement>(null);
 
   const checkpoints = useMemo(() => {
@@ -187,12 +188,22 @@ export function CheckpointPanel({
                 )}
               </div>
               <p className="mt-0.5 truncate text-xs text-foreground/80">{checkpoint.subject}</p>
-              {checkpoint.captureUrl ? (
+              {checkpoint.captureStatus === "captured" &&
+              checkpoint.captureUrl &&
+              !failedCaptureIds.has(checkpoint.id) ? (
                 <img
                   src={checkpoint.captureUrl}
                   alt={`Preview at ${shortSha(checkpoint.commitSha)}`}
                   loading="lazy"
                   className="mt-2 aspect-video w-full rounded border border-border/60 object-cover"
+                  onError={() =>
+                    setFailedCaptureIds((current) => {
+                      if (current.has(checkpoint.id)) return current;
+                      const next = new Set(current);
+                      next.add(checkpoint.id);
+                      return next;
+                    })
+                  }
                 />
               ) : null}
               <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">

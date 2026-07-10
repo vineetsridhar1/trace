@@ -158,11 +158,29 @@ export function handleOrgEvent(event: Event): void {
   const batch = new StoreBatchWriter();
   const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
 
+  const scopeKey = `${event.scopeType}:${event.scopeId}`;
+
+  // App process logs are high-volume and already live in their own capped entity
+  // table. Storing them in the scoped-event log too would defeat that cap, so
+  // upsert the log entity and return without touching eventsByScope.
+  if (event.eventType === "session_application_log_appended") {
+    const logEntry = asJsonObject(payload.logEntry);
+    if (logEntry && typeof logEntry.id === "string") {
+      batch.upsert(
+        "sessionApplicationLogs",
+        logEntry.id,
+        logEntry as unknown as SessionApplicationLogEntry,
+      );
+    }
+    batch.flush();
+    notifyForEvent(event);
+    return;
+  }
+
   // Upsert the event into its scoped bucket. Note: session_output events
   // arrive with trimmed payloads from the org subscription. The session
   // detail view subscribes to sessionEvents for full payloads, which will
   // overwrite these trimmed versions.
-  const scopeKey = `${event.scopeType}:${event.scopeId}`;
   batch.upsertScopedEvent(scopeKey, event.id, event);
 
   // Clean up optimistic session events to prevent brief duplicates
@@ -206,17 +224,6 @@ export function handleOrgEvent(event: Event): void {
         "sessionApplicationProcesses",
         process.id,
         (existing ? { ...existing, ...process } : process) as unknown as SessionApplicationProcess,
-      );
-    }
-  }
-
-  if (event.eventType === "session_application_log_appended") {
-    const logEntry = asJsonObject(payload.logEntry);
-    if (logEntry && typeof logEntry.id === "string") {
-      batch.upsert(
-        "sessionApplicationLogs",
-        logEntry.id,
-        logEntry as unknown as SessionApplicationLogEntry,
       );
     }
   }
