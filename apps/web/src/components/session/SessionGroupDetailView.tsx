@@ -22,12 +22,14 @@ import { GroupTabStrip } from "./GroupTabStrip";
 import { FileCommandPalette } from "./FileCommandPalette";
 import { ForkSessionDialog } from "./ForkSessionDialog";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
+import { AppSessionWorkspace } from "./AppSessionWorkspace";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./AttachmentOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
 import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
+import { AppSessionPreviewPanel } from "./applications/AppSessionPreviewPanel";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
@@ -419,6 +421,7 @@ export function SessionGroupDetailView({
     };
   }, [groupSessions, sessionGroupId, addTerminal]);
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
+  const isAppGroup = groupKind === "app";
   const showApplicationsSidebarTab = selectedSession?.hosting === "cloud";
   const activeTerminal = terminals.find((t) => t.id === activeTerminalId) ?? null;
 
@@ -436,19 +439,6 @@ export function SessionGroupDetailView({
       setShowApplicationsSidebar(false);
     }
   }, [showApplicationsSidebar, showApplicationsSidebarTab]);
-
-  // Auto-open the applications panel once when entering an app session, but
-  // don't fight the user afterward — otherwise opening the git/checkpoints
-  // sidebar (which closes applications) instantly flips back and the restore
-  // UI becomes unreachable.
-  const autoOpenedAppPanelRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (groupKind !== "app" || !showApplicationsSidebarTab) return;
-    if (autoOpenedAppPanelRef.current === sessionGroupId) return;
-    autoOpenedAppPanelRef.current = sessionGroupId;
-    setShowApplicationsSidebar(true);
-    setShowSidebar(false);
-  }, [groupKind, sessionGroupId, showApplicationsSidebarTab]);
 
   const selectedSessionStatus = selectedSession
     ? getDisplaySessionStatus(
@@ -917,62 +907,99 @@ export function SessionGroupDetailView({
                 }
               />
 
-              <GroupTabStrip
-                sessionTabs={sessionTabs}
-                terminals={terminals}
-                groupSessions={groupSessions}
-                selectedSessionId={selectedSession?.id ?? null}
-                activeTerminalId={activeTerminalId}
-                openFiles={openFiles}
-                activeFilePath={activeFilePath}
-                trafficTabOpen={trafficEndpointId !== null}
-                trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
-                onSelectSession={handleSelectSession}
-                onCloseSession={handleCloseSession}
-                canCloseSessions={false}
-                onSelectTerminal={handleSelectTerminalTab}
-                onCloseTerminal={handleCloseTerminal}
-                onRenameTerminal={renameTerminal}
-                onSelectFile={handleSelectFileTab}
-                onCloseFile={handleCloseFile}
-                onSelectTraffic={handleSelectTrafficTab}
-                onCloseTraffic={handleCloseTrafficTab}
-                onNewChat={handleNewChat}
-                onOpenTerminal={() => {
-                  setActiveWorkflowTab("session");
-                  void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
-                }}
-                onOpenFilePalette={handleOpenFilePalette}
-                canNewChat={
-                  !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
-                }
-                canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
-              />
+              {!isAppGroup ? (
+                <GroupTabStrip
+                  sessionTabs={sessionTabs}
+                  terminals={terminals}
+                  groupSessions={groupSessions}
+                  selectedSessionId={selectedSession?.id ?? null}
+                  activeTerminalId={activeTerminalId}
+                  openFiles={openFiles}
+                  activeFilePath={activeFilePath}
+                  trafficTabOpen={trafficEndpointId !== null}
+                  trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
+                  onSelectSession={handleSelectSession}
+                  onCloseSession={handleCloseSession}
+                  canCloseSessions={false}
+                  onSelectTerminal={handleSelectTerminalTab}
+                  onCloseTerminal={handleCloseTerminal}
+                  onRenameTerminal={renameTerminal}
+                  onSelectFile={handleSelectFileTab}
+                  onCloseFile={handleCloseFile}
+                  onSelectTraffic={handleSelectTrafficTab}
+                  onCloseTraffic={handleCloseTrafficTab}
+                  onNewChat={handleNewChat}
+                  onOpenTerminal={() => {
+                    setActiveWorkflowTab("session");
+                    void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
+                  }}
+                  onOpenFilePalette={handleOpenFilePalette}
+                  canNewChat={
+                    !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
+                  }
+                  canOpenTerminal={!selectedSessionIsOptimistic && terminalAllowed}
+                />
+              ) : null}
 
               <div className="flex min-h-0 flex-1 overflow-hidden">
                 <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-                  <SessionGroupContentArea
-                    sessionGroupId={sessionGroupId}
-                    activeFilePath={activeFilePath}
-                    openFiles={openFiles}
-                    activeTerminalId={activeTerminal?.id ?? null}
-                    activeTrafficEndpointId={
-                      activeWorkflowTab === "traffic" ? trafficEndpointId : null
-                    }
-                    selectedSession={selectedSession}
-                    sessionsByRecency={sessionsByRecency}
-                    canStartNewChat={
-                      !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
-                    }
-                    onStartNewChat={handleNewChat}
-                    defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                    getFileBuffer={getFileBuffer}
-                    setFileBuffer={setFileBuffer}
-                    scrollToEventId={scrollToEventId}
-                    onScrollComplete={handleScrollComplete}
-                    onForkSession={handleOpenForkDialog}
-                    canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
-                  />
+                  {isAppGroup ? (
+                    <AppSessionWorkspace
+                      sessionId={selectedSession?.id ?? null}
+                      scrollToEventId={scrollToEventId}
+                      onScrollComplete={handleScrollComplete}
+                      onForkSession={handleOpenForkDialog}
+                      canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
+                      canvas={
+                        <SessionGroupContentArea
+                          sessionGroupId={sessionGroupId}
+                          activeFilePath={activeFilePath}
+                          openFiles={openFiles}
+                          activeTerminalId={activeTerminal?.id ?? null}
+                          activeTrafficEndpointId={
+                            activeWorkflowTab === "traffic" ? trafficEndpointId : null
+                          }
+                          selectedSession={null}
+                          sessionsByRecency={sessionsByRecency}
+                          canStartNewChat={false}
+                          onStartNewChat={handleNewChat}
+                          defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                          getFileBuffer={getFileBuffer}
+                          setFileBuffer={setFileBuffer}
+                          scrollToEventId={null}
+                          onScrollComplete={handleScrollComplete}
+                          onForkSession={handleOpenForkDialog}
+                          canForkSession={false}
+                          emptyState={<AppSessionPreviewPanel sessionGroupId={sessionGroupId} />}
+                        />
+                      }
+                    />
+                  ) : (
+                    <SessionGroupContentArea
+                      sessionGroupId={sessionGroupId}
+                      activeFilePath={activeFilePath}
+                      openFiles={openFiles}
+                      activeTerminalId={activeTerminal?.id ?? null}
+                      activeTrafficEndpointId={
+                        activeWorkflowTab === "traffic" ? trafficEndpointId : null
+                      }
+                      selectedSession={selectedSession}
+                      sessionsByRecency={sessionsByRecency}
+                      canStartNewChat={
+                        !!selectedSession &&
+                        !selectedSessionIsOptimistic &&
+                        bridgeInteractionAllowed
+                      }
+                      onStartNewChat={handleNewChat}
+                      defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                      getFileBuffer={getFileBuffer}
+                      setFileBuffer={setFileBuffer}
+                      scrollToEventId={scrollToEventId}
+                      onScrollComplete={handleScrollComplete}
+                      onForkSession={handleOpenForkDialog}
+                      canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
+                    />
+                  )}
                 </div>
                 {(showSidebar || showApplicationsSidebar) && !selectedSessionIsOptimistic && (
                   <div

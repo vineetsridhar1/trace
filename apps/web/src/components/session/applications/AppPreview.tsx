@@ -4,6 +4,7 @@ import { gql } from "@urql/core";
 import { client } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
 import { TraceLoader } from "@/components/ui/trace-loader";
+import { cn } from "@/lib/utils";
 
 const CREATE_PREVIEW_MUTATION = gql`
   mutation CreateSessionEndpointPreview($endpointId: ID!) {
@@ -13,7 +14,7 @@ const CREATE_PREVIEW_MUTATION = gql`
   }
 `;
 
-export function AppPreview({ endpointId }: { endpointId: string }) {
+export function AppPreview({ endpointId, fill = false }: { endpointId: string; fill?: boolean }) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Re-minting the preview also refreshes the short-lived auth cookie, so the
@@ -43,7 +44,12 @@ export function AppPreview({ endpointId }: { endpointId: string }) {
 
   if (error) {
     return (
-      <div className="flex aspect-video flex-col items-center justify-center gap-2">
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center gap-2",
+          fill ? "h-full" : "aspect-video",
+        )}
+      >
         <p className="px-2 text-center text-xs text-destructive">{error}</p>
         <Button size="sm" variant="outline" onClick={reload}>
           <RotateCw className="mr-1 size-3" />
@@ -54,13 +60,13 @@ export function AppPreview({ endpointId }: { endpointId: string }) {
   }
   if (!url) {
     return (
-      <div className="flex aspect-video items-center justify-center">
+      <div className={cn("flex items-center justify-center", fill ? "h-full" : "aspect-video")}>
         <TraceLoader size={14} showLabel={false} />
       </div>
     );
   }
   return (
-    <div className="relative">
+    <div className={cn("relative", fill && "h-full")}>
       <Button
         size="icon"
         variant="outline"
@@ -74,7 +80,10 @@ export function AppPreview({ endpointId }: { endpointId: string }) {
         key={reloadNonce}
         src={url}
         title="Live app preview"
-        className="aspect-video w-full rounded-md border border-border bg-background"
+        className={cn(
+          "w-full bg-background",
+          fill ? "h-full border-0" : "aspect-video rounded-md border border-border",
+        )}
         sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
       />
     </div>
