@@ -216,7 +216,7 @@ export function AppPreviewCanvas({
             transition={{ duration: 0.2 }}
             className="absolute inset-0 z-20"
           >
-            <AppPreviewCanvasSkeleton />
+            <AppPreviewCanvasSkeleton message="Loading app…" />
           </motion.div>
         ) : null}
       </AnimatePresence>

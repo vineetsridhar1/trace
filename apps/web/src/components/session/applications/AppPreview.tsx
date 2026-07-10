@@ -83,7 +83,7 @@ export function AppPreview({
     );
   }
   if (!url) {
-    if (desktopViewport) return <AppPreviewCanvasSkeleton />;
+    if (desktopViewport) return <AppPreviewCanvasSkeleton message="Connecting to preview…" />;
     return (
       <div className={cn("flex items-center justify-center", fill ? "h-full" : "aspect-video")}>
         <TraceLoader size={14} showLabel={false} />
