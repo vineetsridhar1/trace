@@ -440,7 +440,7 @@ describe("Slack routes", () => {
         channel_type: "channel",
         ts: "1710000001.000100",
         thread_ts: "1710000000.000100",
-        text: "can you keep going?",
+        text: "<@BTRACE> can you keep going?",
       },
     });
 
