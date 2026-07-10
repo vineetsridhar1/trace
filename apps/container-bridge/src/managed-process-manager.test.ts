@@ -159,6 +159,41 @@ describe("ManagedProcessManager", () => {
     await waitForPortAvailable(port);
   });
 
+  it("restart reuses the process id without the old child clobbering the new one", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>
+      messages.push(message),
+    );
+    const port = await getFreePort();
+    const startProcess = () =>
+      manager.start({
+        requestId: "start-1",
+        processInstanceId: "process-1",
+        sessionGroupId: "group-1",
+        sessionId: "session-1",
+        command: `node -e "require('http').createServer((req,res)=>res.end('ok')).listen(${port}, '127.0.0.1')"`,
+        cwd: ".",
+        ports: [port],
+      });
+
+    startProcess();
+    await waitFor(messages, (message) => message.type === "app_process_started");
+    await waitForHttp(port);
+
+    // Restart under the same processInstanceId. The old child is terminated
+    // before the new one spawns; its exit must not be reported (it would mark
+    // the freshly started process as exited on the server).
+    messages.length = 0;
+    startProcess();
+    await waitFor(messages, (message) => message.type === "app_process_started");
+    await waitForHttp(port);
+    expect(messages.some((message) => message.type === "app_process_exited")).toBe(false);
+
+    manager.stop("process-1");
+    await waitFor(messages, (message) => message.type === "app_process_exited");
+    await waitForPortAvailable(port);
+  });
+
   it("proxies HTTP requests to localhost ports", async () => {
     const messages: BridgeMessage[] = [];
     const manager = new ManagedProcessManager(new Map(), (message) => messages.push(message));

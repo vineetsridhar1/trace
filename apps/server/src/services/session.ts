@@ -3744,10 +3744,14 @@ export class SessionService {
 
     // Only provision the runtime immediately when a prompt is provided.
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
-    // until the user sends their first message.
+    // until the user sends their first message. Checkpoint restores are the
+    // exception: they carry no prompt but must provision now so the workspace
+    // materializes at the pinned commit SHA — deferring to the first message
+    // loses the SHA (later provisioning paths clone HEAD) and strands the
+    // restored session with no runtime in the meantime.
     if (
       needsRuntimeProvisioning &&
-      (input.prompt || input.provisionWithoutPrompt) &&
+      (input.prompt || input.provisionWithoutPrompt || input.restoreCheckpointId) &&
       selectedRuntimeAccessAllowed &&
       !deferRuntimeSelection &&
       input.deferInitialRun !== true
@@ -6441,6 +6445,7 @@ export class SessionService {
           "app",
           session.organizationId,
           session.createdById,
+          { asSystem: true },
         );
       } catch (error) {
         await eventService.create({

@@ -197,8 +197,11 @@ const STOP_PROCESS_MUTATION = gql`
 `;
 
 const ENABLE_ENDPOINT_MUTATION = gql`
-  mutation EnableSessionEndpointForwarding($endpointId: ID!) {
-    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: public) {
+  mutation EnableSessionEndpointForwarding(
+    $endpointId: ID!
+    $accessMode: SessionEndpointAccessMode!
+  ) {
+    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: $accessMode) {
       id
     }
   }
@@ -275,11 +278,11 @@ export function SessionApplicationsPanel({
         (existing ? { ...existing, ...group } : group) as SessionGroupEntity,
       );
     }
-    const repo = group?.repo;
-    if (repo?.id) {
-      const existing = useEntityStore.getState().repos[repo.id];
-      upsert("repos", repo.id, (existing ? { ...existing, ...repo } : repo) as Repo);
-    }
+    // The applicationConfig rides on the session-group entity's `repo` field
+    // (read as the `config` fallback below), so we deliberately do NOT upsert
+    // into the generic `repos` table — for app sessions that repo is the hidden
+    // managed repo, and leaking it there surfaces a blank row in Settings →
+    // Repositories and the channel repo picker.
     if (result.data?.sessionApplicationProcesses) {
       upsertMany(
         "sessionApplicationProcesses",
@@ -809,7 +812,16 @@ export function SessionApplicationsPanel({
                                         endpointEnabled
                                           ? DISABLE_ENDPOINT_MUTATION
                                           : ENABLE_ENDPOINT_MUTATION,
-                                        { endpointId: endpoint.id },
+                                        endpointEnabled
+                                          ? { endpointId: endpoint.id }
+                                          : {
+                                              endpointId: endpoint.id,
+                                              // App sessions start private so the
+                                              // Publish action controls going public;
+                                              // other cloud sessions keep the direct
+                                              // public-forward behavior.
+                                              accessMode: groupKind === "app" ? "private" : "public",
+                                            },
                                       )
                                       .toPromise();
                                   })

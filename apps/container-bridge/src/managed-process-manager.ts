@@ -36,7 +36,10 @@ function safeRelativeCwd(baseWorkdir: string, cwd: string): string {
 }
 
 function childEnv(env?: Record<string, string>): NodeJS.ProcessEnv {
-  return { ...process.env, ...(env ?? {}) };
+  // The runtime token authenticates the bridge itself; user app code (which may
+  // be served publicly) must never inherit it.
+  const { TRACE_RUNTIME_TOKEN: _traceRuntimeToken, ...bridgeEnv } = process.env;
+  return { ...bridgeEnv, ...(env ?? {}) };
 }
 
 function capChunk(data: Buffer): string {
@@ -53,6 +56,21 @@ function signalProcessTree(child: ChildProcessWithoutNullStreams, signal: NodeJS
   } catch {
     child.kill(signal);
   }
+}
+
+// SIGTERM a child's process group, escalate to SIGKILL after a grace period,
+// and resolve once it has actually exited so a replacement can spawn cleanly.
+function terminateChild(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (child.exitCode !== null || child.killed) return Promise.resolve();
+  return new Promise((resolve) => {
+    const kill = setTimeout(() => signalProcessTree(child, "SIGKILL"), 5_000);
+    kill.unref();
+    child.once("exit", () => {
+      clearTimeout(kill);
+      resolve();
+    });
+    signalProcessTree(child, "SIGTERM");
+  });
 }
 
 function waitForListeningPort(
@@ -110,6 +128,26 @@ export class ManagedProcessManager {
     env?: Record<string, string>;
     ports?: number[];
   }) {
+    void this.startReplacing(options);
+  }
+
+  /**
+   * The server reuses one processInstanceId per configured process, so a
+   * restart re-enters here while the previous child may still be running. Take
+   * ownership of the old entry first (its exit must not clobber the new
+   * process's state) and wait for it to die before spawning, so the new child
+   * never races the old one for the configured ports.
+   */
+  private async startReplacing(options: {
+    requestId: string;
+    processInstanceId: string;
+    sessionGroupId: string;
+    sessionId: string;
+    command: string;
+    cwd: string;
+    env?: Record<string, string>;
+    ports?: number[];
+  }): Promise<void> {
     const baseWorkdir = this.sessionWorkdirs.get(options.sessionId);
     if (!baseWorkdir) {
       this.send({
@@ -121,7 +159,14 @@ export class ManagedProcessManager {
       return;
     }
     try {
-      this.stop(options.processInstanceId);
+      const previous = this.processes.get(options.processInstanceId);
+      if (previous) {
+        // Remove the entry before killing so the old child's exit handler
+        // (guarded by an identity check) stays silent — the server already
+        // accounted for this process when it requested the replacement.
+        this.processes.delete(options.processInstanceId);
+        await terminateChild(previous.child);
+      }
       const cwd = safeRelativeCwd(baseWorkdir, options.cwd);
       const child = spawn(options.command, {
         cwd,
@@ -153,6 +198,7 @@ export class ManagedProcessManager {
         });
       });
       child.on("error", (error) => {
+        if (this.processes.get(options.processInstanceId)?.child !== child) return;
         this.processes.delete(options.processInstanceId);
         this.send({
           type: "app_process_error",
@@ -162,6 +208,7 @@ export class ManagedProcessManager {
         });
       });
       child.on("exit", (exitCode, signal) => {
+        if (this.processes.get(options.processInstanceId)?.child !== child) return;
         this.processes.delete(options.processInstanceId);
         this.send({
           type: "app_process_exited",
@@ -172,7 +219,7 @@ export class ManagedProcessManager {
       });
       void waitForListeningPort(child, options.ports ?? [])
         .then(() => {
-          if (!this.processes.has(options.processInstanceId)) return;
+          if (this.processes.get(options.processInstanceId)?.child !== child) return;
           this.send({
             type: "app_process_started",
             requestId: options.requestId,
@@ -181,7 +228,7 @@ export class ManagedProcessManager {
           });
         })
         .catch((error: unknown) => {
-          if (!this.processes.has(options.processInstanceId)) return;
+          if (this.processes.get(options.processInstanceId)?.child !== child) return;
           this.stop(options.processInstanceId);
           this.send({
             type: "app_process_error",

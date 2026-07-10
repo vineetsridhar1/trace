@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { RotateCw } from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "@/lib/urql";
+import { Button } from "@/components/ui/button";
 import { TraceLoader } from "@/components/ui/trace-loader";
 
 const CREATE_PREVIEW_MUTATION = gql`
@@ -14,6 +16,15 @@ const CREATE_PREVIEW_MUTATION = gql`
 export function AppPreview({ endpointId }: { endpointId: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Re-minting the preview also refreshes the short-lived auth cookie, so the
+  // reload button doubles as re-auth when the preview session expires.
+  const [reloadNonce, setReloadNonce] = useState(0);
+
+  const reload = useCallback(() => {
+    setUrl(null);
+    setError(null);
+    setReloadNonce((nonce) => nonce + 1);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -28,9 +39,19 @@ export function AppPreview({ endpointId }: { endpointId: string }) {
     return () => {
       active = false;
     };
-  }, [endpointId]);
+  }, [endpointId, reloadNonce]);
 
-  if (error) return <p className="px-2 py-3 text-xs text-destructive">{error}</p>;
+  if (error) {
+    return (
+      <div className="flex aspect-video flex-col items-center justify-center gap-2">
+        <p className="px-2 text-center text-xs text-destructive">{error}</p>
+        <Button size="sm" variant="outline" onClick={reload}>
+          <RotateCw className="mr-1 size-3" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
   if (!url) {
     return (
       <div className="flex aspect-video items-center justify-center">
@@ -39,11 +60,23 @@ export function AppPreview({ endpointId }: { endpointId: string }) {
     );
   }
   return (
-    <iframe
-      src={url}
-      title="Live app preview"
-      className="aspect-video w-full rounded-md border border-border bg-background"
-      sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
-    />
+    <div className="relative">
+      <Button
+        size="icon"
+        variant="outline"
+        onClick={reload}
+        title="Reload preview"
+        className="absolute right-2 top-2 z-10 size-7 opacity-80 hover:opacity-100"
+      >
+        <RotateCw className="size-3" />
+      </Button>
+      <iframe
+        key={reloadNonce}
+        src={url}
+        title="Live app preview"
+        className="aspect-video w-full rounded-md border border-border bg-background"
+        sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
+      />
+    </div>
   );
 }

@@ -2248,13 +2248,15 @@ describe("SessionService", () => {
         }),
       );
 
+      // No prompt: the Restore action in the UI sends only restoreCheckpointId.
+      // The restore must still provision immediately from the pinned SHA rather
+      // than deferring (which would later clone HEAD and lose the checkpoint).
       const result = await service.start({
         organizationId: "org-1",
         createdById: "user-1",
         tool: "claude_code",
         hosting: "cloud",
         restoreCheckpointId: "checkpoint-1",
-        prompt: "restore session",
       } as unknown as StartSessionServiceInput);
 
       expect(result.id).toBe("session-restored");

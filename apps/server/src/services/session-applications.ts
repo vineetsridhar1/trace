@@ -280,14 +280,27 @@ export class SessionApplicationService {
     appConfigId: string,
     organizationId: string,
     userId: string,
+    options?: { asSystem?: boolean },
   ) {
-    const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId);
+    const { group } = await this.resolveCloudRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      options,
+    );
     const app = this.getApplication(group, appConfigId);
     return Promise.all(
       app.processes
         .filter((process) => process.required)
         .map((process) =>
-          this.startProcess(sessionGroupId, appConfigId, process.id, organizationId, userId),
+          this.startProcess(
+            sessionGroupId,
+            appConfigId,
+            process.id,
+            organizationId,
+            userId,
+            options,
+          ),
         ),
     );
   }
@@ -313,11 +326,13 @@ export class SessionApplicationService {
     processConfigId: string,
     organizationId: string,
     userId: string,
+    options?: { asSystem?: boolean },
   ) {
     const { group, sessionId, runtimeId } = await this.resolveCloudRuntime(
       sessionGroupId,
       organizationId,
       userId,
+      options,
     );
     const app = this.getApplication(group, appConfigId);
     const processConfig = app.processes.find((candidate) => candidate.id === processConfigId);
@@ -876,15 +891,33 @@ export class SessionApplicationService {
         bridgeProcessId: null,
       },
     });
-    await prisma.sessionEndpoint.updateMany({
+    // Disable this process's endpoints one row at a time and emit a
+    // forwarding_disabled event for each, so every client's store reconciles
+    // the endpoint to disabled. A bulk updateMany would flip the DB silently
+    // and leave viewers rendering the preview against a dead (503) endpoint.
+    const affectedEndpoints = await prisma.sessionEndpoint.findMany({
       where: {
         sessionGroupId: process.sessionGroupId,
         appConfigId: process.appConfigId,
         processConfigId: process.processConfigId,
         status: "enabled",
       },
-      data: { status: "disabled", disabledAt: new Date(), currentRuntimeInstanceId: null },
     });
+    for (const existing of affectedEndpoints) {
+      const endpoint = await prisma.sessionEndpoint.update({
+        where: { id: existing.id },
+        data: { status: "disabled", disabledAt: new Date(), currentRuntimeInstanceId: null },
+      });
+      await eventService.create({
+        organizationId: process.organizationId,
+        scopeType: "session",
+        scopeId: process.sessionGroupId,
+        eventType: "session_endpoint_forwarding_disabled",
+        payload: { endpoint: publicEndpoint(endpoint) },
+        actorType: "system",
+        actorId: "bridge",
+      });
+    }
     await eventService.create({
       organizationId: process.organizationId,
       scopeType: "session",
@@ -1094,8 +1127,9 @@ export class SessionApplicationService {
     sessionGroupId: string,
     organizationId: string,
     userId: string | null | undefined,
+    options?: { asSystem?: boolean },
   ) {
-    if (!userId) throw new AuthenticationError();
+    if (!options?.asSystem && !userId) throw new AuthenticationError();
     const group = await prisma.sessionGroup.findFirstOrThrow({
       where: { id: sessionGroupId, organizationId },
       select: {
@@ -1113,7 +1147,12 @@ export class SessionApplicationService {
         },
       },
     });
-    await this.assertCanManage(group.id, organizationId, userId, group);
+    // The runtime auto-starts the app on workspace_ready as a system action, so
+    // the initiating session need not be owned by an org admin. User-initiated
+    // start/stop still runs the owner-or-admin manage check.
+    if (!options?.asSystem) {
+      await this.assertCanManage(group.id, organizationId, userId!, group);
+    }
     if (group.kind !== "app" && (!group.repoId || !group.repo)) {
       throw new ValidationError("Session group does not have a repo");
     }

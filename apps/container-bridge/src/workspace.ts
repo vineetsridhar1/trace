@@ -374,11 +374,14 @@ export async function createAppWorkspace({
 
   if (!fs.existsSync(`${workdir}/.git`)) {
     await execFileAsync("git", ["init", "-b", defaultBranch], { cwd: workdir });
-    await execFileAsync("git", ["config", "user.name", "Trace App Agent"], { cwd: workdir });
-    await execFileAsync("git", ["config", "user.email", "app-agent@trace.local"], {
-      cwd: workdir,
-    });
   }
+  // Configure identity on every prepare, not just init: a checkpoint restore
+  // reaches here via clone (no init), and the runtime image ships no global
+  // git config, so commits would otherwise fail with "Author identity unknown".
+  await execFileAsync("git", ["config", "user.name", "Trace App Agent"], { cwd: workdir });
+  await execFileAsync("git", ["config", "user.email", "app-agent@trace.local"], {
+    cwd: workdir,
+  });
   const hasOrigin = await execFileAsync("git", ["remote", "get-url", "origin"], { cwd: workdir })
     .then(() => true)
     .catch(() => false);

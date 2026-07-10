@@ -17,6 +17,7 @@ import type { Channel, Chat } from "@trace/gql";
 import type { SessionGroupEntity } from "@trace/client-core";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
+import { NewAppSessionDialog } from "./NewAppSessionDialog";
 import { useUIStore } from "../../stores/ui";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { useCommandPaletteStore } from "../../stores/command-palette";
@@ -27,7 +28,7 @@ import {
   type RegisteredCommand,
 } from "../../stores/command-registry";
 import { features } from "../../lib/features";
-import { createAppSession, createQuickSession } from "../../lib/create-quick-session";
+import { createQuickSession } from "../../lib/create-quick-session";
 import { isLocalMode } from "../../lib/runtime-mode";
 
 interface PaletteItem {
@@ -59,18 +60,21 @@ export function GlobalCommandPalette() {
   const setOpen = useCommandPaletteStore((s) => s.setPaletteOpen);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent
-        showCloseButton={false}
-        className="max-h-[calc(100dvh-4rem)] w-[min(92vw,640px)] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#111111] p-0 shadow-2xl sm:max-w-[640px]"
-      >
-        <DialogTitle className="sr-only">Command palette</DialogTitle>
-        <DialogDescription className="sr-only">
-          Jump to a channel, conversation, or session, or run a quick action.
-        </DialogDescription>
-        {open && <CommandPaletteBody onClose={() => setOpen(false)} />}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent
+          showCloseButton={false}
+          className="max-h-[calc(100dvh-4rem)] w-[min(92vw,640px)] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#111111] p-0 shadow-2xl sm:max-w-[640px]"
+        >
+          <DialogTitle className="sr-only">Command palette</DialogTitle>
+          <DialogDescription className="sr-only">
+            Jump to a channel, conversation, or session, or run a quick action.
+          </DialogDescription>
+          {open && <CommandPaletteBody onClose={() => setOpen(false)} />}
+        </DialogContent>
+      </Dialog>
+      <NewAppSessionDialog />
+    </>
   );
 }
 
@@ -203,8 +207,8 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       search: "new app session full stack create vibe code",
       icon: <AppWindow size={16} />,
       onSelect: () => {
-        const prompt = window.prompt("What full-stack app should Trace build?");
-        if (prompt) void createAppSession(prompt);
+        onClose();
+        useCommandPaletteStore.getState().setNewAppSessionOpen(true);
       },
     });
 

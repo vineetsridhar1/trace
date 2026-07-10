@@ -437,12 +437,18 @@ export function SessionGroupDetailView({
     }
   }, [showApplicationsSidebar, showApplicationsSidebarTab]);
 
+  // Auto-open the applications panel once when entering an app session, but
+  // don't fight the user afterward — otherwise opening the git/checkpoints
+  // sidebar (which closes applications) instantly flips back and the restore
+  // UI becomes unreachable.
+  const autoOpenedAppPanelRef = useRef<string | null>(null);
   useEffect(() => {
-    if (groupKind === "app" && showApplicationsSidebarTab && !showApplicationsSidebar) {
-      setShowApplicationsSidebar(true);
-      setShowSidebar(false);
-    }
-  }, [groupKind, showApplicationsSidebar, showApplicationsSidebarTab]);
+    if (groupKind !== "app" || !showApplicationsSidebarTab) return;
+    if (autoOpenedAppPanelRef.current === sessionGroupId) return;
+    autoOpenedAppPanelRef.current = sessionGroupId;
+    setShowApplicationsSidebar(true);
+    setShowSidebar(false);
+  }, [groupKind, sessionGroupId, showApplicationsSidebarTab]);
 
   const selectedSessionStatus = selectedSession
     ? getDisplaySessionStatus(
