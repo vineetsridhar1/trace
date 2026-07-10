@@ -2,10 +2,11 @@ import { ExternalLink } from "lucide-react";
 
 export function AppPreviewFrameControls({ url, status }: { url: string; status: string }) {
   return (
-    <div
-      className="absolute -left-px -top-7 z-10 flex h-7 items-center gap-1.5 bg-background pl-2.5 pr-5 text-[11px] font-medium capitalize text-foreground shadow-sm"
-      style={{ clipPath: "polygon(0 0, calc(100% - 12px) 0, 100% 100%, 0 100%)" }}
-    >
+    <div className="absolute bottom-full left-0 z-10 flex h-7 items-center gap-1.5 rounded-t-lg bg-background pl-2.5 pr-2 text-[11px] font-medium capitalize text-foreground drop-shadow-sm">
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-0 -right-2 -z-10 w-5 origin-bottom-left skew-x-[18deg] rounded-tr-xl bg-background"
+      />
       <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
       {status}
       {status === "running" ? (
