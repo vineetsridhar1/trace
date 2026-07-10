@@ -376,7 +376,7 @@ export function SessionInputOptions({
   const ModeIcon = modeConfig.icon;
 
   return (
-    <div className="mt-2 flex items-center gap-1 overflow-hidden whitespace-nowrap">
+    <div className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-1">
       <button
         type="button"
         onClick={() => onModeChange(mode)}
