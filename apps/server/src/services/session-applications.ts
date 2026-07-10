@@ -235,20 +235,28 @@ export class SessionApplicationService {
     const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId);
     const app = this.getApplication(group, appConfigId);
     return Promise.all(
-      app.processes
-        .filter((process) => process.required)
-        .map((process) =>
-          this.startProcess(sessionGroupId, appConfigId, process.id, organizationId, userId),
-        ),
+      app.processes.map((process) =>
+        this.startProcess(sessionGroupId, appConfigId, process.id, organizationId, userId),
+      ),
     );
   }
 
   async stopApplication(sessionGroupId: string, appConfigId: string, organizationId: string, userId: string) {
     const { group } = await this.resolveCloudRuntime(sessionGroupId, organizationId, userId);
     const app = this.getApplication(group, appConfigId);
+    const processConfigIds = app.processes.map((process) => process.id);
+    const existingProcesses = await prisma.sessionApplicationProcess.findMany({
+      where: {
+        sessionGroupId,
+        appConfigId,
+        processConfigId: { in: processConfigIds },
+        status: { in: ["starting", "running", "stopping"] },
+      },
+      select: { processConfigId: true },
+    });
     return Promise.all(
-      app.processes.map((process) =>
-        this.stopProcess(sessionGroupId, appConfigId, process.id, organizationId, userId),
+      existingProcesses.map((process) =>
+        this.stopProcess(sessionGroupId, appConfigId, process.processConfigId, organizationId, userId),
       ),
     );
   }
