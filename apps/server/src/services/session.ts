@@ -66,6 +66,7 @@ import {
   type GitHubRepoRef,
 } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
+import { managedGitService } from "./managed-git.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -877,7 +878,7 @@ If the user asks you to stop auto-saving or disable auto-save, stop doing this f
 </system-instruction>`;
 
 const APP_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace app session. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Next.js/Tailwind starter as the source of truth. Add routes, API handlers, persistence seams, and UI in project files. Preserve data-trace-source attributes when adding inspectable UI elements. Run the dev server on port 3000 with host 0.0.0.0, keep logs useful, and make meaningful checkpoints when the app reaches a working state. Sharing the live app is a valid final outcome.
+This is a Trace app session in its own isolated cloud runtime. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Next.js/Tailwind/shadcn-compatible starter as the source of truth. Add routes, API handlers, persistence, and UI in project files. You may install npm packages, use sudo to install OS packages, and run backing services; Redis is preinstalled. Use supplied database environment variables when present, and keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. Run the dev server on port 3000 with host 0.0.0.0, keep logs useful, and commit and push meaningful checkpoints to the configured managed origin when the app reaches a working state. Sharing the live app is a valid final outcome.
 </system-instruction>`;
 
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
@@ -892,7 +893,7 @@ function appendPromptInstructions(
   let result = prompt + TITLE_INSTRUCTION;
   result += BACKGROUND_WORK_INSTRUCTION;
   if (sessionGroupKind === "app") result += APP_SESSION_INSTRUCTION;
-  if (hasRepo) result += BRANCH_INSTRUCTION;
+  if (hasRepo && sessionGroupKind !== "app") result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
 }
@@ -1281,6 +1282,29 @@ export class SessionService {
         sessionId: params.sessionId,
         sessionGroupId: params.sessionGroupId ?? undefined,
         sessionGroupKind: params.sessionGroupKind ?? undefined,
+        prepareAppGit:
+          params.sessionGroupKind === "app" && params.repo?.remoteUrl
+            ? async (runtimeInstanceId) => {
+                const access = await managedGitService.mintAccessToken({
+                  organizationId: params.organizationId,
+                  repoId: params.repo!.id,
+                  scope: "runtime",
+                  sessionId: params.sessionId,
+                  subject: runtimeInstanceId,
+                  capabilities: ["read", "write"],
+                  actorType: "user",
+                  actorId: params.createdById,
+                });
+                const authenticatedUrl = new URL(params.repo!.remoteUrl!);
+                authenticatedUrl.username = "trace";
+                authenticatedUrl.password = access.token;
+                return {
+                  repoId: params.repo!.id,
+                  repoRemoteUrl: authenticatedUrl.toString(),
+                  defaultBranch: params.repo!.defaultBranch,
+                };
+              }
+            : undefined,
         slug: slug ?? undefined,
         preserveBranchName,
         hosting: params.hosting as "cloud" | "local",
@@ -1289,14 +1313,17 @@ export class SessionService {
         tool: params.tool,
         model: params.model ?? undefined,
         reasoningEffort: params.reasoningEffort ?? undefined,
-        repo: params.repo
-          ? {
-              id: params.repo.id,
-              name: params.repo.name,
-              remoteUrl: params.repo.remoteUrl,
-              defaultBranch: params.repo.defaultBranch,
-            }
-          : null,
+        repo:
+          params.sessionGroupKind === "app"
+            ? null
+            : params.repo
+              ? {
+                  id: params.repo.id,
+                  name: params.repo.name,
+                  remoteUrl: params.repo.remoteUrl,
+                  defaultBranch: params.repo.defaultBranch,
+                }
+              : null,
         branch: params.branch ?? undefined,
         checkpointSha: params.checkpointSha ?? undefined,
         createdById: params.createdById,
@@ -3078,14 +3105,14 @@ export class SessionService {
       throw new Error("Source session repo does not match the channel's linked repo");
     }
 
-    const resolvedRepoId =
+    let resolvedRepoId =
       authoritativeChannelRepoId ??
       input.repoId ??
       seedGroup?.repoId ??
       sourceSession?.repoId ??
       restoreCheckpoint?.repoId ??
       undefined;
-    const resolvedRepo = resolvedRepoId
+    let resolvedRepo = resolvedRepoId
       ? await prisma.repo.findFirst({
           where: { id: resolvedRepoId, organizationId: input.organizationId },
           select: { id: true, remoteUrl: true },
@@ -3485,6 +3512,17 @@ export class SessionService {
       ? validateReasoningEffortForTool(tool, input.reasoningEffort)
       : (resolveStoredReasoningEffortForTool(tool, userDefaults?.defaultSessionReasoningEffort) ??
         getDefaultReasoningEffort(tool));
+
+    if (resolvedKind === "app" && !resolvedRepoId) {
+      const managedRepo = await managedGitService.createManagedRepo({
+        organizationId: input.organizationId,
+        name: `${name} source`,
+        actorType: input.actorType ?? "user",
+        actorId: input.createdById,
+      });
+      resolvedRepoId = managedRepo.id;
+      resolvedRepo = managedRepo;
+    }
 
     assertCloudRepoRemoteAvailable(hosting, resolvedRepo);
 
@@ -6379,6 +6417,31 @@ export class SessionService {
         console.warn(
           `[session] skipping setup script for ${sessionId}: no bound runtime to run it on`,
         );
+      }
+    }
+
+    if (session.sessionGroup?.kind === "app" && session.sessionGroupId) {
+      try {
+        await sessionApplicationService.startApplication(
+          session.sessionGroupId,
+          "app",
+          session.organizationId,
+          session.createdById,
+        );
+      } catch (error) {
+        await eventService.create({
+          organizationId: session.organizationId,
+          scopeType: "session",
+          scopeId: sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "app_preview_start_failed",
+            sessionGroupId: session.sessionGroupId,
+            error: error instanceof Error ? error.message : String(error),
+          } as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        });
       }
     }
 

@@ -120,6 +120,13 @@ vi.mock("./org-secret.js", () => ({
   },
 }));
 
+vi.mock("./managed-git.js", () => ({
+  managedGitService: {
+    createManagedRepo: vi.fn(),
+    mintAccessToken: vi.fn(),
+  },
+}));
+
 vi.mock("./github-repo.js", async () => {
   const actual = await vi.importActual<typeof import("./github-repo.js")>("./github-repo.js");
   return {
@@ -144,6 +151,7 @@ import { inboxService } from "./inbox.js";
 import { apiTokenService } from "./api-token.js";
 import { GitHubApiError, githubRepoService, parseGitHubRepo } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
+import { managedGitService } from "./managed-git.js";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
@@ -172,6 +180,7 @@ const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
 const inboxServiceMock = inboxService as unknown as MockedDeep<typeof inboxService>;
 const apiTokenServiceMock = apiTokenService as unknown as MockedDeep<typeof apiTokenService>;
 const orgSecretServiceMock = orgSecretService as unknown as MockedDeep<typeof orgSecretService>;
+const managedGitServiceMock = managedGitService as unknown as MockedDeep<typeof managedGitService>;
 const githubRepoServiceMock = githubRepoService as unknown as MockedDeep<typeof githubRepoService>;
 const parseGitHubRepoMock = vi.mocked(parseGitHubRepo);
 const getDefaultModelMock = vi.mocked(getDefaultModel);
@@ -344,6 +353,19 @@ describe("SessionService", () => {
     sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValue(makeGitSyncStatus());
     apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "gh-token" });
     orgSecretServiceMock.getDecryptedValueByName.mockResolvedValue(null);
+    managedGitServiceMock.createManagedRepo.mockResolvedValue({
+      id: "managed-repo-1",
+      name: "App source",
+      provider: "managed",
+      remoteUrl: "https://trace.test/git/org-1/managed-repo-1.git",
+      defaultBranch: "main",
+      setupConfig: {},
+      organizationId: "org-1",
+      webhookId: null,
+      webhookSecret: null,
+      createdAt: new Date("2026-07-09T00:00:00.000Z"),
+      updatedAt: new Date("2026-07-09T00:00:00.000Z"),
+    });
     githubRepoServiceMock.listFiles.mockResolvedValue([]);
     githubRepoServiceMock.listFileTree.mockResolvedValue({ paths: [], truncated: false });
     githubRepoServiceMock.listDirectoryEntries.mockResolvedValue([]);
@@ -697,6 +719,99 @@ describe("SessionService", () => {
   });
 
   describe("start", () => {
+    it("rejects app sessions linked to a user repo", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "app",
+          repoId: "repo-1",
+          hosting: "cloud",
+          prompt: "Build a CRM",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("App sessions cannot start from a linked repo");
+    });
+
+    it("rejects local app sessions", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "app",
+          hosting: "local",
+          prompt: "Build a CRM",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("App sessions require cloud hosting");
+    });
+
+    it("rejects app sessions without an initial prompt", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "app",
+          hosting: "cloud",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("App sessions require an initial prompt");
+    });
+
+    it("creates an app session with a hidden managed repo and cloud runtime", async () => {
+      const repo = await managedGitServiceMock.createManagedRepo({
+        organizationId: "org-1",
+        name: "App source",
+        actorType: "user",
+        actorId: "user-1",
+      });
+      managedGitServiceMock.createManagedRepo.mockClear();
+      const sessionGroup = makeSessionGroup({
+        kind: "app",
+        channelId: null,
+        channel: null,
+        repoId: repo.id,
+        repo,
+        slug: null,
+        branch: null,
+      });
+      const session = makeSession({
+        hosting: "cloud",
+        channelId: null,
+        channel: null,
+        repoId: repo.id,
+        repo,
+        sessionGroup,
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        kind: "app",
+        hosting: "cloud",
+        prompt: "Build a CRM",
+      } as unknown as StartSessionServiceInput);
+      await Promise.resolve();
+
+      expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: "org-1", actorId: "user-1" }),
+      );
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ kind: "app", repoId: "managed-repo-1" }),
+        }),
+      );
+      await vi.waitFor(() => {
+        expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sessionGroupKind: "app",
+            hosting: "cloud",
+            prepareAppGit: expect.any(Function),
+            repo: null,
+          }),
+        );
+      });
+    });
+
     it("rejects cloud sessions for repos without remote urls", async () => {
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1", remoteUrl: null });
       prismaMock.channel.findUnique.mockResolvedValueOnce({
@@ -4057,7 +4172,10 @@ describe("SessionService", () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
       prismaMock.session.update.mockResolvedValue(session);
       sessionRouterMock.send.mockReturnValue("delivered");
-      sessionRouterMock.getRuntimeForSession.mockReturnValue({ id: "runtime-a", label: "Laptop A" });
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
 
       await service.sendMessage({
         sessionId: "session-1",
@@ -4094,7 +4212,10 @@ describe("SessionService", () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
       prismaMock.session.update.mockResolvedValue(session);
       sessionRouterMock.send.mockReturnValue("delivered");
-      sessionRouterMock.getRuntimeForSession.mockReturnValue({ id: "runtime-a", label: "Laptop A" });
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
 
       await service.sendMessage({
         sessionId: "session-1",
@@ -4128,7 +4249,10 @@ describe("SessionService", () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
       prismaMock.session.update.mockResolvedValue(session);
       sessionRouterMock.send.mockReturnValue("delivered");
-      sessionRouterMock.getRuntimeForSession.mockReturnValue({ id: "runtime-a", label: "Laptop A" });
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
 
       await service.sendMessage({
         sessionId: "session-1",

@@ -131,6 +131,11 @@ export interface SessionAdapterCreateOptions {
   /** Session group ID — used to key worktrees so all sessions in a group share the same workspace. */
   sessionGroupId?: string;
   sessionGroupKind?: "coding" | "design" | "app";
+  prepareAppGit?: (runtimeInstanceId: string) => Promise<{
+    repoId: string;
+    repoRemoteUrl: string;
+    defaultBranch: string;
+  }>;
   /** Animal slug for the worktree. If set, reuses the existing slug. */
   slug?: string;
   /** Preserve the persisted branch name instead of generating trace/{slug}. */
@@ -2095,7 +2100,13 @@ export class SessionRouter {
           await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
         }
 
-        if (options.sessionGroupKind === "app" && !options.repo) {
+        if (options.sessionGroupKind === "app") {
+          const runtimeInstanceId = startResult.runtimeInstanceId;
+          if (!runtimeInstanceId || !options.prepareAppGit) {
+            options.onFailed("App managed git credentials are unavailable");
+            return;
+          }
+          const appGit = await options.prepareAppGit(runtimeInstanceId);
           const result = this.send(
             options.sessionId,
             {
@@ -2103,6 +2114,8 @@ export class SessionRouter {
               sessionId: options.sessionId,
               sessionGroupId: options.sessionGroupId,
               slug: options.slug,
+              checkpointSha: options.checkpointSha,
+              ...appGit,
             },
             { expectedHomeRuntimeId: startResult.runtimeInstanceId },
           );

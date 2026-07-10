@@ -243,7 +243,12 @@ describe("workspace repo setup", () => {
     mocks.readdirSync.mockReturnValue([]);
 
     await expect(
-      createAppWorkspace({ sessionId: "session-1", sessionGroupId: "group-1" }),
+      createAppWorkspace({
+        sessionId: "session-1",
+        sessionGroupId: "group-1",
+        repoRemoteUrl: "https://trace:token@example.test/git/org/repo.git",
+        defaultBranch: "main",
+      }),
     ).resolves.toEqual({ workdir: "/workspaces/group-1", slug: "group-1" });
 
     expect(mocks.mkdirSync).toHaveBeenCalledWith("/workspaces", { recursive: true });
@@ -252,6 +257,38 @@ describe("workspace repo setup", () => {
       "/workspaces/group-1/.trace/app-starter.json",
       expect.stringContaining('"kind":"nextjs"'),
     );
+  });
+
+  it("restores an app workspace from the managed checkpoint commit", async () => {
+    mocks.existsSync.mockReturnValue(false);
+    mocks.readdirSync.mockReturnValue([]);
+    const checkpointSha = "a".repeat(40);
+
+    await createAppWorkspace({
+      sessionId: "session-1",
+      sessionGroupId: "restored-group",
+      repoRemoteUrl: "https://trace:token@example.test/git/org/repo.git",
+      defaultBranch: "main",
+      checkpointSha,
+    });
+
+    expect(mocks.execFile).toHaveBeenCalledWith(
+      "git",
+      [
+        "clone",
+        "--no-checkout",
+        "https://trace:token@example.test/git/org/repo.git",
+        "/workspaces/restored-group",
+      ],
+      expect.any(Function),
+    );
+    expect(mocks.execFile).toHaveBeenCalledWith(
+      "git",
+      ["checkout", "-B", "main", checkpointSha],
+      { cwd: "/workspaces/restored-group" },
+      expect.any(Function),
+    );
+    expect(mocks.writeFileSync).not.toHaveBeenCalled();
   });
 
   it("creates the requested branch from the default branch when clone reports it missing", async () => {

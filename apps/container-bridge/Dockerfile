@@ -2,7 +2,7 @@ FROM node:22-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git ca-certificates curl openssh-client \
-    python3 make g++ gpg && \
+    python3 make g++ gpg sudo redis-server && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
@@ -12,7 +12,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install coding tool CLIs
-RUN npm install -g @anthropic-ai/claude-code @openai/codex @earendil-works/pi-coding-agent
+RUN npm install -g pnpm@10.7.0 @anthropic-ai/claude-code @openai/codex @earendil-works/pi-coding-agent
 
 WORKDIR /app
 
@@ -30,7 +30,9 @@ COPY apps/container-bridge/dist/ ./dist/
 # Create non-root user — Claude Code refuses --dangerously-skip-permissions as root
 RUN useradd -m -s /bin/bash coder && \
     mkdir -p /workspace /repos /workspaces /home/coder/.npm-global && \
-    chown -R coder:coder /workspace /repos /workspaces /app /home/coder/.npm-global
+    chown -R coder:coder /workspace /repos /workspaces /app /home/coder/.npm-global && \
+    echo "coder ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/trace-coder && \
+    chmod 0440 /etc/sudoers.d/trace-coder
 ENV NPM_CONFIG_PREFIX=/home/coder/.npm-global
 ENV PATH=/home/coder/.npm-global/bin:$PATH
 USER coder

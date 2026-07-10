@@ -333,10 +333,16 @@ export async function createAppWorkspace({
   sessionId: _sessionId,
   sessionGroupId,
   slug,
+  repoRemoteUrl,
+  defaultBranch,
+  checkpointSha,
 }: {
   sessionId: string;
   sessionGroupId?: string;
   slug?: string;
+  repoRemoteUrl: string;
+  defaultBranch: string;
+  checkpointSha?: string;
 }): Promise<{ workdir: string; slug: string }> {
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
   const usedSlugs = new Set(
@@ -348,7 +354,11 @@ export async function createAppWorkspace({
   const workspaceSlug = slug ?? sessionGroupId ?? generateAnimalSlug(usedSlugs);
   const workdir = `${WORKSPACES_DIR}/${workspaceSlug}`;
 
-  if (!fs.existsSync(workdir)) {
+  if (!fs.existsSync(workdir) && checkpointSha) {
+    assertValidCommitSha(checkpointSha);
+    await execFileAsync("git", ["clone", "--no-checkout", repoRemoteUrl, workdir]);
+    await execFileAsync("git", ["checkout", "-B", defaultBranch, checkpointSha], { cwd: workdir });
+  } else if (!fs.existsSync(workdir)) {
     fs.mkdirSync(workdir, { recursive: true });
     if (fs.existsSync(APP_STARTER_DIR)) {
       fs.cpSync(APP_STARTER_DIR, workdir, {
@@ -362,12 +372,33 @@ export async function createAppWorkspace({
     }
   }
 
+  if (!fs.existsSync(`${workdir}/.git`)) {
+    await execFileAsync("git", ["init", "-b", defaultBranch], { cwd: workdir });
+    await execFileAsync("git", ["config", "user.name", "Trace App Agent"], { cwd: workdir });
+    await execFileAsync("git", ["config", "user.email", "app-agent@trace.local"], {
+      cwd: workdir,
+    });
+  }
+  const hasOrigin = await execFileAsync("git", ["remote", "get-url", "origin"], { cwd: workdir })
+    .then(() => true)
+    .catch(() => false);
+  await execFileAsync(
+    "git",
+    hasOrigin
+      ? ["remote", "set-url", "origin", repoRemoteUrl]
+      : ["remote", "add", "origin", repoRemoteUrl],
+    {
+      cwd: workdir,
+    },
+  );
+
   return { workdir, slug: workspaceSlug };
 }
 
 function writeFallbackAppStarter(workdir: string): void {
   fs.mkdirSync(`${workdir}/app/api/notes`, { recursive: true });
   fs.mkdirSync(`${workdir}/.trace`, { recursive: true });
+  fs.mkdirSync(`${workdir}/lib`, { recursive: true });
   fs.writeFileSync(
     `${workdir}/package.json`,
     JSON.stringify(
@@ -380,18 +411,20 @@ function writeFallbackAppStarter(workdir: string): void {
           smoke: "next build",
         },
         dependencies: {
-          "@types/node": "latest",
-          "@types/react": "latest",
-          "@types/react-dom": "latest",
-          next: "latest",
-          react: "latest",
-          "react-dom": "latest",
-          typescript: "latest",
+          "@types/node": "^22.0.0",
+          "@types/react": "^19.0.0",
+          "@types/react-dom": "^19.0.0",
+          clsx: "^2.1.0",
+          next: "^15.5.0",
+          react: "^19.0.0",
+          "react-dom": "^19.0.0",
+          "tailwind-merge": "^3.0.0",
+          typescript: "^5.7.0",
         },
         devDependencies: {
-          autoprefixer: "latest",
-          postcss: "latest",
-          tailwindcss: "latest",
+          autoprefixer: "^10.4.0",
+          postcss: "^8.5.0",
+          tailwindcss: "^3.4.0",
         },
       },
       null,
@@ -400,11 +433,15 @@ function writeFallbackAppStarter(workdir: string): void {
   );
   fs.writeFileSync(`${workdir}/.trace/app-starter.json`, JSON.stringify({ kind: "nextjs" }) + "\n");
   fs.writeFileSync(
+    `${workdir}/trace.tokens.json`,
+    JSON.stringify({ color: { background: "#09090b", foreground: "#fafafa" } }, null, 2) + "\n",
+  );
+  fs.writeFileSync(
     `${workdir}/app/page.tsx`,
     `export default function Home() {
   return (
     <main className="min-h-screen bg-zinc-950 px-8 py-10 text-zinc-50">
-      <section className="mx-auto flex max-w-3xl flex-col gap-6">
+      <section data-trace-source="app/page.tsx:4" className="mx-auto flex max-w-3xl flex-col gap-6">
         <p className="text-sm text-emerald-300">Trace app session</p>
         <h1 className="text-4xl font-semibold tracking-tight">Build from here</h1>
         <p className="text-zinc-300">
@@ -414,6 +451,16 @@ function writeFallbackAppStarter(workdir: string): void {
       </section>
     </main>
   );
+}
+`,
+  );
+  fs.writeFileSync(
+    `${workdir}/lib/utils.ts`,
+    `import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
 }
 `,
   );

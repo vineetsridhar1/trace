@@ -43,7 +43,8 @@ type ManagedSessionGroup = {
   } | null;
 };
 
-const DEFAULT_APP_SESSION_CONFIG = repoApplicationConfigService.parseApplicationConfig({
+const DEFAULT_APP_SESSION_CONFIG = repoApplicationConfigService.normalize({
+  setupScripts: [],
   applications: [
     {
       id: "app",
@@ -218,7 +219,7 @@ export class SessionApplicationService {
       userId,
     );
     const config =
-      group.kind === "app" && !group.repo
+      group.kind === "app"
         ? DEFAULT_APP_SESSION_CONFIG
         : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const script = config.setupScripts.find((candidate) => candidate.id === scriptId);
@@ -335,7 +336,7 @@ export class SessionApplicationService {
         create: {
           organizationId,
           sessionGroupId,
-          repoId: group.repoId,
+          repoId: group.repoId ?? undefined,
           appConfigId,
           processConfigId,
           label: processConfig.name,
@@ -520,7 +521,7 @@ export class SessionApplicationService {
         },
       },
     });
-    if (!process || process.status !== "running") {
+    if (!process || (process.status !== "running" && process.status !== "starting")) {
       throw new ValidationError(
         `Start the process first (current status: ${process?.status ?? "missing"})`,
       );
@@ -944,7 +945,7 @@ export class SessionApplicationService {
           key: await this.createEndpointKey(tx),
           organizationId: group.organizationId,
           sessionGroupId: group.id,
-          repoId: group.repoId,
+          repoId: group.repoId ?? undefined,
           appConfigId,
           processConfigId,
           portConfigId: port.id,
@@ -1009,7 +1010,7 @@ export class SessionApplicationService {
 
   private getApplication(group: ManagedSessionGroup, appConfigId: string) {
     const config =
-      group.kind === "app" && !group.repo
+      group.kind === "app"
         ? DEFAULT_APP_SESSION_CONFIG
         : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const app = config.applications.find((candidate) => candidate.id === appConfigId);
@@ -1041,8 +1042,9 @@ export class SessionApplicationService {
       },
     });
     await this.assertCanManage(group.id, organizationId, userId, group);
-    if (!group.repoId || !group.repo)
+    if (group.kind !== "app" && (!group.repoId || !group.repo)) {
       throw new ValidationError("Session group does not have a repo");
+    }
     const session = group.sessions.find((candidate) =>
       connectionRuntimeInstanceId(candidate.connection),
     );

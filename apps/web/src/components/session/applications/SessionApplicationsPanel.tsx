@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Copy,
   ExternalLink,
+  Globe,
   Play,
   Power,
   RotateCw,
@@ -834,6 +835,28 @@ export function SessionApplicationsPanel({
                               >
                                 <Copy size={14} />
                               </Button>
+                              {groupKind === "app" &&
+                              endpointEnabled &&
+                              endpoint.accessMode === "private" ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  title={`Publish ${endpoint.label}`}
+                                  disabled={pending === `publish:${endpoint.id}`}
+                                  onClick={() =>
+                                    void run(`publish:${endpoint.id}`, () =>
+                                      client
+                                        .mutation(ENABLE_ENDPOINT_MUTATION, {
+                                          endpointId: endpoint.id,
+                                        })
+                                        .toPromise(),
+                                    )
+                                  }
+                                >
+                                  <Globe size={13} />
+                                  Publish
+                                </Button>
+                              ) : null}
                               <Button
                                 variant="ghost"
                                 size="icon-sm"

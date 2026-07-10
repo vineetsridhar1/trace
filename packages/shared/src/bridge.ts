@@ -67,6 +67,10 @@ export interface BridgePrepareAppCommand {
   sessionGroupId?: string;
   /** Pre-assigned slug for the generated app workspace. If absent, the bridge generates one. */
   slug?: string;
+  repoId: string;
+  repoRemoteUrl: string;
+  defaultBranch: string;
+  checkpointSha?: string;
 }
 
 export interface BridgeUpgradeWorkspaceCommand {
