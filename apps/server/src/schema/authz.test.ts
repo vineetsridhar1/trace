@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../lib/storage/index.js", () => ({
+  storage: {
+    putObject: vi.fn(),
+    getGetUrl: vi.fn(),
+  },
+}));
+
 vi.mock("../lib/pubsub.js", () => ({
   pubsub: {
     asyncIterator: vi.fn(() => "iterator"),
