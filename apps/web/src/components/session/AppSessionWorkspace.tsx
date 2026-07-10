@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "../../lib/utils";
+import { useSidebar } from "../ui/sidebar";
 import { SessionDetailView } from "./SessionDetailView";
 
 export function AppSessionWorkspace({
@@ -21,10 +22,17 @@ export function AppSessionWorkspace({
   canvas: ReactNode;
 }) {
   const [canvasRevealed, setCanvasRevealed] = useState(canvasReady);
+  const sidebarCollapsedRef = useRef(false);
+  const { isMobile, setOpen, setOpenMobile } = useSidebar();
 
   useEffect(() => {
-    if (canvasReady) setCanvasRevealed(true);
-  }, [canvasReady]);
+    if (!canvasReady) return;
+    setCanvasRevealed(true);
+    if (sidebarCollapsedRef.current) return;
+    sidebarCollapsedRef.current = true;
+    if (isMobile) setOpenMobile(false);
+    else setOpen(false);
+  }, [canvasReady, isMobile, setOpen, setOpenMobile]);
 
   return (
     <div className="flex h-full min-h-0 overflow-hidden">

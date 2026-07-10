@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { useAuthStore, useEntityField, type AuthState } from "@trace/client-core";
 import { useUIStore, type UIState } from "./stores/ui";
 import { AppSidebar } from "./components/AppSidebar";
@@ -157,7 +157,6 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
         }`}
       >
         <SidebarProvider className="min-h-0 flex-1">
-          <AppSessionSidebarBehavior />
           <AppSidebar />
 
           <MainContentFrame>
@@ -187,31 +186,6 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
       </div>
     </TooltipProvider>
   );
-}
-
-function AppSessionSidebarBehavior() {
-  const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
-  const groupKind = useEntityField("sessionGroups", activeSessionGroupId ?? "", "kind");
-  const { isMobile, setOpen, setOpenMobile } = useSidebar();
-  const collapsedGroupIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!activeSessionGroupId) {
-      collapsedGroupIdRef.current = null;
-      return;
-    }
-    if (groupKind !== "app") {
-      if (groupKind !== undefined) collapsedGroupIdRef.current = null;
-      return;
-    }
-    if (collapsedGroupIdRef.current === activeSessionGroupId) return;
-
-    collapsedGroupIdRef.current = activeSessionGroupId;
-    if (isMobile) setOpenMobile(false);
-    else setOpen(false);
-  }, [activeSessionGroupId, groupKind, isMobile, setOpen, setOpenMobile]);
-
-  return null;
 }
 
 function MainContentFrame({ children }: { children: ReactNode }) {
