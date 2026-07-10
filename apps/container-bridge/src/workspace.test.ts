@@ -265,6 +265,10 @@ describe("workspace repo setup", () => {
       "/workspaces/group-1/server.ts",
       expect.stringContaining("server: { hmr: { server }, middlewareMode: true }"),
     );
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      "/workspaces/group-1/server.ts",
+      expect.stringContaining("APP_CORS_ALLOWED_ORIGINS"),
+    );
   });
 
   it("restores an app workspace from the managed checkpoint commit", async () => {

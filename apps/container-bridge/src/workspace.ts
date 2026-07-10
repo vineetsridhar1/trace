@@ -618,8 +618,49 @@ const server = createHttpServer(app);
 const port = Number(process.env.PORT ?? 3000);
 const root = dirname(fileURLToPath(import.meta.url));
 const notes: Array<{ id: string; text: string }> = [];
+const corsAllowedOrigins = new Set(
+  (process.env.APP_CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => new URL(value).origin),
+);
 
+function requestOrigin(request: express.Request): string | null {
+  const host = request.get("host");
+  if (!host) return null;
+  const forwardedProtocol = request.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  return \`\${forwardedProtocol || request.protocol}://\${host}\`;
+}
+
+app.use((request, response, next) => {
+  const origin = request.get("origin");
+  if (!origin || origin === requestOrigin(request)) {
+    next();
+    return;
+  }
+  if (!corsAllowedOrigins.has(origin)) {
+    response.status(403).json({ error: "Origin not allowed" });
+    return;
+  }
+
+  response.vary("Origin");
+  response.set({
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Headers":
+      request.get("access-control-request-headers") ?? "Authorization, Content-Type",
+    "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Max-Age": "600",
+  });
+  if (request.method === "OPTIONS") {
+    response.status(204).end();
+    return;
+  }
+  next();
+});
 app.use(express.json());
+
 app.get("/api/notes", (_request, response) => response.json({ notes }));
 app.post("/api/notes", (request, response) => {
   const body = request.body as { text?: unknown };

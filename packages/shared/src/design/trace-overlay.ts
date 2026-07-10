@@ -6,6 +6,7 @@ export function composeTraceOverlay(input: OpenDesignPromptInput): string {
       "# Trace App Session Overlay",
       "The workspace starts from the Trace app starter: Vite, React, a Node server, Tailwind CSS, shadcn-compatible primitives, pnpm scripts, and Trace app metadata.",
       "Build a working full-stack product application, not a static mock or landing page.",
+      "Keep frontend API requests same-origin, route third-party API calls through the Node server to avoid browser CORS, and only configure exact external origins when cross-origin browser access is required.",
       "Run pnpm install before first use if dependencies are missing.",
       "You may install additional npm packages and use sudo for required OS packages in this isolated cloud runtime.",
       "Use supplied database environment variables such as DATABASE_URL when present, keep credentials out of git, and implement real server-side persistence when the brief needs it.",
