@@ -6474,33 +6474,11 @@ export class SessionService {
       }
     }
 
-    if (session.sessionGroup?.kind === "app" && session.sessionGroupId) {
-      try {
-        await sessionApplicationService.startApplication(
-          session.sessionGroupId,
-          "app",
-          session.organizationId,
-          session.createdById,
-          { asSystem: true },
-        );
-      } catch (error) {
-        await eventService.create({
-          organizationId: session.organizationId,
-          scopeType: "session",
-          scopeId: sessionId,
-          eventType: "session_output",
-          payload: {
-            type: "app_preview_start_failed",
-            sessionGroupId: session.sessionGroupId,
-            error: error instanceof Error ? error.message : String(error),
-          } as Prisma.InputJsonValue,
-          actorType: "system",
-          actorId: "system",
-        });
-      }
-    }
-
-    // If a run was queued while workspace was being prepared, execute it now
+    // Deliver the queued initial prompt as soon as the workspace exists, so the
+    // agent can start coding the moment the cloud session is connected. The app
+    // auto-start below (pnpm install && pnpm dev) then proceeds in the
+    // background — package installs and the dev server come up while the agent
+    // is already working, rather than blocking it.
     if (pendingRun) {
       const replayResult = await this.deliverPendingCommand(sessionId, pendingRun);
       if (replayResult && replayResult !== "delivered") {
@@ -6516,6 +6494,31 @@ export class SessionService {
           "workspace_replay",
         );
       }
+    }
+
+    if (session.sessionGroup?.kind === "app" && session.sessionGroupId) {
+      const appGroupId = session.sessionGroupId;
+      // Fire-and-forget: the dev server boot must not delay the agent's first
+      // run. Failures surface as an app_preview_start_failed event.
+      void sessionApplicationService
+        .startApplication(appGroupId, "app", session.organizationId, session.createdById, {
+          asSystem: true,
+        })
+        .catch(async (error: unknown) => {
+          await eventService.create({
+            organizationId: session.organizationId,
+            scopeType: "session",
+            scopeId: sessionId,
+            eventType: "session_output",
+            payload: {
+              type: "app_preview_start_failed",
+              sessionGroupId: appGroupId,
+              error: error instanceof Error ? error.message : String(error),
+            } as Prisma.InputJsonValue,
+            actorType: "system",
+            actorId: "system",
+          });
+        });
     }
   }
 

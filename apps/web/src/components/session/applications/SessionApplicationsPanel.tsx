@@ -251,10 +251,20 @@ export function SessionApplicationsPanel({
       ? (s.repos[groupRepo.id]?.applicationConfig as RepoApplicationConfig | null | undefined)
       : undefined,
   );
-  const config =
-    groupRepo?.applicationConfig ??
-    repoApplicationConfig ??
-    (groupKind === "app" ? DEFAULT_APP_CONFIG : undefined);
+  // App sessions run against a hidden managed repo that has no saved
+  // applicationConfig, so its resolved config is empty. Don't let that empty
+  // config shadow the built-in app default (which defines the Dev server) —
+  // otherwise the panel shows "No applications configured" for a real app.
+  const resolvedConfig = groupRepo?.applicationConfig ?? repoApplicationConfig;
+  const resolvedHasContent = Boolean(
+    resolvedConfig &&
+      (resolvedConfig.applications.length > 0 || resolvedConfig.setupScripts.length > 0),
+  );
+  const config = resolvedHasContent
+    ? resolvedConfig
+    : groupKind === "app"
+      ? DEFAULT_APP_CONFIG
+      : resolvedConfig;
   const upsert = useEntityStore((s) => s.upsert);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
