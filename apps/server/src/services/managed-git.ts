@@ -204,7 +204,10 @@ class ManagedGitService {
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
     };
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: ttlSeconds });
+    const token = jwt.sign(payload, JWT_SECRET, {
+      expiresIn: ttlSeconds,
+      algorithm: "HS256",
+    });
     const auditEvent = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
       await tx.repo.findFirstOrThrow({
@@ -238,7 +241,9 @@ class ManagedGitService {
 
   verifyAccessToken(token: string): ManagedGitAuth | null {
     try {
-      const payload = jwt.verify(token, JWT_SECRET) as unknown as ManagedGitTokenPayload;
+      const payload = jwt.verify(token, JWT_SECRET, {
+        algorithms: ["HS256"],
+      }) as unknown as ManagedGitTokenPayload;
       if (
         !payload ||
         typeof payload !== "object" ||

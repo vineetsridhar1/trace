@@ -45,7 +45,14 @@ import { buildAppleAppSiteAssociation } from "./lib/apple-app-site-association.j
 import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.js";
 import { endpointProxyService } from "./services/endpoint-proxy.js";
 import { sessionApplicationService } from "./services/session-applications.js";
-import { endpointTrafficRetentionHours } from "./services/endpoint-utils.js";
+import {
+  assertPreviewHostIsolated,
+  endpointTrafficRetentionHours,
+} from "./services/endpoint-utils.js";
+
+// A single proxied response is base64-framed over the bridge WS; bound a single
+// message so an untrusted runtime can't force an unbounded allocation.
+const BRIDGE_WS_MAX_PAYLOAD_BYTES = 64 * 1024 * 1024;
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -118,6 +125,9 @@ async function main() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
   const PORT = Number(process.env.PORT) || 4000 + Number(process.env.TRACE_PORT || 0);
   const localMode = isLocalMode();
+  // Fail fast if untrusted previews would share a registrable domain with the
+  // Trace app origin (throws in production, warns otherwise).
+  assertPreviewHostIsolated(process.env.TRACE_WEB_URL);
   const allowedCorsOrigins = getAllowedCorsOrigins({
     localMode,
     nodeEnv: process.env.NODE_ENV,
@@ -241,7 +251,10 @@ async function main() {
   );
 
   // Bridge for Electron/desktop session control
-  const bridgeWss = new WebSocketServer({ noServer: true });
+  const bridgeWss = new WebSocketServer({
+    noServer: true,
+    maxPayload: BRIDGE_WS_MAX_PAYLOAD_BYTES,
+  });
   bridgeWss.on("connection", handleBridgeConnection);
 
   // Terminal relay for frontend terminal sessions

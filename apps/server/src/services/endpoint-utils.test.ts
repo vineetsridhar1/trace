@@ -7,6 +7,7 @@ import {
   forwardableRequestHeaders,
   forwardableResponseHeaders,
   generateEndpointKey,
+  isAllowedPreviewRequestOrigin,
   sanitizeHeaders,
   webSocketProtocols,
 } from "./endpoint-utils.js";
@@ -38,6 +39,42 @@ describe("endpoint utils", () => {
     expect(extractEndpointKey("abc123.preview.localhost:4000")).toBe("abc123");
     expect(extractEndpointKey("preview.localhost")).toBeNull();
     expect(extractEndpointKey("trace.localhost")).toBeNull();
+  });
+
+  it("rejects deeper subdomains so one endpoint isn't reachable from many origins", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.localhost");
+
+    expect(extractEndpointKey("evil.abc123.preview.localhost")).toBeNull();
+    expect(extractEndpointKey("abc123.preview.localhost")).toBe("abc123");
+  });
+
+  it("strips the Domain attribute from forwarded Set-Cookie", () => {
+    expect(
+      forwardableResponseHeaders({
+        "set-cookie": ["sid=1; Path=/; Domain=preview.localhost; HttpOnly", "a=b"],
+        "content-type": "text/html",
+      }),
+    ).toEqual({
+      "set-cookie": ["sid=1; Path=/; HttpOnly", "a=b"],
+      "content-type": "text/html",
+    });
+  });
+
+  it("allows same-endpoint and Trace origins but rejects cross-site preview requests", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.localhost");
+    vi.stubEnv("TRACE_WEB_URL", "https://app.trace.test");
+
+    // No Origin (top-level navigation) is allowed.
+    expect(isAllowedPreviewRequestOrigin(undefined, "abc123")).toBe(true);
+    // The app's own origin (even with a differing port) is allowed.
+    expect(isAllowedPreviewRequestOrigin("http://abc123.preview.localhost:4000", "abc123")).toBe(
+      true,
+    );
+    // The Trace app origin (iframe embedder) is allowed.
+    expect(isAllowedPreviewRequestOrigin("https://app.trace.test", "abc123")).toBe(true);
+    // A different endpoint or an attacker origin is rejected.
+    expect(isAllowedPreviewRequestOrigin("http://other.preview.localhost", "abc123")).toBe(false);
+    expect(isAllowedPreviewRequestOrigin("https://evil.test", "abc123")).toBe(false);
   });
 
   it("generates DNS-safe random keys", () => {

@@ -381,6 +381,9 @@ function validateUploadKeysForOrganization(
  */
 const MAX_RECONCILE_ATTEMPTS = 10;
 
+// Upper bound on the org-wide app-session listing so it can't grow unbounded.
+const APP_GROUP_LIST_LIMIT = 200;
+
 /** Maximum optimistic-concurrency retries for `updateConnectionConditional`. */
 const MAX_CONNECTION_UPDATE_ATTEMPTS = 5;
 
@@ -2505,6 +2508,11 @@ export class SessionService {
         AND: [visibleSessionGroupWhere(userId)],
       },
       include: SESSION_GROUP_INCLUDE,
+      // Bound this org-wide listing so it can't grow without limit as an org
+      // accumulates apps. The sidebar shows the most recent apps; the tail is
+      // reachable via search/dedicated views when those land.
+      orderBy: { updatedAt: "desc" },
+      take: APP_GROUP_LIST_LIMIT,
     });
 
     type SessionGroupWithSessions = SessionGroupSummary & {
@@ -3559,6 +3567,10 @@ export class SessionService {
       : (resolveStoredReasoningEffortForTool(tool, userDefaults?.defaultSessionReasoningEffort) ??
         getDefaultReasoningEffort(tool));
 
+    // Tracked so we can clean up the managed repo if the session transaction
+    // below rolls back (it's created before the txn because it initializes
+    // filesystem-backed git storage, not just a row).
+    let createdManagedRepoId: string | null = null;
     if (resolvedKind === "app" && !resolvedRepoId) {
       const managedRepo = await managedGitService.createManagedRepo({
         organizationId: input.organizationId,
@@ -3568,6 +3580,7 @@ export class SessionService {
       });
       resolvedRepoId = managedRepo.id;
       resolvedRepo = managedRepo;
+      createdManagedRepoId = managedRepo.id;
     }
 
     assertCloudRepoRemoteAvailable(hosting, resolvedRepo);
@@ -3764,6 +3777,19 @@ export class SessionService {
       }
 
       return session;
+    }).catch(async (error: unknown) => {
+      // Don't leak the managed repo minted above if the session row never persists.
+      if (createdManagedRepoId) {
+        await managedGitService
+          .deleteManagedRepo({
+            organizationId: input.organizationId,
+            repoId: createdManagedRepoId,
+            actorType: input.actorType ?? "user",
+            actorId: input.createdById,
+          })
+          .catch(() => {});
+      }
+      throw error;
     });
 
     // Publish the start event only after the transaction commits so subscribers
@@ -7092,22 +7118,17 @@ export class SessionService {
 
     if (!persisted) return null;
 
-    if (didPersistCheckpoint && session.sessionGroup?.kind === "app") {
-      const capture = await appCheckpointCaptureService.capture({
-        organizationId: session.organizationId,
-        sessionGroupId: session.sessionGroupId,
-        checkpointId: persisted.id,
-        userId: session.sessionGroup.ownerUserId,
-      });
+    // App checkpoints get a preview screenshot, but the headless render must not
+    // block the per-session event queue (it would freeze the agent's live output
+    // for seconds per commit). Mark it pending, emit the checkpoint now, and run
+    // the capture off-queue — a follow-up git_checkpoint event (merged by id on
+    // the client) carries the thumbnail once it's ready.
+    const shouldCaptureAppCheckpoint =
+      didPersistCheckpoint && session.sessionGroup?.kind === "app";
+    if (shouldCaptureAppCheckpoint && persisted) {
       persisted = await prisma.gitCheckpoint.update({
         where: { id: persisted.id },
-        data: {
-          captureStatus: capture.captureStatus,
-          captureKey: capture.captureKey ?? null,
-          captureUrl: capture.captureUrl ?? null,
-          captureContentType: capture.captureContentType ?? null,
-          capturedAt: capture.capturedAt ?? null,
-        },
+        data: { captureStatus: "pending" },
       });
     }
 
@@ -7147,7 +7168,68 @@ export class SessionService {
       });
     }
 
+    if (shouldCaptureAppCheckpoint && persisted && session.sessionGroup) {
+      this.captureAppCheckpointAsync({
+        checkpointId: persisted.id,
+        sessionId,
+        organizationId: session.organizationId,
+        sessionGroupId: session.sessionGroupId,
+        userId: session.sessionGroup.ownerUserId,
+      });
+    }
+
     return persisted;
+  }
+
+  /**
+   * Render and store an app checkpoint preview off the per-session event queue,
+   * then emit a follow-up git_checkpoint event carrying the captured thumbnail
+   * (the client merges checkpoints by id). Fire-and-forget: capture latency must
+   * never block the live agent output stream.
+   */
+  private captureAppCheckpointAsync(input: {
+    checkpointId: string;
+    sessionId: string;
+    organizationId: string;
+    sessionGroupId: string;
+    userId: string;
+  }): void {
+    void (async () => {
+      try {
+        const capture = await appCheckpointCaptureService.capture({
+          organizationId: input.organizationId,
+          sessionGroupId: input.sessionGroupId,
+          checkpointId: input.checkpointId,
+          userId: input.userId,
+        });
+        const updated = await prisma.gitCheckpoint.update({
+          where: { id: input.checkpointId },
+          data: {
+            captureStatus: capture.captureStatus,
+            captureKey: capture.captureKey ?? null,
+            captureUrl: capture.captureUrl ?? null,
+            captureContentType: capture.captureContentType ?? null,
+            capturedAt: capture.capturedAt ?? null,
+          },
+        });
+        await eventService.create({
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: input.sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "git_checkpoint",
+            checkpoint: serializeGitCheckpoint(updated),
+          } as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        });
+      } catch (error) {
+        // A missing row (checkpoint rewritten away) or capture failure is
+        // non-fatal — the checkpoint simply keeps its pending/last status.
+        console.error("[app-checkpoint] async capture failed", error);
+      }
+    })();
   }
 
   async retryConnection(

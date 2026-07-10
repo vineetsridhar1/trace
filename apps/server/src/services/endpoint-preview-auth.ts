@@ -28,14 +28,16 @@ export function createEndpointPreviewToken(input: {
       endpointId: input.endpointId,
     } satisfies EndpointPreviewTokenPayload,
     JWT_SECRET,
-    { expiresIn: TOKEN_TTL_SECONDS },
+    { expiresIn: TOKEN_TTL_SECONDS, algorithm: "HS256" },
   );
   return { token, expiresAt };
 }
 
 export function verifyEndpointPreviewToken(token: string): EndpointPreviewTokenPayload | null {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as unknown as EndpointPreviewTokenPayload;
+    const payload = jwt.verify(token, JWT_SECRET, {
+      algorithms: ["HS256"],
+    }) as unknown as EndpointPreviewTokenPayload;
     return payload?.tokenType === "endpoint_preview" &&
       typeof payload.userId === "string" &&
       typeof payload.organizationId === "string" &&

@@ -104,6 +104,19 @@ export type EntityState = Tables & {
 
 type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
 
+// A long-running app dev server streams unbounded stdout/stderr lines, each an
+// upserted entity. Cap the table so the store can't grow without limit for the
+// life of a session. Log entries are appended in chronological (sequence) order,
+// so object key insertion order lets us evict the oldest in O(excess).
+const MAX_APP_LOG_ENTRIES = 2000;
+
+function capApplicationLogTable(table: Record<string, unknown>): void {
+  const keys = Object.keys(table);
+  const excess = keys.length - MAX_APP_LOG_ENTRIES;
+  if (excess <= 0) return;
+  for (let i = 0; i < excess; i++) delete table[keys[i]];
+}
+
 export const useEntityStore = create<EntityState>((set: SetState<EntityState>) => ({
   organizations: {},
   users: {},
@@ -135,6 +148,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       const table = { ...(state[entityType] as Record<string, unknown>) };
       const previous = table[id];
       table[id] = data;
+      if (entityType === "sessionApplicationLogs") capApplicationLogTable(table);
       const update: Record<string, unknown> = { [entityType]: table };
 
       if (entityType === "sessions") {
@@ -178,6 +192,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       for (const item of items) {
         table[item.id] = item;
       }
+      if (entityType === "sessionApplicationLogs") capApplicationLogTable(table);
       const update: Record<string, unknown> = { [entityType]: table };
 
       if (entityType === "sessions") {
@@ -418,6 +433,9 @@ export class StoreBatchWriter {
     const table = this.ensureTable(type);
     const previous = table[id];
     table[id] = data;
+    if (type === "sessionApplicationLogs") {
+      capApplicationLogTable(table as Record<string, unknown>);
+    }
     this.dirty.add(type);
 
     if (type === "sessions") {

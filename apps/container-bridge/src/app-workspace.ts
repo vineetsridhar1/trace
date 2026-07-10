@@ -18,6 +18,14 @@ function appStarterDir(): string {
   throw new Error("Trace app starter is missing from the runtime");
 }
 
+// Remove a standalone app workspace directory (created by createAppWorkspace).
+// The slug defaults to the sessionGroupId. Guarded to stay under WORKSPACES_DIR.
+export function removeAppWorkspace(slug: string): void {
+  if (!slug || slug.includes("/") || slug.includes("..")) return;
+  const workdir = `${WORKSPACES_DIR}/${slug}`;
+  fs.rmSync(workdir, { recursive: true, force: true });
+}
+
 export async function createAppWorkspace({
   sessionId: _sessionId,
   sessionGroupId,

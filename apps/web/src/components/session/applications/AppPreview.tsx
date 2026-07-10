@@ -52,10 +52,13 @@ export function AppPreview({
   }, [endpointId, requestRevision]);
 
   useEffect(() => {
-    if (!url || frameLoaded) return;
-    const timeout = window.setTimeout(reload, INITIAL_FRAME_RETRY_MS);
+    if (!url || frameLoaded || error) return;
+    const timeout = window.setTimeout(
+      () => dispatch({ type: "frame-retry" }),
+      INITIAL_FRAME_RETRY_MS,
+    );
     return () => window.clearTimeout(timeout);
-  }, [frameLoaded, frameRevision, reload, url]);
+  }, [error, frameLoaded, frameRevision, url]);
 
   if (error) {
     if (desktopViewport) {

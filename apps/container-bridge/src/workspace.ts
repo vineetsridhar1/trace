@@ -13,6 +13,17 @@ import type { BridgeWorkspaceWarning } from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
 
+// True only for real github.com HTTPS remotes — used to gate token injection so
+// look-alike hosts (github.com.evil.com) never receive the credential.
+function isGitHubHttpsUrl(remoteUrl: string): boolean {
+  try {
+    const url = new URL(remoteUrl);
+    return url.protocol === "https:" && url.hostname.toLowerCase() === "github.com";
+  } catch {
+    return false;
+  }
+}
+
 const REPOS_DIR = "/repos";
 const WORKSPACES_DIR = process.env.TRACE_WORKSPACES_DIR ?? "/workspaces";
 
@@ -52,14 +63,16 @@ export async function ensureRepo(
   }
   const cloneBranch = branch ?? defaultBranch;
 
-  // Inject GitHub token into HTTPS URL for private repo access
+  // Inject GitHub token into HTTPS URL for private repo access. Match the host
+  // exactly — a substring check would also match `github.com.evil.com`, leaking
+  // the org token to an attacker-controlled host.
   let authUrl = remoteUrl;
   const githubToken = process.env.GITHUB_TOKEN;
-  if (githubToken && remoteUrl.startsWith("https://github.com")) {
-    authUrl = remoteUrl.replace(
-      "https://github.com",
-      `https://x-access-token:${githubToken}@github.com`,
-    );
+  if (githubToken && isGitHubHttpsUrl(remoteUrl)) {
+    const parsed = new URL(remoteUrl);
+    parsed.username = "x-access-token";
+    parsed.password = githubToken;
+    authUrl = parsed.toString();
   }
 
   if (fs.existsSync(repoPath)) {
@@ -328,7 +341,7 @@ export async function createWorktree({
   return { workdir: worktreePath, branch: branchName, slug: worktreeSlug };
 }
 
-export { createAppWorkspace } from "./app-workspace.js";
+export { createAppWorkspace, removeAppWorkspace } from "./app-workspace.js";
 
 async function getCurrentBranch(worktreePath: string): Promise<string | null> {
   try {

@@ -2932,15 +2932,6 @@ export type SessionGroupDetailQuery = {
   } | null;
 };
 
-export type CreateSessionEndpointPreviewMutationVariables = Exact<{
-  endpointId: Scalars["ID"]["input"];
-}>;
-
-export type CreateSessionEndpointPreviewMutation = {
-  __typename?: "Mutation";
-  createSessionEndpointPreview: { __typename?: "SessionEndpointPreview"; url: string };
-};
-
 export type AppPreviewStateQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
 }>;
@@ -3209,6 +3200,15 @@ export type PublishAppSessionMutationVariables = Exact<{
 export type PublishAppSessionMutation = {
   __typename?: "Mutation";
   publishAppSession: { __typename?: "SessionEndpoint"; id: string };
+};
+
+export type CreateSessionEndpointPreviewMutationVariables = Exact<{
+  endpointId: Scalars["ID"]["input"];
+}>;
+
+export type CreateSessionEndpointPreviewMutation = {
+  __typename?: "Mutation";
+  createSessionEndpointPreview: { __typename?: "SessionEndpointPreview"; url: string };
 };
 
 export type SessionGroupFileTreeQueryVariables = Exact<{
@@ -6086,49 +6086,6 @@ export const SessionGroupDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupDetailQuery, SessionGroupDetailQueryVariables>;
-export const CreateSessionEndpointPreviewDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "CreateSessionEndpointPreview" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "createSessionEndpointPreview" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "endpointId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "url" } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  CreateSessionEndpointPreviewMutation,
-  CreateSessionEndpointPreviewMutationVariables
->;
 export const AppPreviewStateDocument = {
   kind: "Document",
   definitions: [
@@ -7013,6 +6970,49 @@ export const PublishAppSessionDocument = {
     },
   ],
 } as unknown as DocumentNode<PublishAppSessionMutation, PublishAppSessionMutationVariables>;
+export const CreateSessionEndpointPreviewDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateSessionEndpointPreview" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createSessionEndpointPreview" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "endpointId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "endpointId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "url" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateSessionEndpointPreviewMutation,
+  CreateSessionEndpointPreviewMutationVariables
+>;
 export const SessionGroupFileTreeDocument = {
   kind: "Document",
   definitions: [

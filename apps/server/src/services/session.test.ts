@@ -573,6 +573,8 @@ describe("SessionService", () => {
           AND: [{ OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] }],
         },
         include: expect.any(Object),
+        orderBy: { updatedAt: "desc" },
+        take: 200,
       });
       expect(result.map((group) => group.id)).toEqual(["group-app"]);
     });

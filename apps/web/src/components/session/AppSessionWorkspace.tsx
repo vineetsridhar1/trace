@@ -22,18 +22,42 @@ export function AppSessionWorkspace({
   canvas: ReactNode;
 }) {
   const [canvasRevealed, setCanvasRevealed] = useState(canvasReady);
-  const sidebarCollapsedRef = useRef(false);
+  const hasCollapsedRef = useRef(false);
+  const collapsedByUsRef = useRef(false);
   const reduceMotion = useReducedMotion();
-  const { isMobile, setOpen, setOpenMobile } = useSidebar();
+  const { isMobile, open, openMobile, setOpen, setOpenMobile } = useSidebar();
+
+  // Keep the sidebar API fresh for the unmount cleanup below without re-running
+  // the restore effect on every dependency change.
+  const sidebarApiRef = useRef({ isMobile, setOpen, setOpenMobile });
+  useEffect(() => {
+    sidebarApiRef.current = { isMobile, setOpen, setOpenMobile };
+  });
 
   useEffect(() => {
     if (!canvasReady) return;
     setCanvasRevealed(true);
-    if (sidebarCollapsedRef.current) return;
-    sidebarCollapsedRef.current = true;
+    if (hasCollapsedRef.current) return;
+    hasCollapsedRef.current = true;
+    // Only collapse (and later restore) if the sidebar was open — if the user
+    // had already collapsed it themselves, leave it alone.
+    const wasOpen = isMobile ? openMobile : open;
+    if (!wasOpen) return;
+    collapsedByUsRef.current = true;
     if (isMobile) setOpenMobile(false);
     else setOpen(false);
-  }, [canvasReady, isMobile, setOpen, setOpenMobile]);
+  }, [canvasReady, isMobile, open, openMobile, setOpen, setOpenMobile]);
+
+  // Restore the shared sidebar when leaving the app canvas, but only if we were
+  // the ones who collapsed it.
+  useEffect(() => {
+    return () => {
+      if (!collapsedByUsRef.current) return;
+      const { isMobile: mobile, setOpen: open_, setOpenMobile: openMobile_ } = sidebarApiRef.current;
+      if (mobile) openMobile_(true);
+      else open_(true);
+    };
+  }, []);
 
   return (
     <div className="flex h-full min-h-0 overflow-hidden">

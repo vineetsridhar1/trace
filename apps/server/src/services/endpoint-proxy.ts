@@ -14,15 +14,27 @@ import {
 import {
   bodyPreview,
   endpointProxyMaxRequestBodyBytes,
+  endpointProxyMaxResponseBodyBytes,
   endpointProxyRequestTimeoutMs,
   extractEndpointKey,
   forwardableRequestHeaders,
   forwardableResponseHeaders,
+  isAllowedPreviewRequestOrigin,
   sanitizeHeaders,
   shouldCaptureBodies,
   shouldCaptureHeaders,
   webSocketProtocols,
 } from "./endpoint-utils.js";
+
+// The Trace app is the only legitimate embedder of a private preview iframe, so
+// the injected overlay posts there rather than to any parent ("*").
+const TRACE_APP_ORIGIN = (() => {
+  try {
+    return process.env.TRACE_WEB_URL ? new URL(process.env.TRACE_WEB_URL).origin : "*";
+  } catch {
+    return "*";
+  }
+})();
 
 type PendingHttp = {
   endpointId: string;
@@ -67,7 +79,11 @@ function requestUrl(req: IncomingMessage): URL {
 }
 
 function safeRedirectPath(value: string | null): string {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
+  // Must be a same-origin absolute path. Reject protocol-relative (`//host`) and
+  // backslash variants (`/\host`, which browsers normalize to `//host`).
+  if (!value || !value.startsWith("/")) return "/";
+  if (value[1] === "/" || value[1] === "\\") return "/";
+  return value;
 }
 
 function injectAuthoringOverlay(
@@ -82,7 +98,8 @@ function injectAuthoringOverlay(
   const html = body.toString("utf8");
   if (html.includes("data-trace-app-overlay")) return { headers, body };
   const script = `<script data-trace-app-overlay>(function(){
-function post(event,payload){if(window.parent&&window.parent!==window)window.parent.postMessage({type:"trace:app:overlay",event:event,...payload},"*")}
+var TRACE_ORIGIN=${JSON.stringify(TRACE_APP_ORIGIN)};
+function post(event,payload){if(window.parent&&window.parent!==window)window.parent.postMessage({type:"trace:app:overlay",event:event,...payload},TRACE_ORIGIN)}
 document.addEventListener("click",function(e){var el=e.target&&e.target.closest&&e.target.closest("[data-trace-source]");if(el)post("element-selected",{sourceLocation:el.getAttribute("data-trace-source"),text:(el.textContent||"").trim().slice(0,500)})},true);
 window.addEventListener("error",function(e){post("error",{message:e.message||"Application script error",stack:e.error&&e.error.stack?String(e.error.stack):null})});
 })();</script>`;
@@ -117,7 +134,10 @@ async function readRequestBody(req: IncomingMessage, maxBytes: number): Promise<
 export class EndpointProxyService {
   private pendingHttp = new Map<string, PendingHttp>();
   private pendingWs = new Map<string, PendingWs>();
-  private wsServer = new WebSocketServer({ noServer: true });
+  private wsServer = new WebSocketServer({
+    noServer: true,
+    maxPayload: endpointProxyMaxRequestBodyBytes(),
+  });
 
   extractKey(host: string | undefined | null) {
     return extractEndpointKey(host);
@@ -148,6 +168,13 @@ export class EndpointProxyService {
       return;
     }
     if (endpoint.accessMode === "private") {
+      // The preview cookie is SameSite=None, so a credentialed request can be
+      // driven cross-site (CSRF). Reject any browser Origin that isn't the app's
+      // own preview origin or a Trace app origin.
+      if (!isAllowedPreviewRequestOrigin(req.headers.origin, endpointKey)) {
+        res.writeHead(403).end("Cross-origin request forbidden");
+        return;
+      }
       const userId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
       if (!userId) {
         res.writeHead(401).end("Authentication required");
@@ -290,6 +317,34 @@ export class EndpointProxyService {
     let body: Buffer<ArrayBufferLike> = response.bodyBase64
       ? Buffer.from(response.bodyBase64, "base64")
       : Buffer.alloc(0);
+    // The runtime hosts untrusted app code; cap the relayed response so a huge
+    // body can't OOM the proxy. (Streaming large/SSE responses is a separate
+    // enhancement; this bounds the single-shot buffer.)
+    const maxResponseBytes = endpointProxyMaxResponseBodyBytes();
+    if (body.byteLength > maxResponseBytes) {
+      pending.response.writeHead(502, {
+        "X-Trace-Endpoint-Id": pending.endpointId,
+        "Content-Type": "text/plain",
+      });
+      pending.response.end("Response body too large");
+      void pending.trafficWrite
+        .then((entry) =>
+          entry
+            ? prisma.endpointTrafficEntry.update({
+                where: { id: pending.trafficEntryId },
+                data: {
+                  completedAt: new Date(),
+                  durationMs: Date.now() - pending.startedAt,
+                  responseStatus: 502,
+                  error: "Response body too large",
+                  responseBodyBytes: body.byteLength,
+                },
+              })
+            : null,
+        )
+        .catch(() => {});
+      return;
+    }
     let headers = forwardableResponseHeaders(response.headers);
     if (pending.injectAuthoringOverlay) {
       const injected = injectAuthoringOverlay(headers, body);
@@ -362,6 +417,13 @@ export class EndpointProxyService {
       return;
     }
     if (endpoint.accessMode === "private") {
+      // Guard against Cross-Site WebSocket Hijacking: the SameSite=None preview
+      // cookie rides cross-site upgrades, so require a same-endpoint or Trace
+      // Origin before honoring the credentialed connection.
+      if (!isAllowedPreviewRequestOrigin(req.headers.origin, endpointKey)) {
+        client.close(1008, "Cross-origin request forbidden");
+        return;
+      }
       const userId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
       if (!userId) {
         client.close();

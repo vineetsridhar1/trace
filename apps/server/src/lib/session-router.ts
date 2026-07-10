@@ -2232,6 +2232,7 @@ export class SessionRouter {
     session: {
       hosting: string;
       organizationId?: string;
+      sessionGroupId?: string | null;
       workdir?: string | null;
       repoId?: string | null;
       connection?: unknown;
@@ -2264,6 +2265,7 @@ export class SessionRouter {
         sessionId,
         workdir: session.workdir,
         repoId: session.repoId,
+        sessionGroupId: session.sessionGroupId ?? undefined,
       });
       if (deliveryResult !== "delivered" && adapter.type === "local") {
         console.warn(

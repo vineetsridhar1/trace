@@ -110,6 +110,9 @@ export interface BridgeDeleteCommand {
   sessionId: string;
   workdir?: string;
   repoId?: string;
+  // Present for app sessions so the bridge can stop managed dev-server processes
+  // and remove the standalone app workspace on delete.
+  sessionGroupId?: string;
 }
 
 export interface BridgeListBranchesCommand {

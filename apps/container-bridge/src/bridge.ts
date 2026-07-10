@@ -50,6 +50,7 @@ import {
   ensureRepo,
   createWorktree,
   createAppWorkspace,
+  removeAppWorkspace,
   getWorkspaceSlugs,
   removeWorktree,
   getRepoPath,
@@ -563,6 +564,21 @@ export class ContainerBridge implements IBridgeClient {
         this.sessionWorkdirs.delete(cmd.sessionId);
         this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
+
+        // App sessions run managed dev-server processes and a standalone
+        // workspace keyed by sessionGroupId; stop the processes and remove the
+        // workspace so a deleted app doesn't leak a running server or disk.
+        if (cmd.sessionGroupId) {
+          this.managedProcessManager.destroyForSessionGroup(cmd.sessionGroupId);
+          try {
+            removeAppWorkspace(cmd.sessionGroupId);
+          } catch (err) {
+            console.warn(
+              `[container-bridge] failed to remove app workspace ${cmd.sessionGroupId}:`,
+              err instanceof Error ? err.message : String(err),
+            );
+          }
+        }
 
         // Clean up worktree for this session only — skip for read-only sessions (no worktree to remove)
         if (cmd.workdir && cmd.repoId && !wasReadOnly) {

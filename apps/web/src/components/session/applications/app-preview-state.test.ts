@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { appPreviewReducer, initialAppPreviewState } from "./app-preview-state";
+import {
+  MAX_FRAME_RETRIES,
+  appPreviewReducer,
+  initialAppPreviewState,
+  type AppPreviewState,
+} from "./app-preview-state";
 
 describe("appPreviewReducer", () => {
   it("uses loading state for the initial preview", () => {
@@ -54,6 +59,34 @@ describe("appPreviewReducer", () => {
       frameRevision: 2,
       refreshing: false,
     });
+  });
+
+  it("stops auto-retrying and surfaces an error after the retry cap", () => {
+    let state: AppPreviewState = appPreviewReducer(initialAppPreviewState, {
+      type: "request-succeeded",
+      url: "https://preview.test/auth-1",
+    });
+
+    // Each auto-retry re-mints the preview URL up to the cap.
+    for (let i = 0; i < MAX_FRAME_RETRIES; i++) {
+      state = appPreviewReducer(state, { type: "frame-retry" });
+      expect(state.attempts).toBe(i + 1);
+      expect(state.error).toBeNull();
+      expect(state.requestRevision).toBe(i + 1);
+    }
+
+    // The next retry is exhausted: surface the error, no further remount.
+    const exhausted = appPreviewReducer(state, { type: "frame-retry" });
+    expect(exhausted.error).not.toBeNull();
+    expect(exhausted.refreshing).toBe(false);
+    expect(exhausted.requestRevision).toBe(MAX_FRAME_RETRIES);
+    expect(exhausted.attempts).toBe(MAX_FRAME_RETRIES);
+
+    // Manual retry clears the error and resets the auto-retry budget.
+    const retried = appPreviewReducer(exhausted, { type: "reload" });
+    expect(retried.error).toBeNull();
+    expect(retried.attempts).toBe(0);
+    expect(retried.requestRevision).toBe(MAX_FRAME_RETRIES + 1);
   });
 
   it("keeps a working preview visible when refresh authentication fails", () => {
