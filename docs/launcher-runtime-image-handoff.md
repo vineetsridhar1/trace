@@ -36,11 +36,14 @@ The base image contains:
 ### App-session services and database
 
 The image entrypoint (`trace-entrypoint`) starts Redis and PostgreSQL before launching the bridge.
-It ensures a superuser role for the runtime user and a default `app` database, and — unless the
-launcher already injected `DATABASE_URL` via `bootstrapEnv` — exports
-`DATABASE_URL=postgresql:///app?host=/var/run/postgresql` for the app to use. A launcher that
-provisions an external managed database should inject its own `DATABASE_URL` as an org secret; the
-entrypoint will not overwrite it.
+It ensures a superuser role for the runtime user (with a password) and a default `app` database,
+and — unless the launcher already injected `DATABASE_URL` via `bootstrapEnv` — exports a
+credentialed TCP URL `DATABASE_URL=postgresql://<user>:<pass>@localhost:5432/app` plus
+`REDIS_URL=redis://localhost:6379`. The TCP-with-credentials form is deliberate: Unix-socket URLs
+(`postgresql:///app?host=…`) break most drivers, which send an empty username instead of the OS
+user, so the agent would waste time reverse-engineering auth. A launcher that provisions an external
+managed database should inject its own `DATABASE_URL` as an org secret; the entrypoint will not
+overwrite it.
 
 Derived images MUST preserve this `ENTRYPOINT` (or invoke `trace-entrypoint` themselves) so the
 services and database defaults are available; overriding it with a bare `node dist/index.js` skips
