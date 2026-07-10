@@ -835,6 +835,16 @@ describe("SessionService", () => {
           data: expect.objectContaining({ kind: "app", repoId: "managed-repo-1" }),
         }),
       );
+      // App sessions provision immediately, so the initial prompt must be queued
+      // as a pending run — otherwise workspaceReady has nothing to deliver and
+      // the agent never starts.
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            pendingRun: expect.objectContaining({ type: "run", prompt: "Build a CRM" }),
+          }),
+        }),
+      );
       await vi.waitFor(() => {
         expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
           expect.objectContaining({

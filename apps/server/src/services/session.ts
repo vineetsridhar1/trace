@@ -3579,11 +3579,14 @@ export class SessionService {
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
-    const queueInitialRunUntilBridgeAccess =
-      input.deferInitialRun !== true &&
-      needsRuntimeProvisioning &&
-      !!input.prompt &&
-      (deferRuntimeSelection || !selectedRuntimeAccessAllowed);
+    // Queue the initial prompt as a pending run whenever we're provisioning a
+    // fresh runtime for it; it's delivered once the workspace is ready
+    // (workspaceReady → deliverPendingCommand). This must cover BOTH the
+    // deferred bridge-access path AND the immediate-provision path — app
+    // sessions (and explicit-runtime sessions) provision immediately, and
+    // without queuing here their first prompt would never reach the agent.
+    const queueInitialRun =
+      input.deferInitialRun !== true && needsRuntimeProvisioning && !!input.prompt;
     const initialConnection = sharedConnection
       ? sharedConnection
       : connJson(
@@ -3668,7 +3671,7 @@ export class SessionService {
           channelId: resolvedChannelId,
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
-          pendingRun: queueInitialRunUntilBridgeAccess
+          pendingRun: queueInitialRun
             ? pendingRunValue([
                 {
                   type: "run",
