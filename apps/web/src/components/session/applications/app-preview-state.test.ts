@@ -24,7 +24,7 @@ describe("appPreviewReducer", () => {
     });
   });
 
-  it("preserves a loaded frame throughout a manual refresh", () => {
+  it("shows the loading overlay again when a manual refresh remounts the frame", () => {
     const loaded = appPreviewReducer(
       appPreviewReducer(initialAppPreviewState, {
         type: "request-succeeded",
@@ -34,12 +34,15 @@ describe("appPreviewReducer", () => {
     );
     const refreshing = appPreviewReducer(loaded, { type: "reload" });
 
+    // The existing frame stays visible while the new preview URL is fetched.
     expect(refreshing).toMatchObject({
       url: "https://preview.test/auth-1",
       frameLoaded: true,
       refreshing: true,
     });
 
+    // Once the fresh URL arrives the iframe remounts (new frameRevision), so the
+    // loaded flag resets and the loading overlay covers the blank frame.
     expect(
       appPreviewReducer(refreshing, {
         type: "request-succeeded",
@@ -47,7 +50,7 @@ describe("appPreviewReducer", () => {
       }),
     ).toMatchObject({
       url: "https://preview.test/auth-2",
-      frameLoaded: true,
+      frameLoaded: false,
       frameRevision: 2,
       refreshing: false,
     });

@@ -1,93 +1,52 @@
-import { Monitor, RotateCw, Smartphone } from "lucide-react";
+import { RotateCw } from "lucide-react";
 import { Button } from "../../ui/button";
-import { TraceLoader } from "../../ui/trace-loader";
+import { Skeleton } from "../../ui/skeleton";
 
 export function AppPreviewCanvasSkeleton({
   error,
   onRetry,
-  message = "Starting preview…",
 }: {
   error?: string | null;
   onRetry?: () => void;
-  message?: string;
 }) {
   return (
     <div className="flex h-full flex-col bg-surface-deep">
-      <style>
-        {`
-          .app-preview-loading-bar {
-            animation: app-preview-loading-bar 1.5s ease-in-out infinite;
-          }
-          @keyframes app-preview-loading-bar {
-            0% { transform: translateX(-110%); }
-            100% { transform: translateX(320%); }
-          }
-          @media (prefers-reduced-motion: reduce) {
-            .app-preview-loading-bar { animation: none; opacity: .6; }
-          }
-        `}
-      </style>
-
-      {/* Toolbar — mirrors AppPreviewCanvas so the swap to the live frame is seamless. */}
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
-        <span className="text-xs tabular-nums text-muted-foreground/40">—— × ——</span>
-        <div className="flex items-center gap-1 rounded-md border border-border bg-background/40 p-0.5 opacity-50">
-          <span className="flex size-6 items-center justify-center text-muted-foreground">
-            <Monitor size={13} />
-          </span>
-          <span className="flex size-6 items-center justify-center text-muted-foreground">
-            <Smartphone size={13} />
-          </span>
+        <Skeleton className="h-3 w-20" />
+        <div className="flex gap-1">
+          <Skeleton className="size-6 rounded" />
+          <Skeleton className="size-6 rounded" />
         </div>
-        <Button size="icon-xs" variant="ghost" disabled title="Reload preview">
-          <RotateCw size={13} />
-        </Button>
+        <Skeleton className="size-6 rounded" />
       </div>
-
       <div className="relative flex min-h-0 flex-1 items-center justify-center p-8">
         <div className="flex aspect-[16/10] w-[min(88%,64rem)] flex-col overflow-hidden rounded-md border border-border bg-background shadow-2xl">
-          {/* Fake browser chrome */}
-          <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-4">
-            <div className="flex gap-1.5">
-              <span className="size-2.5 rounded-full bg-muted" />
-              <span className="size-2.5 rounded-full bg-muted" />
-              <span className="size-2.5 rounded-full bg-muted" />
+          <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-4">
+            <Skeleton className="size-3 rounded-full" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="ml-auto h-3 w-16" />
+          </div>
+          <div className="flex flex-1 flex-col gap-4 p-6">
+            <Skeleton className="h-7 w-48" />
+            <Skeleton className="h-4 w-3/5" />
+            <div className="grid flex-1 grid-cols-3 gap-4 pt-2">
+              <Skeleton className="h-full rounded-lg" />
+              <Skeleton className="h-full rounded-lg" />
+              <Skeleton className="h-full rounded-lg" />
             </div>
-            <div className="ml-2 h-4 flex-1 rounded-full bg-muted/50" />
-          </div>
-
-          {/* Indeterminate loading bar under the address bar */}
-          <div className="h-0.5 w-full overflow-hidden bg-border/40">
-            {!error ? (
-              <div className="app-preview-loading-bar h-full w-1/3 rounded-full bg-primary/80" />
-            ) : (
-              <div className="h-full w-full bg-destructive/50" />
-            )}
-          </div>
-
-          {/* Content */}
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
-            {error ? (
-              <>
-                <p className="max-w-md text-sm font-medium text-foreground">
-                  Couldn&apos;t load the preview
-                </p>
-                <p className="max-w-md text-xs text-destructive">{error}</p>
-                {onRetry ? (
-                  <Button size="sm" variant="outline" onClick={onRetry}>
-                    <RotateCw size={12} className="mr-1" />
-                    Retry
-                  </Button>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <TraceLoader size={44} showLabel={false} />
-                <p className="text-xs font-medium text-muted-foreground">{message}</p>
-              </>
-            )}
           </div>
         </div>
+        {error ? (
+          <div className="absolute bottom-5 flex items-center gap-2 rounded-md border border-destructive/30 bg-background/95 px-3 py-2 shadow-lg">
+            <span className="max-w-md truncate text-xs text-destructive">{error}</span>
+            {onRetry ? (
+              <Button size="sm" variant="outline" onClick={onRetry}>
+                <RotateCw size={12} />
+                Retry
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

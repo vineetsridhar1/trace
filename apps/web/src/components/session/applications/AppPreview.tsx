@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { TraceLoader } from "@/components/ui/trace-loader";
 import { cn } from "@/lib/utils";
 import { AppPreviewCanvas } from "./AppPreviewCanvas";
-import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
+import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
 import { appPreviewReducer, initialAppPreviewState } from "./app-preview-state";
 
 const CREATE_PREVIEW_MUTATION = gql`
@@ -65,7 +65,7 @@ export function AppPreview({
 
   if (error) {
     if (desktopViewport) {
-      return <AppPreviewCanvasSkeleton error={error} onRetry={reload} />;
+      return <AppPreviewCanvasLoader error={error} onRetry={reload} />;
     }
     return (
       <div
@@ -83,7 +83,7 @@ export function AppPreview({
     );
   }
   if (!url) {
-    if (desktopViewport) return <AppPreviewCanvasSkeleton message="Connecting to preview…" />;
+    if (desktopViewport) return <AppPreviewCanvasLoader message="Connecting to preview…" />;
     return (
       <div className={cn("flex items-center justify-center", fill ? "h-full" : "aspect-video")}>
         <TraceLoader size={14} showLabel={false} />

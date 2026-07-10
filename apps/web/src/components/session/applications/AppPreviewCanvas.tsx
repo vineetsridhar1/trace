@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Monitor, RotateCw, Smartphone } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { Button } from "../../ui/button";
-import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
+import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
 
 const CANVAS_GUTTER = 32;
 const MIN_VIEWPORT_WIDTH = 320;
@@ -216,7 +216,7 @@ export function AppPreviewCanvas({
             transition={{ duration: 0.2 }}
             className="absolute inset-0 z-20"
           >
-            <AppPreviewCanvasSkeleton message="Loading app…" />
+            <AppPreviewCanvasLoader message="Loading app…" />
           </motion.div>
         ) : null}
       </AnimatePresence>
