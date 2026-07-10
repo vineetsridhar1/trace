@@ -396,7 +396,7 @@ export class EndpointProxyService {
     }
     const requestId = randomUUID();
     this.pendingWs.set(requestId, { client, runtimeId: runtime.key, endpointId: endpoint.id });
-    client.on("message", (data) => {
+    client.on("message", (data, isBinary) => {
       const buffer = Buffer.isBuffer(data)
         ? data
         : Array.isArray(data)
@@ -404,7 +404,12 @@ export class EndpointProxyService {
           : Buffer.from(data);
       sessionRouter.sendToRuntime(
         runtime.key,
-        { type: "endpoint_ws_data", requestId, dataBase64: buffer.toString("base64") },
+        {
+          type: "endpoint_ws_data",
+          requestId,
+          dataBase64: buffer.toString("base64"),
+          isBinary,
+        },
         endpoint.organizationId,
       );
     });
@@ -476,11 +481,13 @@ export class EndpointProxyService {
     res.end();
   }
 
-  resolveWebSocketData(requestId: string, dataBase64: string) {
+  resolveWebSocketData(requestId: string, dataBase64: string, isBinary = true) {
     const pending = this.pendingWs.get(requestId);
     if (!pending) return;
     const data = Buffer.from(dataBase64, "base64");
-    if (pending.client.readyState === pending.client.OPEN) pending.client.send(data);
+    if (pending.client.readyState === pending.client.OPEN) {
+      pending.client.send(isBinary ? data : data.toString("utf8"), { binary: isBinary });
+    }
   }
 
   resolveWebSocketClosed(requestId: string) {

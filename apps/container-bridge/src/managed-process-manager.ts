@@ -428,12 +428,13 @@ export class ManagedProcessManager {
     socket.on("open", () =>
       this.send({ type: "endpoint_ws_opened", requestId: options.requestId }),
     );
-    socket.on("message", (data) => {
+    socket.on("message", (data, isBinary) => {
       const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer);
       this.send({
         type: "endpoint_ws_data",
         requestId: options.requestId,
         dataBase64: buffer.toString("base64"),
+        isBinary,
       });
     });
     socket.on("close", (code, reason) => {
@@ -456,9 +457,11 @@ export class ManagedProcessManager {
     });
   }
 
-  sendWebSocketData(requestId: string, dataBase64: string) {
+  sendWebSocketData(requestId: string, dataBase64: string, isBinary = true) {
     const socket = this.sockets.get(requestId);
-    if (socket?.readyState === WebSocket.OPEN) socket.send(Buffer.from(dataBase64, "base64"));
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    const data = Buffer.from(dataBase64, "base64");
+    socket.send(isBinary ? data : data.toString("utf8"), { binary: isBinary });
   }
 
   closeWebSocket(requestId: string, code?: number, reason?: string) {

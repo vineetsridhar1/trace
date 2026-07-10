@@ -97,10 +97,7 @@ describe("ManagedProcessManager", () => {
       messages,
       (message) => message.type === "setup_script_log" && message.data.includes("setup-ok"),
     );
-    const result = await waitFor(
-      messages,
-      (message) => message.type === "setup_script_result",
-    );
+    const result = await waitFor(messages, (message) => message.type === "setup_script_result");
     expect(result).toMatchObject({
       type: "setup_script_result",
       requestId: "setup-1",
@@ -258,7 +255,7 @@ describe("ManagedProcessManager", () => {
     expect(messages.some((message) => message.type === "endpoint_http_error")).toBe(false);
   });
 
-  it("forwards websocket subprotocols required by Vite HMR", async () => {
+  it("forwards websocket subprotocols and text frames required by Vite HMR", async () => {
     const messages: BridgeMessage[] = [];
     const manager = new ManagedProcessManager(new Map(), (message) => messages.push(message));
     const server = http.createServer();
@@ -267,8 +264,14 @@ describe("ManagedProcessManager", () => {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("Missing test server port");
-    const protocol = new Promise<string>((resolve) => {
-      webSocketServer.once("connection", (socket) => resolve(socket.protocol));
+    const connection = new Promise<{ protocol: string; reply: Promise<boolean> }>((resolve) => {
+      webSocketServer.once("connection", (socket) => {
+        const reply = new Promise<boolean>((resolveReply) => {
+          socket.once("message", (_data, isBinary) => resolveReply(isBinary));
+        });
+        socket.send(JSON.stringify({ type: "connected" }));
+        resolve({ protocol: socket.protocol, reply });
+      });
     });
 
     manager.openWebSocket({
@@ -280,7 +283,23 @@ describe("ManagedProcessManager", () => {
     });
 
     await waitFor(messages, (message) => message.type === "endpoint_ws_opened");
-    expect(await protocol).toBe("vite-hmr");
+    const connected = await connection;
+    expect(connected.protocol).toBe("vite-hmr");
+    const update = await waitFor(
+      messages,
+      (message) => message.type === "endpoint_ws_data" && message.requestId === "ws-hmr",
+    );
+    expect(update).toMatchObject({
+      type: "endpoint_ws_data",
+      dataBase64: Buffer.from(JSON.stringify({ type: "connected" })).toString("base64"),
+      isBinary: false,
+    });
+    manager.sendWebSocketData(
+      "ws-hmr",
+      Buffer.from(JSON.stringify({ type: "custom", event: "vite:ping" })).toString("base64"),
+      false,
+    );
+    expect(await connected.reply).toBe(false);
     manager.destroyAll();
     await new Promise<void>((resolve) => webSocketServer.close(() => resolve()));
   });

@@ -371,6 +371,7 @@ export interface BridgeEndpointWebSocketDataCommand {
   type: "endpoint_ws_data";
   requestId: string;
   dataBase64: string;
+  isBinary?: boolean;
 }
 
 export interface BridgeEndpointWebSocketCloseCommand {
@@ -829,6 +830,7 @@ export interface BridgeEndpointWebSocketData {
   type: "endpoint_ws_data";
   requestId: string;
   dataBase64: string;
+  isBinary?: boolean;
 }
 
 export interface BridgeEndpointWebSocketClosed {

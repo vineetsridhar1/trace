@@ -630,7 +630,11 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "endpoint_ws_data": {
-        this.managedProcessManager.sendWebSocketData(cmd.requestId, cmd.dataBase64);
+        this.managedProcessManager.sendWebSocketData(
+          cmd.requestId,
+          cmd.dataBase64,
+          cmd.isBinary ?? true,
+        );
         break;
       }
 
