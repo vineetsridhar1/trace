@@ -222,7 +222,7 @@ export function GroupHeader({
         </ActionTooltip>
       )}
 
-      {canShowApplications && !compactAppMode ? (
+      {canShowApplications ? (
         <ActionTooltip label={showApplicationsSidebar ? "Hide applications" : "Applications"}>
           <button
             onClick={onToggleApplicationsSidebar}
