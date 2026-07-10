@@ -45,6 +45,7 @@ interface GroupHeaderProps {
   showSidebar: boolean;
   showApplicationsSidebar: boolean;
   canShowApplications: boolean;
+  compactAppMode?: boolean;
   onToggleFullscreen: () => void;
   onToggleSidebar: () => void;
   onToggleApplicationsSidebar: () => void;
@@ -76,6 +77,7 @@ export function GroupHeader({
   showSidebar,
   showApplicationsSidebar,
   canShowApplications,
+  compactAppMode = false,
   onToggleFullscreen,
   onToggleSidebar,
   onToggleApplicationsSidebar,
@@ -181,28 +183,32 @@ export function GroupHeader({
         </ActionTooltip>
       )}
 
-      <SessionMoveButton
-        sessionId={selectedSessionId}
-        disabled={!canMoveSession}
-        disabledReason={moveDisabledReason}
-      />
+      {!compactAppMode ? (
+        <SessionMoveButton
+          sessionId={selectedSessionId}
+          disabled={!canMoveSession}
+          disabledReason={moveDisabledReason}
+        />
+      ) : null}
 
-      <div className="relative" ref={historyRef}>
-        <ActionTooltip label="Group history">
-          <button
-            onClick={() => setShowHistory((value: boolean) => !value)}
-            className={headerIconButtonClass}
-            aria-label="Group history"
-          >
-            <History size={13} />
-          </button>
-        </ActionTooltip>
-        {showHistory && selectedSessionId && (
-          <div className="app-region-no-drag absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
-            <SessionHistory sessionId={selectedSessionId} />
-          </div>
-        )}
-      </div>
+      {!compactAppMode ? (
+        <div className="relative" ref={historyRef}>
+          <ActionTooltip label="Group history">
+            <button
+              onClick={() => setShowHistory((value: boolean) => !value)}
+              className={headerIconButtonClass}
+              aria-label="Group history"
+            >
+              <History size={13} />
+            </button>
+          </ActionTooltip>
+          {showHistory && selectedSessionId ? (
+            <div className="app-region-no-drag absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
+              <SessionHistory sessionId={selectedSessionId} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {panelMode && (
         <ActionTooltip label={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
@@ -216,7 +222,7 @@ export function GroupHeader({
         </ActionTooltip>
       )}
 
-      {canShowApplications && (
+      {canShowApplications && !compactAppMode ? (
         <ActionTooltip label={showApplicationsSidebar ? "Hide applications" : "Applications"}>
           <button
             onClick={onToggleApplicationsSidebar}
@@ -230,21 +236,23 @@ export function GroupHeader({
             <AppWindow size={13} />
           </button>
         </ActionTooltip>
-      )}
+      ) : null}
 
-      <ActionTooltip label={showSidebar ? "Hide sidebar" : "Show sidebar"}>
-        <button
-          onClick={onToggleSidebar}
-          className={cn(
-            headerIconButtonClass,
-            "hidden sm:flex",
-            showSidebar ? "bg-surface-hover text-foreground" : undefined,
-          )}
-          aria-label={showSidebar ? "Hide sidebar" : "Show sidebar"}
-        >
-          <PanelRight size={13} />
-        </button>
-      </ActionTooltip>
+      {!compactAppMode ? (
+        <ActionTooltip label={showSidebar ? "Hide sidebar" : "Show sidebar"}>
+          <button
+            onClick={onToggleSidebar}
+            className={cn(
+              headerIconButtonClass,
+              "hidden sm:flex",
+              showSidebar ? "bg-surface-hover text-foreground" : undefined,
+            )}
+            aria-label={showSidebar ? "Hide sidebar" : "Show sidebar"}
+          >
+            <PanelRight size={13} />
+          </button>
+        </ActionTooltip>
+      ) : null}
     </div>
   );
 }

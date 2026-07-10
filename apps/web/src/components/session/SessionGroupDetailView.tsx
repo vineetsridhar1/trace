@@ -900,6 +900,7 @@ export function SessionGroupDetailView({
                 showSidebar={showSidebar}
                 showApplicationsSidebar={showApplicationsSidebar}
                 canShowApplications={showApplicationsSidebarTab}
+                compactAppMode={isAppGroup}
                 onToggleFullscreen={toggleFullscreen}
                 onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
                 onToggleApplicationsSidebar={

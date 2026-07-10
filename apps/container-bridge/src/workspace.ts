@@ -588,6 +588,22 @@ export default config;
     `${workdir}/postcss.config.js`,
     `module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } };\n`,
   );
+  // Served via the Trace preview proxy (`<key>.<previewHost>`), a different
+  // origin than the container's localhost. Allow it so Next's dev server
+  // doesn't block /_next/HMR/API requests as cross-origin. Trace injects the
+  // exact wildcard host via TRACE_ALLOWED_DEV_ORIGINS.
+  fs.writeFileSync(
+    `${workdir}/next.config.js`,
+    `const injected = (process.env.TRACE_ALLOWED_DEV_ORIGINS || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+module.exports = {
+  allowedDevOrigins: [...injected, "*.preview.localhost", "*.preview.gettrace.org"],
+};
+`,
+  );
   fs.writeFileSync(
     `${workdir}/tsconfig.json`,
     JSON.stringify(
