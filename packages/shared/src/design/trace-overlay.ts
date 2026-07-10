@@ -9,7 +9,7 @@ export function composeTraceOverlay(input: OpenDesignPromptInput): string {
       "Keep frontend API requests same-origin, route third-party API calls through the Node server to avoid browser CORS, and only configure exact external origins when cross-origin browser access is required.",
       "Run pnpm install before first use if dependencies are missing.",
       "You may install additional npm packages and use sudo for required OS packages in this isolated cloud runtime.",
-      "Use supplied database environment variables such as DATABASE_URL when present, keep credentials out of git, and implement real server-side persistence when the brief needs it.",
+      "Use the preinstalled pg client with supplied DATABASE_URL when PostgreSQL persistence is needed; keep credentials out of git.",
       "Redis is preinstalled; start and use it when caching, queues, or ephemeral coordination help the application.",
       "Run pnpm build or an equivalent verification before declaring the app done.",
       "Start the preview with pnpm dev and keep it running so Trace can detect port 3000.",

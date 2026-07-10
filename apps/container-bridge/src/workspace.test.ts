@@ -262,6 +262,10 @@ describe("workspace repo setup", () => {
       expect.stringContaining('"dev": "tsx watch --clear-screen=false server.ts"'),
     );
     expect(mocks.writeFileSync).toHaveBeenCalledWith(
+      "/workspaces/group-1/package.json",
+      expect.stringContaining('"pg": "^8.22.0"'),
+    );
+    expect(mocks.writeFileSync).toHaveBeenCalledWith(
       "/workspaces/group-1/server.ts",
       expect.stringContaining("server: { hmr: { server }, middlewareMode: true }"),
     );

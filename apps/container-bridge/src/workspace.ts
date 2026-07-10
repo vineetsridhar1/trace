@@ -420,6 +420,7 @@ function writeFallbackAppStarter(workdir: string): void {
           "class-variance-authority": "^0.7.0",
           clsx: "^2.1.0",
           express: "^5.1.0",
+          pg: "^8.22.0",
           react: "^19.0.0",
           "react-dom": "^19.0.0",
           "tailwind-merge": "^3.0.0",
@@ -427,6 +428,7 @@ function writeFallbackAppStarter(workdir: string): void {
         devDependencies: {
           "@types/express": "^5.0.0",
           "@types/node": "^22.0.0",
+          "@types/pg": "^8.20.0",
           "@types/react": "^19.0.0",
           "@types/react-dom": "^19.0.0",
           "@vitejs/plugin-react": "^4.3.0",

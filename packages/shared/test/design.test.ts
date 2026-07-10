@@ -81,6 +81,7 @@ describe("composeTraceDesignPrompt", () => {
     expect(prompt).toContain("Build a lightweight CRM.");
     expect(prompt).toContain("Vite + React + Node + Tailwind + shadcn");
     expect(prompt).toContain("route third-party API calls through the Node server");
+    expect(prompt).toContain("preinstalled pg client");
     expect(prompt).toContain("data-trace-source");
     expect(prompt).toContain("managed remote lazily on the first checkpoint");
   });
