@@ -120,6 +120,16 @@ async function resolve(
 
   const repo = await managedGitService.getManagedRepo(organizationId, repoId);
   if (!repo) {
+    // The token verified (same JWT secret) but no managed repo row exists in
+    // THIS server's database. That almost always means the runtime's origin
+    // points at a different Trace deployment than the one that created the
+    // repo — i.e. TRACE_SERVER_PUBLIC_URL on the creating server resolves to
+    // another environment. Log enough to confirm which server is missing it.
+    console.warn(
+      `[managed-git] 404 no managed repo row: org=${organizationId} repo=${repoId} service=${service}. ` +
+        "The pushing runtime's origin resolves to this server, but its DB has no such repo — " +
+        "check that TRACE_SERVER_PUBLIC_URL on the session's server points back to that same deployment.",
+    );
     res.status(404).send("Repository not found");
     return null;
   }

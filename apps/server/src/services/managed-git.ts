@@ -54,8 +54,15 @@ type MintAccessTokenInput = {
 function managedGitBaseUrl(): string {
   const explicit = process.env.TRACE_SERVER_PUBLIC_URL?.trim();
   if (explicit) return explicit.replace(/\/$/, "");
-  // Local/dev fallback so managed remotes resolve without extra config.
+  // Local/dev fallback so managed remotes resolve without extra config. A
+  // remote runtime (cloud/Fly) cannot reach the server's own localhost, so the
+  // origin it's given would be dead — warn loudly rather than fail silently at
+  // push time with a confusing "repository not found".
   const port = process.env.PORT ?? "4000";
+  console.warn(
+    `[managed-git] TRACE_SERVER_PUBLIC_URL is unset; managed git origins fall back to http://localhost:${port}. ` +
+      "Cloud runtimes cannot reach this and their checkpoint pushes will fail. Set TRACE_SERVER_PUBLIC_URL to a URL the runtime can reach back on.",
+  );
   return `http://localhost:${port}`;
 }
 
