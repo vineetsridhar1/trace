@@ -189,9 +189,12 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
 }
 
 function MainContentFrame({ children }: { children: ReactNode }) {
-  const { state } = useSidebar();
+  const { state, isMobile } = useSidebar();
   const style = {
-    "--trace-header-title-offset": state === "collapsed" ? "20rem" : "1rem",
+    // On mobile the sidebar is an off-canvas sheet, so the desktop collapsed
+    // offset (which reserves room for the sidebar rail) would push the header
+    // content off-screen. Keep a small offset on mobile regardless of state.
+    "--trace-header-title-offset": !isMobile && state === "collapsed" ? "20rem" : "1rem",
   } as CSSProperties;
 
   return (
