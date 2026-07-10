@@ -126,6 +126,25 @@ async function main() {
   });
   let startupReady = false;
 
+  // Preview-proxied requests (Host = <key>.<previewHost>) belong to the app
+  // session's own server. Hand them to the endpoint proxy BEFORE any CORS /
+  // cookie / body middleware: the app is same-origin with itself, so Trace's
+  // cross-origin API allowlist must not apply — otherwise the app's own /api
+  // calls (whose Origin is the preview host, not an allowlisted Trace origin)
+  // are rejected by CORS before the proxy ever sees them.
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const endpointKey = endpointProxyService.extractKey(req.headers.host);
+    if (!endpointKey) {
+      next();
+      return;
+    }
+    void endpointProxyService.handleHttpRequest(req, res, endpointKey).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!res.headersSent) res.status(500);
+      res.end(message);
+    });
+  });
+
   app.get("/health", (_req: express.Request, res: express.Response) => {
     res.json({ status: "ok", ready: startupReady });
   });
@@ -156,19 +175,6 @@ async function main() {
     }),
   );
   app.use(cookieParser());
-
-  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const endpointKey = endpointProxyService.extractKey(req.headers.host);
-    if (!endpointKey) {
-      next();
-      return;
-    }
-    void endpointProxyService.handleHttpRequest(req, res, endpointKey).catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      if (!res.headersSent) res.status(500);
-      res.end(message);
-    });
-  });
 
   // Webhook route needs raw body for signature verification — register before express.json()
   app.use("/webhooks/github", express.raw({ type: "application/json" }), webhookRouter);
