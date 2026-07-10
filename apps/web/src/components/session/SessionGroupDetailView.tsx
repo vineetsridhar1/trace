@@ -37,6 +37,7 @@ import { useFileActions } from "./useFileActions";
 import { useSessionGroupFiles } from "./useSessionGroupFiles";
 import { useSessionGroupDirectoryTree } from "./useSessionGroupDirectoryTree";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
+import { isAppCloudReady } from "./app-session-readiness";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
 import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
@@ -426,9 +427,7 @@ export function SessionGroupDetailView({
     | Record<string, unknown>
     | null
     | undefined;
-  const appCloudReady = [groupConnection?.state, selectedConnection?.state].some(
-    (state) => state === "connected" || state === "degraded",
-  );
+  const appCloudReady = isAppCloudReady(selectedConnection?.state, groupConnection?.state);
   const showApplicationsSidebarTab = selectedSession?.hosting === "cloud";
   const activeTerminal = terminals.find((t) => t.id === activeTerminalId) ?? null;
 
