@@ -21,10 +21,12 @@ const INITIAL_FRAME_RETRY_MS = 4_000;
 
 export function AppPreview({
   endpointId,
+  status,
   fill = false,
   desktopViewport = false,
 }: {
   endpointId: string;
+  status: string;
   fill?: boolean;
   desktopViewport?: boolean;
 }) {
@@ -97,6 +99,7 @@ export function AppPreview({
         frameRevision={frameRevision}
         loaded={frameLoaded}
         refreshing={refreshing}
+        status={status}
         onLoad={() => dispatch({ type: "frame-loaded" })}
         onReload={reload}
       />

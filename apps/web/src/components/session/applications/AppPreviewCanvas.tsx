@@ -4,6 +4,7 @@ import { Monitor, RotateCw, Smartphone } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { Button } from "../../ui/button";
 import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
+import { AppPreviewFrameControls } from "./AppPreviewFrameControls";
 
 const CANVAS_GUTTER = 32;
 const MIN_VIEWPORT_WIDTH = 320;
@@ -27,6 +28,7 @@ export function AppPreviewCanvas({
   frameRevision,
   loaded,
   refreshing,
+  status,
   onLoad,
   onReload,
 }: {
@@ -34,6 +36,7 @@ export function AppPreviewCanvas({
   frameRevision: number;
   loaded: boolean;
   refreshing: boolean;
+  status: string;
   onLoad: () => void;
   onReload: () => void;
 }) {
@@ -174,6 +177,7 @@ export function AppPreviewCanvas({
               )}
               style={{ width: displayedWidth, height: displayedHeight }}
             >
+              <AppPreviewFrameControls url={url} status={status} />
               <div className="size-full overflow-hidden rounded-[inherit]">
                 <iframe
                   key={frameRevision}

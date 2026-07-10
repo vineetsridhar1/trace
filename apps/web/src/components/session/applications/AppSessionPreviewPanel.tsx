@@ -96,7 +96,15 @@ export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: str
   }, [endpoint, refresh]);
 
   if (endpoint)
-    return <AppPreview key={endpoint.id} endpointId={endpoint.id} fill desktopViewport />;
+    return (
+      <AppPreview
+        key={endpoint.id}
+        endpointId={endpoint.id}
+        status="running"
+        fill
+        desktopViewport
+      />
+    );
 
   return <AppPreviewCanvasSkeleton error={error} onRetry={() => void refresh()} />;
 }
