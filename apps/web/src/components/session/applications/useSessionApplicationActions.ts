@@ -15,10 +15,14 @@ import {
 type EndpointReference = Pick<SessionEndpoint, "accessMode" | "id" | "url">;
 
 function resultError(result: unknown): Error | null {
-  if (!result || typeof result !== "object" || !("error" in result)) return null;
-  const error = result.error;
+  if (!result || typeof result !== "object") return null;
+  // urql's OperationResult always carries an `error` property (undefined on
+  // success), so guard on its value — not key presence — or every successful
+  // mutation would be reported as a failure.
+  const error = (result as { error?: unknown }).error;
+  if (!error) return null;
   const message =
-    error && typeof error === "object" && "message" in error && typeof error.message === "string"
+    typeof error === "object" && "message" in error && typeof error.message === "string"
       ? error.message
       : "Application action failed";
   return new Error(message);
