@@ -119,6 +119,9 @@ const SESSION_DETAIL_QUERY = gql`
           author
           committedAt
           filesChanged
+          captureStatus
+          captureUrl
+          capturedAt
           createdAt
         }
         channel {
@@ -188,6 +191,9 @@ const SESSION_DETAIL_QUERY = gql`
         author
         committedAt
         filesChanged
+        captureStatus
+        captureUrl
+        capturedAt
         createdAt
       }
       channel {

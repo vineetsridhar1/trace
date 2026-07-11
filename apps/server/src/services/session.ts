@@ -1,5 +1,5 @@
 import type { StartSessionInput, UpdateSessionDefaultsInput, ActorType } from "@trace/gql";
-import type { AgentStatus, SessionStatus, CodingTool } from "@prisma/client";
+import type { AgentStatus, SessionStatus, CodingTool, SessionGroupKind } from "@prisma/client";
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
@@ -72,9 +72,12 @@ import {
   type GitHubRepoRef,
 } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
+import { managedGitService } from "./managed-git.js";
+import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
+  kind?: SessionGroupKind | null;
   sessionGroupId?: string | null;
   sourceSessionId?: string | null;
   imageKeys?: string[] | null;
@@ -384,6 +387,9 @@ function validateUploadKeysForOrganization(
  */
 const MAX_RECONCILE_ATTEMPTS = 10;
 
+// Upper bound on the org-wide app-session listing so it can't grow unbounded.
+const APP_GROUP_LIST_LIMIT = 200;
+
 /** Maximum optimistic-concurrency retries for `updateConnectionConditional`. */
 const MAX_CONNECTION_UPDATE_ATTEMPTS = 5;
 
@@ -561,6 +567,7 @@ function buildCheckpointContextFromStartMeta({
 const SESSION_GROUP_SUMMARY_SELECT = {
   id: true,
   name: true,
+  kind: true,
   slug: true,
   ownerUserId: true,
   ownerUser: true,
@@ -753,6 +760,11 @@ function serializeGitCheckpoint(checkpoint: {
   author: string;
   committedAt: Date;
   filesChanged: number;
+  captureStatus?: string | null;
+  captureKey?: string | null;
+  captureUrl?: string | null;
+  captureContentType?: string | null;
+  capturedAt?: Date | null;
   createdAt: Date;
 }) {
   return {
@@ -768,6 +780,11 @@ function serializeGitCheckpoint(checkpoint: {
     author: checkpoint.author,
     committedAt: checkpoint.committedAt.toISOString(),
     filesChanged: checkpoint.filesChanged,
+    captureStatus: checkpoint.captureStatus ?? null,
+    captureKey: checkpoint.captureKey ?? null,
+    captureUrl: checkpoint.captureUrl ?? null,
+    captureContentType: checkpoint.captureContentType ?? null,
+    capturedAt: checkpoint.capturedAt?.toISOString() ?? null,
     createdAt: checkpoint.createdAt.toISOString(),
   };
 }
@@ -880,15 +897,22 @@ Do this silently — do not mention it to the user unless they ask or it fails.
 If the user asks you to stop auto-saving or disable auto-save, stop doing this for the rest of the session.
 </system-instruction>`;
 
+const APP_SESSION_INSTRUCTION = `\n\n<system-instruction>
+This is a Trace app session in its own isolated cloud runtime. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Vite/React/Node/Tailwind/shadcn-compatible starter as the source of truth. Build frontend UI in src and add API routes or other server behavior in server.ts and related Node modules. Keep browser requests to your own API same-origin. Call third-party APIs from Node routes when browser CORS would block them. Only when an external browser origin must call this app directly, add its exact origin to the comma-separated APP_CORS_ALLOWED_ORIGINS environment variable; never use a wildcard for credentialed requests. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running and ready to use — do NOT install, initialize, or reconfigure them, create roles, or edit pg_hba/auth. The \`pg\` client and its TypeScript types are already installed. For Postgres, import \`Pool\` from \`pg\`, read the DATABASE_URL environment variable, and pass it straight to \`new Pool({ connectionString: process.env.DATABASE_URL })\`; it is a complete, credentialed TCP URL (\`postgresql://user:pass@localhost:5432/app\`) for a ready database named \`app\` — do not parse it, override the user, or switch to a Unix socket. Redis is at REDIS_URL / redis://localhost:6379. Keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. IMPORTANT: the dev server is already started and managed for you on port 3000 (host 0.0.0.0) and hot-reloads your file changes — do NOT run \`pnpm dev\` or otherwise start your own server, the port is already taken and a second one will crash. Just edit files; if you need to verify, curl http://localhost:3000. Commit and push meaningful checkpoints to the configured managed origin when the app reaches a working state. Sharing the live app is a valid final outcome.
+</system-instruction>`;
+
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
 
 /** Append all system instructions (title, background work, branch, auto-save) to a prompt in the correct order. */
-function appendPromptInstructions(prompt: string, { hasRepo }: { hasRepo: boolean }): string {
+function appendPromptInstructions(
+  prompt: string,
+  { hasRepo, sessionGroupKind }: { hasRepo: boolean; sessionGroupKind?: SessionGroupKind | null },
+): string {
   let result = prompt + TITLE_INSTRUCTION;
   result += BACKGROUND_WORK_INSTRUCTION;
-  if (hasRepo) result += BRANCH_INSTRUCTION;
+  if (hasRepo && sessionGroupKind !== "app") result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
 }
@@ -1213,6 +1237,7 @@ export class SessionService {
   private provisionRuntime(params: {
     sessionId: string;
     sessionGroupId?: string | null;
+    sessionGroupKind?: SessionGroupKind | null;
     slug?: string | null;
     preserveBranchName?: boolean;
     hosting: string;
@@ -1224,6 +1249,9 @@ export class SessionService {
     checkpointSha?: string | null;
     createdById: string;
     organizationId: string;
+    /** Actor that initiated provisioning; defaults to a user actor. Agents are
+     * first-class, so the managed-git runtime token must be minted for them. */
+    actorType?: ActorType;
     readOnly?: boolean;
     /** Adopt an existing local worktree at this path instead of creating one. */
     adoptWorktreePath?: string | null;
@@ -1285,6 +1313,30 @@ export class SessionService {
       sessionRouter.createRuntime({
         sessionId: params.sessionId,
         sessionGroupId: params.sessionGroupId ?? undefined,
+        sessionGroupKind: params.sessionGroupKind ?? undefined,
+        prepareAppGit:
+          params.sessionGroupKind === "app" && params.repo?.remoteUrl
+            ? async (runtimeInstanceId) => {
+                const access = await managedGitService.mintAccessToken({
+                  organizationId: params.organizationId,
+                  repoId: params.repo!.id,
+                  scope: "runtime",
+                  sessionId: params.sessionId,
+                  subject: runtimeInstanceId,
+                  capabilities: ["read", "write"],
+                  actorType: params.actorType ?? "user",
+                  actorId: params.createdById,
+                });
+                const authenticatedUrl = new URL(params.repo!.remoteUrl!);
+                authenticatedUrl.username = "trace";
+                authenticatedUrl.password = access.token;
+                return {
+                  repoId: params.repo!.id,
+                  repoRemoteUrl: authenticatedUrl.toString(),
+                  defaultBranch: params.repo!.defaultBranch,
+                };
+              }
+            : undefined,
         slug: slug ?? undefined,
         preserveBranchName,
         hosting: params.hosting as "cloud" | "local",
@@ -1293,14 +1345,17 @@ export class SessionService {
         tool: params.tool,
         model: params.model ?? undefined,
         reasoningEffort: params.reasoningEffort ?? undefined,
-        repo: params.repo
-          ? {
-              id: params.repo.id,
-              name: params.repo.name,
-              remoteUrl: params.repo.remoteUrl,
-              defaultBranch: params.repo.defaultBranch,
-            }
-          : null,
+        repo:
+          params.sessionGroupKind === "app"
+            ? null
+            : params.repo
+              ? {
+                  id: params.repo.id,
+                  name: params.repo.name,
+                  remoteUrl: params.repo.remoteUrl,
+                  defaultBranch: params.repo.defaultBranch,
+                }
+              : null,
         runtimeProfile,
         branch: params.branch ?? undefined,
         checkpointSha: params.checkpointSha ?? undefined,
@@ -2460,6 +2515,47 @@ export class SessionService {
     if (!repo) throw new Error("Repo not found");
   }
 
+  /**
+   * App-kind session groups for the org. Apps have no channel, so channel-scoped
+   * listGroups never surfaces them; this backs the sidebar Apps section.
+   */
+  async listAppGroups(organizationId: string, userId: string) {
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        organizationId,
+        kind: "app",
+        archivedAt: null,
+        AND: [visibleSessionGroupWhere(userId)],
+      },
+      include: SESSION_GROUP_INCLUDE,
+      // Bound this org-wide listing so it can't grow without limit as an org
+      // accumulates apps. The sidebar shows the most recent apps; the tail is
+      // reachable via search/dedicated views when those land.
+      orderBy: { updatedAt: "desc" },
+      take: APP_GROUP_LIST_LIMIT,
+    });
+
+    type SessionGroupWithSessions = SessionGroupSummary & {
+      sessions: SessionWithTimestamps[];
+    };
+
+    return (groups as SessionGroupWithSessions[])
+      .map((group) => {
+        const sessions = sortSessionsByRecency<SessionWithTimestamps>(group.sessions);
+        return {
+          ...buildSessionGroupSnapshot(group, sessions),
+          sessions,
+        };
+      })
+      .sort((a, b) => {
+        const aLatest = a.sessions[0];
+        const bLatest = b.sessions[0];
+        const aTs = aLatest?.lastMessageAt ?? aLatest?.updatedAt ?? a.updatedAt;
+        const bTs = bLatest?.lastMessageAt ?? bLatest?.updatedAt ?? b.updatedAt;
+        return bTs.getTime() - aTs.getTime();
+      });
+  }
+
   async listGroups(
     channelId: string,
     organizationId: string,
@@ -3021,6 +3117,24 @@ export class SessionService {
       this.assertPrivateGroupOwner(resolvedGroup, input.createdById);
     }
     const seedGroup = input.restoreCheckpointId ? restoreGroup : resolvedGroup;
+    const resolvedKind = input.kind ?? seedGroup?.kind ?? "coding";
+    if (existingGroup && input.kind && input.kind !== existingGroup.kind) {
+      throw new ValidationError("Session kind cannot change within an existing session group");
+    }
+    if (resolvedKind === "app") {
+      if (input.sourceSessionId && !input.restoreCheckpointId) {
+        throw new ValidationError("App sessions cannot start from a source session");
+      }
+      if (!existingGroup && !input.restoreCheckpointId && input.repoId) {
+        throw new ValidationError("App sessions cannot start from a linked repo");
+      }
+      if (!existingGroup && !input.restoreCheckpointId && !input.prompt?.trim()) {
+        throw new ValidationError("App sessions require an initial prompt");
+      }
+      if (input.hosting === "local") {
+        throw new ValidationError("App sessions require cloud hosting");
+      }
+    }
     const requestedVisibility = input.visibility ?? "public";
     const newGroupVisibility = requestedVisibility === "private" ? "private" : "public";
     const effectiveGroupVisibility = existingGroup?.visibility ?? newGroupVisibility;
@@ -3043,6 +3157,9 @@ export class SessionService {
 
     const authoritativeChannelRepoId =
       resolvedChannel?.type === "coding" ? (resolvedChannel.repoId ?? null) : null;
+    if (resolvedKind === "app" && authoritativeChannelRepoId && !existingGroup) {
+      throw new ValidationError("App sessions cannot start in a repo-linked coding channel");
+    }
 
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
       throw new Error("Coding channel sessions must use the channel's linked repo");
@@ -3061,15 +3178,21 @@ export class SessionService {
     ) {
       throw new Error("Source session repo does not match the channel's linked repo");
     }
+    // A restore must stay on the checkpoint's repo. Allowing an explicit
+    // input.repoId to override it produces a group whose provisioning fails at
+    // token mint (e.g. attaching a GitHub repoId to a managed-repo checkpoint).
+    if (restoreCheckpoint?.repoId && input.repoId && input.repoId !== restoreCheckpoint.repoId) {
+      throw new Error("Restored session must use the checkpoint's repo");
+    }
 
-    const resolvedRepoId =
+    let resolvedRepoId =
       authoritativeChannelRepoId ??
       input.repoId ??
       seedGroup?.repoId ??
       sourceSession?.repoId ??
       restoreCheckpoint?.repoId ??
       undefined;
-    const resolvedRepo = resolvedRepoId
+    let resolvedRepo = resolvedRepoId
       ? await prisma.repo.findFirst({
           where: { id: resolvedRepoId, organizationId: input.organizationId },
           select: { id: true, remoteUrl: true },
@@ -3175,8 +3298,9 @@ export class SessionService {
       !!existingGroup?.id &&
       (!!sharedWorkdir || !!sharedRuntimeInstanceId || !!sharedConnectionHasRuntimeSelection);
     const deferRuntimeSelection =
-      input.deferRuntimeSelection === true ||
-      (!input.restoreCheckpointId &&
+      (input.deferRuntimeSelection === true && resolvedKind !== "app") ||
+      (resolvedKind !== "app" &&
+        !input.restoreCheckpointId &&
         !requestedRuntimeSelection &&
         !sharedRuntimeInstanceId &&
         !restoreGroupRuntimeInstanceId);
@@ -3227,7 +3351,7 @@ export class SessionService {
             organizationId: input.organizationId,
             environmentId: input.environmentId ?? null,
             adapterType:
-              input.hosting === "cloud"
+              resolvedKind === "app" || input.hosting === "cloud"
                 ? "provisioned"
                 : input.hosting === "local"
                   ? "local"
@@ -3266,7 +3390,7 @@ export class SessionService {
           : null;
 
     let hosting =
-      input.hosting ??
+      (resolvedKind === "app" ? "cloud" : input.hosting) ??
       (deferRuntimeSelection ? "local" : environmentHosting) ??
       sourceSession?.hosting ??
       (isLocalMode() ? "local" : "cloud");
@@ -3469,6 +3593,22 @@ export class SessionService {
       : (resolveStoredReasoningEffortForTool(tool, userDefaults?.defaultSessionReasoningEffort) ??
         getDefaultReasoningEffort(tool));
 
+    // Tracked so we can clean up the managed repo if the session transaction
+    // below rolls back (it's created before the txn because it initializes
+    // filesystem-backed git storage, not just a row).
+    let createdManagedRepoId: string | null = null;
+    if (resolvedKind === "app" && !resolvedRepoId) {
+      const managedRepo = await managedGitService.createManagedRepo({
+        organizationId: input.organizationId,
+        name: `${name} source`,
+        actorType: input.actorType ?? "user",
+        actorId: input.createdById,
+      });
+      resolvedRepoId = managedRepo.id;
+      resolvedRepo = managedRepo;
+      createdManagedRepoId = managedRepo.id;
+    }
+
     assertCloudRepoRemoteAvailable(hosting, resolvedRepo);
 
     // Ask-mode sessions skip worktree creation (read-only against repo root).
@@ -3478,11 +3618,14 @@ export class SessionService {
 
     const needsRuntimeProvisioning =
       !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
-    const queueInitialRunUntilBridgeAccess =
-      input.deferInitialRun !== true &&
-      needsRuntimeProvisioning &&
-      !!input.prompt &&
-      (deferRuntimeSelection || !selectedRuntimeAccessAllowed);
+    // Queue the initial prompt as a pending run whenever we're provisioning a
+    // fresh runtime for it; it's delivered once the workspace is ready
+    // (workspaceReady → deliverPendingCommand). This must cover BOTH the
+    // deferred bridge-access path AND the immediate-provision path — app
+    // sessions (and explicit-runtime sessions) provision immediately, and
+    // without queuing here their first prompt would never reach the agent.
+    const queueInitialRun =
+      input.deferInitialRun !== true && needsRuntimeProvisioning && !!input.prompt;
     const initialConnection = sharedConnection
       ? sharedConnection
       : connJson(
@@ -3530,6 +3673,7 @@ export class SessionService {
         : await tx.sessionGroup.create({
             data: {
               name,
+              kind: resolvedKind,
               organizationId: input.organizationId,
               ownerUserId: input.createdById,
               visibility: newGroupVisibility,
@@ -3566,7 +3710,7 @@ export class SessionService {
           channelId: resolvedChannelId,
           sessionGroupId: sessionGroup.id,
           connection: sessionGroup.connection ?? initialConnection,
-          pendingRun: queueInitialRunUntilBridgeAccess
+          pendingRun: queueInitialRun
             ? pendingRunValue([
                 {
                   type: "run",
@@ -3659,6 +3803,19 @@ export class SessionService {
       }
 
       return session;
+    }).catch(async (error: unknown) => {
+      // Don't leak the managed repo minted above if the session row never persists.
+      if (createdManagedRepoId) {
+        await managedGitService
+          .deleteManagedRepo({
+            organizationId: input.organizationId,
+            repoId: createdManagedRepoId,
+            actorType: input.actorType ?? "user",
+            actorId: input.createdById,
+          })
+          .catch(() => {});
+      }
+      throw error;
     });
 
     // Publish the start event only after the transaction commits so subscribers
@@ -3678,10 +3835,14 @@ export class SessionService {
 
     // Only provision the runtime immediately when a prompt is provided.
     // Sessions created without a prompt (e.g. Cmd+N) defer provisioning
-    // until the user sends their first message.
+    // until the user sends their first message. Checkpoint restores are the
+    // exception: they carry no prompt but must provision now so the workspace
+    // materializes at the pinned commit SHA — deferring to the first message
+    // loses the SHA (later provisioning paths clone HEAD) and strands the
+    // restored session with no runtime in the meantime.
     if (
       needsRuntimeProvisioning &&
-      (input.prompt || input.provisionWithoutPrompt) &&
+      (input.prompt || input.provisionWithoutPrompt || input.restoreCheckpointId) &&
       selectedRuntimeAccessAllowed &&
       !deferRuntimeSelection &&
       input.deferInitialRun !== true
@@ -3689,6 +3850,7 @@ export class SessionService {
       this.provisionRuntime({
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
+        sessionGroupKind: resolvedKind,
         slug: session.sessionGroup?.slug,
         preserveBranchName: false,
         hosting: session.hosting,
@@ -3699,6 +3861,7 @@ export class SessionService {
         branch: resolvedBranch,
         checkpointSha: input.checkpointSha ?? restoreCheckpoint?.commitSha,
         createdById: input.createdById,
+        actorType: input.actorType,
         organizationId: input.organizationId,
         readOnly: readOnlyWorkspace,
         adoptWorktreePath,
@@ -4062,6 +4225,7 @@ export class SessionService {
       this.provisionRuntime({
         sessionId: updated.id,
         sessionGroupId: updated.sessionGroupId,
+        sessionGroupKind: updated.sessionGroup?.kind,
         slug: updated.sessionGroup?.slug,
         preserveBranchName: false,
         hosting: updated.hosting,
@@ -4196,6 +4360,7 @@ export class SessionService {
         this.provisionRuntime({
           sessionId: id,
           sessionGroupId: session.sessionGroupId,
+          sessionGroupKind: session.sessionGroup?.kind,
           slug: session.sessionGroup?.slug,
           preserveBranchName: false,
           hosting: session.hosting,
@@ -4250,7 +4415,10 @@ export class SessionService {
     // Append system instructions (title, auto-save) to the prompt
     const isFirstRun = !session.toolSessionId;
     if (resolvedPrompt) {
-      resolvedPrompt = appendPromptInstructions(resolvedPrompt, { hasRepo: !!session.repo });
+      resolvedPrompt = appendPromptInstructions(resolvedPrompt, {
+        hasRepo: !!session.repo,
+        sessionGroupKind: session.sessionGroup?.kind,
+      });
     }
 
     // Append base branch instruction when the channel specifies one
@@ -4271,6 +4439,8 @@ export class SessionService {
       type: "run" as const,
       sessionId: id,
       prompt: resolvedPrompt ?? undefined,
+      appendSystemPrompt:
+        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
@@ -4563,6 +4733,25 @@ export class SessionService {
       });
     }
 
+    if (group.kind === "app" && group.repoId) {
+      // A restored app group shares the source group's managed repo, so this
+      // repo can be referenced by more than one group. Only delete the repo
+      // (and its bare storage + cascaded checkpoints) when no other group
+      // still points at it — otherwise deleting this group would destroy a
+      // live sibling's source and history.
+      const otherReferences = await prisma.sessionGroup.count({
+        where: { repoId: group.repoId, id: { not: groupId } },
+      });
+      if (otherReferences === 0) {
+        await managedGitService.deleteManagedRepo({
+          organizationId,
+          repoId: group.repoId,
+          actorType,
+          actorId,
+        });
+      }
+    }
+
     return true;
   }
 
@@ -4655,7 +4844,7 @@ export class SessionService {
         hosting: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { slug: true, visibility: true, ownerUserId: true } },
+        sessionGroup: { select: { kind: true, slug: true, visibility: true, ownerUserId: true } },
         channel: { select: { baseBranch: true } },
         connection: true,
         workdir: true,
@@ -4829,6 +5018,7 @@ export class SessionService {
       this.provisionRuntime({
         sessionId: session.id,
         sessionGroupId: session.sessionGroupId,
+        sessionGroupKind: session.sessionGroup?.kind,
         slug: session.sessionGroup?.slug,
         preserveBranchName: shouldPreserveWorkspaceBranchName({
           slug: session.sessionGroup?.slug,
@@ -5378,7 +5568,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { slug: true } },
+        sessionGroup: { select: { kind: true, slug: true } },
         channel: { select: { baseBranch: true } },
         connection: true,
         pendingRun: true,
@@ -5501,6 +5691,7 @@ export class SessionService {
           this.provisionRuntime({
             sessionId,
             sessionGroupId: session.sessionGroupId,
+            sessionGroupKind: session.sessionGroup?.kind,
             slug: session.sessionGroup?.slug,
             preserveBranchName: shouldPreserveWorkspaceBranchName({
               slug: session.sessionGroup?.slug,
@@ -5612,7 +5803,10 @@ export class SessionService {
     }
 
     // Append system instructions (title, auto-save) to the prompt
-    prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
+    prompt = appendPromptInstructions(prompt, {
+      hasRepo: !!session.repoId,
+      sessionGroupKind: session.sessionGroup?.kind,
+    });
 
     const checkpointContext =
       session.repoId && session.sessionGroupId
@@ -5642,6 +5836,8 @@ export class SessionService {
       type: "send" as const,
       sessionId,
       prompt,
+      appendSystemPrompt:
+        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
       tool: activeTool,
       model: activeModel ?? undefined,
       reasoningEffort: activeReasoningEffort ?? undefined,
@@ -6365,7 +6561,11 @@ export class SessionService {
       }
     }
 
-    // If a run was queued while workspace was being prepared, execute it now
+    // Deliver the queued initial prompt as soon as the workspace exists, so the
+    // agent can start coding the moment the cloud session is connected. The app
+    // auto-start below (pnpm install --prefer-offline && pnpm dev) then proceeds in the
+    // background — package installs and the dev server come up while the agent
+    // is already working, rather than blocking it.
     if (pendingRun) {
       const replayResult = await this.deliverPendingCommand(sessionId, pendingRun);
       if (replayResult && replayResult !== "delivered") {
@@ -6381,6 +6581,31 @@ export class SessionService {
           "workspace_replay",
         );
       }
+    }
+
+    if (session.sessionGroup?.kind === "app" && session.sessionGroupId) {
+      const appGroupId = session.sessionGroupId;
+      // Fire-and-forget: the dev server boot must not delay the agent's first
+      // run. Failures surface as an app_preview_start_failed event.
+      void sessionApplicationService
+        .startApplication(appGroupId, "app", session.organizationId, session.createdById, {
+          asSystem: true,
+        })
+        .catch(async (error: unknown) => {
+          await eventService.create({
+            organizationId: session.organizationId,
+            scopeType: "session",
+            scopeId: sessionId,
+            eventType: "session_output",
+            payload: {
+              type: "app_preview_start_failed",
+              sessionGroupId: appGroupId,
+              error: error instanceof Error ? error.message : String(error),
+            } as Prisma.InputJsonValue,
+            actorType: "system",
+            actorId: "system",
+          });
+        });
     }
   }
 
@@ -6753,6 +6978,7 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
+        sessionGroup: { select: { kind: true } },
         connection: true,
       },
     });
@@ -6763,7 +6989,10 @@ export class SessionService {
 
     const context = await buildConversationContext(sessionId);
     let prompt = buildToolSessionRecoveryPrompt(context);
-    prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
+    prompt = appendPromptInstructions(prompt, {
+      hasRepo: !!session.repoId,
+      sessionGroupKind: session.sessionGroup?.kind,
+    });
 
     const promptEvent = await prisma.event.findFirst({
       where: {
@@ -6798,6 +7027,8 @@ export class SessionService {
         type: "send",
         sessionId,
         prompt,
+        appendSystemPrompt:
+          session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
         tool: session.tool,
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
@@ -6862,6 +7093,7 @@ export class SessionService {
         organizationId: true,
         sessionGroupId: true,
         repoId: true,
+        sessionGroup: { select: { kind: true, ownerUserId: true } },
       },
     });
     if (!session?.sessionGroupId || !session.repoId) return;
@@ -6935,6 +7167,20 @@ export class SessionService {
 
     if (!persisted) return null;
 
+    // App checkpoints get a preview screenshot, but the headless render must not
+    // block the per-session event queue (it would freeze the agent's live output
+    // for seconds per commit). Mark it pending, emit the checkpoint now, and run
+    // the capture off-queue — a follow-up git_checkpoint event (merged by id on
+    // the client) carries the thumbnail once it's ready.
+    const shouldCaptureAppCheckpoint =
+      didPersistCheckpoint && session.sessionGroup?.kind === "app";
+    if (shouldCaptureAppCheckpoint && persisted) {
+      persisted = await prisma.gitCheckpoint.update({
+        where: { id: persisted.id },
+        data: { captureStatus: "pending" },
+      });
+    }
+
     if (didPersistCheckpoint) {
       await eventService.create({
         organizationId: session.organizationId,
@@ -6971,7 +7217,68 @@ export class SessionService {
       });
     }
 
+    if (shouldCaptureAppCheckpoint && persisted && session.sessionGroup) {
+      this.captureAppCheckpointAsync({
+        checkpointId: persisted.id,
+        sessionId,
+        organizationId: session.organizationId,
+        sessionGroupId: session.sessionGroupId,
+        userId: session.sessionGroup.ownerUserId,
+      });
+    }
+
     return persisted;
+  }
+
+  /**
+   * Render and store an app checkpoint preview off the per-session event queue,
+   * then emit a follow-up git_checkpoint event carrying the captured thumbnail
+   * (the client merges checkpoints by id). Fire-and-forget: capture latency must
+   * never block the live agent output stream.
+   */
+  private captureAppCheckpointAsync(input: {
+    checkpointId: string;
+    sessionId: string;
+    organizationId: string;
+    sessionGroupId: string;
+    userId: string;
+  }): void {
+    void (async () => {
+      try {
+        const capture = await appCheckpointCaptureService.capture({
+          organizationId: input.organizationId,
+          sessionGroupId: input.sessionGroupId,
+          checkpointId: input.checkpointId,
+          userId: input.userId,
+        });
+        const updated = await prisma.gitCheckpoint.update({
+          where: { id: input.checkpointId },
+          data: {
+            captureStatus: capture.captureStatus,
+            captureKey: capture.captureKey ?? null,
+            captureUrl: capture.captureUrl ?? null,
+            captureContentType: capture.captureContentType ?? null,
+            capturedAt: capture.capturedAt ?? null,
+          },
+        });
+        await eventService.create({
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: input.sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "git_checkpoint",
+            checkpoint: serializeGitCheckpoint(updated),
+          } as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        });
+      } catch (error) {
+        // A missing row (checkpoint rewritten away) or capture failure is
+        // non-fatal — the checkpoint simply keeps its pending/last status.
+        console.error("[app-checkpoint] async capture failed", error);
+      }
+    })();
   }
 
   async retryConnection(
@@ -7462,11 +7769,9 @@ export class SessionService {
       const runtimeConnection = this.parseConnection(sourceCloudRuntimeSession.connection);
       const sessionConnection = this.parseConnection(session.connection);
       const runtimeHasBinding =
-        !!runtimeConnection.runtimeInstanceId ||
-        !!runtimeConnection.providerRuntimeId;
+        !!runtimeConnection.runtimeInstanceId || !!runtimeConnection.providerRuntimeId;
       const sessionHasBinding =
-        !!sessionConnection.runtimeInstanceId ||
-        !!sessionConnection.providerRuntimeId;
+        !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
       if (!runtimeHasBinding && sessionHasBinding) {
         sourceCloudRuntimeSession = {
           ...sourceCloudRuntimeSession,
@@ -7575,6 +7880,7 @@ export class SessionService {
       this.provisionRuntime({
         sessionId: movedSession.id,
         sessionGroupId: movedSession.sessionGroupId,
+        sessionGroupKind: movedSession.sessionGroup?.kind,
         slug: movedSession.sessionGroup?.slug,
         preserveBranchName: shouldPreserveWorkspaceBranchName({
           slug: movedSession.sessionGroup?.slug,
@@ -8501,14 +8807,17 @@ export class SessionService {
         workdir: true,
         visibility: true,
         ownerUserId: true,
-        repo: { select: { remoteUrl: true, defaultBranch: true } },
+        repo: { select: { provider: true, remoteUrl: true, defaultBranch: true } },
       },
     });
     if (!group) throw new Error("Session group not found");
     if (!canViewSessionGroup(group, userId)) {
       throw new AuthorizationError("Not authorized for this session group");
     }
-    if (!group.repo?.remoteUrl) {
+    if (group.repo?.provider !== "github") {
+      throw new Error("Cannot access GitHub files for a managed repo.");
+    }
+    if (!group.repo.remoteUrl) {
       throw new Error("Cannot access files: this session group has no GitHub remote.");
     }
 
@@ -9048,6 +9357,7 @@ export class SessionService {
         repoId: true,
         connection: true,
         sessionGroupId: true,
+        sessionGroup: { select: { kind: true } },
       },
     });
 
@@ -9063,7 +9373,10 @@ export class SessionService {
 
     // Append system instructions (title, auto-save) to the prompt
     if (prompt) {
-      prompt = appendPromptInstructions(prompt, { hasRepo: !!session.repoId });
+      prompt = appendPromptInstructions(prompt, {
+        hasRepo: !!session.repoId,
+        sessionGroupKind: session.sessionGroup?.kind,
+      });
     }
 
     const fallbackCheckpointContext =
@@ -9087,6 +9400,8 @@ export class SessionService {
       type: pending.type,
       sessionId,
       prompt: prompt ?? undefined,
+      appendSystemPrompt:
+        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
@@ -9100,6 +9415,7 @@ export class SessionService {
       type: "run" | "send";
       sessionId: string;
       prompt?: string;
+      appendSystemPrompt?: string;
       tool: CodingTool;
       model?: string;
       reasoningEffort?: string;
@@ -9343,16 +9659,13 @@ export class SessionService {
       const cloudSession =
         cloudSessions.find((session) => {
           const sessionConnection = this.parseConnection(session.connection);
-          return (
-            !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId
-          );
+          return !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
         }) ?? cloudSessions[0];
       if (!cloudSession) continue;
       if (!groupHasRuntimeBinding) {
         const sessionConnection = this.parseConnection(cloudSession.connection);
         const sessionHasRuntimeBinding =
-          !!sessionConnection.runtimeInstanceId ||
-          !!sessionConnection.providerRuntimeId;
+          !!sessionConnection.runtimeInstanceId || !!sessionConnection.providerRuntimeId;
         if (!sessionHasRuntimeBinding) continue;
       }
 
@@ -9415,7 +9728,10 @@ export class SessionService {
         this.destroyRuntimeOptions(cloudSession.id, "idle_session_group_cleanup"),
       );
       // Destroying the runtime kills any forwarded application processes; reflect that.
-      await sessionApplicationService.markSessionGroupRuntimeStopped(group.id, session.organizationId);
+      await sessionApplicationService.markSessionGroupRuntimeStopped(
+        group.id,
+        session.organizationId,
+      );
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

@@ -48,6 +48,7 @@ describe("WebhookService", () => {
     prismaMock.repo.findUniqueOrThrow.mockResolvedValueOnce({
       id: "repo-1",
       organizationId: "org-1",
+      provider: "github",
       name: "trace",
       remoteUrl: "https://github.com/acme/trace.git",
       defaultBranch: "main",
@@ -61,6 +62,7 @@ describe("WebhookService", () => {
     prismaMock.repo.update.mockResolvedValueOnce({
       id: "repo-1",
       organizationId: "org-1",
+      provider: "github",
       name: "trace",
       remoteUrl: "https://github.com/acme/trace.git",
       defaultBranch: "main",
@@ -88,6 +90,7 @@ describe("WebhookService", () => {
     prismaMock.repo.findUniqueOrThrow.mockResolvedValueOnce({
       id: "repo-1",
       organizationId: "org-2",
+      provider: "github",
       remoteUrl: "https://github.com/acme/trace.git",
       webhookId: null,
     });
@@ -100,6 +103,7 @@ describe("WebhookService", () => {
     prismaMock.repo.findUniqueOrThrow.mockResolvedValueOnce({
       id: "repo-1",
       organizationId: "org-1",
+      provider: "github",
       remoteUrl: "https://github.com/acme/trace.git",
       webhookId: null,
     });
@@ -114,6 +118,7 @@ describe("WebhookService", () => {
     prismaMock.repo.findUniqueOrThrow.mockResolvedValueOnce({
       id: "repo-1",
       organizationId: "org-1",
+      provider: "github",
       name: "trace",
       remoteUrl: "https://github.com/acme/trace.git",
       defaultBranch: "main",
@@ -128,6 +133,7 @@ describe("WebhookService", () => {
     prismaMock.repo.update.mockResolvedValueOnce({
       id: "repo-1",
       organizationId: "org-1",
+      provider: "github",
       webhookId: null,
       webhookSecret: null,
       name: "trace",
@@ -146,5 +152,21 @@ describe("WebhookService", () => {
         webhookSecret: null,
       },
     });
+  });
+
+  it("rejects webhook registration for managed repos", async () => {
+    prismaMock.repo.findUniqueOrThrow.mockResolvedValueOnce({
+      id: "repo-1",
+      organizationId: "org-1",
+      provider: "managed",
+      remoteUrl: "https://trace.test/git/org-1/repo-1.git",
+      webhookId: null,
+    });
+
+    const service = new WebhookService();
+    await expect(service.registerGitHubWebhook("repo-1", "user-1", "org-1")).rejects.toThrow(
+      "GitHub webhooks are only supported for GitHub repos",
+    );
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });

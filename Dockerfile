@@ -37,6 +37,9 @@ RUN pnpm --filter @trace/web build
 
 FROM base AS production
 RUN npm install -g serve@14
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends chromium && \
+    rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 1001 trace && \
     useradd --uid 1001 --gid trace --create-home trace
 WORKDIR /app
@@ -73,5 +76,6 @@ RUN chown -R trace:trace /app
 
 USER trace
 ENV NODE_ENV=production
+ENV TRACE_CHROMIUM_EXECUTABLE=/usr/bin/chromium
 EXPOSE 3000 4000
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

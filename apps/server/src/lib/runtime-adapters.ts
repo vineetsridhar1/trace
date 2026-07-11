@@ -14,6 +14,7 @@ import {
 import { resolveJwtSecret } from "./jwt-secret.js";
 import { isLocalMode } from "./mode.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
+import { orgSecretService } from "../services/org-secret.js";
 import { CODING_TOOL_IDS } from "@trace/shared";
 
 const CODING_TOOLS = new Set(CODING_TOOL_IDS);
@@ -58,7 +59,13 @@ type ProvisionedConfig = {
   auth: ProvisionedAuthConfig;
   startupTimeoutSeconds: number;
   deprovisionPolicy: "on_session_end" | "manual";
+  runtimeEnv: ProvisionedRuntimeEnv[];
   launcherMetadata?: Record<string, unknown>;
+};
+
+type ProvisionedRuntimeEnv = {
+  name: string;
+  secretId: string;
 };
 
 type ProvisionedRuntimeTokenAuth = {
@@ -186,6 +193,41 @@ function assertProvisionedAuthConfig(value: unknown): ProvisionedAuthConfig {
   return { type: auth.type };
 }
 
+function parseProvisionedRuntimeEnv(value: unknown): ProvisionedRuntimeEnv[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new Error("Provisioned agent environment runtimeEnv must be an array");
+  }
+
+  const seen = new Set<string>();
+  return value.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`Provisioned agent environment runtimeEnv[${index}] must be an object`);
+    }
+    const record = entry as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+    const secretId = typeof record.secretId === "string" ? record.secretId.trim() : "";
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      throw new Error(
+        `Provisioned agent environment runtimeEnv[${index}].name must be a valid environment variable name`,
+      );
+    }
+    if (name.startsWith("TRACE_")) {
+      throw new Error("Provisioned agent environment runtimeEnv cannot override TRACE_ variables");
+    }
+    if (!secretId) {
+      throw new Error(
+        `Provisioned agent environment runtimeEnv[${index}].secretId must be non-empty`,
+      );
+    }
+    if (seen.has(name)) {
+      throw new Error(`Provisioned agent environment runtimeEnv contains duplicate name ${name}`);
+    }
+    seen.add(name);
+    return { name, secretId };
+  });
+}
+
 function parseProvisionedConfig(config: Record<string, unknown>): ProvisionedConfig {
   assertCompatibilityConstraints(config);
 
@@ -221,10 +263,27 @@ function parseProvisionedConfig(config: Record<string, unknown>): ProvisionedCon
     auth: assertProvisionedAuthConfig(config.auth),
     startupTimeoutSeconds,
     deprovisionPolicy: normalizedDeprovisionPolicy,
+    runtimeEnv: parseProvisionedRuntimeEnv(config.runtimeEnv),
     ...(launcherMetadata !== undefined
       ? { launcherMetadata: launcherMetadata as Record<string, unknown> }
       : {}),
   };
+}
+
+async function resolveProvisionedRuntimeEnv(
+  organizationId: string,
+  mappings: ProvisionedRuntimeEnv[],
+): Promise<Record<string, string>> {
+  const entries = await Promise.all(
+    mappings.map(async ({ name, secretId }) => {
+      const value = await orgSecretService.getDecryptedValue(organizationId, secretId);
+      if (value === null) {
+        throw new Error(`Provisioned runtime environment secret was not found for ${name}`);
+      }
+      return [name, value] as const;
+    }),
+  );
+  return Object.fromEntries(entries);
 }
 
 function configRecord(value: unknown): Record<string, unknown> {
@@ -569,6 +628,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       runtimeTokenTtlSeconds,
     );
     const bridgeUrl = input.bridgeUrl ?? defaultBridgeUrl();
+    const runtimeEnv = await resolveProvisionedRuntimeEnv(input.organizationId, config.runtimeEnv);
 
     const body = {
       sessionId: input.sessionId,
@@ -592,13 +652,20 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       reasoningEffort: input.reasoningEffort ?? null,
       runtimeProfile: input.runtimeProfile ?? null,
       bootstrapEnv: {
+        ...runtimeEnv,
         TRACE_SESSION_ID: input.sessionId,
         TRACE_ORG_ID: input.organizationId,
+        TRACE_SERVER_PUBLIC_URL: process.env.TRACE_SERVER_PUBLIC_URL?.trim() ?? "",
         TRACE_RUNTIME_INSTANCE_ID: runtimeInstanceId,
         TRACE_RUNTIME_TOKEN: runtimeToken.token,
         TRACE_BRIDGE_URL: bridgeUrl,
         ...(input.userGithubToken ? { GITHUB_TOKEN: input.userGithubToken } : {}),
         ...(input.userCodexAccessToken ? { CODEX_ACCESS_TOKEN: input.userCodexAccessToken } : {}),
+        // The app is served through the `<key>.<previewHost>` proxy origin, not
+        // the container's localhost. Dev servers (e.g. Next 15) otherwise flag
+        // requests from that origin as cross-origin and block /_next/HMR/API
+        // calls. Hand the starter the wildcard preview host to allow.
+        TRACE_ALLOWED_DEV_ORIGINS: `*.${(process.env.TRACE_ENDPOINT_PREVIEW_BASE_HOST?.trim() || "preview.localhost").split(":")[0]}`,
       },
       metadata: {
         requestedBy: input.actorId,

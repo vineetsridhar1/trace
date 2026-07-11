@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Info, Plus, Save } from "lucide-react";
-import type { AgentEnvironment } from "@trace/gql";
+import type { AgentEnvironment, OrgSecret } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { Button } from "../ui/button";
 import {
@@ -27,6 +27,7 @@ type Props = {
   organizationId: string;
   environment: AgentEnvironment | null;
   localBridges: LocalBridgeSummary[];
+  orgSecrets: OrgSecret[];
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 };
@@ -37,6 +38,18 @@ function createDraft(environment: AgentEnvironment | null): AgentEnvironmentDraf
   const launcherMetadata = config.launcherMetadata
     ? JSON.stringify(config.launcherMetadata, null, 2)
     : "";
+  const runtimeEnv = Array.isArray(config.runtimeEnv)
+    ? config.runtimeEnv.flatMap((entry) =>
+        entry && typeof entry === "object" && !Array.isArray(entry)
+          ? [
+              {
+                name: typeof entry.name === "string" ? entry.name : "",
+                secretId: typeof entry.secretId === "string" ? entry.secretId : "",
+              },
+            ]
+          : [],
+      )
+    : [];
 
   return {
     name: environment?.name ?? "",
@@ -48,6 +61,7 @@ function createDraft(environment: AgentEnvironment | null): AgentEnvironmentDraf
     stopUrl: config.stopUrl ?? "",
     statusUrl: config.statusUrl ?? "",
     startupTimeoutSeconds: String(config.startupTimeoutSeconds ?? 180),
+    runtimeEnv,
     launcherMetadata,
   };
 }
@@ -69,6 +83,7 @@ function buildConfig(draft: AgentEnvironmentDraft): Record<string, unknown> {
     auth: { type: "bearer" },
     startupTimeoutSeconds: Number(draft.startupTimeoutSeconds),
     deprovisionPolicy: "on_session_end",
+    runtimeEnv: draft.runtimeEnv.filter((entry) => entry.name.trim() && entry.secretId.trim()),
     ...(metadata ? { launcherMetadata: JSON.parse(metadata) as Record<string, unknown> } : {}),
   };
 }
@@ -78,6 +93,7 @@ export function AgentEnvironmentForm({
   organizationId,
   environment,
   localBridges,
+  orgSecrets,
   onOpenChange,
   onSaved,
 }: Props) {
@@ -173,7 +189,11 @@ export function AgentEnvironmentForm({
           {draft.adapterType === "local" ? (
             <AgentEnvironmentLocalFields draft={draft} localBridges={localBridges} />
           ) : (
-            <AgentEnvironmentProvisionedFields draft={draft} update={update} />
+            <AgentEnvironmentProvisionedFields
+              draft={draft}
+              orgSecrets={orgSecrets}
+              update={update}
+            />
           )}
 
           <DialogFooter>

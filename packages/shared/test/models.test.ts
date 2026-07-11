@@ -168,6 +168,13 @@ describe("resolveCursorComposerModel", () => {
     expect(resolveCursorComposerModel("grok-4.5", "max")).toBe("grok-4.5-xhigh");
   });
 
+  it("clamps gpt-5.5 to extra-high for xhigh/max instead of emitting rejected ids", () => {
+    expect(resolveCursorComposerModel("gpt-5.5", "xhigh")).toBe("gpt-5.5-extra-high");
+    expect(resolveCursorComposerModel("gpt-5.5", "max")).toBe("gpt-5.5-extra-high");
+    expect(resolveCursorComposerModel("gpt-5.5", "low")).toBe("gpt-5.5-low");
+    expect(resolveCursorComposerModel("gpt-5.5", "high")).toBe("gpt-5.5-high");
+  });
+
   it("defaults to medium when the level is missing or foreign", () => {
     expect(resolveCursorComposerModel("opus-4.8", undefined)).toBe(
       "claude-opus-4-8-thinking-medium",

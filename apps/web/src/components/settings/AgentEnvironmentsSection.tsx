@@ -100,6 +100,7 @@ export function AgentEnvironmentsSection() {
           organizationId={settings.activeOrgId}
           environment={settings.editingEnvironment}
           localBridges={settings.localBridges}
+          orgSecrets={settings.orgSecrets}
           onOpenChange={settings.setFormOpen}
           onSaved={() => void settings.fetchSettings()}
         />

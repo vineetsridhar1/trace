@@ -28,6 +28,7 @@ export type {
   BridgeRunCommand,
   BridgeSendCommand,
   BridgePrepareCommand,
+  BridgePrepareAppCommand,
   BridgeTerminateCommand,
   BridgePauseCommand,
   BridgeResumeCommand,
@@ -205,10 +206,7 @@ export {
   hasAttachmentKeys,
   hasVisibleUserSessionContent,
 } from "./session-content.js";
-export {
-  PROVISIONED_RUNTIME_PREFIX,
-  isProvisionedRuntimeId,
-} from "./runtime-ids.js";
+export { PROVISIONED_RUNTIME_PREFIX, isProvisionedRuntimeId } from "./runtime-ids.js";
 export {
   branchNameFromGitRef,
   branchNamesFromGitRefsOutput,

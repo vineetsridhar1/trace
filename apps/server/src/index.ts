@@ -27,6 +27,7 @@ import { mcpResourceServerUrl, oauthIssuerUrl } from "./lib/oauth/config.js";
 import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
+import { gitRouter } from "./routes/git.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -52,7 +53,14 @@ import { buildAppleAppSiteAssociation } from "./lib/apple-app-site-association.j
 import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.js";
 import { endpointProxyService } from "./services/endpoint-proxy.js";
 import { sessionApplicationService } from "./services/session-applications.js";
-import { endpointTrafficRetentionHours } from "./services/endpoint-utils.js";
+import {
+  assertPreviewHostIsolated,
+  endpointTrafficRetentionHours,
+} from "./services/endpoint-utils.js";
+
+// A single proxied response is base64-framed over the bridge WS; bound a single
+// message so an untrusted runtime can't force an unbounded allocation.
+const BRIDGE_WS_MAX_PAYLOAD_BYTES = 64 * 1024 * 1024;
 
 const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
@@ -125,6 +133,9 @@ async function main() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
   const PORT = Number(process.env.PORT) || 4000 + Number(process.env.TRACE_PORT || 0);
   const localMode = isLocalMode();
+  // Fail fast if untrusted previews would share a registrable domain with the
+  // Trace app origin (throws in production, warns otherwise).
+  assertPreviewHostIsolated(process.env.TRACE_WEB_URL);
   const allowedCorsOrigins = getAllowedCorsOrigins({
     localMode,
     nodeEnv: process.env.NODE_ENV,
@@ -132,6 +143,25 @@ async function main() {
     corsAllowedOrigins: process.env.CORS_ALLOWED_ORIGINS,
   });
   let startupReady = false;
+
+  // Preview-proxied requests (Host = <key>.<previewHost>) belong to the app
+  // session's own server. Hand them to the endpoint proxy BEFORE any CORS /
+  // cookie / body middleware: the app is same-origin with itself, so Trace's
+  // cross-origin API allowlist must not apply — otherwise the app's own /api
+  // calls (whose Origin is the preview host, not an allowlisted Trace origin)
+  // are rejected by CORS before the proxy ever sees them.
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const endpointKey = endpointProxyService.extractKey(req.headers.host);
+    if (!endpointKey) {
+      next();
+      return;
+    }
+    void endpointProxyService.handleHttpRequest(req, res, endpointKey).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!res.headersSent) res.status(500);
+      res.end(message);
+    });
+  });
 
   app.get("/health", (_req: express.Request, res: express.Response) => {
     res.json({ status: "ok", ready: startupReady });
@@ -192,6 +222,10 @@ async function main() {
 
   // Local storage PUT accepts raw body — register BEFORE express.json()
   if (localStorageRouter) app.use(localStorageRouter);
+
+  // Managed git smart-HTTP streams binary pack bodies and reads the request
+  // stream directly — register BEFORE express.json() so the body is untouched.
+  app.use("/git", gitRouter);
 
   app.use(express.json());
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -266,7 +300,10 @@ async function main() {
   );
 
   // Bridge for Electron/desktop session control
-  const bridgeWss = new WebSocketServer({ noServer: true });
+  const bridgeWss = new WebSocketServer({
+    noServer: true,
+    maxPayload: BRIDGE_WS_MAX_PAYLOAD_BYTES,
+  });
   bridgeWss.on("connection", handleBridgeConnection);
 
   // Terminal relay for frontend terminal sessions

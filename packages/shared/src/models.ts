@@ -88,6 +88,12 @@ export function resolveCursorComposerModel(
   // Clamp to a known level: a stale/foreign effort (e.g. "auto" carried over
   // from Claude) must never produce an invalid id like `...-thinking-auto`.
   const level = effort && CURSOR_COMPOSER_LEVELS.has(effort) ? effort : "medium";
+  if (model === "gpt-5.5") {
+    // gpt-5.5's catalog tops out at extra-high, so clamp the two highest tiers
+    // rather than emitting the rejected gpt-5.5-xhigh / gpt-5.5-max ids.
+    const clamped = level === "xhigh" || level === "max" ? "extra-high" : level;
+    return `gpt-5.5-${clamped}`;
+  }
   if (/^gpt-5\.\d+(-[a-z]+)?$/.test(model)) {
     return `${model}-${level}`;
   }

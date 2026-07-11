@@ -237,4 +237,25 @@ describe("repoApplicationConfigService", () => {
       expect(entry).not.toHaveProperty("value");
     }
   });
+
+  it("rejects forwarding system ports", () => {
+    expect(() =>
+      repoApplicationConfigService.normalize({
+        applications: [
+          {
+            id: "shell",
+            name: "Shell",
+            processes: [
+              {
+                id: "ssh",
+                name: "SSH",
+                command: "sshd",
+                ports: [{ id: "ssh", label: "SSH", port: 22 }],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow("System and container-management ports cannot be forwarded");
+  });
 });

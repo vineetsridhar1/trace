@@ -27,8 +27,27 @@ The base image contains:
 - the Trace container bridge
 - git and workspace setup dependencies
 - default coding-tool CLIs
-- a non-root `coder` user
-- a user-writable npm global prefix
+- a non-root `coder` user with passwordless `sudo` (so the agent can install any additional OS packages)
+- a user-writable npm global prefix, plus `pnpm`
+- backing services for app sessions: Redis and PostgreSQL, started by the image entrypoint
+- a pinned, lockfile-reproducible full-stack starter baked at `/opt/trace/app-starter`, with the
+  pnpm store pre-warmed so the first `pnpm install` in a session is fast and offline-capable
+
+### App-session services and database
+
+The image entrypoint (`trace-entrypoint`) starts Redis and PostgreSQL before launching the bridge.
+It ensures a superuser role for the runtime user (with a password) and a default `app` database,
+and — unless the launcher already injected `DATABASE_URL` via `bootstrapEnv` — exports a
+credentialed TCP URL `DATABASE_URL=postgresql://<user>:<pass>@localhost:5432/app` plus
+`REDIS_URL=redis://localhost:6379`. The TCP-with-credentials form is deliberate: Unix-socket URLs
+(`postgresql:///app?host=…`) break most drivers, which send an empty username instead of the OS
+user, so the agent would waste time reverse-engineering auth. A launcher that provisions an external
+managed database should inject its own `DATABASE_URL` as an org secret; the entrypoint will not
+overwrite it.
+
+Derived images MUST preserve this `ENTRYPOINT` (or invoke `trace-entrypoint` themselves) so the
+services and database defaults are available; overriding it with a bare `node dist/index.js` skips
+service startup.
 
 ## What The Launcher Should Do
 
@@ -77,8 +96,8 @@ TRACE_RUNTIME_IMAGE=registry.acme.com/trace-runtime:platform-tools
 
 ## Required Runtime Environment
 
-The launcher still needs to inject the Trace bootstrap environment values from the start-session
-request:
+The launcher must inject every entry in the start-session request's `bootstrapEnv` object into the
+runtime container. That object always contains the Trace bootstrap values:
 
 ```txt
 TRACE_SESSION_ID
@@ -87,6 +106,11 @@ TRACE_RUNTIME_INSTANCE_ID
 TRACE_RUNTIME_TOKEN
 TRACE_BRIDGE_URL
 ```
+
+It can also contain organization-secret-backed runtime variables configured on the Agent
+Environment, such as `DATABASE_URL`. Trace decrypts only the explicitly selected secrets for that
+environment and sends their values inside `bootstrapEnv`; the launcher must not log or persist
+those values.
 
 It should also pass through tool and repo values when present:
 

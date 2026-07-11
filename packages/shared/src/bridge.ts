@@ -11,6 +11,7 @@ export interface BridgeRunCommand {
   type: "run";
   sessionId: string;
   prompt?: string;
+  appendSystemPrompt?: string;
   cwd?: string;
   tool?: string;
   model?: string;
@@ -26,6 +27,7 @@ export interface BridgeSendCommand {
   type: "send";
   sessionId: string;
   prompt: string;
+  appendSystemPrompt?: string;
   cwd?: string;
   tool?: string;
   model?: string;
@@ -59,6 +61,18 @@ export interface BridgePrepareCommand {
    * branch, and never resets or removes it. Takes precedence over readOnly.
    */
   adoptWorktreePath?: string;
+}
+
+export interface BridgePrepareAppCommand {
+  type: "prepare_app";
+  sessionId: string;
+  sessionGroupId?: string;
+  /** Pre-assigned slug for the generated app workspace. If absent, the bridge generates one. */
+  slug?: string;
+  repoId: string;
+  repoRemoteUrl: string;
+  defaultBranch: string;
+  checkpointSha?: string;
 }
 
 export interface BridgeUpgradeWorkspaceCommand {
@@ -96,6 +110,9 @@ export interface BridgeDeleteCommand {
   sessionId: string;
   workdir?: string;
   repoId?: string;
+  // Present for app sessions so the bridge can stop managed dev-server processes
+  // and remove the standalone app workspace on delete.
+  sessionGroupId?: string;
 }
 
 export interface BridgeListBranchesCommand {
@@ -350,12 +367,14 @@ export interface BridgeEndpointWebSocketOpenCommand {
   port: number;
   path: string;
   headers: Record<string, string | string[]>;
+  protocols?: string[];
 }
 
 export interface BridgeEndpointWebSocketDataCommand {
   type: "endpoint_ws_data";
   requestId: string;
   dataBase64: string;
+  isBinary?: boolean;
 }
 
 export interface BridgeEndpointWebSocketCloseCommand {
@@ -369,6 +388,7 @@ export type BridgeCommand =
   | BridgeRunCommand
   | BridgeSendCommand
   | BridgePrepareCommand
+  | BridgePrepareAppCommand
   | BridgeUpgradeWorkspaceCommand
   | BridgeTerminateCommand
   | BridgePauseCommand
@@ -813,6 +833,7 @@ export interface BridgeEndpointWebSocketData {
   type: "endpoint_ws_data";
   requestId: string;
   dataBase64: string;
+  isBinary?: boolean;
 }
 
 export interface BridgeEndpointWebSocketClosed {

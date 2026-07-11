@@ -49,6 +49,8 @@ import {
 import {
   ensureRepo,
   createWorktree,
+  createAppWorkspace,
+  removeAppWorkspace,
   getWorkspaceSlugs,
   removeWorktree,
   getRepoPath,
@@ -336,6 +338,7 @@ export class ContainerBridge implements IBridgeClient {
         this.runPrompt({
           sessionId: cmd.sessionId,
           prompt: cmd.prompt ?? "",
+          appendSystemPrompt: cmd.appendSystemPrompt,
           cwd: cmd.cwd ?? os.homedir(),
           tool: cmd.tool,
           model: cmd.model,
@@ -449,6 +452,31 @@ export class ContainerBridge implements IBridgeClient {
         break;
       }
 
+      case "prepare_app": {
+        const { sessionId, sessionGroupId, slug, repoRemoteUrl, defaultBranch, checkpointSha } =
+          cmd;
+        (async () => {
+          try {
+            const { workdir, slug: workspaceSlug } = await createAppWorkspace({
+              sessionId,
+              sessionGroupId,
+              slug,
+              repoRemoteUrl,
+              defaultBranch,
+              checkpointSha,
+            });
+            this.sessionWorkdirs.set(sessionId, workdir);
+            this.send({ type: "register_session", sessionId });
+            this.send({ type: "workspace_ready", sessionId, workdir, slug: workspaceSlug });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`[container-bridge] app workspace failed for ${sessionId}:`, message);
+            this.send({ type: "workspace_failed", sessionId, error: message });
+          }
+        })();
+        break;
+      }
+
       case "upgrade_workspace": {
         const {
           sessionId,
@@ -533,9 +561,33 @@ export class ContainerBridge implements IBridgeClient {
         this.sessionRunSequence.delete(cmd.sessionId);
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
+        // Capture the workdir before dropping it from the map — the app
+        // workspace lives at this path (a slug dir under WORKSPACES_DIR).
+        const appWorkdir =
+          (typeof cmd.workdir === "string" ? cmd.workdir : null) ??
+          this.sessionWorkdirs.get(cmd.sessionId) ??
+          null;
         this.sessionWorkdirs.delete(cmd.sessionId);
         this.pendingGitToolUses.delete(cmd.sessionId);
         this.terminalManager.destroyForSession(cmd.sessionId);
+
+        // App sessions run managed dev-server processes (keyed by
+        // sessionGroupId) and a standalone workspace at the slug directory.
+        // Stop the processes and remove the workspace so a deleted app doesn't
+        // leak a running server or disk. removeAppWorkspace only removes a
+        // direct child of WORKSPACES_DIR, so it is a safe no-op for worktree
+        // sessions whose workdir lives elsewhere.
+        if (cmd.sessionGroupId) {
+          this.managedProcessManager.destroyForSessionGroup(cmd.sessionGroupId);
+        }
+        if (appWorkdir) {
+          removeAppWorkspace(appWorkdir).catch((err: unknown) => {
+            console.warn(
+              `[container-bridge] failed to remove app workspace ${appWorkdir}:`,
+              err instanceof Error ? err.message : String(err),
+            );
+          });
+        }
 
         // Clean up worktree for this session only — skip for read-only sessions (no worktree to remove)
         if (cmd.workdir && cmd.repoId && !wasReadOnly) {
@@ -569,6 +621,7 @@ export class ContainerBridge implements IBridgeClient {
           command: cmd.command,
           cwd: cmd.cwd,
           env: cmd.env,
+          ports: cmd.ports.map((port) => port.port),
         });
         break;
       }
@@ -596,12 +649,17 @@ export class ContainerBridge implements IBridgeClient {
           port: cmd.port,
           path: cmd.path,
           headers: cmd.headers,
+          protocols: cmd.protocols,
         });
         break;
       }
 
       case "endpoint_ws_data": {
-        this.managedProcessManager.sendWebSocketData(cmd.requestId, cmd.dataBase64);
+        this.managedProcessManager.sendWebSocketData(
+          cmd.requestId,
+          cmd.dataBase64,
+          cmd.isBinary ?? true,
+        );
         break;
       }
 
@@ -807,6 +865,7 @@ export class ContainerBridge implements IBridgeClient {
   private async runPrompt({
     sessionId,
     prompt,
+    appendSystemPrompt,
     cwd,
     tool,
     model,
@@ -818,6 +877,7 @@ export class ContainerBridge implements IBridgeClient {
   }: {
     sessionId: string;
     prompt: string;
+    appendSystemPrompt?: string;
     cwd: string;
     tool?: string;
     model?: string;
@@ -867,12 +927,16 @@ export class ContainerBridge implements IBridgeClient {
       }
     }
 
-    // Prepend file paths to prompt so all adapters see them
+    // Prepend file paths to the prompt so all adapters see them, then append
+    // the system suffix last. The refs line must build on finalPrompt (not the
+    // original prompt) or the appended instruction is lost whenever an image is
+    // attached — the dominant "make it look like this screenshot" flow.
     let finalPrompt = prompt;
     if (imagePaths?.length) {
       const refs = imagePaths.map((p) => `[Attached file: ${p}]`).join("\n");
-      finalPrompt = `${refs}\n\n${prompt}`;
+      finalPrompt = `${refs}\n\n${finalPrompt}`;
     }
+    if (appendSystemPrompt) finalPrompt = `${finalPrompt}\n\n${appendSystemPrompt}`;
 
     // Single owner of temp-image lifetime so we don't leak files when the
     // adapter ends via the pending-input branch (which doesn't always fire

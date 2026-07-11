@@ -14,6 +14,7 @@ const REPOS_QUERY = gql`
     repos(organizationId: $organizationId) {
       id
       name
+      provider
       remoteUrl
       defaultBranch
       webhookActive

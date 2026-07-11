@@ -1,3 +1,4 @@
+import type { OrgSecret } from "@trace/gql";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import type {
@@ -5,13 +6,15 @@ import type {
   UpdateAgentEnvironmentDraft,
 } from "./agent-environment-form-types";
 import { AgentEnvironmentFieldLabel } from "./AgentEnvironmentFieldLabel";
+import { AgentEnvironmentRuntimeEnvFields } from "./AgentEnvironmentRuntimeEnvFields";
 
 type Props = {
   draft: AgentEnvironmentDraft;
+  orgSecrets: OrgSecret[];
   update: UpdateAgentEnvironmentDraft;
 };
 
-export function AgentEnvironmentProvisionedFields({ draft, update }: Props) {
+export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 md:grid-cols-3">
@@ -47,6 +50,7 @@ export function AgentEnvironmentProvisionedFields({ draft, update }: Props) {
         The launcher bearer token is sourced from the TRACE_CLOUD_LAUNCHER_TOKEN environment
         variable.
       </p>
+      <AgentEnvironmentRuntimeEnvFields draft={draft} orgSecrets={orgSecrets} update={update} />
       <label className="flex flex-col gap-1.5">
         <AgentEnvironmentFieldLabel tooltip="How long Trace waits for the provisioned runtime to connect before treating startup as failed.">
           Startup timeout seconds

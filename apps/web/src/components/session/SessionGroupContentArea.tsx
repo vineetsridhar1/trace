@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import type { SessionEntity } from "@trace/client-core";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
@@ -37,6 +37,7 @@ interface SessionGroupContentAreaProps {
   canForkSession: boolean;
   getFileBuffer: (filePath: string) => FileEditorBuffer | undefined;
   setFileBuffer: (filePath: string, buffer: FileEditorBuffer) => void;
+  emptyState?: ReactNode;
 }
 
 export function SessionGroupContentArea({
@@ -56,6 +57,7 @@ export function SessionGroupContentArea({
   canForkSession,
   getFileBuffer,
   setFileBuffer,
+  emptyState,
 }: SessionGroupContentAreaProps) {
   const activeFile = openFiles.find((file) => file.filePath === activeFilePath);
 
@@ -178,8 +180,10 @@ export function SessionGroupContentArea({
   }
 
   return (
-    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-      Select a chat tab to continue.
-    </div>
+    emptyState ?? (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Select a chat tab to continue.
+      </div>
+    )
   );
 }

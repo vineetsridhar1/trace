@@ -14,7 +14,9 @@ import type {
   ScopeType,
   SessionApplicationProcess,
   SessionApplicationWorkflowRun,
+  SessionApplicationLogEntry,
   SessionEndpoint,
+  SessionSetupScriptRun,
   SessionStatus,
 } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
@@ -157,11 +159,29 @@ export function handleOrgEvent(event: Event): void {
   const batch = new StoreBatchWriter();
   const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
 
+  const scopeKey = `${event.scopeType}:${event.scopeId}`;
+
+  // App process logs are high-volume and already live in their own capped entity
+  // table. Storing them in the scoped-event log too would defeat that cap, so
+  // upsert the log entity and return without touching eventsByScope.
+  if (event.eventType === "session_application_log_appended") {
+    const logEntry = asJsonObject(payload.logEntry);
+    if (logEntry && typeof logEntry.id === "string") {
+      batch.upsert(
+        "sessionApplicationLogs",
+        logEntry.id,
+        logEntry as unknown as SessionApplicationLogEntry,
+      );
+    }
+    batch.flush();
+    notifyForEvent(event);
+    return;
+  }
+
   // Upsert the event into its scoped bucket. Note: session_output events
   // arrive with trimmed payloads from the org subscription. The session
   // detail view subscribes to sessionEvents for full payloads, which will
   // overwrite these trimmed versions.
-  const scopeKey = `${event.scopeType}:${event.scopeId}`;
   batch.upsertScopedEvent(scopeKey, event.id, event);
 
   // Clean up optimistic session events to prevent brief duplicates
@@ -179,7 +199,10 @@ export function handleOrgEvent(event: Event): void {
     event.eventType === "application_config_updated"
   ) {
     const repo = asJsonObject(payload.repo);
-    if (repo && typeof repo.id === "string") {
+    // Managed repos are session durability plumbing, not user-selectable repos.
+    // Keep their events in the scoped event log without polluting the generic
+    // repo table that settings and coding-session pickers consume.
+    if (repo && repo.provider !== "managed" && typeof repo.id === "string") {
       const existing = batch.get("repos", repo.id);
       batch.upsert(
         "repos",
@@ -219,6 +242,23 @@ export function handleOrgEvent(event: Event): void {
         "sessionApplicationWorkflowRuns",
         workflow.id,
         workflow as unknown as SessionApplicationWorkflowRun,
+      );
+    }
+  }
+
+  const setupRunEventTypes = new Set<EventType>([
+    "session_setup_script_started",
+    "session_setup_script_completed",
+    "session_setup_script_failed",
+  ]);
+  if (setupRunEventTypes.has(event.eventType)) {
+    const run = asJsonObject(payload.setupScriptRun);
+    if (run && typeof run.id === "string") {
+      const existing = batch.get("sessionSetupScriptRuns", run.id);
+      batch.upsert(
+        "sessionSetupScriptRuns",
+        run.id,
+        (existing ? { ...existing, ...run } : run) as unknown as SessionSetupScriptRun,
       );
     }
   }
@@ -483,6 +523,7 @@ export function handleOrgEvent(event: Event): void {
 
     if (deletedSessionGroupId && ui.getActiveSessionGroupId() === deletedSessionGroupId) {
       ui.setActiveSessionId(null);
+      ui.setActiveSessionGroupId(null);
     } else if (ui.getActiveSessionId() === deletedId) {
       const allSessions = batch.getAll("sessions");
       const remaining = Object.values(allSessions)

@@ -44,8 +44,11 @@ export class OrganizationService {
   }
 
   async listRepos(organizationId: string) {
+    // Managed repos are durability plumbing for design/app sessions — hide them
+    // from normal repo lists and pickers. Session/checkpoint services resolve
+    // them directly by id and are unaffected by this filter.
     return prisma.repo.findMany({
-      where: { organizationId },
+      where: { organizationId, provider: "github" },
       include: { projects: true, sessions: true },
     });
   }
@@ -166,6 +169,7 @@ export class OrganizationService {
               repo: {
                 id: repo.id,
                 name: repo.name,
+                provider: repo.provider,
                 remoteUrl: repo.remoteUrl,
                 defaultBranch: repo.defaultBranch,
                 webhookActive: !!repo.webhookId,
@@ -262,6 +266,7 @@ export class OrganizationService {
             repo: {
               id: repo.id,
               name: repo.name,
+              provider: repo.provider,
               remoteUrl: repo.remoteUrl,
               defaultBranch: repo.defaultBranch,
               webhookActive: !!repo.webhookId,

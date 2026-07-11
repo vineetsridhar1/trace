@@ -7,6 +7,7 @@ import type {
   BridgeTerminalInputCommand,
   BridgeTerminalResizeCommand,
   BridgeTerminalDestroyCommand,
+  BridgePrepareAppCommand,
   BridgeListFilesCommand,
   BridgeReadFileCommand,
   BridgeWriteFileCommand,
@@ -48,6 +49,7 @@ interface BaseSessionCommand {
     | "resume"
     | "send"
     | "prepare"
+    | "prepare_app"
     | "delete"
     | "list_branches"
     | "upgrade_workspace";
@@ -58,6 +60,7 @@ interface BaseSessionCommand {
 
 export type SessionCommand =
   | BaseSessionCommand
+  | BridgePrepareAppCommand
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeWriteFileCommand
@@ -128,6 +131,12 @@ export interface SessionAdapterCreateOptions {
   sessionId: string;
   /** Session group ID — used to key worktrees so all sessions in a group share the same workspace. */
   sessionGroupId?: string;
+  sessionGroupKind?: "coding" | "design" | "app";
+  prepareAppGit?: (runtimeInstanceId: string) => Promise<{
+    repoId: string;
+    repoRemoteUrl: string;
+    defaultBranch: string;
+  }>;
   /** Animal slug for the worktree. If set, reuses the existing slug. */
   slug?: string;
   /** Preserve the persisted branch name instead of generating trace/{slug}. */
@@ -2128,6 +2137,31 @@ export class SessionRouter {
           await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
         }
 
+        if (options.sessionGroupKind === "app") {
+          const runtimeInstanceId = startResult.runtimeInstanceId;
+          if (!runtimeInstanceId || !options.prepareAppGit) {
+            options.onFailed("App managed git credentials are unavailable");
+            return;
+          }
+          const appGit = await options.prepareAppGit(runtimeInstanceId);
+          const result = this.send(
+            options.sessionId,
+            {
+              type: "prepare_app",
+              sessionId: options.sessionId,
+              sessionGroupId: options.sessionGroupId,
+              slug: options.slug,
+              checkpointSha: options.checkpointSha,
+              ...appGit,
+            },
+            { expectedHomeRuntimeId: startResult.runtimeInstanceId },
+          );
+          if (result !== "delivered") {
+            options.onFailed(`prepare_app: ${result}`);
+          }
+          return;
+        }
+
         if (options.repo) {
           const result = this.send(
             options.sessionId,
@@ -2235,6 +2269,7 @@ export class SessionRouter {
     session: {
       hosting: string;
       organizationId?: string;
+      sessionGroupId?: string | null;
       workdir?: string | null;
       repoId?: string | null;
       connection?: unknown;
@@ -2267,6 +2302,7 @@ export class SessionRouter {
         sessionId,
         workdir: session.workdir,
         repoId: session.repoId,
+        sessionGroupId: session.sessionGroupId ?? undefined,
       });
       if (deliveryResult !== "delivered" && adapter.type === "local") {
         console.warn(

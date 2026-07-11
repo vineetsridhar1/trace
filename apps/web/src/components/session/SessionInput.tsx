@@ -117,7 +117,12 @@ export function SessionInput({
       lastUserMessageAt: rawLastUserMessageAt,
       lastMessageAt,
       connection,
-    }) || isSessionRuntimeStartingUp(connection);
+    }) ||
+    // Only trust the connection's startup state before the workspace exists.
+    // Once workdir is set the runtime is demonstrably up, so a lagging
+    // connection.state (e.g. app sessions whose "connected" event arrives late)
+    // must not keep showing "Preparing workspace…".
+    (!workdir && isSessionRuntimeStartingUp(connection));
   const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
   const bridgeInteractionAllowed = hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
