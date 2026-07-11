@@ -9,12 +9,14 @@ import {
   generateEndpointKey,
   isAllowedPreviewRequestOrigin,
   sanitizeHeaders,
+  warnIfPreviewHostNotIsolated,
   webSocketProtocols,
 } from "./endpoint-utils.js";
 
 describe("endpoint utils", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   it("builds URLs from preview host configuration", () => {
@@ -23,6 +25,16 @@ describe("endpoint utils", () => {
 
     expect(endpointPreviewBaseHost()).toBe("preview.example.test");
     expect(buildEndpointUrl("abc123")).toBe("https://abc123.preview.example.test");
+  });
+
+  it("warns but does not fail when previews share the Trace registrable domain", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.trace.infra.opendoor.com");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    expect(() =>
+      warnIfPreviewHostNotIsolated("https://trace.infra.opendoor.com"),
+    ).not.toThrow();
+    expect(warn).toHaveBeenCalledOnce();
   });
 
   it("supports local preview hosts with explicit ports", () => {

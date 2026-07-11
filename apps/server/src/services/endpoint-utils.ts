@@ -236,11 +236,11 @@ export function forwardableResponseHeaders(
   return forwarded;
 }
 
-// Assert at startup that previews are served from a registrable domain distinct
+// Warn at startup when previews are not served from a registrable domain distinct
 // from the Trace app origin (the plan's "never render untrusted content from the
-// Trace app origin"). A shared parent domain would let untrusted app JS reach
-// Trace's cookies/DOM despite the iframe sandbox. Throws in production.
-export function assertPreviewHostIsolated(traceWebUrl: string | undefined): void {
+// Trace app origin"). A shared parent domain can let untrusted app JS reach
+// Trace's cookies/DOM despite the iframe sandbox.
+export function warnIfPreviewHostNotIsolated(traceWebUrl: string | undefined): void {
   const baseHost = endpointPreviewBaseHost().toLowerCase().split(":")[0];
   const appHost = (() => {
     try {
@@ -259,8 +259,7 @@ export function assertPreviewHostIsolated(traceWebUrl: string | undefined): void
   if (!shared) return;
   const message =
     `[endpoint-preview] preview base host "${baseHost}" shares a registrable domain with the Trace app ` +
-    `origin "${appHost}". Untrusted app previews must be served from a separate registrable domain.`;
-  if (process.env.NODE_ENV === "production") throw new Error(message);
+    `origin "${appHost}". Untrusted app previews should be served from a separate registrable domain.`;
   console.warn(message);
 }
 

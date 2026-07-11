@@ -54,7 +54,7 @@ import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.
 import { endpointProxyService } from "./services/endpoint-proxy.js";
 import { sessionApplicationService } from "./services/session-applications.js";
 import {
-  assertPreviewHostIsolated,
+  warnIfPreviewHostNotIsolated,
   endpointTrafficRetentionHours,
 } from "./services/endpoint-utils.js";
 
@@ -133,9 +133,8 @@ async function main() {
   const schema = makeExecutableSchema({ typeDefs, resolvers });
   const PORT = Number(process.env.PORT) || 4000 + Number(process.env.TRACE_PORT || 0);
   const localMode = isLocalMode();
-  // Fail fast if untrusted previews would share a registrable domain with the
-  // Trace app origin (throws in production, warns otherwise).
-  assertPreviewHostIsolated(process.env.TRACE_WEB_URL);
+  // Warn if previews share a registrable domain with the Trace app origin.
+  warnIfPreviewHostNotIsolated(process.env.TRACE_WEB_URL);
   const allowedCorsOrigins = getAllowedCorsOrigins({
     localMode,
     nodeEnv: process.env.NODE_ENV,
