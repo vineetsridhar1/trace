@@ -38,7 +38,7 @@ RUN pnpm --filter @trace/web build
 FROM base AS production
 RUN npm install -g serve@14
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends chromium && \
+    apt-get install -y --no-install-recommends chromium git && \
     rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 1001 trace && \
     useradd --uid 1001 --gid trace --create-home trace
