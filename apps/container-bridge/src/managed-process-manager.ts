@@ -1,8 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
-import http from "http";
 import path from "path";
-import WebSocket from "ws";
+import net from "net";
 import type { BridgeMessage } from "@trace/shared";
+import { EndpointForwarder } from "./endpoint-forwarder.js";
 
 type SendFn = (message: BridgeMessage) => void;
 
@@ -15,6 +15,9 @@ type ManagedProcess = {
 
 const MAX_LOG_CHUNK_BYTES = 16 * 1024;
 const MAX_SETUP_OUTPUT_BYTES = 64 * 1024;
+// A hung setup script (interactive prompt, network stall) must not block session
+// setup forever with no result. Kill the tree and report failure past this.
+const SETUP_SCRIPT_TIMEOUT_MS = 10 * 60_000;
 
 function safeRelativeCwd(baseWorkdir: string, cwd: string): string {
   const relative = cwd.trim() || ".";
@@ -34,8 +37,33 @@ function safeRelativeCwd(baseWorkdir: string, cwd: string): string {
   return resolved;
 }
 
+const SENSITIVE_ENV_EXACT = new Set(["TRACE_RUNTIME_TOKEN", "GITHUB_TOKEN"]);
+
+// Server-only secrets the publicly-served app must never inherit. DATABASE_URL
+// is intentionally kept — the app is expected to use its container-local DB.
+// (This is defense-in-depth: it is NOT a hard boundary because the child runs as
+// the same uid as the bridge and could read /proc/<bridge>/environ. A separate
+// low-privilege uid for app processes is the real isolation and remains TODO.)
+function isSensitiveEnvName(name: string): boolean {
+  if (SENSITIVE_ENV_EXACT.has(name)) return true;
+  const upper = name.toUpperCase();
+  return (
+    upper.endsWith("_TOKEN") ||
+    upper.endsWith("_API_KEY") ||
+    upper.endsWith("_KEY") ||
+    upper.includes("SECRET") ||
+    upper.includes("PRIVATE_KEY")
+  );
+}
+
 function childEnv(env?: Record<string, string>): NodeJS.ProcessEnv {
-  return { ...process.env, ...(env ?? {}) };
+  const bridgeEnv: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (isSensitiveEnvName(key)) continue;
+    bridgeEnv[key] = value;
+  }
+  // Explicit per-process env always wins (an app may be handed its own tokens).
+  return { ...bridgeEnv, ...(env ?? {}) };
 }
 
 function capChunk(data: Buffer): string {
@@ -54,14 +82,89 @@ function signalProcessTree(child: ChildProcessWithoutNullStreams, signal: NodeJS
   }
 }
 
+// SIGTERM a child's process group, escalate to SIGKILL after a grace period,
+// and resolve once it has actually exited so a replacement can spawn cleanly.
+function terminateChild(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (child.exitCode !== null || child.killed) return Promise.resolve();
+  return new Promise((resolve) => {
+    const kill = setTimeout(() => signalProcessTree(child, "SIGKILL"), 5_000);
+    kill.unref();
+    child.once("exit", () => {
+      clearTimeout(kill);
+      resolve();
+    });
+    signalProcessTree(child, "SIGTERM");
+  });
+}
+
+function waitForListeningPort(
+  child: ChildProcessWithoutNullStreams,
+  ports: number[],
+  timeoutMs = 5 * 60_000,
+): Promise<void> {
+  if (ports.length === 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    const probe = () => {
+      if (child.exitCode !== null || child.killed) {
+        reject(new Error("App process exited before opening its configured port"));
+        return;
+      }
+      let pending = ports.length;
+      let settled = false;
+      for (const port of ports) {
+        const socket = net.createConnection({ host: "127.0.0.1", port });
+        socket.once("connect", () => {
+          if (settled) return;
+          settled = true;
+          socket.destroy();
+          resolve();
+        });
+        socket.once("error", () => {
+          pending -= 1;
+          if (!settled && pending === 0) {
+            if (Date.now() >= deadline) reject(new Error("Timed out waiting for app port"));
+            else setTimeout(probe, 250).unref();
+          }
+        });
+      }
+    };
+    probe();
+  });
+}
+
 export class ManagedProcessManager {
   private processes = new Map<string, ManagedProcess>();
-  private sockets = new Map<string, WebSocket>();
+  // Per-processInstanceId serialization for start/restart (see start()).
+  private startLocks = new Map<string, Promise<void>>();
+  private readonly endpointForwarder: EndpointForwarder;
 
   constructor(
     private readonly sessionWorkdirs: Map<string, string>,
     private readonly send: SendFn,
-  ) {}
+  ) {
+    this.endpointForwarder = new EndpointForwarder(send);
+  }
+
+  // Serialize all lifecycle transitions for a processInstanceId onto one chain.
+  // start/stop/destroy must not interleave: without this, a stop arriving during
+  // a restart's await of the old child's exit would see an empty map entry and
+  // no-op, leaving the freshly-spawned child running after the user's last
+  // action was stop; likewise two starts could spawn concurrently and orphan a
+  // process holding the port.
+  private enqueue(key: string, task: () => Promise<void>): Promise<void> {
+    const prev = this.startLocks.get(key) ?? Promise.resolve();
+    const run = prev.then(task, task);
+    const tail = run.then(
+      () => {},
+      () => {},
+    );
+    this.startLocks.set(key, tail);
+    void tail.then(() => {
+      if (this.startLocks.get(key) === tail) this.startLocks.delete(key);
+    });
+    return tail;
+  }
 
   start(options: {
     requestId: string;
@@ -71,7 +174,28 @@ export class ManagedProcessManager {
     command: string;
     cwd: string;
     env?: Record<string, string>;
+    ports?: number[];
   }) {
+    this.enqueue(options.processInstanceId, () => this.startReplacing(options));
+  }
+
+  /**
+   * The server reuses one processInstanceId per configured process, so a
+   * restart re-enters here while the previous child may still be running. Take
+   * ownership of the old entry first (its exit must not clobber the new
+   * process's state) and wait for it to die before spawning, so the new child
+   * never races the old one for the configured ports.
+   */
+  private async startReplacing(options: {
+    requestId: string;
+    processInstanceId: string;
+    sessionGroupId: string;
+    sessionId: string;
+    command: string;
+    cwd: string;
+    env?: Record<string, string>;
+    ports?: number[];
+  }): Promise<void> {
     const baseWorkdir = this.sessionWorkdirs.get(options.sessionId);
     if (!baseWorkdir) {
       this.send({
@@ -83,7 +207,14 @@ export class ManagedProcessManager {
       return;
     }
     try {
-      this.stop(options.processInstanceId);
+      const previous = this.processes.get(options.processInstanceId);
+      if (previous) {
+        // Remove the entry before killing so the old child's exit handler
+        // (guarded by an identity check) stays silent — the server already
+        // accounted for this process when it requested the replacement.
+        this.processes.delete(options.processInstanceId);
+        await terminateChild(previous.child);
+      }
       const cwd = safeRelativeCwd(baseWorkdir, options.cwd);
       const child = spawn(options.command, {
         cwd,
@@ -115,6 +246,7 @@ export class ManagedProcessManager {
         });
       });
       child.on("error", (error) => {
+        if (this.processes.get(options.processInstanceId)?.child !== child) return;
         this.processes.delete(options.processInstanceId);
         this.send({
           type: "app_process_error",
@@ -124,6 +256,7 @@ export class ManagedProcessManager {
         });
       });
       child.on("exit", (exitCode, signal) => {
+        if (this.processes.get(options.processInstanceId)?.child !== child) return;
         this.processes.delete(options.processInstanceId);
         this.send({
           type: "app_process_exited",
@@ -132,12 +265,26 @@ export class ManagedProcessManager {
           signal: signal ?? undefined,
         });
       });
-      this.send({
-        type: "app_process_started",
-        requestId: options.requestId,
-        processInstanceId: options.processInstanceId,
-        bridgeProcessId,
-      });
+      void waitForListeningPort(child, options.ports ?? [])
+        .then(() => {
+          if (this.processes.get(options.processInstanceId)?.child !== child) return;
+          this.send({
+            type: "app_process_started",
+            requestId: options.requestId,
+            processInstanceId: options.processInstanceId,
+            bridgeProcessId,
+          });
+        })
+        .catch((error: unknown) => {
+          if (this.processes.get(options.processInstanceId)?.child !== child) return;
+          this.stop(options.processInstanceId);
+          this.send({
+            type: "app_process_error",
+            requestId: options.requestId,
+            processInstanceId: options.processInstanceId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
     } catch (error) {
       this.send({
         type: "app_process_error",
@@ -149,26 +296,42 @@ export class ManagedProcessManager {
   }
 
   stop(processInstanceId: string): void {
+    void this.enqueue(processInstanceId, async () => this.killEntry(processInstanceId));
+  }
+
+  // SIGTERM then SIGKILL the current child. Runs inside the per-id lock so it
+  // always observes the entry as of "now" (after any in-flight start settled).
+  private killEntry(processInstanceId: string): void {
     const managed = this.processes.get(processInstanceId);
     if (!managed) return;
-    signalProcessTree(managed.child, "SIGTERM");
+    const { child } = managed;
+    signalProcessTree(child, "SIGTERM");
     setTimeout(() => {
-      if (this.processes.has(processInstanceId)) {
-        signalProcessTree(managed.child, "SIGKILL");
+      // Identity check: only escalate if THIS child is still the live entry —
+      // a stop→exit→restart within the grace window must not kill the new pid.
+      if (this.processes.get(processInstanceId)?.child === child) {
+        signalProcessTree(child, "SIGKILL");
       }
     }, 5_000).unref();
   }
 
   destroyForSessionGroup(sessionGroupId: string): void {
-    for (const process of this.processes.values()) {
-      if (process.sessionGroupId === sessionGroupId) this.stop(process.processInstanceId);
+    // Cover both running processes and in-flight starts (whose map entry does
+    // not exist yet but whose lock key is live), so a delete arriving during a
+    // start can't let the new process slip through after teardown.
+    const keys = new Set<string>([...this.processes.keys(), ...this.startLocks.keys()]);
+    for (const key of keys) {
+      void this.enqueue(key, async () => {
+        if (this.processes.get(key)?.sessionGroupId === sessionGroupId) this.killEntry(key);
+      });
     }
   }
 
   destroyAll(): void {
-    for (const processInstanceId of this.processes.keys()) this.stop(processInstanceId);
-    for (const socket of this.sockets.values()) socket.close();
-    this.sockets.clear();
+    for (const key of new Set<string>([...this.processes.keys(), ...this.startLocks.keys()])) {
+      this.stop(key);
+    }
+    this.endpointForwarder.destroy();
   }
 
   runSetupScript(options: {
@@ -194,9 +357,26 @@ export class ManagedProcessManager {
         cwd,
         env: childEnv(options.env),
         shell: true,
-        detached: false,
+        // Own process group so a timeout can kill the whole tree.
+        detached: true,
       });
       const chunks: Buffer[] = [];
+      let settled = false;
+      const finish = (result: { exitCode: number; output?: string; error?: string }): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        this.send({ type: "setup_script_result", requestId: options.requestId, ...result });
+      };
+      const timeout = setTimeout(() => {
+        signalProcessTree(child, "SIGKILL");
+        finish({
+          exitCode: 1,
+          output: Buffer.concat(chunks).toString("utf8"),
+          error: `Setup script timed out after ${Math.round(SETUP_SCRIPT_TIMEOUT_MS / 1000)}s`,
+        });
+      }, SETUP_SCRIPT_TIMEOUT_MS);
+      timeout.unref();
       let bytes = 0;
       const appendOutput = (chunk: Buffer) => {
         if (bytes >= MAX_SETUP_OUTPUT_BYTES) return;
@@ -213,7 +393,10 @@ export class ManagedProcessManager {
         });
         appendOutput(chunk);
       };
-      const prelude = Buffer.from(`[trace] Running setup script in ${cwd}\n$ ${options.command}\n`, "utf8");
+      const prelude = Buffer.from(
+        `[trace] Running setup script in ${cwd}\n$ ${options.command}\n`,
+        "utf8",
+      );
       this.send({
         type: "setup_script_log",
         requestId: options.requestId,
@@ -224,18 +407,14 @@ export class ManagedProcessManager {
       child.stdout.on("data", (chunk: Buffer) => collect("stdout", chunk));
       child.stderr.on("data", (chunk: Buffer) => collect("stderr", chunk));
       child.on("error", (error) => {
-        this.send({
-          type: "setup_script_result",
-          requestId: options.requestId,
+        finish({
           exitCode: 1,
           output: Buffer.concat(chunks).toString("utf8"),
           error: error.message,
         });
       });
       child.on("exit", (exitCode) => {
-        this.send({
-          type: "setup_script_result",
-          requestId: options.requestId,
+        finish({
           exitCode: exitCode ?? 1,
           output: Buffer.concat(chunks).toString("utf8"),
         });
@@ -250,91 +429,19 @@ export class ManagedProcessManager {
     }
   }
 
-  proxyHttp(options: {
-    requestId: string;
-    port: number;
-    method: string;
-    path: string;
-    headers: Record<string, string | string[]>;
-    bodyBase64?: string;
-  }) {
-    const body = options.bodyBase64 ? Buffer.from(options.bodyBase64, "base64") : undefined;
-    const req = http.request(
-      {
-        host: "127.0.0.1",
-        port: options.port,
-        method: options.method,
-        path: options.path,
-        headers: options.headers,
-        timeout: 60_000,
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (chunk: Buffer) => chunks.push(chunk));
-        res.on("end", () => {
-          this.send({
-            type: "endpoint_http_response",
-            requestId: options.requestId,
-            status: res.statusCode ?? 502,
-            headers: res.headers as Record<string, string | string[]>,
-            bodyBase64: Buffer.concat(chunks).toString("base64"),
-          });
-        });
-      },
-    );
-    req.on("timeout", () => {
-      req.destroy(new Error("Proxy request timed out"));
-    });
-    req.on("error", (error) => {
-      this.send({ type: "endpoint_http_error", requestId: options.requestId, error: error.message });
-    });
-    if (body) req.write(body);
-    req.end();
+  proxyHttp(options: Parameters<EndpointForwarder["proxyHttp"]>[0]): void {
+    this.endpointForwarder.proxyHttp(options);
   }
 
-  openWebSocket(options: {
-    requestId: string;
-    port: number;
-    path: string;
-    headers: Record<string, string | string[]>;
-  }) {
-    const socket = new WebSocket(`ws://127.0.0.1:${options.port}${options.path}`, {
-      headers: options.headers,
-    });
-    this.sockets.set(options.requestId, socket);
-    socket.on("open", () => this.send({ type: "endpoint_ws_opened", requestId: options.requestId }));
-    socket.on("message", (data) => {
-      const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer);
-      this.send({
-        type: "endpoint_ws_data",
-        requestId: options.requestId,
-        dataBase64: buffer.toString("base64"),
-      });
-    });
-    socket.on("close", (code, reason) => {
-      this.sockets.delete(options.requestId);
-      this.send({
-        type: "endpoint_ws_closed",
-        requestId: options.requestId,
-        code,
-        reason: reason.toString("utf8"),
-      });
-    });
-    socket.on("error", (error) => {
-      this.sockets.delete(options.requestId);
-      this.send({ type: "endpoint_ws_closed", requestId: options.requestId, code: 1011, reason: error.message });
-    });
+  openWebSocket(options: Parameters<EndpointForwarder["openWebSocket"]>[0]): void {
+    this.endpointForwarder.openWebSocket(options);
   }
 
-  sendWebSocketData(requestId: string, dataBase64: string) {
-    const socket = this.sockets.get(requestId);
-    if (socket?.readyState === WebSocket.OPEN) socket.send(Buffer.from(dataBase64, "base64"));
+  sendWebSocketData(requestId: string, dataBase64: string, isBinary = true): void {
+    this.endpointForwarder.sendWebSocketData(requestId, dataBase64, isBinary);
   }
 
-  closeWebSocket(requestId: string, code?: number, reason?: string) {
-    const socket = this.sockets.get(requestId);
-    if (!socket) return;
-    socket.close(code, reason);
-    this.sockets.delete(requestId);
+  closeWebSocket(requestId: string, code?: number, reason?: string): void {
+    this.endpointForwarder.closeWebSocket(requestId, code, reason);
   }
 }

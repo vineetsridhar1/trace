@@ -7,6 +7,7 @@ import type {
   UpdateAgentEnvironmentDraft,
 } from "./agent-environment-form-types";
 import { AgentEnvironmentFieldLabel } from "./AgentEnvironmentFieldLabel";
+import { AgentEnvironmentRuntimeEnvFields } from "./AgentEnvironmentRuntimeEnvFields";
 
 type Props = {
   draft: AgentEnvironmentDraft;
@@ -71,6 +72,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
           </SelectContent>
         </Select>
       </label>
+      <AgentEnvironmentRuntimeEnvFields draft={draft} orgSecrets={orgSecrets} update={update} />
       <label className="flex flex-col gap-1.5">
         <AgentEnvironmentFieldLabel tooltip="How long Trace waits for the provisioned runtime to connect before treating startup as failed.">
           Startup timeout seconds

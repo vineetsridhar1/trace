@@ -107,6 +107,62 @@ describe("ProvisionedRuntimeAdapter", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("validates runtime environment secret mappings", async () => {
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.validateConfig({
+        ...provisionedConfig,
+        runtimeEnv: [{ name: "DATABASE_URL", secretId: "database-secret" }],
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      adapter.validateConfig({
+        ...provisionedConfig,
+        runtimeEnv: [{ name: "DATABASE-URL", secretId: "database-secret" }],
+      }),
+    ).rejects.toThrow("must be a valid environment variable name");
+    await expect(
+      adapter.validateConfig({
+        ...provisionedConfig,
+        runtimeEnv: [{ name: "TRACE_RUNTIME_TOKEN", secretId: "wrong-token" }],
+      }),
+    ).rejects.toThrow("cannot override TRACE_ variables");
+  });
+
+  it("resolves configured organization secrets into runtime bootstrap env", async () => {
+    vi.mocked(orgSecretService.getDecryptedValue).mockImplementation(
+      async (_organizationId, secretId) =>
+        secretId === "database-secret" ? "postgresql://db.example/app" : "launcher-secret",
+    );
+    fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await adapter.startSession({
+      sessionId: "session-with-database",
+      organizationId: "org-1",
+      actorId: "user-1",
+      environment: {
+        id: "env-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: {
+          ...provisionedConfig,
+          runtimeEnv: [{ name: "DATABASE_URL", secretId: "database-secret" }],
+        },
+      },
+      tool: "codex",
+      bridgeUrl: "wss://trace.example/bridge",
+    });
+
+    const init = fetchMock().mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(init.body as string) as {
+      bootstrapEnv: Record<string, string>;
+    };
+    expect(body.bootstrapEnv.DATABASE_URL).toBe("postgresql://db.example/app");
+    expect(orgSecretService.getDecryptedValue).toHaveBeenCalledWith("org-1", "database-secret");
+  });
+
   it("allows loopback HTTP provisioned URLs outside production", async () => {
     const adapter = new ProvisionedRuntimeAdapter();
 

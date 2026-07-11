@@ -38,6 +38,18 @@ function createDraft(environment: AgentEnvironment | null): AgentEnvironmentDraf
   const launcherMetadata = config.launcherMetadata
     ? JSON.stringify(config.launcherMetadata, null, 2)
     : "";
+  const runtimeEnv = Array.isArray(config.runtimeEnv)
+    ? config.runtimeEnv.flatMap((entry) =>
+        entry && typeof entry === "object" && !Array.isArray(entry)
+          ? [
+              {
+                name: typeof entry.name === "string" ? entry.name : "",
+                secretId: typeof entry.secretId === "string" ? entry.secretId : "",
+              },
+            ]
+          : [],
+      )
+    : [];
 
   return {
     name: environment?.name ?? "",
@@ -50,6 +62,7 @@ function createDraft(environment: AgentEnvironment | null): AgentEnvironmentDraf
     statusUrl: config.statusUrl ?? "",
     authSecretId: config.auth?.secretId ?? "",
     startupTimeoutSeconds: String(config.startupTimeoutSeconds ?? 180),
+    runtimeEnv,
     launcherMetadata,
   };
 }
@@ -71,6 +84,7 @@ function buildConfig(draft: AgentEnvironmentDraft): Record<string, unknown> {
     auth: { type: "bearer", secretId: draft.authSecretId.trim() },
     startupTimeoutSeconds: Number(draft.startupTimeoutSeconds),
     deprovisionPolicy: "on_session_end",
+    runtimeEnv: draft.runtimeEnv.filter((entry) => entry.name.trim() && entry.secretId.trim()),
     ...(metadata ? { launcherMetadata: JSON.parse(metadata) as Record<string, unknown> } : {}),
   };
 }

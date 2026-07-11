@@ -1,6 +1,7 @@
 import http from "http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BridgeMessage } from "@trace/shared";
+import { WebSocketServer } from "ws";
 import { ManagedProcessManager } from "./managed-process-manager.js";
 
 function waitFor(messages: BridgeMessage[], predicate: (message: BridgeMessage) => boolean) {
@@ -96,10 +97,7 @@ describe("ManagedProcessManager", () => {
       messages,
       (message) => message.type === "setup_script_log" && message.data.includes("setup-ok"),
     );
-    const result = await waitFor(
-      messages,
-      (message) => message.type === "setup_script_result",
-    );
+    const result = await waitFor(messages, (message) => message.type === "setup_script_result");
     expect(result).toMatchObject({
       type: "setup_script_result",
       requestId: "setup-1",
@@ -149,10 +147,46 @@ describe("ManagedProcessManager", () => {
       sessionId: "session-1",
       command: `node -e "require('http').createServer((req,res)=>res.end('ok')).listen(${port}, '127.0.0.1')"`,
       cwd: ".",
+      ports: [port],
     });
 
     await waitFor(messages, (message) => message.type === "app_process_started");
     await waitForHttp(port);
+    manager.stop("process-1");
+    await waitFor(messages, (message) => message.type === "app_process_exited");
+    await waitForPortAvailable(port);
+  });
+
+  it("restart reuses the process id without the old child clobbering the new one", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>
+      messages.push(message),
+    );
+    const port = await getFreePort();
+    const startProcess = () =>
+      manager.start({
+        requestId: "start-1",
+        processInstanceId: "process-1",
+        sessionGroupId: "group-1",
+        sessionId: "session-1",
+        command: `node -e "require('http').createServer((req,res)=>res.end('ok')).listen(${port}, '127.0.0.1')"`,
+        cwd: ".",
+        ports: [port],
+      });
+
+    startProcess();
+    await waitFor(messages, (message) => message.type === "app_process_started");
+    await waitForHttp(port);
+
+    // Restart under the same processInstanceId. The old child is terminated
+    // before the new one spawns; its exit must not be reported (it would mark
+    // the freshly started process as exited on the server).
+    messages.length = 0;
+    startProcess();
+    await waitFor(messages, (message) => message.type === "app_process_started");
+    await waitForHttp(port);
+    expect(messages.some((message) => message.type === "app_process_exited")).toBe(false);
+
     manager.stop("process-1");
     await waitFor(messages, (message) => message.type === "app_process_exited");
     await waitForPortAvailable(port);
@@ -191,6 +225,83 @@ describe("ManagedProcessManager", () => {
       throw new Error("Missing HTTP proxy body");
     }
     expect(Buffer.from(response.bodyBase64, "base64").toString("utf8")).toBe("proxied GET /hello");
+  });
+
+  it("retries safe requests while a watched dev server restarts", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map(), (message) => messages.push(message));
+    const port = await getFreePort();
+    const server = http.createServer((_req, res) => res.end("restarted"));
+    servers.push(server);
+
+    manager.proxyHttp({
+      requestId: "http-restart",
+      port,
+      method: "GET",
+      path: "/",
+      headers: {},
+    });
+    setTimeout(() => server.listen(port, "127.0.0.1"), 150);
+
+    const response = await waitFor(
+      messages,
+      (message) => message.type === "endpoint_http_response",
+    );
+    expect(response).toMatchObject({
+      type: "endpoint_http_response",
+      requestId: "http-restart",
+      status: 200,
+    });
+    expect(messages.some((message) => message.type === "endpoint_http_error")).toBe(false);
+  });
+
+  it("forwards websocket subprotocols and text frames required by Vite HMR", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map(), (message) => messages.push(message));
+    const server = http.createServer();
+    const webSocketServer = new WebSocketServer({ server });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Missing test server port");
+    const connection = new Promise<{ protocol: string; reply: Promise<boolean> }>((resolve) => {
+      webSocketServer.once("connection", (socket) => {
+        const reply = new Promise<boolean>((resolveReply) => {
+          socket.once("message", (_data, isBinary) => resolveReply(isBinary));
+        });
+        socket.send(JSON.stringify({ type: "connected" }));
+        resolve({ protocol: socket.protocol, reply });
+      });
+    });
+
+    manager.openWebSocket({
+      requestId: "ws-hmr",
+      port: address.port,
+      path: "/",
+      headers: {},
+      protocols: ["vite-hmr"],
+    });
+
+    await waitFor(messages, (message) => message.type === "endpoint_ws_opened");
+    const connected = await connection;
+    expect(connected.protocol).toBe("vite-hmr");
+    const update = await waitFor(
+      messages,
+      (message) => message.type === "endpoint_ws_data" && message.requestId === "ws-hmr",
+    );
+    expect(update).toMatchObject({
+      type: "endpoint_ws_data",
+      dataBase64: Buffer.from(JSON.stringify({ type: "connected" })).toString("base64"),
+      isBinary: false,
+    });
+    manager.sendWebSocketData(
+      "ws-hmr",
+      Buffer.from(JSON.stringify({ type: "custom", event: "vite:ping" })).toString("base64"),
+      false,
+    );
+    expect(await connected.reply).toBe(false);
+    manager.destroyAll();
+    await new Promise<void>((resolve) => webSocketServer.close(() => resolve()));
   });
 
   it("rejects unsafe working directories", async () => {

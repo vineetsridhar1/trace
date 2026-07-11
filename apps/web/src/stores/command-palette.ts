@@ -10,6 +10,9 @@ interface CommandPaletteState {
   openForSearch: (initialQuery: string) => void;
   shortcutsOpen: boolean;
   setShortcutsOpen: (open: boolean) => void;
+  /** Whether the "new app session" prompt dialog is open. */
+  newAppSessionOpen: boolean;
+  setNewAppSessionOpen: (open: boolean) => void;
 }
 
 export const useCommandPaletteStore = create<CommandPaletteState>((set) => ({
@@ -23,4 +26,6 @@ export const useCommandPaletteStore = create<CommandPaletteState>((set) => ({
     set({ paletteOpen: true, pendingQuery: initialQuery ? `"${initialQuery}"` : "" }),
   shortcutsOpen: false,
   setShortcutsOpen: (open: boolean) => set({ shortcutsOpen: open }),
+  newAppSessionOpen: false,
+  setNewAppSessionOpen: (open: boolean) => set({ newAppSessionOpen: open }),
 }));

@@ -120,6 +120,16 @@ async function resolve(
 
   const repo = await managedGitService.getManagedRepo(organizationId, repoId);
   if (!repo) {
+    // The token verified (same JWT secret) but no managed repo row exists in
+    // THIS server's database. That almost always means the runtime's origin
+    // points at a different Trace deployment than the one that created the
+    // repo — i.e. TRACE_SERVER_PUBLIC_URL on the creating server resolves to
+    // another environment. Log enough to confirm which server is missing it.
+    console.warn(
+      `[managed-git] 404 no managed repo row: org=${organizationId} repo=${repoId} service=${service}. ` +
+        "The pushing runtime's origin resolves to this server, but its DB has no such repo — " +
+        "check that TRACE_SERVER_PUBLIC_URL on the session's server points back to that same deployment.",
+    );
     res.status(404).send("Repository not found");
     return null;
   }
@@ -171,6 +181,27 @@ router.get("/:orgId/:repoId/info/refs", async (req: Request, res: Response) => {
   });
 });
 
+// Serialize receive-pack per repo so the pre/post ref snapshots that derive the
+// `repo_updated` event can't interleave with a concurrent push (which would
+// corrupt oldSha and actor attribution). Concurrent pushes to one managed repo
+// are rare (one active project per session group), so the throughput cost is
+// negligible. upload-pack (read-only) is never serialized.
+const repoReceiveLocks = new Map<string, Promise<void>>();
+
+function runExclusive(key: string, fn: () => Promise<void>): Promise<void> {
+  const prev = repoReceiveLocks.get(key) ?? Promise.resolve();
+  const run = prev.then(fn, fn);
+  const tail = run.then(
+    () => {},
+    () => {},
+  );
+  repoReceiveLocks.set(key, tail);
+  void tail.then(() => {
+    if (repoReceiveLocks.get(key) === tail) repoReceiveLocks.delete(key);
+  });
+  return run;
+}
+
 function rpcHandler(service: GitService) {
   return async (req: Request, res: Response): Promise<void> => {
     const expectedContentType = `application/x-${service}-request`;
@@ -192,16 +223,47 @@ function rpcHandler(service: GitService) {
     const resolved = await resolve(req, res, service);
     if (!resolved) return;
 
-    const refsBefore =
-      service === "git-receive-pack"
-        ? await gitStorage.listRefs(resolved.organizationId, resolved.repoId)
-        : null;
+    if (service === "git-receive-pack") {
+      await runExclusive(
+        `${resolved.organizationId}/${resolved.repoId}`,
+        () => streamRpc(service, req, res, resolved, encoding),
+      );
+    } else {
+      await streamRpc(service, req, res, resolved, encoding);
+    }
+  };
+}
 
-    const child = spawn("git", [gitSubcommand(service), "--stateless-rpc", resolved.repoPath]);
+// Runs one git smart-HTTP RPC, resolving only once the response is fully
+// handled (child exit + push event recorded, or a terminal error) so callers
+// can serialize on the returned promise.
+function streamRpc(
+  service: GitService,
+  req: Request,
+  res: Response,
+  resolved: ResolvedRequest,
+  encoding: string | undefined,
+): Promise<void> {
+  return new Promise<void>((resolveDone) => {
+    let settled = false;
+    const done = (): void => {
+      if (settled) return;
+      settled = true;
+      resolveDone();
+    };
+
+    void (async () => {
+      const refsBefore =
+        service === "git-receive-pack"
+          ? await gitStorage.listRefs(resolved.organizationId, resolved.repoId)
+          : null;
+
+      const child = spawn("git", [gitSubcommand(service), "--stateless-rpc", resolved.repoPath]);
     const stderr: Buffer[] = [];
     child.stderr.on("data", (d: Buffer) => stderr.push(d));
     child.on("error", () => {
       if (!res.headersSent) res.status(500).send("git operation failed");
+      done();
     });
     const limiter = new GitBodyLimitStream();
     const decoder = encoding === "gzip" ? createGunzip() : null;
@@ -218,9 +280,11 @@ function rpcHandler(service: GitService) {
       limiter.destroy();
       req.resume();
       if (child.exitCode === null) child.kill("SIGKILL");
-      if (res.destroyed) return;
-      if (!res.headersSent) res.status(status).send(message);
-      else res.destroy();
+      if (!res.destroyed) {
+        if (!res.headersSent) res.status(status).send(message);
+        else res.destroy();
+      }
+      done();
     };
     req.on("error", () => failInput(400, "Invalid request body"));
     decoder?.on("error", () => failInput(400, "Invalid gzip request body"));
@@ -238,9 +302,11 @@ function rpcHandler(service: GitService) {
     // gzip body can fail as soon as the streams are connected.
     if (decoder) req.pipe(decoder);
     input.pipe(limiter).pipe(child.stdin);
-    // Kill git if the client disconnects mid-request.
+    // Kill git if the client disconnects mid-request. If the child already
+    // exited there's no close event coming, so release the lock here too.
     res.on("close", () => {
       if (!res.writableEnded && child.exitCode === null) child.kill("SIGKILL");
+      else if (child.exitCode !== null) done();
     });
 
     res.status(200);
@@ -252,12 +318,19 @@ function rpcHandler(service: GitService) {
     child.stdout.pipe(res, { end: !isReceivePack });
 
     child.on("close", async (code) => {
-      if (inputFailed) return;
+      if (inputFailed) {
+        done();
+        return;
+      }
       if (code !== 0) {
         console.error(`[git] ${service} exited ${code}: ${Buffer.concat(stderr)}`);
-        if (res.destroyed) return;
+        if (res.destroyed) {
+          done();
+          return;
+        }
         if (!res.headersSent) res.status(500).end();
         else if (isReceivePack && !res.writableEnded) res.end();
+        done();
         return;
       }
       if (isReceivePack && refsBefore) {
@@ -281,8 +354,15 @@ function rpcHandler(service: GitService) {
           if (!res.destroyed) res.destroy(error instanceof Error ? error : undefined);
         }
       }
+      done();
     });
-  };
+    })().catch((error: unknown) => {
+      console.error("[git] rpc handler failed", error);
+      if (!res.headersSent) res.status(500).end();
+      else if (!res.writableEnded) res.end();
+      done();
+    });
+  });
 }
 
 router.post("/:orgId/:repoId/git-upload-pack", rpcHandler("git-upload-pack"));

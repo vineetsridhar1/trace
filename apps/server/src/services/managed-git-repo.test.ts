@@ -102,6 +102,44 @@ describe("createManagedRepo", () => {
   });
 });
 
+describe("deleteManagedRepo", () => {
+  it("deletes bare storage and the managed repo row", async () => {
+    const organizationId = "org-managed";
+    const repoId = "managed-repo";
+    await gitStorage.initBareRepo(organizationId, repoId);
+    prismaMock.repo.findFirst.mockResolvedValueOnce({ id: repoId });
+
+    await expect(
+      managedGitService.deleteManagedRepo({
+        organizationId,
+        repoId,
+        actorType: "system",
+        actorId: "system",
+      }),
+    ).resolves.toBe(true);
+
+    expect(await gitStorage.repoExists(organizationId, repoId)).toBe(false);
+    expect(prismaMock.repo.delete).toHaveBeenCalledWith({ where: { id: repoId } });
+  });
+
+  it("does not touch storage for a missing or non-managed repo", async () => {
+    prismaMock.repo.findFirst.mockResolvedValueOnce(null);
+    const deleteSpy = vi.spyOn(gitStorage, "deleteRepo");
+
+    await expect(
+      managedGitService.deleteManagedRepo({
+        organizationId: "org-managed",
+        repoId: "github-repo",
+        actorType: "system",
+        actorId: "system",
+      }),
+    ).resolves.toBe(false);
+
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(prismaMock.repo.delete).not.toHaveBeenCalled();
+  });
+});
+
 describe("repo listing hides managed repos", () => {
   it("filters org repo lists to github-provider repos", async () => {
     prismaMock.repo.findMany.mockResolvedValue([]);

@@ -31,6 +31,11 @@ export function endpointProxyMaxRequestBodyBytes(): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 25 * 1024 * 1024;
 }
 
+export function endpointProxyMaxResponseBodyBytes(): number {
+  const parsed = Number(process.env.TRACE_ENDPOINT_PROXY_MAX_RESPONSE_BODY_BYTES);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 25 * 1024 * 1024;
+}
+
 export function buildEndpointUrl(key: string): string {
   return `${endpointPreviewScheme()}://${key}.${endpointPreviewBaseHost()}`;
 }
@@ -49,8 +54,50 @@ export function extractEndpointKey(hostHeader: string | undefined | null): strin
   const host = hostHeader.split(":")[0]?.toLowerCase();
   const baseHost = endpointPreviewBaseHost().toLowerCase().split(":")[0];
   if (!host || host === baseHost || !host.endsWith(`.${baseHost}`)) return null;
-  const key = host.slice(0, -1 * (`.${baseHost}`).length).split(".").at(-1);
-  return key && /^[a-z0-9-]+$/.test(key) ? key : null;
+  // The key must be exactly one label: `<key>.<baseHost>`. Reject deeper
+  // subdomains (`evil.<key>.<baseHost>`) so one endpoint isn't reachable from
+  // unbounded origins that could script/set cookies across the isolation seam.
+  const prefix = host.slice(0, -1 * (`.${baseHost}`).length);
+  return /^[a-z0-9-]+$/.test(prefix) ? prefix : null;
+}
+
+// Origins Trace itself serves from — the legitimate embedder of a preview iframe.
+// Read lazily so tests and deployments can vary the env without reload ordering.
+function traceAppOrigins(): Set<string> {
+  const origins = new Set<string>();
+  const add = (raw: string | undefined) => {
+    const trimmed = raw?.trim();
+    if (trimmed) origins.add(trimmed);
+  };
+  add(process.env.TRACE_WEB_URL);
+  for (const value of (process.env.CORS_ALLOWED_ORIGINS ?? "").split(",")) add(value);
+  return origins;
+}
+
+/**
+ * Decide whether a credentialed request/upgrade to a preview endpoint may
+ * proceed based on its browser Origin. Requests carry the preview cookie
+ * (SameSite=None) so they ride any cross-site context; we only allow:
+ *  - no Origin (top-level navigation — not a cross-site credentialed fetch),
+ *  - the endpoint's own preview origin (the app's own same-origin subrequests),
+ *  - a Trace app origin (the legitimate iframe embedder).
+ * Everything else is a cross-site request and is rejected (CSWSH/CSRF guard).
+ */
+export function isAllowedPreviewRequestOrigin(
+  originHeader: string | string[] | undefined,
+  endpointKey: string,
+): boolean {
+  const origin = Array.isArray(originHeader) ? originHeader[0] : originHeader;
+  if (!origin) return true;
+  // The app's own same-origin subrequests carry the endpoint's origin. Compare
+  // by endpoint key (not exact string) so a local/proxied port or scheme
+  // difference doesn't reject the app's legitimate own traffic.
+  try {
+    if (extractEndpointKey(new URL(origin).host) === endpointKey) return true;
+  } catch {
+    // Non-URL Origin (e.g. "null") — fall through to the Trace allowlist.
+  }
+  return traceAppOrigins().has(origin);
 }
 
 export function sanitizeHeaders(
@@ -102,13 +149,18 @@ const WS_HANDSHAKE_HEADERS = new Set([
   "sec-websocket-protocol",
 ]);
 
-// The Trace session lives in a single cookie. Strip only that pair so the
-// proxied application keeps its own cookies but never receives Trace credentials.
+// Trace credentials live in the session cookie plus __trace_-prefixed cookies
+// (e.g. the endpoint preview cookie). Strip those pairs so the proxied
+// application keeps its own cookies but never receives Trace credentials.
 function stripTraceSessionCookie(value: string): string | null {
   const kept = value
     .split(";")
     .map((part) => part.trim())
-    .filter((part) => part && part.split("=")[0]?.trim().toLowerCase() !== TRACE_SESSION_COOKIE);
+    .filter((part) => {
+      if (!part) return false;
+      const name = part.split("=")[0]?.trim().toLowerCase() ?? "";
+      return name !== TRACE_SESSION_COOKIE && !name.startsWith("__trace_");
+    });
   return kept.length ? kept.join("; ") : null;
 }
 
@@ -137,17 +189,79 @@ export function forwardableRequestHeaders(
   return forwarded;
 }
 
+export function webSocketProtocols(
+  headers: Record<string, string | string[] | undefined>,
+): string[] {
+  const value = headers["sec-websocket-protocol"];
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return [
+    ...new Set(
+      values
+        .flatMap((entry) => entry.split(","))
+        .map((protocol) => protocol.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+// Remove the `Domain` attribute from a Set-Cookie so the app's cookie stays
+// host-only. Endpoints are siblings under one base host; a `Domain=<baseHost>`
+// cookie from one untrusted app would otherwise be sent to every other
+// endpoint (cross-tenant cookie tossing / fixation).
+function stripSetCookieDomain(setCookie: string): string {
+  return setCookie
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0 && !part.toLowerCase().startsWith("domain="))
+    .join("; ");
+}
+
 // Strip hop-by-hop headers from the application's response before relaying it
-// back to the caller; the proxy manages framing itself.
+// back to the caller; the proxy manages framing itself. Set-Cookie is forwarded
+// but forced host-only so untrusted apps can't inject cookies onto siblings.
 export function forwardableResponseHeaders(
   headers: Record<string, string | string[]>,
 ): Record<string, string | string[]> {
   const forwarded: Record<string, string | string[]> = {};
   for (const [rawName, value] of Object.entries(headers)) {
     if (HOP_BY_HOP_HEADERS.has(rawName.toLowerCase())) continue;
+    if (rawName.toLowerCase() === "set-cookie") {
+      forwarded[rawName] = Array.isArray(value)
+        ? value.map(stripSetCookieDomain)
+        : stripSetCookieDomain(value);
+      continue;
+    }
     forwarded[rawName] = value;
   }
   return forwarded;
+}
+
+// Assert at startup that previews are served from a registrable domain distinct
+// from the Trace app origin (the plan's "never render untrusted content from the
+// Trace app origin"). A shared parent domain would let untrusted app JS reach
+// Trace's cookies/DOM despite the iframe sandbox. Throws in production.
+export function assertPreviewHostIsolated(traceWebUrl: string | undefined): void {
+  const baseHost = endpointPreviewBaseHost().toLowerCase().split(":")[0];
+  const appHost = (() => {
+    try {
+      return traceWebUrl ? new URL(traceWebUrl).hostname.toLowerCase() : null;
+    } catch {
+      return null;
+    }
+  })();
+  if (!appHost) return;
+  const registrable = (host: string) => host.split(".").slice(-2).join(".");
+  const shared =
+    appHost === baseHost ||
+    appHost.endsWith(`.${baseHost}`) ||
+    baseHost.endsWith(`.${appHost}`) ||
+    registrable(appHost) === registrable(baseHost);
+  if (!shared) return;
+  const message =
+    `[endpoint-preview] preview base host "${baseHost}" shares a registrable domain with the Trace app ` +
+    `origin "${appHost}". Untrusted app previews must be served from a separate registrable domain.`;
+  if (process.env.NODE_ENV === "production") throw new Error(message);
+  console.warn(message);
 }
 
 export function shouldCaptureHeaders(mode: EndpointTrafficCaptureMode): boolean {

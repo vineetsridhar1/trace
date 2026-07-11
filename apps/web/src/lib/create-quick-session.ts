@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { client } from "./urql";
 import { START_SESSION_MUTATION, useEntityStore } from "@trace/client-core";
-import { navigateToSession } from "../stores/ui";
+import { navigateToSession, navigateToSessionGroup } from "../stores/ui";
 
 const pendingQuickSessionChannels = new Set<string>();
 
@@ -72,5 +72,42 @@ export async function createQuickSession(
     toast.error("Failed to create session", { description: message });
   } finally {
     pendingQuickSessionChannels.delete(channelId);
+  }
+}
+
+export async function createAppSession(prompt: string): Promise<boolean> {
+  const trimmed = prompt.trim();
+  if (!trimmed) return false;
+
+  try {
+    const result = await client
+      .mutation(START_SESSION_MUTATION, {
+        input: {
+          kind: "app",
+          hosting: "cloud",
+          prompt: trimmed,
+        },
+      })
+      .toPromise();
+
+    if (result.error) {
+      toast.error("Failed to create app session", { description: result.error.message });
+      return false;
+    }
+
+    const session = result.data?.startSession;
+    if (!session?.id || !session.sessionGroupId) {
+      toast.error("Failed to create app session", {
+        description: "Server did not return a session.",
+      });
+      return false;
+    }
+
+    navigateToSessionGroup(null, session.sessionGroupId, session.id);
+    return true;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    toast.error("Failed to create app session", { description: message });
+    return false;
   }
 }

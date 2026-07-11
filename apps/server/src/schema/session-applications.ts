@@ -1,11 +1,7 @@
-import type {
-  EndpointTrafficCaptureMode,
-  SessionEndpointAccessMode,
-} from "@prisma/client";
+import type { EndpointTrafficCaptureMode, SessionEndpointAccessMode } from "@prisma/client";
 import type { Context } from "../context.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { requireOrgContext } from "../lib/require-org.js";
-import { prisma } from "../lib/db.js";
 import { buildEndpointUrl } from "../services/endpoint-utils.js";
 import { sessionApplicationService } from "../services/session-applications.js";
 
@@ -15,22 +11,18 @@ function requireUser(ctx: Context): string {
 }
 
 export const sessionApplicationQueries = {
-  sessionSetupScriptRuns: (
-    _parent: unknown,
-    args: { sessionGroupId: string },
-    ctx: Context,
-  ) =>
+  sessionSetupScriptRuns: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>
     sessionApplicationService.listSetupScriptRuns(
       args.sessionGroupId,
       requireOrgContext(ctx),
       requireUser(ctx),
     ),
-  sessionApplicationProcesses: (
-    _parent: unknown,
-    args: { sessionGroupId: string },
-    ctx: Context,
-  ) =>
-    sessionApplicationService.listProcesses(args.sessionGroupId, requireOrgContext(ctx), requireUser(ctx)),
+  sessionApplicationProcesses: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>
+    sessionApplicationService.listProcesses(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    ),
   sessionApplicationLogs: (
     _parent: unknown,
     args: { processId: string; limit?: number | null; beforeSequence?: number | null },
@@ -41,16 +33,25 @@ export const sessionApplicationQueries = {
       beforeSequence: args.beforeSequence,
     }),
   sessionEndpoints: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>
-    sessionApplicationService.listEndpoints(args.sessionGroupId, requireOrgContext(ctx), requireUser(ctx)),
+    sessionApplicationService.listEndpoints(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    ),
   endpointTraffic: (
     _parent: unknown,
     args: { endpointId: string; limit?: number | null; before?: Date | null },
     ctx: Context,
   ) =>
-    sessionApplicationService.listTraffic(args.endpointId, requireOrgContext(ctx), requireUser(ctx), {
-      limit: args.limit,
-      before: args.before,
-    }),
+    sessionApplicationService.listTraffic(
+      args.endpointId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+      {
+        limit: args.limit,
+        before: args.before,
+      },
+    ),
 };
 
 export const sessionApplicationMutations = {
@@ -139,9 +140,17 @@ export const sessionApplicationMutations = {
     args: { endpointId: string },
     ctx: Context,
   ) =>
-    sessionApplicationService.disableEndpoint(args.endpointId, requireOrgContext(ctx), requireUser(ctx)),
+    sessionApplicationService.disableEndpoint(
+      args.endpointId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    ),
   rotateSessionEndpoint: (_parent: unknown, args: { endpointId: string }, ctx: Context) =>
-    sessionApplicationService.rotateEndpoint(args.endpointId, requireOrgContext(ctx), requireUser(ctx)),
+    sessionApplicationService.rotateEndpoint(
+      args.endpointId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    ),
   updateSessionEndpointTrafficCapture: (
     _parent: unknown,
     args: { endpointId: string; mode: EndpointTrafficCaptureMode },
@@ -154,7 +163,23 @@ export const sessionApplicationMutations = {
       requireUser(ctx),
     ),
   clearEndpointTraffic: (_parent: unknown, args: { endpointId: string }, ctx: Context) =>
-    sessionApplicationService.clearTraffic(args.endpointId, requireOrgContext(ctx), requireUser(ctx)),
+    sessionApplicationService.clearTraffic(
+      args.endpointId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    ),
+  createSessionEndpointPreview: (_parent: unknown, args: { endpointId: string }, ctx: Context) =>
+    sessionApplicationService.createEndpointPreview(
+      args.endpointId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    ),
+  publishAppSession: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>
+    sessionApplicationService.publishAppSession(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      requireUser(ctx),
+    ),
 };
 
 export const sessionApplicationTypeResolvers = {
@@ -166,14 +191,6 @@ export const sessionApplicationTypeResolvers = {
       sessionGroupId: string;
       appConfigId: string;
       processConfigId: string;
-    }) =>
-      prisma.sessionEndpoint.findMany({
-        where: {
-          sessionGroupId: process.sessionGroupId,
-          appConfigId: process.appConfigId,
-          processConfigId: process.processConfigId,
-        },
-        orderBy: { portConfigId: "asc" },
-      }),
+    }) => sessionApplicationService.listProcessEndpoints(process),
   },
 };

@@ -26,7 +26,27 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Build and push Fly runtime image
-        run: flyctl deploy --config apps/container-bridge/fly.toml --dockerfile apps/container-bridge/Dockerfile --build-only --push
+      # Build and push through Fly's own builder (registry.fly.io rejects direct
+      # docker pushes of arbitrary tags). --image-label overrides the default
+      # deployment-<ts> tag with stable `latest` and a sha tag, so the launcher
+      # can pin TRACE_RUNTIME_IMAGE=registry.fly.io/trace-sessions:latest once
+      # and every future deploy auto-rolls. --build-only keeps the app un-rolled.
+      - name: Push :latest runtime image
+        run: >-
+          flyctl deploy --config apps/container-bridge/fly.toml
+          --dockerfile apps/container-bridge/Dockerfile
+          --build-only --push --image-label latest
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Push sha-tagged runtime image
+        run: >-
+          flyctl deploy --config apps/container-bridge/fly.toml
+          --dockerfile apps/container-bridge/Dockerfile
+          --build-only --push --image-label sha-${{ steps.sha.outputs.short }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

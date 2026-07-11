@@ -20,6 +20,7 @@ const EMPTY_APPLICATION_CONFIG: RepoApplicationConfig = {
 const ID_RE = /^[a-z0-9_-]+$/;
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HTTP_PROTOCOLS = new Set(["http"]);
+const DENIED_FORWARD_PORTS = new Set([2375, 2376]);
 
 function record(value: unknown): JsonRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -45,7 +46,9 @@ function requiredString(value: unknown, field: string): string {
 
 function validateId(id: string, field: string): string {
   if (!ID_RE.test(id)) {
-    throw new ValidationError(`${field} must use lowercase letters, numbers, hyphen, or underscore`);
+    throw new ValidationError(
+      `${field} must use lowercase letters, numbers, hyphen, or underscore`,
+    );
   }
   return id;
 }
@@ -113,6 +116,9 @@ function normalizePort(value: unknown): RepoPortDefinition {
   if (!Number.isInteger(port) || (port as number) < 1 || (port as number) > 65535) {
     throw new ValidationError("Port must be an integer from 1 to 65535");
   }
+  if ((port as number) < 1024 || DENIED_FORWARD_PORTS.has(port as number)) {
+    throw new ValidationError("System and container-management ports cannot be forwarded");
+  }
   const protocol = optionalString(input.protocol)?.trim() || "http";
   if (!HTTP_PROTOCOLS.has(protocol)) {
     throw new ValidationError("Only http ports are supported");
@@ -127,10 +133,20 @@ function normalizePort(value: unknown): RepoPortDefinition {
   };
 }
 
-function normalizeProcess(value: unknown): RepoProcessDefinition {
+function normalizeProcess(value: unknown, strict: boolean): RepoProcessDefinition {
   const input = record(value);
   if (!input) throw new ValidationError("Process must be an object");
-  const ports = array(input.ports).map(normalizePort);
+  const ports: RepoPortDefinition[] = [];
+  for (const portValue of array(input.ports)) {
+    try {
+      ports.push(normalizePort(portValue));
+    } catch (err) {
+      // Enforce port rules on write, but fail open on read: a stored port that
+      // violates a rule tightened after it was saved (e.g. a formerly-valid
+      // sub-1024 port) must not throw and brick the whole application panel.
+      if (strict) throw err;
+    }
+  }
   assertUnique(
     ports.map((port) => port.id),
     "Port",
@@ -146,10 +162,10 @@ function normalizeProcess(value: unknown): RepoProcessDefinition {
   };
 }
 
-function normalizeApplication(value: unknown): RepoApplicationDefinition {
+function normalizeApplication(value: unknown, strict: boolean): RepoApplicationDefinition {
   const input = record(value);
   if (!input) throw new ValidationError("Application must be an object");
-  const processes = array(input.processes).map(normalizeProcess);
+  const processes = array(input.processes).map((process) => normalizeProcess(process, strict));
   assertUnique(
     processes.map((process) => process.id),
     "Process",
@@ -174,14 +190,18 @@ export class RepoApplicationConfigService {
     const root = this.parseSetupConfig(setupConfig);
     const applicationsRoot = record(root.applications);
     if (!applicationsRoot) return this.empty();
-    return this.normalize(applicationsRoot);
+    // Read path: fail open so a stored config that predates a tightened rule
+    // still parses (the offending port is dropped rather than throwing).
+    return this.normalize(applicationsRoot, false);
   }
 
-  normalize(input: RepoApplicationConfigInput | unknown): RepoApplicationConfig {
+  normalize(input: RepoApplicationConfigInput | unknown, strict = true): RepoApplicationConfig {
     const root = record(input);
     if (!root) throw new ValidationError("Application config must be an object");
     const setupScripts = array(root.setupScripts).map(normalizeSetupScript);
-    const applications = array(root.applications).map(normalizeApplication);
+    const applications = array(root.applications).map((application) =>
+      normalizeApplication(application, strict),
+    );
     assertUnique(
       setupScripts.map((script) => script.id),
       "Setup script",
@@ -200,6 +220,7 @@ export class RepoApplicationConfigService {
     const root = this.parseSetupConfig(existingSetupConfig);
     return {
       ...root,
+      // Write path: enforce all rules (strict, the default).
       applications: this.normalize(applicationConfig),
     } as Prisma.InputJsonValue;
   }

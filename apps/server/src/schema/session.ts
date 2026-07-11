@@ -20,6 +20,7 @@ import {
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
 import { assertScopeAccess, canViewSessionGroup } from "../services/access.js";
+import { storage } from "../lib/storage/index.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -37,6 +38,10 @@ export const sessionQueries = {
       status: args.status ?? undefined,
       includeActiveMerged: args.includeActiveMerged ?? undefined,
     });
+  },
+  appSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    assertOrgAccess(ctx, args.organizationId);
+    return sessionService.listAppGroups(args.organizationId, ctx.userId);
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx), ctx.userId);
@@ -805,6 +810,10 @@ export const sessionTypeResolvers = {
     attachmentKeys: (message: { imageKeys: string[] }) => message.imageKeys,
   },
   GitCheckpoint: {
+    captureUrl: (checkpoint: { captureKey?: string | null; captureUrl?: string | null }) =>
+      checkpoint.captureKey
+        ? storage.getGetUrl(checkpoint.captureKey, { downloadFilename: "app-checkpoint.png" })
+        : (checkpoint.captureUrl ?? null),
     session: async (checkpoint: { sessionId: string }, _args: unknown, ctx: Context) => {
       return ctx.sessionLoader.load(checkpoint.sessionId);
     },

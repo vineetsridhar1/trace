@@ -7,16 +7,34 @@ import { sessionRouter } from "../lib/session-router.js";
 import { parseCookieToken, verifyToken } from "../lib/auth.js";
 import { canViewSessionGroup } from "./access.js";
 import {
+  endpointPreviewCookieHeader,
+  endpointPreviewTokenFromCookie,
+  verifyEndpointPreviewToken,
+} from "./endpoint-preview-auth.js";
+import {
   bodyPreview,
   endpointProxyMaxRequestBodyBytes,
+  endpointProxyMaxResponseBodyBytes,
   endpointProxyRequestTimeoutMs,
   extractEndpointKey,
   forwardableRequestHeaders,
   forwardableResponseHeaders,
+  isAllowedPreviewRequestOrigin,
   sanitizeHeaders,
   shouldCaptureBodies,
   shouldCaptureHeaders,
+  webSocketProtocols,
 } from "./endpoint-utils.js";
+
+// The Trace app is the only legitimate embedder of a private preview iframe, so
+// the injected overlay posts there rather than to any parent ("*").
+const TRACE_APP_ORIGIN = (() => {
+  try {
+    return process.env.TRACE_WEB_URL ? new URL(process.env.TRACE_WEB_URL).origin : "*";
+  } catch {
+    return "*";
+  }
+})();
 
 type PendingHttp = {
   endpointId: string;
@@ -25,6 +43,7 @@ type PendingHttp = {
   startedAt: number;
   response: ServerResponse;
   timer: ReturnType<typeof setTimeout>;
+  injectAuthoringOverlay: boolean;
 };
 
 type PendingWs = {
@@ -35,13 +54,96 @@ type PendingWs = {
 
 function requestPath(req: IncomingMessage): { path: string; query: string | null } {
   const raw = req.url ?? "/";
-  const [path, query] = raw.split("?", 2);
-  return { path: path || "/", query: query ?? null };
+  // Split on the FIRST "?" only — a literal "?" is legal inside a query string
+  // (RFC 3986), so `split("?", 2)` would silently drop everything after it.
+  const i = raw.indexOf("?");
+  const path = i === -1 ? raw : raw.slice(0, i);
+  const query = i === -1 ? null : raw.slice(i + 1);
+  return { path: path || "/", query };
 }
 
 function authenticatedUserId(req: IncomingMessage): string | null {
   const cookieToken = parseCookieToken(req.headers.cookie);
   return cookieToken ? verifyToken(cookieToken) : null;
+}
+
+function endpointPreviewUserId(
+  req: IncomingMessage,
+  endpoint: { id: string; organizationId: string },
+): string | null {
+  const token = endpointPreviewTokenFromCookie(req.headers.cookie);
+  const payload = token ? verifyEndpointPreviewToken(token) : null;
+  return payload?.endpointId === endpoint.id && payload.organizationId === endpoint.organizationId
+    ? payload.userId
+    : null;
+}
+
+// Private preview access requires the caller to (1) resolve to a user via a
+// Trace session cookie or an endpoint-preview cookie, (2) be a member of the
+// endpoint's org, and (3) be able to view the backing session group. The plain
+// session cookie authenticates a user across ANY org, so the org-membership
+// check is essential: without it a user from another org holding the endpoint
+// key could reach a private preview (the group's default visibility is public).
+async function authorizePrivateAccess(
+  req: IncomingMessage,
+  endpoint: { id: string; organizationId: string; sessionGroupId: string },
+): Promise<boolean> {
+  const userId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
+  if (!userId) return false;
+  const membership = await prisma.orgMember.findUnique({
+    where: { userId_organizationId: { userId, organizationId: endpoint.organizationId } },
+    select: { userId: true },
+  });
+  if (!membership) return false;
+  const group = await prisma.sessionGroup.findFirst({
+    where: { id: endpoint.sessionGroupId, organizationId: endpoint.organizationId },
+    select: { visibility: true, ownerUserId: true },
+  });
+  return !!group && canViewSessionGroup(group, userId);
+}
+
+function requestUrl(req: IncomingMessage): URL {
+  return new URL(req.url ?? "/", "http://trace-endpoint.local");
+}
+
+function safeRedirectPath(value: string | null): string {
+  // Must be a same-origin absolute path. Reject protocol-relative (`//host`) and
+  // backslash variants (`/\host`, which browsers normalize to `//host`).
+  if (!value || !value.startsWith("/")) return "/";
+  if (value[1] === "/" || value[1] === "\\") return "/";
+  return value;
+}
+
+function injectAuthoringOverlay(
+  headers: Record<string, string | string[]>,
+  body: Buffer,
+): { headers: Record<string, string | string[]>; body: Buffer } {
+  const contentType = headers["content-type"] ?? headers["Content-Type"];
+  const encoding = headers["content-encoding"] ?? headers["Content-Encoding"];
+  if (encoding || typeof contentType !== "string" || !/\btext\/html\b/i.test(contentType)) {
+    return { headers, body };
+  }
+  const html = body.toString("utf8");
+  if (html.includes("data-trace-app-overlay")) return { headers, body };
+  const script = `<script data-trace-app-overlay>(function(){
+var TRACE_ORIGIN=${JSON.stringify(TRACE_APP_ORIGIN)};
+function post(event,payload){if(TRACE_ORIGIN!=="*"&&window.parent&&window.parent!==window)window.parent.postMessage({type:"trace:app:overlay",event:event,...payload},TRACE_ORIGIN)}
+document.addEventListener("click",function(e){var el=e.target&&e.target.closest&&e.target.closest("[data-trace-source]");if(el)post("element-selected",{sourceLocation:el.getAttribute("data-trace-source"),text:(el.textContent||"").trim().slice(0,500)})},true);
+window.addEventListener("error",function(e){post("error",{message:e.message||"Application script error",stack:e.error&&e.error.stack?String(e.error.stack):null})});
+})();</script>`;
+  const nextBody = Buffer.from(
+    /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${script}</body>`) : `${html}${script}`,
+  );
+  const nextHeaders = { ...headers };
+  delete nextHeaders["content-length"];
+  delete nextHeaders["Content-Length"];
+  // Intentionally drop the app's CSP so the injected inline overlay script runs.
+  // This only affects private previews (an isolated origin serving the org's own
+  // in-development app), so it weakens that untrusted app's own defense-in-depth
+  // rather than any Trace-origin protection.
+  delete nextHeaders["content-security-policy"];
+  delete nextHeaders["Content-Security-Policy"];
+  return { headers: nextHeaders, body: nextBody };
 }
 
 class RequestBodyTooLargeError extends Error {}
@@ -64,7 +166,10 @@ async function readRequestBody(req: IncomingMessage, maxBytes: number): Promise<
 export class EndpointProxyService {
   private pendingHttp = new Map<string, PendingHttp>();
   private pendingWs = new Map<string, PendingWs>();
-  private wsServer = new WebSocketServer({ noServer: true });
+  private wsServer = new WebSocketServer({
+    noServer: true,
+    maxPayload: endpointProxyMaxRequestBodyBytes(),
+  });
 
   extractKey(host: string | undefined | null) {
     return extractEndpointKey(host);
@@ -86,21 +191,23 @@ export class EndpointProxyService {
       res.writeHead(410).end("Endpoint revoked");
       return;
     }
+    if (requestUrl(req).pathname === "/__trace_preview_auth") {
+      await this.handlePreviewAuth(req, res, endpoint);
+      return;
+    }
     if (endpoint.status !== "enabled") {
       res.writeHead(503).end("Endpoint unavailable");
       return;
     }
     if (endpoint.accessMode === "private") {
-      const userId = authenticatedUserId(req);
-      if (!userId) {
-        res.writeHead(401).end("Authentication required");
+      // The preview cookie is SameSite=None, so a credentialed request can be
+      // driven cross-site (CSRF). Reject any browser Origin that isn't the app's
+      // own preview origin or a Trace app origin.
+      if (!isAllowedPreviewRequestOrigin(req.headers.origin, endpointKey)) {
+        res.writeHead(403).end("Cross-origin request forbidden");
         return;
       }
-      const group = await prisma.sessionGroup.findFirst({
-        where: { id: endpoint.sessionGroupId, organizationId: endpoint.organizationId },
-        select: { visibility: true, ownerUserId: true },
-      });
-      if (!group || !canViewSessionGroup(group, userId)) {
+      if (!(await authorizePrivateAccess(req, endpoint))) {
         res.writeHead(403).end("Forbidden");
         return;
       }
@@ -197,6 +304,7 @@ export class EndpointProxyService {
       startedAt,
       response: res,
       timer,
+      injectAuthoringOverlay: endpoint.accessMode === "private",
     };
     this.pendingHttp.set(requestId, pending);
     const delivery = sessionRouter.sendToRuntime(
@@ -221,14 +329,53 @@ export class EndpointProxyService {
     }
   }
 
-  resolveHttpResponse(requestId: string, response: { status: number; headers: Record<string, string | string[]>; bodyBase64?: string }) {
+  resolveHttpResponse(
+    requestId: string,
+    response: { status: number; headers: Record<string, string | string[]>; bodyBase64?: string },
+  ) {
     const pending = this.pendingHttp.get(requestId);
     if (!pending) return;
     this.pendingHttp.delete(requestId);
     clearTimeout(pending.timer);
-    const body = response.bodyBase64 ? Buffer.from(response.bodyBase64, "base64") : Buffer.alloc(0);
+    let body: Buffer<ArrayBufferLike> = response.bodyBase64
+      ? Buffer.from(response.bodyBase64, "base64")
+      : Buffer.alloc(0);
+    // The runtime hosts untrusted app code; cap the relayed response so a huge
+    // body can't OOM the proxy. (Streaming large/SSE responses is a separate
+    // enhancement; this bounds the single-shot buffer.)
+    const maxResponseBytes = endpointProxyMaxResponseBodyBytes();
+    if (body.byteLength > maxResponseBytes) {
+      pending.response.writeHead(502, {
+        "X-Trace-Endpoint-Id": pending.endpointId,
+        "Content-Type": "text/plain",
+      });
+      pending.response.end("Response body too large");
+      void pending.trafficWrite
+        .then((entry) =>
+          entry
+            ? prisma.endpointTrafficEntry.update({
+                where: { id: pending.trafficEntryId },
+                data: {
+                  completedAt: new Date(),
+                  durationMs: Date.now() - pending.startedAt,
+                  responseStatus: 502,
+                  error: "Response body too large",
+                  responseBodyBytes: body.byteLength,
+                },
+              })
+            : null,
+        )
+        .catch(() => {});
+      return;
+    }
+    let headers = forwardableResponseHeaders(response.headers);
+    if (pending.injectAuthoringOverlay) {
+      const injected = injectAuthoringOverlay(headers, body);
+      headers = injected.headers;
+      body = injected.body;
+    }
     pending.response.writeHead(response.status, {
-      ...forwardableResponseHeaders(response.headers),
+      ...headers,
       "X-Trace-Endpoint-Id": pending.endpointId,
     });
     pending.response.end(body);
@@ -293,16 +440,14 @@ export class EndpointProxyService {
       return;
     }
     if (endpoint.accessMode === "private") {
-      const userId = authenticatedUserId(req);
-      if (!userId) {
-        client.close();
+      // Guard against Cross-Site WebSocket Hijacking: the SameSite=None preview
+      // cookie rides cross-site upgrades, so require a same-endpoint or Trace
+      // Origin before honoring the credentialed connection.
+      if (!isAllowedPreviewRequestOrigin(req.headers.origin, endpointKey)) {
+        client.close(1008, "Cross-origin request forbidden");
         return;
       }
-      const group = await prisma.sessionGroup.findFirst({
-        where: { id: endpoint.sessionGroupId, organizationId: endpoint.organizationId },
-        select: { visibility: true, ownerUserId: true },
-      });
-      if (!group || !canViewSessionGroup(group, userId)) {
+      if (!(await authorizePrivateAccess(req, endpoint))) {
         client.close();
         return;
       }
@@ -327,7 +472,7 @@ export class EndpointProxyService {
     }
     const requestId = randomUUID();
     this.pendingWs.set(requestId, { client, runtimeId: runtime.key, endpointId: endpoint.id });
-    client.on("message", (data) => {
+    client.on("message", (data, isBinary) => {
       const buffer = Buffer.isBuffer(data)
         ? data
         : Array.isArray(data)
@@ -335,7 +480,12 @@ export class EndpointProxyService {
           : Buffer.from(data);
       sessionRouter.sendToRuntime(
         runtime.key,
-        { type: "endpoint_ws_data", requestId, dataBase64: buffer.toString("base64") },
+        {
+          type: "endpoint_ws_data",
+          requestId,
+          dataBase64: buffer.toString("base64"),
+          isBinary,
+        },
         endpoint.organizationId,
       );
     });
@@ -362,6 +512,7 @@ export class EndpointProxyService {
         port: endpoint.targetPort,
         path: `${path}${query ? `?${query}` : ""}`,
         headers: forwardableRequestHeaders(req.headers, { websocket: true }),
+        protocols: webSocketProtocols(req.headers),
       },
       endpoint.organizationId,
     );
@@ -373,11 +524,46 @@ export class EndpointProxyService {
 
   resolveWebSocketOpened(_requestId: string) {}
 
-  resolveWebSocketData(requestId: string, dataBase64: string) {
+  private async handlePreviewAuth(
+    req: IncomingMessage,
+    res: ServerResponse,
+    endpoint: { id: string; organizationId: string; sessionGroupId: string },
+  ) {
+    const url = requestUrl(req);
+    const token = url.searchParams.get("token");
+    const payload = token ? verifyEndpointPreviewToken(token) : null;
+    if (
+      !payload ||
+      payload.endpointId !== endpoint.id ||
+      payload.organizationId !== endpoint.organizationId
+    ) {
+      res.writeHead(401).end("Invalid endpoint preview token");
+      return;
+    }
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: endpoint.sessionGroupId, organizationId: endpoint.organizationId },
+      select: { visibility: true, ownerUserId: true },
+    });
+    if (!group || !canViewSessionGroup(group, payload.userId)) {
+      res.writeHead(403).end("Forbidden");
+      return;
+    }
+    const expiresAt = payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 60_000);
+    res.writeHead(302, {
+      "Set-Cookie": endpointPreviewCookieHeader(token ?? "", expiresAt),
+      Location: safeRedirectPath(url.searchParams.get("next")),
+      "Cache-Control": "no-store",
+    });
+    res.end();
+  }
+
+  resolveWebSocketData(requestId: string, dataBase64: string, isBinary = true) {
     const pending = this.pendingWs.get(requestId);
     if (!pending) return;
     const data = Buffer.from(dataBase64, "base64");
-    if (pending.client.readyState === pending.client.OPEN) pending.client.send(data);
+    if (pending.client.readyState === pending.client.OPEN) {
+      pending.client.send(isBinary ? data : data.toString("utf8"), { binary: isBinary });
+    }
   }
 
   resolveWebSocketClosed(requestId: string) {

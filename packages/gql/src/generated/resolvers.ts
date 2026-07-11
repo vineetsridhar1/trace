@@ -462,6 +462,10 @@ export type EventType =
 export type GitCheckpoint = {
   __typename?: "GitCheckpoint";
   author: Scalars["String"]["output"];
+  captureContentType?: Maybe<Scalars["String"]["output"]>;
+  captureStatus?: Maybe<GitCheckpointCaptureStatus>;
+  captureUrl?: Maybe<Scalars["String"]["output"]>;
+  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   commitSha: Scalars["String"]["output"];
   committedAt: Scalars["DateTime"]["output"];
   createdAt: Scalars["DateTime"]["output"];
@@ -479,6 +483,8 @@ export type GitCheckpoint = {
   subject: Scalars["String"]["output"];
   treeSha: Scalars["String"]["output"];
 };
+
+export type GitCheckpointCaptureStatus = "captured" | "failed" | "pending" | "unavailable";
 
 export type HostingMode = "cloud" | "local";
 
@@ -610,6 +616,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteAgentEnvironment: Scalars["Boolean"]["output"];
@@ -642,6 +649,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  publishAppSession: SessionEndpoint;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -791,6 +799,10 @@ export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
 };
 
+export type MutationCreateSessionEndpointPreviewArgs = {
+  endpointId: Scalars["ID"]["input"];
+};
+
 export type MutationCreateTerminalArgs = {
   cols: Scalars["Int"]["input"];
   rows: Scalars["Int"]["input"];
@@ -930,6 +942,10 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationPublishAppSessionArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationQueueSessionMessageArgs = {
@@ -1301,6 +1317,11 @@ export type PushPlatform = "android" | "ios";
 export type Query = {
   __typename?: "Query";
   agentEnvironments: Array<AgentEnvironment>;
+  /**
+   * App-kind session groups for the org. Apps have no channel, so this is their
+   * listing surface (the sidebar Apps section).
+   */
+  appSessionGroups: Array<SessionGroup>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   bridgeRuntimeAccess: BridgeRuntimeAccess;
@@ -1364,6 +1385,10 @@ export type Query = {
 
 export type QueryAgentEnvironmentsArgs = {
   orgId: Scalars["ID"]["input"];
+};
+
+export type QueryAppSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryAvailableRuntimesArgs = {
@@ -1920,6 +1945,12 @@ export type SessionEndpoint = {
 
 export type SessionEndpointAccessMode = "private" | "public";
 
+export type SessionEndpointPreview = {
+  __typename?: "SessionEndpointPreview";
+  expiresAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
+
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
 export type SessionEndpoints = {
@@ -1949,6 +1980,7 @@ export type SessionGroup = {
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
+  kind: SessionGroupKind;
   name: Scalars["String"]["output"];
   owner: User;
   prUrl?: Maybe<Scalars["String"]["output"]>;
@@ -1986,6 +2018,8 @@ export type SessionGroupFileTree = {
   paths: Array<Scalars["String"]["output"]>;
   truncated: Scalars["Boolean"]["output"];
 };
+
+export type SessionGroupKind = "app" | "coding" | "design";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2097,6 +2131,7 @@ export type StartSessionInput = {
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
+  kind?: InputMaybe<SessionGroupKind>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   projectId?: InputMaybe<Scalars["ID"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;
@@ -2424,6 +2459,7 @@ export type ResolversTypes = ResolversObject<{
   EventType: EventType;
   Float: ResolverTypeWrapper<Scalars["Float"]["output"]>;
   GitCheckpoint: ResolverTypeWrapper<GitCheckpoint>;
+  GitCheckpointCaptureStatus: GitCheckpointCaptureStatus;
   HostingMode: HostingMode;
   ID: ResolverTypeWrapper<Scalars["ID"]["output"]>;
   InboxItem: ResolverTypeWrapper<InboxItem>;
@@ -2477,6 +2513,7 @@ export type ResolversTypes = ResolversObject<{
   SessionConnectionState: SessionConnectionState;
   SessionEndpoint: ResolverTypeWrapper<SessionEndpoint>;
   SessionEndpointAccessMode: SessionEndpointAccessMode;
+  SessionEndpointPreview: ResolverTypeWrapper<SessionEndpointPreview>;
   SessionEndpointStatus: SessionEndpointStatus;
   SessionEndpoints: ResolverTypeWrapper<SessionEndpoints>;
   SessionFilters: SessionFilters;
@@ -2484,6 +2521,7 @@ export type ResolversTypes = ResolversObject<{
   SessionGroupDirectoryEntry: ResolverTypeWrapper<SessionGroupDirectoryEntry>;
   SessionGroupFileContentResult: ResolverTypeWrapper<SessionGroupFileContentResult>;
   SessionGroupFileTree: ResolverTypeWrapper<SessionGroupFileTree>;
+  SessionGroupKind: SessionGroupKind;
   SessionGroupStatus: SessionGroupStatus;
   SessionGroupVisibility: SessionGroupVisibility;
   SessionPromptIndexItem: ResolverTypeWrapper<SessionPromptIndexItem>;
@@ -2600,6 +2638,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionApplicationProcess: SessionApplicationProcess;
   SessionConnection: SessionConnection;
   SessionEndpoint: SessionEndpoint;
+  SessionEndpointPreview: SessionEndpointPreview;
   SessionEndpoints: SessionEndpoints;
   SessionFilters: SessionFilters;
   SessionGroup: SessionGroup;
@@ -2949,6 +2988,14 @@ export type GitCheckpointResolvers<
   ParentType extends ResolversParentTypes["GitCheckpoint"] = ResolversParentTypes["GitCheckpoint"],
 > = ResolversObject<{
   author?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  captureContentType?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  captureStatus?: Resolver<
+    Maybe<ResolversTypes["GitCheckpointCaptureStatus"]>,
+    ParentType,
+    ContextType
+  >;
+  captureUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  capturedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   commitSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   committedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
@@ -3208,6 +3255,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationCreateRepoArgs, "input">
   >;
+  createSessionEndpointPreview?: Resolver<
+    ResolversTypes["SessionEndpointPreview"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateSessionEndpointPreviewArgs, "endpointId">
+  >;
   createTerminal?: Resolver<
     ResolversTypes["Terminal"],
     ParentType,
@@ -3393,6 +3446,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationMuteScopeArgs, "scopeId" | "scopeType">
+  >;
+  publishAppSession?: Resolver<
+    ResolversTypes["SessionEndpoint"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationPublishAppSessionArgs, "sessionGroupId">
   >;
   queueSessionMessage?: Resolver<
     ResolversTypes["QueuedMessage"],
@@ -3835,6 +3894,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryAgentEnvironmentsArgs, "orgId">
+  >;
+  appSessionGroups?: Resolver<
+    Array<ResolversTypes["SessionGroup"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryAppSessionGroupsArgs, "organizationId">
   >;
   availableRuntimes?: Resolver<
     Array<ResolversTypes["SessionRuntimeInstance"]>,
@@ -4413,6 +4478,16 @@ export type SessionEndpointResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type SessionEndpointPreviewResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SessionEndpointPreview"] =
+    ResolversParentTypes["SessionEndpointPreview"],
+> = ResolversObject<{
+  expiresAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  url?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type SessionEndpointsResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["SessionEndpoints"] =
@@ -4436,6 +4511,7 @@ export type SessionGroupResolvers<
   forkedFromSessionGroupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  kind?: Resolver<ResolversTypes["SessionGroupKind"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   owner?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
@@ -4790,6 +4866,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionApplicationProcess?: SessionApplicationProcessResolvers<ContextType>;
   SessionConnection?: SessionConnectionResolvers<ContextType>;
   SessionEndpoint?: SessionEndpointResolvers<ContextType>;
+  SessionEndpointPreview?: SessionEndpointPreviewResolvers<ContextType>;
   SessionEndpoints?: SessionEndpointsResolvers<ContextType>;
   SessionGroup?: SessionGroupResolvers<ContextType>;
   SessionGroupDirectoryEntry?: SessionGroupDirectoryEntryResolvers<ContextType>;

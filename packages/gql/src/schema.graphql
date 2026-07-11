@@ -21,6 +21,12 @@ enum SessionGroupVisibility {
   private
 }
 
+enum SessionGroupKind {
+  coding
+  design
+  app
+}
+
 enum SessionGroupStatus {
   in_progress
   needs_input
@@ -212,6 +218,13 @@ enum AgentEnvironmentAdapterType {
 enum RepoProvider {
   github
   managed
+}
+
+enum GitCheckpointCaptureStatus {
+  pending
+  captured
+  unavailable
+  failed
 }
 
 enum InboxItemType {
@@ -478,6 +491,7 @@ type ChannelGroup {
 type SessionGroup {
   id: ID!
   name: String!
+  kind: SessionGroupKind!
   slug: String
   forkedFromSessionGroupId: ID
   forkedFromSessionGroup: SessionGroup
@@ -581,6 +595,10 @@ type GitCheckpoint {
   author: String!
   committedAt: DateTime!
   filesChanged: Int!
+  captureStatus: GitCheckpointCaptureStatus
+  captureUrl: String
+  captureContentType: String
+  capturedAt: DateTime
   createdAt: DateTime!
 }
 
@@ -824,6 +842,11 @@ type SessionEndpoint {
   revokedAt: DateTime
 }
 
+type SessionEndpointPreview {
+  url: String!
+  expiresAt: DateTime!
+}
+
 type EndpointTrafficEntry {
   id: ID!
   endpointId: ID!
@@ -1059,6 +1082,7 @@ input ReorderChannelsInput {
 }
 
 input StartSessionInput {
+  kind: SessionGroupKind
   tool: CodingTool
   model: String
   reasoningEffort: String
@@ -1259,6 +1283,11 @@ type Query {
     status: SessionGroupStatus
     includeActiveMerged: Boolean
   ): [SessionGroup!]!
+  """
+  App-kind session groups for the org. Apps have no channel, so this is their
+  listing surface (the sidebar Apps section).
+  """
+  appSessionGroups(organizationId: ID!): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
@@ -1347,7 +1376,11 @@ type Query {
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
   sessionApplicationProcesses(sessionGroupId: ID!): [SessionApplicationProcess!]!
-  sessionApplicationLogs(processId: ID!, limit: Int, beforeSequence: Int): [SessionApplicationLogEntry!]!
+  sessionApplicationLogs(
+    processId: ID!
+    limit: Int
+    beforeSequence: Int
+  ): [SessionApplicationLogEntry!]!
   sessionEndpoints(sessionGroupId: ID!): [SessionEndpoint!]!
   endpointTraffic(endpointId: ID!, limit: Int, before: DateTime): [EndpointTrafficEntry!]!
   searchUsers(query: String!): [User!]!
@@ -1554,14 +1587,34 @@ type Mutation {
   runSessionGroupSetupScript(sessionGroupId: ID!, scriptId: ID!): Boolean!
   startSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
   stopSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
-  startSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
-  stopSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
-  restartSessionProcess(sessionGroupId: ID!, appConfigId: ID!, processConfigId: ID!): SessionApplicationProcess!
-  enableSessionEndpointForwarding(endpointId: ID!, accessMode: SessionEndpointAccessMode): SessionEndpoint!
+  startSessionProcess(
+    sessionGroupId: ID!
+    appConfigId: ID!
+    processConfigId: ID!
+  ): SessionApplicationProcess!
+  stopSessionProcess(
+    sessionGroupId: ID!
+    appConfigId: ID!
+    processConfigId: ID!
+  ): SessionApplicationProcess!
+  restartSessionProcess(
+    sessionGroupId: ID!
+    appConfigId: ID!
+    processConfigId: ID!
+  ): SessionApplicationProcess!
+  enableSessionEndpointForwarding(
+    endpointId: ID!
+    accessMode: SessionEndpointAccessMode
+  ): SessionEndpoint!
   disableSessionEndpointForwarding(endpointId: ID!): SessionEndpoint!
   rotateSessionEndpoint(endpointId: ID!): SessionEndpoint!
-  updateSessionEndpointTrafficCapture(endpointId: ID!, mode: EndpointTrafficCaptureMode!): SessionEndpoint!
+  updateSessionEndpointTrafficCapture(
+    endpointId: ID!
+    mode: EndpointTrafficCaptureMode!
+  ): SessionEndpoint!
   clearEndpointTraffic(endpointId: ID!): Boolean!
+  createSessionEndpointPreview(endpointId: ID!): SessionEndpointPreview!
+  publishAppSession(sessionGroupId: ID!): SessionEndpoint!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!

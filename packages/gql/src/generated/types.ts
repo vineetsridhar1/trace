@@ -459,6 +459,10 @@ export type EventType =
 export type GitCheckpoint = {
   __typename?: "GitCheckpoint";
   author: Scalars["String"]["output"];
+  captureContentType?: Maybe<Scalars["String"]["output"]>;
+  captureStatus?: Maybe<GitCheckpointCaptureStatus>;
+  captureUrl?: Maybe<Scalars["String"]["output"]>;
+  capturedAt?: Maybe<Scalars["DateTime"]["output"]>;
   commitSha: Scalars["String"]["output"];
   committedAt: Scalars["DateTime"]["output"];
   createdAt: Scalars["DateTime"]["output"];
@@ -476,6 +480,8 @@ export type GitCheckpoint = {
   subject: Scalars["String"]["output"];
   treeSha: Scalars["String"]["output"];
 };
+
+export type GitCheckpointCaptureStatus = "captured" | "failed" | "pending" | "unavailable";
 
 export type HostingMode = "cloud" | "local";
 
@@ -607,6 +613,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
   deleteAgentEnvironment: Scalars["Boolean"]["output"];
@@ -639,6 +646,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
+  publishAppSession: SessionEndpoint;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -788,6 +796,10 @@ export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
 };
 
+export type MutationCreateSessionEndpointPreviewArgs = {
+  endpointId: Scalars["ID"]["input"];
+};
+
 export type MutationCreateTerminalArgs = {
   cols: Scalars["Int"]["input"];
   rows: Scalars["Int"]["input"];
@@ -927,6 +939,10 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type MutationPublishAppSessionArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationQueueSessionMessageArgs = {
@@ -1298,6 +1314,11 @@ export type PushPlatform = "android" | "ios";
 export type Query = {
   __typename?: "Query";
   agentEnvironments: Array<AgentEnvironment>;
+  /**
+   * App-kind session groups for the org. Apps have no channel, so this is their
+   * listing surface (the sidebar Apps section).
+   */
+  appSessionGroups: Array<SessionGroup>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   bridgeRuntimeAccess: BridgeRuntimeAccess;
@@ -1361,6 +1382,10 @@ export type Query = {
 
 export type QueryAgentEnvironmentsArgs = {
   orgId: Scalars["ID"]["input"];
+};
+
+export type QueryAppSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryAvailableRuntimesArgs = {
@@ -1917,6 +1942,12 @@ export type SessionEndpoint = {
 
 export type SessionEndpointAccessMode = "private" | "public";
 
+export type SessionEndpointPreview = {
+  __typename?: "SessionEndpointPreview";
+  expiresAt: Scalars["DateTime"]["output"];
+  url: Scalars["String"]["output"];
+};
+
 export type SessionEndpointStatus = "disabled" | "enabled" | "revoked" | "unavailable";
 
 export type SessionEndpoints = {
@@ -1946,6 +1977,7 @@ export type SessionGroup = {
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
   id: Scalars["ID"]["output"];
+  kind: SessionGroupKind;
   name: Scalars["String"]["output"];
   owner: User;
   prUrl?: Maybe<Scalars["String"]["output"]>;
@@ -1983,6 +2015,8 @@ export type SessionGroupFileTree = {
   paths: Array<Scalars["String"]["output"]>;
   truncated: Scalars["Boolean"]["output"];
 };
+
+export type SessionGroupKind = "app" | "coding" | "design";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2094,6 +2128,7 @@ export type StartSessionInput = {
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
+  kind?: InputMaybe<SessionGroupKind>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   projectId?: InputMaybe<Scalars["ID"]["input"]>;
   prompt?: InputMaybe<Scalars["String"]["input"]>;

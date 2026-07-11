@@ -549,7 +549,12 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       if (msg.type === "app_process_log" && typeof msg.processInstanceId === "string") {
         if (typeof msg.data === "string" && (msg.stream === "stdout" || msg.stream === "stderr")) {
           void sessionApplicationService
-            .appendProcessLog(msg.processInstanceId, bridgeAuth.organizationId, msg.stream, msg.data)
+            .appendProcessLog(
+              msg.processInstanceId,
+              bridgeAuth.organizationId,
+              msg.stream,
+              msg.data,
+            )
             .catch((err: unknown) => {
               console.error("[bridge] error appending app process log:", err);
             });
@@ -615,7 +620,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
       if (msg.type === "endpoint_ws_data" && typeof msg.requestId === "string") {
         if (typeof msg.dataBase64 === "string") {
-          endpointProxyService.resolveWebSocketData(msg.requestId, msg.dataBase64);
+          endpointProxyService.resolveWebSocketData(
+            msg.requestId,
+            msg.dataBase64,
+            typeof msg.isBinary === "boolean" ? msg.isBinary : true,
+          );
         }
         return;
       }

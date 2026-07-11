@@ -54,8 +54,15 @@ type MintAccessTokenInput = {
 function managedGitBaseUrl(): string {
   const explicit = process.env.TRACE_SERVER_PUBLIC_URL?.trim();
   if (explicit) return explicit.replace(/\/$/, "");
-  // Local/dev fallback so managed remotes resolve without extra config.
+  // Local/dev fallback so managed remotes resolve without extra config. A
+  // remote runtime (cloud/Fly) cannot reach the server's own localhost, so the
+  // origin it's given would be dead — warn loudly rather than fail silently at
+  // push time with a confusing "repository not found".
   const port = process.env.PORT ?? "4000";
+  console.warn(
+    `[managed-git] TRACE_SERVER_PUBLIC_URL is unset; managed git origins fall back to http://localhost:${port}. ` +
+      "Cloud runtimes cannot reach this and their checkpoint pushes will fail. Set TRACE_SERVER_PUBLIC_URL to a URL the runtime can reach back on.",
+  );
   return `http://localhost:${port}`;
 }
 
@@ -150,6 +157,41 @@ class ManagedGitService {
     });
   }
 
+  /** Delete a managed repo row and its bare git storage. */
+  async deleteManagedRepo(input: {
+    organizationId: string;
+    repoId: string;
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<boolean> {
+    const repo = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
+      const managedRepo = await tx.repo.findFirst({
+        where: {
+          id: input.repoId,
+          organizationId: input.organizationId,
+          provider: "managed",
+        },
+        select: { id: true },
+      });
+      if (!managedRepo) return null;
+      await tx.repo.delete({ where: { id: managedRepo.id } });
+      return managedRepo;
+    });
+    if (!repo) return false;
+
+    // The row is the source of truth and is already gone; a storage-delete
+    // failure must not fail the surrounding group deletion. Worst case is a
+    // leaked bare dir, which is far less harmful than a half-deleted group.
+    await gitStorage.deleteRepo(input.organizationId, repo.id).catch((error) => {
+      console.warn(
+        `[managed-git] failed to delete bare storage for repo ${repo.id}:`,
+        error instanceof Error ? error.message : String(error),
+      );
+    });
+    return true;
+  }
+
   async mintAccessToken(input: MintAccessTokenInput): Promise<{ token: string; expiresAt: Date }> {
     if (input.capabilities.length === 0) {
       throw new ValidationError("A managed git token needs at least one capability");
@@ -170,7 +212,10 @@ class ManagedGitService {
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
     };
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: ttlSeconds });
+    const token = jwt.sign(payload, JWT_SECRET, {
+      expiresIn: ttlSeconds,
+      algorithm: "HS256",
+    });
     const auditEvent = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId);
       await tx.repo.findFirstOrThrow({
@@ -204,7 +249,9 @@ class ManagedGitService {
 
   verifyAccessToken(token: string): ManagedGitAuth | null {
     try {
-      const payload = jwt.verify(token, JWT_SECRET) as unknown as ManagedGitTokenPayload;
+      const payload = jwt.verify(token, JWT_SECRET, {
+        algorithms: ["HS256"],
+      }) as unknown as ManagedGitTokenPayload;
       if (
         !payload ||
         typeof payload !== "object" ||

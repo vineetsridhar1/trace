@@ -20,6 +20,9 @@ function resetStores() {
     inboxItems: {},
     messages: {},
     queuedMessages: {},
+    sessionApplicationProcesses: {},
+    sessionApplicationLogs: {},
+    sessionEndpoints: {},
     eventsByScope: {},
     _eventIdsByScope: {},
     _sessionIdsByGroup: {},
@@ -167,6 +170,36 @@ describe("handleOrgEvent", () => {
     expect(bucket).toBeDefined();
     expect(bucket?.[event.id]).toEqual(event);
     expect(useEntityStore.getState()._eventIdsByScope["session:session-1"]).toEqual([event.id]);
+  });
+
+  it("clears navigation when the active session group is deleted", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": { id: "session-1", sessionGroupId: "group-1" } as never,
+      },
+      sessionGroups: {
+        "group-1": { id: "group-1" } as never,
+      },
+    });
+    const harness = installBindings({
+      activeSessionId: "session-1",
+      activeSessionGroupId: "group-1",
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_deleted",
+        scopeId: "session-1",
+        payload: {
+          sessionGroupId: "group-1",
+          deletedSessionGroupId: "group-1",
+        },
+      }),
+    );
+
+    expect(harness.setActiveSessionId).toHaveBeenCalledWith(null);
+    expect(harness.setActiveSessionGroupId).toHaveBeenCalledWith(null);
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toBeUndefined();
   });
 
   it("keeps scoped event ids ordered by timestamp", () => {
@@ -850,5 +883,63 @@ describe("handleOrgEvent", () => {
     );
 
     expect(harness.setActiveSessionId).toHaveBeenCalledWith("session-new");
+  });
+
+  it("upserts streamed app process logs without a refetch", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_application_log_appended",
+        scopeId: "group-1",
+        payload: {
+          logEntry: {
+            id: "log-1",
+            processId: "process-1",
+            stream: "stdout",
+            data: "ready\n",
+            sequence: 1,
+            timestamp: "2026-07-09T00:00:00.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionApplicationLogs["log-1"]).toMatchObject({
+      processId: "process-1",
+      data: "ready\n",
+    });
+    // The log entity lives in its own capped table; it must NOT also be stored
+    // in the uncapped scoped-event log.
+    expect(useEntityStore.getState().eventsByScope["session:group-1"]).toBeUndefined();
+  });
+
+  it("upserts setup script runs without a refetch", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_setup_script_started",
+        scopeId: "group-1",
+        payload: {
+          setupScriptRun: {
+            id: "run-1",
+            sessionGroupId: "group-1",
+            scriptConfigId: "install",
+            label: "Install",
+            command: "pnpm install",
+            workingDirectory: ".",
+            status: "running",
+            exitCode: null,
+            outputPreview: "Queued",
+            outputTruncated: false,
+            lastError: null,
+            startedAt: "2026-07-09T00:00:00.000Z",
+            completedAt: null,
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionSetupScriptRuns["run-1"]).toMatchObject({
+      scriptConfigId: "install",
+      status: "running",
+    });
   });
 });

@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import type { Event as PrismaEvent, Prisma } from "@prisma/client";
 import type { ScopeType, EventType, ActorType } from "@trace/gql";
 import { prisma } from "../lib/db.js";
@@ -137,6 +138,34 @@ export class EventService {
     }
 
     return event;
+  }
+
+  /**
+   * Broadcast a transient event WITHOUT persisting it (no DB row, no Redis
+   * agent stream, no push notifications). For high-volume streams that already
+   * have their own durable, pruned entity table (app process logs): writing an
+   * immutable Event per chunk would grow the append-only event log without
+   * bound. Clients receive it on the same session/org topics as a real event.
+   */
+  publishEphemeral(input: CreateEventInput): void {
+    const event = {
+      id: input.id ?? randomUUID(),
+      organizationId: input.organizationId,
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      eventType: input.eventType,
+      payload: input.payload,
+      actorType: input.actorType,
+      actorId: input.actorId,
+      parentId: input.parentId ?? null,
+      metadata: input.metadata ?? {},
+      timestamp: input.timestamp ?? new Date(),
+    } as unknown as PrismaEvent;
+
+    if (event.scopeType === "session") {
+      pubsub.publish(topics.sessionEvents(event.scopeId), { sessionEvents: event });
+    }
+    pubsub.publish(topics.orgEvents(event.organizationId), { orgEvents: event });
   }
 
   publishCreated(event: PrismaEvent) {

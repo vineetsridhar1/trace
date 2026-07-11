@@ -7,6 +7,10 @@ and verification requirements from the design/app session planning thread. It is
 to be the single starting point for another AI agent implementing or finishing the full
 feature.
 
+> Note: the source docs listed below were consolidated into this document and then
+> removed, so those paths no longer resolve. Likewise, `pnpm smoke:design-session` is
+> not yet written — the shipped smoke script is `pnpm smoke:cloud-app-session`.
+
 Source docs that this consolidates:
 
 - `docs/design-session-experience.md`
