@@ -28,6 +28,7 @@ import {
 } from "../lib/errors.js";
 import { eventService } from "./event.js";
 import { sessionApplicationService } from "./session-applications.js";
+import { sessionApplicationWorkflowService } from "./session-application-workflow.js";
 import {
   sessionRouter,
   type DeliveryResult,
@@ -6587,10 +6588,8 @@ export class SessionService {
       const appGroupId = session.sessionGroupId;
       // Fire-and-forget: the dev server boot must not delay the agent's first
       // run. Failures surface as an app_preview_start_failed event.
-      void sessionApplicationService
-        .startApplication(appGroupId, "app", session.organizationId, session.createdById, {
-          asSystem: true,
-        })
+      void sessionApplicationWorkflowService
+        .startWorkflow(appGroupId, "app", session.organizationId, session.createdById)
         .catch(async (error: unknown) => {
           await eventService.create({
             organizationId: session.organizationId,

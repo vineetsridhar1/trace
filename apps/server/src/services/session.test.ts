@@ -133,6 +133,10 @@ vi.mock("./app-checkpoint-capture.js", () => ({
   appCheckpointCaptureService: { capture: vi.fn() },
 }));
 
+vi.mock("./session-application-workflow.js", () => ({
+  sessionApplicationWorkflowService: { startWorkflow: vi.fn().mockResolvedValue({ id: "wf-1" }) },
+}));
+
 vi.mock("./github-repo.js", async () => {
   const actual = await vi.importActual<typeof import("./github-repo.js")>("./github-repo.js");
   return {
@@ -159,6 +163,7 @@ import { GitHubApiError, githubRepoService, parseGitHubRepo } from "./github-rep
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
+import { sessionApplicationWorkflowService } from "./session-application-workflow.js";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
@@ -191,6 +196,10 @@ const managedGitServiceMock = managedGitService as unknown as MockedDeep<typeof 
 const appCheckpointCaptureServiceMock = appCheckpointCaptureService as unknown as MockedDeep<
   typeof appCheckpointCaptureService
 >;
+const sessionApplicationWorkflowServiceMock =
+  sessionApplicationWorkflowService as unknown as MockedDeep<
+    typeof sessionApplicationWorkflowService
+  >;
 const githubRepoServiceMock = githubRepoService as unknown as MockedDeep<typeof githubRepoService>;
 const parseGitHubRepoMock = vi.mocked(parseGitHubRepo);
 const getDefaultModelMock = vi.mocked(getDefaultModel);
@@ -6101,6 +6110,37 @@ describe("SessionService", () => {
   });
 
   describe("workspaceReady", () => {
+    it("auto-starts app sessions through the Applications workflow", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        readOnlyWorkspace: false,
+        workdir: null,
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          workdir: "/tmp/trace/app",
+          sessionGroup: makeSessionGroup({ kind: "app" }),
+        }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ kind: "app", workdir: "/tmp/trace/app" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady("session-1", "/tmp/trace/app");
+
+      await vi.waitFor(() => {
+        expect(sessionApplicationWorkflowServiceMock.startWorkflow).toHaveBeenCalledWith(
+          "group-1",
+          "app",
+          "org-1",
+          "user-1",
+        );
+      });
+    });
+
     it("reconciles an existing group branch from workspace_ready for the same workdir", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         pendingRun: null,

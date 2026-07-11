@@ -14,7 +14,11 @@ import { orgSecretService } from "./org-secret.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
 import { sessionApplicationWorkflowService } from "./session-application-workflow.js";
 import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
-import { isLiteralEnv, type AppEnvVar } from "../config/hardcoded-applications.js";
+import {
+  DEFAULT_APP_SESSION_CONFIG,
+  isLiteralEnv,
+  type AppEnvVar,
+} from "../config/hardcoded-applications.js";
 import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
 
 type Tx = Prisma.TransactionClient;
@@ -45,36 +49,6 @@ type ManagedSessionGroup = {
     setupConfig: Prisma.JsonValue;
   } | null;
 };
-
-const DEFAULT_APP_SESSION_CONFIG = repoApplicationConfigService.normalize({
-  setupScripts: [],
-  applications: [
-    {
-      id: "app",
-      name: "App",
-      processes: [
-        {
-          id: "dev",
-          name: "Dev server",
-          command: "pnpm install --prefer-offline && pnpm dev",
-          workingDirectory: ".",
-          required: true,
-          env: [],
-          ports: [
-            {
-              id: "web",
-              label: "Preview",
-              port: 3000,
-              protocol: "http",
-              defaultForwardingEnabled: true,
-              healthPath: "/",
-            },
-          ],
-        },
-      ],
-    },
-  ],
-});
 
 function connectionRecord(connection: Prisma.JsonValue): Record<string, unknown> {
   return connection && typeof connection === "object" && !Array.isArray(connection)

@@ -10,6 +10,7 @@ import type {
   AppDefinition,
   HardcodedApplicationConfig,
 } from "../config/hardcoded-applications.js";
+import { DEFAULT_APP_SESSION_CONFIG } from "../config/hardcoded-applications.js";
 
 const WORKFLOW_RUN_LIST_LIMIT = 10;
 
@@ -403,6 +404,7 @@ export class SessionApplicationWorkflowService {
       where: { id: sessionGroupId, organizationId },
       select: {
         id: true,
+        kind: true,
         organizationId: true,
         ownerUserId: true,
         visibility: true,
@@ -418,7 +420,10 @@ export class SessionApplicationWorkflowService {
     }
     return {
       group: { id: group.id, organizationId: group.organizationId, repoId: group.repoId },
-      config: repoApplicationConfigService.resolveApplicationConfig(group.repo),
+      config:
+        group.kind === "app"
+          ? DEFAULT_APP_SESSION_CONFIG
+          : repoApplicationConfigService.resolveApplicationConfig(group.repo),
     };
   }
 

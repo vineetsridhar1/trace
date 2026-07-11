@@ -26,6 +26,37 @@ export interface HardcodedApplicationConfig {
   applications: AppDefinition[];
 }
 
+export const DEFAULT_APP_SESSION_CONFIG: HardcodedApplicationConfig = {
+  setupScripts: [],
+  applications: [
+    {
+      id: "app",
+      name: "App",
+      processes: [
+        {
+          id: "dev",
+          name: "Dev server",
+          command: "pnpm install --prefer-offline && pnpm dev",
+          workingDirectory: ".",
+          required: true,
+          dependsOn: [],
+          env: [],
+          ports: [
+            {
+              id: "web",
+              label: "Preview",
+              port: 3000,
+              protocol: "http",
+              defaultForwardingEnabled: true,
+              healthPath: "/",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 export function isLiteralEnv(entry: AppEnvVar): entry is { key: string; value: string } {
   return "value" in entry;
 }

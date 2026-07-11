@@ -98,6 +98,32 @@ describe("SessionApplicationWorkflowService.advance", () => {
     expect(prismaMock.sessionApplicationWorkflowRun.update).not.toHaveBeenCalled();
   });
 
+  it("uses the built-in dev server workflow for app sessions", async () => {
+    prismaMock.sessionApplicationWorkflowRun.findUnique.mockResolvedValue(RUN);
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValue({
+      id: "group-1",
+      kind: "app",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+      visibility: "public",
+      repoId: "repo-1",
+      repo: { id: "repo-1", name: "App", remoteUrl: null, setupConfig: {} },
+    });
+    prismaMock.sessionSetupScriptRun.findMany.mockResolvedValue([]);
+    prismaMock.sessionApplicationProcess.findMany.mockResolvedValue([]);
+
+    await sessionApplicationWorkflowService.advance("wf-1");
+
+    expect(serviceMock.startProcess).toHaveBeenCalledWith(
+      "group-1",
+      "app",
+      "dev",
+      "org-1",
+      "user-1",
+      { workflowRunId: "wf-1" },
+    );
+  });
+
   it("dispatches a dependent step once its dependency has completed", async () => {
     mockState([{ scriptConfigId: "a", status: "completed" }], []);
     await sessionApplicationWorkflowService.advance("wf-1");
