@@ -231,6 +231,85 @@ describe("SessionApplicationService", () => {
     );
   });
 
+  it("enables default preview forwarding when a repo-less app process starts", async () => {
+    const runningProcess = {
+      id: "process-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: null,
+      appConfigId: "app",
+      processConfigId: "dev",
+      label: "Dev server",
+      command: "pnpm install --prefer-offline && pnpm dev",
+      workingDirectory: ".",
+      status: "running",
+      runtimeInstanceId: "runtime-1",
+      bridgeProcessId: "bridge-1",
+      exitCode: null,
+      lastError: null,
+      startedByUserId: "user-1",
+      startedAt: new Date("2026-07-11T00:00:00.000Z"),
+      stoppedAt: null,
+      lastHeartbeatAt: new Date("2026-07-11T00:00:00.000Z"),
+      createdAt: new Date("2026-07-11T00:00:00.000Z"),
+      updatedAt: new Date("2026-07-11T00:00:00.000Z"),
+      workflowRunId: null,
+    };
+    const disabledEndpoint = {
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: null,
+      appConfigId: "app",
+      processConfigId: "dev",
+      portConfigId: "web",
+      label: "Preview",
+      targetPort: 3000,
+      protocol: "http",
+      status: "disabled",
+      accessMode: "private",
+      trafficCaptureMode: "metadata",
+      enabledByUserId: null,
+      enabledAt: null,
+      disabledAt: null,
+      revokedAt: null,
+      currentRuntimeInstanceId: null,
+      createdAt: new Date("2026-07-11T00:00:00.000Z"),
+      updatedAt: new Date("2026-07-11T00:00:00.000Z"),
+    };
+    prismaMock.sessionApplicationProcess.findFirst.mockResolvedValueOnce({ id: "process-1" });
+    prismaMock.sessionApplicationProcess.update.mockResolvedValueOnce(runningProcess);
+    prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({ kind: "app", repo: null });
+    prismaMock.sessionEndpoint.findUnique.mockResolvedValueOnce(disabledEndpoint);
+    prismaMock.sessionEndpoint.update.mockImplementationOnce(async ({ data }) => ({
+      ...disabledEndpoint,
+      ...data,
+      updatedAt: new Date("2026-07-11T00:00:01.000Z"),
+    }));
+
+    await new SessionApplicationService().markProcessRunning(
+      "process-1",
+      "org-1",
+      "bridge-1",
+    );
+
+    expect(prismaMock.sessionEndpoint.update).toHaveBeenCalledWith({
+      where: { id: "endpoint-1" },
+      data: expect.objectContaining({
+        status: "enabled",
+        accessMode: "public",
+        currentRuntimeInstanceId: "runtime-1",
+      }),
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_endpoint_forwarding_enabled",
+        actorType: "system",
+      }),
+    );
+  });
+
   it("requires a running process before enabling forwarding", async () => {
     prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
       id: "endpoint-1",

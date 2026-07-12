@@ -857,10 +857,16 @@ export class SessionApplicationService {
   private async enableDefaultForwarding(process: PrismaSessionApplicationProcess) {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: process.sessionGroupId, organizationId: process.organizationId },
-      select: { repo: { select: { id: true, name: true, remoteUrl: true, setupConfig: true } } },
+      select: {
+        kind: true,
+        repo: { select: { id: true, name: true, remoteUrl: true, setupConfig: true } },
+      },
     });
-    if (!group?.repo) return;
-    const config = repoApplicationConfigService.resolveApplicationConfig(group.repo);
+    if (!group) return;
+    const config =
+      group.kind === "app"
+        ? DEFAULT_APP_SESSION_CONFIG
+        : repoApplicationConfigService.resolveApplicationConfig(group.repo);
     const app = config.applications.find((candidate) => candidate.id === process.appConfigId);
     const processConfig = app?.processes.find(
       (candidate) => candidate.id === process.processConfigId,
