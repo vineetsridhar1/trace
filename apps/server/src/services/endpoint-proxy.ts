@@ -43,6 +43,7 @@ type PendingHttp = {
   startedAt: number;
   response: ServerResponse;
   timer: ReturnType<typeof setTimeout>;
+  disableCache: boolean;
   injectAuthoringOverlay: boolean;
 };
 
@@ -199,6 +200,9 @@ export class EndpointProxyService {
       res.writeHead(503).end("Endpoint unavailable");
       return;
     }
+    // AppPreview obtains this credential for both private and published
+    // endpoints. Public visitors use the clean endpoint URL without it.
+    const authenticatedPreview = endpointPreviewUserId(req, endpoint) != null;
     if (endpoint.accessMode === "private") {
       // The preview cookie is SameSite=None, so a credentialed request can be
       // driven cross-site (CSRF). Reject any browser Origin that isn't the app's
@@ -304,6 +308,7 @@ export class EndpointProxyService {
       startedAt,
       response: res,
       timer,
+      disableCache: authenticatedPreview,
       injectAuthoringOverlay: endpoint.accessMode === "private",
     };
     this.pendingHttp.set(requestId, pending);
@@ -317,7 +322,12 @@ export class EndpointProxyService {
         port: endpoint.targetPort,
         method: req.method ?? "GET",
         path: `${path}${query ? `?${query}` : ""}`,
-        headers: forwardableRequestHeaders(req.headers),
+        // Authenticated AppPreview requests are a live authoring surface.
+        // Revalidating Vite's module and stylesheet responses can leave the
+        // iframe with a mixed pre/post-HMR asset graph, so fetch current bytes.
+        headers: forwardableRequestHeaders(req.headers, {
+          disableCache: authenticatedPreview,
+        }),
         bodyBase64: requestBody.byteLength ? requestBody.toString("base64") : undefined,
       },
       endpoint.organizationId,
@@ -368,7 +378,9 @@ export class EndpointProxyService {
         .catch(() => {});
       return;
     }
-    let headers = forwardableResponseHeaders(response.headers);
+    let headers = forwardableResponseHeaders(response.headers, {
+      disableCache: pending.disableCache,
+    });
     if (pending.injectAuthoringOverlay) {
       const injected = injectAuthoringOverlay(headers, body);
       headers = injected.headers;

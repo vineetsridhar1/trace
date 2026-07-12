@@ -169,7 +169,7 @@ function stripTraceSessionCookie(value: string): string | null {
 // observe the caller's Trace session.
 export function forwardableRequestHeaders(
   headers: Record<string, string | string[] | undefined>,
-  options?: { websocket?: boolean },
+  options?: { websocket?: boolean; disableCache?: boolean },
 ): Record<string, string | string[]> {
   const forwarded: Record<string, string | string[]> = {};
   for (const [rawName, value] of Object.entries(headers)) {
@@ -178,6 +178,15 @@ export function forwardableRequestHeaders(
     if (name === "authorization" || name === "proxy-authorization") continue;
     if (HOP_BY_HOP_HEADERS.has(name)) continue;
     if (options?.websocket && WS_HANDSHAKE_HEADERS.has(name)) continue;
+    if (
+      options?.disableCache &&
+      (name === "cache-control" ||
+        name === "pragma" ||
+        name === "if-none-match" ||
+        name === "if-modified-since")
+    ) {
+      continue;
+    }
     if (name === "cookie") {
       const cookie = Array.isArray(value) ? value.join("; ") : value;
       const stripped = stripTraceSessionCookie(cookie);
@@ -185,6 +194,10 @@ export function forwardableRequestHeaders(
       continue;
     }
     forwarded[rawName] = value;
+  }
+  if (options?.disableCache) {
+    forwarded["cache-control"] = "no-cache";
+    forwarded.pragma = "no-cache";
   }
   return forwarded;
 }
@@ -221,11 +234,23 @@ function stripSetCookieDomain(setCookie: string): string {
 // but forced host-only so untrusted apps can't inject cookies onto siblings.
 export function forwardableResponseHeaders(
   headers: Record<string, string | string[]>,
+  options?: { disableCache?: boolean },
 ): Record<string, string | string[]> {
   const forwarded: Record<string, string | string[]> = {};
   for (const [rawName, value] of Object.entries(headers)) {
-    if (HOP_BY_HOP_HEADERS.has(rawName.toLowerCase())) continue;
-    if (rawName.toLowerCase() === "set-cookie") {
+    const name = rawName.toLowerCase();
+    if (HOP_BY_HOP_HEADERS.has(name)) continue;
+    if (
+      options?.disableCache &&
+      (name === "age" ||
+        name === "cache-control" ||
+        name === "etag" ||
+        name === "expires" ||
+        name === "last-modified")
+    ) {
+      continue;
+    }
+    if (name === "set-cookie") {
       forwarded[rawName] = Array.isArray(value)
         ? value.map(stripSetCookieDomain)
         : stripSetCookieDomain(value);
@@ -233,6 +258,7 @@ export function forwardableResponseHeaders(
     }
     forwarded[rawName] = value;
   }
+  if (options?.disableCache) forwarded["Cache-Control"] = "no-store";
   return forwarded;
 }
 

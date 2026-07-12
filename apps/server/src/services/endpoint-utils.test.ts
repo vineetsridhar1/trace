@@ -153,6 +153,25 @@ describe("endpoint utils", () => {
     ).toEqual({ "x-app": "ok" });
   });
 
+  it("forces private preview requests to bypass cached application assets", () => {
+    expect(
+      forwardableRequestHeaders(
+        {
+          "cache-control": "max-age=0",
+          pragma: "cache",
+          "if-none-match": 'W/"stale"',
+          "if-modified-since": "Sat, 01 Jan 2000 00:00:00 GMT",
+          accept: "text/css",
+        },
+        { disableCache: true },
+      ),
+    ).toEqual({
+      accept: "text/css",
+      "cache-control": "no-cache",
+      pragma: "no-cache",
+    });
+  });
+
   it("extracts websocket subprotocols before stripping handshake headers", () => {
     expect(
       webSocketProtocols({
@@ -169,6 +188,24 @@ describe("endpoint utils", () => {
         "transfer-encoding": "chunked",
       }),
     ).toEqual({ "content-type": "text/html" });
+  });
+
+  it("prevents private preview responses from being reused after live edits", () => {
+    expect(
+      forwardableResponseHeaders(
+        {
+          "cache-control": "public, max-age=3600",
+          etag: 'W/"old"',
+          expires: "Sat, 01 Jan 2100 00:00:00 GMT",
+          "last-modified": "Sat, 01 Jan 2000 00:00:00 GMT",
+          "content-type": "text/css",
+        },
+        { disableCache: true },
+      ),
+    ).toEqual({
+      "Cache-Control": "no-store",
+      "content-type": "text/css",
+    });
   });
 
   it("truncates body previews", () => {
