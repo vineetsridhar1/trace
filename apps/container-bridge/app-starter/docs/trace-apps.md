@@ -16,8 +16,9 @@ while the app appears beside it as a live preview.
 ## Project map
 
 - `src/App.tsx` is the main React interface.
-- `src/index.css` contains global styles and Tailwind directives. Keep its import in `src/main.tsx`
-  so Vite transforms and injects it through the module graph.
+- `src/index.css` contains global styles and Tailwind directives. Keep both its import in
+  `src/main.tsx` and its link in `index.html`: the import provides Vite transformation and hot
+  reload, while the link keeps embedded previews styled if JavaScript style injection is lost.
 - `src/components/ui` contains reusable shadcn-compatible interface components.
 - `server.ts` serves the app and contains same-origin `/api` routes.
 - The app uses Vite, React, TypeScript, Tailwind CSS, Express, and pnpm.
