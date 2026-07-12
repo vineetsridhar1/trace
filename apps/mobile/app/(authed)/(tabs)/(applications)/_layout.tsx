@@ -21,6 +21,14 @@ export default function ApplicationsLayout() {
           headerLargeTitle: true,
           headerRight: () => (
             <TopBarPill
+              actions={[
+                {
+                  id: "new-application",
+                  accessibilityLabel: "Build a new application",
+                  symbol: "plus",
+                  onPress: () => router.push("/sheets/new-application"),
+                },
+              ]}
               avatar={
                 user
                   ? {

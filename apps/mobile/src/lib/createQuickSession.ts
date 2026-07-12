@@ -16,6 +16,7 @@ import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useMobileUIStore } from "@/stores/ui";
 
 const pendingQuickSessionChannels = new Set<string>();
+let appCreationPending = false;
 
 interface CreateAgentTabOptions {
   navigate?: (sessionGroupId: string, sessionId: string) => void;
@@ -62,6 +63,50 @@ export async function createQuickSession(channelId: string): Promise<void> {
     Alert.alert("Couldn't start session", message);
   } finally {
     pendingQuickSessionChannels.delete(channelId);
+  }
+}
+
+/**
+ * Create a standalone cloud app session and open its chat/preview workspace.
+ */
+export async function createApplication(prompt: string): Promise<boolean> {
+  const trimmedPrompt = prompt.trim();
+  if (!trimmedPrompt || appCreationPending) return false;
+  appCreationPending = true;
+
+  void haptic.light();
+
+  try {
+    const result = await getClient()
+      .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
+        input: {
+          kind: "app",
+          hosting: "cloud",
+          prompt: trimmedPrompt,
+        },
+      })
+      .toPromise();
+    if (result.error) throw result.error;
+    const session = result.data?.startSession;
+    if (!session?.id || !session.sessionGroupId) {
+      throw new Error("Server did not return a session id");
+    }
+
+    void fetchSessionGroupDetail(session.sessionGroupId).catch((error: unknown) => {
+      console.warn("[createApplication] failed to prefetch session group", error);
+    });
+
+    const ui = useMobileUIStore.getState();
+    ui.setOverlaySessionId(session.id);
+    router.replace(`/sessions/${session.sessionGroupId}/${session.id}` as never);
+    return true;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Please try again.";
+    void haptic.error();
+    Alert.alert("Couldn't build application", message);
+    return false;
+  } finally {
+    appCreationPending = false;
   }
 }
 

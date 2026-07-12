@@ -1,9 +1,10 @@
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { ApplicationListRow } from "@/components/applications/ApplicationListRow";
-import { Text, TraceLoader } from "@/components/design-system";
+import { Button, Text, TraceLoader } from "@/components/design-system";
 import { useAppSessionGroups } from "@/hooks/useAppSessionGroups";
 import { handleUnauthorized } from "@/lib/auth";
 import { haptic } from "@/lib/haptics";
@@ -11,6 +12,7 @@ import { useTheme } from "@/theme";
 
 export default function ApplicationsScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const { ids, loading, error, refresh } = useAppSessionGroups(activeOrgId);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,7 +42,13 @@ export default function ApplicationsScreen() {
       onRefresh={handleRefresh}
       refreshing={refreshing}
       ItemSeparatorComponent={ApplicationSeparator}
-      ListEmptyComponent={<ApplicationsEmpty error={error} onRetry={handleRefresh} />}
+      ListEmptyComponent={
+        <ApplicationsEmpty
+          error={error}
+          onCreate={() => router.push("/sheets/new-application")}
+          onRetry={handleRefresh}
+        />
+      }
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     />
   );
@@ -57,9 +65,11 @@ function ApplicationSeparator() {
 
 function ApplicationsEmpty({
   error,
+  onCreate,
   onRetry,
 }: {
   error: string | null;
+  onCreate: () => void;
   onRetry: () => Promise<void>;
 }) {
   return (
@@ -74,9 +84,14 @@ function ApplicationsEmpty({
           </Text>
         </Pressable>
       ) : (
-        <Text variant="caption2" color="dimForeground" align="center">
-          Apps you build with Trace will appear here.
-        </Text>
+        <>
+          <Text variant="caption2" color="dimForeground" align="center">
+            Apps you build with Trace will appear here.
+          </Text>
+          <View style={styles.emptyAction}>
+            <Button title="Build an application" size="sm" onPress={onCreate} />
+          </View>
+        </>
       )}
     </View>
   );
@@ -97,6 +112,10 @@ const styles = StyleSheet.create({
   retry: {
     paddingHorizontal: 16,
     paddingVertical: 8,
+  },
+  emptyAction: {
+    alignSelf: "stretch",
+    marginTop: 10,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
