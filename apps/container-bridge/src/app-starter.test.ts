@@ -8,6 +8,9 @@ function readStarterFile(path: string): string {
 describe("app starter styling", () => {
   it("loads Tailwind through the Vite module graph", () => {
     expect(readStarterFile("src/main.tsx")).toContain('import "./index.css";');
+    expect(readStarterFile("index.html")).toContain(
+      '<link rel="stylesheet" href="/src/index.css" />',
+    );
     expect(readStarterFile("src/index.css")).toContain(
       "@tailwind base;\n@tailwind components;\n@tailwind utilities;",
     );
