@@ -7,6 +7,23 @@ function timestamp(value: string | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+export function appSessionSubtitle({
+  agentStatus,
+  preview,
+  status,
+}: {
+  agentStatus: string | null | undefined;
+  preview: string | null | undefined;
+  status: string | null | undefined;
+}): string {
+  if (status === "needs_input") return "Needs your input";
+  if (status === "failed" || agentStatus === "failed") return "Build failed";
+  if (agentStatus === "active") return "Building now";
+  if (preview?.trim()) return preview.trim();
+  if (status === "stopped" || agentStatus === "stopped") return "Stopped";
+  return "Ready to continue";
+}
+
 export function buildAppSessionGroupIds(state: EntityState): string[] {
   return (Object.values(state.sessionGroups) as SessionGroupEntity[])
     .filter((group) => group.kind === "app" && !group.archivedAt && group.status !== "archived")

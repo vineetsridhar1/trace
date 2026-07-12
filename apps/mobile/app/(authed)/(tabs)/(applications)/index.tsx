@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, type AuthState } from "@trace/client-core";
-import { SessionGroupRow } from "@/components/channels/SessionGroupRow";
-import { EmptyState, TraceLoader } from "@/components/design-system";
+import { ApplicationListRow } from "@/components/applications/ApplicationListRow";
+import { Text, TraceLoader } from "@/components/design-system";
 import { useAppSessionGroups } from "@/hooks/useAppSessionGroups";
 import { handleUnauthorized } from "@/lib/auth";
 import { haptic } from "@/lib/haptics";
@@ -34,25 +34,51 @@ export default function ApplicationsScreen() {
   return (
     <FlashList
       data={ids}
-      renderItem={({ item }) => <SessionGroupRow groupId={item} hideAvatar />}
+      renderItem={renderApplication}
       keyExtractor={(id) => id}
       contentInsetAdjustmentBehavior="automatic"
       onRefresh={handleRefresh}
       refreshing={refreshing}
-      ListEmptyComponent={
-        <View style={styles.empty}>
-          <EmptyState
-            icon={error ? "exclamationmark.triangle" : "app"}
-            title={error ? "Couldn't load applications" : "No applications yet"}
-            subtitle={
-              error ? error : "Standalone applications you build in Trace will appear here."
-            }
-            action={error ? { label: "Retry", onPress: () => void handleRefresh() } : undefined}
-          />
-        </View>
-      }
+      ItemSeparatorComponent={ApplicationSeparator}
+      ListEmptyComponent={<ApplicationsEmpty error={error} onRetry={handleRefresh} />}
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     />
+  );
+}
+
+function renderApplication({ item }: { item: string }) {
+  return <ApplicationListRow groupId={item} />;
+}
+
+function ApplicationSeparator() {
+  const theme = useTheme();
+  return <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />;
+}
+
+function ApplicationsEmpty({
+  error,
+  onRetry,
+}: {
+  error: string | null;
+  onRetry: () => Promise<void>;
+}) {
+  return (
+    <View style={styles.empty}>
+      <Text variant="footnote" color={error ? "destructive" : "mutedForeground"} align="center">
+        {error ?? "No applications yet"}
+      </Text>
+      {error ? (
+        <Pressable accessibilityRole="button" onPress={() => void onRetry()} style={styles.retry}>
+          <Text variant="footnote" color="accent">
+            Retry
+          </Text>
+        </Pressable>
+      ) : (
+        <Text variant="caption2" color="dimForeground" align="center">
+          Apps you build with Trace will appear here.
+        </Text>
+      )}
+    </View>
   );
 }
 
@@ -63,6 +89,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   empty: {
-    paddingTop: 80,
+    paddingTop: 96,
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 32,
+  },
+  retry: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 60,
+    opacity: 0.55,
   },
 });

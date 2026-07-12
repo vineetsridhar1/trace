@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { EntityState } from "@trace/client-core";
 import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
-import { buildAppSessionGroupIds, findReadyAppPreviewUrl } from "./app-sessions";
+import {
+  appSessionSubtitle,
+  buildAppSessionGroupIds,
+  findReadyAppPreviewUrl,
+} from "./app-sessions";
 
 function stateWithGroups(sessionGroups: Record<string, Record<string, unknown>>): EntityState {
   return { sessionGroups } as unknown as EntityState;
@@ -64,6 +68,27 @@ describe("buildAppSessionGroupIds", () => {
     });
 
     expect(buildAppSessionGroupIds(state)).toEqual(["active"]);
+  });
+});
+
+describe("appSessionSubtitle", () => {
+  it("prioritizes actionable and active states over event previews", () => {
+    expect(
+      appSessionSubtitle({ agentStatus: "active", preview: "Old preview", status: "needs_input" }),
+    ).toBe("Needs your input");
+    expect(
+      appSessionSubtitle({ agentStatus: "active", preview: "Old preview", status: "in_progress" }),
+    ).toBe("Building now");
+  });
+
+  it("uses the latest preview when the application is idle", () => {
+    expect(
+      appSessionSubtitle({
+        agentStatus: "done",
+        preview: "Added the dashboard",
+        status: "in_review",
+      }),
+    ).toBe("Added the dashboard");
   });
 });
 
