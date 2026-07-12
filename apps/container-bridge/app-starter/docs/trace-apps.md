@@ -16,7 +16,8 @@ while the app appears beside it as a live preview.
 ## Project map
 
 - `src/App.tsx` is the main React interface.
-- `src/index.css` contains global styles and Tailwind directives.
+- `src/index.css` contains global styles and Tailwind directives. Keep its import in `src/main.tsx`
+  so Vite transforms and injects it through the module graph.
 - `src/components/ui` contains reusable shadcn-compatible interface components.
 - `server.ts` serves the app and contains same-origin `/api` routes.
 - The app uses Vite, React, TypeScript, Tailwind CSS, Express, and pnpm.
@@ -44,6 +45,8 @@ storage when the user's app needs to retain information.
 
 - Exercise the main user flow in the live preview.
 - Run `pnpm typecheck` and `pnpm build` after substantial changes.
+- Confirm an intentional computed style in the browser; a successful build alone does not prove
+  that the stylesheet loaded.
 - Check narrow and wide layouts and basic keyboard navigation.
 - Remove placeholder actions and make empty, loading, success, and error states understandable.
 - Commit and push a meaningful checkpoint once the app is working.
