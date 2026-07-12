@@ -1040,6 +1040,10 @@ function parseSlackPrompt(text: string): ParsedSlackPrompt {
   return result;
 }
 
+function isBuildApplicationPrompt(prompt: string): boolean {
+  return /^build\s+an\s+(?:app|application)\b/i.test(prompt.trim());
+}
+
 function slackTsValue(ts: string | undefined): number | null {
   if (!ts) return null;
   const value = Number(ts);
@@ -2140,6 +2144,7 @@ async function handleAppMention(input: {
 
   const rawText = typeof event.text === "string" ? event.text : "";
   const parsed = parseSlackPrompt(stripBotMention(rawText, install.botUserId));
+  const buildApplication = isBuildApplicationPrompt(parsed.prompt);
   const threadContext = await loadSlackThreadContext({
     slackTeamId: teamId,
     slackChannelId: channel,
@@ -2187,6 +2192,30 @@ async function handleAppMention(input: {
     prompt,
     fileRefs: files.refs,
   });
+  if (buildApplication) {
+    try {
+      await startSlackSessionFromDraft({
+        draftId,
+        slackUserId,
+        kind: "app",
+        settings: {
+          tool: null,
+          model: null,
+          reasoningEffort: null,
+          hosting: "cloud",
+        },
+      });
+    } catch (err: unknown) {
+      await postMentionFeedback({
+        slackTeamId: teamId,
+        slackChannelId: channel,
+        slackUserId,
+        threadTs,
+        text: `Could not start the app build: ${errorMessage(err)}`,
+      });
+    }
+    return;
+  }
   if (parsed.yolo) {
     try {
       const settings = await recommendedSettingsForDraft(draftId, slackUserId);
@@ -2232,6 +2261,7 @@ async function startSlackSessionFromDraft(input: {
   settings: SlackSessionSettings;
   traceChannelId?: string | null;
   promptOverride?: string | null;
+  kind?: "coding" | "app";
 }): Promise<void> {
   const draft = await loadSlackSessionDraft(input.draftId, input.slackUserId);
   if (!draft) throw new Error("This Slack session draft is no longer available. Mention `@trace` again.");
@@ -2251,12 +2281,14 @@ async function startSlackSessionFromDraft(input: {
   if (!membership) throw new Error("Your Trace account is not in this workspace's org");
 
   const traceChannelId = input.traceChannelId ?? draft.traceChannelId;
-  if (!traceChannelId) throw new Error("This Slack channel is not bound to a Trace channel");
-  const channel = await prisma.channel.findFirst({
-    where: { id: traceChannelId, organizationId: draft.organizationId },
-    select: { id: true },
-  });
-  if (!channel) throw new Error("Trace channel not found");
+  if (input.kind !== "app") {
+    if (!traceChannelId) throw new Error("This Slack channel is not bound to a Trace channel");
+    const channel = await prisma.channel.findFirst({
+      where: { id: traceChannelId, organizationId: draft.organizationId },
+      select: { id: true },
+    });
+    if (!channel) throw new Error("Trace channel not found");
+  }
 
   const fileRefs = parseSlackFileRefs(draft.fileRefs);
   const imageKeys = imageKeysFromFileRefs(fileRefs);
@@ -2267,12 +2299,13 @@ async function startSlackSessionFromDraft(input: {
       slackChannelId: draft.slackChannelId,
       slackThreadTs: draft.slackThreadTs,
       organizationId: draft.organizationId,
-      traceChannelId,
+      traceChannelId: input.kind === "app" ? undefined : traceChannelId,
       actorUserId: account.userId,
       prompt,
       imageKeys,
       settings: input.settings,
       source: "mention",
+      kind: input.kind,
     });
     await deleteSlackSessionDraft(draft.id);
   } catch (err: unknown) {

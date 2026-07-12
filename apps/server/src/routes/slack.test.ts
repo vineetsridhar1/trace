@@ -120,6 +120,7 @@ vi.mock("../lib/slack/event-bridge.js", () => ({
 
 import { prisma } from "../lib/db.js";
 import { sessionService } from "../services/session.js";
+import { startSlackSession } from "../lib/slack/session-orchestrator.js";
 import { slackRouter } from "./slack.js";
 
 type BasePrismaMock = ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
@@ -165,6 +166,7 @@ const prismaMock = prisma as unknown as PrismaMock;
 const sessionServiceMock = sessionService as unknown as {
   sendMessage: ReturnType<typeof vi.fn>;
 };
+const startSlackSessionMock = startSlackSession as unknown as ReturnType<typeof vi.fn>;
 const JWT_SECRET = process.env.JWT_SECRET || "trace-dev-secret";
 const SLACK_SIGNING_SECRET = "test-slack-signing-secret";
 
@@ -408,6 +410,84 @@ describe("Slack routes", () => {
         thread_ts: "1710000200.000100",
         text: "Start Trace session",
       }),
+    );
+  });
+
+  it.each([
+    ["build an app for tracking launches", "EAPP1", "1710000300.000100"],
+    ["Build an application that plans team lunches", "EAPP2", "1710000301.000100"],
+  ])("starts an app session directly for %s", async (prompt, eventId, ts) => {
+    prismaMock.slackProcessedEvent.deleteMany.mockResolvedValue({ count: 0 });
+    prismaMock.slackProcessedEvent.create.mockResolvedValue({});
+    prismaMock.slackInstall.findUnique.mockResolvedValue({
+      organizationId: "org-1",
+      botUserId: "BTRACE",
+    });
+    prismaMock.slackThreadSession.findUnique.mockResolvedValue(null);
+    prismaMock.slackAccount.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.orgMember.findUnique.mockResolvedValue({ userId: "user-1" });
+    prismaMock.slackChannelBinding.findUnique.mockResolvedValue({
+      traceChannelId: "channel-1",
+      organizationId: "org-1",
+    });
+    prismaMock.slackSessionDraft.create.mockResolvedValue({ id: "draft-app" });
+    prismaMock.slackSessionDraft.findUnique.mockResolvedValue({
+      id: "draft-app",
+      slackTeamId: "T1",
+      slackChannelId: "C1",
+      slackThreadTs: ts,
+      slackUserId: "U1",
+      organizationId: "org-1",
+      traceChannelId: "channel-1",
+      prompt,
+      fileRefs: [],
+    });
+    prismaMock.slackSessionDraft.delete.mockResolvedValue({});
+    startSlackSessionMock.mockResolvedValue({
+      sessionId: "session-app",
+      slackThreadTs: ts,
+    });
+
+    const rawBody = JSON.stringify({
+      type: "event_callback",
+      team_id: "T1",
+      event_id: eventId,
+      event: {
+        type: "app_mention",
+        user: "U1",
+        channel: "C1",
+        channel_type: "channel",
+        ts,
+        text: `<@BTRACE> ${prompt}`,
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/slack/events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...signedSlackHeaders(rawBody),
+      },
+      body: rawBody,
+    });
+
+    expect(response.status).toBe(200);
+    await waitForDeferredSlackWork();
+    expect(startSlackSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "app",
+        prompt,
+        traceChannelId: undefined,
+        settings: {
+          tool: null,
+          model: null,
+          reasoningEffort: null,
+          hosting: "cloud",
+        },
+      }),
+    );
+    expect(slackMocks.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ text: "Start Trace session" }),
     );
   });
 

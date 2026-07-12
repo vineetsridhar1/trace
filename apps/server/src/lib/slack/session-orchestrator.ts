@@ -1,4 +1,4 @@
-import type { CodingTool } from "@prisma/client";
+import type { CodingTool, SessionGroupKind } from "@prisma/client";
 import { prisma } from "../db.js";
 import { sessionService } from "../../services/session.js";
 import { getSlackClient } from "./client.js";
@@ -20,12 +20,13 @@ export type StartSlackSessionInput = {
   slackChannelId: string;
   slackThreadTs?: string;
   organizationId: string;
-  traceChannelId: string;
+  traceChannelId?: string | null;
   actorUserId: string;
   prompt: string;
   imageKeys?: string[];
   settings: SlackSessionSettings;
   source: SlackSessionSource;
+  kind?: SessionGroupKind;
 };
 
 export type StartSlackSessionResult = {
@@ -33,11 +34,16 @@ export type StartSlackSessionResult = {
   slackThreadTs: string;
 };
 
-function startMessage(sessionId: string, traceLink: string | null): string {
+function startMessage(
+  sessionId: string,
+  traceLink: string | null,
+  kind: SessionGroupKind | undefined,
+): string {
   const shortId = sessionId.slice(0, 8);
+  const label = kind === "app" ? "App build started" : "Session started";
   return traceLink
-    ? `🟢 Session started — \`${shortId}\` · <${traceLink}|Open in Trace>`
-    : `🟢 Session started — \`${shortId}\``;
+    ? `🟢 ${label} — \`${shortId}\` · <${traceLink}|Open in Trace>`
+    : `🟢 ${label} — \`${shortId}\``;
 }
 
 async function recordSlackThreadSession(input: {
@@ -90,24 +96,23 @@ export async function startSlackSession(
   }
 
   const session = await sessionService.start({
+    kind: input.kind,
     tool: input.settings.tool ?? undefined,
     model: input.settings.model ?? undefined,
     reasoningEffort: input.settings.reasoningEffort ?? undefined,
     environmentId: input.settings.environmentId ?? undefined,
-    runtimeInstanceId: input.settings.runtimeInstanceId ?? undefined,
+    runtimeInstanceId:
+      input.kind === "app" ? undefined : (input.settings.runtimeInstanceId ?? undefined),
     organizationId: input.organizationId,
     createdById: input.actorUserId,
-    channelId: input.traceChannelId,
-    hosting: input.settings.hosting,
+    channelId: input.kind === "app" ? undefined : (input.traceChannelId ?? undefined),
+    hosting: input.kind === "app" ? "cloud" : input.settings.hosting,
     prompt: input.prompt,
     imageKeys: input.imageKeys,
     deferInitialRun: true,
     actorType: "user",
     clientSource: "slack",
   });
-
-  const traceLink = await buildTraceSessionLink(session.id);
-  const text = startMessage(session.id, traceLink);
 
   await recordSlackThreadSession({
     slackTeamId: input.slackTeamId,
@@ -116,6 +121,16 @@ export async function startSlackSession(
     sessionId: session.id,
     organizationId: input.organizationId,
   });
+  if (input.kind === "app" && session.sessionGroupId) {
+    slackEventBridge.attachGroup(session.sessionGroupId, {
+      slackTeamId: input.slackTeamId,
+      slackChannelId: input.slackChannelId,
+      slackThreadTs,
+    });
+  }
+
+  const traceLink = await buildTraceSessionLink(session.id);
+  const text = startMessage(session.id, traceLink, input.kind);
 
   if (client) {
     if (topLevelMessageTs) {
