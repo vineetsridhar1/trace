@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEntityField } from "@trace/client-core";
 import type { Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import PagerView from "react-native-pager-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, EmptyState, Screen, TraceLoader } from "@/components/design-system";
 import { ActiveTodoStrip } from "@/components/sessions/ActiveTodoStrip";
@@ -17,6 +18,7 @@ import { dismissNotificationsForSession } from "@/lib/notifications";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
 import { alpha, useTheme } from "@/theme";
+import { useAppPreview } from "@/hooks/useAppPreview";
 import {
   fetchSessionGroupDetail,
   useEnsureSessionGroupDetail,
@@ -50,6 +52,8 @@ export default function SessionStreamScreen() {
   const browserUrl = useMobileUIStore((s) => s.browserUrl);
   const browserUrlGroupId = useMobileUIStore((s) => s.browserUrlGroupId);
   const setBrowserUrl = useMobileUIStore((s) => s.setBrowserUrl);
+  const pagerRef = useRef<PagerView>(null);
+  const [appPage, setAppPage] = useState(pane === "browser" ? 1 : 0);
   const sessionOptimistic = useEntityField("sessions", sessionId, "_optimistic") as
     | boolean
     | undefined;
@@ -67,15 +71,30 @@ export default function SessionStreamScreen() {
     | string
     | null
     | undefined;
-  const resolvedBrowserUrl = useMemo(
-    () =>
-      resolveBrowserUrl(
-        browserUrlGroupId === hydratedGroupId ? browserUrl : null,
-        prUrl,
-        repo?.remoteUrl,
-      ),
-    [browserUrl, browserUrlGroupId, hydratedGroupId, prUrl, repo?.remoteUrl],
-  );
+  const groupKind = useEntityField("sessionGroups", hydratedGroupId, "kind") as
+    | string
+    | null
+    | undefined;
+  const isAppGroup = groupKind === "app";
+  const {
+    url: appPreviewUrl,
+    loading: appPreviewLoading,
+    error: appPreviewError,
+    refresh: refreshAppPreview,
+  } = useAppPreview(hydratedGroupId, isAppGroup);
+  const resolvedBrowserUrl = useMemo(() => {
+    const persistedUrl = browserUrlGroupId === hydratedGroupId ? browserUrl : null;
+    if (isAppGroup) return persistedUrl || appPreviewUrl || "";
+    return resolveBrowserUrl(persistedUrl, prUrl, repo?.remoteUrl);
+  }, [
+    appPreviewUrl,
+    browserUrl,
+    browserUrlGroupId,
+    hydratedGroupId,
+    isAppGroup,
+    prUrl,
+    repo?.remoteUrl,
+  ]);
   useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
     if (sessionIds.includes(sessionId)) return;
@@ -91,13 +110,19 @@ export default function SessionStreamScreen() {
     [groupId, router, sessionId],
   );
   const openBrowser = useCallback(() => {
+    if (isAppGroup) {
+      pagerRef.current?.setPage(1);
+      setAppPage(1);
+      return;
+    }
     if (activePane === "browser") return;
     router.push(`/sessions/${groupId}/${sessionId}?pane=browser`);
-  }, [activePane, groupId, router, sessionId]);
+  }, [activePane, groupId, isAppGroup, router, sessionId]);
 
   const handleSelectSession = useCallback(
     (nextId: string) => {
       useMobileUIStore.getState().setOverlaySessionId(nextId);
+      setAppPage(0);
       router.replace(`/sessions/${groupId}/${nextId}`);
     },
     [groupId, router],
@@ -128,6 +153,14 @@ export default function SessionStreamScreen() {
   const showLoading = loadingGroup || handoffPending;
   const missingGroup = !showLoading && !groupName;
   const browserEnabled = !sessionOptimistic && !handoffPending && !showLoading;
+  const headerPane: SessionPaneMode =
+    activePane === "terminal"
+      ? "terminal"
+      : isAppGroup
+        ? appPage === 1
+          ? "browser"
+          : "session"
+        : activePane;
   useSessionPorts(sessionId, browserEnabled);
 
   useEffect(() => {
@@ -146,15 +179,20 @@ export default function SessionStreamScreen() {
             <SessionPageHeader
               groupId={hydratedGroupId}
               sessionId={sessionId}
-              activePane={activePane}
+              activePane={headerPane}
               browserEnabled={browserEnabled}
               onOpenBrowser={openBrowser}
               onBack={
                 activePane === "terminal"
                   ? () => navigateToPane("session")
-                  : activePane === "browser"
-                    ? () => router.back()
-                    : closeSessionPlayer
+                  : isAppGroup && appPage === 1
+                    ? () => {
+                        pagerRef.current?.setPage(0);
+                        setAppPage(0);
+                      }
+                    : activePane === "browser"
+                      ? () => router.back()
+                      : closeSessionPlayer
               }
             />
             <ActiveTodoStrip sessionId={sessionId} />
@@ -187,7 +225,53 @@ export default function SessionStreamScreen() {
           </View>
         ) : (
           <View key={hydratedGroupId} style={styles.overlayPaddedScene}>
-            {activePane === "session" ? (
+            {isAppGroup && activePane !== "terminal" ? (
+              <PagerView
+                ref={pagerRef}
+                initialPage={pane === "browser" ? 1 : 0}
+                onPageSelected={(event) => setAppPage(event.nativeEvent.position)}
+                overdrag
+                style={styles.pager}
+              >
+                <View key="chat" style={styles.overlayPaddedScene}>
+                  <SessionSurface
+                    sessionId={sessionId}
+                    onSelectSession={handleSelectSession}
+                    hideHeader
+                    topInset={overlayHeight}
+                  />
+                </View>
+                <View key="browser" style={styles.overlayPaddedScene}>
+                  {resolvedBrowserUrl ? (
+                    <BrowserPanel
+                      url={resolvedBrowserUrl}
+                      onUrlChange={handleBrowserUrlChange}
+                      topInset={overlayHeight}
+                    />
+                  ) : appPreviewLoading ? (
+                    <View style={styles.center}>
+                      <TraceLoader size="small" color="mutedForeground" />
+                    </View>
+                  ) : (
+                    <View style={styles.center}>
+                      <EmptyState
+                        icon={appPreviewError ? "exclamationmark.triangle" : "app"}
+                        title={appPreviewError ? "Couldn't load the app" : "App is starting"}
+                        subtitle={
+                          appPreviewError
+                            ? appPreviewError
+                            : "The preview will appear when the application is running."
+                        }
+                        action={{
+                          label: "Retry",
+                          onPress: () => void refreshAppPreview(),
+                        }}
+                      />
+                    </View>
+                  )}
+                </View>
+              </PagerView>
+            ) : activePane === "session" ? (
               <SessionSurface
                 sessionId={sessionId}
                 onSelectSession={handleSelectSession}
@@ -213,7 +297,7 @@ export default function SessionStreamScreen() {
         )}
       </View>
 
-      {!showLoading && !missingGroup && activePane === "session" && overlayHeight > 0 ? (
+      {!showLoading && !missingGroup && headerPane === "session" && overlayHeight > 0 ? (
         <>
           <BlurView
             pointerEvents="none"
@@ -277,6 +361,9 @@ const styles = StyleSheet.create({
   overlayPaddedScene: {
     flex: 1,
     minHeight: 0,
+  },
+  pager: {
+    flex: 1,
   },
   center: {
     flex: 1,
