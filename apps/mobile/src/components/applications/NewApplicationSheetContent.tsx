@@ -31,7 +31,7 @@ export function NewApplicationSheetContent() {
           ]}
         >
           <SymbolView
-            name="app.fill"
+            name="globe"
             size={24}
             tintColor={theme.colors.accent}
             resizeMode="scaleAspectFit"

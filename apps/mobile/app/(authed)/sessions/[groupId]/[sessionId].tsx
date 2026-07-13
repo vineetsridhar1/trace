@@ -255,7 +255,7 @@ export default function SessionStreamScreen() {
                   ) : (
                     <View style={styles.center}>
                       <EmptyState
-                        icon={appPreviewError ? "exclamationmark.triangle" : "app"}
+                        icon={appPreviewError ? "exclamationmark.triangle" : "globe"}
                         title={appPreviewError ? "Couldn't load the app" : "App is starting"}
                         subtitle={
                           appPreviewError

@@ -34,7 +34,7 @@ const channelsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> 
   sfSymbol: "tray",
 });
 const applicationsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
-  sfSymbol: "app",
+  sfSymbol: "globe",
 });
 
 export default function TabsLayout() {

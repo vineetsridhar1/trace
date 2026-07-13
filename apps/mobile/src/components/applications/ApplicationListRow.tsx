@@ -84,7 +84,7 @@ export const ApplicationListRow = memo(function ApplicationListRow({
           ]}
         >
           <SymbolView
-            name="app.fill"
+            name="globe"
             size={19}
             tintColor={iconColor}
             resizeMode="scaleAspectFit"
