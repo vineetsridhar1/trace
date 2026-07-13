@@ -14,6 +14,7 @@ import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { WEBHOOK_REPO_REMOTE_REQUIRED, hasRepoRemote } from "../../lib/repo-capabilities";
 import { isLocalMode } from "../../lib/runtime-mode";
 import { RepoApplicationsSection } from "./repo-applications/RepoApplicationsSection";
+import { LinkRepoDialog } from "./LinkRepoDialog";
 
 const isElectron = typeof window.trace?.getRepoConfig === "function";
 const LOCAL_MODE_WEBHOOK_DISABLED = "Local mode does not support GitHub webhooks.";
@@ -104,6 +105,7 @@ export function RepoCard({
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {remoteUrl ?? "No remote configured"}
           </p>
+          {!hasRepoRemote({ remoteUrl }) && <LinkRepoDialog repoId={id} />}
           <div className="mt-1 flex items-center gap-1.5">
             {editing ? (
               <div className="flex items-center gap-1.5">

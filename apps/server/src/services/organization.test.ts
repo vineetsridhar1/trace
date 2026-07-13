@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CreateRepoInput } from "@trace/gql";
+import type { CreateRepoInput, UpdateRepoInput } from "@trace/gql";
 
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
@@ -322,6 +322,105 @@ describe("OrganizationService", () => {
     await expect(
       service.linkEntityToProject("chat", "chat-1", "project-1", "user", "user-1"),
     ).rejects.toThrow("Chats cannot be linked to projects");
+  });
+
+  it("associates a remote URL with an existing local repo and emits the full repo", async () => {
+    prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({
+      id: "repo-1",
+      name: "local-only",
+      remoteUrl: null,
+      setupConfig: {},
+    });
+    prismaMock.repo.findUnique.mockResolvedValueOnce(null);
+    prismaMock.repo.update.mockResolvedValueOnce({
+      id: "repo-1",
+      organizationId: "org-1",
+      name: "local-only",
+      provider: "github",
+      remoteUrl: "https://github.com/acme/local-only.git",
+      defaultBranch: "main",
+      webhookId: null,
+      setupConfig: {},
+      projects: [],
+      sessions: [],
+    });
+
+    const service = new OrganizationService();
+    await service.updateRepo(
+      "repo-1",
+      "org-1",
+      { remoteUrl: "  https://github.com/acme/local-only.git  " } as UpdateRepoInput,
+      "user",
+      "user-1",
+    );
+
+    expect(prismaMock.repo.update).toHaveBeenCalledWith({
+      where: { id: "repo-1" },
+      data: { remoteUrl: "https://github.com/acme/local-only.git" },
+      include: { projects: true, sessions: true },
+    });
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        scopeType: "system",
+        scopeId: "repo-1",
+        eventType: "repo_updated",
+        payload: expect.objectContaining({
+          repo: expect.objectContaining({
+            id: "repo-1",
+            remoteUrl: "https://github.com/acme/local-only.git",
+          }),
+        }),
+      }),
+      prismaMock,
+    );
+  });
+
+  it("rejects associating a remote URL already used by another repo", async () => {
+    prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({
+      id: "repo-1",
+      name: "local-only",
+      remoteUrl: null,
+      setupConfig: {},
+    });
+    prismaMock.repo.findUnique.mockResolvedValueOnce({ id: "repo-2" });
+
+    const service = new OrganizationService();
+    await expect(
+      service.updateRepo(
+        "repo-1",
+        "org-1",
+        { remoteUrl: "https://github.com/acme/trace.git" } as UpdateRepoInput,
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("This remote URL is already connected to another repo.");
+
+    expect(prismaMock.repo.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
+  it("does not replace an existing repo remote URL", async () => {
+    prismaMock.repo.findFirstOrThrow.mockResolvedValueOnce({
+      id: "repo-1",
+      name: "trace",
+      remoteUrl: "https://github.com/acme/trace.git",
+      setupConfig: {},
+    });
+
+    const service = new OrganizationService();
+    await expect(
+      service.updateRepo(
+        "repo-1",
+        "org-1",
+        { remoteUrl: "https://github.com/acme/other.git" } as UpdateRepoInput,
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("This repo already has a remote URL.");
+
+    expect(prismaMock.repo.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.repo.update).not.toHaveBeenCalled();
   });
 
   it("requires project repos to belong to the project organization", async () => {

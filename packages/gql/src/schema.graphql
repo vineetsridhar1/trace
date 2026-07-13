@@ -1259,6 +1259,8 @@ input CreateRepoInput {
 
 input UpdateRepoInput {
   name: String
+  """Associate a remote URL with a repo that does not have one yet."""
+  remoteUrl: String
   defaultBranch: String
   applicationConfig: RepoApplicationConfigInput
   """

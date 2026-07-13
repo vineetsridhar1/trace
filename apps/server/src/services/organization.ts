@@ -222,6 +222,29 @@ export class OrganizationService {
         select: { id: true, name: true, remoteUrl: true, setupConfig: true },
       });
 
+      const remoteUrl = input.remoteUrl?.trim();
+      if (input.remoteUrl != null) {
+        if (!remoteUrl) {
+          throw new ValidationError("Remote URL cannot be empty.");
+        }
+        if (existing.remoteUrl && existing.remoteUrl !== remoteUrl) {
+          throw new ValidationError("This repo already has a remote URL.");
+        }
+
+        const repoWithRemote = await tx.repo.findUnique({
+          where: {
+            organizationId_remoteUrl: {
+              organizationId,
+              remoteUrl,
+            },
+          },
+          select: { id: true },
+        });
+        if (repoWithRemote && repoWithRemote.id !== id) {
+          throw new ValidationError("This remote URL is already connected to another repo.");
+        }
+      }
+
       if (input.applicationConfig != null && repoApplicationConfigService.isHardcoded(existing)) {
         throw new ValidationError(
           "This repo's application config is managed by the internal fork and cannot be edited.",
@@ -246,6 +269,7 @@ export class OrganizationService {
         where: { id },
         data: {
           ...(input.name != null && { name: input.name }),
+          ...(remoteUrl != null && { remoteUrl }),
           ...(input.defaultBranch != null && { defaultBranch: input.defaultBranch }),
           ...(setupConfig !== undefined && { setupConfig }),
         },

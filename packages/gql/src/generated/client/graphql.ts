@@ -2415,6 +2415,8 @@ export type UpdateRepoInput = {
   applicationConfig?: InputMaybe<RepoApplicationConfigInput>;
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
+  /** Associate a remote URL with a repo that does not have one yet. */
+  remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
   /**
    * Named launcher runtime profile for cloud sessions on this repo (e.g. a
    * larger image/resources preset). Empty string clears the profile.
