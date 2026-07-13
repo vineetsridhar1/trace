@@ -7519,6 +7519,104 @@ describe("SessionService", () => {
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
     });
+
+    it("does not reap a runtime that is still starting up (retry race)", async () => {
+      // Regression: a manual retry/resume provisions a fresh container without
+      // posting a message, so a group already past the idle cutoff still looks
+      // idle. Without the in-flight guard the next sweep reaps the container
+      // mid-boot, its bridge never connects, and the resume fails with a bridge
+      // timeout — retry can never win. Startup states must be skipped.
+      const provisioningConnection = {
+        state: "provisioning",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-1",
+        providerRuntimeId: "provider-runtime-1",
+        requestedAt: "2026-05-12T11:44:59.000Z",
+        provisioningAt: "2026-05-12T11:45:00.000Z",
+        canRetry: true,
+        canMove: true,
+        version: 2,
+      };
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:00:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection: provisioningConnection,
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:00:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T11:00:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:45:00.000Z"),
+              connection: provisioningConnection,
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:01.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
+
+    it("does not reap a runtime that connected within the idle window", async () => {
+      // The window after the bridge attaches but before the first message
+      // lands: activity timestamps are still stale, but the runtime is live.
+      const connectedConnection = {
+        state: "connected",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-1",
+        providerRuntimeId: "provider-runtime-1",
+        requestedAt: "2026-05-12T11:44:50.000Z",
+        connectedAt: "2026-05-12T11:44:58.000Z",
+        canRetry: true,
+        canMove: true,
+        version: 3,
+      };
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:00:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection: connectedConnection,
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:00:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T11:00:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:45:00.000Z"),
+              connection: connectedConnection,
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:01.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
   });
 
   describe("archiveGroup", () => {

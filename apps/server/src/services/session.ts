@@ -446,6 +446,31 @@ function isRuntimeComputeGone(conn: SessionConnectionData): boolean {
   return conn.state === "disconnected" && conn.deprovisionedAt != null;
 }
 
+/**
+ * True when a runtime is still coming up (or connected within the idle window)
+ * and must not be reaped by the idle sweep.
+ *
+ * The sweep judges idleness from conversation activity (lastMessageAt etc.),
+ * but a manual retry/resume provisions a fresh container without posting a
+ * message, so a group that was already past the idle cutoff still looks idle.
+ * Without this guard the next 60s sweep reaps the just-provisioned container
+ * mid-boot; its bridge never connects, `waitForBridge` times out, and the
+ * resume fails — retry can never win against the sweep. Startup states
+ * (requested/provisioning/booting/connecting) are always protected, as is a
+ * runtime that *connected* more recently than `idleAfterMs` ago (covers the
+ * brief window after the bridge attaches but before the first message lands).
+ * A runtime connected longer ago than the idle window is genuinely idle and is
+ * still reaped. `failed`/`timed_out` are intentionally NOT protected — a start
+ * that failed may have leaked provider compute the sweep should still reclaim.
+ */
+function isRuntimeStartInFlight(conn: SessionConnectionData, cutoff: Date): boolean {
+  if (isRuntimeStartupState(conn.state)) return true;
+  if (conn.state !== "connected") return false;
+  const connectedAt =
+    conn.connectedAt ?? conn.connectingAt ?? conn.provisioningAt ?? conn.requestedAt;
+  return connectedAt != null && new Date(connectedAt) > cutoff;
+}
+
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
   if (sessionStatus === "merged") return "merged";
   return sessionStatus === "in_review" ? "in_review" : "in_progress";
@@ -9675,6 +9700,12 @@ export class SessionService {
       // groups cost no extra query; the same predicate is re-checked
       // race-safely inside the conditional update below.
       if (isRuntimeComputeGone(this.parseConnection(cloudSession.connection))) continue;
+
+      // Don't reap a runtime that's still starting up (or just connected): a
+      // manual retry provisions a fresh container without posting a message,
+      // so the activity check above still sees the group as idle. Reaping it
+      // mid-boot is the "retry spins, then the same banner returns" bug.
+      if (isRuntimeStartInFlight(this.parseConnection(cloudSession.connection), cutoff)) continue;
 
       const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(
         group,
