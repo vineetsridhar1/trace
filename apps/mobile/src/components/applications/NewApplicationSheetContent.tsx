@@ -20,12 +20,10 @@ export function NewApplicationSheetContent() {
   return (
     <View style={styles.content}>
       <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text variant="title2">Build an application</Text>
-          <Text variant="footnote" color="mutedForeground">
-            Describe what you want. Trace will create a cloud app and open its live preview.
-          </Text>
-        </View>
+        <Text variant="title2">Build an application</Text>
+        <Text variant="footnote" color="mutedForeground">
+          Describe what you want. Trace will create a cloud app and open its live preview.
+        </Text>
       </View>
 
       <Glass
@@ -90,9 +88,6 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "flex-start",
-  },
-  headerText: {
-    flex: 1,
     gap: 3,
   },
   inputGlass: {
