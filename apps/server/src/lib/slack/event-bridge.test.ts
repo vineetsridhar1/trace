@@ -103,6 +103,19 @@ function makeSlackUserEvent(text: string): PrismaEvent {
   } as unknown as PrismaEvent;
 }
 
+function makeEndpointEvent(): PrismaEvent {
+  return {
+    eventType: "session_endpoint_forwarding_enabled",
+    actorType: "system",
+    payload: {
+      endpoint: {
+        label: "App preview",
+        url: "https://app.example.test",
+      },
+    },
+  } as unknown as PrismaEvent;
+}
+
 async function waitForBridge(): Promise<void> {
   await new Promise<void>((resolve) => setImmediate(resolve));
   await new Promise<void>((resolve) => setImmediate(resolve));
@@ -120,6 +133,7 @@ describe("SlackEventBridgeManager", () => {
 
   afterEach(() => {
     slackEventBridge.detach("session-1");
+    slackEventBridge.detachGroup("group-1");
   });
 
   it("starts a new assistant Slack message block after a Slack user message", async () => {
@@ -157,6 +171,25 @@ describe("SlackEventBridgeManager", () => {
     expect(slackMocks.update).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ ts: "1710000000.000300", text: "Final new answer" }),
+    );
+  });
+
+  it("posts the first live application endpoint from group events", async () => {
+    slackEventBridge.attachGroup("group-1", {
+      slackTeamId: "T1",
+      slackChannelId: "C1",
+      slackThreadTs: "1710000000.000100",
+    });
+
+    eventSource.push({ sessionEvents: makeEndpointEvent() });
+    await waitForBridge();
+
+    expect(slackMocks.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "C1",
+        thread_ts: "1710000000.000100",
+        text: "🔗 *App preview* is live: <https://app.example.test|open>",
+      }),
     );
   });
 });
