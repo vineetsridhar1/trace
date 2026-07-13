@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, TextInput, View } from "react-native";
-import { SymbolView } from "expo-symbols";
 import { Button, Glass, Text } from "@/components/design-system";
 import { createApplication } from "@/lib/createQuickSession";
 import { alpha, useTheme } from "@/theme";
@@ -21,22 +20,6 @@ export function NewApplicationSheetContent() {
   return (
     <View style={styles.content}>
       <View style={styles.header}>
-        <View
-          style={[
-            styles.iconShell,
-            {
-              backgroundColor: alpha(theme.colors.accent, 0.12),
-              borderRadius: theme.radius.lg,
-            },
-          ]}
-        >
-          <SymbolView
-            name="globe"
-            size={24}
-            tintColor={theme.colors.accent}
-            resizeMode="scaleAspectFit"
-          />
-        </View>
         <View style={styles.headerText}>
           <Text variant="title2">Build an application</Text>
           <Text variant="footnote" color="mutedForeground">
@@ -106,15 +89,7 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  iconShell: {
-    width: 48,
-    height: 48,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "flex-start",
   },
   headerText: {
     flex: 1,
