@@ -37,8 +37,8 @@ eas login
 Publish JavaScript, styling, and asset changes from the repository root:
 
 ```bash
-pnpm --filter @trace/mobile update:preview -- --message "Describe the update"
-pnpm --filter @trace/mobile update:production -- --message "Describe the update"
+pnpm --filter @trace/mobile update:preview --message "Describe the update"
+pnpm --filter @trace/mobile update:production --message "Describe the update"
 ```
 
 Only builds created from the matching EAS build profile receive an update. Build and install a new binary before the first update, or whenever native dependencies, Expo config, permissions, or the runtime fingerprint change:
