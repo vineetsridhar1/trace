@@ -208,6 +208,56 @@ describe("createQuickSession", () => {
   });
 });
 
+describe("createApplication", () => {
+  beforeEach(() => {
+    replaceMock.mockReset();
+    pushMock.mockReset();
+    alertMock.mockReset();
+    mutationMock.mockReset();
+    fetchSessionGroupDetailMock.mockReset();
+    setOverlaySessionIdMock.mockReset();
+    lightMock.mockReset();
+    errorMock.mockReset();
+  });
+
+  it("creates a cloud app session and opens it", async () => {
+    mutationMock.mockReturnValue({
+      toPromise: async () => ({
+        data: { startSession: { id: "session_app", sessionGroupId: "group_app" } },
+      }),
+    });
+    fetchSessionGroupDetailMock.mockResolvedValue({ ok: true, error: null });
+
+    const { createApplication } = await import("./createQuickSession");
+    const created = await createApplication("  Build a launch tracker  ");
+
+    expect(created).toBe(true);
+    expect(mutationMock).toHaveBeenCalledWith(START_SESSION_MUTATION, {
+      input: {
+        kind: "app",
+        hosting: "cloud",
+        prompt: "Build a launch tracker",
+      },
+    });
+    expect(setOverlaySessionIdMock).toHaveBeenCalledWith("session_app");
+    expect(replaceMock).toHaveBeenCalledWith("/sessions/group_app/session_app");
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the creation sheet open when creation fails", async () => {
+    mutationMock.mockReturnValue({
+      toPromise: async () => ({ error: new Error("cloud unavailable") }),
+    });
+
+    const { createApplication } = await import("./createQuickSession");
+    const created = await createApplication("Build a launch tracker");
+
+    expect(created).toBe(false);
+    expect(replaceMock).not.toHaveBeenCalled();
+    expect(alertMock).toHaveBeenCalledWith("Couldn't build application", "cloud unavailable");
+  });
+});
+
 describe("startPlanImplementationSession", () => {
   beforeEach(() => {
     replaceMock.mockReset();

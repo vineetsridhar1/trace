@@ -75,6 +75,7 @@ const MY_SESSIONS_QUERY = gql`
       sessionGroup {
         id
         name
+        kind
         slug
         status
         branch

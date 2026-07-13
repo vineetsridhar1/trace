@@ -1,0 +1,48 @@
+import { Stack, useRouter } from "expo-router";
+import { useAuthStore, type AuthState } from "@trace/client-core";
+import { TopBarPill } from "@/components/navigation/TopBarPill";
+
+export default function ApplicationsLayout() {
+  const user = useAuthStore((s: AuthState) => s.user);
+  const router = useRouter();
+
+  return (
+    <Stack
+      screenOptions={{
+        headerTintColor: "white",
+        headerTitleStyle: { color: "white" },
+        headerLargeTitleStyle: { color: "white" },
+      }}
+    >
+      <Stack.Screen
+        name="index"
+        options={{
+          title: "Applications",
+          headerLargeTitle: true,
+          headerRight: () => (
+            <TopBarPill
+              actions={[
+                {
+                  id: "new-application",
+                  accessibilityLabel: "Build a new application",
+                  symbol: "plus",
+                  onPress: () => router.push("/sheets/new-application"),
+                },
+              ]}
+              avatar={
+                user
+                  ? {
+                      name: user.name ?? user.email ?? "?",
+                      uri: user.avatarUrl,
+                      accessibilityLabel: "Account",
+                      onPress: () => router.push("/sheets/account"),
+                    }
+                  : undefined
+              }
+            />
+          ),
+        }}
+      />
+    </Stack>
+  );
+}
