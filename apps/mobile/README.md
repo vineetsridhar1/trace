@@ -25,6 +25,32 @@ pnpm dev:server                         # in repo root
 EXPO_PUBLIC_API_URL=http://<lan-ip>:4000 EXPO_PUBLIC_EAS_PROJECT_ID=<eas-project-id> pnpm --filter @trace/mobile start
 ```
 
+## Over-the-air updates
+
+EAS Update is configured with fingerprint runtime versioning and separate `preview` and `production` channels. Install and authenticate the EAS CLI before publishing:
+
+```bash
+npm install --global eas-cli
+eas login
+```
+
+Publish JavaScript, styling, and asset changes from the repository root:
+
+```bash
+pnpm --filter @trace/mobile update:preview -- --message "Describe the update"
+pnpm --filter @trace/mobile update:production -- --message "Describe the update"
+```
+
+Only builds created from the matching EAS build profile receive an update. Build and install a new binary before the first update, or whenever native dependencies, Expo config, permissions, or the runtime fingerprint change:
+
+```bash
+cd apps/mobile
+eas build --profile preview --platform all
+eas build --profile production --platform all
+```
+
+Production OTA updates should be tested on the `preview` channel first. Updates are downloaded asynchronously on cold launch by default and run on a subsequent restart.
+
 ## Typecheck
 
 ```bash

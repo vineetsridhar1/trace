@@ -9,6 +9,8 @@
     "android": "expo run:android",
     "build": "tsc -b",
     "lint": "tsc -b",
+    "update:preview": "eas update --channel preview",
+    "update:production": "eas update --channel production",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
