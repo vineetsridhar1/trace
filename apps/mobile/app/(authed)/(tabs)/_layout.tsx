@@ -33,8 +33,8 @@ const homeIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = ()
 const channelsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
   sfSymbol: "tray",
 });
-const connectionsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
-  sfSymbol: "laptopcomputer.and.iphone",
+const applicationsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
+  sfSymbol: "globe",
 });
 
 export default function TabsLayout() {
@@ -43,7 +43,7 @@ export default function TabsLayout() {
   return (
     <NativeTabs
       // Pin Home as the default tab. expo-router picks the alphabetically
-      // first route otherwise, and `(connections)` sorts before `(home)`.
+      // first route otherwise, and `(applications)` sorts before `(home)`.
       initialRouteName="(home)"
       minimizeBehavior="onScrollDown"
     >
@@ -60,9 +60,10 @@ export default function TabsLayout() {
         options={{ title: "Channels", tabBarIcon: channelsIcon }}
       />
       <NativeTabs.Screen
-        name="(connections)"
-        options={{ title: "Connections", tabBarIcon: connectionsIcon }}
+        name="(applications)"
+        options={{ title: "Applications", tabBarIcon: applicationsIcon }}
       />
+      <NativeTabs.Screen name="(connections)" options={{ tabBarItemHidden: true }} />
     </NativeTabs>
   );
 }

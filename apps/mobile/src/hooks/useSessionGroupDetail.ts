@@ -12,6 +12,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
     sessionGroup(id: $id) {
       id
       name
+      kind
       slug
       status
       visibility

@@ -97,6 +97,8 @@ export async function buildTraceSessionLink(sessionId: string): Promise<string |
 class SlackEventBridgeManager {
   private active = new Map<string, ThreadBinding>();
   private cancellers = new Map<string, () => void>();
+  private activeGroups = new Map<string, ThreadBinding>();
+  private groupCancellers = new Map<string, () => void>();
 
   attach(sessionId: string, binding: ThreadBinding): void {
     if (this.active.has(sessionId)) return;
@@ -143,6 +145,59 @@ class SlackEventBridgeManager {
 
   isAttached(sessionId: string): boolean {
     return this.active.has(sessionId);
+  }
+
+  attachGroup(sessionGroupId: string, binding: ThreadBinding): void {
+    if (this.activeGroups.has(sessionGroupId)) return;
+    this.activeGroups.set(sessionGroupId, binding);
+
+    const iterator = pubsub.asyncIterator<EventEnvelope>(topics.sessionEvents(sessionGroupId));
+    let cancelled = false;
+    const cancel = () => {
+      if (cancelled) return;
+      cancelled = true;
+      iterator.return?.().catch(() => {});
+    };
+    this.groupCancellers.set(sessionGroupId, cancel);
+
+    void (async () => {
+      try {
+        for await (const envelope of iterator) {
+          if (cancelled) break;
+          const event = envelope?.sessionEvents;
+          if (!event) continue;
+          const posted = await this.handleGroupEvent(event, binding);
+          if (posted) {
+            this.detachGroup(sessionGroupId);
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(
+          `[slack-bridge] group iterator error for ${sessionGroupId}:`,
+          (err as Error).message,
+        );
+        this.detachGroup(sessionGroupId);
+      }
+    })();
+  }
+
+  detachGroup(sessionGroupId: string): void {
+    const canceller = this.groupCancellers.get(sessionGroupId);
+    this.groupCancellers.delete(sessionGroupId);
+    this.activeGroups.delete(sessionGroupId);
+    if (canceller) canceller();
+  }
+
+  private async handleGroupEvent(event: PrismaEvent, binding: ThreadBinding): Promise<boolean> {
+    if (event.eventType !== "session_endpoint_forwarding_enabled") return false;
+    const payload = getObject(event.payload);
+    const endpoint = getObject(payload?.endpoint);
+    const url = typeof endpoint?.url === "string" ? endpoint.url : null;
+    if (!url) return false;
+    const label = typeof endpoint?.label === "string" ? endpoint.label : "Application";
+    await this.post(binding, `🔗 *${label}* is live: <${url}|open>`);
+    return true;
   }
 
   private async handleEvent(
