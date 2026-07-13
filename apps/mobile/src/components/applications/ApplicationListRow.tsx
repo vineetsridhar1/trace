@@ -57,7 +57,6 @@ export const ApplicationListRow = memo(function ApplicationListRow({
 
   const subtitle = appSessionSubtitle({ agentStatus, preview, status });
   const timestamp = lastMessageAt ?? sessionUpdatedAt ?? groupUpdatedAt;
-  const iconColor = applicationIconColor({ agentStatus, status, theme });
 
   return (
     <ContextMenu actions={menu.actions} onPress={menu.onPress} preview={null}>
@@ -69,28 +68,11 @@ export const ApplicationListRow = memo(function ApplicationListRow({
         style={({ pressed }) => [
           styles.row,
           {
-            backgroundColor: pressed ? alpha(iconColor, 0.08) : "transparent",
+            backgroundColor: pressed ? alpha(theme.colors.accent, 0.08) : "transparent",
             paddingHorizontal: theme.spacing.md,
           },
         ]}
       >
-        <View
-          style={[
-            styles.iconShell,
-            {
-              backgroundColor: alpha(iconColor, 0.12),
-              borderRadius: theme.radius.md,
-            },
-          ]}
-        >
-          <SymbolView
-            name="globe"
-            size={19}
-            tintColor={iconColor}
-            resizeMode="scaleAspectFit"
-            style={styles.icon}
-          />
-        </View>
         <View style={styles.text}>
           <Text variant="body" color="foreground" numberOfLines={1} style={styles.name}>
             {name}
@@ -116,38 +98,12 @@ export const ApplicationListRow = memo(function ApplicationListRow({
   );
 });
 
-function applicationIconColor({
-  agentStatus,
-  status,
-  theme,
-}: {
-  agentStatus: string | null | undefined;
-  status: string | null | undefined;
-  theme: ReturnType<typeof useTheme>;
-}): string {
-  if (status === "needs_input") return theme.colors.warning;
-  if (status === "failed" || agentStatus === "failed") return theme.colors.destructive;
-  if (agentStatus === "active") return theme.colors.accent;
-  if (status === "stopped" || agentStatus === "stopped") return theme.colors.mutedForeground;
-  return theme.colors.success;
-}
-
 const styles = StyleSheet.create({
   row: {
     minHeight: 64,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-  },
-  iconShell: {
-    width: 38,
-    height: 38,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  icon: {
-    width: 19,
-    height: 19,
   },
   text: {
     flex: 1,
