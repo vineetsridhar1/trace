@@ -13,6 +13,7 @@ import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/mar
 import { TraceLoader } from "../ui/trace-loader";
 import { PromptTimeline } from "./PromptTimeline";
 import type { SessionPromptIndexItem } from "../../hooks/useSessionPromptIndex";
+import { shouldFollowBottom } from "./sessionAutoScroll";
 
 export type SessionListNode =
   | SessionNode
@@ -110,6 +111,7 @@ export function SessionMessageList({
   const wasLoadingOlderRef = useRef(false);
   const scrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const isNearBottomRef = useRef(true);
+  const previousScrollTopRef = useRef(0);
   const hasScrolledInitiallyRef = useRef(false);
   const pendingTimelineAnchorRef = useRef<string | null>(null);
   const currentIndexFrameRef = useRef<number | null>(null);
@@ -167,7 +169,13 @@ export function SessionMessageList({
     if (!container) return;
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
-    isNearBottomRef.current = distanceFromBottom < 100;
+    isNearBottomRef.current = shouldFollowBottom({
+      wasFollowing: isNearBottomRef.current,
+      previousScrollTop: previousScrollTopRef.current,
+      scrollTop: container.scrollTop,
+      distanceFromBottom,
+    });
+    previousScrollTopRef.current = container.scrollTop;
 
     if (currentIndexFrameRef.current == null) {
       currentIndexFrameRef.current = requestAnimationFrame(() => {
