@@ -1,0 +1,387 @@
+# Design Sessions v1
+
+Status: product and implementation specification (2026-07-14).
+
+This document defines the first shippable version of Trace Design. It intentionally
+narrows the broader vision in `docs/design-app-sessions-master-plan.md`. Where the two
+documents conflict for v1, this document controls.
+
+## Goal
+
+Let a user describe a product interface in chat and watch an agent build and continuously
+update a multi-screen React design on one live canvas.
+
+Design v1 should reuse the existing App session path wherever possible. It is not a new
+artifact platform, a Figma replacement, or a collection of independent preview runtimes.
+It is one specialized React app whose output is a canvas containing many logical screens.
+
+## Product Definition
+
+Design answers: **“What should this look like across variations, states, and viewports?”**
+
+A design session has:
+
+- the existing Trace chat on the left
+- one live React preview on the right
+- one AI-controlled canvas inside that preview
+- any number of logical screens on the canvas
+- one hidden managed repo and one provisioned workspace
+- live updates through the same dev-server and preview flow as App sessions
+
+The agent is the canvas operator. The user directs the work through normal chat, answers
+questions in the existing chat UI, and chooses which directions to keep developing.
+
+## V1 Decisions
+
+- **Reuse the App session runtime.** A design session provisions the existing cloud
+  workspace, managed repo, process, endpoint, and preview infrastructure.
+- **Use React.** The design starter is a Vite + React + TypeScript + Tailwind project.
+- **Render one canvas in one preview.** All screens share one React tree, dev server,
+  endpoint, and sandboxed iframe.
+- **Keep screens logically independent.** Every screen has a stable id, metadata, and a
+  separate React component even though screens do not have separate browser runtimes.
+- **Let the AI control the screen set.** The agent may add, remove, rename, regroup,
+  reorder, and edit screens by changing source files and `design.canvas.json`.
+- **Use the existing chat question flow.** V1 adds no canvas-specific question entity or
+  question UI.
+- **Use hot reload for visible progress.** The preview updates as the agent edits files;
+  Trace does not wait for the entire requested batch to finish.
+- **Do not add design comments in v1.** There are no pins, anchored comments, or
+  “send to agent” comment actions.
+- **Do not add per-screen artifact entities in v1.** Git is the durable source of truth,
+  and `design.canvas.json` is the authoritative screen index.
+
+## User Experience
+
+### Creating a Design
+
+The user chooses **New design** and enters an initial prompt, for example:
+
+> Design four dashboard variations. Show default, loading, and error states for each.
+
+Trace creates a `design` session group without asking for a repository, stack, runtime,
+or hosting choice. It provisions the design starter through the same path used by an App
+session and opens the session immediately.
+
+The initial layout is:
+
+```text
++----------------------+--------------------------------------------+
+| Chat                 | Live design canvas                         |
+|                      |                                            |
+| User prompt          | Variation A  [default] [loading] [error]   |
+| Agent progress       | Variation B  [default] [loading] [error]   |
+| Questions            | Variation C  [default] [loading] [error]   |
+| Follow-up prompts    | Variation D  [default] [loading] [error]   |
++----------------------+--------------------------------------------+
+```
+
+The global sidebar may collapse when the design opens, but it remains user-controllable.
+Repo selection and app-specific database/runtime controls are not part of the primary
+design UI. Logs may remain available as a diagnostic surface rather than a main tab.
+
+### AI Control of the Canvas
+
+The agent controls both screen contents and canvas composition. It can:
+
+- create several variations from one brief
+- create multiple states or viewports for every variation
+- add and remove screens
+- rename and reorder screens
+- group screens into sections
+- update one screen without rewriting the others
+- apply a requested change across a selected logical group
+- reorganize the canvas as the design develops
+
+For the example prompt, the agent creates twelve logical screens:
+
+```text
+4 variations x 3 states = 12 screens
+```
+
+A follow-up such as “add an empty state to every variation” adds four components and
+updates the manifest, producing sixteen screens. A follow-up such as “keep B and D, remove
+the others, and add mobile versions” changes the screen set and canvas organization in
+place.
+
+V1 does not require direct manipulation tools for users. The user controls the result
+through chat; pan, zoom, fit, and focus controls are provided by the design canvas runtime.
+
+### Questions
+
+Questions use the existing agent question flow in chat. For example:
+
+> Which direction should I develop further?
+>
+> 1. Variation A — minimal
+> 2. Variation B — information dense
+> 3. Variation C — guided
+> 4. Continue all three
+
+While the agent is waiting:
+
+- the session uses the existing `needs_input` behavior
+- the canvas remains visible and interactive
+- completed work remains available
+- answering in chat resumes the same agent session
+
+V1 does not highlight question targets on the canvas or create an “Action needed” canvas
+entity. The agent should refer to stable, visible screen names in its question.
+
+### Live Updates
+
+The canvas should look active because real file changes appear continuously:
+
+- the starter preview becomes available as soon as its dev server is ready
+- sections and screens appear as the agent adds them
+- edits flow through Vite hot module replacement
+- changing one screen component updates that artboard without navigating the parent Trace
+  page or creating a new preview
+- adding or removing manifest entries updates the canvas organization
+- session output in chat describes current work and failures
+
+Trace must not simulate progress. Visible changes correspond to actual source edits,
+manifest edits, build state, or runtime state.
+
+Generated source may be temporarily invalid during an edit. Vite's error overlay can
+report compile failures while preserving the last rendered page where possible. Each
+artboard must also have a React error boundary so a runtime error in one screen does not
+remove successful sibling screens. The preview recovers automatically after the agent
+fixes the source.
+
+### Refresh and Recovery
+
+Reloading Trace should reopen the same design session and preview. The current workspace
+continues running when available. If the provisioned workspace is recreated, it restores
+from the managed repo using the existing session provisioning and checkpoint paths.
+
+The user should never need to understand or select the hidden repo.
+
+## Runtime and Repository Model
+
+Design v1 uses the same basic execution model as App sessions:
+
+```text
+Design session
+    -> provisioned workspace
+    -> hidden managed Git repo
+    -> Vite/React design starter
+    -> managed dev-server process
+    -> one private preview endpoint
+    -> one iframe in Trace
+```
+
+Differences from an App session:
+
+- the starter is a design canvas rather than a full-stack application
+- the system prompt tells the agent to produce visual screens, not a standalone product
+- the primary output is the canvas and its screen source
+- database, Redis, API routes, and backend behavior are not part of the default brief
+- the main UI emphasizes chat and preview rather than terminal, logs, and processes
+
+Do not create a second design-specific provisioning system. Extend the existing services
+to accept both `app` and `design` where they manage the shared runtime mechanics. Keep
+kind-specific validation, starter selection, agent instructions, and UI composition at
+explicit seams.
+
+## Design Starter
+
+The starter should contain a stable canvas runtime and an agent-owned design directory:
+
+```text
+src/
+  App.tsx                         # stable canvas entry point
+  design/
+    screens/                     # one component per logical screen
+      variation-a-default.tsx
+      variation-a-loading.tsx
+      variation-a-error.tsx
+    styles.css                   # design tokens and shared design styles
+design.canvas.json               # authoritative canvas and screen metadata
+```
+
+The stable runtime owns:
+
+- pan, zoom, fit, and focus behavior
+- section and artboard layout
+- loading and empty states
+- per-artboard error boundaries
+- resolving manifest component paths through a fixed `import.meta.glob` contract
+- displaying screen labels and viewport frames
+
+The agent owns:
+
+- files under `src/design/screens/`
+- shared design styles and tokens
+- section and screen entries in `design.canvas.json`
+
+The agent should not replace the canvas runtime unless the user explicitly asks to change
+the design tool itself.
+
+## Canvas Manifest
+
+`design.canvas.json` is the authoritative logical screen index. The UI must not infer the
+screen set by parsing JSX.
+
+V1 needs this minimum shape:
+
+```json
+{
+  "version": 1,
+  "sections": [
+    {
+      "id": "variation-a",
+      "title": "Variation A",
+      "description": "Minimal, task-focused direction",
+      "screenIds": ["variation-a-default", "variation-a-loading"]
+    }
+  ],
+  "screens": [
+    {
+      "id": "variation-a-default",
+      "title": "Default",
+      "variation": "variation-a",
+      "state": "default",
+      "viewport": { "name": "desktop", "width": 1440, "height": 1000 },
+      "component": "./src/design/screens/variation-a-default.tsx"
+    }
+  ]
+}
+```
+
+Requirements:
+
+- ids are stable across edits and unique within the design session
+- section `screenIds` must resolve to screen records
+- component paths must stay inside the agent-owned screen directory
+- every screen component must exist
+- removed screens are removed from section membership and the screen index
+- ordering in the manifest controls ordering on the canvas
+- variation, state, and viewport are structured fields rather than naming conventions
+- unknown manifest versions fail visibly instead of being guessed
+
+The starter validates the manifest at runtime and renders a clear diagnostic on invalid
+entries. Server-side validation can be added when Trace needs to index screens outside the
+running preview; it is not required to create separate screen entities in v1.
+
+## Agent Instructions
+
+Design sessions receive a design-specific instruction overlay. It must tell the agent to:
+
+- build visual product designs, not a full-stack app
+- use the provided React design starter and preserve its canvas runtime
+- create one component per logical screen
+- use stable, descriptive screen ids
+- keep `design.canvas.json` consistent with component files
+- represent variation, state, and viewport explicitly
+- use semantic Tailwind and shadcn-compatible patterns where appropriate
+- include meaningful default, loading, empty, error, and success states when relevant
+- make narrow edits for follow-up requests
+- let the existing dev server hot-reload changes; never start a second server
+- ask blocking product questions through the existing chat question mechanism
+- commit and push meaningful checkpoints to the managed repo
+
+The agent may decide how many screens are needed unless the user specifies an exact count.
+It should explain important assumptions in chat and ask only when a decision materially
+changes the result.
+
+## Service and UI Reuse
+
+### Reuse Without Forking
+
+The implementation should reuse:
+
+- `startSession` and `SessionGroup.kind`
+- cloud environment provisioning
+- managed repo creation and authentication
+- bridge workspace setup
+- pending initial prompt delivery
+- coding-tool execution and streaming
+- session questions and `needs_input`
+- process supervision and port detection
+- private endpoint creation and preview authorization
+- App preview loading and error states
+- checkpoint, restore, and workspace recovery paths
+
+### Design-Specific Behavior
+
+The implementation adds:
+
+- a **New design** entry point and Designs sidebar section
+- design-kind validation: initial prompt required, no user repo, cloud hosting
+- design starter selection
+- the design-specific agent instruction overlay
+- a design session layout using existing chat plus one existing preview component
+- the canvas runtime and manifest contract inside the starter
+
+Shared runtime services must not duplicate their business logic for Design. If an existing
+service currently rejects every non-`app` group, broaden the shared mechanical operation
+to `app | design` and keep truly app-specific behavior guarded separately.
+
+## Events and State
+
+V1 does not need events for every screen or artboard. Existing session, message, process,
+endpoint, and checkpoint events remain the source of truth for Trace state. Vite HMR is
+the transport for changes inside the live design preview.
+
+Mutations remain fire-and-forget for shared state. Resolvers remain thin and all session
+creation, provisioning, and checkpoint behavior remains in services.
+
+Later versions may ingest the manifest into event-backed screen entities when Trace needs
+cross-session search, screen-level publishing, comments, or screen-level collaboration.
+
+## Security
+
+The generated design is untrusted user content and must use the same preview isolation and
+authorization boundaries as App sessions. It must not render directly in the Trace app
+origin or receive Trace cookies.
+
+The one-preview decision reduces runtime duplication; it does not weaken the iframe and
+endpoint security boundary.
+
+## V1 Non-Goals
+
+- card-level or element-level comments
+- pins and anchored agent requests
+- separate iframes or endpoints for individual screens
+- database-backed `Artifact`, `CanvasSection`, or `DesignComment` entities
+- direct manipulation of individual screen elements in Trace
+- a no-model token editor
+- per-screen public publishing
+- PDF, standalone HTML, or ZIP export
+- automatic promotion into a coding session
+- serverless in-browser Babel packaging
+- an Open Design daemon or separate design generation service
+
+These can be added after the core chat-to-live-canvas loop proves useful. The manifest and
+stable screen ids preserve a migration path without requiring those systems now.
+
+## Acceptance Criteria
+
+V1 is complete when all of the following are demonstrated:
+
+- A user can create a design session from a prompt without selecting a repo or runtime.
+- Trace provisions exactly one managed repo, workspace, process, endpoint, and preview for
+  the design session.
+- The design starter loads as one React canvas in one iframe.
+- A prompt requesting four variations with three states produces twelve manifest-indexed
+  screens with stable unique ids.
+- The canvas visibly adds screens as the agent creates files and updates the manifest.
+- Asking for an empty state across all four variations adds four screens without creating
+  new preview endpoints or reloading the parent Trace page.
+- Editing one screen updates the running canvas through HMR while sibling screens remain
+  present.
+- A runtime exception in one artboard is contained by that artboard's error boundary.
+- An agent question appears and resolves through the existing chat question flow.
+- Refreshing Trace returns to the same design session and live preview.
+- A checkpoint can restore the design workspace and reproduce the canvas.
+- Existing App and Coding session behavior remains unchanged.
+
+## Suggested Delivery Order
+
+1. Add the design starter and verify its manifest-driven canvas locally.
+2. Allow `design` groups through the shared App provisioning, process, and endpoint path.
+3. Add design-specific validation and agent instructions.
+4. Add New Design and the chat-plus-preview session layout.
+5. Verify live creation, deletion, and updating of multiple screens through HMR.
+6. Add focused service, UI, runtime, and hosted smoke coverage for the acceptance criteria.
