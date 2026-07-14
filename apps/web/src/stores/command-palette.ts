@@ -13,6 +13,8 @@ interface CommandPaletteState {
   /** Whether the "new app session" prompt dialog is open. */
   newAppSessionOpen: boolean;
   setNewAppSessionOpen: (open: boolean) => void;
+  newDesignSessionOpen: boolean;
+  setNewDesignSessionOpen: (open: boolean) => void;
 }
 
 export const useCommandPaletteStore = create<CommandPaletteState>((set) => ({
@@ -28,4 +30,6 @@ export const useCommandPaletteStore = create<CommandPaletteState>((set) => ({
   setShortcutsOpen: (open: boolean) => set({ shortcutsOpen: open }),
   newAppSessionOpen: false,
   setNewAppSessionOpen: (open: boolean) => set({ newAppSessionOpen: open }),
+  newDesignSessionOpen: false,
+  setNewDesignSessionOpen: (open: boolean) => set({ newDesignSessionOpen: open }),
 }));

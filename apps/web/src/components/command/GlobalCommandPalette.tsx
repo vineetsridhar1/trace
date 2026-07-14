@@ -18,6 +18,7 @@ import type { SessionGroupEntity } from "@trace/client-core";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
 import { NewAppSessionDialog } from "./NewAppSessionDialog";
+import { NewDesignSessionDialog } from "./NewDesignSessionDialog";
 import { useUIStore } from "../../stores/ui";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { useCommandPaletteStore } from "../../stores/command-palette";
@@ -74,6 +75,7 @@ export function GlobalCommandPalette() {
         </DialogContent>
       </Dialog>
       <NewAppSessionDialog />
+      <NewDesignSessionDialog />
     </>
   );
 }

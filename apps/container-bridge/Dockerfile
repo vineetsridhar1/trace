@@ -36,6 +36,7 @@ RUN chmod +x /usr/local/bin/trace-entrypoint
 # materializes from a reproducible, lockfile-pinned scaffold rather than a
 # floating-version fallback.
 COPY apps/container-bridge/app-starter/ /opt/trace/app-starter/
+COPY apps/container-bridge/design-starter/ /opt/trace/design-starter/
 
 # Create non-root user — Claude Code refuses --dangerously-skip-permissions as root.
 # Scope sudo to exactly the Postgres bootstrap commands the entrypoint runs. App
@@ -59,6 +60,9 @@ RUN mkdir -p /home/coder/.ssh && chmod 700 /home/coder/.ssh
 # first `pnpm install` in a session hardlinks from cache instead of hitting the
 # registry cold. Keep the store; drop the throwaway node_modules.
 RUN cd /opt/trace/app-starter && \
+    pnpm install --ignore-workspace --frozen-lockfile && \
+    rm -rf node_modules && \
+    cd /opt/trace/design-starter && \
     pnpm install --ignore-workspace --frozen-lockfile && \
     rm -rf node_modules
 

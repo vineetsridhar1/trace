@@ -13,6 +13,7 @@ import { eventService } from "./event.js";
 import { orgSecretService } from "./org-secret.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
 import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
+import { isGeneratedProjectKind } from "../lib/generated-project.js";
 import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
 
 import type { RepoEnvVar } from "@trace/gql";
@@ -267,7 +268,7 @@ export class SessionApplicationService {
       userId,
     );
     const config =
-      group.kind === "app"
+      isGeneratedProjectKind(group.kind)
         ? DEFAULT_APP_SESSION_CONFIG
         : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const script = config.setupScripts.find((candidate) => candidate.id === scriptId);
@@ -1161,7 +1162,7 @@ export class SessionApplicationService {
 
   private getApplication(group: ManagedSessionGroup, appConfigId: string) {
     const config =
-      group.kind === "app"
+      isGeneratedProjectKind(group.kind)
         ? DEFAULT_APP_SESSION_CONFIG
         : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const app = config.applications.find((candidate) => candidate.id === appConfigId);
@@ -1199,7 +1200,7 @@ export class SessionApplicationService {
     if (!options?.asSystem) {
       await this.assertCanManage(group.id, organizationId, userId!, group);
     }
-    if (group.kind !== "app" && (!group.repoId || !group.repo)) {
+    if (!isGeneratedProjectKind(group.kind) && (!group.repoId || !group.repo)) {
       throw new ValidationError("Session group does not have a repo");
     }
     const session = group.sessions.find((candidate) =>

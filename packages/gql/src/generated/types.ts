@@ -1330,6 +1330,8 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  /** Design-kind session groups for the org (the sidebar Designs section). */
+  designSessionGroups: Array<SessionGroup>;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
@@ -1437,6 +1439,10 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryEndpointTrafficArgs = {

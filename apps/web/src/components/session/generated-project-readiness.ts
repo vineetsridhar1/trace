@@ -1,6 +1,6 @@
 const STARTED_AGENT_STATES = new Set(["active", "done", "failed", "stopped"]);
 
-export function isAppCanvasReady(
+export function isGeneratedProjectCanvasReady(
   agentStatus: unknown,
   selectedState: unknown,
   groupState: unknown,

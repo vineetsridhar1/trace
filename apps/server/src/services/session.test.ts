@@ -158,6 +158,7 @@ import { GitHubApiError, githubRepoService, parseGitHubRepo } from "./github-rep
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
+import { sessionApplicationService } from "./session-applications.js";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
@@ -580,6 +581,27 @@ describe("SessionService", () => {
     });
   });
 
+  describe("listDesignGroups", () => {
+    it("lists only non-archived design groups visible to the user", async () => {
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        makeSessionGroup({
+          id: "group-design",
+          kind: "design",
+          sessions: [makeSession({ id: "session-design" })],
+        }),
+      ]);
+
+      const result = await service.listDesignGroups("org-1", "user-1");
+
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ organizationId: "org-1", kind: "design" }),
+        }),
+      );
+      expect(result.map((group) => group.id)).toEqual(["group-design"]);
+    });
+  });
+
   describe("listByUser", () => {
     it("filters merged and archived groups when requested", async () => {
       prismaMock.session.findMany.mockResolvedValueOnce([]);
@@ -855,6 +877,85 @@ describe("SessionService", () => {
             prepareAppGit: expect.any(Function),
             repo: null,
           }),
+        );
+      });
+    });
+
+    it("validates design sessions as prompt-first, repo-less, cloud sessions", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "design",
+          repoId: "repo-1",
+          hosting: "cloud",
+          prompt: "Explore onboarding",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Design sessions cannot start from a linked repo");
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "design",
+          hosting: "local",
+          prompt: "Explore onboarding",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Design sessions require cloud hosting");
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "design",
+          hosting: "cloud",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Design sessions require an initial prompt");
+    });
+
+    it("creates a design session with managed git and design runtime preparation", async () => {
+      const repo = await managedGitServiceMock.createManagedRepo({
+        organizationId: "org-1",
+        name: "Design source",
+        actorType: "user",
+        actorId: "user-1",
+      });
+      managedGitServiceMock.createManagedRepo.mockClear();
+      const sessionGroup = makeSessionGroup({ kind: "design", repoId: repo.id, repo });
+      const session = makeSession({
+        hosting: "cloud",
+        repoId: repo.id,
+        repo,
+        sessionGroup,
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        kind: "design",
+        hosting: "cloud",
+        prompt: "Explore onboarding",
+      } as unknown as StartSessionServiceInput);
+      await Promise.resolve();
+
+      expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ kind: "design", repoId: "managed-repo-1" }),
+        }),
+      );
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            pendingRun: expect.objectContaining({ prompt: "Explore onboarding" }),
+          }),
+        }),
+      );
+      await vi.waitFor(() => {
+        expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+          expect.objectContaining({ sessionGroupKind: "design", repo: null }),
         );
       });
     });
@@ -4261,6 +4362,45 @@ describe("SessionService", () => {
       );
     });
 
+    it("injects design guidance without branch instructions for managed design repos", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        hosting: "cloud",
+        workdir: "/workspaces/design",
+        toolSessionId: "tool-sess-1",
+        repoId: "managed-repo-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-design",
+          runtimeLabel: "Design Runtime",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+        sessionGroup: makeSessionGroup({ kind: "design" }),
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "add an empty state",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          prompt: expect.not.stringContaining("trace-<slug>-<descriptive-name>"),
+          appendSystemPrompt: expect.stringContaining("design.canvas.json"),
+        }),
+        expect.any(Object),
+      );
+    });
+
     it("passes enableClaudeInChrome on the delivery command when the creator enabled it", async () => {
       const session = makeSession({
         agentStatus: "done",
@@ -6072,6 +6212,41 @@ describe("SessionService", () => {
   });
 
   describe("workspaceReady", () => {
+    it("auto-starts design sessions through the shared application service", async () => {
+      const startApplication = vi
+        .spyOn(sessionApplicationService, "startApplication")
+        .mockResolvedValueOnce([]);
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        readOnlyWorkspace: false,
+        workdir: null,
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          workdir: "/tmp/trace/design",
+          sessionGroup: makeSessionGroup({ kind: "design" }),
+        }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(
+        makeSessionGroup({ kind: "design", workdir: "/tmp/trace/design" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.workspaceReady("session-1", "/tmp/trace/design");
+
+      await vi.waitFor(() => {
+        expect(startApplication).toHaveBeenCalledWith(
+          "group-1",
+          "app",
+          "org-1",
+          "user-1",
+          { asSystem: true },
+        );
+      });
+      startApplication.mockRestore();
+    });
     it("reconciles an existing group branch from workspace_ready for the same workdir", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         pendingRun: null,

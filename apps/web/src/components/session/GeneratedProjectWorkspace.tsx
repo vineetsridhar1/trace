@@ -4,7 +4,7 @@ import { cn } from "../../lib/utils";
 import { useSidebar } from "../ui/sidebar";
 import { SessionDetailView } from "./SessionDetailView";
 
-export function AppSessionWorkspace({
+export function GeneratedProjectWorkspace({
   sessionId,
   scrollToEventId,
   onScrollComplete,
@@ -53,7 +53,11 @@ export function AppSessionWorkspace({
   useEffect(() => {
     return () => {
       if (!collapsedByUsRef.current) return;
-      const { isMobile: mobile, setOpen: open_, setOpenMobile: openMobile_ } = sidebarApiRef.current;
+      const {
+        isMobile: mobile,
+        setOpen: open_,
+        setOpenMobile: openMobile_,
+      } = sidebarApiRef.current;
       if (mobile) openMobile_(true);
       else open_(true);
     };
@@ -90,7 +94,7 @@ export function AppSessionWorkspace({
       <AnimatePresence initial={false}>
         {canvasRevealed ? (
           <motion.main
-            key="app-canvas"
+            key="generated-project-canvas"
             initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: 48 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 48 }}

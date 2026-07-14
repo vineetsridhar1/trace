@@ -260,6 +260,31 @@ describe("workspace repo setup", () => {
     );
   });
 
+  it("creates a design workspace from the bundled design starter", async () => {
+    mocks.existsSync.mockImplementation((path) => String(path).endsWith("/design-starter"));
+    mocks.readdirSync.mockReturnValue([]);
+
+    await createAppWorkspace({
+      sessionId: "session-1",
+      sessionGroupId: "design-group",
+      sessionGroupKind: "design",
+      repoRemoteUrl: "https://trace:token@example.test/git/org/repo.git",
+      defaultBranch: "main",
+    });
+
+    expect(mocks.cpSync).toHaveBeenCalledWith(
+      expect.stringMatching(/design-starter$/),
+      "/workspaces/design-group",
+      expect.objectContaining({ recursive: true }),
+    );
+    expect(mocks.execFile).toHaveBeenCalledWith(
+      "git",
+      ["config", "user.email", "design-agent@trace.local"],
+      { cwd: "/workspaces/design-group" },
+      expect.any(Function),
+    );
+  });
+
   it("restores an app workspace from the managed checkpoint commit", async () => {
     mocks.existsSync.mockReturnValue(false);
     mocks.readdirSync.mockReturnValue([]);

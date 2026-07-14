@@ -10,7 +10,7 @@ import type { SessionGroupRow } from "../channel/sessions-table-types";
  * group's member sessions in the store (subscribing to the stable raw tables and
  * deriving in useMemo to avoid a fresh-object selector looping the store).
  */
-export function useAppSessionGroupRow(groupId: string): SessionGroupRow {
+export function useGeneratedProjectSessionGroupRow(groupId: string): SessionGroupRow {
   const group = useEntityStore((s) => s.sessionGroups[groupId]);
   const sessionsTable = useEntityStore((s) => s.sessions);
   const idsByGroup = useEntityStore((s) => s._sessionIdsByGroup);

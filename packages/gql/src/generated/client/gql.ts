@@ -76,6 +76,7 @@ type Documents = {
   "\n  mutation CreateChannel($input: CreateChannelInput!) {\n    createChannel(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateChannelDocument;
   "\n  mutation CreateChannelGroup($input: CreateChannelGroupInput!) {\n    createChannelGroup(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateChannelGroupDocument;
   "\n  mutation CreateChat($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateChatDocument;
+  "\n  query DesignSessionGroups($organizationId: ID!) {\n    designSessionGroups(organizationId: $organizationId) {\n      id\n      name\n      slug\n      kind\n      status\n      visibility\n      archivedAt\n      connection {\n        state\n      }\n      sessions {\n        id\n        sessionGroupId\n        agentStatus\n        sessionStatus\n        prUrl\n        worktreeDeleted\n        lastMessageAt\n        lastUserMessageAt\n        updatedAt\n        createdAt\n      }\n    }\n  }\n": typeof types.DesignSessionGroupsDocument;
   "\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n": typeof types.DeleteChannelGroupDocument;
   "\n  query Tickets($organizationId: ID!) {\n    tickets(organizationId: $organizationId) {\n      id\n      title\n      description\n      status\n      priority\n      assignees {\n        id\n        name\n        avatarUrl\n      }\n      labels\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n      channel {\n        id\n      }\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.TicketsDocument;
   "\n  mutation MoveChannel($input: MoveChannelInput!) {\n    moveChannel(input: $input) {\n      id\n    }\n  }\n": typeof types.MoveChannelDocument;
@@ -226,6 +227,8 @@ const documents: Documents = {
     types.CreateChannelGroupDocument,
   "\n  mutation CreateChat($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n":
     types.CreateChatDocument,
+  "\n  query DesignSessionGroups($organizationId: ID!) {\n    designSessionGroups(organizationId: $organizationId) {\n      id\n      name\n      slug\n      kind\n      status\n      visibility\n      archivedAt\n      connection {\n        state\n      }\n      sessions {\n        id\n        sessionGroupId\n        agentStatus\n        sessionStatus\n        prUrl\n        worktreeDeleted\n        lastMessageAt\n        lastUserMessageAt\n        updatedAt\n        createdAt\n      }\n    }\n  }\n":
+    types.DesignSessionGroupsDocument,
   "\n  mutation DeleteChannelGroup($id: ID!) {\n    deleteChannelGroup(id: $id)\n  }\n":
     types.DeleteChannelGroupDocument,
   "\n  query Tickets($organizationId: ID!) {\n    tickets(organizationId: $organizationId) {\n      id\n      title\n      description\n      status\n      priority\n      assignees {\n        id\n        name\n        avatarUrl\n      }\n      labels\n      createdBy {\n        id\n        name\n        avatarUrl\n      }\n      channel {\n        id\n      }\n      createdAt\n      updatedAt\n    }\n  }\n":
@@ -662,6 +665,12 @@ export function graphql(
 export function graphql(
   source: "\n  mutation CreateChat($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n",
 ): (typeof documents)["\n  mutation CreateChat($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query DesignSessionGroups($organizationId: ID!) {\n    designSessionGroups(organizationId: $organizationId) {\n      id\n      name\n      slug\n      kind\n      status\n      visibility\n      archivedAt\n      connection {\n        state\n      }\n      sessions {\n        id\n        sessionGroupId\n        agentStatus\n        sessionStatus\n        prUrl\n        worktreeDeleted\n        lastMessageAt\n        lastUserMessageAt\n        updatedAt\n        createdAt\n      }\n    }\n  }\n",
+): (typeof documents)["\n  query DesignSessionGroups($organizationId: ID!) {\n    designSessionGroups(organizationId: $organizationId) {\n      id\n      name\n      slug\n      kind\n      status\n      visibility\n      archivedAt\n      connection {\n        state\n      }\n      sessions {\n        id\n        sessionGroupId\n        agentStatus\n        sessionStatus\n        prUrl\n        worktreeDeleted\n        lastMessageAt\n        lastUserMessageAt\n        updatedAt\n        createdAt\n      }\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

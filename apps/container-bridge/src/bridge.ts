@@ -453,8 +453,15 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "prepare_app": {
-        const { sessionId, sessionGroupId, slug, repoRemoteUrl, defaultBranch, checkpointSha } =
-          cmd;
+        const {
+          sessionId,
+          sessionGroupId,
+          sessionGroupKind,
+          slug,
+          repoRemoteUrl,
+          defaultBranch,
+          checkpointSha,
+        } = cmd;
         (async () => {
           try {
             const { workdir, slug: workspaceSlug } = await createAppWorkspace({
@@ -464,6 +471,7 @@ export class ContainerBridge implements IBridgeClient {
               repoRemoteUrl,
               defaultBranch,
               checkpointSha,
+              sessionGroupKind,
             });
             this.sessionWorkdirs.set(sessionId, workdir);
             this.send({ type: "register_session", sessionId });

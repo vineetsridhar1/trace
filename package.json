@@ -19,6 +19,7 @@
     "test:server": "pnpm --filter @trace/server test:unit",
     "test:server:coverage": "pnpm --filter @trace/server test:unit:coverage",
     "smoke:cloud-app-session": "node ./scripts/smoke-cloud-app-session.mjs",
+    "smoke:cloud-design-session": "node ./scripts/smoke-cloud-design-session.mjs",
     "lint:eslint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

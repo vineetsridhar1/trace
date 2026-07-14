@@ -4,20 +4,22 @@ import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
-import { DeleteAppDialog } from "./DeleteAppDialog";
-import { useAppSessionGroupRow } from "./useAppSessionGroupRow";
+import { DeleteGeneratedProjectDialog } from "./DeleteGeneratedProjectDialog";
+import { useGeneratedProjectSessionGroupRow } from "./useGeneratedProjectSessionGroupRow";
 
-export function AppSessionItem({
+export function GeneratedProjectSessionItem({
   groupId,
   isActive,
+  kind,
 }: {
   groupId: string;
   isActive: boolean;
+  kind: "app" | "design";
 }) {
-  const row = useAppSessionGroupRow(groupId);
+  const row = useGeneratedProjectSessionGroupRow(groupId);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const groupName = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
-  const name = groupName ?? "Untitled app";
+  const name = groupName ?? `Untitled ${kind}`;
 
   return (
     <>
@@ -46,9 +48,10 @@ export function AppSessionItem({
           <Trash2 size={13} />
         </button>
       </div>
-      <DeleteAppDialog
-        appId={groupId}
-        appName={name}
+      <DeleteGeneratedProjectDialog
+        groupId={groupId}
+        groupName={name}
+        kind={kind}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
       />

@@ -41,7 +41,7 @@ const APP_PREVIEW_ENDPOINTS_QUERY = gql`
   }
 `;
 
-export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: string }) {
+export function GeneratedProjectPreviewPanel({ sessionGroupId }: { sessionGroupId: string }) {
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
   const upsertMany = useEntityStore((s) => s.upsertMany);

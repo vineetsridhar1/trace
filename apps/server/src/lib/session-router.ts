@@ -2100,7 +2100,7 @@ export class SessionRouter {
           await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
         }
 
-        if (options.sessionGroupKind === "app") {
+        if (options.sessionGroupKind === "app" || options.sessionGroupKind === "design") {
           const runtimeInstanceId = startResult.runtimeInstanceId;
           if (!runtimeInstanceId || !options.prepareAppGit) {
             options.onFailed("App managed git credentials are unavailable");
@@ -2113,6 +2113,7 @@ export class SessionRouter {
               type: "prepare_app",
               sessionId: options.sessionId,
               sessionGroupId: options.sessionGroupId,
+              sessionGroupKind: options.sessionGroupKind,
               slug: options.slug,
               checkpointSha: options.checkpointSha,
               ...appGit,

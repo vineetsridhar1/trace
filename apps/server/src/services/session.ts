@@ -68,6 +68,7 @@ import {
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
+import { isGeneratedProjectKind } from "../lib/generated-project.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -382,7 +383,7 @@ function validateUploadKeysForOrganization(
 const MAX_RECONCILE_ATTEMPTS = 10;
 
 // Upper bound on the org-wide app-session listing so it can't grow unbounded.
-const APP_GROUP_LIST_LIMIT = 200;
+const GENERATED_PROJECT_GROUP_LIST_LIMIT = 200;
 
 /** Maximum optimistic-concurrency retries for `updateConnectionConditional`. */
 const MAX_CONNECTION_UPDATE_ATTEMPTS = 5;
@@ -895,6 +896,18 @@ const APP_SESSION_INSTRUCTION = `\n\n<system-instruction>
 This is a Trace app session in its own isolated cloud runtime. When present, read and follow docs/ai-guidance.md and docs/trace-apps.md before changing the app. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Vite/React/Node/Tailwind/shadcn-compatible starter as the source of truth. Build frontend UI in src and add API routes or other server behavior in server.ts and related Node modules. Keep browser requests to your own API same-origin. Call third-party APIs from Node routes when browser CORS would block them. Only when an external browser origin must call this app directly, add its exact origin to the comma-separated APP_CORS_ALLOWED_ORIGINS environment variable; never use a wildcard for credentialed requests. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running and ready to use — do NOT install, initialize, or reconfigure them, create roles, or edit pg_hba/auth. The \`pg\` client and its TypeScript types are already installed. For Postgres, import \`Pool\` from \`pg\`, read the DATABASE_URL environment variable, and pass it straight to \`new Pool({ connectionString: process.env.DATABASE_URL })\`; it is a complete, credentialed TCP URL (\`postgresql://user:pass@localhost:5432/app\`) for a ready database named \`app\` — do not parse it, override the user, or switch to a Unix socket. Redis is at REDIS_URL / redis://localhost:6379. Keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. IMPORTANT: the dev server is already started and managed for you on port 3000 (host 0.0.0.0) and hot-reloads your file changes — do NOT run \`pnpm dev\` or otherwise start your own server, the port is already taken and a second one will crash. Just edit files; if you need to verify, curl http://localhost:3000. Commit and push meaningful checkpoints to the configured managed origin when the app reaches a working state. Sharing the live app is a valid final outcome.
 </system-instruction>`;
 
+const DESIGN_SESSION_INSTRUCTION = `\n\n<system-instruction>
+This is a Trace design session in its own isolated cloud runtime. Before editing, read and follow docs/ai-guidance.md. Build and refine the design by editing design.canvas.json and the screen components under src/design/screens. Keep one component per logical screen and use stable screen ids. The manifest controls sections, screen order, labels, states, variations, and viewport sizes; do not replace or edit the stable canvas runtime unless the user explicitly asks to change canvas behavior. Use local or embeddable assets only so Export HTML remains self-contained and works offline. The Vite dev server is already managed on port 3000 and hot-reloads changes; do not start a second server. Ask blocking product questions through the normal Trace question mechanism. Commit and push meaningful checkpoints to the configured managed origin.
+</system-instruction>`;
+
+function generatedProjectInstruction(
+  kind: SessionGroupKind | string | null | undefined,
+): string | undefined {
+  if (kind === "app") return APP_SESSION_INSTRUCTION;
+  if (kind === "design") return DESIGN_SESSION_INSTRUCTION;
+  return undefined;
+}
+
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
 }
@@ -906,7 +919,7 @@ function appendPromptInstructions(
 ): string {
   let result = prompt + TITLE_INSTRUCTION;
   result += BACKGROUND_WORK_INSTRUCTION;
-  if (hasRepo && sessionGroupKind !== "app") result += BRANCH_INSTRUCTION;
+  if (hasRepo && !isGeneratedProjectKind(sessionGroupKind)) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
 }
@@ -1299,7 +1312,7 @@ export class SessionService {
         sessionGroupId: params.sessionGroupId ?? undefined,
         sessionGroupKind: params.sessionGroupKind ?? undefined,
         prepareAppGit:
-          params.sessionGroupKind === "app" && params.repo?.remoteUrl
+          isGeneratedProjectKind(params.sessionGroupKind) && params.repo?.remoteUrl
             ? async (runtimeInstanceId) => {
                 const access = await managedGitService.mintAccessToken({
                   organizationId: params.organizationId,
@@ -1329,17 +1342,16 @@ export class SessionService {
         tool: params.tool,
         model: params.model ?? undefined,
         reasoningEffort: params.reasoningEffort ?? undefined,
-        repo:
-          params.sessionGroupKind === "app"
-            ? null
-            : params.repo
-              ? {
-                  id: params.repo.id,
-                  name: params.repo.name,
-                  remoteUrl: params.repo.remoteUrl,
-                  defaultBranch: params.repo.defaultBranch,
-                }
-              : null,
+        repo: isGeneratedProjectKind(params.sessionGroupKind)
+          ? null
+          : params.repo
+            ? {
+                id: params.repo.id,
+                name: params.repo.name,
+                remoteUrl: params.repo.remoteUrl,
+                defaultBranch: params.repo.defaultBranch,
+              }
+            : null,
         branch: params.branch ?? undefined,
         checkpointSha: params.checkpointSha ?? undefined,
         createdById: params.createdById,
@@ -2498,15 +2510,24 @@ export class SessionService {
     if (!repo) throw new Error("Repo not found");
   }
 
-  /**
-   * App-kind session groups for the org. Apps have no channel, so channel-scoped
-   * listGroups never surfaces them; this backs the sidebar Apps section.
-   */
+  /** Channel-less generated project groups for the Apps and Designs sidebar sections. */
   async listAppGroups(organizationId: string, userId: string) {
+    return this.listGeneratedProjectGroups("app", organizationId, userId);
+  }
+
+  async listDesignGroups(organizationId: string, userId: string) {
+    return this.listGeneratedProjectGroups("design", organizationId, userId);
+  }
+
+  private async listGeneratedProjectGroups(
+    kind: "app" | "design",
+    organizationId: string,
+    userId: string,
+  ) {
     const groups = await prisma.sessionGroup.findMany({
       where: {
         organizationId,
-        kind: "app",
+        kind,
         archivedAt: null,
         AND: [visibleSessionGroupWhere(userId)],
       },
@@ -2515,7 +2536,7 @@ export class SessionService {
       // accumulates apps. The sidebar shows the most recent apps; the tail is
       // reachable via search/dedicated views when those land.
       orderBy: { updatedAt: "desc" },
-      take: APP_GROUP_LIST_LIMIT,
+      take: GENERATED_PROJECT_GROUP_LIST_LIMIT,
     });
 
     type SessionGroupWithSessions = SessionGroupSummary & {
@@ -3104,18 +3125,19 @@ export class SessionService {
     if (existingGroup && input.kind && input.kind !== existingGroup.kind) {
       throw new ValidationError("Session kind cannot change within an existing session group");
     }
-    if (resolvedKind === "app") {
+    if (isGeneratedProjectKind(resolvedKind)) {
+      const label = resolvedKind === "design" ? "Design" : "App";
       if (input.sourceSessionId && !input.restoreCheckpointId) {
-        throw new ValidationError("App sessions cannot start from a source session");
+        throw new ValidationError(`${label} sessions cannot start from a source session`);
       }
       if (!existingGroup && !input.restoreCheckpointId && input.repoId) {
-        throw new ValidationError("App sessions cannot start from a linked repo");
+        throw new ValidationError(`${label} sessions cannot start from a linked repo`);
       }
       if (!existingGroup && !input.restoreCheckpointId && !input.prompt?.trim()) {
-        throw new ValidationError("App sessions require an initial prompt");
+        throw new ValidationError(`${label} sessions require an initial prompt`);
       }
       if (input.hosting === "local") {
-        throw new ValidationError("App sessions require cloud hosting");
+        throw new ValidationError(`${label} sessions require cloud hosting`);
       }
     }
     const requestedVisibility = input.visibility ?? "public";
@@ -3140,8 +3162,9 @@ export class SessionService {
 
     const authoritativeChannelRepoId =
       resolvedChannel?.type === "coding" ? (resolvedChannel.repoId ?? null) : null;
-    if (resolvedKind === "app" && authoritativeChannelRepoId && !existingGroup) {
-      throw new ValidationError("App sessions cannot start in a repo-linked coding channel");
+    if (isGeneratedProjectKind(resolvedKind) && authoritativeChannelRepoId && !existingGroup) {
+      const label = resolvedKind === "design" ? "Design" : "App";
+      throw new ValidationError(`${label} sessions cannot start in a repo-linked coding channel`);
     }
 
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
@@ -3410,9 +3433,7 @@ export class SessionService {
         select: { id: true },
       });
       if (conflictingGroup) {
-        throw new ValidationError(
-          "This worktree is already imported by another session group",
-        );
+        throw new ValidationError("This worktree is already imported by another session group");
       }
     }
     let runtimeLabel: string | undefined;
@@ -3580,7 +3601,7 @@ export class SessionService {
     // below rolls back (it's created before the txn because it initializes
     // filesystem-backed git storage, not just a row).
     let createdManagedRepoId: string | null = null;
-    if (resolvedKind === "app" && !resolvedRepoId) {
+    if (isGeneratedProjectKind(resolvedKind) && !resolvedRepoId) {
       const managedRepo = await managedGitService.createManagedRepo({
         organizationId: input.organizationId,
         name: `${name} source`,
@@ -3631,175 +3652,178 @@ export class SessionService {
     const hasInitialUserContent = !!input.prompt || !!input.imageKeys?.length;
 
     let startEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
-    const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const sessionGroup = existingGroup
-        ? await (async () => {
-            const nextGroupData: Prisma.SessionGroupUncheckedUpdateInput = {};
-            if (resolvedChannelId !== undefined && existingGroup.channelId !== resolvedChannelId) {
-              nextGroupData.channelId = resolvedChannelId;
-            }
-            if (existingGroup.repoId == null && resolvedRepoId !== undefined) {
-              nextGroupData.repoId = resolvedRepoId;
-            }
-            if (existingGroup.branch == null && resolvedBranch !== undefined) {
-              nextGroupData.branch = resolvedBranch;
-            }
-            if (Object.keys(nextGroupData).length === 0) {
-              return existingGroup;
-            }
-            return tx.sessionGroup.update({
-              where: { id: existingGroup.id },
-              data: nextGroupData,
+    const session = await prisma
+      .$transaction(async (tx: Prisma.TransactionClient) => {
+        const sessionGroup = existingGroup
+          ? await (async () => {
+              const nextGroupData: Prisma.SessionGroupUncheckedUpdateInput = {};
+              if (
+                resolvedChannelId !== undefined &&
+                existingGroup.channelId !== resolvedChannelId
+              ) {
+                nextGroupData.channelId = resolvedChannelId;
+              }
+              if (existingGroup.repoId == null && resolvedRepoId !== undefined) {
+                nextGroupData.repoId = resolvedRepoId;
+              }
+              if (existingGroup.branch == null && resolvedBranch !== undefined) {
+                nextGroupData.branch = resolvedBranch;
+              }
+              if (Object.keys(nextGroupData).length === 0) {
+                return existingGroup;
+              }
+              return tx.sessionGroup.update({
+                where: { id: existingGroup.id },
+                data: nextGroupData,
+                select: SESSION_GROUP_SUMMARY_SELECT,
+              });
+            })()
+          : await tx.sessionGroup.create({
+              data: {
+                name,
+                kind: resolvedKind,
+                organizationId: input.organizationId,
+                ownerUserId: input.createdById,
+                visibility: newGroupVisibility,
+                forkedFromSessionGroupId: input.forkedFromSessionGroupId ?? undefined,
+                channelId: resolvedChannelId,
+                repoId: resolvedRepoId ?? undefined,
+                branch: resolvedBranch ?? undefined,
+                connection: initialConnection,
+                // Adopting an existing worktree: record the path and flag the group
+                // so re-provisioning re-adopts it and teardown never removes it.
+                ...(adoptWorktreePath ? { workdir: adoptWorktreePath, worktreeAdopted: true } : {}),
+              },
               select: SESSION_GROUP_SUMMARY_SELECT,
             });
-          })()
-        : await tx.sessionGroup.create({
-            data: {
-              name,
-              kind: resolvedKind,
-              organizationId: input.organizationId,
-              ownerUserId: input.createdById,
-              visibility: newGroupVisibility,
-              forkedFromSessionGroupId: input.forkedFromSessionGroupId ?? undefined,
-              channelId: resolvedChannelId,
-              repoId: resolvedRepoId ?? undefined,
-              branch: resolvedBranch ?? undefined,
-              connection: initialConnection,
-              // Adopting an existing worktree: record the path and flag the group
-              // so re-provisioning re-adopts it and teardown never removes it.
-              ...(adoptWorktreePath
-                ? { workdir: adoptWorktreePath, worktreeAdopted: true }
-                : {}),
-            },
-            select: SESSION_GROUP_SUMMARY_SELECT,
-          });
 
-      const projectIds = input.projectId != null ? [input.projectId] : sourceProjectIds;
+        const projectIds = input.projectId != null ? [input.projectId] : sourceProjectIds;
 
-      const session = await tx.session.create({
-        data: {
-          name,
-          agentStatus: initialAgentStatus,
-          sessionStatus: initialSessionStatus,
-          tool,
-          model: model ?? undefined,
-          reasoningEffort: reasoningEffort ?? undefined,
-          hosting,
-          organizationId: input.organizationId,
-          createdById: input.createdById,
-          repoId: resolvedRepoId ?? undefined,
-          branch: resolvedBranch ?? undefined,
-          workdir: sessionGroup.workdir ?? undefined,
-          channelId: resolvedChannelId,
-          sessionGroupId: sessionGroup.id,
-          connection: sessionGroup.connection ?? initialConnection,
-          pendingRun: queueInitialRun
-            ? pendingRunValue([
-                {
-                  type: "run",
-                  prompt: input.prompt ?? null,
-                  interactionMode: input.interactionMode ?? null,
-                  clientSource: normalizeClientSource(input.clientSource),
-                  checkpointContext: null,
-                  ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
-                },
-              ])
-            : undefined,
-          lastUserMessageAt: hasInitialUserContent ? new Date() : undefined,
-          lastMessageAt: hasInitialUserContent ? new Date() : undefined,
-          worktreeDeleted: sessionGroup.worktreeDeleted,
-          readOnlyWorkspace,
-          ...(projectIds.length > 0 && {
-            projects: {
-              create: projectIds.map((projectId: string) => ({ projectId })),
-            },
-          }),
-        },
-        include: SESSION_INCLUDE,
-      });
-
-      if (sourceTicketLinks.length > 0) {
-        await tx.ticketLink.createMany({
-          data: sourceTicketLinks.map((ticketLink: { ticketId: string }) => ({
-            ticketId: ticketLink.ticketId,
-            entityType: "session",
-            entityId: session.id,
-          })),
-          skipDuplicates: true,
+        const session = await tx.session.create({
+          data: {
+            name,
+            agentStatus: initialAgentStatus,
+            sessionStatus: initialSessionStatus,
+            tool,
+            model: model ?? undefined,
+            reasoningEffort: reasoningEffort ?? undefined,
+            hosting,
+            organizationId: input.organizationId,
+            createdById: input.createdById,
+            repoId: resolvedRepoId ?? undefined,
+            branch: resolvedBranch ?? undefined,
+            workdir: sessionGroup.workdir ?? undefined,
+            channelId: resolvedChannelId,
+            sessionGroupId: sessionGroup.id,
+            connection: sessionGroup.connection ?? initialConnection,
+            pendingRun: queueInitialRun
+              ? pendingRunValue([
+                  {
+                    type: "run",
+                    prompt: input.prompt ?? null,
+                    interactionMode: input.interactionMode ?? null,
+                    clientSource: normalizeClientSource(input.clientSource),
+                    checkpointContext: null,
+                    ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
+                  },
+                ])
+              : undefined,
+            lastUserMessageAt: hasInitialUserContent ? new Date() : undefined,
+            lastMessageAt: hasInitialUserContent ? new Date() : undefined,
+            worktreeDeleted: sessionGroup.worktreeDeleted,
+            readOnlyWorkspace,
+            ...(projectIds.length > 0 && {
+              projects: {
+                create: projectIds.map((projectId: string) => ({ projectId })),
+              },
+            }),
+          },
+          include: SESSION_INCLUDE,
         });
-      }
 
-      const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
-        { agentStatus: initialAgentStatus, sessionStatus: initialSessionStatus },
-      ]);
+        if (sourceTicketLinks.length > 0) {
+          await tx.ticketLink.createMany({
+            data: sourceTicketLinks.map((ticketLink: { ticketId: string }) => ({
+              ticketId: ticketLink.ticketId,
+              entityType: "session",
+              entityId: session.id,
+            })),
+            skipDuplicates: true,
+          });
+        }
 
-      const startEventId = input.startEventId ?? randomUUID();
-      const startEventPayload = {
-        session: serializeSession(session),
-        sessionGroup: sessionGroupSnapshot,
-        prompt: input.prompt ?? null,
-        clientSource: normalizeClientSource(input.clientSource),
-        sourceSessionId: input.sourceSessionId ?? null,
-        restoreCheckpointId: restoreCheckpoint?.id ?? null,
-        restoreCheckpointSha: restoreCheckpoint?.commitSha ?? null,
-        ...(input.imageKeys?.length
-          ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
-          : {}),
-      } as Prisma.InputJsonValue;
-      const startEventMetadata = initialCheckpointContextId
-        ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
-        : undefined;
-      const startEventOverride = input.buildStartEvent?.({
-        session,
-        sessionGroup,
-        sessionGroupSnapshot,
-        startEventId,
-        defaultPayload: startEventPayload,
-        defaultMetadata: startEventMetadata,
-      });
+        const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
+          { agentStatus: initialAgentStatus, sessionStatus: initialSessionStatus },
+        ]);
 
-      startEventToPublish = await eventService.create(
-        {
-          id: startEventId,
-          organizationId: input.organizationId,
-          scopeType: "session",
-          scopeId: session.id,
-          eventType: "session_started",
-          payload: startEventOverride?.payload ?? startEventPayload,
-          metadata: startEventOverride?.metadata ?? startEventMetadata,
-          actorType: startEventOverride?.actorType ?? "user",
-          actorId: startEventOverride?.actorId ?? input.createdById,
-          timestamp: startEventOverride?.timestamp,
-          deferPublish: true,
-        },
-        tx,
-      );
-
-      if (input.afterCreate) {
-        await input.afterCreate({
-          tx,
+        const startEventId = input.startEventId ?? randomUUID();
+        const startEventPayload = {
+          session: serializeSession(session),
+          sessionGroup: sessionGroupSnapshot,
+          prompt: input.prompt ?? null,
+          clientSource: normalizeClientSource(input.clientSource),
+          sourceSessionId: input.sourceSessionId ?? null,
+          restoreCheckpointId: restoreCheckpoint?.id ?? null,
+          restoreCheckpointSha: restoreCheckpoint?.commitSha ?? null,
+          ...(input.imageKeys?.length
+            ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
+            : {}),
+        } as Prisma.InputJsonValue;
+        const startEventMetadata = initialCheckpointContextId
+          ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
+          : undefined;
+        const startEventOverride = input.buildStartEvent?.({
           session,
           sessionGroup,
+          sessionGroupSnapshot,
           startEventId,
-          startEventPayload: startEventOverride?.payload ?? startEventPayload,
+          defaultPayload: startEventPayload,
+          defaultMetadata: startEventMetadata,
         });
-      }
 
-      return session;
-    }).catch(async (error: unknown) => {
-      // Don't leak the managed repo minted above if the session row never persists.
-      if (createdManagedRepoId) {
-        await managedGitService
-          .deleteManagedRepo({
+        startEventToPublish = await eventService.create(
+          {
+            id: startEventId,
             organizationId: input.organizationId,
-            repoId: createdManagedRepoId,
-            actorType: input.actorType ?? "user",
-            actorId: input.createdById,
-          })
-          .catch(() => {});
-      }
-      throw error;
-    });
+            scopeType: "session",
+            scopeId: session.id,
+            eventType: "session_started",
+            payload: startEventOverride?.payload ?? startEventPayload,
+            metadata: startEventOverride?.metadata ?? startEventMetadata,
+            actorType: startEventOverride?.actorType ?? "user",
+            actorId: startEventOverride?.actorId ?? input.createdById,
+            timestamp: startEventOverride?.timestamp,
+            deferPublish: true,
+          },
+          tx,
+        );
+
+        if (input.afterCreate) {
+          await input.afterCreate({
+            tx,
+            session,
+            sessionGroup,
+            startEventId,
+            startEventPayload: startEventOverride?.payload ?? startEventPayload,
+          });
+        }
+
+        return session;
+      })
+      .catch(async (error: unknown) => {
+        // Don't leak the managed repo minted above if the session row never persists.
+        if (createdManagedRepoId) {
+          await managedGitService
+            .deleteManagedRepo({
+              organizationId: input.organizationId,
+              repoId: createdManagedRepoId,
+              actorType: input.actorType ?? "user",
+              actorId: input.createdById,
+            })
+            .catch(() => {});
+        }
+        throw error;
+      });
 
     // Publish the start event only after the transaction commits so subscribers
     // don't query for the session before its row is visible (e.g. long-running forks).
@@ -4422,8 +4446,7 @@ export class SessionService {
       type: "run" as const,
       sessionId: id,
       prompt: resolvedPrompt ?? undefined,
-      appendSystemPrompt:
-        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+      appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
@@ -4716,7 +4739,7 @@ export class SessionService {
       });
     }
 
-    if (group.kind === "app" && group.repoId) {
+    if (isGeneratedProjectKind(group.kind) && group.repoId) {
       // A restored app group shares the source group's managed repo, so this
       // repo can be referenced by more than one group. Only delete the repo
       // (and its bare storage + cascaded checkpoints) when no other group
@@ -5819,8 +5842,7 @@ export class SessionService {
       type: "send" as const,
       sessionId,
       prompt,
-      appendSystemPrompt:
-        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+      appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
       tool: activeTool,
       model: activeModel ?? undefined,
       reasoningEffort: activeReasoningEffort ?? undefined,
@@ -6554,14 +6576,20 @@ export class SessionService {
       }
     }
 
-    if (session.sessionGroup?.kind === "app" && session.sessionGroupId) {
-      const appGroupId = session.sessionGroupId;
+    if (isGeneratedProjectKind(session.sessionGroup?.kind) && session.sessionGroupId) {
+      const generatedProjectGroupId = session.sessionGroupId;
       // Fire-and-forget: the dev server boot must not delay the agent's first
       // run. Failures surface as an app_preview_start_failed event.
       void sessionApplicationService
-        .startApplication(appGroupId, "app", session.organizationId, session.createdById, {
+        .startApplication(
+          generatedProjectGroupId,
+          "app",
+          session.organizationId,
+          session.createdById,
+          {
           asSystem: true,
-        })
+          },
+        )
         .catch(async (error: unknown) => {
           await eventService.create({
             organizationId: session.organizationId,
@@ -6570,7 +6598,7 @@ export class SessionService {
             eventType: "session_output",
             payload: {
               type: "app_preview_start_failed",
-              sessionGroupId: appGroupId,
+              sessionGroupId: generatedProjectGroupId,
               error: error instanceof Error ? error.message : String(error),
             } as Prisma.InputJsonValue,
             actorType: "system",
@@ -6998,8 +7026,7 @@ export class SessionService {
         type: "send",
         sessionId,
         prompt,
-        appendSystemPrompt:
-          session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+        appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
         tool: session.tool,
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
@@ -7143,8 +7170,7 @@ export class SessionService {
     // for seconds per commit). Mark it pending, emit the checkpoint now, and run
     // the capture off-queue — a follow-up git_checkpoint event (merged by id on
     // the client) carries the thumbnail once it's ready.
-    const shouldCaptureAppCheckpoint =
-      didPersistCheckpoint && session.sessionGroup?.kind === "app";
+    const shouldCaptureAppCheckpoint = didPersistCheckpoint && session.sessionGroup?.kind === "app";
     if (shouldCaptureAppCheckpoint && persisted) {
       persisted = await prisma.gitCheckpoint.update({
         where: { id: persisted.id },
@@ -9371,8 +9397,7 @@ export class SessionService {
       type: pending.type,
       sessionId,
       prompt: prompt ?? undefined,
-      appendSystemPrompt:
-        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+      appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,

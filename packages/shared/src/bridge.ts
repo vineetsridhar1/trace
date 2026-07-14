@@ -67,6 +67,7 @@ export interface BridgePrepareAppCommand {
   type: "prepare_app";
   sessionId: string;
   sessionGroupId?: string;
+  sessionGroupKind: "app" | "design";
   /** Pre-assigned slug for the generated app workspace. If absent, the bridge generates one. */
   slug?: string;
   repoId: string;
@@ -918,8 +919,7 @@ export function parseWorktreeListPorcelain(
   const flush = () => {
     if (typeof current.path !== "string") return;
     const isTraceManaged =
-      current.path === traceManagedPrefix ||
-      current.path.startsWith(traceManagedPrefix + pathSep);
+      current.path === traceManagedPrefix || current.path.startsWith(traceManagedPrefix + pathSep);
     worktrees.push({
       path: current.path,
       branch: current.branch ?? null,

@@ -6,7 +6,7 @@ import { useEntityStore, type SessionEntity, type SessionGroupEntity } from "@tr
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { useCommandPaletteStore } from "../../stores/command-palette";
-import { AppSessionItem } from "./AppSessionItem";
+import { GeneratedProjectSessionItem } from "./GeneratedProjectSessionItem";
 
 const APP_SESSION_GROUPS_QUERY = gql`
   query AppSessionGroups($organizationId: ID!) {
@@ -115,10 +115,11 @@ export function AppsSection({
       ) : (
         <div className="mt-1 space-y-0.5">
           {appGroups.map((group) => (
-            <AppSessionItem
+            <GeneratedProjectSessionItem
               key={group.id}
               groupId={group.id}
               isActive={group.id === activeSessionGroupId}
+              kind="app"
             />
           ))}
         </div>
