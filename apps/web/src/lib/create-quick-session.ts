@@ -88,7 +88,6 @@ export function buildGeneratedProjectStartInput(
   return {
     kind,
     hosting: "cloud" as const,
-    name: kind === "design" ? "Untitled Design" : "Untitled App",
     ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
   };
 }

@@ -3275,6 +3275,10 @@ export class SessionService {
       ? input.name.slice(0, MAX_SESSION_NAME_LENGTH)
       : input.prompt
         ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
+        : isGeneratedProjectKind(resolvedKind)
+          ? resolvedKind === "design"
+            ? "Untitled Design"
+            : "Untitled App"
         : restoreCheckpoint
           ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
               .trim()

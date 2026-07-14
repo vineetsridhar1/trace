@@ -6,7 +6,6 @@ describe("buildGeneratedProjectStartInput", () => {
     expect(buildGeneratedProjectStartInput("design")).toEqual({
       kind: "design",
       hosting: "cloud",
-      name: "Untitled Design",
     });
   });
 
@@ -14,7 +13,6 @@ describe("buildGeneratedProjectStartInput", () => {
     expect(buildGeneratedProjectStartInput("design", "  Explore onboarding  ")).toEqual({
       kind: "design",
       hosting: "cloud",
-      name: "Untitled Design",
       prompt: "Explore onboarding",
     });
   });

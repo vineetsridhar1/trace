@@ -826,11 +826,12 @@ describe("SessionService", () => {
         createdById: "user-1",
         kind: "app",
         hosting: "cloud",
-        name: "Untitled App",
       } as unknown as StartSessionServiceInput);
       await Promise.resolve();
 
-      expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalled();
+      expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Untitled App source" }),
+      );
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ pendingRun: undefined }),
@@ -952,11 +953,12 @@ describe("SessionService", () => {
         createdById: "user-1",
         kind: "design",
         hosting: "cloud",
-        name: "Untitled Design",
       } as unknown as StartSessionServiceInput);
       await Promise.resolve();
 
-      expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalled();
+      expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Untitled Design source" }),
+      );
       expect(prismaMock.session.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ pendingRun: undefined }),
