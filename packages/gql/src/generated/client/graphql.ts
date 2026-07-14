@@ -2939,16 +2939,6 @@ export type SessionGroupDetailQuery = {
   } | null;
 };
 
-export type StartSessionApplicationWorkflowMutationVariables = Exact<{
-  sessionGroupId: Scalars["ID"]["input"];
-  appConfigId: Scalars["ID"]["input"];
-}>;
-
-export type StartSessionApplicationWorkflowMutation = {
-  __typename?: "Mutation";
-  startSessionApplicationWorkflow: { __typename?: "SessionApplicationWorkflowRun"; id: string };
-};
-
 export type AppPreviewStateQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
 }>;
@@ -6135,62 +6125,6 @@ export const SessionGroupDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupDetailQuery, SessionGroupDetailQueryVariables>;
-export const StartSessionApplicationWorkflowDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "StartSessionApplicationWorkflow" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "appConfigId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "startSessionApplicationWorkflow" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "appConfigId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "appConfigId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  StartSessionApplicationWorkflowMutation,
-  StartSessionApplicationWorkflowMutationVariables
->;
 export const AppPreviewStateDocument = {
   kind: "Document",
   definitions: [
