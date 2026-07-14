@@ -9,7 +9,7 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "smoke": "vite build",
-    "test": "tsx --test src/canvas/manifest.test.ts server/export-html.test.ts docs/agent-contract.test.ts"
+    "test": "tsx --test src/canvas/manifest.test.ts src/canvas/viewport.test.ts server/export-html.test.ts docs/agent-contract.test.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.0",
