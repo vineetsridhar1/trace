@@ -4399,6 +4399,21 @@ describe("SessionService", () => {
         }),
         expect.any(Object),
       );
+      const command = sessionRouterMock.send.mock.calls.at(-1)?.[1];
+      expect(command).toEqual(
+        expect.objectContaining({
+          appendSystemPrompt: expect.stringContaining(
+            "React is only the rendering medium",
+          ),
+        }),
+      );
+      expect(command).toEqual(
+        expect.objectContaining({
+          appendSystemPrompt: expect.stringContaining(
+            "do not build APIs, databases, authentication, persistence",
+          ),
+        }),
+      );
     });
 
     it("passes enableClaudeInChrome on the delivery command when the creator enabled it", async () => {
