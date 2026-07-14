@@ -7,10 +7,10 @@ describe("isGeneratedProjectCanvasReady", () => {
     expect(isGeneratedProjectCanvasReady("preparing", "connected", "connected")).toBe(false);
   });
 
-  it("reveals the canvas when the AI is active and its cloud is ready", () => {
+  it("reveals the canvas as soon as the AI starts so startup and HMR are visible", () => {
     expect(isGeneratedProjectCanvasReady("active", "connected", "provisioning")).toBe(true);
     expect(isGeneratedProjectCanvasReady("active", "degraded", "connected")).toBe(true);
-    expect(isGeneratedProjectCanvasReady("active", "provisioning", "connected")).toBe(false);
+    expect(isGeneratedProjectCanvasReady("active", "provisioning", "booting")).toBe(true);
   });
 
   it("restores the canvas after an AI run has finished", () => {

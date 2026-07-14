@@ -42,7 +42,7 @@ test("defines an artifact-first design workflow and quality gate", () => {
 test("routes specialized design work without replacing the shared canvas contract", () => {
   assert.match(guidance, /reference-grounding\.md/);
   assert.match(guidance, /visual-directions\.md/);
-  assert.match(guidance, /Build one representative screen first/);
+  assert.match(guidance, /watch the canvas evolve through Vite HMR/);
   assert.match(guidance, /Inspect every PNG/);
 });
 

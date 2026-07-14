@@ -6345,6 +6345,77 @@ describe("SessionService", () => {
       });
       startApplication.mockRestore();
     });
+
+    it("dispatches the live preview before delivering the first generated-project prompt", async () => {
+      const pendingRun = {
+        type: "send",
+        prompt: "Build an operations dashboard",
+        interactionMode: null,
+        checkpointContext: null,
+      };
+      let releasePreviewStart: (() => void) | undefined;
+      const startApplication = vi
+        .spyOn(sessionApplicationService, "startApplication")
+        .mockReturnValueOnce(
+          new Promise((resolve) => {
+            releasePreviewStart = () => resolve([]);
+          }),
+        );
+      prismaMock.session.findUniqueOrThrow
+        .mockResolvedValueOnce({
+          pendingRun,
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+          readOnlyWorkspace: false,
+          workdir: null,
+        })
+        .mockResolvedValueOnce(
+          makeSession({
+            workdir: "/tmp/trace/app",
+            sessionGroup: makeSessionGroup({ kind: "app", workdir: "/tmp/trace/app" }),
+          }),
+        );
+      prismaMock.session.update
+        .mockResolvedValueOnce(
+          makeSession({
+            workdir: "/tmp/trace/app",
+            sessionGroup: makeSessionGroup({ kind: "app", workdir: "/tmp/trace/app" }),
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            agentStatus: "active",
+            workdir: "/tmp/trace/app",
+            sessionGroup: makeSessionGroup({ kind: "app", workdir: "/tmp/trace/app" }),
+          }),
+        );
+      prismaMock.sessionGroup.update.mockResolvedValue(
+        makeSessionGroup({ kind: "app", workdir: "/tmp/trace/app" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValue({ count: 1 });
+      prismaMock.event.findMany.mockResolvedValue([]);
+
+      const ready = service.workspaceReady("session-1", "/tmp/trace/app");
+
+      await vi.waitFor(() => {
+        expect(startApplication).toHaveBeenCalled();
+      });
+      expect(sessionRouterMock.send).not.toHaveBeenCalled();
+
+      releasePreviewStart?.();
+      await ready;
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "send",
+          prompt: expect.stringContaining("Build an operations dashboard"),
+        }),
+        expect.any(Object),
+      );
+      startApplication.mockRestore();
+    });
+
     it("reconciles an existing group branch from workspace_ready for the same workdir", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         pendingRun: null,

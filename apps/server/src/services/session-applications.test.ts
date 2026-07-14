@@ -224,7 +224,7 @@ describe("SessionApplicationService", () => {
       "runtime-1",
       expect.objectContaining({
         type: "app_process_start",
-        command: "pnpm install --prefer-offline && pnpm dev",
+        command: "pnpm install --offline --frozen-lockfile && pnpm dev",
         ports: [{ portConfigId: "web", port: 3000, protocol: "http" }],
       }),
       "org-1",
@@ -256,7 +256,7 @@ describe("SessionApplicationService", () => {
       "runtime-1",
       expect.objectContaining({
         type: "app_process_start",
-        command: "pnpm install --prefer-offline && pnpm dev",
+        command: "pnpm install --offline --frozen-lockfile && pnpm dev",
         ports: [{ portConfigId: "web", port: 3000, protocol: "http" }],
       }),
       "org-1",

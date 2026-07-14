@@ -1,6 +1,7 @@
 import { RotateCw } from "lucide-react";
 import { Button } from "../../ui/button";
 import { Skeleton } from "../../ui/skeleton";
+import { TraceLoader } from "../../ui/trace-loader";
 
 export function AppPreviewCanvasSkeleton({
   error,
@@ -33,6 +34,18 @@ export function AppPreviewCanvasSkeleton({
               <Skeleton className="h-full rounded-lg" />
               <Skeleton className="h-full rounded-lg" />
               <Skeleton className="h-full rounded-lg" />
+            </div>
+          </div>
+          <div
+            className="absolute inset-0 flex items-center justify-center bg-background/65 backdrop-blur-[2px]"
+            aria-live="polite"
+          >
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-background/95 px-5 py-4 text-center shadow-lg">
+              <TraceLoader size={18} showLabel={false} />
+              <p className="text-sm font-medium text-foreground">Starting live preview…</p>
+              <p className="max-w-64 text-xs leading-5 text-muted-foreground">
+                Changes will appear here as the agent builds.
+              </p>
             </div>
           </div>
         </div>
