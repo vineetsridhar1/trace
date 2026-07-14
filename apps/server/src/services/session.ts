@@ -6509,17 +6509,28 @@ export class SessionService {
       branch !== undefined &&
       previousGroupBranch !== branch &&
       Boolean(session.sessionGroup?.prUrl);
-    const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
-      workdir,
-      connection: session.connection as Prisma.InputJsonValue,
-      worktreeDeleted: false,
-      repoId: session.repoId ?? null,
-      ...(branch !== undefined ? { branch } : {}),
-      ...(shouldClearPrUrl ? { prUrl: null } : {}),
-      ...(slug !== undefined ? { slug } : {}),
-      setupStatus: setupScript ? "running" : "idle",
-      setupError: null,
-    });
+    // The ready workspace belongs to this session's runtime; only mirror its
+    // path to siblings that share that runtime so a cloud path can never land
+    // on a local session (or vice versa) and break its cwd.
+    const workdirRuntimeInstanceId =
+      this.parseConnection(session.connection).runtimeInstanceId ??
+      sessionRouter.getRuntimeForSession(sessionId)?.id ??
+      null;
+    const sessionGroup = await this.syncGroupWorkspaceState(
+      session.sessionGroupId,
+      {
+        workdir,
+        connection: session.connection as Prisma.InputJsonValue,
+        worktreeDeleted: false,
+        repoId: session.repoId ?? null,
+        ...(branch !== undefined ? { branch } : {}),
+        ...(shouldClearPrUrl ? { prUrl: null } : {}),
+        ...(slug !== undefined ? { slug } : {}),
+        setupStatus: setupScript ? "running" : "idle",
+        setupError: null,
+      },
+      { workdirRuntimeInstanceId },
+    );
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -9159,15 +9170,32 @@ export class SessionService {
   private async syncGroupWorkspaceState(
     sessionGroupId: string | null | undefined,
     patch: GroupWorkspaceStatePatch,
+    options?: { workdirRuntimeInstanceId?: string | null },
   ) {
     if (!sessionGroupId) return null;
 
     const groupData: Prisma.SessionGroupUncheckedUpdateInput = {};
     const sessionData: Prisma.SessionUpdateManyMutationInput = {};
 
+    // `workdir` is a runtime-specific filesystem path. A concrete path may only
+    // be stamped onto sessions that actually live on the runtime that produced
+    // it — mirroring one runtime's path onto a session bound to a different
+    // runtime yields a nonexistent cwd and `spawn ENOENT`. Groups are pinned to
+    // a single runtime, so in the healthy case this still updates every session;
+    // the runtime scope is a guard against any legacy group whose sessions
+    // diverged across runtimes. Clearing the workdir (null) is always safe to
+    // apply group-wide.
+    let scopedWorkdirUpdate: { runtimeInstanceId: string; workdir: string } | null = null;
     if (Object.prototype.hasOwnProperty.call(patch, "workdir")) {
       groupData.workdir = patch.workdir ?? null;
-      sessionData.workdir = patch.workdir ?? null;
+      if (patch.workdir && options?.workdirRuntimeInstanceId) {
+        scopedWorkdirUpdate = {
+          runtimeInstanceId: options.workdirRuntimeInstanceId,
+          workdir: patch.workdir,
+        };
+      } else {
+        sessionData.workdir = patch.workdir ?? null;
+      }
     }
 
     if (Object.prototype.hasOwnProperty.call(patch, "connection")) {
@@ -9224,6 +9252,19 @@ export class SessionService {
         await tx.session.updateMany({
           where: { sessionGroupId },
           data: sessionData,
+        });
+      }
+
+      if (scopedWorkdirUpdate) {
+        await tx.session.updateMany({
+          where: {
+            sessionGroupId,
+            connection: {
+              path: ["runtimeInstanceId"],
+              equals: scopedWorkdirUpdate.runtimeInstanceId,
+            },
+          },
+          data: { workdir: scopedWorkdirUpdate.workdir },
         });
       }
     });

@@ -6408,6 +6408,56 @@ describe("SessionService", () => {
       startApplication.mockRestore();
     });
 
+    it("only mirrors the ready workdir to sessions on the same runtime", async () => {
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+        pendingRun: null,
+        agentStatus: "not_started",
+        sessionStatus: "in_progress",
+        readOnlyWorkspace: false,
+        workdir: null,
+      });
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          workdir: "/workspaces/crocodile-2",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime_99a9d155",
+            runtimeLabel: "Cloud",
+          },
+        }),
+      );
+      prismaMock.sessionGroup.update.mockResolvedValueOnce(makeSessionGroup());
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...makeSessionGroup(),
+        sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+      });
+      prismaMock.session.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.workspaceReady("session-1", "/workspaces/crocodile-2");
+
+      // The group's canonical workdir is always updated.
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ workdir: "/workspaces/crocodile-2" }),
+        }),
+      );
+      // The concrete path is mirrored ONLY to sessions bound to that same runtime,
+      // never blanket-applied to every session in the group.
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: {
+          sessionGroupId: "group-1",
+          connection: { path: ["runtimeInstanceId"], equals: "runtime_99a9d155" },
+        },
+        data: { workdir: "/workspaces/crocodile-2" },
+      });
+      const blanketWorkdirMirror = prismaMock.session.updateMany.mock.calls.some(
+        ([arg]) =>
+          !arg?.where?.connection &&
+          (arg?.data as { workdir?: unknown } | undefined)?.workdir === "/workspaces/crocodile-2",
+      );
+      expect(blanketWorkdirMirror).toBe(false);
+    });
+
     it("reconciles an existing group branch from workspace_ready for the same workdir", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
         pendingRun: null,
