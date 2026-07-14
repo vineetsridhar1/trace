@@ -4409,6 +4409,11 @@ describe("SessionService", () => {
       );
       expect(command).toEqual(
         expect.objectContaining({
+          appendSystemPrompt: expect.stringContaining("critique it before delivery"),
+        }),
+      );
+      expect(command).toEqual(
+        expect.objectContaining({
           appendSystemPrompt: expect.stringContaining(
             "do not build APIs, databases, authentication, persistence",
           ),
