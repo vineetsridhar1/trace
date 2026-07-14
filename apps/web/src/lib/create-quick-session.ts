@@ -4,6 +4,7 @@ import { START_SESSION_MUTATION, useEntityStore } from "@trace/client-core";
 import { navigateToSession, navigateToSessionGroup } from "../stores/ui";
 
 const pendingQuickSessionChannels = new Set<string>();
+const pendingGeneratedProjectKinds = new Set<"app" | "design">();
 
 export function getChannelRepoId(channelId: string): string | undefined {
   const channel = useEntityStore.getState().channels[channelId];
@@ -75,30 +76,38 @@ export async function createQuickSession(
   }
 }
 
-export async function createAppSession(prompt: string): Promise<boolean> {
-  return createGeneratedProjectSession("app", prompt);
+export async function createAppSession(): Promise<boolean> {
+  return createGeneratedProjectSession("app");
 }
 
-export function buildGeneratedProjectStartInput(kind: "app" | "design", prompt: string) {
-  return { kind, hosting: "cloud" as const, prompt: prompt.trim() };
+export function buildGeneratedProjectStartInput(
+  kind: "app" | "design",
+  prompt?: string,
+) {
+  const trimmedPrompt = prompt?.trim();
+  return {
+    kind,
+    hosting: "cloud" as const,
+    name: kind === "design" ? "Untitled Design" : "Untitled App",
+    ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
+  };
 }
 
-export async function createDesignSession(prompt: string): Promise<boolean> {
-  return createGeneratedProjectSession("design", prompt);
+export async function createDesignSession(): Promise<boolean> {
+  return createGeneratedProjectSession("design");
 }
 
 async function createGeneratedProjectSession(
   kind: "app" | "design",
-  prompt: string,
 ): Promise<boolean> {
-  const trimmed = prompt.trim();
-  if (!trimmed) return false;
+  if (pendingGeneratedProjectKinds.has(kind)) return false;
+  pendingGeneratedProjectKinds.add(kind);
   const label = kind === "design" ? "design" : "app";
 
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
-        input: buildGeneratedProjectStartInput(kind, trimmed),
+        input: buildGeneratedProjectStartInput(kind),
       })
       .toPromise();
 
@@ -121,5 +130,7 @@ async function createGeneratedProjectSession(
     const message = err instanceof Error ? err.message : "Unknown error";
     toast.error(`Failed to create ${label} session`, { description: message });
     return false;
+  } finally {
+    pendingGeneratedProjectKinds.delete(kind);
   }
 }

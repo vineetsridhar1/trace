@@ -13,6 +13,7 @@ import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/mar
 import { TraceLoader } from "../ui/trace-loader";
 import { PromptTimeline } from "./PromptTimeline";
 import type { SessionPromptIndexItem } from "../../hooks/useSessionPromptIndex";
+import { getSessionEmptyStateContent, isGeneratedProjectKind } from "./sessionEmptyState";
 
 export type SessionListNode =
   | SessionNode
@@ -25,22 +26,6 @@ function nodeKey(node: SessionListNode): string {
 
 // Height of the gradient fade above the floating composer.
 const BOTTOM_FADE_HEIGHT = 48;
-
-// Starter prompts shown on the session empty state. Clicking one sends it immediately.
-const STARTER_PROMPTS: { label: string; prompt: string }[] = [
-  {
-    label: "Explain this codebase",
-    prompt: "Give me a high-level tour of how this codebase is organized.",
-  },
-  {
-    label: "Summarize recent changes",
-    prompt: "Summarize the most recent changes on this branch.",
-  },
-  {
-    label: "Review the latest commit",
-    prompt: "Review the latest commit and flag anything risky.",
-  },
-];
 
 // Fallback height for rows the browser has not rendered yet (content-visibility
 // placeholder sizing). Once a row has been on screen, `contain-intrinsic-size:
@@ -416,12 +401,18 @@ export function SessionMessageList({
     | string
     | null
     | undefined;
+  const groupKind = useEntityField("sessionGroups", sessionGroupId ?? "", "kind") as
+    | string
+    | null
+    | undefined;
   const [showImportWorktree, setShowImportWorktree] = useState(false);
   const requestPrefill = useComposerStore((s) => s.requestPrefill);
   const canImportWorktree =
     agentStatus === "not_started" && hosting !== "cloud" && Boolean(sessionRepo?.id);
   const importedWorktree = Boolean(worktreeAdopted);
-  const repoName = sessionRepo?.name;
+  const generatedProject = isGeneratedProjectKind(groupKind);
+  const repoName = generatedProject ? undefined : sessionRepo?.name;
+  const emptyStateContent = getSessionEmptyStateContent(groupKind);
 
   const emptyState = (
     <motion.div
@@ -436,7 +427,7 @@ export function SessionMessageList({
       >
         <div className="relative flex min-h-full items-center justify-center overflow-hidden px-4 py-10">
           <div className="relative w-[90%]">
-            {(repoName || groupBranch) && (
+            {(repoName || (groupBranch && !generatedProject)) && (
               <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
                 {repoName && (
                   <span className="flex items-center gap-1.5 font-medium text-foreground">
@@ -445,7 +436,7 @@ export function SessionMessageList({
                   </span>
                 )}
                 {repoName && groupBranch && <span className="text-border">/</span>}
-                {groupBranch && (
+                {groupBranch && !generatedProject && (
                   <span className="flex items-center gap-1 font-mono">
                     <GitBranch size={11} className="shrink-0" />
                     {groupBranch}
@@ -455,18 +446,20 @@ export function SessionMessageList({
             )}
 
             <h2 className="text-base font-semibold tracking-tight text-foreground">
-              What should the agent do?
+              {emptyStateContent.title}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Start with a suggestion, or type your own below.
+              {emptyStateContent.description}
             </p>
 
             <div className="pointer-events-auto mt-4 flex flex-wrap gap-2">
-              {STARTER_PROMPTS.map(({ label, prompt }) => (
+              {emptyStateContent.starterPrompts.map(({ label, prompt }) => (
                 <button
                   key={label}
                   type="button"
-                  onClick={() => requestPrefill(sessionId, prompt, true)}
+                  onClick={() =>
+                    requestPrefill(sessionId, prompt, emptyStateContent.sendStarterImmediately)
+                  }
                   className="group flex h-28 w-full max-w-[230px] flex-1 flex-col items-start overflow-hidden rounded-lg border border-border bg-surface-deep p-3 text-left transition-colors hover:border-accent/40 hover:bg-surface-elevated"
                 >
                   <span className="line-clamp-4 text-sm leading-snug text-foreground">{label}</span>

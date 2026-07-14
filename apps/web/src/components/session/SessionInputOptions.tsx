@@ -23,6 +23,7 @@ import { cn } from "../../lib/utils";
 import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvironmentAvailable";
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
+import { isGeneratedProjectKind } from "./sessionEmptyState";
 
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 const CLOUD_RUNTIME_ID = "__cloud__";
@@ -129,6 +130,10 @@ export function SessionInputOptions({
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
+  const sessionGroupKind = useEntityField("sessionGroups", sessionGroupId ?? "", "kind") as
+    | string
+    | null
+    | undefined;
 
   const repo = useEntityField("sessions", sessionId, "repo") as
     | { id: string; remoteUrl?: string | null }
@@ -142,6 +147,7 @@ export function SessionInputOptions({
   const reasoningEffortOptions = getReasoningEffortsForTool(currentTool);
   const currentReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
   const isNotStarted = agentStatus === "not_started";
+  const runtimeLocked = isGeneratedProjectKind(sessionGroupKind);
 
   const runtimeLabel = connection?.runtimeLabel ?? null;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
@@ -158,7 +164,7 @@ export function SessionInputOptions({
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const connectedLocalRuntimes = runtimes.filter(isAccessibleLocalRuntime);
   const fetchAvailableRuntimes = useCallback(() => {
-    if (!isNotStarted || isOptimistic) return Promise.resolve();
+    if (!isNotStarted || isOptimistic || runtimeLocked) return Promise.resolve();
     return client
       .query(AVAILABLE_RUNTIMES_QUERY, {
         tool: currentTool,
@@ -172,7 +178,7 @@ export function SessionInputOptions({
       .catch((error: unknown) => {
         console.error("Failed to fetch available runtimes:", error);
       });
-  }, [isNotStarted, isOptimistic, currentTool, sessionGroupId]);
+  }, [isNotStarted, isOptimistic, runtimeLocked, currentTool, sessionGroupId]);
 
   useEffect(() => {
     void fetchAvailableRuntimes();
@@ -342,6 +348,7 @@ export function SessionInputOptions({
     if (
       !isNotStarted ||
       isOptimistic ||
+      runtimeLocked ||
       isCloudRuntime ||
       runtimeInstanceId ||
       currentRuntimeValue !== UNBOUND_LOCAL_RUNTIME_ID ||
@@ -368,6 +375,7 @@ export function SessionInputOptions({
     isNotStarted,
     isOptimistic,
     runtimeInstanceId,
+    runtimeLocked,
     runtimes,
     sessionId,
   ]);
@@ -416,7 +424,7 @@ export function SessionInputOptions({
           onChange={handleReasoningEffortChange}
         />
       )}
-      {isNotStarted ? (
+      {isNotStarted && !runtimeLocked ? (
         <Select
           value={currentRuntimeValue}
           onValueChange={handleRuntimeChange}

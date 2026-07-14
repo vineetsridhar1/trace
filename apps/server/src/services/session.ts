@@ -3133,9 +3133,6 @@ export class SessionService {
       if (!existingGroup && !input.restoreCheckpointId && input.repoId) {
         throw new ValidationError(`${label} sessions cannot start from a linked repo`);
       }
-      if (!existingGroup && !input.restoreCheckpointId && !input.prompt?.trim()) {
-        throw new ValidationError(`${label} sessions require an initial prompt`);
-      }
       if (input.hosting === "local") {
         throw new ValidationError(`${label} sessions require cloud hosting`);
       }
@@ -4891,6 +4888,9 @@ export class SessionService {
     const runtimeChanged =
       prev.agentStatus === "not_started" &&
       (config.hosting != null || config.runtimeInstanceId != null);
+    if (runtimeChanged && isGeneratedProjectKind(prev.sessionGroup?.kind)) {
+      throw new ValidationError("App and Design sessions use a fixed cloud runtime");
+    }
     let requestedEnvironment: Awaited<
       ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>
     > | null = null;
