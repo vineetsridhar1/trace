@@ -1,15 +1,25 @@
+ARG PG_MAJOR=18
 FROM node:22-slim
+ARG PG_MAJOR
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git ca-certificates curl openssh-client \
     python3 make g++ gpg sudo redis-server tini \
-    postgresql postgresql-client sqlite3 && \
+    postgresql-common sqlite3 && \
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+      | gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg && \
+    . /etc/os-release && \
+    echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+      > /etc/apt/sources.list.d/pgdg.list && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
       > /etc/apt/sources.list.d/github-cli.list && \
     apt-get update && \
-    apt-get install -y --no-install-recommends gh && \
+    apt-get install -y --no-install-recommends gh \
+      "postgresql-${PG_MAJOR}" \
+      "postgresql-client-${PG_MAJOR}" \
+      "postgresql-${PG_MAJOR}-pgvector" && \
     rm -rf /var/lib/apt/lists/*
 
 # Install coding tool CLIs
