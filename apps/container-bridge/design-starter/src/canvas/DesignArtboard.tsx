@@ -27,7 +27,7 @@ export function DesignArtboard({
       <div
         className="absolute left-0"
         style={{
-          bottom: 12 * inverseZoom,
+          bottom: screen.viewport.height + 12 * inverseZoom,
           transform: `scale(${inverseZoom})`,
           transformOrigin: "bottom left",
           width: labelWidth,

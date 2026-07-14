@@ -1,5 +1,7 @@
 export const MIN_CANVAS_ZOOM = 0.1;
 export const MAX_CANVAS_ZOOM = 2;
+const WHEEL_ZOOM_SENSITIVITY = 0.004;
+const GESTURE_ZOOM_EXPONENT = 1.75;
 
 export type CanvasViewport = {
   zoom: number;
@@ -40,7 +42,15 @@ export function zoomCanvasViewportAt(
 }
 
 export function zoomFromWheel(viewport: CanvasViewport, deltaY: number, point: CanvasPoint) {
-  return zoomCanvasViewportAt(viewport, viewport.zoom * Math.exp(-deltaY * 0.002), point);
+  return zoomCanvasViewportAt(
+    viewport,
+    viewport.zoom * Math.exp(-deltaY * WHEEL_ZOOM_SENSITIVITY),
+    point,
+  );
+}
+
+export function acceleratedGestureScale(scale: number): number {
+  return Math.pow(scale, GESTURE_ZOOM_EXPONENT);
 }
 
 export function wheelDeltaPixels(delta: number, deltaMode: number, pageSize: number): number {

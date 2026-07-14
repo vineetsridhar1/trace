@@ -6,6 +6,7 @@ import { resolveScreenComponent } from "./screen-modules";
 import {
   type CanvasPoint,
   type CanvasViewport,
+  acceleratedGestureScale,
   panCanvasViewport,
   wheelDeltaPixels,
   zoomCanvasViewportAt,
@@ -78,7 +79,7 @@ export function DesignCanvas({
       const top = Math.min(...targets.map((item) => item.y));
       const right = Math.max(...targets.map((item) => item.x + item.screen.viewport.width));
       const bottom = Math.max(...targets.map((item) => item.y + item.screen.viewport.height));
-      const padding = screenId ? 80 : 140;
+      const padding = screenId ? 160 : 140;
       const nextZoom = Math.min(
         1.25,
         Math.max(
@@ -144,7 +145,13 @@ export function DesignCanvas({
       if (!start) return;
       const scale = (event as WebKitGestureEvent).scale;
       if (typeof scale !== "number" || !Number.isFinite(scale)) return;
-      setViewport(zoomCanvasViewportAt(start.viewport, start.viewport.zoom * scale, start.point));
+      setViewport(
+        zoomCanvasViewportAt(
+          start.viewport,
+          start.viewport.zoom * acceleratedGestureScale(scale),
+          start.point,
+        ),
+      );
     };
     const onGestureEnd = (event: Event) => {
       event.preventDefault();

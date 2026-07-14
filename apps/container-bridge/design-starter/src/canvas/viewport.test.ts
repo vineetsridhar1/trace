@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   MAX_CANVAS_ZOOM,
   MIN_CANVAS_ZOOM,
+  acceleratedGestureScale,
   panCanvasViewport,
   wheelDeltaPixels,
   zoomCanvasViewportAt,
@@ -34,6 +35,18 @@ test("clamps wheel zoom without moving the pointer anchor", () => {
   const viewport = { zoom: 1, x: 0, y: 0 };
   assert.equal(zoomFromWheel(viewport, -100_000, { x: 0, y: 0 }).zoom, MAX_CANVAS_ZOOM);
   assert.equal(zoomFromWheel(viewport, 100_000, { x: 0, y: 0 }).zoom, MIN_CANVAS_ZOOM);
+});
+
+test("uses responsive zoom for trackpad pinch gestures", () => {
+  const viewport = { zoom: 1, x: 0, y: 0 };
+  const zoomedIn = zoomFromWheel(viewport, -100, { x: 0, y: 0 }).zoom;
+  const zoomedOut = zoomFromWheel(viewport, 100, { x: 0, y: 0 }).zoom;
+
+  assert.ok(zoomedIn > 1.45);
+  assert.ok(zoomedOut < 0.7);
+  assert.ok(acceleratedGestureScale(1.1) > 1.1);
+  assert.ok(acceleratedGestureScale(0.9) < 0.9);
+  assert.equal(acceleratedGestureScale(1), 1);
 });
 
 test("normalizes line and page wheel deltas", () => {
