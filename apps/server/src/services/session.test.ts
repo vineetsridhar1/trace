@@ -353,6 +353,9 @@ describe("SessionService", () => {
     // none so tests that don't exercise forwarding stay unaffected.
     prismaMock.sessionApplicationProcess.findMany.mockResolvedValue([]);
     prismaMock.sessionEndpoint.findMany.mockResolvedValue([]);
+    // Default: a group has no sibling sessions to relocate during a move. Tests
+    // exercising multi-session groups override this with mockResolvedValueOnce.
+    prismaMock.session.findMany.mockResolvedValue([]);
     sessionRouterMock.send.mockReturnValue("delivered");
     sessionRouterMock.transitionRuntime.mockResolvedValue("delivered");
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
@@ -8105,6 +8108,106 @@ describe("SessionService", () => {
         }),
       );
       expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
+    });
+
+    it("relocates every sibling session in the group onto the same runtime", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          workdir: "/tmp/trace/worktrees/session-1",
+          sessionGroupId: "group-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          sessionGroupId: "group-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Local Dev",
+          },
+        }),
+      );
+      // One sibling still bound to the old bridge.
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        makeSession({
+          id: "session-2",
+          hosting: "local",
+          sessionGroupId: "group-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Laptop A",
+          },
+        }),
+      ]);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          id: "session-2",
+          hosting: "local",
+          sessionGroupId: "group-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-1",
+            runtimeLabel: "Local Dev",
+          },
+        }),
+      );
+      const targetRuntime = {
+        key: "org-1:runtime-1",
+        id: "runtime-1",
+        label: "Local Dev",
+        hostingMode: "local",
+        organizationId: "org-1",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      };
+      sessionRouterMock.getRuntime.mockReturnValue(
+        targetRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntime>,
+      );
+
+      await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
+
+      // Sibling relocated: terminated on the old bridge, re-pointed, re-bound.
+      expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-2");
+      expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
+        "session-2",
+        "local",
+        "terminate",
+      );
+      expect(sessionRouterMock.unbindSession).toHaveBeenCalledWith("session-2");
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-2" },
+          data: expect.objectContaining({
+            hosting: "local",
+            workdir: null,
+            toolSessionId: null,
+            connection: expect.objectContaining({ runtimeInstanceId: "runtime-1" }),
+          }),
+        }),
+      );
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-2", "org-1:runtime-1");
+      // The sibling must not spin up its own workspace — only the primary provisions.
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledTimes(1);
+      expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: "session-1" }),
+      );
     });
 
     it("provisions from the source HEAD when moving an unpushed branch to another runtime", async () => {
