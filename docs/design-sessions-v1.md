@@ -46,6 +46,8 @@ questions in the existing chat UI, and chooses which directions to keep developi
   question UI.
 - **Use hot reload for visible progress.** The preview updates as the agent edits files;
   Trace does not wait for the entire requested batch to finish.
+- **Export the whole canvas as interactive HTML.** The exported file includes the same
+  canvas runtime and retains pan, zoom, fit, focus, labels, and screen interactions.
 - **Do not add design comments in v1.** There are no pins, anchored comments, or
   “send to agent” comment actions.
 - **Do not add per-screen artifact entities in v1.** Git is the durable source of truth,
@@ -157,6 +159,42 @@ from the managed repo using the existing session provisioning and checkpoint pat
 
 The user should never need to understand or select the hidden repo.
 
+### Interactive HTML Export
+
+V1 exports the complete design canvas as one self-contained `design.html` file. The
+export contains the design source compiled for the browser plus the stable canvas runtime.
+It does not contain Trace's chat, session controls, authentication, or development tools.
+
+Opening `design.html` must provide:
+
+- all sections and screens from the exported manifest snapshot
+- pan, wheel/trackpad navigation, zoom controls, fit-to-canvas, and focus mode
+- screen labels, state labels, and viewport frames
+- interactions implemented inside screen components
+- per-artboard runtime error boundaries
+- operation from `file://` with no network connection
+
+The first export mode is whole-canvas only. A later screen export may omit the canvas
+runtime and render one selected screen at its native viewport.
+
+The export must be deterministic for a committed source snapshot. It must not proxy the
+live preview URL, depend on the running workspace, or fetch JavaScript, CSS, fonts, or
+images from Trace. Required assets are bundled or encoded into the HTML. External assets
+introduced by the agent must either be embedded during export or fail validation with a
+clear message; silently producing an export that only works online is not acceptable.
+
+For v0, the design starter may own a same-origin download endpoint such as
+`/__trace_design_export`. On request it:
+
+1. validates `design.canvas.json` and referenced component files
+2. runs a production Vite build configured to inline JavaScript and CSS
+3. verifies that the output is one HTML file with no local asset references
+4. returns it as `attachment; filename="design.html"`
+
+An **Export HTML** control in the canvas toolbar downloads from that endpoint. This keeps
+the first implementation inside the existing provisioned design runtime. A later version
+may move export to a server-owned worker so it works while the runtime is offline.
+
 ## Runtime and Repository Model
 
 Design v1 uses the same basic execution model as App sessions:
@@ -169,6 +207,7 @@ Design session
     -> managed dev-server process
     -> one private preview endpoint
     -> one iframe in Trace
+    -> optional self-contained design.html download
 ```
 
 Differences from an App session:
@@ -208,6 +247,7 @@ The stable runtime owns:
 - per-artboard error boundaries
 - resolving manifest component paths through a fixed `import.meta.glob` contract
 - displaying screen labels and viewport frames
+- the whole-canvas Export HTML control
 
 The agent owns:
 
@@ -280,6 +320,7 @@ Design sessions receive a design-specific instruction overlay. It must tell the 
 - let the existing dev server hot-reload changes; never start a second server
 - ask blocking product questions through the existing chat question mechanism
 - commit and push meaningful checkpoints to the managed repo
+- keep exported designs self-contained by using local or embeddable assets
 
 The agent may decide how many screens are needed unless the user specifies an exact count.
 It should explain important assumptions in chat and ask only when a decision materially
@@ -302,6 +343,7 @@ The implementation should reuse:
 - private endpoint creation and preview authorization
 - App preview loading and error states
 - checkpoint, restore, and workspace recovery paths
+- private endpoint authorization for the same-origin export download
 
 ### Design-Specific Behavior
 
@@ -313,6 +355,7 @@ The implementation adds:
 - the design-specific agent instruction overlay
 - a design session layout using existing chat plus one existing preview component
 - the canvas runtime and manifest contract inside the starter
+- the design starter's self-contained HTML build and download path
 
 Shared runtime services must not duplicate their business logic for Design. If an existing
 service currently rejects every non-`app` group, broaden the shared mechanical operation
@@ -348,13 +391,153 @@ endpoint security boundary.
 - direct manipulation of individual screen elements in Trace
 - a no-model token editor
 - per-screen public publishing
-- PDF, standalone HTML, or ZIP export
+- PDF, selected-screen HTML, or ZIP export
 - automatic promotion into a coding session
 - serverless in-browser Babel packaging
 - an Open Design daemon or separate design generation service
 
 These can be added after the core chat-to-live-canvas loop proves useful. The manifest and
 stable screen ids preserve a migration path without requiring those systems now.
+
+## V0 Implementation Slice
+
+V0 is the smallest hosted end-to-end version that proves the product loop. It is a subset
+of v1, not a disposable mock.
+
+V0 includes:
+
+- New Design prompt-first creation
+- `design` session validation and design-specific agent instructions
+- the existing App provisioned runtime, managed workspace, process, endpoint, and preview
+  path generalized to support `design`
+- a separate bundled design starter selected by session kind
+- one manifest-driven React canvas in one iframe
+- AI creation and editing of multiple screen components
+- pan, zoom, fit, focus, sections, labels, and artboard error boundaries
+- live Vite HMR while the agent works
+- existing chat questions and `needs_input` behavior
+- whole-canvas, self-contained interactive HTML export
+- focused tests plus one hosted smoke path
+
+V0 does not include comments, pins, artifact database entities, per-screen previews,
+screen selection from the Trace shell, public design publishing, PDF/ZIP export, or coding
+promotion.
+
+### Concrete Implementation Map
+
+The following files are the expected starting points. Implementers should follow the
+current code rather than assuming names are exhaustive.
+
+Server:
+
+- `apps/server/src/services/session.ts`
+  - validate new design sessions like App sessions: initial prompt required, no user repo,
+    and cloud hosting
+  - add a design instruction overlay everywhere the App instruction overlay is currently
+    added to agent runs and resumed runs
+  - preserve existing App and Coding behavior
+- `apps/server/src/services/session-applications.ts`
+  - treat `design` as a generated-project runtime when choosing the default application
+    config and resolving a repo-less cloud runtime
+  - reuse process, port, endpoint, preview-token, and lifecycle behavior
+  - do not expose app-only publish behavior as design publishing
+- `apps/server/src/services/session-application-workflow.ts`
+  - allow the same default dev-server workflow for Design
+  - keep app-specific checkpoint capture or publishing behavior explicitly guarded
+
+Bridge and runtime image:
+
+- add `apps/container-bridge/design-starter/` beside `app-starter/`
+- generalize `apps/container-bridge/src/app-workspace.ts` or its caller to select the
+  bundled starter from `SessionGroup.kind`; do not copy the provisioning implementation
+- ensure container/runtime image definitions include the design starter
+- retain exactly one workspace and dev-server process per design session group
+
+Web:
+
+- extend `apps/web/src/lib/create-quick-session.ts` with design creation using
+  `kind: "design"`, `hosting: "cloud"`, and the initial prompt
+- add a shadcn-based New Design dialog following `NewAppSessionDialog.tsx`
+- add a Designs sidebar entry following `AppsSection.tsx`
+- update `SessionGroupDetailView.tsx` so Design uses the existing chat-plus-canvas
+  workspace and preview readiness path
+- reuse or narrowly generalize `AppSessionWorkspace`, `AppSessionPreviewPanel`, and their
+  readiness helpers; do not duplicate the preview stack
+
+Design starter:
+
+- use the same supported Vite/React/TypeScript/Tailwind baseline as the App starter
+- keep canvas runtime files separate from `src/design/`, which the agent edits
+- add a valid example manifest and at least one example screen
+- load screen modules through a constrained `import.meta.glob`
+- validate the manifest before rendering
+- implement per-artboard error boundaries
+- implement the same-origin self-contained HTML export endpoint and canvas toolbar button
+- add design-specific `docs/ai-guidance.md` explaining the file and manifest contract
+
+Tests and smoke:
+
+- add focused server tests for design validation, instruction injection, workflow reuse,
+  and protection of App/Coding behavior
+- add bridge tests proving kind-based starter selection and restore behavior
+- add starter tests or a build check covering valid/invalid manifests and the single-file
+  export
+- add web tests for design creation and design workspace selection
+- add `scripts/smoke-cloud-design-session.mjs` and a root
+  `smoke:cloud-design-session` command modeled on the existing App smoke script
+
+No GraphQL enum or Prisma model should be duplicated: `SessionGroupKind.design` already
+exists. Add schema operations only if the v0 UI cannot use an existing operation.
+
+### V0 Completion Gate
+
+Do not call v0 complete until a hosted smoke run proves this sequence:
+
+1. Create a design session from a prompt without a repo or runtime picker.
+2. Verify the group kind is `design`, one hidden managed repo exists, and exactly one
+   workspace/process/endpoint is active.
+3. Open the private preview and see the design canvas.
+4. Ask the agent for four variations with default, loading, and error states.
+5. Observe twelve uniquely identified screens on the same live canvas.
+6. Ask for an empty state across every variation and observe four screens appear through
+   HMR without creating another endpoint or reloading the parent Trace page.
+7. Trigger the existing chat question flow, answer it, and verify work resumes.
+8. Download `design.html`, disconnect from the network, open it from `file://`, and verify
+   pan, zoom, fit, focus, labels, and screen interactions.
+9. Verify focused tests pass and a normal App session still starts and previews correctly.
+
+## Copy-Paste Codex Goal
+
+```text
+Implement Design Sessions v0 end to end according to docs/design-sessions-v1.md.
+
+Reuse the existing App session infrastructure instead of creating a parallel platform.
+A new design session must be prompt-first, repo-less, cloud-hosted, and provision exactly
+one hidden managed repo, managed workspace, Vite process, private endpoint, and preview
+iframe. Add a separate React/TypeScript/Tailwind design starter containing a stable
+pan/zoom canvas runtime, design.canvas.json, and one component per logical screen. The
+agent must control screen creation, deletion, grouping, variation, state, viewport, and
+content by editing the manifest and screen files. All screens render inside one React app
+and update live through Vite HMR. Reuse the existing chat and question/needs_input
+behavior. Do not implement comments, pins, artifact database models, or per-screen
+iframes.
+
+Add whole-canvas HTML export. The canvas toolbar must download one self-contained
+design.html that opens offline from file:// and retains pan, zoom, fit, focus, labels, and
+screen interactions without Trace authentication or network assets.
+
+Follow Trace architecture rules: services own mutations and events, GraphQL resolvers
+stay thin, shared state comes from events, and existing App/Coding behavior must not
+regress. Generalize the current App provisioning, application workflow, preview, and
+workspace code only at the necessary seams. Do not duplicate schema types that already
+exist.
+
+Implement focused server, bridge, starter, and web tests, plus a hosted design smoke script
+modeled on scripts/smoke-cloud-app-session.mjs. Use the v0 completion gate in the spec as
+the definition of done. Audit the current code before editing, make surgical changes, run
+the relevant tests and builds, and continue until the complete hosted workflow is proven
+or a concrete external blocker is documented.
+```
 
 ## Acceptance Criteria
 
@@ -375,6 +558,9 @@ V1 is complete when all of the following are demonstrated:
 - An agent question appears and resolves through the existing chat question flow.
 - Refreshing Trace returns to the same design session and live preview.
 - A checkpoint can restore the design workspace and reproduce the canvas.
+- Export HTML downloads one `design.html` file that opens offline and retains pan, zoom,
+  fit, focus, labels, and screen interactions.
+- The export contains no dependency on the private preview URL or Trace authentication.
 - Existing App and Coding session behavior remains unchanged.
 
 ## Suggested Delivery Order
@@ -384,4 +570,5 @@ V1 is complete when all of the following are demonstrated:
 3. Add design-specific validation and agent instructions.
 4. Add New Design and the chat-plus-preview session layout.
 5. Verify live creation, deletion, and updating of multiple screens through HMR.
-6. Add focused service, UI, runtime, and hosted smoke coverage for the acceptance criteria.
+6. Add the whole-canvas self-contained HTML export.
+7. Add focused service, UI, runtime, and hosted smoke coverage for the acceptance criteria.
