@@ -2,7 +2,7 @@ FROM node:22-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git ca-certificates curl openssh-client \
-    python3 make g++ gpg sudo redis-server tini \
+    python3 make g++ gpg sudo redis-server tini chromium \
     postgresql postgresql-client sqlite3 && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \

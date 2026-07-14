@@ -10,10 +10,12 @@
     "muted": "#a1a1aa",
     "border": "#3f3f46",
     "primary": "#fafafa",
+    "primaryForeground": "#09090b",
     "secondary": "#71717a",
     "success": "#22c55e",
     "warning": "#f59e0b",
-    "danger": "#ef4444"
+    "danger": "#ef4444",
+    "dangerForeground": "#ffffff"
   },
   "typography": {
     "display": "ui-sans-serif, system-ui, sans-serif",

@@ -8,8 +8,10 @@
     "start": "NODE_ENV=production tsx server.ts",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
+    "design:check": "tsx scripts/check-design.ts",
+    "design:review": "tsx scripts/review-design.ts",
     "smoke": "vite build",
-    "test": "tsx --test src/canvas/manifest.test.ts src/canvas/viewport.test.ts server/export-html.test.ts docs/agent-contract.test.ts"
+    "test": "tsx --test src/canvas/manifest.test.ts src/canvas/viewport.test.ts src/design/brief.test.ts src/design/tokens.test.ts src/design/primitives/primitives.test.tsx scripts/design-qa.test.ts server/export-html.test.ts docs/agent-contract.test.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.0",
@@ -27,6 +29,7 @@
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.0",
     "postcss": "^8.5.0",
+    "playwright-core": "^1.61.1",
     "tailwindcss": "^3.4.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { DesignArtboard } from "./DesignArtboard";
 import type { DesignManifest, DesignScreen } from "./manifest";
+import { resolveScreenComponent } from "./screen-modules";
 import {
   type CanvasPoint,
   type CanvasViewport,
@@ -22,12 +23,6 @@ type WebKitGestureEvent = Event & {
 };
 
 const INITIAL_VIEWPORT: CanvasViewport = { zoom: 0.75, x: 100, y: 100 };
-
-function moduleComponent(value: unknown): ComponentType | null {
-  if (!value || typeof value !== "object" || !("default" in value)) return null;
-  const component = (value as { default?: unknown }).default;
-  return typeof component === "function" ? (component as ComponentType) : null;
-}
 
 export function DesignCanvas({
   manifest,
@@ -205,8 +200,7 @@ export function DesignCanvas({
         }}
       >
         {visible.map(({ screen, x, y, sectionName }) => {
-          const key = `./design/${screen.component.slice(2)}`;
-          const component = moduleComponent(screenModules[key]);
+          const component = resolveScreenComponent(screenModules, screen.component);
           return (
             <div key={screen.id} className="absolute" style={{ left: x, top: y }}>
               {component ? (

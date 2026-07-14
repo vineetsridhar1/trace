@@ -3,8 +3,10 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
+const viteCli = fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url));
 
 export function validateSelfContainedHtml(html: string): void {
   const assetTag =
@@ -23,10 +25,14 @@ export function validateSelfContainedHtml(html: string): void {
 export async function buildSelfContainedHtml(root: string): Promise<string> {
   const outputDir = await mkdtemp(join(tmpdir(), "trace-design-export-"));
   try {
-    await execFileAsync("pnpm", ["exec", "vite", "build", "--outDir", outputDir, "--emptyOutDir"], {
-      cwd: root,
-      env: { ...process.env, TRACE_DESIGN_EXPORT: "1" },
-    });
+    await execFileAsync(
+      process.execPath,
+      [viteCli, "build", "--outDir", outputDir, "--emptyOutDir"],
+      {
+        cwd: root,
+        env: { ...process.env, TRACE_DESIGN_EXPORT: "1" },
+      },
+    );
     let html = await readFile(join(outputDir, "index.html"), "utf8");
     const scriptPattern = /<script\b[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi;
     const stylePattern = /<link\b[^>]*href=["']([^"']+\.css)["'][^>]*>/gi;

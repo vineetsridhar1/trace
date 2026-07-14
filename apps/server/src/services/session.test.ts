@@ -4402,14 +4402,22 @@ describe("SessionService", () => {
       const command = sessionRouterMock.send.mock.calls.at(-1)?.[1];
       expect(command).toEqual(
         expect.objectContaining({
-          appendSystemPrompt: expect.stringContaining(
-            "React is only the rendering medium",
-          ),
+          appendSystemPrompt: expect.stringContaining("React is only the rendering medium"),
         }),
       );
       expect(command).toEqual(
         expect.objectContaining({
           appendSystemPrompt: expect.stringContaining("critique it before delivery"),
+        }),
+      );
+      expect(command).toEqual(
+        expect.objectContaining({
+          appendSystemPrompt: expect.stringContaining("resolve design.brief.json"),
+        }),
+      );
+      expect(command).toEqual(
+        expect.objectContaining({
+          appendSystemPrompt: expect.stringContaining("pnpm design:review"),
         }),
       );
       expect(command).toEqual(

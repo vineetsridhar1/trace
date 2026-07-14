@@ -5,6 +5,7 @@ dist
 .env.*
 !.env.example
 data
+.trace/review/
 *.log
 
 next-env.d.ts

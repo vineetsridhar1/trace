@@ -28,11 +28,22 @@ test("defines an artifact-first design workflow and quality gate", () => {
   assert.match(guidance, /## Precedence/);
   assert.match(guidance, /## Design loop/);
   assert.match(guidance, /Commit to a visual system/);
+  assert.match(guidance, /design\.brief\.json/);
   assert.match(guidance, /trace\.tokens\.json/);
+  assert.match(guidance, /Executable tokens and screen primitives/);
+  assert.match(guidance, /docs\/playbooks\/README\.md/);
   assert.match(guidance, /Avoid generic AI styling/);
   assert.match(guidance, /## Final critique/);
   assert.match(guidance, /Brief fidelity/);
   assert.match(guidance, /Interaction and accessibility/);
+  assert.match(guidance, /pnpm design:review/);
+});
+
+test("routes specialized design work without replacing the shared canvas contract", () => {
+  assert.match(guidance, /reference-grounding\.md/);
+  assert.match(guidance, /visual-directions\.md/);
+  assert.match(guidance, /Build one representative screen first/);
+  assert.match(guidance, /Inspect every PNG/);
 });
 
 test("preserves attribution for the adapted Open Design guidance", () => {
