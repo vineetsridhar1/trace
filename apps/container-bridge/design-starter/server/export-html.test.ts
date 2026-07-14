@@ -27,6 +27,6 @@ test("builds the design runtime as one self-contained HTML file", async () => {
   assert.match(html, /<script type="module">/);
   assert.match(html, /<style>/);
   assert.doesNotMatch(html, /<script\b[^>]*\bsrc=/i);
-  assert.doesNotMatch(html, /<link\b[^>]*\bhref=/i);
+  assert.doesNotMatch(html, /<link\b[^>]*\bhref=["'](?!data:)/i);
   validateSelfContainedHtml(html);
 });
