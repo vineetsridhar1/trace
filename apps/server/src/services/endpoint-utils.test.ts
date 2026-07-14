@@ -33,6 +33,23 @@ describe("endpoint utils", () => {
     expect(extractEndpointKey("abc123.preview.localhost:4000")).toBe("abc123");
   });
 
+  it("defaults local previews to the API server port", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "");
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME", "");
+    vi.stubEnv("PORT", "4100");
+
+    expect(endpointPreviewBaseHost()).toBe("preview.localhost:4100");
+    expect(buildEndpointUrl("abc123")).toBe("http://abc123.preview.localhost:4100");
+  });
+
+  it("applies the local Trace port offset when PORT is unset", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "");
+    vi.stubEnv("PORT", "");
+    vi.stubEnv("TRACE_PORT", "7");
+
+    expect(buildEndpointUrl("abc123")).toBe("http://abc123.preview.localhost:4007");
+  });
+
   it("extracts opaque endpoint keys from wildcard hosts", () => {
     vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.localhost");
 

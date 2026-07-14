@@ -127,6 +127,10 @@ async function initializeLocalModeEnv() {
     TRACE_SERVER_URL: serverUrl,
     TRACE_WEB_URL: webUrl,
     CORS_ALLOWED_ORIGINS: webUrl,
+    TRACE_ENDPOINT_PREVIEW_BASE_HOST:
+      process.env.TRACE_ENDPOINT_PREVIEW_BASE_HOST ?? `preview.localhost:${serverPort}`,
+    TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME:
+      process.env.TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME ?? "http",
     STORAGE_MODE: "local",
     STORAGE_PUBLIC_URL: serverUrl,
     NODE_ENV: process.env.NODE_ENV ?? "development",

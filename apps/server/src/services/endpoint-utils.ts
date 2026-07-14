@@ -3,8 +3,17 @@ import type { EndpointTrafficCaptureMode } from "@prisma/client";
 
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 
+function localServerPort(): number {
+  const explicitPort = Number(process.env.PORT);
+  if (Number.isInteger(explicitPort) && explicitPort > 0) return explicitPort;
+  const offset = Number(process.env.TRACE_PORT);
+  return 4000 + (Number.isInteger(offset) ? offset : 0);
+}
+
 export function endpointPreviewBaseHost(): string {
-  return process.env.TRACE_ENDPOINT_PREVIEW_BASE_HOST?.trim() || "preview.localhost";
+  return (
+    process.env.TRACE_ENDPOINT_PREVIEW_BASE_HOST?.trim() || `preview.localhost:${localServerPort()}`
+  );
 }
 
 export function endpointPreviewScheme(): string {
@@ -57,7 +66,7 @@ export function extractEndpointKey(hostHeader: string | undefined | null): strin
   // The key must be exactly one label: `<key>.<baseHost>`. Reject deeper
   // subdomains (`evil.<key>.<baseHost>`) so one endpoint isn't reachable from
   // unbounded origins that could script/set cookies across the isolation seam.
-  const prefix = host.slice(0, -1 * (`.${baseHost}`).length);
+  const prefix = host.slice(0, -1 * `.${baseHost}`.length);
   return /^[a-z0-9-]+$/.test(prefix) ? prefix : null;
 }
 
