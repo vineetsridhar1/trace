@@ -85,7 +85,6 @@ export function GeneratedProjectPreviewPanel({ sessionGroupId }: { sessionGroupI
         endpointId={endpoint.id}
         status="running"
         fill
-        desktopViewport
       />
     );
 
