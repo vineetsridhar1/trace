@@ -1,11 +1,9 @@
-import { execFile } from "node:child_process";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
+import { chromium } from "playwright-core";
 
-const execFileAsync = promisify(execFile);
 const serverUrl = requiredEnv("TRACE_SMOKE_SERVER_URL").replace(/\/$/, "");
 const authToken = requiredEnv("TRACE_SMOKE_AUTH_TOKEN");
 const organizationId = requiredEnv("TRACE_SMOKE_ORG_ID");
@@ -105,6 +103,8 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+class FatalSmokeError extends Error {}
+
 async function poll(label, check) {
   const deadline = Date.now() + timeoutMs;
   let detail = "not checked";
@@ -114,6 +114,7 @@ async function poll(label, check) {
       if (result.ok) return result.value;
       detail = result.detail;
     } catch (error) {
+      if (error instanceof FatalSmokeError) throw error;
       detail = error.message;
     }
     process.stdout.write(`Waiting for ${label}: ${detail}\n`);
@@ -126,8 +127,9 @@ async function state(groupId) {
   return graphql(DESIGN_STATE, { sessionGroupId: groupId });
 }
 
-async function waitForAgent(groupId, expectedStatus = "done") {
+async function waitForAgent(groupId, expectedStatus = "done", endpointId) {
   return poll(`design agent status ${expectedStatus}`, async () => {
+    if (endpointId) await ensurePreviewAccess(endpointId);
     const current = await state(groupId);
     const session = current.sessionGroup?.sessions?.[0];
     if (!session) return { ok: false, detail: "session missing" };
@@ -169,41 +171,50 @@ async function previewUrl(endpointId) {
   return data.createSessionEndpointPreview.url;
 }
 
-async function dumpDom(url, offline = false) {
-  const profile = await fsp.mkdtemp(path.join(os.tmpdir(), "trace-design-smoke-"));
-  try {
-    const args = [
-      "--headless=new",
-      "--disable-gpu",
-      "--disable-dev-shm-usage",
-      "--no-first-run",
-      "--no-default-browser-check",
-      `--user-data-dir=${profile}`,
-      "--virtual-time-budget=5000",
-      ...(offline ? ["--host-resolver-rules=MAP * 0.0.0.0"] : []),
-      "--dump-dom",
-      url,
-    ];
-    const { stdout } = await execFileAsync(chromeExecutable, args, {
-      maxBuffer: 30 * 1024 * 1024,
-      timeout: 60_000,
-    });
-    return stdout;
-  } finally {
-    await fsp.rm(profile, { recursive: true, force: true });
+const browser = await chromium.launch({
+  executablePath: chromeExecutable,
+  headless: true,
+  args: ["--no-sandbox", "--disable-dev-shm-usage"],
+});
+const previewContext = await browser.newContext();
+const previewPage = await previewContext.newPage();
+const authPage = await previewContext.newPage();
+let previewAccessRefreshedAt = 0;
+
+async function ensurePreviewAccess(endpointId, force = false) {
+  if (!force && Date.now() - previewAccessRefreshedAt < 2 * 60_000) return;
+  const authUrl = await previewUrl(endpointId);
+  const response = await authPage.goto(authUrl, { waitUntil: "domcontentloaded" });
+  if (!response?.ok()) {
+    throw new Error(`Preview authentication failed (${response?.status() ?? "no response"})`);
   }
+  await authPage.goto("about:blank");
+  previewAccessRefreshedAt = Date.now();
 }
 
-async function verifyCanvas(url, expectedScreens) {
+async function verifyCanvas(expectedScreens, pageIdentity, endpointId) {
   return poll(`${expectedScreens} rendered design screens`, async () => {
-    const dom = await dumpDom(url);
-    const count = (dom.match(/data-screen-id=/g) ?? []).length;
-    if (!dom.includes(marker)) return { ok: false, detail: `marker missing; screens=${count}` };
+    await ensurePreviewAccess(endpointId);
+    const count = await previewPage.locator("[data-screen-id]").count();
+    const body = (await previewPage.locator("body").textContent()) ?? "";
+    if (!body.includes(marker)) return { ok: false, detail: `marker missing; screens=${count}` };
     if (count !== expectedScreens) return { ok: false, detail: `rendered screens=${count}` };
-    for (const control of ["Zoom in", "Zoom out", "Fit", "Export HTML", "Focus"]) {
-      if (!dom.includes(control)) return { ok: false, detail: `control missing: ${control}` };
+    if (pageIdentity) {
+      const currentIdentity = await previewPage.evaluate(
+        () => globalThis.__traceDesignSmokePageIdentity,
+      );
+      if (currentIdentity !== pageIdentity) {
+        throw new FatalSmokeError(
+          "The design preview reloaded instead of updating through HMR",
+        );
+      }
     }
-    return { ok: true, value: dom };
+    for (const control of ["Zoom in", "Zoom out", "Fit", "Export HTML", "Focus"]) {
+      if ((await previewPage.getByText(control, { exact: true }).count()) === 0) {
+        return { ok: false, detail: `control missing: ${control}` };
+      }
+    }
+    return { ok: true, value: body };
   });
 }
 
@@ -214,12 +225,27 @@ async function send(sessionId, text) {
 async function verifyOfflineExport(livePreviewUrl, expectedScreens) {
   const exportUrl = new URL(livePreviewUrl);
   exportUrl.pathname = "/__trace_design_export";
-  const response = await fetch(exportUrl, { redirect: "follow" });
-  const html = await response.text();
-  if (!response.ok)
-    throw new Error(`Design export failed (${response.status}): ${html.slice(0, 500)}`);
-  if (!response.headers.get("content-disposition")?.includes('filename="design.html"')) {
+  exportUrl.search = "";
+  const result = await previewPage.evaluate(async (url) => {
+    const response = await fetch(url, { credentials: "include" });
+    return {
+      ok: response.ok,
+      status: response.status,
+      contentDisposition: response.headers.get("content-disposition"),
+      html: await response.text(),
+    };
+  }, exportUrl.toString());
+  if (!result.ok) {
+    throw new Error(
+      `Design export failed (${result.status}): ${result.html.slice(0, 500)}`,
+    );
+  }
+  if (!result.contentDisposition?.includes('filename="design.html"')) {
     throw new Error("Design export did not return the design.html attachment");
+  }
+  const html = result.html;
+  if (html.includes("data-trace-app-overlay")) {
+    throw new Error("Design export contains the private-preview authoring overlay");
   }
   if (/<(?:script|link)\b[^>]*(?:src|href)=["'](?!data:|#)/i.test(html)) {
     throw new Error("Design export contains a non-inline script or stylesheet");
@@ -228,13 +254,25 @@ async function verifyOfflineExport(livePreviewUrl, expectedScreens) {
   try {
     const file = path.join(directory, "design.html");
     await fsp.writeFile(file, html);
-    const dom = await dumpDom(`file://${file}`, true);
-    const count = (dom.match(/data-screen-id=/g) ?? []).length;
-    if (count !== expectedScreens || !dom.includes(marker)) {
-      throw new Error(`Offline design rendered ${count}/${expectedScreens} screens or lost marker`);
-    }
-    for (const control of ["Zoom in", "Zoom out", "Fit", "Focus"]) {
-      if (!dom.includes(control)) throw new Error(`Offline design lost ${control}`);
+    const offlineContext = await browser.newContext({ offline: true });
+    try {
+      const offlinePage = await offlineContext.newPage();
+      await offlinePage.goto(`file://${file}`, { waitUntil: "domcontentloaded" });
+      await offlinePage.locator("[data-screen-id]").first().waitFor({ state: "attached" });
+      const count = await offlinePage.locator("[data-screen-id]").count();
+      const body = (await offlinePage.locator("body").textContent()) ?? "";
+      if (count !== expectedScreens || !body.includes(marker)) {
+        throw new Error(
+          `Offline design rendered ${count}/${expectedScreens} screens or lost marker`,
+        );
+      }
+      for (const control of ["Zoom in", "Zoom out", "Fit", "Focus"]) {
+        if ((await offlinePage.getByText(control, { exact: true }).count()) === 0) {
+          throw new Error(`Offline design lost ${control}`);
+        }
+      }
+    } finally {
+      await offlineContext.close();
     }
   } finally {
     await fsp.rm(directory, { recursive: true, force: true });
@@ -268,35 +306,48 @@ try {
   createdGroups.push(session.sessionGroupId);
 
   const ready = await waitForReadyRuntime(session.sessionGroupId);
-  await waitForAgent(session.sessionGroupId);
-  const liveUrl = await previewUrl(ready.endpoint.id);
-  await verifyCanvas(liveUrl, 12);
+  await waitForAgent(session.sessionGroupId, "done", ready.endpoint.id);
+  const liveAuthUrl = await previewUrl(ready.endpoint.id);
+  await previewPage.goto(liveAuthUrl, { waitUntil: "domcontentloaded" });
+  previewAccessRefreshedAt = Date.now();
+  const liveUrl = new URL(previewPage.url());
+  liveUrl.pathname = "/";
+  liveUrl.search = "";
+  const pageIdentity = await previewPage.evaluate(() => {
+    globalThis.__traceDesignSmokePageIdentity = crypto.randomUUID();
+    return globalThis.__traceDesignSmokePageIdentity;
+  });
+  await verifyCanvas(12, pageIdentity, ready.endpoint.id);
 
+  await ensurePreviewAccess(ready.endpoint.id, true);
   await send(
     session.id,
     "Add one Empty state to each of the four variations, for exactly sixteen total screens. Commit when complete.",
   );
-  await waitForAgent(session.sessionGroupId);
+  await waitForAgent(session.sessionGroupId, "done", ready.endpoint.id);
   const afterHmr = await waitForReadyRuntime(session.sessionGroupId);
   if (afterHmr.endpoint.id !== ready.endpoint.id || afterHmr.process.id !== ready.process.id) {
     throw new Error("The HMR edit created a second process or endpoint");
   }
-  await verifyCanvas(liveUrl, 16);
+  await verifyCanvas(16, pageIdentity, ready.endpoint.id);
 
+  await ensurePreviewAccess(ready.endpoint.id, true);
   await send(
     session.id,
     "Before changing the design, use the existing question tool to ask me which accent color to use. Do not continue until I answer.",
   );
-  await waitForAgent(session.sessionGroupId, "needs_input");
+  await waitForAgent(session.sessionGroupId, "needs_input", ready.endpoint.id);
   await send(session.id, "Use cobalt blue, then finish without adding or removing screens.");
-  await waitForAgent(session.sessionGroupId);
-  await verifyCanvas(liveUrl, 16);
-  await verifyOfflineExport(liveUrl, 16);
+  await waitForAgent(session.sessionGroupId, "done", ready.endpoint.id);
+  await verifyCanvas(16, pageIdentity, ready.endpoint.id);
+  await ensurePreviewAccess(ready.endpoint.id, true);
+  await verifyOfflineExport(liveUrl.toString(), 16);
 
   process.stdout.write(
     `Trace cloud design session smoke passed.\nSession: ${session.id}\nGroup: ${session.sessionGroupId}\nEndpoint: ${ready.endpoint.id}\n`,
   );
 } finally {
+  await browser.close();
   if (keepResources) {
     process.stdout.write("TRACE_SMOKE_KEEP=1 — leaving design resources in place.\n");
   } else {

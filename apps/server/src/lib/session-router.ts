@@ -2103,7 +2103,7 @@ export class SessionRouter {
         if (options.sessionGroupKind === "app" || options.sessionGroupKind === "design") {
           const runtimeInstanceId = startResult.runtimeInstanceId;
           if (!runtimeInstanceId || !options.prepareAppGit) {
-            options.onFailed("App managed git credentials are unavailable");
+            options.onFailed("Generated project managed git credentials are unavailable");
             return;
           }
           const appGit = await options.prepareAppGit(runtimeInstanceId);

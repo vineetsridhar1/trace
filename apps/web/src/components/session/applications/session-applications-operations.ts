@@ -166,6 +166,7 @@ export const CREATE_PREVIEW_MUTATION = gql`
   mutation CreateSessionEndpointPreview($endpointId: ID!) {
     createSessionEndpointPreview(endpointId: $endpointId) {
       url
+      expiresAt
     }
   }
 `;

@@ -6,6 +6,7 @@ import {
   extractEndpointKey,
   forwardableRequestHeaders,
   forwardableResponseHeaders,
+  isAttachmentResponse,
   generateEndpointKey,
   isAllowedPreviewRequestOrigin,
   sanitizeHeaders,
@@ -75,6 +76,13 @@ describe("endpoint utils", () => {
       "set-cookie": ["sid=1; Path=/; HttpOnly", "a=b"],
       "content-type": "text/html",
     });
+  });
+
+  it("recognizes downloads that must not receive the authoring overlay", () => {
+    expect(
+      isAttachmentResponse({ "Content-Disposition": 'attachment; filename="design.html"' }),
+    ).toBe(true);
+    expect(isAttachmentResponse({ "content-type": "text/html" })).toBe(false);
   });
 
   it("allows same-endpoint and Trace origins but rejects cross-site preview requests", () => {

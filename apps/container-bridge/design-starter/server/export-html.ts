@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { validateDesignProject } from "../scripts/design-qa";
 
 const execFileAsync = promisify(execFile);
 const viteCli = fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url));
@@ -20,9 +21,16 @@ export function validateSelfContainedHtml(html: string): void {
   const cssUrl = /url\(\s*["']?(?!data:)([^)'"\s]+)["']?\s*\)/gi;
   const cssMatch = cssUrl.exec(html);
   if (cssMatch) throw new Error(`Export contains an external CSS asset: ${cssMatch[1]}`);
+  if (/@import\s+(?:url\s*\(|["'])/i.test(html)) {
+    throw new Error("Export contains an unresolved CSS import");
+  }
 }
 
 export async function buildSelfContainedHtml(root: string): Promise<string> {
+  const report = await validateDesignProject(root);
+  if (report.errors.length > 0) {
+    throw new Error(`Design validation failed:\n${report.errors.join("\n")}`);
+  }
   const outputDir = await mkdtemp(join(tmpdir(), "trace-design-export-"));
   try {
     await execFileAsync(

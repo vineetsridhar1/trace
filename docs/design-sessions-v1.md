@@ -271,19 +271,18 @@ V1 needs this minimum shape:
   "sections": [
     {
       "id": "variation-a",
-      "title": "Variation A",
-      "description": "Minimal, task-focused direction",
+      "name": "Variation A",
       "screenIds": ["variation-a-default", "variation-a-loading"]
     }
   ],
   "screens": [
     {
       "id": "variation-a-default",
-      "title": "Default",
+      "name": "Default",
       "variation": "variation-a",
       "state": "default",
-      "viewport": { "name": "desktop", "width": 1440, "height": 1000 },
-      "component": "./src/design/screens/variation-a-default.tsx"
+      "viewport": { "width": 1440, "height": 1000 },
+      "component": "./screens/variation-a-default.tsx"
     }
   ]
 }

@@ -55,7 +55,7 @@ const DEFAULT_APP_SESSION_CONFIG = repoApplicationConfigService.normalize({
         {
           id: "dev",
           name: "Dev server",
-          command: "pnpm install --offline --frozen-lockfile && pnpm dev",
+          command: "pnpm install --prefer-offline --frozen-lockfile && pnpm dev",
           workingDirectory: ".",
           required: true,
           env: [],

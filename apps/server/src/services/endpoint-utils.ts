@@ -245,6 +245,11 @@ export function forwardableResponseHeaders(
   return forwarded;
 }
 
+export function isAttachmentResponse(headers: Record<string, string | string[]>): boolean {
+  const disposition = headers["content-disposition"] ?? headers["Content-Disposition"];
+  return typeof disposition === "string" && /\battachment\b/i.test(disposition);
+}
+
 // Assert at startup that previews are served from a registrable domain distinct
 // from the Trace app origin (the plan's "never render untrusted content from the
 // Trace app origin"). A shared parent domain would let untrusted app JS reach
