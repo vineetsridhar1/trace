@@ -5,8 +5,8 @@ This directory is the executable AWS CDK implementation of
 
 It creates six production stacks:
 
-- `Foundation`: VPC, subnets, NAT, endpoints, Route 53, ACM, KMS, ECR, and GitHub OIDC.
-- `Data`: Aurora/RDS Proxy, Valkey, EFS, S3, SQS, and application secrets.
+- `Foundation`: managed or imported VPC/subnets, Route 53, ACM, KMS, ECR, and GitHub OIDC.
+- `Data`: managed Aurora or an imported RDS PostgreSQL database, Valkey, EFS, S3, SQS, and secrets.
 - `Runtime`: isolated Fargate task definition, launcher API, runtime registry, and lifecycle queue.
 - `ControlPlane`: web/API ECS services, ALB routing, WAF, managed-Git mount, and migration task.
 - `AppDeployment`: generated-app cluster, build project, repositories, queues, and deployment roles.
@@ -14,7 +14,7 @@ It creates six production stacks:
 
 Start with [the deployment runbook](../docs/aws-iac-deployment.md). Do not deploy the example
 configuration as production. Copy it to `config/production.json`, supply the real account/domain,
-and synthesize with:
+VPC, subnet, and database identifiers, and synthesize with:
 
 ```bash
 pnpm install

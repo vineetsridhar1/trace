@@ -129,9 +129,7 @@ export class RuntimeStack extends Stack {
         TASK_EXECUTION_ROLE_ARN: this.taskDefinition.executionRole!.roleArn,
         TASK_ROLE_ARN: this.taskDefinition.taskRole.roleArn,
         RUNTIME_CONTAINER_NAME: "runtime",
-        SUBNET_IDS: foundation.vpc
-          .selectSubnets({ subnetGroupName: "session-runtime" })
-          .subnetIds.join(","),
+        SUBNET_IDS: foundation.runtimeSubnetIds.join(","),
         SECURITY_GROUP_IDS: this.runtimeSecurityGroup.securityGroupId,
         RUNTIME_TABLE_NAME: runtimeTable.tableName,
         AUTH_SECRET_ARN: this.launcherAuthSecret.secretArn,

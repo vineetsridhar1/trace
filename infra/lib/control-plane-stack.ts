@@ -66,7 +66,7 @@ export class ControlPlaneStack extends Stack {
     });
     this.apiSecurityGroup.addIngressRule(albSecurityGroup, ec2.Port.tcp(4000), "ALB to API");
     for (const [ruleId, targetSecurityGroup, port] of [
-      ["ApiToDatabaseProxy", data.controlProxySecurityGroup, 5432],
+      ["ApiToControlDatabase", data.controlDatabaseSecurityGroup, data.controlDatabasePort],
       ["ApiToRedis", data.redisSecurityGroup, 6379],
       ["ApiToGitEfs", data.gitSecurityGroup, 2049],
     ] as const) {
@@ -127,7 +127,7 @@ export class ControlPlaneStack extends Stack {
       desiredCount: config.webDesiredCount,
       assignPublicIp: false,
       securityGroups: [this.webSecurityGroup],
-      vpcSubnets: { subnetGroupName: "control-plane" },
+      vpcSubnets: foundation.controlPlaneSubnets,
       circuitBreaker: { enable: true, rollback: true },
       healthCheckGracePeriod: Duration.seconds(60),
       minHealthyPercent: 100,
@@ -163,7 +163,7 @@ export class ControlPlaneStack extends Stack {
       desiredCount: config.apiDesiredCount,
       assignPublicIp: false,
       securityGroups: [this.apiSecurityGroup],
-      vpcSubnets: { subnetGroupName: "control-plane" },
+      vpcSubnets: foundation.controlPlaneSubnets,
       circuitBreaker: { enable: true, rollback: true },
       healthCheckGracePeriod: Duration.minutes(3),
       minHealthyPercent: 0,
@@ -192,7 +192,7 @@ export class ControlPlaneStack extends Stack {
       vpc: foundation.vpc,
       internetFacing: true,
       securityGroup: albSecurityGroup,
-      vpcSubnets: { subnetGroupName: "public" },
+      vpcSubnets: foundation.publicSubnets,
       idleTimeout: Duration.minutes(60),
       deletionProtection: config.retainDataOnDelete,
       dropInvalidHeaderFields: true,
@@ -365,7 +365,7 @@ export class ControlPlaneStack extends Stack {
       value: this.migrationTaskDefinition.taskDefinitionArn,
     });
     new CfnOutput(this, "ControlSubnetIds", {
-      value: foundation.vpc.selectSubnets({ subnetGroupName: "control-plane" }).subnetIds.join(","),
+      value: foundation.controlPlaneSubnetIds.join(","),
     });
     new CfnOutput(this, "MigrationSecurityGroupIds", {
       value: this.apiSecurityGroup.securityGroupId,
@@ -428,9 +428,9 @@ export class ControlPlaneStack extends Stack {
         ROLE: role,
         NODE_ENV: "production",
         PORT: "4000",
-        DATABASE_HOST: data.controlDatabaseProxy.endpoint,
-        DATABASE_PORT: "5432",
-        DATABASE_NAME: "trace",
+        DATABASE_HOST: data.controlDatabaseEndpoint,
+        DATABASE_PORT: String(data.controlDatabasePort),
+        DATABASE_NAME: data.controlDatabaseName,
         REDIS_URL: `rediss://${data.redisEndpointAddress}:${data.redisPort}`,
         TRACE_WEB_URL: `https://${config.domainName}`,
         TRACE_SERVER_PUBLIC_URL: `https://${config.domainName}`,
@@ -449,8 +449,8 @@ export class ControlPlaneStack extends Stack {
         SLACK_REDIRECT_URI: `https://${config.domainName}/slack/oauth/callback`,
       },
       secrets: {
-        DATABASE_USER: ecs.Secret.fromSecretsManager(data.controlDatabase.secret!, "username"),
-        DATABASE_PASSWORD: ecs.Secret.fromSecretsManager(data.controlDatabase.secret!, "password"),
+        DATABASE_USER: ecs.Secret.fromSecretsManager(data.controlDatabaseSecret, "username"),
+        DATABASE_PASSWORD: ecs.Secret.fromSecretsManager(data.controlDatabaseSecret, "password"),
         JWT_SECRET: ecs.Secret.fromSecretsManager(data.jwtSecret),
         TOKEN_ENCRYPTION_KEY: ecs.Secret.fromSecretsManager(data.tokenEncryptionSecret),
         GITHUB_CLIENT_ID: ecs.Secret.fromSecretsManager(data.integrationSecret, "GITHUB_CLIENT_ID"),
@@ -492,6 +492,8 @@ export class ControlPlaneStack extends Stack {
     });
 
     data.artifactBucket.grantReadWrite(task.taskRole);
+    data.controlDatabaseSecret.grantRead(task.executionRole!);
+    data.controlDatabaseSecretKmsKey?.grantDecrypt(task.executionRole!);
     data.gitFileSystem.grantReadWrite(task.taskRole);
     task.taskRole.addToPrincipalPolicy(
       new iam.PolicyStatement({

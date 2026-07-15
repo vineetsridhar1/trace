@@ -10,7 +10,26 @@ export interface TraceInfraConfig {
   hostedZoneId?: string;
   createHostedZone: boolean;
   githubRepository: string;
-  githubDeployBranch: string;
+  githubDeployEnvironment: string;
+  networkMode: "managed" | "existing";
+  existingVpcId?: string;
+  existingAvailabilityZones?: string[];
+  existingPublicSubnetIds?: string[];
+  existingPublicRouteTableIds?: string[];
+  existingControlPlaneSubnetIds?: string[];
+  existingControlPlaneRouteTableIds?: string[];
+  existingRuntimeSubnetIds?: string[];
+  existingRuntimeRouteTableIds?: string[];
+  existingDataSubnetIds?: string[];
+  existingDataRouteTableIds?: string[];
+  controlDatabaseMode: "managed" | "existing";
+  existingControlDatabaseHost?: string;
+  existingControlDatabasePort?: number;
+  existingControlDatabaseName?: string;
+  existingControlDatabaseIdentifier?: string;
+  existingControlDatabaseSecretArn?: string;
+  existingControlDatabaseSecretKmsKeyArn?: string;
+  existingControlDatabaseSecurityGroupId?: string;
   alertEmail?: string;
   availabilityZones: number;
   natGateways: number;
@@ -41,14 +60,81 @@ const requiredStringKeys = [
   "region",
   "domainName",
   "githubRepository",
-  "githubDeployBranch",
+  "githubDeployEnvironment",
   "controlImageTag",
   "runtimeImageTag",
 ] as const;
 
+function requireString(config: TraceInfraConfig, key: keyof TraceInfraConfig): void {
+  const value = config[key];
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`Infrastructure config requires ${String(key)}`);
+  }
+}
+
+function requireList(config: TraceInfraConfig, key: keyof TraceInfraConfig): void {
+  const value = config[key];
+  if (!Array.isArray(value) || value.length < 2 || value.some((id) => !id.trim())) {
+    throw new Error(`${String(key)} must contain at least two values`);
+  }
+}
+
+function requireSubnetGroup(
+  config: TraceInfraConfig,
+  subnetKey: keyof TraceInfraConfig,
+  routeTableKey: keyof TraceInfraConfig,
+): void {
+  requireList(config, subnetKey);
+  requireList(config, routeTableKey);
+  const subnets = config[subnetKey] as string[];
+  const routeTables = config[routeTableKey] as string[];
+  if (subnets.length !== routeTables.length) {
+    throw new Error(`${String(routeTableKey)} must align one-to-one with ${String(subnetKey)}`);
+  }
+}
+
 function assertConfig(config: TraceInfraConfig): void {
   for (const key of requiredStringKeys) {
     if (!config[key]?.trim()) throw new Error(`Infrastructure config requires ${key}`);
+  }
+  if (config.networkMode !== "managed" && config.networkMode !== "existing") {
+    throw new Error("networkMode must be managed or existing");
+  }
+  if (config.controlDatabaseMode !== "managed" && config.controlDatabaseMode !== "existing") {
+    throw new Error("controlDatabaseMode must be managed or existing");
+  }
+  if (config.networkMode === "existing") {
+    requireString(config, "existingVpcId");
+    requireList(config, "existingAvailabilityZones");
+    requireSubnetGroup(config, "existingPublicSubnetIds", "existingPublicRouteTableIds");
+    requireSubnetGroup(
+      config,
+      "existingControlPlaneSubnetIds",
+      "existingControlPlaneRouteTableIds",
+    );
+    requireSubnetGroup(config, "existingRuntimeSubnetIds", "existingRuntimeRouteTableIds");
+    requireSubnetGroup(config, "existingDataSubnetIds", "existingDataRouteTableIds");
+    if (config.enablePaidVpcEndpoints) {
+      throw new Error("enablePaidVpcEndpoints must be false when networkMode is existing");
+    }
+  }
+  if (config.controlDatabaseMode === "existing") {
+    if (config.networkMode !== "existing") {
+      throw new Error("An existing control database requires networkMode existing");
+    }
+    for (const key of [
+      "existingControlDatabaseHost",
+      "existingControlDatabaseName",
+      "existingControlDatabaseIdentifier",
+      "existingControlDatabaseSecretArn",
+      "existingControlDatabaseSecurityGroupId",
+    ] as const) {
+      requireString(config, key);
+    }
+    const port = config.existingControlDatabasePort;
+    if (!Number.isInteger(port) || port! < 1 || port! > 65535) {
+      throw new Error("existingControlDatabasePort must be a valid TCP port");
+    }
   }
   if (!config.createHostedZone && !config.hostedZoneId) {
     throw new Error("Set hostedZoneId when createHostedZone is false");

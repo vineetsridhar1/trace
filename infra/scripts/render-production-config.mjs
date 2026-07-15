@@ -31,7 +31,21 @@ function bool(name, fallback) {
   throw new Error(`${name} must be true or false`);
 }
 
+function csv(name, description = "IDs") {
+  const raw = required(name);
+  const values = raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (values.length < 2) {
+    throw new Error(`${name} must contain at least two comma-separated ${description}`);
+  }
+  return values;
+}
+
 const hostedZoneId = optional("ROUTE53_HOSTED_ZONE_ID");
+const networkMode = required("NETWORK_MODE");
+const controlDatabaseMode = required("CONTROL_DATABASE_MODE");
 const config = {
   account: required("AWS_ACCOUNT_ID"),
   environmentName: optional("TRACE_ENVIRONMENT_NAME") ?? "prod",
@@ -40,7 +54,51 @@ const config = {
   hostedZoneId,
   createHostedZone: !hostedZoneId,
   githubRepository: optional("GITHUB_REPOSITORY") ?? "vineetsridhar1/trace",
-  githubDeployBranch: optional("GITHUB_DEPLOY_BRANCH") ?? "main",
+  githubDeployEnvironment: optional("GITHUB_DEPLOY_ENVIRONMENT") ?? "production",
+  networkMode,
+  existingVpcId: networkMode === "existing" ? required("EXISTING_VPC_ID") : undefined,
+  existingAvailabilityZones:
+    networkMode === "existing" ? csv("EXISTING_AVAILABILITY_ZONES", "values") : undefined,
+  existingPublicSubnetIds:
+    networkMode === "existing" ? csv("EXISTING_PUBLIC_SUBNET_IDS") : undefined,
+  existingPublicRouteTableIds:
+    networkMode === "existing" ? csv("EXISTING_PUBLIC_ROUTE_TABLE_IDS") : undefined,
+  existingControlPlaneSubnetIds:
+    networkMode === "existing" ? csv("EXISTING_CONTROL_PLANE_SUBNET_IDS") : undefined,
+  existingControlPlaneRouteTableIds:
+    networkMode === "existing" ? csv("EXISTING_CONTROL_PLANE_ROUTE_TABLE_IDS") : undefined,
+  existingRuntimeSubnetIds:
+    networkMode === "existing" ? csv("EXISTING_RUNTIME_SUBNET_IDS") : undefined,
+  existingRuntimeRouteTableIds:
+    networkMode === "existing" ? csv("EXISTING_RUNTIME_ROUTE_TABLE_IDS") : undefined,
+  existingDataSubnetIds: networkMode === "existing" ? csv("EXISTING_DATA_SUBNET_IDS") : undefined,
+  existingDataRouteTableIds:
+    networkMode === "existing" ? csv("EXISTING_DATA_ROUTE_TABLE_IDS") : undefined,
+  controlDatabaseMode,
+  existingControlDatabaseHost:
+    controlDatabaseMode === "existing" ? required("EXISTING_CONTROL_DATABASE_HOST") : undefined,
+  existingControlDatabasePort:
+    controlDatabaseMode === "existing"
+      ? integer("EXISTING_CONTROL_DATABASE_PORT", 5432)
+      : undefined,
+  existingControlDatabaseName:
+    controlDatabaseMode === "existing" ? required("EXISTING_CONTROL_DATABASE_NAME") : undefined,
+  existingControlDatabaseIdentifier:
+    controlDatabaseMode === "existing"
+      ? required("EXISTING_CONTROL_DATABASE_IDENTIFIER")
+      : undefined,
+  existingControlDatabaseSecretArn:
+    controlDatabaseMode === "existing"
+      ? required("EXISTING_CONTROL_DATABASE_SECRET_ARN")
+      : undefined,
+  existingControlDatabaseSecretKmsKeyArn:
+    controlDatabaseMode === "existing"
+      ? optional("EXISTING_CONTROL_DATABASE_SECRET_KMS_KEY_ARN")
+      : undefined,
+  existingControlDatabaseSecurityGroupId:
+    controlDatabaseMode === "existing"
+      ? required("EXISTING_CONTROL_DATABASE_SECURITY_GROUP_ID")
+      : undefined,
   alertEmail: optional("ALERT_EMAIL"),
   availabilityZones: integer("AVAILABILITY_ZONES", 3),
   natGateways: integer("NAT_GATEWAYS", 1),
@@ -57,7 +115,7 @@ const config = {
   auroraMinAcu: Number(optional("AURORA_MIN_ACU") ?? "0.5"),
   auroraMaxAcu: Number(optional("AURORA_MAX_ACU") ?? "4"),
   enableControlDatabaseReader: bool("ENABLE_CONTROL_DATABASE_READER", false),
-  enableAppData: bool("ENABLE_APP_DATA", true),
+  enableAppData: bool("ENABLE_APP_DATA", false),
   enableAppDataReader: bool("ENABLE_APP_DATA_READER", false),
   monthlyBudgetUsd: integer("MONTHLY_BUDGET_USD", 500),
   retainDataOnDelete: true,

@@ -23,7 +23,13 @@ export interface FoundationStackProps extends StackProps {
 }
 
 export class FoundationStack extends Stack {
-  readonly vpc: ec2.Vpc;
+  readonly vpc: ec2.IVpc;
+  readonly publicSubnets: ec2.SubnetSelection;
+  readonly controlPlaneSubnets: ec2.SubnetSelection;
+  readonly runtimeSubnets: ec2.SubnetSelection;
+  readonly dataSubnets: ec2.SubnetSelection;
+  readonly controlPlaneSubnetIds: string[];
+  readonly runtimeSubnetIds: string[];
   readonly hostedZone: route53.IHostedZone;
   readonly certificate: acm.Certificate;
   readonly dataKey: kms.Key;
@@ -132,49 +138,79 @@ export class FoundationStack extends Stack {
       30,
     );
 
-    this.vpc = new ec2.Vpc(this, "Vpc", {
-      vpcName: resourceName(config, "vpc"),
-      ipAddresses: ec2.IpAddresses.cidr("10.42.0.0/16"),
-      maxAzs: config.availabilityZones,
-      natGateways: config.natGateways,
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      restrictDefaultSecurityGroup: true,
-      subnetConfiguration: [
-        { name: "public", subnetType: ec2.SubnetType.PUBLIC, cidrMask: 24 },
-        {
-          name: "control-plane",
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 21,
+    if (config.networkMode === "existing") {
+      this.vpc = ec2.Vpc.fromVpcAttributes(this, "Vpc", {
+        vpcId: config.existingVpcId!,
+        availabilityZones: config.existingAvailabilityZones!,
+      });
+      this.publicSubnets = this.importSubnets(
+        "Public",
+        config.existingPublicSubnetIds!,
+        config.existingPublicRouteTableIds!,
+      );
+      this.controlPlaneSubnets = this.importSubnets(
+        "ControlPlane",
+        config.existingControlPlaneSubnetIds!,
+        config.existingControlPlaneRouteTableIds!,
+      );
+      this.runtimeSubnets = this.importSubnets(
+        "Runtime",
+        config.existingRuntimeSubnetIds!,
+        config.existingRuntimeRouteTableIds!,
+      );
+      this.dataSubnets = this.importSubnets(
+        "Data",
+        config.existingDataSubnetIds!,
+        config.existingDataRouteTableIds!,
+      );
+    } else {
+      const vpc = new ec2.Vpc(this, "Vpc", {
+        vpcName: resourceName(config, "vpc"),
+        ipAddresses: ec2.IpAddresses.cidr("10.42.0.0/16"),
+        maxAzs: config.availabilityZones,
+        natGateways: config.natGateways,
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        restrictDefaultSecurityGroup: true,
+        subnetConfiguration: [
+          { name: "public", subnetType: ec2.SubnetType.PUBLIC, cidrMask: 24 },
+          {
+            name: "control-plane",
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+            cidrMask: 21,
+          },
+          {
+            name: "session-runtime",
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+            cidrMask: 19,
+          },
+          { name: "data", subnetType: ec2.SubnetType.PRIVATE_ISOLATED, cidrMask: 24 },
+        ],
+        gatewayEndpoints: {
+          S3: { service: ec2.GatewayVpcEndpointAwsService.S3 },
         },
-        {
-          name: "session-runtime",
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 19,
-        },
-        { name: "data", subnetType: ec2.SubnetType.PRIVATE_ISOLATED, cidrMask: 24 },
-      ],
-      gatewayEndpoints: {
-        S3: { service: ec2.GatewayVpcEndpointAwsService.S3 },
-      },
-    });
+      });
+      this.vpc = vpc;
+      this.publicSubnets = { subnetGroupName: "public" };
+      this.controlPlaneSubnets = { subnetGroupName: "control-plane" };
+      this.runtimeSubnets = { subnetGroupName: "session-runtime" };
+      this.dataSubnets = { subnetGroupName: "data" };
 
-    const flowLogGroup = new logs.LogGroup(this, "VpcFlowLogGroup", {
-      logGroupName: `/trace/${config.environmentName}/vpc-flow`,
-      encryptionKey: this.logsKey,
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: retained,
-    });
-    this.vpc.addFlowLog("VpcFlowLogs", {
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogGroup),
-      trafficType: ec2.FlowLogTrafficType.REJECT,
-    });
+      const flowLogGroup = new logs.LogGroup(this, "VpcFlowLogGroup", {
+        logGroupName: `/trace/${config.environmentName}/vpc-flow`,
+        encryptionKey: this.logsKey,
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy: retained,
+      });
+      vpc.addFlowLog("VpcFlowLogs", {
+        destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogGroup),
+        trafficType: ec2.FlowLogTrafficType.REJECT,
+      });
+    }
+    this.controlPlaneSubnetIds = this.vpc.selectSubnets(this.controlPlaneSubnets).subnetIds;
+    this.runtimeSubnetIds = this.vpc.selectSubnets(this.runtimeSubnets).subnetIds;
 
-    if (config.enablePaidVpcEndpoints) {
-      const endpointSubnets = {
-        subnetGroupName: "control-plane",
-        onePerAz: true,
-      };
+    if (config.enablePaidVpcEndpoints && this.vpc instanceof ec2.Vpc) {
       const services = {
         EcrApi: ec2.InterfaceVpcEndpointAwsService.ECR,
         EcrDocker: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
@@ -187,7 +223,7 @@ export class FoundationStack extends Stack {
         this.vpc.addInterfaceEndpoint(`${endpointId}Endpoint`, {
           service,
           privateDnsEnabled: true,
-          subnets: endpointSubnets,
+          subnets: this.controlPlaneSubnets,
         });
       }
     }
@@ -222,9 +258,7 @@ export class FoundationStack extends Stack {
       assumedBy: new iam.OpenIdConnectPrincipal(githubProvider).withConditions({
         StringEquals: {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        },
-        StringLike: {
-          "token.actions.githubusercontent.com:sub": `repo:${config.githubRepository}:ref:refs/heads/${config.githubDeployBranch}`,
+          "token.actions.githubusercontent.com:sub": `repo:${config.githubRepository}:environment:${config.githubDeployEnvironment}`,
         },
       }),
     });
@@ -343,6 +377,21 @@ export class FoundationStack extends Stack {
       pendingWindow: Duration.days(30),
     });
     return key;
+  }
+
+  private importSubnets(
+    idPrefix: string,
+    subnetIds: string[],
+    routeTableIds: string[],
+  ): ec2.SubnetSelection {
+    return {
+      subnets: subnetIds.map((subnetId, index) =>
+        ec2.Subnet.fromSubnetAttributes(this, `${idPrefix}Subnet${index + 1}`, {
+          subnetId,
+          routeTableId: routeTableIds[index],
+        }),
+      ),
+    };
   }
 
   private createRepository(

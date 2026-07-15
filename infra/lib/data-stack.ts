@@ -19,11 +19,17 @@ export interface DataStackProps extends StackProps {
 }
 
 export class DataStack extends Stack {
-  readonly controlDatabase: rds.DatabaseCluster;
-  readonly controlDatabaseProxy: rds.DatabaseProxy;
+  readonly controlDatabase?: rds.DatabaseCluster;
+  readonly controlDatabaseProxy?: rds.DatabaseProxy;
+  readonly controlDatabaseEndpoint: string;
+  readonly controlDatabasePort: number;
+  readonly controlDatabaseName: string;
+  readonly controlDatabaseIdentifier: string;
+  readonly controlDatabaseSecret: secretsmanager.ISecret;
+  readonly controlDatabaseSecretKmsKey?: kms.IKey;
+  readonly controlDatabaseSecurityGroup: ec2.ISecurityGroup;
   readonly appDataDatabase?: rds.DatabaseCluster;
   readonly appDataProxy?: rds.DatabaseProxy;
-  readonly controlProxySecurityGroup: ec2.SecurityGroup;
   readonly redisSecurityGroup: ec2.SecurityGroup;
   readonly gitSecurityGroup: ec2.SecurityGroup;
   readonly appDataClientSecurityGroup: ec2.SecurityGroup;
@@ -60,69 +66,99 @@ export class DataStack extends Stack {
       allowAllOutbound: true,
     });
 
-    const controlDbSecurityGroup = new ec2.SecurityGroup(this, "ControlDatabaseSecurityGroup", {
-      vpc: foundation.vpc,
-      securityGroupName: resourceName(config, "control-db"),
-      allowAllOutbound: false,
-    });
-    this.controlProxySecurityGroup = new ec2.SecurityGroup(this, "ControlProxySecurityGroup", {
-      vpc: foundation.vpc,
-      securityGroupName: resourceName(config, "control-db-proxy"),
-      allowAllOutbound: true,
-    });
-    controlDbSecurityGroup.addIngressRule(
-      this.controlProxySecurityGroup,
-      ec2.Port.tcp(5432),
-      "RDS Proxy",
-    );
-
-    const controlReaders = config.enableControlDatabaseReader
-      ? [
-          rds.ClusterInstance.serverlessV2("reader", {
-            scaleWithWriter: true,
-            publiclyAccessible: false,
-          }),
-        ]
-      : [];
-    this.controlDatabase = new rds.DatabaseCluster(this, "ControlDatabase", {
-      clusterIdentifier: resourceName(config, "control"),
-      engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.of("16.6", "16"),
-      }),
-      writer: rds.ClusterInstance.serverlessV2("writer", { publiclyAccessible: false }),
-      readers: controlReaders,
-      serverlessV2MinCapacity: config.auroraMinAcu,
-      serverlessV2MaxCapacity: config.auroraMaxAcu,
-      credentials: rds.Credentials.fromGeneratedSecret("traceadmin", {
-        encryptionKey: secretsKey,
-        excludeCharacters: " %+~`#$&*()|[]{}:;<>?!'/@\"\\",
-      }),
-      defaultDatabaseName: "trace",
-      vpc: foundation.vpc,
-      vpcSubnets: { subnetGroupName: "data" },
-      securityGroups: [controlDbSecurityGroup],
-      storageEncrypted: true,
-      storageEncryptionKey: dataKey,
-      backup: { retention: Duration.days(35) },
-      preferredMaintenanceWindow: "sun:07:00-sun:08:00",
-      cloudwatchLogsExports: ["postgresql"],
-      cloudwatchLogsRetention: logs.RetentionDays.ONE_MONTH,
-      deletionProtection: config.retainDataOnDelete,
-      removalPolicy: retained,
-      enableDataApi: false,
-    });
-    this.controlDatabaseProxy = this.controlDatabase.addProxy("ControlDatabaseProxy", {
-      dbProxyName: resourceName(config, "control"),
-      secrets: [this.controlDatabase.secret!],
-      vpc: foundation.vpc,
-      vpcSubnets: { subnetGroupName: "data" },
-      securityGroups: [this.controlProxySecurityGroup],
-      requireTLS: true,
-      debugLogging: false,
-      idleClientTimeout: Duration.minutes(30),
-      maxConnectionsPercent: 80,
-      maxIdleConnectionsPercent: 40,
-    });
+    if (config.controlDatabaseMode === "existing") {
+      this.controlDatabaseEndpoint = config.existingControlDatabaseHost!;
+      this.controlDatabasePort = config.existingControlDatabasePort!;
+      this.controlDatabaseName = config.existingControlDatabaseName!;
+      this.controlDatabaseIdentifier = config.existingControlDatabaseIdentifier!;
+      this.controlDatabaseSecret = secretsmanager.Secret.fromSecretCompleteArn(
+        this,
+        "ExistingControlDatabaseSecret",
+        config.existingControlDatabaseSecretArn!,
+      );
+      this.controlDatabaseSecretKmsKey = config.existingControlDatabaseSecretKmsKeyArn
+        ? kms.Key.fromKeyArn(
+            this,
+            "ExistingControlDatabaseSecretKey",
+            config.existingControlDatabaseSecretKmsKeyArn,
+          )
+        : undefined;
+      this.controlDatabaseSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
+        this,
+        "ExistingControlDatabaseSecurityGroup",
+        config.existingControlDatabaseSecurityGroupId!,
+        { mutable: false },
+      );
+    } else {
+      const controlDbSecurityGroup = new ec2.SecurityGroup(this, "ControlDatabaseSecurityGroup", {
+        vpc: foundation.vpc,
+        securityGroupName: resourceName(config, "control-db"),
+        allowAllOutbound: false,
+      });
+      const controlProxySecurityGroup = new ec2.SecurityGroup(this, "ControlProxySecurityGroup", {
+        vpc: foundation.vpc,
+        securityGroupName: resourceName(config, "control-db-proxy"),
+        allowAllOutbound: true,
+      });
+      controlDbSecurityGroup.addIngressRule(
+        controlProxySecurityGroup,
+        ec2.Port.tcp(5432),
+        "RDS Proxy",
+      );
+      const controlReaders = config.enableControlDatabaseReader
+        ? [
+            rds.ClusterInstance.serverlessV2("reader", {
+              scaleWithWriter: true,
+              publiclyAccessible: false,
+            }),
+          ]
+        : [];
+      this.controlDatabase = new rds.DatabaseCluster(this, "ControlDatabase", {
+        clusterIdentifier: resourceName(config, "control"),
+        engine: rds.DatabaseClusterEngine.auroraPostgres({
+          version: rds.AuroraPostgresEngineVersion.of("16.6", "16"),
+        }),
+        writer: rds.ClusterInstance.serverlessV2("writer", { publiclyAccessible: false }),
+        readers: controlReaders,
+        serverlessV2MinCapacity: config.auroraMinAcu,
+        serverlessV2MaxCapacity: config.auroraMaxAcu,
+        credentials: rds.Credentials.fromGeneratedSecret("traceadmin", {
+          encryptionKey: secretsKey,
+          excludeCharacters: " %+~`#$&*()|[]{}:;<>?!'/@\"\\",
+        }),
+        defaultDatabaseName: "trace",
+        vpc: foundation.vpc,
+        vpcSubnets: foundation.dataSubnets,
+        securityGroups: [controlDbSecurityGroup],
+        storageEncrypted: true,
+        storageEncryptionKey: dataKey,
+        backup: { retention: Duration.days(35) },
+        preferredMaintenanceWindow: "sun:07:00-sun:08:00",
+        cloudwatchLogsExports: ["postgresql"],
+        cloudwatchLogsRetention: logs.RetentionDays.ONE_MONTH,
+        deletionProtection: config.retainDataOnDelete,
+        removalPolicy: retained,
+        enableDataApi: false,
+      });
+      this.controlDatabaseProxy = this.controlDatabase.addProxy("ControlDatabaseProxy", {
+        dbProxyName: resourceName(config, "control"),
+        secrets: [this.controlDatabase.secret!],
+        vpc: foundation.vpc,
+        vpcSubnets: foundation.dataSubnets,
+        securityGroups: [controlProxySecurityGroup],
+        requireTLS: true,
+        debugLogging: false,
+        idleClientTimeout: Duration.minutes(30),
+        maxConnectionsPercent: 80,
+        maxIdleConnectionsPercent: 40,
+      });
+      this.controlDatabaseEndpoint = this.controlDatabaseProxy.endpoint;
+      this.controlDatabasePort = 5432;
+      this.controlDatabaseName = "trace";
+      this.controlDatabaseIdentifier = this.controlDatabase.clusterIdentifier;
+      this.controlDatabaseSecret = this.controlDatabase.secret!;
+      this.controlDatabaseSecurityGroup = controlProxySecurityGroup;
+    }
 
     this.redisSecurityGroup = new ec2.SecurityGroup(this, "RedisSecurityGroup", {
       vpc: foundation.vpc,
@@ -131,7 +167,7 @@ export class DataStack extends Stack {
     });
     const redisSubnetGroup = new elasticache.CfnSubnetGroup(this, "RedisSubnetGroup", {
       description: "Trace production Valkey subnets",
-      subnetIds: foundation.vpc.selectSubnets({ subnetGroupName: "data" }).subnetIds,
+      subnetIds: foundation.vpc.selectSubnets(foundation.dataSubnets).subnetIds,
       cacheSubnetGroupName: resourceName(config, "redis"),
     });
     const redis = new elasticache.CfnReplicationGroup(this, "Redis", {
@@ -163,7 +199,7 @@ export class DataStack extends Stack {
     this.gitFileSystem = new efs.FileSystem(this, "GitFileSystem", {
       fileSystemName: resourceName(config, "git"),
       vpc: foundation.vpc,
-      vpcSubnets: { subnetGroupName: "data" },
+      vpcSubnets: foundation.dataSubnets,
       securityGroup: this.gitSecurityGroup,
       encrypted: true,
       kmsKey: gitKey,
@@ -306,7 +342,7 @@ export class DataStack extends Stack {
         }),
         defaultDatabaseName: "trace_apps",
         vpc: foundation.vpc,
-        vpcSubnets: { subnetGroupName: "data" },
+        vpcSubnets: foundation.dataSubnets,
         securityGroups: [appDbSecurityGroup],
         storageEncrypted: true,
         storageEncryptionKey: dataKey,
@@ -320,7 +356,7 @@ export class DataStack extends Stack {
         dbProxyName: resourceName(config, "app-data"),
         secrets: [this.appDataDatabase.secret!],
         vpc: foundation.vpc,
-        vpcSubnets: { subnetGroupName: "data" },
+        vpcSubnets: foundation.dataSubnets,
         securityGroups: [appProxySecurityGroup],
         requireTLS: true,
         idleClientTimeout: Duration.minutes(30),
@@ -330,8 +366,12 @@ export class DataStack extends Stack {
     }
 
     new CfnOutput(this, "ArtifactBucketName", { value: this.artifactBucket.bucketName });
-    new CfnOutput(this, "ControlDatabaseProxyEndpoint", {
-      value: this.controlDatabaseProxy.endpoint,
+    new CfnOutput(this, "ControlDatabaseEndpoint", {
+      value: this.controlDatabaseEndpoint,
+      description:
+        config.controlDatabaseMode === "existing"
+          ? "Imported RDS endpoint; the database remains externally owned"
+          : "CDK-managed RDS Proxy endpoint",
     });
     new CfnOutput(this, "RedisEndpoint", {
       value: `rediss://${this.redisEndpointAddress}:${this.redisPort}`,

@@ -6,6 +6,8 @@ Scope: the Trace control plane, isolated cloud sessions, Trace-managed app sourc
 
 Implementation: the deployable TypeScript CDK application is in `infra/`; operator bootstrap and deployment steps are in `docs/aws-iac-deployment.md`.
 
+Initial production database decision: reuse the existing RDS for PostgreSQL instance and its VPC. The CDK application imports the database endpoint, secret, security group, VPC, and explicit subnet groups without taking deletion ownership. Aurora PostgreSQL remains the later scaling target described in this blueprint, not a prerequisite for the first production deployment.
+
 ## 1. Executive decision
 
 Build Trace on AWS around four independent lifecycles:
@@ -22,7 +24,7 @@ Use these systems of record:
 | Coding project source                                                    | GitHub                                                                 |
 | Trace app source                                                         | Trace-managed bare Git repository                                      |
 | Designs, PDFs, Office documents, spreadsheets, and media                 | Immutable objects in Amazon S3                                         |
-| Trace entities, events, revision metadata, and desired state             | Aurora PostgreSQL                                                      |
+| Trace entities, events, revision metadata, and desired state             | Existing RDS PostgreSQL initially; Aurora PostgreSQL at later scale    |
 | Transient pub/sub, distributed locks, runtime routing, and worker queues | ElastiCache for Valkey/Redis OSS plus SQS where durability is required |
 | Built Trace and generated-app images                                     | Amazon ECR                                                             |
 | Running development environments                                         | Disposable Fargate tasks                                               |

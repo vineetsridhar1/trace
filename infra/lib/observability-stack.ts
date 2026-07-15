@@ -169,7 +169,7 @@ export class ObservabilityStack extends Stack {
     });
     const backupResources = [
       backup.BackupResource.fromConstruct(data.gitFileSystem),
-      backup.BackupResource.fromConstruct(data.controlDatabase),
+      ...(data.controlDatabase ? [backup.BackupResource.fromConstruct(data.controlDatabase)] : []),
       ...(data.appDataDatabase ? [backup.BackupResource.fromConstruct(data.appDataDatabase)] : []),
     ];
     backupPlan.addSelection("StatefulResources", {
@@ -178,6 +178,23 @@ export class ObservabilityStack extends Stack {
     });
 
     const alarmAction = new cloudwatchActions.SnsAction(alerts);
+    const databaseCpuMetric = data.controlDatabase
+      ? data.controlDatabase.metricCPUUtilization({ period: Duration.minutes(5) })
+      : new cloudwatch.Metric({
+          namespace: "AWS/RDS",
+          metricName: "CPUUtilization",
+          dimensionsMap: { DBInstanceIdentifier: data.controlDatabaseIdentifier },
+          statistic: "Average",
+          period: Duration.minutes(5),
+        });
+    const databaseConnectionsMetric = data.controlDatabase
+      ? data.controlDatabase.metricDatabaseConnections()
+      : new cloudwatch.Metric({
+          namespace: "AWS/RDS",
+          metricName: "DatabaseConnections",
+          dimensionsMap: { DBInstanceIdentifier: data.controlDatabaseIdentifier },
+          statistic: "Average",
+        });
     const alarms = [
       controlPlane.loadBalancer.metrics
         .httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, {
@@ -197,13 +214,11 @@ export class ObservabilityStack extends Stack {
           threshold: 80,
           evaluationPeriods: 3,
         }),
-      data.controlDatabase
-        .metricCPUUtilization({ period: Duration.minutes(5) })
-        .createAlarm(this, "DatabaseCpuAlarm", {
-          alarmName: resourceName(config, "database-cpu"),
-          threshold: 80,
-          evaluationPeriods: 3,
-        }),
+      databaseCpuMetric.createAlarm(this, "DatabaseCpuAlarm", {
+        alarmName: resourceName(config, "database-cpu"),
+        threshold: 80,
+        evaluationPeriods: 3,
+      }),
     ];
     for (const alarm of alarms) alarm.addAlarmAction(alarmAction);
 
@@ -228,10 +243,7 @@ export class ObservabilityStack extends Stack {
       new cloudwatch.GraphWidget({
         title: "Database",
         width: 12,
-        left: [
-          data.controlDatabase.metricCPUUtilization(),
-          data.controlDatabase.metricDatabaseConnections(),
-        ],
+        left: [databaseCpuMetric, databaseConnectionsMetric],
       }),
       new cloudwatch.GraphWidget({
         title: "ECS running tasks",
