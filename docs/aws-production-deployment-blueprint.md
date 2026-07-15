@@ -39,7 +39,7 @@ This plan uses the following product decisions:
 - Designs need compute while an agent is editing or rendering them. The existing `cleanupIdleCloudSessionGroups` job deprovisions their inactive cloud runtimes using the configured cloud-session-group idle threshold; no design-specific cleanup mechanism is needed.
 - Published apps must be always available and may need persistent PostgreSQL data.
 - Every completed agent operation creates a durable revision.
-- Deleting a group may delete its source, artifacts, deployment, and app data, but deletion should be recoverable for a retention window.
+- Deleting a group is destructive in the initial product: it permanently deletes the group's source, artifacts, deployment, and app data. A user-recoverable trash or retention window may be added later.
 - Future content types include PDFs, documents, presentations, spreadsheets, images, audio, video, and other media.
 - The target is thousands of concurrent users and potentially thousands of active runtime tasks.
 
@@ -65,7 +65,7 @@ The existing `SessionGroup` is the durable identity for one coding project conte
 - Its repository or artifact revisions.
 - The current revision pointer.
 - An optional published deployment.
-- Its archive, soft-delete, and purge lifecycle.
+- Its archive and destructive deletion lifecycle.
 
 Avoid adding a second generic `Resource` entity until a real product requirement needs resources outside session groups.
 
@@ -492,7 +492,7 @@ Run background concerns as explicit ECS services or scheduled tasks rather than 
 - Endpoint traffic cleanup.
 - Git garbage collection.
 - Artifact preview/render/scan jobs.
-- Group purge after retention.
+- Group deletion and cascading resource cleanup.
 - Deployment reconciliation.
 
 Existing Redis locks prevent some duplicate work, but dedicated worker roles make ownership, scaling, and observability clearer.
@@ -664,7 +664,7 @@ Add an artifact/revision service to the existing service layer with operations s
 - Finalize a revision after checksum/size validation.
 - Read the current or a historical revision.
 - Promote a revision to current.
-- Soft-delete and purge group artifacts.
+- Delete an artifact-backed group and purge all of its objects.
 - Enqueue preview, thumbnail, extraction, malware-scan, or conversion jobs.
 
 Conceptual revision fields:
@@ -991,9 +991,9 @@ Pipeline stages:
 
 Database migrations must be backward-compatible with the previous application version during rolling deploys. Use expand/migrate/contract for destructive schema changes.
 
-## 21. Deletion and retention
+## 21. Archival and destructive deletion
 
-Implement separate archive, soft-delete, and purge states.
+Keep archive as the non-destructive lifecycle action. Group deletion is permanent in the initial product and does not provide a trash or restore window.
 
 ### Archive
 
@@ -1001,28 +1001,30 @@ Implement separate archive, soft-delete, and purge states.
 - Preserve source, revisions, events, and app data.
 - Allow a published deployment to continue.
 
-### Soft-delete
+### Delete
 
-- Mark the group deleted and hide it.
-- Stop development runtimes.
-- Undeploy the published app and remove public routing.
-- Revoke runtime, deployment, Git, and storage credentials.
-- Preserve recoverable data for 30 days by default.
-- Warn explicitly that a published app and its data will be removed.
+Require explicit confirmation when a group owns a published app or persistent app data. On confirmation, a service-layer workflow immediately:
 
-### Purge
+- Marks the group `deleting` only as an internal orchestration state; this state is not user-recoverable.
+- Stops development runtimes.
+- Undeploys the published app and removes public routing.
+- Revokes runtime, deployment, Git, and storage credentials.
+- Prevents new sessions, deployments, uploads, and revisions for the group.
+- Removes the managed bare Git repository.
+- Removes every S3 object version belonging to the group's artifact, preview, checkpoint, and app-upload prefixes.
+- Removes the app database and role.
+- Removes deployment records and unique ECR images when unreferenced.
+- Removes remaining group-scoped secrets.
+- Removes non-audit metadata permitted by the data-retention policy.
+- Deletes the group record after its owned resources are gone.
 
-After retention, a service-layer purge workflow removes:
+Each cleanup step must be idempotent and resumable so a partial infrastructure failure does not leave an accessible deployment or orphaned billable resources. Record a minimal tombstone/audit event without retaining deleted private content.
 
-- Managed bare Git repository.
-- Artifact revisions and previews.
-- App upload prefix.
-- App database and role.
-- Deployment records and unique ECR images when unreferenced.
-- Remaining secrets.
-- Non-audit metadata allowed by the retention policy.
+Normal infrastructure backups may retain encrypted data until their configured backup expiration, but the product does not expose deletion recovery. Document this behavior in the privacy and data-retention policy.
 
-Every purge step must be idempotent and resumable. Record tombstone/audit events without retaining deleted private content.
+### Future recoverable deletion
+
+A user-visible trash, restore API, and recovery retention window are explicitly deferred. They can be added later without changing the runtime or storage architecture.
 
 ## 22. Required application changes
 
@@ -1174,7 +1176,7 @@ Build-time values such as `VITE_API_URL` and `VITE_AG_GRID_LICENSE_KEY` must com
 - [ ] Forced runtime kill loses no completed operation.
 - [ ] Published app remains available after its development runtime stops.
 - [ ] Published app task replacement preserves externally stored data.
-- [ ] Group soft-delete, restore, and purge are idempotent.
+- [ ] Group deletion immediately disables access and its cascading cleanup succeeds when any individual step is retried.
 
 ### Scale gates
 
@@ -1261,10 +1263,10 @@ The architecture can proceed while these values are chosen, but they must be res
 5. Idle timeout by group kind: coding, app development, design, and artifact processing.
 6. Whether published apps are allowed to use ephemeral local-only databases, or whether persistence is mandatory whenever SQL is enabled.
 7. App-data retention and recovery promises.
-8. Soft-delete retention period and legal/audit retention rules.
+8. Backup expiration and legal/audit retention rules for data belonging to deleted groups.
 9. Permitted runtime internet egress and abuse controls.
 10. Whether automatic GitHub checkpoints use visible branches or Trace-owned refs.
 11. Which document/media formats launch interactive runtimes versus queued processors.
 12. Availability SLA and acceptable cold-start target for development sessions and published apps.
 
-Until those are answered, use the defaults in this document: `us-east-1`, three AZs, 10-minute development idle deprovisioning, 30-day soft-delete recovery, one always-on task per published app, external PostgreSQL for durable app data, and Trace-owned checkpoint refs where GitHub permits them.
+Until those are answered, use the defaults in this document: `us-east-1`, three AZs, 10-minute development idle deprovisioning, destructive group deletion with no product recovery window, one always-on task per published app, external PostgreSQL for durable app data, and Trace-owned checkpoint refs where GitHub permits them.
