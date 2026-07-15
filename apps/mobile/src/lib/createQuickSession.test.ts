@@ -305,6 +305,9 @@ describe("startPlanImplementationSession", () => {
     expect(setOverlaySessionIdMock).toHaveBeenCalledWith("session_new");
     expect(replaceMock).toHaveBeenCalledWith("/sessions/group_1/session_new");
     expect(mutationMock).toHaveBeenCalledTimes(3);
+    expect(mutationMock).toHaveBeenNthCalledWith(1, START_SESSION_MUTATION, {
+      input: expect.not.objectContaining({ hosting: expect.anything() }),
+    });
     expect(mutationMock).toHaveBeenNthCalledWith(3, TERMINATE_SESSION_MUTATION, {
       id: "source_session",
     });

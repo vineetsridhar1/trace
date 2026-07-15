@@ -3301,29 +3301,20 @@ export class SessionService {
         "environmentId" in sharedConnection ||
         "providerRuntimeId" in sharedConnection ||
         "providerRuntimeUrl" in sharedConnection);
-    // A session group is bound to exactly one bridge. When joining a group that
-    // is already bound, reject any request that would place the new session on a
-    // different runtime — every session in a group must share the same bridge.
-    if (existingGroup?.id) {
-      if (sharedRuntimeInstanceId) {
-        const conflictsWithLocalRuntime =
-          (!!input.runtimeInstanceId && input.runtimeInstanceId !== sharedRuntimeInstanceId) ||
-          input.hosting === "cloud" ||
-          !!input.environmentId;
-        if (conflictsWithLocalRuntime) {
-          throw new Error("This session group is already bound to a different runtime");
-        }
-      } else if (sharedConnectionHasRuntimeSelection) {
-        const conflictsWithCloudRuntime = !!input.runtimeInstanceId || input.hosting === "local";
-        if (conflictsWithCloudRuntime) {
-          throw new Error("This session group is already bound to a different runtime");
-        }
-      }
+    const existingGroupHasRuntimeSelection =
+      !!sharedWorkdir || !!sharedRuntimeInstanceId || !!sharedConnectionHasRuntimeSelection;
+    // Joining an established group never accepts a runtime choice, even when
+    // the requested value happens to match. New sessions inherit the group's
+    // bridge; changing it is exclusively a group Move operation.
+    if (existingGroup?.id && existingGroupHasRuntimeSelection && requestedRuntimeSelection) {
+      throw new ValidationError(
+        "New sessions inherit the session group's bridge. Move the session group to change bridges.",
+      );
     }
     const reuseExistingGroupRuntimeSelection =
       !input.environmentId &&
       !!existingGroup?.id &&
-      (!!sharedWorkdir || !!sharedRuntimeInstanceId || !!sharedConnectionHasRuntimeSelection);
+      existingGroupHasRuntimeSelection;
     const deferRuntimeSelection =
       (input.deferRuntimeSelection === true && resolvedKind !== "app") ||
       (resolvedKind !== "app" &&

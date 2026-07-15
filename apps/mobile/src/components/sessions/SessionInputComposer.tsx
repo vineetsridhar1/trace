@@ -109,6 +109,16 @@ export function SessionInputComposer({
     | string
     | null
     | undefined;
+  const groupConnection = useEntityField(
+    "sessionGroups",
+    sessionGroupId ?? "",
+    "connection",
+  ) as SessionConnection | null | undefined;
+  const groupWorkdir = useEntityField(
+    "sessionGroups",
+    sessionGroupId ?? "",
+    "workdir",
+  ) as string | null | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic");
 
   const [text, setText] = useState("");
@@ -258,7 +268,14 @@ export function SessionInputComposer({
     sessionId,
     tool,
   });
-  const canChangeBridge = isNotStarted && !isOptimistic;
+  const groupHasSelectedBridge = Boolean(
+    groupWorkdir ||
+    groupConnection?.runtimeInstanceId ||
+    groupConnection?.environmentId ||
+    groupConnection?.providerRuntimeId ||
+    groupConnection?.adapterType === "provisioned",
+  );
+  const canChangeBridge = isNotStarted && !isOptimistic && !groupHasSelectedBridge;
 
   const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
   useEffect(() => {

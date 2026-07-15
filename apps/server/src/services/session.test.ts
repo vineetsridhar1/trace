@@ -2330,6 +2330,41 @@ describe("SessionService", () => {
       );
     });
 
+    it("rejects runtime selection when adding a session to an established group", async () => {
+      const groupConnection = {
+        state: "connected",
+        runtimeInstanceId: "runtime-a",
+        runtimeLabel: "Laptop A",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
+        makeSessionGroup({ connection: groupConnection }),
+      );
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          tool: "claude_code",
+          hosting: "local",
+          runtimeInstanceId: "runtime-a",
+          sessionGroupId: "group-1",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow(
+        "New sessions inherit the session group's bridge. Move the session group to change bridges.",
+      );
+
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+    });
+
     it("inherits repo and branch from the existing group for a clean new chat", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(
         makeSessionGroup({
@@ -2357,7 +2392,6 @@ describe("SessionService", () => {
         organizationId: "org-1",
         createdById: "user-1",
         tool: "claude_code",
-        hosting: "cloud",
         sessionGroupId: "group-1",
       } as unknown as StartSessionServiceInput);
 

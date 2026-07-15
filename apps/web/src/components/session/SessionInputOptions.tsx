@@ -134,6 +134,16 @@ export function SessionInputOptions({
     | string
     | null
     | undefined;
+  const groupConnection = useEntityField(
+    "sessionGroups",
+    sessionGroupId ?? "",
+    "connection",
+  ) as SessionConnection | null | undefined;
+  const groupWorkdir = useEntityField(
+    "sessionGroups",
+    sessionGroupId ?? "",
+    "workdir",
+  ) as string | null | undefined;
 
   const repo = useEntityField("sessions", sessionId, "repo") as
     | { id: string; remoteUrl?: string | null }
@@ -148,6 +158,14 @@ export function SessionInputOptions({
   const currentReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
   const isNotStarted = agentStatus === "not_started";
   const runtimeLocked = isGeneratedProjectKind(sessionGroupKind);
+  const groupHasSelectedRuntime = Boolean(
+    groupWorkdir ||
+    groupConnection?.runtimeInstanceId ||
+    groupConnection?.environmentId ||
+    groupConnection?.providerRuntimeId ||
+    groupConnection?.adapterType === "provisioned",
+  );
+  const canChangeRuntime = isNotStarted && !runtimeLocked && !groupHasSelectedRuntime;
 
   const runtimeLabel = connection?.runtimeLabel ?? null;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
@@ -160,11 +178,12 @@ export function SessionInputOptions({
     cloudEnvironmentAvailable || currentRuntimeValue === CLOUD_RUNTIME_ID;
   const autoSelectedRuntimeSessionRef = useRef<string | null>(null);
 
-  // Fetch runtimes when not_started so user can switch
+  // Runtime selection is only available while choosing the first bridge for
+  // a new, unbound group. Sibling sessions inherit the group's bridge.
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const connectedLocalRuntimes = runtimes.filter(isAccessibleLocalRuntime);
   const fetchAvailableRuntimes = useCallback(() => {
-    if (!isNotStarted || isOptimistic || runtimeLocked) return Promise.resolve();
+    if (!canChangeRuntime || isOptimistic) return Promise.resolve();
     return client
       .query(AVAILABLE_RUNTIMES_QUERY, {
         tool: currentTool,
@@ -178,7 +197,7 @@ export function SessionInputOptions({
       .catch((error: unknown) => {
         console.error("Failed to fetch available runtimes:", error);
       });
-  }, [isNotStarted, isOptimistic, runtimeLocked, currentTool, sessionGroupId]);
+  }, [canChangeRuntime, isOptimistic, currentTool, sessionGroupId]);
 
   useEffect(() => {
     void fetchAvailableRuntimes();
@@ -251,7 +270,7 @@ export function SessionInputOptions({
 
   const handleRuntimeChange = useCallback(
     async (value: string | null) => {
-      if (isOptimistic || value === currentRuntimeValue) return;
+      if (!canChangeRuntime || isOptimistic || value === currentRuntimeValue) return;
       if (!value) return;
       if (value === UNBOUND_LOCAL_RUNTIME_ID) return;
 
@@ -335,6 +354,7 @@ export function SessionInputOptions({
     },
     [
       isOptimistic,
+      canChangeRuntime,
       sessionId,
       currentRuntimeValue,
       runtimes,
@@ -347,6 +367,7 @@ export function SessionInputOptions({
   useEffect(() => {
     if (
       !isNotStarted ||
+      !canChangeRuntime ||
       isOptimistic ||
       runtimeLocked ||
       isCloudRuntime ||
@@ -369,6 +390,7 @@ export function SessionInputOptions({
     void handleRuntimeChange(ownedRuntime.id);
   }, [
     channelRepoId,
+    canChangeRuntime,
     currentRuntimeValue,
     handleRuntimeChange,
     isCloudRuntime,
@@ -431,9 +453,16 @@ export function SessionInputOptions({
           onOpenChange={(open) => {
             if (open) void fetchAvailableRuntimes();
           }}
-          disabled={isOptimistic}
+          disabled={isOptimistic || !canChangeRuntime}
         >
-          <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
+          <SelectTrigger
+            className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0"
+            title={
+              groupHasSelectedRuntime
+                ? "This session inherits its session group's bridge. Use Move to change bridges."
+                : undefined
+            }
+          >
             <SelectValue>
               <span className="flex items-center gap-1">
                 {currentRuntimeValue === CLOUD_RUNTIME_ID ? (

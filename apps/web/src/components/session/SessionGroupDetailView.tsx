@@ -684,11 +684,11 @@ export function SessionGroupDetailView({
           tool: selectedSession.tool,
           model: selectedSession.model ?? undefined,
           reasoningEffort: selectedSession.reasoningEffort ?? undefined,
-          hosting: selectedHosting,
           channelId: resolvedChannelId ?? undefined,
           repoId: selectedRepo?.id,
           branch: groupBranch ?? selectedSession.branch ?? undefined,
           sessionGroupId,
+          sourceSessionId: selectedSession.id,
         },
       })
       .toPromise();

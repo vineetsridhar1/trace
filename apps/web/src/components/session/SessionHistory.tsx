@@ -12,7 +12,6 @@ import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
-import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
 
 interface SessionHistoryProps {
   sessionId: string;
@@ -73,7 +72,6 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
               tool: source.tool,
               model: source.model ?? undefined,
               reasoningEffort: source.reasoningEffort ?? undefined,
-              hosting: resolveSupportedHostingForRepo(source.hosting, sourceRepo),
               channelId: getSessionChannelId(source) ?? undefined,
               repoId: sourceRepo?.id,
               branch: source.branch ?? undefined,

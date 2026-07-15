@@ -100,7 +100,6 @@ export function PlanResponseBar({
             tool: tool ?? "claude_code",
             model,
             reasoningEffort,
-            hosting: defaultHosting,
             channelId: channel?.id,
             repoId: repo?.id,
             branch,
