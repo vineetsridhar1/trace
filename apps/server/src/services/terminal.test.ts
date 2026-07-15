@@ -106,6 +106,44 @@ describe("TerminalService", () => {
       );
     });
 
+    it("uses the session group's bridge when a legacy session binding is stale", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce({
+        id: "session-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        connection: { runtimeInstanceId: "runtime-old" },
+        sessionGroup: {
+          workdir: "/workspace",
+          worktreeDeleted: false,
+          connection: { runtimeInstanceId: "runtime-current" },
+        },
+      });
+
+      await terminalService.create({
+        sessionId: "session-1",
+        cols: 80,
+        rows: 24,
+        organizationId: "org-1",
+        userId: "user-1",
+      });
+
+      expect(runtimeAccessServiceMock.assertAccess).toHaveBeenCalledWith(
+        expect.objectContaining({ runtimeInstanceId: "runtime-current" }),
+      );
+      expect(terminalRelayMock.createTerminal).toHaveBeenCalledWith(
+        "session-1",
+        "group-1",
+        "org-1",
+        "runtime-current",
+        "user-1",
+        80,
+        24,
+        "/workspace",
+      );
+    });
+
     it("rejects terminal creation for private sessions owned by another user", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",

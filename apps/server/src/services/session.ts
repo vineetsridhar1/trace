@@ -1848,9 +1848,16 @@ export class SessionService {
         data: { connection: connJson(nextWithVersion) },
       });
       if (result.count === 1) {
-        await this.syncGroupWorkspaceState(session.sessionGroupId, {
-          connection: connJson(nextWithVersion),
-        });
+        const runtimeBindingChanged =
+          current.runtimeInstanceId !== nextWithVersion.runtimeInstanceId;
+        await this.syncGroupWorkspaceState(
+          session.sessionGroupId,
+          { connection: connJson(nextWithVersion) },
+          {
+            rebindSessionsToConnection: runtimeBindingChanged,
+            destroyGroupTerminals: runtimeBindingChanged,
+          },
+        );
         return { updated: nextWithVersion, sessionGroupId: session.sessionGroupId };
       }
       // Version mismatch — another writer landed first. Loop and retry.
@@ -4916,6 +4923,8 @@ export class SessionService {
       ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>
     > | null = null;
     let shouldProvisionPendingRun = false;
+    let targetRuntimeKey: string | null = null;
+    let targetRuntimeLabel: string | null = null;
     if (runtimeChanged) {
       if (isLocalMode() && config.hosting === "cloud") {
         throw new Error("Cloud sessions are disabled in local mode");
@@ -4935,6 +4944,8 @@ export class SessionService {
         newHosting = runtime.hostingMode;
         runtimeInstanceId = runtime.id;
         runtimeLabel = runtime.label;
+        targetRuntimeKey = runtime.key;
+        targetRuntimeLabel = runtime.label;
         await this.assertPrivateRuntimeOwner({
           visibility: prev.sessionGroup?.visibility,
           ownerUserId: prev.sessionGroup?.ownerUserId,
@@ -4942,7 +4953,6 @@ export class SessionService {
           hosting: newHosting,
           runtimeInstanceId,
         });
-        sessionRouter.bindSession(sessionId, runtime.key);
       } else if (newHosting === "cloud") {
         await this.assertPrivateRuntimeOwner({
           visibility: prev.sessionGroup?.visibility,
@@ -4975,6 +4985,8 @@ export class SessionService {
         }
         runtimeInstanceId = runtime.id;
         runtimeLabel = runtime.label;
+        targetRuntimeKey = runtime.key;
+        targetRuntimeLabel = runtime.label;
         await this.assertPrivateRuntimeOwner({
           visibility: prev.sessionGroup?.visibility,
           ownerUserId: prev.sessionGroup?.ownerUserId,
@@ -4982,8 +4994,18 @@ export class SessionService {
           hosting: newHosting,
           runtimeInstanceId,
         });
-        sessionRouter.bindSession(sessionId, runtime.key);
       }
+
+      // A config-based runtime selection is a group move just like the
+      // explicit Move mutation. Detach the selected session now; siblings are
+      // terminated and rebound together after the shared connection commits.
+      if (prev.sessionGroupId) {
+        terminalRelay.destroyAllForSessionGroup(prev.sessionGroupId);
+      } else {
+        terminalRelay.destroyAllForSession(sessionId);
+      }
+      sessionRouter.unbindSession(sessionId);
+      if (targetRuntimeKey) sessionRouter.bindSession(sessionId, targetRuntimeKey);
       shouldProvisionPendingRun =
         this.parsePendingCommands(prev.pendingRun).length > 0 &&
         !prev.workdir &&
@@ -5018,6 +5040,18 @@ export class SessionService {
       await this.syncGroupWorkspaceState(session.sessionGroupId, {
         connection: session.connection as Prisma.InputJsonValue,
         worktreeDeleted: false,
+      });
+      await this.relocateGroupSiblingsToRuntime({
+        sessionGroupId: session.sessionGroupId,
+        primarySessionId: session.id,
+        organizationId: session.organizationId,
+        targetHosting: session.hosting as "cloud" | "local",
+        targetRuntimeKey,
+        targetRuntimeLabel,
+        nextConnection: session.connection as Prisma.InputJsonValue,
+        sourceBranch: prev.branch,
+        actorType,
+        actorId,
       });
     }
 
@@ -9170,7 +9204,11 @@ export class SessionService {
   private async syncGroupWorkspaceState(
     sessionGroupId: string | null | undefined,
     patch: GroupWorkspaceStatePatch,
-    options?: { workdirRuntimeInstanceId?: string | null },
+    options?: {
+      workdirRuntimeInstanceId?: string | null;
+      rebindSessionsToConnection?: boolean;
+      destroyGroupTerminals?: boolean;
+    },
   ) {
     if (!sessionGroupId) return null;
 
@@ -9201,8 +9239,11 @@ export class SessionService {
     if (Object.prototype.hasOwnProperty.call(patch, "connection")) {
       const connectionValue = patch.connection ?? Prisma.DbNull;
       groupData.connection = connectionValue;
-      // Do NOT mirror connection to sessions — each session keeps its own connection state.
-      // Only the group's connection represents the shared workspace runtime state.
+      // Runtime ownership is a session-group invariant. Persist the same
+      // connection on every member in the same transaction as the group so a
+      // lifecycle update (including cloud reprovisioning) can never leave one
+      // session pointing at a different bridge.
+      sessionData.connection = connectionValue;
     }
 
     if (Object.prototype.hasOwnProperty.call(patch, "prUrl")) {
@@ -9241,6 +9282,7 @@ export class SessionService {
 
     const shouldMirrorToSessions = Object.keys(sessionData).length > 0;
 
+    let sessionsToRebind: Array<{ id: string; organizationId: string }> = [];
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.sessionGroup.update({
         where: { id: sessionGroupId },
@@ -9267,7 +9309,30 @@ export class SessionService {
           data: { workdir: scopedWorkdirUpdate.workdir },
         });
       }
+
+      if (options?.rebindSessionsToConnection) {
+        const sessions = await tx.session.findMany({
+          where: { sessionGroupId },
+          select: { id: true, organizationId: true },
+        });
+        sessionsToRebind = sessions;
+      }
     });
+
+    if (options?.destroyGroupTerminals) {
+      terminalRelay.destroyAllForSessionGroup(sessionGroupId);
+    }
+
+    if (options?.rebindSessionsToConnection) {
+      const runtimeInstanceId = this.getConnectionRuntimeInstanceId(patch.connection);
+      const runtime = runtimeInstanceId
+        ? sessionRouter.getRuntime(runtimeInstanceId, sessionsToRebind[0]?.organizationId)
+        : null;
+      for (const session of sessionsToRebind) {
+        sessionRouter.unbindSession(session.id);
+        if (runtime) sessionRouter.bindSession(session.id, runtime.key);
+      }
+    }
 
     return this.loadSessionGroupSnapshot(sessionGroupId);
   }

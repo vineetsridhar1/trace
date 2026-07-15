@@ -5058,7 +5058,17 @@ describe("SessionService", () => {
           connection: session.connection,
           sessionGroupId: "group-1",
         });
-      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.session.updateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 2 });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", organizationId: "org-1" },
+        { id: "session-2", organizationId: "org-1" },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "org-1:runtime-provisioned-1",
+        id: "runtime-provisioned-1",
+      });
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
         makeSessionGroup({
           id: "group-1",
@@ -5079,6 +5089,22 @@ describe("SessionService", () => {
             }),
           },
         }),
+      );
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { sessionGroupId: "group-1" },
+        data: {
+          connection: expect.objectContaining({
+            state: "requested",
+            runtimeInstanceId: "runtime-provisioned-1",
+          }),
+        },
+      });
+      expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
+      expect(sessionRouterMock.unbindSession).toHaveBeenCalledWith("session-1");
+      expect(sessionRouterMock.unbindSession).toHaveBeenCalledWith("session-2");
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith(
+        "session-2",
+        "org-1:runtime-provisioned-1",
       );
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -5709,6 +5735,77 @@ describe("SessionService", () => {
       ).rejects.toThrow("Cloud sessions require the repo to have a remote URL.");
 
       expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+
+    it("moves every group session when runtime selection changes", async () => {
+      const targetRuntime = {
+        key: "org-1:runtime-b",
+        id: "runtime-b",
+        label: "Laptop B",
+        hostingMode: "local",
+        organizationId: "org-1",
+      };
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          agentStatus: "not_started",
+          sessionGroupId: "group-1",
+          connection: { runtimeInstanceId: "runtime-a" },
+        }),
+      );
+      sessionRouterMock.getRuntime.mockReturnValueOnce(targetRuntime);
+      prismaMock.session.update
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            agentStatus: "not_started",
+            hosting: "local",
+            sessionGroupId: "group-1",
+            connection: { runtimeInstanceId: "runtime-b", runtimeLabel: "Laptop B" },
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-2",
+            agentStatus: "not_started",
+            hosting: "local",
+            sessionGroupId: "group-1",
+            connection: { runtimeInstanceId: "runtime-b", runtimeLabel: "Laptop B" },
+          }),
+        );
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        makeSession({
+          id: "session-2",
+          hosting: "local",
+          sessionGroupId: "group-1",
+          connection: { runtimeInstanceId: "runtime-a" },
+        }),
+      ]);
+
+      await service.updateConfig(
+        "session-1",
+        "org-1",
+        { runtimeInstanceId: "runtime-b" },
+        "user",
+        "user-1",
+      );
+
+      expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
+      expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
+        "session-2",
+        "local",
+        "terminate",
+      );
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-2" },
+          data: expect.objectContaining({
+            hosting: "local",
+            connection: expect.objectContaining({ runtimeInstanceId: "runtime-b" }),
+          }),
+        }),
+      );
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-2", "org-1:runtime-b");
     });
   });
 
@@ -7401,6 +7498,8 @@ describe("SessionService", () => {
       };
       prismaMock.session.updateMany
         .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 1 })
         .mockResolvedValueOnce({ count: 1 });
       prismaMock.session.findUnique
         .mockResolvedValueOnce(
@@ -7698,6 +7797,8 @@ describe("SessionService", () => {
         version: 1,
       };
       prismaMock.session.updateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 1 })
         .mockResolvedValueOnce({ count: 1 })
         .mockResolvedValueOnce({ count: 1 });
       prismaMock.session.findUnique
