@@ -199,7 +199,7 @@ Do not assign public IPs to ECS tasks.
 
 Create one NAT Gateway per AZ for production and route each private subnet to the NAT Gateway in the same AZ. Session tasks require outbound access to GitHub, model providers, package registries, and arbitrary development dependencies. NAT permits outbound connections without accepting unsolicited inbound traffic. See [AWS NAT devices](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat.html).
 
-Add VPC endpoints to reduce NAT cost and keep AWS traffic private:
+Add VPC endpoints where measured traffic or security requirements justify them. The S3 gateway endpoint has no hourly endpoint charge, but interface endpoints are billed for every endpoint ENI in every AZ and can cost more than NAT data processing at low traffic. For the initial 20-user deployment, create the S3 gateway endpoint and defer the paid interface endpoints unless private-only AWS API access is required:
 
 - S3 gateway endpoint.
 - ECR API and ECR Docker interface endpoints.
@@ -1267,3 +1267,95 @@ The architecture can proceed while these values are chosen, but they must be res
 12. Availability SLA and acceptable cold-start target for development sessions and published apps.
 
 Until those are answered, use the defaults in this document: `us-east-1`, three AZs, 10-minute development idle deprovisioning, destructive group deletion with no product recovery window, one always-on task per published app, external PostgreSQL for durable app data, and Trace-owned checkpoint refs where GitHub permits them.
+
+## 28. Estimated monthly cost at 20 users
+
+This is a planning estimate in USD for `us-east-1`, using public on-demand prices available on July 15, 2026. It excludes AWS free-tier credits, taxes, Enterprise Support, model-provider API charges, unusual internet egress, and engineering labor. Actual billing should be validated in the AWS Pricing Calculator after task sizes and traffic assumptions are measured.
+
+### Usage assumptions
+
+- 20 users.
+- 20 workdays per month.
+- Two active cloud-session hours per user per workday: 800 session task-hours per month.
+- A standard session task uses 2 vCPU and 4 GiB of memory.
+- Idle session tasks are stopped by the existing `cleanupIdleCloudSessionGroups` job.
+- No GPU tasks.
+- Repositories and artifacts total tens of gigabytes, not terabytes.
+- Low application traffic and modest CloudWatch log volume.
+- Published apps are priced separately because their tasks run continuously.
+
+### Recommended initial production budget
+
+Use a cost-conscious production shape while the current in-process runtime router requires one backend task. This is appropriate for an early 20-user production rollout, but it does not provide the final multi-AZ control-plane availability described elsewhere in this document.
+
+| Cost area | Estimated monthly cost | Assumption |
+| --- | ---: | --- |
+| Always-on control-plane Fargate tasks | $50–$80 | One backend/runtime owner, small web tasks, and limited worker runtime |
+| Aurora control-plane database and RDS Proxy | $60–$120 | One Aurora Serverless v2 writer, generally near 0.5–1 ACU, plus low storage/I/O and proxy use |
+| ElastiCache | $25–$45 | Small primary and replica |
+| ALB and AWS WAF | $30–$45 | One low-traffic ALB, one Web ACL, and a small rule set |
+| Network egress foundation | $35–$65 | One NAT Gateway for the initial rollout, S3 gateway endpoint, and modest data processing; this accepts an AZ dependency |
+| EFS, S3, ECR, backups, logs, secrets, KMS, and DNS | $30–$70 | Tens of gigabytes and controlled log retention |
+| 800 standard session task-hours | About $79 | 2 vCPU and 4 GiB at about $0.0987 per task-hour |
+| **Estimated total** | **$310–$505/month** | Before model APIs and published apps |
+
+Use **$400/month** as the initial planning number, plus a 25% alert buffer. That is about **$20 per user per month** at 20 users. The fixed platform portion is roughly $230–$425, so per-user cost falls as more users share the same control plane.
+
+The session-compute formula is:
+
+```text
+monthly session compute
+  = active task-hours
+  × ((vCPU × $0.0404784) + (memory GiB × $0.004446))
+
+2 vCPU / 4 GiB standard task
+  = about $0.0987408 per active hour
+```
+
+AWS bills Linux/x86 Fargate per second while a task is running. Current `us-east-1` public rates are $0.000011244 per vCPU-second and $0.000001235 per GiB-second; storage beyond the included 20 GB is billed separately. See [AWS Fargate pricing](https://aws.amazon.com/fargate/pricing/).
+
+Session usage sensitivity:
+
+| Average use | Monthly task-hours | Standard session compute |
+| --- | ---: | ---: |
+| 1 hour/user/workday | 400 | About $40 |
+| 2 hours/user/workday | 800 | About $79 |
+| 4 hours/user/workday | 1,600 | About $158 |
+| 8 hours/user/workday | 3,200 | About $316 |
+
+The cleanup job therefore has direct financial value: every unnecessary idle hour costs about $0.10 for the standard task before logs and network traffic.
+
+### Published app cost
+
+Published apps are independent of development sessions and remain billable while deployed:
+
+- A minimal 0.25 vCPU/0.5 GiB app task costs about **$9/month** when running for 730 hours.
+- A 0.5 vCPU/1 GiB app task costs about **$18/month**.
+- Twenty continuously running apps therefore add about **$180–$360/month** in app-task compute.
+- A shared app gateway and the separate durable app-data Aurora estate add approximately **$80–$180/month** at low load.
+
+With 20 always-on published apps, budget roughly **$570–$1,045/month total**, before model APIs. Letting users explicitly undeploy unused apps is the largest app-hosting cost control.
+
+### Full target high-availability cost
+
+Deploying the complete three-AZ target topology immediately changes the economics:
+
+- Three NAT Gateways cost about $99/month before data processing, compared with about $33 for one. AWS's example `us-east-2` rate is $0.045 per NAT Gateway-hour and $0.045 per GB processed; confirm the selected Region at deployment time. See [Amazon VPC pricing](https://aws.amazon.com/vpc/pricing/).
+- Six interface endpoint types across three AZs cost about $131/month before data processing at $0.01 per endpoint ENI-hour. This is why the initial deployment should add paid endpoints selectively. See [AWS PrivateLink pricing](https://aws.amazon.com/privatelink/pricing/).
+- Two or three tasks for each web, API, gateway, and worker role add roughly $150–$250/month over the compact baseline.
+- An Aurora writer and reader plus redundant cache nodes add fixed database capacity regardless of having only 20 users. The separate app-data cluster adds another database floor once published apps are enabled. Aurora Serverless v2 has a 0.5 ACU minimum per active instance in AWS's pricing example and charges $0.12 per ACU-hour for Aurora Standard in `us-east-1`. See [Amazon Aurora pricing](https://aws.amazon.com/rds/aurora/pricing/).
+
+Budget **$850–$1,350/month** for the full target control plane plus the assumed 800 session hours, before published apps and model APIs. With 20 always-on apps, budget approximately **$1,100–$1,850/month**.
+
+Do not buy the full fixed topology solely because the long-term design supports thousands of users. Start with the compact production shape, preserve the same IaC boundaries, and add multi-AZ redundancy and paid endpoints when availability requirements, traffic, and measured failure risk justify them.
+
+### Costs not included
+
+- OpenAI, Anthropic, or other model usage. This may exceed AWS infrastructure cost and must be metered per organization and operation.
+- Large generated-app database workloads, media transcoding, GPU rendering, or heavy document processing.
+- High internet egress, especially large previews, media, package downloads, or app responses.
+- CodeBuild minutes and image storage for frequent generated-app deployments beyond a modest allowance.
+- AWS Shield Advanced, premium WAF managed rules, Enterprise Support, or cross-Region disaster recovery.
+- Third-party observability, incident response, email, domains, and payment processing.
+
+Configure AWS Budgets at $400, $500, and $750 for the initial no-published-app rollout, plus Cost Anomaly Detection. Tag every session and deployment with organization, user, group, runtime, and deployment identifiers so compute and NAT usage can be attributed rather than treated as an undifferentiated platform bill.
