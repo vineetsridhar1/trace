@@ -446,23 +446,16 @@ export function SessionInputOptions({
           onChange={handleReasoningEffortChange}
         />
       )}
-      {isNotStarted && !runtimeLocked ? (
+      {canChangeRuntime ? (
         <Select
           value={currentRuntimeValue}
           onValueChange={handleRuntimeChange}
           onOpenChange={(open) => {
             if (open) void fetchAvailableRuntimes();
           }}
-          disabled={isOptimistic || !canChangeRuntime}
+          disabled={isOptimistic}
         >
-          <SelectTrigger
-            className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0"
-            title={
-              groupHasSelectedRuntime
-                ? "This session inherits its session group's bridge. Use Move to change bridges."
-                : undefined
-            }
-          >
+          <SelectTrigger className="h-7 w-auto cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0">
             <SelectValue>
               <span className="flex items-center gap-1">
                 {currentRuntimeValue === CLOUD_RUNTIME_ID ? (
