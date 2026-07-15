@@ -4,6 +4,8 @@ Status: proposed production architecture and implementation plan
 Audience: Trace engineering and infrastructure owners  
 Scope: the Trace control plane, isolated cloud sessions, Trace-managed app source, artifact storage, and always-on generated app deployments on AWS
 
+Implementation: the deployable TypeScript CDK application is in `infra/`; operator bootstrap and deployment steps are in `docs/aws-iac-deployment.md`.
+
 ## 1. Executive decision
 
 Build Trace on AWS around four independent lifecycles:
@@ -15,16 +17,16 @@ Build Trace on AWS around four independent lifecycles:
 
 Use these systems of record:
 
-| Data | System of record |
-| --- | --- |
-| Coding project source | GitHub |
-| Trace app source | Trace-managed bare Git repository |
-| Designs, PDFs, Office documents, spreadsheets, and media | Immutable objects in Amazon S3 |
-| Trace entities, events, revision metadata, and desired state | Aurora PostgreSQL |
+| Data                                                                     | System of record                                                       |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Coding project source                                                    | GitHub                                                                 |
+| Trace app source                                                         | Trace-managed bare Git repository                                      |
+| Designs, PDFs, Office documents, spreadsheets, and media                 | Immutable objects in Amazon S3                                         |
+| Trace entities, events, revision metadata, and desired state             | Aurora PostgreSQL                                                      |
 | Transient pub/sub, distributed locks, runtime routing, and worker queues | ElastiCache for Valkey/Redis OSS plus SQS where durability is required |
-| Built Trace and generated-app images | Amazon ECR |
-| Running development environments | Disposable Fargate tasks |
-| Running published apps | Replaceable Fargate tasks with external durable data |
+| Built Trace and generated-app images                                     | Amazon ECR                                                             |
+| Running development environments                                         | Disposable Fargate tasks                                               |
+| Running published apps                                                   | Replaceable Fargate tasks with external durable data                   |
 
 The runtime filesystem is never authoritative. A runtime may disappear without warning; completed agent operations must already be recoverable from Git or S3.
 
@@ -167,14 +169,14 @@ Create a TypeScript AWS CDK application under `infra/` because Trace is already 
 
 Recommended stacks:
 
-| Stack | Responsibility |
-| --- | --- |
-| `TraceFoundationStack` | VPC, subnets, endpoints, DNS, certificates, KMS, base security groups |
-| `TraceDataStack` | Aurora, RDS Proxy, ElastiCache, EFS, S3, AWS Backup |
-| `TraceControlPlaneStack` | ALB, WAF, ECS cluster, API/web/gateway services, autoscaling |
-| `TraceRuntimeStack` | Runtime cluster, task definitions, launcher API/Lambda, queues, EventBridge |
-| `TraceAppDeploymentStack` | Build system, app image repository, app gateway, deployment workers |
-| `TraceObservabilityStack` | Logs, metrics, alarms, dashboards, SNS/PagerDuty destinations |
+| Stack                     | Responsibility                                                              |
+| ------------------------- | --------------------------------------------------------------------------- |
+| `TraceFoundationStack`    | VPC, subnets, endpoints, DNS, certificates, KMS, base security groups       |
+| `TraceDataStack`          | Aurora, RDS Proxy, ElastiCache, EFS, S3, AWS Backup                         |
+| `TraceControlPlaneStack`  | ALB, WAF, ECS cluster, API/web/gateway services, autoscaling                |
+| `TraceRuntimeStack`       | Runtime cluster, task definitions, launcher API/Lambda, queues, EventBridge |
+| `TraceAppDeploymentStack` | Build system, app image repository, app gateway, deployment workers         |
+| `TraceObservabilityStack` | Logs, metrics, alarms, dashboards, SNS/PagerDuty destinations               |
 
 Every resource must carry `Application=trace`, `Environment`, `Owner`, and `CostCenter` tags.
 
@@ -186,12 +188,12 @@ Create a `/16` VPC with DNS hostnames and DNS resolution enabled. Reserve enough
 
 Example subnet plan:
 
-| Tier | AZ A | AZ B | AZ C | Purpose |
-| --- | --- | --- | --- | --- |
-| Public | `/24` | `/24` | `/24` | ALB and NAT gateways only |
-| Control plane | `/21` | `/21` | `/21` | API, web, gateway, and workers |
-| Session runtime | `/19` | `/19` | `/19` | Thousands of session/app task ENIs |
-| Data | `/24` | `/24` | `/24` | Aurora, ElastiCache, and EFS mounts |
+| Tier            | AZ A  | AZ B  | AZ C  | Purpose                             |
+| --------------- | ----- | ----- | ----- | ----------------------------------- |
+| Public          | `/24` | `/24` | `/24` | ALB and NAT gateways only           |
+| Control plane   | `/21` | `/21` | `/21` | API, web, gateway, and workers      |
+| Session runtime | `/19` | `/19` | `/19` | Thousands of session/app task ENIs  |
+| Data            | `/24` | `/24` | `/24` | Aurora, ElastiCache, and EFS mounts |
 
 Do not assign public IPs to ECS tasks.
 
@@ -215,18 +217,18 @@ ECR image layers also require S3 connectivity; AWS documents the endpoint combin
 
 Create narrowly scoped security groups:
 
-| Security group | Inbound | Outbound |
-| --- | --- | --- |
-| `trace-public-alb` | TCP 443 from internet; TCP 80 only for redirect | API/web/gateway target ports |
-| `trace-web` | Port 3000 from ALB | CloudWatch/VPC endpoints only |
-| `trace-api` | Port 4000 from ALB and internal workers | Aurora proxy, Redis, EFS, AWS endpoints, HTTPS internet as required |
-| `trace-runtime-gateway` | Gateway port from ALB/internal routers | Redis, Aurora, AWS endpoints |
-| `trace-session-runtime` | No inbound rules | HTTPS internet, Trace public bridge, managed Git HTTPS; no data-subnet access |
-| `trace-app-runtime` | No inbound rules when using the outbound app tunnel | App-data DB proxy, app storage broker, gateway |
-| `trace-aurora` | PostgreSQL from API/RDS Proxy only | Default return traffic |
-| `trace-app-aurora` | PostgreSQL from app tasks/proxy only | Default return traffic |
-| `trace-redis` | Redis TLS port from API/gateway/workers | Default return traffic |
-| `trace-efs` | NFS from API Git-storage tasks only | Default return traffic |
+| Security group          | Inbound                                             | Outbound                                                                      |
+| ----------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `trace-public-alb`      | TCP 443 from internet; TCP 80 only for redirect     | API/web/gateway target ports                                                  |
+| `trace-web`             | Port 3000 from ALB                                  | CloudWatch/VPC endpoints only                                                 |
+| `trace-api`             | Port 4000 from ALB and internal workers             | Aurora proxy, Redis, EFS, AWS endpoints, HTTPS internet as required           |
+| `trace-runtime-gateway` | Gateway port from ALB/internal routers              | Redis, Aurora, AWS endpoints                                                  |
+| `trace-session-runtime` | No inbound rules                                    | HTTPS internet, Trace public bridge, managed Git HTTPS; no data-subnet access |
+| `trace-app-runtime`     | No inbound rules when using the outbound app tunnel | App-data DB proxy, app storage broker, gateway                                |
+| `trace-aurora`          | PostgreSQL from API/RDS Proxy only                  | Default return traffic                                                        |
+| `trace-app-aurora`      | PostgreSQL from app tasks/proxy only                | Default return traffic                                                        |
+| `trace-redis`           | Redis TLS port from API/gateway/workers             | Default return traffic                                                        |
+| `trace-efs`             | NFS from API Git-storage tasks only                 | Default return traffic                                                        |
 
 Untrusted session tasks must never be able to connect directly to the Trace control-plane database, Redis, EFS, or Secrets Manager.
 
@@ -261,13 +263,13 @@ TRACE_AUTH_COOKIE_SAME_SITE=lax
 
 Use an internet-facing Application Load Balancer with HTTPS termination and host-header preservation. Route:
 
-| Match | Target |
-| --- | --- |
-| Host `trace.example.com`, default | Web target group |
-| Paths `/auth*`, `/graphql*`, `/uploads*`, `/webhooks/github*`, `/slack*`, `/ws*`, `/git*`, `/health`, `/.well-known/*`, `/apple-app-site-association` | API target group |
-| Paths `/bridge*`, `/terminal*` | Runtime gateway target group after the gateway split |
-| Host `*.preview.trace.example.com` | Preview router/gateway target group |
-| Host `*.apps.trace.example.com` | Published app gateway target group |
+| Match                                                                                                                                                 | Target                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Host `trace.example.com`, default                                                                                                                     | Web target group                                     |
+| Paths `/auth*`, `/graphql*`, `/uploads*`, `/webhooks/github*`, `/slack*`, `/ws*`, `/git*`, `/health`, `/.well-known/*`, `/apple-app-site-association` | API target group                                     |
+| Paths `/bridge*`, `/terminal*`                                                                                                                        | Runtime gateway target group after the gateway split |
+| Host `*.preview.trace.example.com`                                                                                                                    | Preview router/gateway target group                  |
+| Host `*.apps.trace.example.com`                                                                                                                       | Published app gateway target group                   |
 
 The existing self-hosted Caddy configuration does not route `/git`; the AWS routing rules must include it for managed repositories to work.
 
@@ -583,11 +585,11 @@ It must not have wildcard IAM, EC2, Secrets Manager, S3, RDS, or control-plane a
 
 Create task definition families by workload profile rather than arbitrary user-selected sizes:
 
-| Profile | Initial size | Use |
-| --- | --- | --- |
-| `trace-runtime-standard` | 2 vCPU, 4–8 GiB, 40–60 GiB ephemeral storage | Coding and document work |
-| `trace-runtime-app` | 4 vCPU, 8–16 GiB, 60–100 GiB ephemeral storage | App builds, Chromium, local Postgres/Redis |
-| `trace-runtime-media` | Profile after measurement | CPU/memory-heavy rendering or conversion |
+| Profile                  | Initial size                                   | Use                                        |
+| ------------------------ | ---------------------------------------------- | ------------------------------------------ |
+| `trace-runtime-standard` | 2 vCPU, 4–8 GiB, 40–60 GiB ephemeral storage   | Coding and document work                   |
+| `trace-runtime-app`      | 4 vCPU, 8–16 GiB, 60–100 GiB ephemeral storage | App builds, Chromium, local Postgres/Redis |
+| `trace-runtime-media`    | Profile after measurement                      | CPU/memory-heavy rendering or conversion   |
 
 Tune these through measurement. Do not promise a fixed profile to the product API until startup time and workload limits are understood.
 
@@ -939,14 +941,14 @@ Use ECS task-state EventBridge events to enrich runtime failure diagnostics and 
 
 Define initial objectives and revise after product review:
 
-| System | Initial RPO | Initial RTO | Protection |
-| --- | --- | --- | --- |
-| Trace control-plane DB | 5 minutes or better | 1 hour | Aurora PITR, daily snapshot, cross-Region copy |
-| App-data DB | 5–15 minutes | 1–4 hours | Aurora PITR and shard snapshots |
-| Managed Git/EFS | 1 hour | 2–4 hours | Hourly/daily AWS Backup, restore validation |
-| S3 artifacts | Near zero for committed revision | 1–4 hours | Versioning, optional cross-Region replication |
-| ECR images | Rebuildable | 4 hours | Cross-Region replication or rebuild from revision |
-| Redis | No durable RPO guarantee | Minutes | Multi-AZ; rebuild transient state from DB/runtime reconnects |
+| System                 | Initial RPO                      | Initial RTO | Protection                                                   |
+| ---------------------- | -------------------------------- | ----------- | ------------------------------------------------------------ |
+| Trace control-plane DB | 5 minutes or better              | 1 hour      | Aurora PITR, daily snapshot, cross-Region copy               |
+| App-data DB            | 5–15 minutes                     | 1–4 hours   | Aurora PITR and shard snapshots                              |
+| Managed Git/EFS        | 1 hour                           | 2–4 hours   | Hourly/daily AWS Backup, restore validation                  |
+| S3 artifacts           | Near zero for committed revision | 1–4 hours   | Versioning, optional cross-Region replication                |
+| ECR images             | Rebuildable                      | 4 hours     | Cross-Region replication or rebuild from revision            |
+| Redis                  | No durable RPO guarantee         | Minutes     | Multi-AZ; rebuild transient state from DB/runtime reconnects |
 
 Configure AWS Backup:
 
@@ -1127,35 +1129,35 @@ A user-visible trash, restore API, and recovery retention window are explicitly 
 
 The production task definition should explicitly supply or validate at least:
 
-| Variable | Source |
-| --- | --- |
-| `NODE_ENV=production` | Plain environment |
-| `PORT=4000` | Plain environment |
-| `DATABASE_URL` | Secrets Manager, preferably RDS Proxy endpoint |
-| `REDIS_URL` | Secrets Manager/stack output, TLS endpoint |
-| `JWT_SECRET` | Secrets Manager |
-| `TOKEN_ENCRYPTION_KEY` | Secrets Manager |
-| `TRACE_WEB_URL` | CDK configuration |
-| `TRACE_SERVER_PUBLIC_URL` | CDK configuration |
-| `TRACE_CLOUD_BRIDGE_URL` | CDK configuration |
-| `TRACE_AUTH_COOKIE_SAME_SITE` | CDK configuration |
-| `CORS_ALLOWED_ORIGINS` | CDK configuration |
-| `STORAGE_MODE=s3` | Plain environment |
-| `S3_BUCKET` | CDK stack output |
-| `AWS_REGION` | ECS/AWS environment |
-| `GIT_STORAGE_MODE=local` | Plain environment; local adapter over mounted EFS |
-| `GIT_STORAGE_ROOT=/mnt/trace-git` | Plain environment |
-| `TRACE_ENDPOINT_PREVIEW_BASE_HOST` | CDK configuration |
-| `TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME=https` | Plain environment |
-| `TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS` | Product/operations configuration |
-| `TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS` | Product/operations configuration |
-| `GITHUB_CLIENT_ID` | Configuration or Secrets Manager |
-| `GITHUB_CLIENT_SECRET` | Secrets Manager when used |
-| `SLACK_CLIENT_ID` | Secrets Manager when enabled |
-| `SLACK_CLIENT_SECRET` | Secrets Manager when enabled |
-| `SLACK_SIGNING_SECRET` | Secrets Manager when enabled |
-| `SLACK_REDIRECT_URI` | CDK configuration |
-| Model-provider keys | Secrets Manager or per-user encrypted credentials |
+| Variable                                             | Source                                            |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| `NODE_ENV=production`                                | Plain environment                                 |
+| `PORT=4000`                                          | Plain environment                                 |
+| `DATABASE_URL`                                       | Secrets Manager, preferably RDS Proxy endpoint    |
+| `REDIS_URL`                                          | Secrets Manager/stack output, TLS endpoint        |
+| `JWT_SECRET`                                         | Secrets Manager                                   |
+| `TOKEN_ENCRYPTION_KEY`                               | Secrets Manager                                   |
+| `TRACE_WEB_URL`                                      | CDK configuration                                 |
+| `TRACE_SERVER_PUBLIC_URL`                            | CDK configuration                                 |
+| `TRACE_CLOUD_BRIDGE_URL`                             | CDK configuration                                 |
+| `TRACE_AUTH_COOKIE_SAME_SITE`                        | CDK configuration                                 |
+| `CORS_ALLOWED_ORIGINS`                               | CDK configuration                                 |
+| `STORAGE_MODE=s3`                                    | Plain environment                                 |
+| `S3_BUCKET`                                          | CDK stack output                                  |
+| `AWS_REGION`                                         | ECS/AWS environment                               |
+| `GIT_STORAGE_MODE=local`                             | Plain environment; local adapter over mounted EFS |
+| `GIT_STORAGE_ROOT=/mnt/trace-git`                    | Plain environment                                 |
+| `TRACE_ENDPOINT_PREVIEW_BASE_HOST`                   | CDK configuration                                 |
+| `TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME=https`         | Plain environment                                 |
+| `TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS`    | Product/operations configuration                  |
+| `TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS` | Product/operations configuration                  |
+| `GITHUB_CLIENT_ID`                                   | Configuration or Secrets Manager                  |
+| `GITHUB_CLIENT_SECRET`                               | Secrets Manager when used                         |
+| `SLACK_CLIENT_ID`                                    | Secrets Manager when enabled                      |
+| `SLACK_CLIENT_SECRET`                                | Secrets Manager when enabled                      |
+| `SLACK_SIGNING_SECRET`                               | Secrets Manager when enabled                      |
+| `SLACK_REDIRECT_URI`                                 | CDK configuration                                 |
+| Model-provider keys                                  | Secrets Manager or per-user encrypted credentials |
 
 Build-time values such as `VITE_API_URL` and `VITE_AG_GRID_LICENSE_KEY` must come from CI secrets/configuration. Never place secrets in Docker build arguments that become image history or public frontend assets.
 
@@ -1288,16 +1290,16 @@ This is a planning estimate in USD for `us-east-1`, using public on-demand price
 
 Use a cost-conscious production shape while the current in-process runtime router requires one backend task. This is appropriate for an early 20-user production rollout, but it does not provide the final multi-AZ control-plane availability described elsewhere in this document.
 
-| Cost area | Estimated monthly cost | Assumption |
-| --- | ---: | --- |
-| Always-on control-plane Fargate tasks | $50–$80 | One backend/runtime owner, small web tasks, and limited worker runtime |
-| Aurora control-plane database and RDS Proxy | $60–$120 | One Aurora Serverless v2 writer, generally near 0.5–1 ACU, plus low storage/I/O and proxy use |
-| ElastiCache | $25–$45 | Small primary and replica |
-| ALB and AWS WAF | $30–$45 | One low-traffic ALB, one Web ACL, and a small rule set |
-| Network egress foundation | $35–$65 | One NAT Gateway for the initial rollout, S3 gateway endpoint, and modest data processing; this accepts an AZ dependency |
-| EFS, S3, ECR, backups, logs, secrets, KMS, and DNS | $30–$70 | Tens of gigabytes and controlled log retention |
-| 800 standard session task-hours | About $79 | 2 vCPU and 4 GiB at about $0.0987 per task-hour |
-| **Estimated total** | **$310–$505/month** | Before model APIs and published apps |
+| Cost area                                          | Estimated monthly cost | Assumption                                                                                                              |
+| -------------------------------------------------- | ---------------------: | ----------------------------------------------------------------------------------------------------------------------- |
+| Always-on control-plane Fargate tasks              |                $50–$80 | One backend/runtime owner, small web tasks, and limited worker runtime                                                  |
+| Aurora control-plane database and RDS Proxy        |               $60–$120 | One Aurora Serverless v2 writer, generally near 0.5–1 ACU, plus low storage/I/O and proxy use                           |
+| ElastiCache                                        |                $25–$45 | Small primary and replica                                                                                               |
+| ALB and AWS WAF                                    |                $30–$45 | One low-traffic ALB, one Web ACL, and a small rule set                                                                  |
+| Network egress foundation                          |                $35–$65 | One NAT Gateway for the initial rollout, S3 gateway endpoint, and modest data processing; this accepts an AZ dependency |
+| EFS, S3, ECR, backups, logs, secrets, KMS, and DNS |                $30–$70 | Tens of gigabytes and controlled log retention                                                                          |
+| 800 standard session task-hours                    |              About $79 | 2 vCPU and 4 GiB at about $0.0987 per task-hour                                                                         |
+| **Estimated total**                                |    **$310–$505/month** | Before model APIs and published apps                                                                                    |
 
 Use **$400/month** as the initial planning number, plus a 25% alert buffer. That is about **$20 per user per month** at 20 users. The fixed platform portion is roughly $230–$425, so per-user cost falls as more users share the same control plane.
 
@@ -1316,12 +1318,12 @@ AWS bills Linux/x86 Fargate per second while a task is running. Current `us-east
 
 Session usage sensitivity:
 
-| Average use | Monthly task-hours | Standard session compute |
-| --- | ---: | ---: |
-| 1 hour/user/workday | 400 | About $40 |
-| 2 hours/user/workday | 800 | About $79 |
-| 4 hours/user/workday | 1,600 | About $158 |
-| 8 hours/user/workday | 3,200 | About $316 |
+| Average use          | Monthly task-hours | Standard session compute |
+| -------------------- | -----------------: | -----------------------: |
+| 1 hour/user/workday  |                400 |                About $40 |
+| 2 hours/user/workday |                800 |                About $79 |
+| 4 hours/user/workday |              1,600 |               About $158 |
+| 8 hours/user/workday |              3,200 |               About $316 |
 
 The cleanup job therefore has direct financial value: every unnecessary idle hour costs about $0.10 for the standard task before logs and network traffic.
 
