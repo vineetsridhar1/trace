@@ -5096,8 +5096,21 @@ describe("SessionService", () => {
         .mockResolvedValueOnce({ count: 1 })
         .mockResolvedValueOnce({ count: 2 });
       prismaMock.session.findMany.mockResolvedValueOnce([
-        { id: "session-1", organizationId: "org-1" },
-        { id: "session-2", organizationId: "org-1" },
+        {
+          id: "session-1",
+          organizationId: "org-1",
+          connection: { state: "requested", version: 1, retryCount: 0 },
+        },
+        {
+          id: "session-2",
+          organizationId: "org-1",
+          connection: {
+            state: "failed",
+            version: 7,
+            retryCount: 3,
+            lastError: "session-specific failure",
+          },
+        },
       ]);
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         key: "org-1:runtime-provisioned-1",
@@ -5124,11 +5137,14 @@ describe("SessionService", () => {
           },
         }),
       );
-      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
-        where: { sessionGroupId: "group-1" },
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-2" },
         data: {
           connection: expect.objectContaining({
-            state: "requested",
+            state: "failed",
+            version: 7,
+            retryCount: 3,
+            lastError: "session-specific failure",
             runtimeInstanceId: "runtime-provisioned-1",
           }),
         },
@@ -5771,75 +5787,33 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
 
-    it("moves every group session when runtime selection changes", async () => {
-      const targetRuntime = {
-        key: "org-1:runtime-b",
-        id: "runtime-b",
-        label: "Laptop B",
-        hostingMode: "local",
-        organizationId: "org-1",
-      };
+    it("requires the group move action when a group already has a bridge", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
           id: "session-1",
           agentStatus: "not_started",
           sessionGroupId: "group-1",
           connection: { runtimeInstanceId: "runtime-a" },
-        }),
-      );
-      sessionRouterMock.getRuntime.mockReturnValueOnce(targetRuntime);
-      prismaMock.session.update
-        .mockResolvedValueOnce(
-          makeSession({
-            id: "session-1",
-            agentStatus: "not_started",
-            hosting: "local",
-            sessionGroupId: "group-1",
-            connection: { runtimeInstanceId: "runtime-b", runtimeLabel: "Laptop B" },
+          sessionGroup: makeSessionGroup({
+            connection: { runtimeInstanceId: "runtime-a" },
           }),
-        )
-        .mockResolvedValueOnce(
-          makeSession({
-            id: "session-2",
-            agentStatus: "not_started",
-            hosting: "local",
-            sessionGroupId: "group-1",
-            connection: { runtimeInstanceId: "runtime-b", runtimeLabel: "Laptop B" },
-          }),
-        );
-      prismaMock.session.findMany.mockResolvedValueOnce([
-        makeSession({
-          id: "session-2",
-          hosting: "local",
-          sessionGroupId: "group-1",
-          connection: { runtimeInstanceId: "runtime-a" },
         }),
-      ]);
-
-      await service.updateConfig(
-        "session-1",
-        "org-1",
-        { runtimeInstanceId: "runtime-b" },
-        "user",
-        "user-1",
       );
 
-      expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
-      expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
-        "session-2",
-        "local",
-        "terminate",
+      await expect(
+        service.updateConfig(
+          "session-1",
+          "org-1",
+          { runtimeInstanceId: "runtime-b" },
+          "user",
+          "user-1",
+        ),
+      ).rejects.toThrow(
+        "This session group already has a bridge. Use Move to switch the entire session group.",
       );
-      expect(prismaMock.session.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: "session-2" },
-          data: expect.objectContaining({
-            hosting: "local",
-            connection: expect.objectContaining({ runtimeInstanceId: "runtime-b" }),
-          }),
-        }),
-      );
-      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-2", "org-1:runtime-b");
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(terminalRelayMock.destroyAllForSessionGroup).not.toHaveBeenCalled();
     });
   });
 
@@ -6587,6 +6561,12 @@ describe("SessionService", () => {
           (arg?.data as { workdir?: unknown } | undefined)?.workdir === "/workspaces/crocodile-2",
       );
       expect(blanketWorkdirMirror).toBe(false);
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { sessionGroupId: "group-1" },
+          data: expect.objectContaining({ connection: expect.anything() }),
+        }),
+      );
     });
 
     it("reconciles an existing group branch from workspace_ready for the same workdir", async () => {
@@ -7473,6 +7453,62 @@ describe("SessionService", () => {
     });
   });
 
+  describe("markConnectionRestored", () => {
+    it("propagates a changed bridge binding without overwriting sibling lifecycle state", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          connection: { state: "disconnected", runtimeInstanceId: "runtime-a" },
+        }),
+      );
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        connection: { state: "disconnected", runtimeInstanceId: "runtime-a" },
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          organizationId: "org-1",
+          connection: { state: "connected", version: 2, runtimeInstanceId: "runtime-b" },
+        },
+        {
+          id: "session-2",
+          organizationId: "org-1",
+          connection: {
+            state: "failed",
+            version: 9,
+            lastError: "tool crashed",
+            runtimeInstanceId: "runtime-a",
+          },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-b",
+        key: "org-1:runtime-b",
+        label: "Laptop B",
+      });
+
+      await service.markConnectionRestored("session-1", "runtime-b");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-2" },
+        data: {
+          connection: expect.objectContaining({
+            state: "failed",
+            version: 9,
+            lastError: "tool crashed",
+            runtimeInstanceId: "runtime-b",
+            runtimeLabel: "Laptop B",
+          }),
+        },
+      });
+      expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith(
+        "session-2",
+        "org-1:runtime-b",
+      );
+    });
+  });
+
   describe("cleanupIdleCloudSessionGroups", () => {
     beforeEach(() => {
       prismaMock.sessionGroup.findMany.mockReset();
@@ -8244,7 +8280,6 @@ describe("SessionService", () => {
           data: expect.objectContaining({
             agentStatus: "not_started",
             sessionStatus: "in_progress",
-            createdById: "user-1",
             hosting: "local",
             pendingRun: expect.objectContaining({
               type: "run",
@@ -8292,7 +8327,7 @@ describe("SessionService", () => {
           skipUnbind: true,
         }),
       );
-      expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
+      expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
     });
 
     it("relocates every sibling session in the group onto the same runtime", async () => {
@@ -8326,7 +8361,7 @@ describe("SessionService", () => {
           },
         }),
       );
-      // One sibling still bound to the old bridge.
+      // Active and merged siblings are both part of the bridge invariant.
       prismaMock.session.findMany.mockResolvedValueOnce([
         makeSession({
           id: "session-2",
@@ -8338,19 +8373,46 @@ describe("SessionService", () => {
             runtimeLabel: "Laptop A",
           },
         }),
-      ]);
-      prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
-          id: "session-2",
+          id: "session-merged",
           hosting: "local",
+          sessionStatus: "merged",
+          agentStatus: "done",
           sessionGroupId: "group-1",
           connection: {
-            state: "connected",
-            runtimeInstanceId: "runtime-1",
-            runtimeLabel: "Local Dev",
+            state: "stopped",
+            runtimeInstanceId: "runtime-source",
+            runtimeLabel: "Laptop A",
           },
         }),
-      );
+      ]);
+      prismaMock.session.update
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-2",
+            hosting: "local",
+            sessionGroupId: "group-1",
+            connection: {
+              state: "connected",
+              runtimeInstanceId: "runtime-1",
+              runtimeLabel: "Local Dev",
+            },
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-merged",
+            hosting: "local",
+            sessionStatus: "merged",
+            agentStatus: "done",
+            sessionGroupId: "group-1",
+            connection: {
+              state: "connected",
+              runtimeInstanceId: "runtime-1",
+              runtimeLabel: "Local Dev",
+            },
+          }),
+        );
       const targetRuntime = {
         key: "org-1:runtime-1",
         id: "runtime-1",
@@ -8369,7 +8431,7 @@ describe("SessionService", () => {
       await service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1");
 
       // Sibling relocated: terminated on the old bridge, re-pointed, re-bound.
-      expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-2");
+      expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
       expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
         "session-2",
         "local",
@@ -8388,11 +8450,117 @@ describe("SessionService", () => {
         }),
       );
       expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-2", "org-1:runtime-1");
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-merged" },
+          data: expect.not.objectContaining({
+            agentStatus: expect.anything(),
+            sessionStatus: expect.anything(),
+          }),
+        }),
+      );
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith(
+        "session-merged",
+        "org-1:runtime-1",
+      );
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: {
+          sessionGroupId: "group-1",
+          id: { notIn: ["session-1", "session-2", "session-merged"] },
+        },
+        data: expect.objectContaining({
+          hosting: "local",
+          connection: expect.objectContaining({ runtimeInstanceId: "runtime-1" }),
+        }),
+      });
       // The sibling must not spin up its own workspace — only the primary provisions.
       expect(sessionRouterMock.createRuntime).toHaveBeenCalledTimes(1);
       expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
         expect.objectContaining({ sessionId: "session-1" }),
       );
+    });
+
+    it("does not commit any group binding when a live sibling cannot terminate", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          workdir: "/tmp/trace/worktrees/session-1",
+          connection: { state: "connected", runtimeInstanceId: "runtime-source" },
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        makeSession({
+          id: "session-2",
+          hosting: "local",
+          connection: { state: "connected", runtimeInstanceId: "runtime-source" },
+        }),
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Local Dev",
+        hostingMode: "local",
+        organizationId: "org-1",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      sessionRouterMock.transitionRuntime
+        .mockResolvedValueOnce("delivered")
+        .mockRejectedValueOnce(new Error("bridge refused termination"));
+
+      await expect(
+        service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1"),
+      ).rejects.toThrow("bridge refused termination");
+
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(sessionRouterMock.bindSession).not.toHaveBeenCalled();
+      expect(terminalRelayMock.destroyAllForSessionGroup).not.toHaveBeenCalled();
+    });
+
+    it("rejects a group move when the target bridge cannot run a sibling tool", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          hosting: "local",
+          workdir: "/tmp/trace/worktrees/session-1",
+          connection: { state: "connected", runtimeInstanceId: "runtime-source" },
+          projects: [{ projectId: "project-1" }],
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValueOnce([]);
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        makeSession({
+          id: "session-2",
+          tool: "codex",
+          hosting: "local",
+          connection: { state: "connected", runtimeInstanceId: "runtime-source" },
+        }),
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Claude-only bridge",
+        hostingMode: "local",
+        organizationId: "org-1",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await expect(
+        service.moveToRuntime("session-1", "runtime-1", "org-1", "user", "user-1"),
+      ).rejects.toThrow("The selected coding tool is not installed on Claude-only bridge.");
+
+      expect(sessionRouterMock.transitionRuntime).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
 
     it("provisions from the source HEAD when moving an unpushed branch to another runtime", async () => {
@@ -8540,11 +8708,6 @@ describe("SessionService", () => {
         | undefined;
       expect(updateArgs?.data?.workdir).toBeNull();
       expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ workdir: null }),
-        }),
-      );
-      expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ workdir: null }),
         }),
@@ -9394,7 +9557,6 @@ describe("SessionService", () => {
           data: expect.objectContaining({
             agentStatus: "not_started",
             sessionStatus: "in_progress",
-            createdById: "user-1",
             hosting: "cloud",
             pendingRun: expect.objectContaining({
               type: "run",
@@ -9427,7 +9589,7 @@ describe("SessionService", () => {
         "cloud",
         "terminate",
       );
-      expect(terminalRelayMock.destroyAllForSession).toHaveBeenCalledWith("session-1");
+      expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
     });
 
     it("resolves a provisioned environment before moving a local session to cloud", async () => {
@@ -9594,7 +9756,7 @@ describe("SessionService", () => {
       );
     });
 
-    it("reassigns move ownership to the actor before cloud provisioning", async () => {
+    it("preserves creator ownership while provisioning as the move actor", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
           createdById: "user-1",
@@ -9615,8 +9777,8 @@ describe("SessionService", () => {
       prismaMock.session.update.mockResolvedValueOnce(
         makeSession({
           id: "session-1",
-          createdById: "user-2",
-          createdBy: { id: "user-2", name: "Mover", avatarUrl: null },
+          createdById: "user-1",
+          createdBy: { id: "user-1", name: "Original Owner", avatarUrl: null },
           agentStatus: "not_started",
           sessionStatus: "in_progress",
           hosting: "cloud",
@@ -9626,11 +9788,9 @@ describe("SessionService", () => {
 
       await service.moveToCloud("session-1", "org-1", "user", "user-2");
 
-      expect(prismaMock.session.update).toHaveBeenCalledWith(
+      expect(prismaMock.session.update).not.toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            createdById: "user-2",
-          }),
+          data: expect.objectContaining({ createdById: expect.any(String) }),
         }),
       );
       expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(

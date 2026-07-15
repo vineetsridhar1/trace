@@ -31,7 +31,11 @@ export { getAuthHeaders, LOCAL_LOGIN_NAME_KEY, useAuthStore } from "./stores/aut
 
 export { generateUUID } from "./utils/uuid.js";
 
-export { getSessionChannelId, getSessionGroupChannelId } from "./lib/session-group.js";
+export {
+  getSessionChannelId,
+  getSessionGroupChannelId,
+  hasSelectedSessionGroupRuntime,
+} from "./lib/session-group.js";
 
 export * from "./mutations/index.js";
 export {

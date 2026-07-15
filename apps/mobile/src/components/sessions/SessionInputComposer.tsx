@@ -14,7 +14,12 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { DISMISS_SESSION_MUTATION, generateUUID, useEntityField } from "@trace/client-core";
+import {
+  DISMISS_SESSION_MUTATION,
+  generateUUID,
+  hasSelectedSessionGroupRuntime,
+  useEntityField,
+} from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
 import { useClipboardImage } from "@/hooks/useClipboardImage";
@@ -99,6 +104,10 @@ export function SessionInputComposer({
   const hosting = useEntityField("sessions", sessionId, "hosting") as string | null | undefined;
   const connection = useEntityField("sessions", sessionId, "connection") as
     | SessionConnection
+    | null
+    | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as
+    | string
     | null
     | undefined;
   const channel = useEntityField("sessions", sessionId, "channel") as
@@ -268,12 +277,9 @@ export function SessionInputComposer({
     sessionId,
     tool,
   });
-  const groupHasSelectedBridge = Boolean(
-    groupWorkdir ||
-    groupConnection?.runtimeInstanceId ||
-    groupConnection?.environmentId ||
-    groupConnection?.providerRuntimeId ||
-    groupConnection?.adapterType === "provisioned",
+  const groupHasSelectedBridge = hasSelectedSessionGroupRuntime(
+    groupConnection === undefined ? connection : groupConnection,
+    groupWorkdir === undefined ? workdir : groupWorkdir,
   );
   const canChangeBridge = isNotStarted && !isOptimistic && !groupHasSelectedBridge;
 

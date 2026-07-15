@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import type { SessionConnection, SessionRuntimeInstance } from "@trace/gql";
-import { useEntityField } from "@trace/client-core";
+import { hasSelectedSessionGroupRuntime, useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
@@ -127,6 +127,10 @@ export function SessionInputOptions({
     | SessionConnection
     | null
     | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as
+    | string
+    | null
+    | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
@@ -158,12 +162,9 @@ export function SessionInputOptions({
   const currentReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
   const isNotStarted = agentStatus === "not_started";
   const runtimeLocked = isGeneratedProjectKind(sessionGroupKind);
-  const groupHasSelectedRuntime = Boolean(
-    groupWorkdir ||
-    groupConnection?.runtimeInstanceId ||
-    groupConnection?.environmentId ||
-    groupConnection?.providerRuntimeId ||
-    groupConnection?.adapterType === "provisioned",
+  const groupHasSelectedRuntime = hasSelectedSessionGroupRuntime(
+    groupConnection === undefined ? connection : groupConnection,
+    groupWorkdir === undefined ? workdir : groupWorkdir,
   );
   const canChangeRuntime = isNotStarted && !runtimeLocked && !groupHasSelectedRuntime;
 
