@@ -6,6 +6,7 @@ import { PREVIEW_FRAME_MARGIN, usePreviewViewport } from "./usePreviewViewport";
 
 export function AppPreviewCanvas({
   url,
+  title,
   frameRevision,
   loaded,
   refreshing,
@@ -14,6 +15,7 @@ export function AppPreviewCanvas({
   onReload,
 }: {
   url: string | null;
+  title: string;
   frameRevision: number;
   loaded: boolean;
   refreshing: boolean;
@@ -58,7 +60,7 @@ export function AppPreviewCanvas({
                   <iframe
                     key={frameRevision}
                     src={url}
-                    title="Live app preview"
+                    title={title}
                     onLoad={onLoad}
                     className={cn(
                       "block origin-top-left border-0 bg-background",

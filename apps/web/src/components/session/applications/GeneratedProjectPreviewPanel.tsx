@@ -41,10 +41,13 @@ const APP_PREVIEW_ENDPOINTS_QUERY = gql`
   }
 `;
 
-export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: string }) {
+export function GeneratedProjectPreviewPanel({ sessionGroupId }: { sessionGroupId: string }) {
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
   const upsertMany = useEntityStore((s) => s.upsertMany);
+  const projectKind = useEntityStore((s) =>
+    s.sessionGroups[sessionGroupId]?.kind === "design" ? "design" : "app",
+  );
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -60,9 +63,11 @@ export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: str
         (result.data?.sessionApplicationProcesses as SessionApplicationProcess[] | undefined) ?? [];
       upsertMany("sessionApplicationProcesses", processes);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to load the app preview");
+      setError(
+        cause instanceof Error ? cause.message : `Failed to load the ${projectKind} preview`,
+      );
     }
-  }, [sessionGroupId, upsertMany]);
+  }, [projectKind, sessionGroupId, upsertMany]);
 
   useEffect(() => {
     void refresh();
@@ -85,9 +90,15 @@ export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: str
         endpointId={endpoint.id}
         status="running"
         fill
-        desktopViewport
+        title={projectKind === "design" ? "Live design preview" : "Live app preview"}
       />
     );
 
-  return <AppPreviewCanvasSkeleton error={error} onRetry={() => void refresh()} />;
+  return (
+    <AppPreviewCanvasSkeleton
+      error={error}
+      onRetry={() => void refresh()}
+      projectKind={projectKind}
+    />
+  );
 }

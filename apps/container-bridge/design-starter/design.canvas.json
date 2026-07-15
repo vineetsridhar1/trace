@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "sections": [
+    {
+      "id": "getting-started",
+      "name": "Getting started",
+      "screenIds": ["welcome-default"]
+    }
+  ],
+  "screens": [
+    {
+      "id": "welcome-default",
+      "name": "Welcome",
+      "component": "./screens/WelcomeScreen.tsx",
+      "variation": "Primary",
+      "state": "Default",
+      "viewport": { "width": 390, "height": 844 },
+      "position": { "x": 0, "y": 0 }
+    }
+  ]
+}

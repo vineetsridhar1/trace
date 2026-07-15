@@ -2,6 +2,11 @@
 
 Status: consolidated product and implementation spec (2026-07-09).
 
+> **V1 implementation note:** `docs/design-sessions-v1.md` defines the narrower first
+> release of Design. It reuses the App runtime and renders one React canvas in one live
+> preview. Where its v1 decisions conflict with this broader plan, the v1 document
+> controls.
+
 This document consolidates the decisions, tradeoffs, implementation contracts, gap plans,
 and verification requirements from the design/app session planning thread. It is intended
 to be the single starting point for another AI agent implementing or finishing the full

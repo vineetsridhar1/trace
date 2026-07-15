@@ -6,6 +6,7 @@ import {
   GitBranch,
   Hash,
   Inbox,
+  Figma,
   MessageCircle,
   Plus,
   Search,
@@ -17,7 +18,6 @@ import type { Channel, Chat } from "@trace/gql";
 import type { SessionGroupEntity } from "@trace/client-core";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
-import { NewAppSessionDialog } from "./NewAppSessionDialog";
 import { useUIStore } from "../../stores/ui";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { useCommandPaletteStore } from "../../stores/command-palette";
@@ -30,6 +30,7 @@ import {
 import { features } from "../../lib/features";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { isLocalMode } from "../../lib/runtime-mode";
+import { NewGeneratedProjectDialog } from "./NewGeneratedProjectDialog";
 
 interface PaletteItem {
   key: string;
@@ -73,7 +74,7 @@ export function GlobalCommandPalette() {
           {open && <CommandPaletteBody onClose={() => setOpen(false)} />}
         </DialogContent>
       </Dialog>
-      <NewAppSessionDialog />
+      <NewGeneratedProjectDialog />
     </>
   );
 }
@@ -90,6 +91,7 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
   const activeChannelId = useUIStore((s) => s.activeChannelId);
+  const openGeneratedProjectDialog = useCommandPaletteStore((s) => s.openGeneratedProjectDialog);
 
   const commandsByToken = useCommandRegistryStore((s) => s.commandsByToken);
   const registeredGroups = useMemo(() => {
@@ -208,7 +210,18 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       icon: <AppWindow size={16} />,
       onSelect: () => {
         onClose();
-        useCommandPaletteStore.getState().setNewAppSessionOpen(true);
+        openGeneratedProjectDialog("app");
+      },
+    });
+    list.push({
+      key: "new-design-session",
+      group: "Actions",
+      label: "New design",
+      search: "new design session screens flow visual create",
+      icon: <Figma size={16} />,
+      onSelect: () => {
+        onClose();
+        openGeneratedProjectDialog("design");
       },
     });
 
@@ -299,6 +312,7 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     return list;
   }, [
     registeredGroups,
+    openGeneratedProjectDialog,
     channels,
     chats,
     sessionGroups,

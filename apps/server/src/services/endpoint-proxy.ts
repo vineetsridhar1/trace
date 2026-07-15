@@ -20,6 +20,7 @@ import {
   forwardableRequestHeaders,
   forwardableResponseHeaders,
   isAllowedPreviewRequestOrigin,
+  isAttachmentResponse,
   sanitizeHeaders,
   shouldCaptureBodies,
   shouldCaptureHeaders,
@@ -120,7 +121,12 @@ function injectAuthoringOverlay(
 ): { headers: Record<string, string | string[]>; body: Buffer } {
   const contentType = headers["content-type"] ?? headers["Content-Type"];
   const encoding = headers["content-encoding"] ?? headers["Content-Encoding"];
-  if (encoding || typeof contentType !== "string" || !/\btext\/html\b/i.test(contentType)) {
+  if (
+    encoding ||
+    isAttachmentResponse(headers) ||
+    typeof contentType !== "string" ||
+    !/\btext\/html\b/i.test(contentType)
+  ) {
     return { headers, body };
   }
   const html = body.toString("utf8");

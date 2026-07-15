@@ -10,9 +10,9 @@ interface CommandPaletteState {
   openForSearch: (initialQuery: string) => void;
   shortcutsOpen: boolean;
   setShortcutsOpen: (open: boolean) => void;
-  /** Whether the "new app session" prompt dialog is open. */
-  newAppSessionOpen: boolean;
-  setNewAppSessionOpen: (open: boolean) => void;
+  newGeneratedProjectKind: "app" | "design" | null;
+  openGeneratedProjectDialog: (kind: "app" | "design") => void;
+  closeGeneratedProjectDialog: () => void;
 }
 
 export const useCommandPaletteStore = create<CommandPaletteState>((set) => ({
@@ -26,6 +26,7 @@ export const useCommandPaletteStore = create<CommandPaletteState>((set) => ({
     set({ paletteOpen: true, pendingQuery: initialQuery ? `"${initialQuery}"` : "" }),
   shortcutsOpen: false,
   setShortcutsOpen: (open: boolean) => set({ shortcutsOpen: open }),
-  newAppSessionOpen: false,
-  setNewAppSessionOpen: (open: boolean) => set({ newAppSessionOpen: open }),
+  newGeneratedProjectKind: null,
+  openGeneratedProjectDialog: (kind) => set({ newGeneratedProjectKind: kind }),
+  closeGeneratedProjectDialog: () => set({ newGeneratedProjectKind: null }),
 }));

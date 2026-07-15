@@ -68,6 +68,7 @@ import {
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
+import { isGeneratedProjectKind } from "../lib/generated-project.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -382,7 +383,7 @@ function validateUploadKeysForOrganization(
 const MAX_RECONCILE_ATTEMPTS = 10;
 
 // Upper bound on the org-wide app-session listing so it can't grow unbounded.
-const APP_GROUP_LIST_LIMIT = 200;
+const GENERATED_PROJECT_GROUP_LIST_LIMIT = 200;
 
 /** Maximum optimistic-concurrency retries for `updateConnectionConditional`. */
 const MAX_CONNECTION_UPDATE_ATTEMPTS = 5;
@@ -892,8 +893,20 @@ If the user asks you to stop auto-saving or disable auto-save, stop doing this f
 </system-instruction>`;
 
 const APP_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace app session in its own isolated cloud runtime. When present, read and follow docs/ai-guidance.md and docs/trace-apps.md before changing the app. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Vite/React/Node/Tailwind/shadcn-compatible starter as the source of truth. Build frontend UI in src and add API routes or other server behavior in server.ts and related Node modules. Keep browser requests to your own API same-origin. Call third-party APIs from Node routes when browser CORS would block them. Only when an external browser origin must call this app directly, add its exact origin to the comma-separated APP_CORS_ALLOWED_ORIGINS environment variable; never use a wildcard for credentialed requests. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running and ready to use — do NOT install, initialize, or reconfigure them, create roles, or edit pg_hba/auth. The \`pg\` client and its TypeScript types are already installed. For Postgres, import \`Pool\` from \`pg\`, read the DATABASE_URL environment variable, and pass it straight to \`new Pool({ connectionString: process.env.DATABASE_URL })\`; it is a complete, credentialed TCP URL (\`postgresql://user:pass@localhost:5432/app\`) for a ready database named \`app\` — do not parse it, override the user, or switch to a Unix socket. Redis is at REDIS_URL / redis://localhost:6379. Keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. IMPORTANT: the dev server is already started and managed for you on port 3000 (host 0.0.0.0) and hot-reloads your file changes — do NOT run \`pnpm dev\` or otherwise start your own server, the port is already taken and a second one will crash. Just edit files; if you need to verify, curl http://localhost:3000. Commit and push meaningful checkpoints to the configured managed origin when the app reaches a working state. Sharing the live app is a valid final outcome.
+This is a Trace app session in its own isolated cloud runtime. When present, read and follow docs/ai-guidance.md and docs/trace-apps.md before changing the app. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Vite/React/Node/Tailwind/shadcn-compatible starter as the source of truth. Work visibly and incrementally: make a small, valid first UI change quickly, then build in coherent runnable batches so the user can watch each meaningful step through Vite HMR. Keep the app working between edits; do not prepare the entire replacement offscreen and swap it in only at the end. Build frontend UI in src and add API routes or other server behavior in server.ts and related Node modules. Keep browser requests to your own API same-origin. Call third-party APIs from Node routes when browser CORS would block them. Only when an external browser origin must call this app directly, add its exact origin to the comma-separated APP_CORS_ALLOWED_ORIGINS environment variable; never use a wildcard for credentialed requests. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running and ready to use — do NOT install, initialize, or reconfigure them, create roles, or edit pg_hba/auth. The \`pg\` client and its TypeScript types are already installed. For Postgres, import \`Pool\` from \`pg\`, read the DATABASE_URL environment variable, and pass it straight to \`new Pool({ connectionString: process.env.DATABASE_URL })\`; it is a complete, credentialed TCP URL (\`postgresql://user:pass@localhost:5432/app\`) for a ready database named \`app\` — do not parse it, override the user, or switch to a Unix socket. Redis is at REDIS_URL / redis://localhost:6379. Keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. IMPORTANT: the dev server is already started and managed for you on port 3000 (host 0.0.0.0) and hot-reloads your file changes — do NOT run \`pnpm dev\` or otherwise start your own server, the port is already taken and a second one will crash. Just edit files; if you need to verify, curl http://localhost:3000. Commit and push meaningful checkpoints to the configured managed origin when the app reaches a working state. Sharing the live app is a valid final outcome.
 </system-instruction>`;
+
+const DESIGN_SESSION_INSTRUCTION = `\n\n<system-instruction>
+This is a Trace Design session, not an App or Coding session. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; when the user asks to build or create a product, design its screens, flows, variants, and states instead of implementing a production application. Before editing, read and follow AGENTS.md or CLAUDE.md plus docs/ai-guidance.md, resolve design.brief.json, and read the relevant docs/playbooks guidance. Follow the workspace guide's design loop: understand the brief, ground supplied references in observable evidence, map the experience, commit to executable tokens, compose a representative screen and then the coherent screen set, and critique it before delivery. Work visibly and incrementally: render a rough but valid representative screen early, then add and refine screens in coherent runnable batches so the user can watch the canvas evolve through Vite HMR. Keep the manifest and canvas valid between edits; do not assemble the whole design offscreen and reveal it only at the end. Build and refine the artifact through design.brief.json, design.canvas.json, trace.tokens.json, and focused components under src/design, with one component per logical screen and stable screen ids. Prefer the token-driven primitives already under src/design/primitives. Local component state is allowed for prototype interactions, but do not build APIs, databases, authentication, persistence, real integrations, or production business logic. Do not replace src/App.tsx, the stable canvas or review runtime, server.ts, scripts, or the Vite/export configuration, and do not add routing that bypasses the canvas. Use local or embeddable assets only so Export HTML remains self-contained and works offline. The managed Vite server already runs on port 3000 and hot-reloads changes; do not start another server. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect every generated review screenshot, repair failures, and rerun the checks. Ask only blocking product questions through Trace's normal question mechanism; otherwise make explicit, reasonable assumptions and proceed. Commit and push meaningful design checkpoints to the configured managed origin.
+</system-instruction>`;
+
+function generatedProjectInstruction(
+  kind: SessionGroupKind | string | null | undefined,
+): string | undefined {
+  if (kind === "app") return APP_SESSION_INSTRUCTION;
+  if (kind === "design") return DESIGN_SESSION_INSTRUCTION;
+  return undefined;
+}
 
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
   return hasRepo ? prompt + AUTO_SAVE_INSTRUCTION : prompt;
@@ -906,7 +919,7 @@ function appendPromptInstructions(
 ): string {
   let result = prompt + TITLE_INSTRUCTION;
   result += BACKGROUND_WORK_INSTRUCTION;
-  if (hasRepo && sessionGroupKind !== "app") result += BRANCH_INSTRUCTION;
+  if (hasRepo && !isGeneratedProjectKind(sessionGroupKind)) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
 }
@@ -1299,7 +1312,7 @@ export class SessionService {
         sessionGroupId: params.sessionGroupId ?? undefined,
         sessionGroupKind: params.sessionGroupKind ?? undefined,
         prepareAppGit:
-          params.sessionGroupKind === "app" && params.repo?.remoteUrl
+          isGeneratedProjectKind(params.sessionGroupKind) && params.repo?.remoteUrl
             ? async (runtimeInstanceId) => {
                 const access = await managedGitService.mintAccessToken({
                   organizationId: params.organizationId,
@@ -1329,17 +1342,16 @@ export class SessionService {
         tool: params.tool,
         model: params.model ?? undefined,
         reasoningEffort: params.reasoningEffort ?? undefined,
-        repo:
-          params.sessionGroupKind === "app"
-            ? null
-            : params.repo
-              ? {
-                  id: params.repo.id,
-                  name: params.repo.name,
-                  remoteUrl: params.repo.remoteUrl,
-                  defaultBranch: params.repo.defaultBranch,
-                }
-              : null,
+        repo: isGeneratedProjectKind(params.sessionGroupKind)
+          ? null
+          : params.repo
+            ? {
+                id: params.repo.id,
+                name: params.repo.name,
+                remoteUrl: params.repo.remoteUrl,
+                defaultBranch: params.repo.defaultBranch,
+              }
+            : null,
         branch: params.branch ?? undefined,
         checkpointSha: params.checkpointSha ?? undefined,
         createdById: params.createdById,
@@ -2498,15 +2510,24 @@ export class SessionService {
     if (!repo) throw new Error("Repo not found");
   }
 
-  /**
-   * App-kind session groups for the org. Apps have no channel, so channel-scoped
-   * listGroups never surfaces them; this backs the sidebar Apps section.
-   */
+  /** Channel-less generated project groups for the Apps and Designs sidebar sections. */
   async listAppGroups(organizationId: string, userId: string) {
+    return this.listGeneratedProjectGroups("app", organizationId, userId);
+  }
+
+  async listDesignGroups(organizationId: string, userId: string) {
+    return this.listGeneratedProjectGroups("design", organizationId, userId);
+  }
+
+  private async listGeneratedProjectGroups(
+    kind: "app" | "design",
+    organizationId: string,
+    userId: string,
+  ) {
     const groups = await prisma.sessionGroup.findMany({
       where: {
         organizationId,
-        kind: "app",
+        kind,
         archivedAt: null,
         AND: [visibleSessionGroupWhere(userId)],
       },
@@ -2515,7 +2536,7 @@ export class SessionService {
       // accumulates apps. The sidebar shows the most recent apps; the tail is
       // reachable via search/dedicated views when those land.
       orderBy: { updatedAt: "desc" },
-      take: APP_GROUP_LIST_LIMIT,
+      take: GENERATED_PROJECT_GROUP_LIST_LIMIT,
     });
 
     type SessionGroupWithSessions = SessionGroupSummary & {
@@ -3104,18 +3125,19 @@ export class SessionService {
     if (existingGroup && input.kind && input.kind !== existingGroup.kind) {
       throw new ValidationError("Session kind cannot change within an existing session group");
     }
-    if (resolvedKind === "app") {
+    if (isGeneratedProjectKind(resolvedKind)) {
+      const label = resolvedKind === "design" ? "Design" : "App";
       if (input.sourceSessionId && !input.restoreCheckpointId) {
-        throw new ValidationError("App sessions cannot start from a source session");
+        throw new ValidationError(`${label} sessions cannot start from a source session`);
       }
       if (!existingGroup && !input.restoreCheckpointId && input.repoId) {
-        throw new ValidationError("App sessions cannot start from a linked repo");
+        throw new ValidationError(`${label} sessions cannot start from a linked repo`);
       }
       if (!existingGroup && !input.restoreCheckpointId && !input.prompt?.trim()) {
-        throw new ValidationError("App sessions require an initial prompt");
+        throw new ValidationError(`${label} sessions require an initial prompt`);
       }
       if (input.hosting === "local") {
-        throw new ValidationError("App sessions require cloud hosting");
+        throw new ValidationError(`${label} sessions require cloud hosting`);
       }
     }
     const requestedVisibility = input.visibility ?? "public";
@@ -3140,8 +3162,9 @@ export class SessionService {
 
     const authoritativeChannelRepoId =
       resolvedChannel?.type === "coding" ? (resolvedChannel.repoId ?? null) : null;
-    if (resolvedKind === "app" && authoritativeChannelRepoId && !existingGroup) {
-      throw new ValidationError("App sessions cannot start in a repo-linked coding channel");
+    if (isGeneratedProjectKind(resolvedKind) && authoritativeChannelRepoId && !existingGroup) {
+      const label = resolvedKind === "design" ? "Design" : "App";
+      throw new ValidationError(`${label} sessions cannot start in a repo-linked coding channel`);
     }
 
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
@@ -3255,6 +3278,10 @@ export class SessionService {
       ? input.name.slice(0, MAX_SESSION_NAME_LENGTH)
       : input.prompt
         ? input.prompt.slice(0, MAX_SESSION_NAME_LENGTH)
+        : isGeneratedProjectKind(resolvedKind)
+          ? resolvedKind === "design"
+            ? "Untitled Design"
+            : "Untitled App"
         : restoreCheckpoint
           ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
               .trim()
@@ -3559,6 +3586,10 @@ export class SessionService {
         sessionRouter.getRuntime(requestedRuntimeInstanceId, input.organizationId)?.label ??
         this.parseConnection(sharedConnection ?? restoreGroup?.connection ?? null).runtimeLabel;
     }
+    if (isGeneratedProjectKind(resolvedKind) && hosting !== "cloud") {
+      const label = resolvedKind === "design" ? "Design" : "App";
+      throw new ValidationError(`${label} sessions require cloud hosting`);
+    }
     await this.assertPrivateRuntimeOwner({
       visibility: effectiveGroupVisibility,
       ownerUserId: effectiveGroupOwnerUserId,
@@ -3580,7 +3611,7 @@ export class SessionService {
     // below rolls back (it's created before the txn because it initializes
     // filesystem-backed git storage, not just a row).
     let createdManagedRepoId: string | null = null;
-    if (resolvedKind === "app" && !resolvedRepoId) {
+    if (isGeneratedProjectKind(resolvedKind) && !resolvedRepoId) {
       const managedRepo = await managedGitService.createManagedRepo({
         organizationId: input.organizationId,
         name: `${name} source`,
@@ -4422,8 +4453,7 @@ export class SessionService {
       type: "run" as const,
       sessionId: id,
       prompt: resolvedPrompt ?? undefined,
-      appendSystemPrompt:
-        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+      appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
@@ -4716,7 +4746,7 @@ export class SessionService {
       });
     }
 
-    if (group.kind === "app" && group.repoId) {
+    if (isGeneratedProjectKind(group.kind) && group.repoId) {
       // A restored app group shares the source group's managed repo, so this
       // repo can be referenced by more than one group. Only delete the repo
       // (and its bare storage + cascaded checkpoints) when no other group
@@ -4869,6 +4899,9 @@ export class SessionService {
     const runtimeChanged =
       prev.agentStatus === "not_started" &&
       (config.hosting != null || config.runtimeInstanceId != null);
+    if (runtimeChanged && isGeneratedProjectKind(prev.sessionGroup?.kind)) {
+      throw new ValidationError("App and Design sessions use a fixed cloud runtime");
+    }
     let requestedEnvironment: Awaited<
       ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>
     > | null = null;
@@ -5819,8 +5852,7 @@ export class SessionService {
       type: "send" as const,
       sessionId,
       prompt,
-      appendSystemPrompt:
-        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+      appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
       tool: activeTool,
       model: activeModel ?? undefined,
       reasoningEffort: activeReasoningEffort ?? undefined,
@@ -6532,11 +6564,42 @@ export class SessionService {
       }
     }
 
-    // Deliver the queued initial prompt as soon as the workspace exists, so the
-    // agent can start coding the moment the cloud session is connected. The app
-    // auto-start below (pnpm install --prefer-offline && pnpm dev) then proceeds in the
-    // background — package installs and the dev server come up while the agent
-    // is already working, rather than blocking it.
+    // Dispatch the generated-project dev server before the first agent command.
+    // startApplication returns once the process-start command is sent (not when the
+    // long-running server exits), so this only adds a small setup delay while
+    // ensuring the live starter and HMR are coming up before edits begin.
+    if (isGeneratedProjectKind(session.sessionGroup?.kind) && session.sessionGroupId) {
+      const generatedProjectGroupId = session.sessionGroupId;
+      await sessionApplicationService
+        .startApplication(
+          generatedProjectGroupId,
+          "app",
+          session.organizationId,
+          session.createdById,
+          {
+            asSystem: true,
+          },
+        )
+        .catch(async (error: unknown) => {
+          await eventService.create({
+            organizationId: session.organizationId,
+            scopeType: "session",
+            scopeId: sessionId,
+            eventType: "session_output",
+            payload: {
+              type: "app_preview_start_failed",
+              sessionGroupId: generatedProjectGroupId,
+              error: error instanceof Error ? error.message : String(error),
+            } as Prisma.InputJsonValue,
+            actorType: "system",
+            actorId: "system",
+          });
+        });
+    }
+
+    // Deliver the queued prompt after preview startup has been dispatched. The
+    // process and agent then run concurrently, with the warmed dependency cache
+    // making the starter visible early enough to watch incremental edits.
     if (pendingRun) {
       const replayResult = await this.deliverPendingCommand(sessionId, pendingRun);
       if (replayResult && replayResult !== "delivered") {
@@ -6552,31 +6615,6 @@ export class SessionService {
           "workspace_replay",
         );
       }
-    }
-
-    if (session.sessionGroup?.kind === "app" && session.sessionGroupId) {
-      const appGroupId = session.sessionGroupId;
-      // Fire-and-forget: the dev server boot must not delay the agent's first
-      // run. Failures surface as an app_preview_start_failed event.
-      void sessionApplicationService
-        .startApplication(appGroupId, "app", session.organizationId, session.createdById, {
-          asSystem: true,
-        })
-        .catch(async (error: unknown) => {
-          await eventService.create({
-            organizationId: session.organizationId,
-            scopeType: "session",
-            scopeId: sessionId,
-            eventType: "session_output",
-            payload: {
-              type: "app_preview_start_failed",
-              sessionGroupId: appGroupId,
-              error: error instanceof Error ? error.message : String(error),
-            } as Prisma.InputJsonValue,
-            actorType: "system",
-            actorId: "system",
-          });
-        });
     }
   }
 
@@ -6998,8 +7036,7 @@ export class SessionService {
         type: "send",
         sessionId,
         prompt,
-        appendSystemPrompt:
-          session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+        appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
         tool: session.tool,
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
@@ -9371,8 +9408,7 @@ export class SessionService {
       type: pending.type,
       sessionId,
       prompt: prompt ?? undefined,
-      appendSystemPrompt:
-        session.sessionGroup?.kind === "app" ? APP_SESSION_INSTRUCTION : undefined,
+      appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,

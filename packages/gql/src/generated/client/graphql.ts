@@ -1332,6 +1332,8 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  /** Design-kind session groups for the org (the sidebar Designs section). */
+  designSessionGroups: Array<SessionGroup>;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
@@ -1439,6 +1441,10 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryEndpointTrafficArgs = {
@@ -3662,6 +3668,38 @@ export type CreateChatMutationVariables = Exact<{
 export type CreateChatMutation = {
   __typename?: "Mutation";
   createChat: { __typename?: "Chat"; id: string };
+};
+
+export type DesignSessionGroupsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type DesignSessionGroupsQuery = {
+  __typename?: "Query";
+  designSessionGroups: Array<{
+    __typename?: "SessionGroup";
+    id: string;
+    name: string;
+    slug?: string | null;
+    kind: SessionGroupKind;
+    status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
+    archivedAt?: string | null;
+    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+    sessions: Array<{
+      __typename?: "Session";
+      id: string;
+      sessionGroupId?: string | null;
+      agentStatus: AgentStatus;
+      sessionStatus: SessionStatus;
+      prUrl?: string | null;
+      worktreeDeleted: boolean;
+      lastMessageAt?: string | null;
+      lastUserMessageAt?: string | null;
+      updatedAt: string;
+      createdAt: string;
+    }>;
+  }>;
 };
 
 export type DeleteChannelGroupMutationVariables = Exact<{
@@ -8604,6 +8642,81 @@ export const CreateChatDocument = {
     },
   ],
 } as unknown as DocumentNode<CreateChatMutation, CreateChatMutationVariables>;
+export const DesignSessionGroupsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "DesignSessionGroups" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "connection" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessions" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DesignSessionGroupsQuery, DesignSessionGroupsQueryVariables>;
 export const DeleteChannelGroupDocument = {
   kind: "Document",
   definitions: [

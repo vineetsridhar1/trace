@@ -22,14 +22,14 @@ import { GroupTabStrip } from "./GroupTabStrip";
 import { FileCommandPalette } from "./FileCommandPalette";
 import { ForkSessionDialog } from "./ForkSessionDialog";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
-import { AppSessionWorkspace } from "./AppSessionWorkspace";
+import { GeneratedProjectWorkspace } from "./GeneratedProjectWorkspace";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./AttachmentOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
 import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
 import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
-import { AppSessionPreviewPanel } from "./applications/AppSessionPreviewPanel";
+import { GeneratedProjectPreviewPanel } from "./applications/GeneratedProjectPreviewPanel";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
@@ -37,7 +37,8 @@ import { useFileActions } from "./useFileActions";
 import { useSessionGroupFiles } from "./useSessionGroupFiles";
 import { useSessionGroupDirectoryTree } from "./useSessionGroupDirectoryTree";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
-import { isAppCanvasReady } from "./app-session-readiness";
+import { isGeneratedProjectCanvasReady } from "./generated-project-readiness";
+import { usesGeneratedProjectWorkspace } from "./generated-project-kind";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
 import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
@@ -422,12 +423,12 @@ export function SessionGroupDetailView({
     };
   }, [groupSessions, sessionGroupId, addTerminal]);
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
-  const isAppGroup = groupKind === "app";
+  const isGeneratedProjectGroup = usesGeneratedProjectWorkspace(groupKind);
   const selectedConnection = selectedSession?.connection as
     | Record<string, unknown>
     | null
     | undefined;
-  const appCanvasReady = isAppCanvasReady(
+  const generatedProjectCanvasReady = isGeneratedProjectCanvasReady(
     selectedSession?.agentStatus,
     selectedConnection?.state,
     groupConnection?.state,
@@ -910,7 +911,7 @@ export function SessionGroupDetailView({
                 showSidebar={showSidebar}
                 showApplicationsSidebar={showApplicationsSidebar}
                 canShowApplications={showApplicationsSidebarTab}
-                compactAppMode={isAppGroup}
+                compactAppMode={isGeneratedProjectGroup}
                 onToggleFullscreen={toggleFullscreen}
                 onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
                 onToggleApplicationsSidebar={
@@ -918,7 +919,7 @@ export function SessionGroupDetailView({
                 }
               />
 
-              {!isAppGroup ? (
+              {!isGeneratedProjectGroup ? (
                 <GroupTabStrip
                   sessionTabs={sessionTabs}
                   terminals={terminals}
@@ -954,14 +955,14 @@ export function SessionGroupDetailView({
 
               <div className="flex min-h-0 flex-1 overflow-hidden">
                 <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-                  {isAppGroup ? (
-                    <AppSessionWorkspace
+                  {isGeneratedProjectGroup ? (
+                    <GeneratedProjectWorkspace
                       sessionId={selectedSession?.id ?? null}
                       scrollToEventId={scrollToEventId}
                       onScrollComplete={handleScrollComplete}
                       onForkSession={handleOpenForkDialog}
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
-                      canvasReady={appCanvasReady}
+                      canvasReady={generatedProjectCanvasReady}
                       canvas={
                         <SessionGroupContentArea
                           sessionGroupId={sessionGroupId}
@@ -982,7 +983,9 @@ export function SessionGroupDetailView({
                           onScrollComplete={handleScrollComplete}
                           onForkSession={handleOpenForkDialog}
                           canForkSession={false}
-                          emptyState={<AppSessionPreviewPanel sessionGroupId={sessionGroupId} />}
+                          emptyState={
+                            <GeneratedProjectPreviewPanel sessionGroupId={sessionGroupId} />
+                          }
                         />
                       }
                     />

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "artifactType": "Mobile product screen",
+  "audience": "Product teams evaluating the Trace Design canvas",
+  "platform": "Mobile",
+  "fidelity": "High-fidelity example",
+  "primaryJob": "Understand that Design sessions produce reviewable interactive screen artifacts",
+  "coreFlow": ["Review the example screen", "Trigger its local prototype interaction"],
+  "requiredStates": ["default"],
+  "direction": {
+    "name": "Neutral product",
+    "principles": [
+      "Clear hierarchy",
+      "Restrained semantic color",
+      "Comfortable mobile touch targets"
+    ]
+  },
+  "references": [],
+  "assumptions": [
+    "The agent replaces this starter brief with decisions derived from the user's request."
+  ]
+}

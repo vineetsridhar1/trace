@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import { RotateCw } from "lucide-react";
 import { client } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { TraceLoader } from "@/components/ui/trace-loader";
 import { cn } from "@/lib/utils";
 import { AppPreviewCanvas } from "./AppPreviewCanvas";
 import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
+import { PreviewCredentialRenewal } from "./PreviewCredentialRenewal";
 import { appPreviewReducer, initialAppPreviewState } from "./app-preview-state";
 import { CREATE_PREVIEW_MUTATION } from "./session-applications-operations";
 
@@ -16,13 +17,16 @@ export function AppPreview({
   status,
   fill = false,
   desktopViewport = false,
+  title = "Live app preview",
 }: {
   endpointId: string;
   status: string;
   fill?: boolean;
   desktopViewport?: boolean;
+  title?: string;
 }) {
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
+  const [credentialExpiresAt, setCredentialExpiresAt] = useState<string | null>(null);
   const { error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
 
   const reload = useCallback(() => {
@@ -31,19 +35,22 @@ export function AppPreview({
 
   useEffect(() => {
     let active = true;
+    setCredentialExpiresAt(null);
     void client
       .mutation(CREATE_PREVIEW_MUTATION, { endpointId })
       .toPromise()
       .then((result) => {
         if (!active) return;
         const nextUrl = result.data?.createSessionEndpointPreview?.url;
-        if (result.error || !nextUrl) {
+        const expiresAt = result.data?.createSessionEndpointPreview?.expiresAt;
+        if (result.error || !nextUrl || !expiresAt) {
           dispatch({
             type: "request-failed",
             error: result.error?.message ?? "Failed to load the app preview",
           });
           return;
         }
+        setCredentialExpiresAt(expiresAt);
         dispatch({ type: "request-succeeded", url: nextUrl });
       });
     return () => {
@@ -83,15 +90,19 @@ export function AppPreview({
   }
   if (desktopViewport) {
     return (
-      <AppPreviewCanvas
-        url={url}
-        frameRevision={frameRevision}
-        loaded={frameLoaded}
-        refreshing={refreshing}
-        status={status}
-        onLoad={() => dispatch({ type: "frame-loaded" })}
-        onReload={reload}
-      />
+      <>
+        <AppPreviewCanvas
+          url={url}
+          title={title}
+          frameRevision={frameRevision}
+          loaded={frameLoaded}
+          refreshing={refreshing}
+          status={status}
+          onLoad={() => dispatch({ type: "frame-loaded" })}
+          onReload={reload}
+        />
+        <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
+      </>
     );
   }
   if (!url) {
@@ -103,6 +114,7 @@ export function AppPreview({
   }
   return (
     <div className={cn("relative", fill && "h-full")}>
+      <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       <Button
         size="icon"
         variant="outline"
@@ -117,7 +129,7 @@ export function AppPreview({
       <iframe
         key={frameRevision}
         src={url}
-        title="Live app preview"
+        title={title}
         onLoad={() => dispatch({ type: "frame-loaded" })}
         className={cn(
           "w-full bg-background",

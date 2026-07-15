@@ -1,0 +1,41 @@
+{
+  "direction": {
+    "name": "Neutral product",
+    "rationale": "Replace this with a direction derived from the user brief or brand references."
+  },
+  "color": {
+    "background": "#09090b",
+    "surface": "#18181b",
+    "foreground": "#fafafa",
+    "muted": "#a1a1aa",
+    "border": "#3f3f46",
+    "primary": "#fafafa",
+    "primaryForeground": "#09090b",
+    "secondary": "#71717a",
+    "success": "#22c55e",
+    "warning": "#f59e0b",
+    "danger": "#ef4444",
+    "dangerForeground": "#ffffff"
+  },
+  "typography": {
+    "display": "ui-sans-serif, system-ui, sans-serif",
+    "body": "ui-sans-serif, system-ui, sans-serif",
+    "mono": "ui-monospace, SFMono-Regular, monospace",
+    "scale": "1.25"
+  },
+  "spacing": {
+    "base": 4,
+    "density": "balanced"
+  },
+  "radius": {
+    "control": 8,
+    "surface": 16
+  },
+  "elevation": {
+    "surface": "0 16px 48px rgb(0 0 0 / 0.24)"
+  },
+  "motion": {
+    "duration": 180,
+    "easing": "cubic-bezier(0.2, 0.8, 0.2, 1)"
+  }
+}

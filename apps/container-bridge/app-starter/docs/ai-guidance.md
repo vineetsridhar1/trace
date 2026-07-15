@@ -12,6 +12,9 @@ product partner, not just their programmer.
 - Make the default experience polished, responsive, accessible, and welcoming. Use realistic copy
   and empty states that help the user understand what to do next.
 - Check your work in the live app before saying it is finished. Fix visible errors yourself.
+- Work visibly and incrementally. Make a small, valid UI change early, then build in coherent,
+  runnable batches so the user can watch each meaningful step appear through Vite HMR. Keep the app
+  working between edits instead of preparing a complete replacement and revealing it only at the end.
 - Never expose credentials, internal infrastructure, or implementation details in the interface.
 
 Read [trace-apps.md](trace-apps.md) before changing the app. It explains how the preview, server,

@@ -4,6 +4,7 @@ import { START_SESSION_MUTATION, useEntityStore } from "@trace/client-core";
 import { navigateToSession, navigateToSessionGroup } from "../stores/ui";
 
 const pendingQuickSessionChannels = new Set<string>();
+const pendingGeneratedProjectKinds = new Set<"app" | "design">();
 
 export function getChannelRepoId(channelId: string): string | undefined {
   const channel = useEntityStore.getState().channels[channelId];
@@ -76,28 +77,44 @@ export async function createQuickSession(
 }
 
 export async function createAppSession(prompt: string): Promise<boolean> {
-  const trimmed = prompt.trim();
-  if (!trimmed) return false;
+  return createGeneratedProjectSession("app", prompt);
+}
+
+export function buildGeneratedProjectStartInput(kind: "app" | "design", prompt: string) {
+  return {
+    kind,
+    hosting: "cloud" as const,
+    prompt: prompt.trim(),
+  };
+}
+
+export async function createDesignSession(prompt: string): Promise<boolean> {
+  return createGeneratedProjectSession("design", prompt);
+}
+
+async function createGeneratedProjectSession(
+  kind: "app" | "design",
+  prompt: string,
+): Promise<boolean> {
+  if (pendingGeneratedProjectKinds.has(kind)) return false;
+  pendingGeneratedProjectKinds.add(kind);
+  const label = kind === "design" ? "design" : "app";
 
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
-        input: {
-          kind: "app",
-          hosting: "cloud",
-          prompt: trimmed,
-        },
+        input: buildGeneratedProjectStartInput(kind, prompt),
       })
       .toPromise();
 
     if (result.error) {
-      toast.error("Failed to create app session", { description: result.error.message });
+      toast.error(`Failed to create ${label} session`, { description: result.error.message });
       return false;
     }
 
     const session = result.data?.startSession;
     if (!session?.id || !session.sessionGroupId) {
-      toast.error("Failed to create app session", {
+      toast.error(`Failed to create ${label} session`, {
         description: "Server did not return a session.",
       });
       return false;
@@ -107,7 +124,9 @@ export async function createAppSession(prompt: string): Promise<boolean> {
     return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    toast.error("Failed to create app session", { description: message });
+    toast.error(`Failed to create ${label} session`, { description: message });
     return false;
+  } finally {
+    pendingGeneratedProjectKinds.delete(kind);
   }
 }

@@ -19,6 +19,7 @@
     "test:server": "pnpm --filter @trace/server test:unit",
     "test:server:coverage": "pnpm --filter @trace/server test:unit:coverage",
     "smoke:cloud-app-session": "node ./scripts/smoke-cloud-app-session.mjs",
+    "smoke:cloud-design-session": "node ./scripts/smoke-cloud-design-session.mjs",
     "lint:eslint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -104,6 +105,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.0.3",
+    "playwright-core": "^1.61.1",
     "prettier": "^3.8.1",
     "typescript-eslint": "^8.57.0"
   }

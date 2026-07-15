@@ -12,14 +12,16 @@ import {
   ResponsiveDialogTitle as DialogTitle,
 } from "../ui/responsive-dialog";
 
-export function DeleteAppDialog({
-  appId,
-  appName,
+export function DeleteGeneratedProjectDialog({
+  groupId,
+  groupName,
+  kind,
   open,
   onOpenChange,
 }: {
-  appId: string;
-  appName: string;
+  groupId: string;
+  groupName: string;
+  kind: "app" | "design";
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -36,7 +38,7 @@ export function DeleteAppDialog({
     setError(null);
     try {
       const result = await client
-        .mutation(DELETE_SESSION_GROUP_MUTATION, { id: appId })
+        .mutation(DELETE_SESSION_GROUP_MUTATION, { id: groupId })
         .toPromise();
       if (result.error) {
         setError(result.error.message);
@@ -44,7 +46,7 @@ export function DeleteAppDialog({
       }
       handleOpenChange(false);
     } catch {
-      setError("Failed to delete app. Please try again.");
+      setError(`Failed to delete ${kind}. Please try again.`);
     } finally {
       setDeleting(false);
     }
@@ -54,10 +56,10 @@ export function DeleteAppDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>Delete App</DialogTitle>
+          <DialogTitle>Delete {kind === "design" ? "Design" : "App"}</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete <strong>{appName}</strong>? This permanently deletes its
-            sessions and managed git repository and cannot be undone.
+            Are you sure you want to delete <strong>{groupName}</strong>? This permanently deletes
+            its sessions and managed git repository and cannot be undone.
           </DialogDescription>
         </DialogHeader>
         {error ? (
@@ -68,7 +70,7 @@ export function DeleteAppDialog({
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
           <Button variant="destructive" disabled={deleting} onClick={handleDelete}>
-            {deleting ? "Deleting…" : "Delete App"}
+            {deleting ? "Deleting…" : `Delete ${kind === "design" ? "Design" : "App"}`}
           </Button>
         </DialogFooter>
       </DialogContent>

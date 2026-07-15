@@ -1288,6 +1288,10 @@ type Query {
   listing surface (the sidebar Apps section).
   """
   appSessionGroups(organizationId: ID!): [SessionGroup!]!
+  """
+  Design-kind session groups for the org (the sidebar Designs section).
+  """
+  designSessionGroups(organizationId: ID!): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session

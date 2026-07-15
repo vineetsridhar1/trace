@@ -10,16 +10,23 @@ const execFileAsync = promisify(execFile);
 const WORKSPACES_DIR = process.env.TRACE_WORKSPACES_DIR ?? "/workspaces";
 const IMAGE_APP_STARTER_DIR = "/opt/trace/app-starter";
 const SOURCE_APP_STARTER_DIR = fileURLToPath(new URL("../app-starter", import.meta.url));
+const IMAGE_DESIGN_STARTER_DIR = "/opt/trace/design-starter";
+const SOURCE_DESIGN_STARTER_DIR = fileURLToPath(new URL("../design-starter", import.meta.url));
 
-function appStarterDir(): string {
-  const configured = process.env.TRACE_APP_STARTER_DIR;
+export type GeneratedProjectKind = "app" | "design";
+
+function starterDir(kind: GeneratedProjectKind): string {
+  const configured =
+    kind === "design" ? process.env.TRACE_DESIGN_STARTER_DIR : process.env.TRACE_APP_STARTER_DIR;
   if (configured) return configured;
-  if (fs.existsSync(IMAGE_APP_STARTER_DIR)) return IMAGE_APP_STARTER_DIR;
-  if (fs.existsSync(SOURCE_APP_STARTER_DIR)) return SOURCE_APP_STARTER_DIR;
-  throw new Error("Trace app starter is missing from the runtime");
+  const imageDir = kind === "design" ? IMAGE_DESIGN_STARTER_DIR : IMAGE_APP_STARTER_DIR;
+  const sourceDir = kind === "design" ? SOURCE_DESIGN_STARTER_DIR : SOURCE_APP_STARTER_DIR;
+  if (fs.existsSync(imageDir)) return imageDir;
+  if (fs.existsSync(sourceDir)) return sourceDir;
+  throw new Error(`Trace ${kind} starter is missing from the runtime`);
 }
 
-// Remove a standalone app workspace directory (created by createAppWorkspace).
+// Remove a standalone generated-project workspace directory (created by createAppWorkspace).
 // Takes the actual workdir path (the server persists it as session.workdir and
 // sends it on delete; the bridge also tracks it in sessionWorkdirs) so we delete
 // the real slug directory rather than guessing from the sessionGroupId. Only a
@@ -40,6 +47,7 @@ export async function createAppWorkspace({
   repoRemoteUrl,
   defaultBranch,
   checkpointSha,
+  sessionGroupKind = "app",
 }: {
   sessionId: string;
   sessionGroupId?: string;
@@ -47,6 +55,7 @@ export async function createAppWorkspace({
   repoRemoteUrl: string;
   defaultBranch: string;
   checkpointSha?: string;
+  sessionGroupKind?: GeneratedProjectKind;
 }): Promise<{ workdir: string; slug: string }> {
   fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
   const usedSlugs = new Set(
@@ -64,7 +73,7 @@ export async function createAppWorkspace({
     await execFileAsync("git", ["checkout", "-B", defaultBranch, checkpointSha], { cwd: workdir });
   } else if (!fs.existsSync(workdir)) {
     fs.mkdirSync(workdir, { recursive: true });
-    fs.cpSync(appStarterDir(), workdir, {
+    fs.cpSync(starterDir(sessionGroupKind), workdir, {
       recursive: true,
       force: false,
       errorOnExist: false,
@@ -75,8 +84,13 @@ export async function createAppWorkspace({
   if (!fs.existsSync(`${workdir}/.git`)) {
     await execFileAsync("git", ["init", "-b", defaultBranch], { cwd: workdir });
   }
-  await execFileAsync("git", ["config", "user.name", "Trace App Agent"], { cwd: workdir });
-  await execFileAsync("git", ["config", "user.email", "app-agent@trace.local"], { cwd: workdir });
+  const agentLabel = sessionGroupKind === "design" ? "Design" : "App";
+  await execFileAsync("git", ["config", "user.name", `Trace ${agentLabel} Agent`], {
+    cwd: workdir,
+  });
+  await execFileAsync("git", ["config", "user.email", `${sessionGroupKind}-agent@trace.local`], {
+    cwd: workdir,
+  });
   const hasOrigin = await execFileAsync("git", ["remote", "get-url", "origin"], { cwd: workdir })
     .then(() => true)
     .catch(() => false);

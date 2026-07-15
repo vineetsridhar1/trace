@@ -48,6 +48,7 @@ import { useTerminalStore } from "../../stores/terminal";
 import { useAttachmentOpen } from "./AttachmentOpenContext";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
+import { getSessionEmptyStateContent } from "./sessionEmptyState";
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
 
@@ -88,6 +89,10 @@ export function SessionInput({
     | boolean
     | undefined;
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
+  const groupKind = useEntityField("sessionGroups", sessionGroupId ?? "", "kind") as
+    | string
+    | null
+    | undefined;
   const images = useDraftsStore((s) => s.drafts[sessionId]?.images ?? EMPTY_ATTACHMENTS);
   const openAttachment = useAttachmentOpen();
   const setDraftImages = useDraftsStore((s) => s.setDraftImages);
@@ -453,7 +458,7 @@ export function SessionInput({
       : isActive
         ? "Queue a message..."
         : isNotStarted
-          ? "What should the agent work on?"
+          ? getSessionEmptyStateContent(groupKind).placeholder
           : "Send a message...";
 
   return (
