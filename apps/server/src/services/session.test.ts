@@ -803,41 +803,17 @@ describe("SessionService", () => {
       ).rejects.toThrow("App sessions require cloud hosting");
     });
 
-    it("creates an empty app session without provisioning its runtime", async () => {
-      const repo = await managedGitServiceMock.createManagedRepo({
-        organizationId: "org-1",
-        name: "Untitled App source",
-        actorType: "user",
-        actorId: "user-1",
-      });
-      managedGitServiceMock.createManagedRepo.mockClear();
-      const sessionGroup = makeSessionGroup({ kind: "app", repoId: repo.id, repo });
-      const session = makeSession({
-        hosting: "cloud",
-        repoId: repo.id,
-        repo,
-        sessionGroup,
-      });
-      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
-      prismaMock.session.create.mockResolvedValueOnce(session);
+    it("requires an initial prompt for new app sessions", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "app",
+          hosting: "cloud",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("App sessions require an initial prompt");
 
-      await service.start({
-        organizationId: "org-1",
-        createdById: "user-1",
-        kind: "app",
-        hosting: "cloud",
-      } as unknown as StartSessionServiceInput);
-      await Promise.resolve();
-
-      expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalledWith(
-        expect.objectContaining({ name: "Untitled App source" }),
-      );
-      expect(prismaMock.session.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ pendingRun: undefined }),
-        }),
-      );
-      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+      expect(managedGitServiceMock.createManagedRepo).not.toHaveBeenCalled();
     });
 
     it("creates an app session with a hidden managed repo and cloud runtime", async () => {
@@ -930,41 +906,52 @@ describe("SessionService", () => {
       ).rejects.toThrow("Design sessions require cloud hosting");
     });
 
-    it("creates an empty design session without provisioning its runtime", async () => {
-      const repo = await managedGitServiceMock.createManagedRepo({
-        organizationId: "org-1",
-        name: "Untitled Design source",
-        actorType: "user",
-        actorId: "user-1",
-      });
-      managedGitServiceMock.createManagedRepo.mockClear();
-      const sessionGroup = makeSessionGroup({ kind: "design", repoId: repo.id, repo });
-      const session = makeSession({
-        hosting: "cloud",
-        repoId: repo.id,
-        repo,
-        sessionGroup,
-      });
-      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
-      prismaMock.session.create.mockResolvedValueOnce(session);
+    it("requires an initial prompt for new design sessions", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "design",
+          hosting: "cloud",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Design sessions require an initial prompt");
 
-      await service.start({
-        organizationId: "org-1",
-        createdById: "user-1",
-        kind: "design",
-        hosting: "cloud",
-      } as unknown as StartSessionServiceInput);
-      await Promise.resolve();
+      expect(managedGitServiceMock.createManagedRepo).not.toHaveBeenCalled();
+    });
 
-      expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalledWith(
-        expect.objectContaining({ name: "Untitled Design source" }),
-      );
-      expect(prismaMock.session.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ pendingRun: undefined }),
-        }),
-      );
-      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+    it("rejects design sessions resolved through a local environment", async () => {
+      prismaMock.agentEnvironment.findFirstOrThrow.mockResolvedValueOnce({
+        id: "env-local",
+        organizationId: "org-1",
+        name: "Local Laptop",
+        adapterType: "local",
+        config: { runtimeInstanceId: "runtime-local" },
+        enabled: true,
+        isDefault: false,
+        createdAt: new Date("2024-01-01T00:00:00.000Z"),
+        updatedAt: new Date("2024-01-01T00:00:00.000Z"),
+      });
+      sessionRouterMock.getRuntime.mockReturnValue({
+        id: "runtime-local",
+        label: "Local Laptop",
+        hostingMode: "local",
+        registeredRepoIds: [],
+        supportedTools: ["claude_code"],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "design",
+          environmentId: "env-local",
+          prompt: "Explore onboarding",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Design sessions require cloud hosting");
+
+      expect(managedGitServiceMock.createManagedRepo).not.toHaveBeenCalled();
     });
 
     it("creates a design session with managed git and design runtime preparation", async () => {

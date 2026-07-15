@@ -6,9 +6,11 @@ import { TraceLoader } from "../../ui/trace-loader";
 export function AppPreviewCanvasSkeleton({
   error,
   onRetry,
+  projectKind = "app",
 }: {
   error?: string | null;
   onRetry?: () => void;
+  projectKind?: "app" | "design";
 }) {
   return (
     <div className="flex h-full flex-col bg-surface-deep">
@@ -44,7 +46,8 @@ export function AppPreviewCanvasSkeleton({
               <TraceLoader size={18} showLabel={false} />
               <p className="text-sm font-medium text-foreground">Starting live preview…</p>
               <p className="max-w-64 text-xs leading-5 text-muted-foreground">
-                Changes will appear here as the agent builds.
+                Changes will appear here as the agent{" "}
+                {projectKind === "design" ? "designs" : "builds"}.
               </p>
             </div>
           </div>

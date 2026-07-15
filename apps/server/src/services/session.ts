@@ -3133,6 +3133,9 @@ export class SessionService {
       if (!existingGroup && !input.restoreCheckpointId && input.repoId) {
         throw new ValidationError(`${label} sessions cannot start from a linked repo`);
       }
+      if (!existingGroup && !input.restoreCheckpointId && !input.prompt?.trim()) {
+        throw new ValidationError(`${label} sessions require an initial prompt`);
+      }
       if (input.hosting === "local") {
         throw new ValidationError(`${label} sessions require cloud hosting`);
       }
@@ -3582,6 +3585,10 @@ export class SessionService {
       runtimeLabel =
         sessionRouter.getRuntime(requestedRuntimeInstanceId, input.organizationId)?.label ??
         this.parseConnection(sharedConnection ?? restoreGroup?.connection ?? null).runtimeLabel;
+    }
+    if (isGeneratedProjectKind(resolvedKind) && hosting !== "cloud") {
+      const label = resolvedKind === "design" ? "Design" : "App";
+      throw new ValidationError(`${label} sessions require cloud hosting`);
     }
     await this.assertPrivateRuntimeOwner({
       visibility: effectiveGroupVisibility,

@@ -6,6 +6,7 @@ import {
   GitBranch,
   Hash,
   Inbox,
+  Figma,
   MessageCircle,
   Plus,
   Search,
@@ -27,8 +28,9 @@ import {
   type RegisteredCommand,
 } from "../../stores/command-registry";
 import { features } from "../../lib/features";
-import { createAppSession, createQuickSession } from "../../lib/create-quick-session";
+import { createQuickSession } from "../../lib/create-quick-session";
 import { isLocalMode } from "../../lib/runtime-mode";
+import { NewGeneratedProjectDialog } from "./NewGeneratedProjectDialog";
 
 interface PaletteItem {
   key: string;
@@ -59,18 +61,21 @@ export function GlobalCommandPalette() {
   const setOpen = useCommandPaletteStore((s) => s.setPaletteOpen);
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent
-        showCloseButton={false}
-        className="max-h-[calc(100dvh-4rem)] w-[min(92vw,640px)] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#111111] p-0 shadow-2xl sm:max-w-[640px]"
-      >
-        <DialogTitle className="sr-only">Command palette</DialogTitle>
-        <DialogDescription className="sr-only">
-          Jump to a channel, conversation, or session, or run a quick action.
-        </DialogDescription>
-        {open && <CommandPaletteBody onClose={() => setOpen(false)} />}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent
+          showCloseButton={false}
+          className="max-h-[calc(100dvh-4rem)] w-[min(92vw,640px)] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#111111] p-0 shadow-2xl sm:max-w-[640px]"
+        >
+          <DialogTitle className="sr-only">Command palette</DialogTitle>
+          <DialogDescription className="sr-only">
+            Jump to a channel, conversation, or session, or run a quick action.
+          </DialogDescription>
+          {open && <CommandPaletteBody onClose={() => setOpen(false)} />}
+        </DialogContent>
+      </Dialog>
+      <NewGeneratedProjectDialog />
+    </>
   );
 }
 
@@ -86,6 +91,7 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   const setActiveChatId = useUIStore((s) => s.setActiveChatId);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
   const activeChannelId = useUIStore((s) => s.activeChannelId);
+  const openGeneratedProjectDialog = useCommandPaletteStore((s) => s.openGeneratedProjectDialog);
 
   const commandsByToken = useCommandRegistryStore((s) => s.commandsByToken);
   const registeredGroups = useMemo(() => {
@@ -204,7 +210,18 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       icon: <AppWindow size={16} />,
       onSelect: () => {
         onClose();
-        void createAppSession();
+        openGeneratedProjectDialog("app");
+      },
+    });
+    list.push({
+      key: "new-design-session",
+      group: "Actions",
+      label: "New design",
+      search: "new design session screens flow visual create",
+      icon: <Figma size={16} />,
+      onSelect: () => {
+        onClose();
+        openGeneratedProjectDialog("design");
       },
     });
 
@@ -295,6 +312,7 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     return list;
   }, [
     registeredGroups,
+    openGeneratedProjectDialog,
     channels,
     chats,
     sessionGroups,

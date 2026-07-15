@@ -16,11 +16,13 @@ export function AppPreview({
   status,
   fill = false,
   desktopViewport = false,
+  title = "Live app preview",
 }: {
   endpointId: string;
   status: string;
   fill?: boolean;
   desktopViewport?: boolean;
+  title?: string;
 }) {
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
   const { error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
@@ -85,6 +87,7 @@ export function AppPreview({
     return (
       <AppPreviewCanvas
         url={url}
+        title={title}
         frameRevision={frameRevision}
         loaded={frameLoaded}
         refreshing={refreshing}
@@ -117,7 +120,7 @@ export function AppPreview({
       <iframe
         key={frameRevision}
         src={url}
-        title="Live app preview"
+        title={title}
         onLoad={() => dispatch({ type: "frame-loaded" })}
         className={cn(
           "w-full bg-background",

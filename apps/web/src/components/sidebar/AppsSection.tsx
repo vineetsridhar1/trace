@@ -5,7 +5,7 @@ import type { Session, SessionGroup } from "@trace/gql";
 import { useEntityStore, type SessionEntity, type SessionGroupEntity } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
-import { createAppSession } from "../../lib/create-quick-session";
+import { useCommandPaletteStore } from "../../stores/command-palette";
 import { GeneratedProjectSessionItem } from "./GeneratedProjectSessionItem";
 
 const APP_SESSION_GROUPS_QUERY = gql`
@@ -44,6 +44,9 @@ export function AppsSection({
   activeSessionGroupId: string | null;
 }) {
   const upsertMany = useEntityStore((s) => s.upsertMany);
+  const openGeneratedProjectDialog = useCommandPaletteStore(
+    (state) => state.openGeneratedProjectDialog,
+  );
 
   useEffect(() => {
     if (!activeOrgId) return;
@@ -93,7 +96,7 @@ export function AppsSection({
           type="button"
           title="New app session"
           aria-label="New app session"
-          onClick={() => void createAppSession()}
+          onClick={() => openGeneratedProjectDialog("app")}
           className="pointer-events-none flex size-5 touch-manipulation items-center justify-center rounded opacity-0 transition-opacity hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring group-hover/apps-header:pointer-events-auto group-hover/apps-header:opacity-100 group-focus-within/apps-header:pointer-events-auto group-focus-within/apps-header:opacity-100"
         >
           <Plus size={14} />
@@ -103,7 +106,7 @@ export function AppsSection({
       {appGroups.length === 0 ? (
         <button
           type="button"
-          onClick={() => void createAppSession()}
+          onClick={() => openGeneratedProjectDialog("app")}
           className={cn(
             "flex w-full touch-manipulation items-center gap-2 rounded-md px-2 py-1.5 pl-4 text-sm text-muted-foreground transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring",
           )}
