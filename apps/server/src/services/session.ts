@@ -275,6 +275,11 @@ function hasRuntimeBindingChanged(
   return RUNTIME_IDENTITY_FIELDS.some((field) => current[field] !== next[field]);
 }
 
+// Whether a session group is already pinned to a bridge/runtime. Keep this in
+// lockstep with `hasSelectedSessionGroupRuntime` in
+// packages/client-core/src/lib/session-group.ts — the client hides the bridge
+// selector on exactly the groups this server-side guard rejects a re-selection
+// for, so the two field sets must stay identical.
 function hasRuntimeBinding(connection: SessionConnectionData, workdir?: string | null): boolean {
   return Boolean(
     workdir ||
@@ -3347,15 +3352,10 @@ export class SessionService {
 
     const requestedRuntimeSelection =
       !!input.environmentId || !!input.hosting || !!input.runtimeInstanceId;
-    const sharedConnectionHasRuntimeSelection =
-      sharedConnection &&
-      typeof sharedConnection === "object" &&
-      ("runtimeInstanceId" in sharedConnection ||
-        "environmentId" in sharedConnection ||
-        "providerRuntimeId" in sharedConnection ||
-        "providerRuntimeUrl" in sharedConnection);
-    const existingGroupHasRuntimeSelection =
-      !!sharedWorkdir || !!sharedRuntimeInstanceId || !!sharedConnectionHasRuntimeSelection;
+    const existingGroupHasRuntimeSelection = hasRuntimeBinding(
+      this.parseConnection(sharedConnection),
+      sharedWorkdir,
+    );
     // Joining an established group never accepts a runtime choice, even when
     // the requested value happens to match. New sessions inherit the group's
     // bridge; changing it is exclusively a group Move operation.
@@ -9382,7 +9382,10 @@ export class SessionService {
             data: {
               // Bridge identity is shared by the group, while lifecycle state,
               // errors, retry counters, and optimistic versions remain owned by
-              // each session.
+              // each session. This write intentionally bypasses the connection
+              // `version` gate — it runs inside the transaction against
+              // not_started sessions that aren't actively writing their own
+              // connection, so there is no conditional-write race to lose to.
               connection: connJson(
                 mergeRuntimeBinding(this.parseConnection(session.connection), targetConnection),
               ),

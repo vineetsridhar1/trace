@@ -45,6 +45,10 @@ export function getSessionGroupChannelId(
   return null;
 }
 
+// Whether a session group is already pinned to a bridge/runtime. Keep this in
+// lockstep with `hasRuntimeBinding` in apps/server/src/services/session.ts —
+// the client hides the bridge selector on exactly the groups the server rejects
+// a re-selection for, so the two field sets must stay identical.
 export function hasSelectedSessionGroupRuntime(
   connection: SessionGroupRuntimeConnection | null | undefined,
   workdir: string | null | undefined,
