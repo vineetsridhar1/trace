@@ -98,7 +98,7 @@ A deployment is durable desired state, not a development runtime. It points to a
 
 ## 4. Target AWS topology
 
-Deploy one production Region first, across three Availability Zones. Use a separate AWS account for production and, preferably, separate accounts for development and staging under AWS Organizations.
+Deploy one production environment in one dedicated AWS account and one Region first, across three Availability Zones. Continue using local development and CI tests; do not create AWS staging or development environments yet.
 
 ```text
 Internet
@@ -142,21 +142,19 @@ Regional services
 
 ## 5. AWS account and infrastructure-as-code foundation
 
-### 5.1 Accounts
+### 5.1 Production account
 
-Create at minimum:
+Create one dedicated AWS account:
 
 - `trace-production`
-- `trace-staging`
-- `trace-development`
-- Optional `trace-log-archive` and `trace-security` accounts as the organization grows.
+
+Do not deploy development, ad hoc experiments, or unrelated workloads into this account. Defer AWS staging, development, log-archive, and security accounts until operating the production environment justifies them.
 
 Enable:
 
-- AWS Organizations with service control policies.
 - IAM Identity Center for human access.
 - MFA for all human access and the root account.
-- Organization CloudTrail delivered to a protected log account or log bucket.
+- Account-level CloudTrail delivered to the protected production audit bucket.
 - AWS Config and Security Hub in production.
 - GuardDuty in every enabled Region.
 - AWS Budgets and Cost Anomaly Detection.
@@ -366,7 +364,7 @@ Create separate buckets:
 
 - `trace-artifacts-<account>-<region>` — uploads, artifact revisions, previews, captures, and exports.
 - `trace-alb-logs-<account>-<region>` — ALB logs.
-- `trace-audit-logs-<account>-<region>` — CloudTrail and security logs if a log-archive account is not yet used.
+- `trace-audit-logs-<account>-<region>` — CloudTrail and production security logs.
 - Optional `trace-build-sources-<account>-<region>` — generated-app build inputs.
 
 For the artifact bucket:
@@ -957,7 +955,7 @@ Configure AWS Backup:
 - Daily EFS backups retained 35 days.
 - Weekly backups retained 12 weeks.
 - Aurora snapshots copied to the DR Region.
-- Quarterly restore exercises into an isolated account/VPC.
+- Quarterly restore exercises into a temporary isolated VPC in the production account, with no path to live production resources.
 
 AWS Backup supports policy-based incremental EFS backups and file-level or full restores; see [Backing up EFS](https://docs.aws.amazon.com/efs/latest/ug/awsbackup.html). Scheduled cross-Region backup copies are supported; see [cross-Region AWS Backup](https://docs.aws.amazon.com/aws-backup/latest/devguide/cross-region-backup.html).
 
@@ -981,13 +979,12 @@ Pipeline stages:
 3. Build control-plane and runtime images.
 4. Scan images and dependencies.
 5. Push content-addressed images to ECR.
-6. Deploy infrastructure changes to staging.
-7. Run a one-off migration task.
-8. Deploy API/web/gateway services by image digest with ECS deployment circuit breakers.
-9. Run health, GraphQL, WebSocket, managed-Git, upload, and cloud-session smoke tests.
-10. Promote the same digests to production with approval.
-11. Run the migration task, then rolling deployment.
-12. Verify alarms and smoke tests; roll back service images on failure.
+6. Synthesize and review the production infrastructure diff.
+7. Require explicit production deployment approval.
+8. Deploy infrastructure changes and run the one-off migration task.
+9. Deploy API/web/gateway services by image digest with ECS deployment circuit breakers.
+10. Run health, GraphQL, WebSocket, managed-Git, upload, and cloud-session smoke tests against a dedicated production canary organization.
+11. Verify alarms and smoke tests; roll back service images on failure.
 
 Database migrations must be backward-compatible with the previous application version during rolling deploys. Use expand/migrate/contract for destructive schema changes.
 
@@ -1073,7 +1070,7 @@ A user-visible trash, restore API, and recovery retention window are explicitly 
 
 ### Foundation
 
-- [ ] Production/staging AWS accounts and IAM Identity Center.
+- [ ] Dedicated production AWS account and IAM Identity Center.
 - [ ] CDK application and deployment roles.
 - [ ] VPC across three AZs.
 - [ ] Public, control-plane, runtime, and data subnets.
@@ -1207,7 +1204,7 @@ Do not call the system production-ready for thousands of concurrent cloud sessio
 
 - Select production Region and domains.
 - Set concurrency, startup-time, retention, RPO, and RTO targets.
-- Create accounts, CDK application, VPC, DNS, certificates, and KMS.
+- Create the production account, CDK application, VPC, DNS, certificates, and KMS.
 - Submit Fargate/ENI quota requests based on the intended beta size.
 
 ### Phase 1: production control plane
@@ -1223,7 +1220,7 @@ Do not call the system production-ready for thousands of concurrent cloud sessio
 - Deploy launcher start/stop/status endpoints.
 - Configure a provisioned Agent Environment.
 - Add EventBridge reconciliation, tagging, quotas, alarms, and smoke tests.
-- Run the cloud-app-session smoke test in staging.
+- Run the cloud-app-session smoke test with a dedicated production canary organization before opening access.
 
 ### Phase 3: horizontal runtime gateway
 
