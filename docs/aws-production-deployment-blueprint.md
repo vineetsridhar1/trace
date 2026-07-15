@@ -36,7 +36,7 @@ This plan uses the following product decisions:
 - A session works on one group; concurrent editing of one group is not required.
 - Coding repositories use GitHub as their source of truth.
 - Users can create Trace apps without connecting GitHub, so Trace must retain an internal Git capability for app source.
-- Designs need compute while an agent is editing or rendering them, but may be deprovisioned otherwise.
+- Designs need compute while an agent is editing or rendering them. The existing `cleanupIdleCloudSessionGroups` job deprovisions their inactive cloud runtimes using the configured cloud-session-group idle threshold; no design-specific cleanup mechanism is needed.
 - Published apps must be always available and may need persistent PostgreSQL data.
 - Every completed agent operation creates a durable revision.
 - Deleting a group may delete its source, artifacts, deployment, and app data, but deletion should be recoverable for a retention window.
@@ -487,7 +487,7 @@ Use an internal authenticated HTTP/2 or WebSocket connection between routers and
 
 Run background concerns as explicit ECS services or scheduled tasks rather than timers duplicated in every API process:
 
-- Cloud-session idle cleanup.
+- The existing cloud-session idle cleanup (`cleanupIdleCloudSessionGroups`), moved intact into the worker role when singleton jobs are extracted from the API process.
 - Stuck deprovision reconciliation.
 - Endpoint traffic cleanup.
 - Git garbage collection.
@@ -1031,6 +1031,7 @@ Every purge step must be idempotent and resumable. Record tombstone/audit events
 - Implement/deploy the ECS launcher from the existing provisioned runtime contract.
 - Publish the runtime image to ECR and make task bootstrap environment-compatible.
 - Configure the production provisioned Agent Environment.
+- Keep the existing cloud-session-group idle cleanup enabled so inactive design and other cloud runtimes are deprovisioned automatically.
 - Mount EFS at `GIT_STORAGE_ROOT` for managed app Git.
 - Route `/git` through the AWS ingress.
 - Separate Prisma migration execution from API startup.
@@ -1169,7 +1170,7 @@ Build-time values such as `VITE_API_URL` and `VITE_AG_GRID_LICENSE_KEY` must com
 - [ ] S3 direct upload/download succeeds with private bucket settings.
 - [ ] Managed app repo clone, checkpoint push, restore, and delete succeed through `/git`.
 - [ ] Coding session clones GitHub and persists a recovery checkpoint.
-- [ ] App/design session starts, connects, previews, checkpoints, stops, and restores.
+- [ ] App/design session starts, connects, previews, and checkpoints; the existing idle cleanup deprovisions its inactive runtime; the next operation restores it.
 - [ ] Forced runtime kill loses no completed operation.
 - [ ] Published app remains available after its development runtime stops.
 - [ ] Published app task replacement preserves externally stored data.
