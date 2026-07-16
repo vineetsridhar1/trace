@@ -40,10 +40,25 @@ interface TokenStatus {
 }
 
 const PROVIDER_META: Record<string, { label: string; placeholder: string; description: string }> = {
+  anthropic: {
+    label: "Anthropic",
+    placeholder: "sk-ant-...",
+    description: "Used to run Claude Code sessions with your personal Anthropic account",
+  },
+  openai: {
+    label: "OpenAI",
+    placeholder: "sk-...",
+    description: "Used to run Codex sessions with your personal OpenAI account",
+  },
   github: {
     label: "GitHub",
     placeholder: "ghp_...",
     description: "Used for cloud containers, repository files, diffs, and webhooks",
+  },
+  ssh_key: {
+    label: "SSH private key",
+    placeholder: "-----BEGIN OPENSSH PRIVATE KEY-----",
+    description: "Used by cloud sessions to access repositories over SSH",
   },
 };
 

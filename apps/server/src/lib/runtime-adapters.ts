@@ -12,6 +12,7 @@ import {
   type RuntimeEnvironment,
 } from "./runtime-adapter-registry.js";
 import { orgSecretService } from "../services/org-secret.js";
+import { apiTokenService } from "../services/api-token.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
 import { isLocalMode } from "./mode.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
@@ -39,6 +40,16 @@ const RUNTIME_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const RUNTIME_TOKEN_STARTUP_MARGIN_SECONDS = 60;
 const JWT_SECRET = resolveJwtSecret();
 const LAUNCHER_REQUEST_TIMEOUT_MS = 30_000;
+
+async function resolveUserApiTokenEnv(userId: string): Promise<Record<string, string>> {
+  const tokens = await apiTokenService.getDecryptedTokens(userId);
+  return {
+    ...(tokens.anthropic ? { ANTHROPIC_API_KEY: tokens.anthropic } : {}),
+    ...(tokens.openai ? { OPENAI_API_KEY: tokens.openai } : {}),
+    ...(tokens.github ? { GITHUB_TOKEN: tokens.github } : {}),
+    ...(tokens.ssh_key ? { SSH_PRIVATE_KEY: tokens.ssh_key } : {}),
+  };
+}
 
 type ProvisionedAuthConfig = {
   type: "bearer" | "hmac";
@@ -628,7 +639,10 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       runtimeTokenTtlSeconds,
     );
     const bridgeUrl = input.bridgeUrl ?? defaultBridgeUrl();
-    const runtimeEnv = await resolveProvisionedRuntimeEnv(input.organizationId, config.runtimeEnv);
+    const [runtimeEnv, userApiTokenEnv] = await Promise.all([
+      resolveProvisionedRuntimeEnv(input.organizationId, config.runtimeEnv),
+      resolveUserApiTokenEnv(input.actorId),
+    ]);
 
     const body = {
       sessionId: input.sessionId,
@@ -652,6 +666,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       reasoningEffort: input.reasoningEffort ?? null,
       bootstrapEnv: {
         ...runtimeEnv,
+        ...userApiTokenEnv,
         TRACE_SESSION_ID: input.sessionId,
         TRACE_ORG_ID: input.organizationId,
         TRACE_SERVER_PUBLIC_URL: process.env.TRACE_SERVER_PUBLIC_URL?.trim() ?? "",
