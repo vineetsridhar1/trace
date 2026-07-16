@@ -45,6 +45,7 @@ import { buildAppleAppSiteAssociation } from "./lib/apple-app-site-association.j
 import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.js";
 import { endpointProxyService } from "./services/endpoint-proxy.js";
 import { sessionApplicationService } from "./services/session-applications.js";
+import { seedCloudForAllOrgs } from "./services/cloud-bootstrap.js";
 import {
   assertPreviewHostIsolated,
   endpointTrafficRetentionHours,
@@ -545,6 +546,12 @@ async function main() {
       console.warn("[slack-bridge] rehydration failed:", (err as Error).message);
     });
   }
+
+  // Load the shared cloud from cloud.config.json (if present) into every org so
+  // they inherit it by default. Never fatal — a bad/missing config just skips.
+  await seedCloudForAllOrgs().catch((err: unknown) => {
+    console.error("[cloud-config] cloud seed failed:", (err as Error).message);
+  });
 
   startupReady = true;
 }

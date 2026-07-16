@@ -13,6 +13,8 @@ import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { createChannelInTransaction } from "./channel-create.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
+import { loadCloudConfig, seedCloudForOrg } from "./cloud-bootstrap.js";
+import { isLocalMode } from "../lib/mode.js";
 
 const PROJECT_INCLUDE = {
   repo: true,
@@ -121,7 +123,7 @@ export class OrganizationService {
       throw new Error("Organization name is required");
     }
 
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const member = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.user.findUniqueOrThrow({
         where: { id: actorId },
         select: { id: true },
@@ -188,6 +190,19 @@ export class OrganizationService {
 
       return member;
     });
+
+    // Inherit the shared cloud (if configured) so the new org can host cloud
+    // sessions immediately. Runs after commit so it never blocks org creation.
+    const cloudConfig = loadCloudConfig();
+    if (cloudConfig && !isLocalMode()) {
+      await seedCloudForOrg(member.organizationId, cloudConfig).catch((err: unknown) => {
+        console.error(
+          `[cloud-config] failed to seed cloud for new org ${member.organizationId}: ${(err as Error).message}`,
+        );
+      });
+    }
+
+    return member;
   }
 
   async createRepo(input: CreateRepoInput, actorType: ActorType, actorId: string) {
