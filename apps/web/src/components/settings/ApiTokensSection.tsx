@@ -6,6 +6,7 @@ import { gql } from "@urql/core";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
+import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 
 const API_TOKENS_QUERY = gql`
   query MyApiTokens {
@@ -40,12 +41,40 @@ interface TokenStatus {
 }
 
 const PROVIDER_META: Record<string, { label: string; placeholder: string; description: string }> = {
+  anthropic: {
+    label: "Anthropic",
+    placeholder: "sk-ant-...",
+    description: "Used to run Claude Code sessions with your personal Anthropic account",
+  },
+  openai: {
+    label: "OpenAI",
+    placeholder: "sk-...",
+    description: "Used to run Codex sessions with your personal OpenAI account",
+  },
   github: {
     label: "GitHub",
     placeholder: "ghp_...",
     description: "Used for cloud containers, repository files, diffs, and webhooks",
   },
+  ssh_key: {
+    label: "SSH private key",
+    placeholder: "-----BEGIN OPENSSH PRIVATE KEY-----",
+    description: "Used by cloud sessions to access repositories over SSH",
+  },
 };
+
+function ProviderIcon({ provider }: { provider: string }) {
+  if (provider === "anthropic") {
+    return <ClaudeIcon className="h-5 w-5 object-contain" />;
+  }
+  if (provider === "openai") {
+    return <CodexIcon className="h-5 w-5" />;
+  }
+  if (provider === "github") {
+    return <Github size={20} />;
+  }
+  return <Key size={18} className="text-muted-foreground" />;
+}
 
 export function ApiTokensSection() {
   const user = useAuthStore((s: { user: { id: string } | null }) => s.user);
@@ -155,7 +184,7 @@ export function ApiTokensSection() {
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Key size={16} className="text-muted-foreground" />
+                  <ProviderIcon provider={token.provider} />
                   <div>
                     <p className="text-sm font-medium text-foreground">{meta.label}</p>
                     <p className="text-xs text-muted-foreground">{meta.description}</p>

@@ -4,10 +4,17 @@ import {
   ProvisionedRuntimeAdapter,
 } from "./runtime-adapters.js";
 import { orgSecretService } from "../services/org-secret.js";
+import { apiTokenService } from "../services/api-token.js";
 
 vi.mock("../services/org-secret.js", () => ({
   orgSecretService: {
     getDecryptedValue: vi.fn().mockResolvedValue("launcher-secret"),
+  },
+}));
+
+vi.mock("../services/api-token.js", () => ({
+  apiTokenService: {
+    getDecryptedTokens: vi.fn().mockResolvedValue({}),
   },
 }));
 
@@ -35,6 +42,7 @@ describe("ProvisionedRuntimeAdapter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(orgSecretService.getDecryptedValue).mockResolvedValue("launcher-secret");
+    vi.mocked(apiTokenService.getDecryptedTokens).mockResolvedValue({});
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(makeResponse({ status: "unknown" })));
     delete process.env.TRACE_SERVER_PUBLIC_URL;
     delete process.env.TRACE_CLOUD_BRIDGE_URL;
@@ -161,6 +169,43 @@ describe("ProvisionedRuntimeAdapter", () => {
     };
     expect(body.bootstrapEnv.DATABASE_URL).toBe("postgresql://db.example/app");
     expect(orgSecretService.getDecryptedValue).toHaveBeenCalledWith("org-1", "database-secret");
+  });
+
+  it("passes the session owner's API tokens to its provisioned runtime", async () => {
+    vi.mocked(apiTokenService.getDecryptedTokens).mockResolvedValue({
+      anthropic: "anthropic-token",
+      openai: "openai-token",
+      github: "github-token",
+      ssh_key: "ssh-private-key",
+    });
+    fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await adapter.startSession({
+      sessionId: "session-with-user-tokens",
+      organizationId: "org-1",
+      actorId: "user-1",
+      environment: {
+        id: "env-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: provisionedConfig,
+      },
+      tool: "claude_code",
+      bridgeUrl: "wss://trace.example/bridge",
+    });
+
+    const init = fetchMock().mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(init.body as string) as {
+      bootstrapEnv: Record<string, string>;
+    };
+    expect(apiTokenService.getDecryptedTokens).toHaveBeenCalledWith("user-1");
+    expect(body.bootstrapEnv).toMatchObject({
+      ANTHROPIC_API_KEY: "anthropic-token",
+      OPENAI_API_KEY: "openai-token",
+      GITHUB_TOKEN: "github-token",
+      SSH_PRIVATE_KEY: "ssh-private-key",
+    });
   });
 
   it("allows loopback HTTP provisioned URLs outside production", async () => {
