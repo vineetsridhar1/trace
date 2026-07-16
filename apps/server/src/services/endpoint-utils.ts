@@ -274,6 +274,10 @@ export function assertPreviewHostIsolated(traceWebUrl: string | undefined): void
   const message =
     `[endpoint-preview] preview base host "${baseHost}" shares a registrable domain with the Trace app ` +
     `origin "${appHost}". Untrusted app previews must be served from a separate registrable domain.`;
+  if (process.env.TRACE_ALLOW_SAME_SITE_PREVIEWS === "true") {
+    console.warn(`${message} Temporary same-site preview override is enabled.`);
+    return;
+  }
   if (process.env.NODE_ENV === "production") throw new Error(message);
   console.warn(message);
 }
