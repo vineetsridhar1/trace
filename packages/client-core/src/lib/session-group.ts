@@ -1,3 +1,4 @@
+import type { SessionConnection } from "@trace/gql";
 import type { SessionEntity, SessionGroupEntity } from "../stores/entity.js";
 
 type ChannelRef = { id: string } | null | undefined;
@@ -9,6 +10,13 @@ type SessionGroupWithRuntimeFields = SessionGroupEntity & {
 type SessionWithRuntimeFields = SessionEntity & {
   channelId?: string | null;
 };
+
+type SessionGroupRuntimeConnection = Partial<
+  Pick<
+    SessionConnection,
+    "runtimeInstanceId" | "environmentId" | "providerRuntimeId" | "adapterType"
+  >
+>;
 
 export function getSessionChannelId(session: SessionEntity | null | undefined): string | null {
   if (!session) return null;
@@ -35,4 +43,21 @@ export function getSessionGroupChannelId(
   }
 
   return null;
+}
+
+// Whether a session group is already pinned to a bridge/runtime. Keep this in
+// lockstep with `hasRuntimeBinding` in apps/server/src/services/session.ts —
+// the client hides the bridge selector on exactly the groups the server rejects
+// a re-selection for, so the two field sets must stay identical.
+export function hasSelectedSessionGroupRuntime(
+  connection: SessionGroupRuntimeConnection | null | undefined,
+  workdir: string | null | undefined,
+): boolean {
+  return Boolean(
+    workdir ||
+      connection?.runtimeInstanceId ||
+      connection?.environmentId ||
+      connection?.providerRuntimeId ||
+      connection?.adapterType === "provisioned",
+  );
 }

@@ -104,7 +104,6 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
             tool: sessionTool ?? "claude_code",
             model: sessionModel ?? undefined,
             reasoningEffort: sessionReasoningEffort ?? undefined,
-            hosting,
             channelId: sessionChannel?.id,
             repoId: sessionRepo?.id,
             branch: sessionBranch ?? undefined,

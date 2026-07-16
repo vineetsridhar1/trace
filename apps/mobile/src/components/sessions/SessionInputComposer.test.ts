@@ -144,6 +144,22 @@ vi.mock("react-native-reanimated", () => {
 vi.mock("@trace/client-core", () => ({
   DISMISS_SESSION_MUTATION: "dismiss",
   generateUUID: () => "uuid",
+  hasSelectedSessionGroupRuntime: (
+    connection: {
+      runtimeInstanceId?: string | null;
+      environmentId?: string | null;
+      providerRuntimeId?: string | null;
+      adapterType?: string | null;
+    } | null,
+    workdir: string | null,
+  ) =>
+    Boolean(
+      workdir ||
+        connection?.runtimeInstanceId ||
+        connection?.environmentId ||
+        connection?.providerRuntimeId ||
+        connection?.adapterType === "provisioned",
+    ),
   useEntityField: (_entity: string, _id: string, field: string) => {
     switch (field) {
       case "agentStatus":

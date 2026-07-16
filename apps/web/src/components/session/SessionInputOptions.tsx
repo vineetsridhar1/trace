@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import type { SessionConnection, SessionRuntimeInstance } from "@trace/gql";
-import { useEntityField } from "@trace/client-core";
+import { hasSelectedSessionGroupRuntime, useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
@@ -127,6 +127,10 @@ export function SessionInputOptions({
     | SessionConnection
     | null
     | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as
+    | string
+    | null
+    | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
@@ -134,6 +138,16 @@ export function SessionInputOptions({
     | string
     | null
     | undefined;
+  const groupConnection = useEntityField(
+    "sessionGroups",
+    sessionGroupId ?? "",
+    "connection",
+  ) as SessionConnection | null | undefined;
+  const groupWorkdir = useEntityField(
+    "sessionGroups",
+    sessionGroupId ?? "",
+    "workdir",
+  ) as string | null | undefined;
 
   const repo = useEntityField("sessions", sessionId, "repo") as
     | { id: string; remoteUrl?: string | null }
@@ -148,6 +162,11 @@ export function SessionInputOptions({
   const currentReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
   const isNotStarted = agentStatus === "not_started";
   const runtimeLocked = isGeneratedProjectKind(sessionGroupKind);
+  const groupHasSelectedRuntime = hasSelectedSessionGroupRuntime(
+    groupConnection === undefined ? connection : groupConnection,
+    groupWorkdir === undefined ? workdir : groupWorkdir,
+  );
+  const canChangeRuntime = isNotStarted && !runtimeLocked && !groupHasSelectedRuntime;
 
   const runtimeLabel = connection?.runtimeLabel ?? null;
   const runtimeInstanceId = connection?.runtimeInstanceId ?? null;
@@ -160,11 +179,12 @@ export function SessionInputOptions({
     cloudEnvironmentAvailable || currentRuntimeValue === CLOUD_RUNTIME_ID;
   const autoSelectedRuntimeSessionRef = useRef<string | null>(null);
 
-  // Fetch runtimes when not_started so user can switch
+  // Runtime selection is only available while choosing the first bridge for
+  // a new, unbound group. Sibling sessions inherit the group's bridge.
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const connectedLocalRuntimes = runtimes.filter(isAccessibleLocalRuntime);
   const fetchAvailableRuntimes = useCallback(() => {
-    if (!isNotStarted || isOptimistic || runtimeLocked) return Promise.resolve();
+    if (!canChangeRuntime || isOptimistic) return Promise.resolve();
     return client
       .query(AVAILABLE_RUNTIMES_QUERY, {
         tool: currentTool,
@@ -178,7 +198,7 @@ export function SessionInputOptions({
       .catch((error: unknown) => {
         console.error("Failed to fetch available runtimes:", error);
       });
-  }, [isNotStarted, isOptimistic, runtimeLocked, currentTool, sessionGroupId]);
+  }, [canChangeRuntime, isOptimistic, currentTool, sessionGroupId]);
 
   useEffect(() => {
     void fetchAvailableRuntimes();
@@ -251,7 +271,7 @@ export function SessionInputOptions({
 
   const handleRuntimeChange = useCallback(
     async (value: string | null) => {
-      if (isOptimistic || value === currentRuntimeValue) return;
+      if (!canChangeRuntime || isOptimistic || value === currentRuntimeValue) return;
       if (!value) return;
       if (value === UNBOUND_LOCAL_RUNTIME_ID) return;
 
@@ -335,6 +355,7 @@ export function SessionInputOptions({
     },
     [
       isOptimistic,
+      canChangeRuntime,
       sessionId,
       currentRuntimeValue,
       runtimes,
@@ -347,6 +368,7 @@ export function SessionInputOptions({
   useEffect(() => {
     if (
       !isNotStarted ||
+      !canChangeRuntime ||
       isOptimistic ||
       runtimeLocked ||
       isCloudRuntime ||
@@ -369,6 +391,7 @@ export function SessionInputOptions({
     void handleRuntimeChange(ownedRuntime.id);
   }, [
     channelRepoId,
+    canChangeRuntime,
     currentRuntimeValue,
     handleRuntimeChange,
     isCloudRuntime,
@@ -424,7 +447,7 @@ export function SessionInputOptions({
           onChange={handleReasoningEffortChange}
         />
       )}
-      {isNotStarted && !runtimeLocked ? (
+      {canChangeRuntime ? (
         <Select
           value={currentRuntimeValue}
           onValueChange={handleRuntimeChange}
