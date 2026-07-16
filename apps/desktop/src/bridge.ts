@@ -577,8 +577,18 @@ export class BridgeClient implements IBridgeClient {
     this.autoSyncManager.stop();
     // Tear down the old socket without triggering the close handler's reconnect
     if (this.ws) {
-      this.ws.removeAllListeners();
-      this.ws.close();
+      const staleSocket = this.ws;
+      staleSocket.removeAllListeners();
+      // Closing while the handshake is still in progress emits an error on the
+      // next tick. Keep a listener on the retired socket so it cannot become an
+      // uncaught exception after the normal bridge listeners are removed.
+      staleSocket.on("error", (err) => {
+        runtimeDebug("desktop bridge stale websocket closed", {
+          instanceId: this.instanceId,
+          error: err.message,
+        });
+      });
+      staleSocket.close();
       this.ws = null;
     }
     this.setStatus("disconnected");
