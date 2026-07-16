@@ -140,11 +140,13 @@ export class DataStack extends Stack {
         removalPolicy: retained,
         enableDataApi: false,
       });
+      // RDS Proxy fetches credentials from Secrets Manager through the VPC, so
+      // it needs egress (NAT or endpoint); the isolated data subnets have none.
       this.controlDatabaseProxy = this.controlDatabase.addProxy("ControlDatabaseProxy", {
         dbProxyName: resourceName(config, "control"),
         secrets: [this.controlDatabase.secret!],
         vpc: foundation.vpc,
-        vpcSubnets: foundation.dataSubnets,
+        vpcSubnets: foundation.controlPlaneSubnets,
         securityGroups: [controlProxySecurityGroup],
         requireTLS: true,
         debugLogging: false,
@@ -352,11 +354,12 @@ export class DataStack extends Stack {
         deletionProtection: config.retainDataOnDelete,
         removalPolicy: retained,
       });
+      // Control-plane subnets for Secrets Manager reachability; see above.
       this.appDataProxy = this.appDataDatabase.addProxy("AppDataProxy", {
         dbProxyName: resourceName(config, "app-data"),
         secrets: [this.appDataDatabase.secret!],
         vpc: foundation.vpc,
-        vpcSubnets: foundation.dataSubnets,
+        vpcSubnets: foundation.controlPlaneSubnets,
         securityGroups: [appProxySecurityGroup],
         requireTLS: true,
         idleClientTimeout: Duration.minutes(30),

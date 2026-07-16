@@ -172,6 +172,7 @@ repository/environment variables:
 | `ENABLE_APP_DATA`                              | Initially `false`                          |
 | `MONTHLY_BUDGET_USD`                           | Initially `500`                            |
 | `ALERT_EMAIL`                                  | Production operations email                |
+| `EXISTING_GITHUB_OIDC_PROVIDER_ARN`            | Blank unless the account already has the GitHub Actions OIDC provider; an AWS account allows only one per URL |
 
 Add `VITE_AG_GRID_LICENSE_KEY` as a GitHub environment secret when the production web build uses it.
 
@@ -255,8 +256,22 @@ production Agent Environment configuration:
 The launcher maps this fixed profile to the CDK-owned cluster, task definition, subnets, security
 group, and roles. Organization input cannot override those infrastructure identifiers.
 
+The launcher is stateless: `runtimeId` is the ECS task ARN, start idempotency comes from the ECS
+`clientToken`, and stop/status operate on ECS directly.
+
+Security caveat: the session bootstrap environment (including the runtime token and any
+organization `runtimeEnv` secrets) is injected through ECS `RunTask` container overrides. AWS
+records those overrides in CloudTrail management events and returns them from `ecs:DescribeTasks`,
+so anyone with CloudTrail or DescribeTasks read access in the production account can read them.
+Restrict those permissions to the operators who already hold the secrets. Removing this exposure
+requires changing the provisioned-runtime contract so the runtime fetches its bootstrap payload
+from the control plane at boot instead of receiving it through task overrides.
+
 ## 8. Production verification
 
+- Activate the `Application` cost allocation tag in Billing → Cost allocation tags after the first
+  deployment. The monthly budget filters on that tag and reports zero spend until it is active
+  (activation can take up to 24 hours).
 - Confirm `https://TRACE_DOMAIN/health` returns `ready: true`.
 - Sign in, create an organization, and test GraphQL subscriptions.
 - Push and clone a Trace-managed repository through `/git`.

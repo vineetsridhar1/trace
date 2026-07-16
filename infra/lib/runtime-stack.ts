@@ -1,7 +1,6 @@
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
 import * as apigwv2 from "aws-cdk-lib/aws-apigatewayv2";
 import * as apigwv2Integrations from "aws-cdk-lib/aws-apigatewayv2-integrations";
-import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import type * as ecr from "aws-cdk-lib/aws-ecr";
 import * as ecs from "aws-cdk-lib/aws-ecs";
@@ -82,16 +81,6 @@ export class RuntimeStack extends Stack {
       stopTimeout: Duration.seconds(30),
     });
 
-    const runtimeTable = new dynamodb.Table(this, "RuntimeTable", {
-      tableName: resourceName(config, "runtime-launches"),
-      partitionKey: { name: "runtimeId", type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: dataKey,
-      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
-      timeToLiveAttribute: "expiresAt",
-      removalPolicy: retained,
-    });
     this.launcherAuthSecret = new secretsmanager.Secret(this, "LauncherAuthSecret", {
       secretName: `trace/${config.environmentName}/runtime-launcher-token`,
       encryptionKey: secretsKey,
@@ -131,11 +120,9 @@ export class RuntimeStack extends Stack {
         RUNTIME_CONTAINER_NAME: "runtime",
         SUBNET_IDS: foundation.runtimeSubnetIds.join(","),
         SECURITY_GROUP_IDS: this.runtimeSecurityGroup.securityGroupId,
-        RUNTIME_TABLE_NAME: runtimeTable.tableName,
         AUTH_SECRET_ARN: this.launcherAuthSecret.secretArn,
       },
     });
-    runtimeTable.grantReadWriteData(launcher);
     this.launcherAuthSecret.grantRead(launcher);
     launcher.addToRolePolicy(
       new iam.PolicyStatement({
@@ -215,6 +202,8 @@ export class RuntimeStack extends Stack {
     });
     this.launcherUrl = `https://launcher.${config.domainName}`;
 
+    // Durable ECS state-change feed for the blueprint's Phase 2 reconciliation
+    // worker. Nothing consumes it yet; grant the consumer when it exists.
     const lifecycleDlq = new sqs.Queue(this, "RuntimeLifecycleDlq", {
       queueName: resourceName(config, "runtime-lifecycle-dlq"),
       encryption: sqs.QueueEncryption.KMS,

@@ -23,6 +23,14 @@ function integer(name, fallback) {
   return value;
 }
 
+function decimal(name, fallback) {
+  const raw = optional(name);
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) throw new Error(`${name} must be a number`);
+  return value;
+}
+
 function bool(name, fallback) {
   const raw = optional(name)?.toLowerCase();
   if (!raw) return fallback;
@@ -55,6 +63,7 @@ const config = {
   createHostedZone: !hostedZoneId,
   githubRepository: optional("GITHUB_REPOSITORY") ?? "vineetsridhar1/trace",
   githubDeployEnvironment: optional("GITHUB_DEPLOY_ENVIRONMENT") ?? "production",
+  existingGithubOidcProviderArn: optional("EXISTING_GITHUB_OIDC_PROVIDER_ARN"),
   networkMode,
   existingVpcId: networkMode === "existing" ? required("EXISTING_VPC_ID") : undefined,
   existingAvailabilityZones:
@@ -112,8 +121,8 @@ const config = {
   runtimeCpu: integer("RUNTIME_CPU", 2048),
   runtimeMemoryMiB: integer("RUNTIME_MEMORY_MIB", 4096),
   runtimeEphemeralStorageGiB: integer("RUNTIME_EPHEMERAL_STORAGE_GIB", 40),
-  auroraMinAcu: Number(optional("AURORA_MIN_ACU") ?? "0.5"),
-  auroraMaxAcu: Number(optional("AURORA_MAX_ACU") ?? "4"),
+  auroraMinAcu: decimal("AURORA_MIN_ACU", 0.5),
+  auroraMaxAcu: decimal("AURORA_MAX_ACU", 4),
   enableControlDatabaseReader: bool("ENABLE_CONTROL_DATABASE_READER", false),
   enableAppData: bool("ENABLE_APP_DATA", false),
   enableAppDataReader: bool("ENABLE_APP_DATA_READER", false),

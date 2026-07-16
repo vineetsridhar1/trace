@@ -247,10 +247,17 @@ export class FoundationStack extends Stack {
       validation: acm.CertificateValidation.fromDns(this.hostedZone),
     });
 
-    const githubProvider = new iam.OpenIdConnectProvider(this, "GitHubOidcProvider", {
-      url: "https://token.actions.githubusercontent.com",
-      clientIds: ["sts.amazonaws.com"],
-    });
+    // An account allows only one OIDC provider per URL; import when one exists.
+    const githubProvider = config.existingGithubOidcProviderArn
+      ? iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
+          this,
+          "GitHubOidcProvider",
+          config.existingGithubOidcProviderArn,
+        )
+      : new iam.OpenIdConnectProvider(this, "GitHubOidcProvider", {
+          url: "https://token.actions.githubusercontent.com",
+          clientIds: ["sts.amazonaws.com"],
+        });
     this.githubDeployRole = new iam.Role(this, "GitHubDeployRole", {
       roleName: resourceName(config, "github-deploy"),
       description: "Restricted GitHub OIDC role used to deploy Trace production through CDK",

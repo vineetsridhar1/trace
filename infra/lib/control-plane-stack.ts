@@ -252,6 +252,16 @@ export class ControlPlaneStack extends Stack {
       },
       deregistrationDelay: Duration.minutes(5),
     });
+    // The app gateway is not built yet; without this rule generated-app hosts
+    // would fall through to the web frontend default action.
+    httpsListener.addAction("AppsHosts", {
+      priority: 4,
+      conditions: [elbv2.ListenerCondition.hostHeaders([`*.apps.${config.domainName}`])],
+      action: elbv2.ListenerAction.fixedResponse(404, {
+        contentType: "text/plain",
+        messageBody: "App gateway is not deployed",
+      }),
+    });
     httpsListener.addAction("PreviewHosts", {
       priority: 5,
       conditions: [elbv2.ListenerCondition.hostHeaders([`*.preview.${config.domainName}`])],
@@ -312,7 +322,27 @@ export class ControlPlaneStack extends Stack {
           name: "GlobalRateLimit",
           priority: 30,
           action: { block: {} },
-          statement: { rateBasedStatement: { aggregateKeyType: "IP", limit: 3000 } },
+          statement: {
+            rateBasedStatement: {
+              aggregateKeyType: "IP",
+              limit: 3000,
+              // Session runtimes egress through shared NAT IPs; rate-limiting
+              // their bridge and Git traffic by IP would block every session
+              // at once under normal aggregate load.
+              scopeDownStatement: {
+                notStatement: {
+                  statement: {
+                    orStatement: {
+                      statements: [
+                        this.pathPrefixStatement("/bridge"),
+                        this.pathPrefixStatement("/git/"),
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
           visibilityConfig: {
             cloudWatchMetricsEnabled: true,
             metricName: resourceName(config, "waf-rate-limit"),
@@ -509,6 +539,17 @@ export class ControlPlaneStack extends Stack {
     const artifactKey = kms.Key.fromKeyArn(this, `${id}ArtifactKey`, foundation.artifactKey.keyArn);
     artifactKey.grantEncryptDecrypt(task.taskRole);
     return task;
+  }
+
+  private pathPrefixStatement(prefix: string): wafv2.CfnWebACL.StatementProperty {
+    return {
+      byteMatchStatement: {
+        fieldToMatch: { uriPath: {} },
+        positionalConstraint: "STARTS_WITH",
+        searchString: prefix,
+        textTransformations: [{ priority: 0, type: "NONE" }],
+      },
+    };
   }
 
   private managedRule(

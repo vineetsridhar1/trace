@@ -7,6 +7,7 @@ import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as cloudwatchActions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as configService from "aws-cdk-lib/aws-config";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import * as events from "aws-cdk-lib/aws-events";
 import * as guardduty from "aws-cdk-lib/aws-guardduty";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as kms from "aws-cdk-lib/aws-kms";
@@ -97,11 +98,6 @@ export class ObservabilityStack extends Stack {
         ],
       });
       auditLogsBucket.grantReadWrite(configRole);
-      const delivery = new configService.CfnDeliveryChannel(this, "ConfigDeliveryChannel", {
-        name: resourceName(config, "config"),
-        s3BucketName: auditLogsBucket.bucketName,
-        s3KeyPrefix: "aws-config",
-      });
       const recorder = new configService.CfnConfigurationRecorder(this, "ConfigRecorder", {
         name: resourceName(config, "config"),
         roleArn: configRole.roleArn,
@@ -110,7 +106,13 @@ export class ObservabilityStack extends Stack {
           includeGlobalResourceTypes: true,
         },
       });
-      recorder.addDependency(delivery);
+      // AWS Config rejects a delivery channel until a recorder exists.
+      const delivery = new configService.CfnDeliveryChannel(this, "ConfigDeliveryChannel", {
+        name: resourceName(config, "config"),
+        s3BucketName: auditLogsBucket.bucketName,
+        s3KeyPrefix: "aws-config",
+      });
+      delivery.addDependency(recorder);
       for (const [id, identifier] of Object.entries({
         EncryptedVolumes: "ENCRYPTED_VOLUMES",
         S3PublicReadProhibited: "S3_BUCKET_PUBLIC_READ_PROHIBITED",
@@ -160,7 +162,7 @@ export class ObservabilityStack extends Stack {
       backupPlanRules: [
         new backup.BackupPlanRule({
           ruleName: "Daily",
-          scheduleExpression: undefined,
+          scheduleExpression: events.Schedule.cron({ minute: "0", hour: "6" }),
           startWindow: Duration.hours(1),
           completionWindow: Duration.hours(6),
           deleteAfter: Duration.days(35),

@@ -11,6 +11,7 @@ export interface TraceInfraConfig {
   createHostedZone: boolean;
   githubRepository: string;
   githubDeployEnvironment: string;
+  existingGithubOidcProviderArn?: string;
   networkMode: "managed" | "existing";
   existingVpcId?: string;
   existingAvailabilityZones?: string[];
@@ -156,7 +157,12 @@ function assertConfig(config: TraceInfraConfig): void {
       "apiDesiredCount must remain 1 until runtime socket ownership is extracted from the backend",
     );
   }
-  if (config.auroraMinAcu < 0 || config.auroraMaxAcu < config.auroraMinAcu) {
+  if (
+    !Number.isFinite(config.auroraMinAcu) ||
+    !Number.isFinite(config.auroraMaxAcu) ||
+    config.auroraMinAcu < 0 ||
+    config.auroraMaxAcu < config.auroraMinAcu
+  ) {
     throw new Error("Aurora ACU bounds are invalid");
   }
 }

@@ -7,7 +7,7 @@ It creates six production stacks:
 
 - `Foundation`: managed or imported VPC/subnets, Route 53, ACM, KMS, ECR, and GitHub OIDC.
 - `Data`: managed Aurora or an imported RDS PostgreSQL database, Valkey, EFS, S3, SQS, and secrets.
-- `Runtime`: isolated Fargate task definition, launcher API, runtime registry, and lifecycle queue.
+- `Runtime`: isolated Fargate task definition, stateless launcher API, and lifecycle queue.
 - `ControlPlane`: web/API ECS services, ALB routing, WAF, managed-Git mount, and migration task.
 - `AppDeployment`: generated-app cluster, build project, repositories, queues, and deployment roles.
 - `Observability`: CloudTrail, Config, Security Hub, GuardDuty, AWS Backup, alarms, dashboard, and budget.

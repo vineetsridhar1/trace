@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import {
+  ConflictException,
   DescribeTasksCommand,
   ECSClient,
   RunTaskCommand,
@@ -7,18 +8,10 @@ import {
   type KeyValuePair,
   type Tag,
 } from "@aws-sdk/client-ecs";
-import {
-  ConditionalCheckFailedException,
-  DynamoDBClient,
-  GetItemCommand,
-  PutItemCommand,
-  UpdateItemCommand,
-} from "@aws-sdk/client-dynamodb";
 import { GetSecretValueCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 
 const ecs = new ECSClient({});
-const dynamodb = new DynamoDBClient({});
 const secrets = new SecretsManagerClient({});
 
 const clusterArn = requiredEnv("CLUSTER_ARN");
@@ -28,10 +21,15 @@ const taskRoleArn = requiredEnv("TASK_ROLE_ARN");
 const runtimeContainerName = requiredEnv("RUNTIME_CONTAINER_NAME");
 const subnetIds = requiredEnv("SUBNET_IDS").split(",");
 const securityGroupIds = requiredEnv("SECURITY_GROUP_IDS").split(",");
-const tableName = requiredEnv("RUNTIME_TABLE_NAME");
 const authSecretArn = requiredEnv("AUTH_SECRET_ARN");
 
+// ECS caps the entire RunTask overrides JSON (env entries, role ARNs, and
+// framing) at 8192 characters. Reserve headroom for the fixed entries.
+const MAX_BOOTSTRAP_ENV_BYTES = 6_000;
+const AUTH_SECRET_CACHE_MS = 5 * 60 * 1000;
+
 let cachedAuthSecret: string | undefined;
+let cachedAuthSecretAt = 0;
 
 interface StartRequest {
   sessionId: string;
@@ -42,14 +40,6 @@ interface StartRequest {
   model?: string | null;
   reasoningEffort?: string | null;
   bootstrapEnv: Record<string, string>;
-}
-
-interface RuntimeRecord {
-  runtimeId: string;
-  taskArn?: string;
-  status: string;
-  sessionId?: string;
-  orgId?: string;
 }
 
 function requiredEnv(name: string): string {
@@ -70,14 +60,16 @@ function parseBody(body: string | undefined): Record<string, unknown> {
   if (!body) return {};
   const value = JSON.parse(body) as unknown;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Request body must be a JSON object");
+    throw new ValidationError("Request body must be a JSON object");
   }
   return value as Record<string, unknown>;
 }
 
+class ValidationError extends Error {}
+
 function requiredString(record: Record<string, unknown>, key: string): string {
   const value = record[key];
-  if (typeof value !== "string" || !value.trim()) throw new Error(`${key} is required`);
+  if (typeof value !== "string" || !value.trim()) throw new ValidationError(`${key} is required`);
   return value;
 }
 
@@ -89,9 +81,10 @@ function safeEqual(left: string, right: string): boolean {
 
 async function authenticate(authorization: string | undefined): Promise<boolean> {
   if (!authorization?.startsWith("Bearer ")) return false;
-  if (!cachedAuthSecret) {
+  if (!cachedAuthSecret || Date.now() - cachedAuthSecretAt > AUTH_SECRET_CACHE_MS) {
     const result = await secrets.send(new GetSecretValueCommand({ SecretId: authSecretArn }));
     cachedAuthSecret = result.SecretString;
+    cachedAuthSecretAt = Date.now();
   }
   return Boolean(cachedAuthSecret && safeEqual(authorization.slice(7), cachedAuthSecret));
 }
@@ -129,12 +122,12 @@ function runtimeEnvironment(input: StartRequest): KeyValuePair[] {
       !protectedNames.has(name) &&
       typeof value === "string",
   );
-  if (entries.length > 80) throw new Error("bootstrapEnv contains too many values");
+  if (entries.length > 80) throw new ValidationError("bootstrapEnv contains too many values");
   const totalBytes = entries.reduce(
     (sum, [name, value]) => sum + Buffer.byteLength(name) + Buffer.byteLength(value),
     0,
   );
-  if (totalBytes > 24_000) throw new Error("bootstrapEnv is too large");
+  if (totalBytes > MAX_BOOTSTRAP_ENV_BYTES) throw new ValidationError("bootstrapEnv is too large");
   return [
     ...entries.map(([name, value]) => ({ name, value })),
     { name: "CODING_TOOL", value: input.tool },
@@ -146,65 +139,14 @@ function runtimeEnvironment(input: StartRequest): KeyValuePair[] {
   ];
 }
 
-async function getRuntime(runtimeId: string): Promise<RuntimeRecord | null> {
-  const result = await dynamodb.send(
-    new GetItemCommand({ TableName: tableName, Key: { runtimeId: { S: runtimeId } } }),
-  );
-  if (!result.Item) return null;
-  return {
-    runtimeId,
-    taskArn: result.Item.taskArn?.S,
-    status: result.Item.status?.S ?? "unknown",
-    sessionId: result.Item.sessionId?.S,
-    orgId: result.Item.orgId?.S,
-  };
-}
-
-async function reserveRuntime(input: StartRequest): Promise<boolean> {
-  try {
-    await dynamodb.send(
-      new PutItemCommand({
-        TableName: tableName,
-        ConditionExpression: "attribute_not_exists(runtimeId)",
-        Item: {
-          runtimeId: { S: input.runtimeInstanceId },
-          sessionId: { S: input.sessionId },
-          orgId: { S: input.orgId },
-          status: { S: "provisioning" },
-          createdAt: { S: new Date().toISOString() },
-          expiresAt: { N: String(Math.floor(Date.now() / 1000) + 31 * 24 * 60 * 60) },
-        },
-      }),
-    );
-    return true;
-  } catch (error) {
-    if (error instanceof ConditionalCheckFailedException) return false;
-    throw error;
-  }
-}
-
-async function updateRuntime(runtimeId: string, status: string, taskArn?: string): Promise<void> {
-  await dynamodb.send(
-    new UpdateItemCommand({
-      TableName: tableName,
-      Key: { runtimeId: { S: runtimeId } },
-      UpdateExpression: taskArn
-        ? "SET #status = :status, taskArn = :taskArn, updatedAt = :updatedAt"
-        : "SET #status = :status, updatedAt = :updatedAt",
-      ExpressionAttributeNames: { "#status": "status" },
-      ExpressionAttributeValues: {
-        ":status": { S: status },
-        ":updatedAt": { S: new Date().toISOString() },
-        ...(taskArn ? { ":taskArn": { S: taskArn } } : {}),
-      },
-    }),
-  );
+function runtimeLabel(runtimeInstanceId: string): string {
+  return `trace-${runtimeInstanceId.slice(-12)}`;
 }
 
 async function start(body: Record<string, unknown>) {
   const bootstrapEnv = body.bootstrapEnv;
   if (!bootstrapEnv || typeof bootstrapEnv !== "object" || Array.isArray(bootstrapEnv)) {
-    throw new Error("bootstrapEnv is required");
+    throw new ValidationError("bootstrapEnv is required");
   }
   const input: StartRequest = {
     sessionId: requiredString(body, "sessionId"),
@@ -226,18 +168,12 @@ async function start(body: Record<string, unknown>) {
     ),
   };
 
-  const reserved = await reserveRuntime(input);
-  if (!reserved) {
-    const existing = await getRuntime(input.runtimeInstanceId);
-    return response(200, {
-      runtimeId: input.runtimeInstanceId,
-      label: `trace-${input.runtimeInstanceId.slice(-12)}`,
-      status: existing?.status ?? "provisioning",
-    });
-  }
-
+  // ECS deduplicates RunTask by clientToken: a retry with identical parameters
+  // returns the already-launched task, and a conflicting reuse surfaces the
+  // existing task ARN through ConflictException. No launcher-side state needed.
+  const clientToken = createHash("sha256").update(input.runtimeInstanceId).digest("hex");
+  let taskArn: string | undefined;
   try {
-    const clientToken = createHash("sha256").update(input.runtimeInstanceId).digest("hex");
     const result = await ecs.send(
       new RunTaskCommand({
         cluster: clusterArn,
@@ -265,50 +201,49 @@ async function start(body: Record<string, unknown>) {
       }),
     );
     const failure = result.failures?.[0];
-    const taskArn = result.tasks?.[0]?.taskArn;
+    taskArn = result.tasks?.[0]?.taskArn;
     if (!taskArn)
       throw new Error(failure?.reason ?? failure?.detail ?? "ECS did not return a task");
-    await updateRuntime(input.runtimeInstanceId, "provisioning", taskArn);
-    return response(200, {
-      runtimeId: input.runtimeInstanceId,
-      label: `trace-${input.runtimeInstanceId.slice(-12)}`,
-      status: "provisioning",
-    });
   } catch (error) {
-    await updateRuntime(input.runtimeInstanceId, "failed");
-    throw error;
+    if (!(error instanceof ConflictException) || !error.resourceIds?.[0]) throw error;
+    taskArn = error.resourceIds[0];
   }
+  return response(200, {
+    runtimeId: taskArn,
+    label: runtimeLabel(input.runtimeInstanceId),
+    status: "provisioning",
+  });
+}
+
+function isMissingTaskError(error: unknown): boolean {
+  return error instanceof Error && /task was not found|not found/i.test(error.message);
 }
 
 async function stop(body: Record<string, unknown>) {
-  const runtimeId = requiredString(body, "runtimeId");
-  const runtime = await getRuntime(runtimeId);
-  if (!runtime) return response(200, { ok: true, status: "not_found" });
-  if (!runtime.taskArn) {
-    await updateRuntime(runtimeId, "stopped");
-    return response(200, { ok: true, status: "stopped" });
+  const taskArn = requiredString(body, "runtimeId");
+  try {
+    await ecs.send(
+      new StopTaskCommand({
+        cluster: clusterArn,
+        task: taskArn,
+        reason:
+          typeof body.reason === "string" ? body.reason.slice(0, 255) : "Trace session stopped",
+      }),
+    );
+  } catch (error) {
+    if (isMissingTaskError(error)) return response(200, { ok: true, status: "not_found" });
+    throw error;
   }
-  await ecs.send(
-    new StopTaskCommand({
-      cluster: clusterArn,
-      task: runtime.taskArn,
-      reason: typeof body.reason === "string" ? body.reason.slice(0, 255) : "Trace session stopped",
-    }),
-  );
-  await updateRuntime(runtimeId, "stopping");
   return response(200, { ok: true, status: "stopping" });
 }
 
 async function status(body: Record<string, unknown>) {
-  const runtimeId = requiredString(body, "runtimeId");
-  const runtime = await getRuntime(runtimeId);
-  if (!runtime) return response(200, { status: "stopped", message: "Runtime not found" });
-  if (!runtime.taskArn) return response(200, { status: runtime.status });
+  const taskArn = requiredString(body, "runtimeId");
   const result = await ecs.send(
-    new DescribeTasksCommand({ cluster: clusterArn, tasks: [runtime.taskArn] }),
+    new DescribeTasksCommand({ cluster: clusterArn, tasks: [taskArn] }),
   );
+  // ECS forgets stopped tasks after about an hour; MISSING means stopped.
   if (result.failures?.length || !result.tasks?.[0]) {
-    await updateRuntime(runtimeId, "stopped");
     return response(200, { status: "stopped", message: "Runtime task no longer exists" });
   }
   const task = result.tasks[0];
@@ -323,7 +258,6 @@ async function status(body: Record<string, unknown>) {
         : lastStatus === "DEPROVISIONING" || lastStatus === "STOPPING"
           ? "stopping"
           : "provisioning";
-  await updateRuntime(runtimeId, mappedStatus);
   return response(200, {
     status: mappedStatus,
     metadata: {
@@ -355,7 +289,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     console.error(
       JSON.stringify({ event: "runtime_launcher_error", path: event.rawPath, message }),
     );
-    const statusCode = /required|must|too many|too large/.test(message) ? 400 : 500;
-    return response(statusCode, { error: message });
+    if (error instanceof ValidationError || error instanceof SyntaxError) {
+      return response(400, { error: message });
+    }
+    return response(500, { error: "Launcher request failed" });
   }
 };
