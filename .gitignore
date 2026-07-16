@@ -30,8 +30,3 @@ package-lock.json
 /sessions/
 # Managed git bare-repo storage (default GIT_STORAGE_ROOT in dev)
 .trace-git/
-
-# AWS CDK output and local production configuration
-cdk.out/
-infra/cdk.out/
-infra/config/production.json

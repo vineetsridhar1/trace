@@ -33,9 +33,6 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/trace
 
-      - name: Infrastructure tests
-        run: pnpm --filter @trace/infra test
-
       - name: ESLint
         run: pnpm lint:eslint
 
