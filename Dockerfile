@@ -1,6 +1,6 @@
 FROM node:22.14.0-slim AS base
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openssl ca-certificates && \
+    apt-get install -y --no-install-recommends openssl ca-certificates git && \
     rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@10.7.0 --activate
 WORKDIR /app
