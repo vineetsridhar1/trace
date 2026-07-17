@@ -18,7 +18,6 @@ import {
   getAppConnectivityBannerKind,
   shouldTickConnectivityClock,
 } from "@/lib/connectivityVisibility";
-import { getGraphqlUrls } from "@/lib/connection-target";
 import { alpha, useTheme } from "@/theme";
 import { useConnectionStore } from "@/stores/connection";
 
@@ -31,7 +30,6 @@ export function AppConnectivityBanner() {
   const wsConnected = useConnectionStore((s) => s.connected);
   const disconnectedAt = useConnectionStore((s) => s.disconnectedAt);
   const hasConnectedBefore = useConnectionStore((s) => s.hasConnectedBefore);
-  const wsUrl = getGraphqlUrls().wsUrl;
   const [networkDisconnectedAt, setNetworkDisconnectedAt] = useState<number | null>(null);
   const pulse = useSharedValue(1);
 
@@ -68,7 +66,7 @@ export function AppConnectivityBanner() {
     now,
     wsConnected,
   });
-  const reconnecting = !wsConnected;
+  const reconnecting = bannerKind === "reconnecting";
 
   useEffect(() => {
     if (!reconnecting || reducedMotion) {
@@ -91,46 +89,25 @@ export function AppConnectivityBanner() {
     if (bannerKind === "offline") {
       return {
         icon: "wifi.slash" as const,
-        title: "Socket: offline",
-        detail: wsUrl || "No WebSocket URL configured",
+        title: "No internet",
+        detail: "Actions will retry when you're back online.",
         borderColor: alpha(theme.colors.warning, 0.35),
         tint: alpha(theme.colors.warning, 0.14),
       };
     }
-    if (wsConnected) {
-      return {
-        icon: "checkmark" as const,
-        title: "Socket: connected",
-        detail: wsUrl,
-        borderColor: alpha(theme.colors.success, 0.35),
-        tint: alpha(theme.colors.success, 0.14),
-      };
-    }
-    if (!hasConnectedBefore) {
+    if (bannerKind === "reconnecting") {
       return {
         icon: "arrow.triangle.2.circlepath" as const,
-        title: "Socket: connecting",
-        detail: wsUrl || "No WebSocket URL configured",
+        title: "Reconnecting…",
+        detail: "Live updates are paused while the session stream recovers.",
         borderColor: alpha(theme.colors.accent, 0.35),
         tint: alpha(theme.colors.accent, 0.14),
       };
     }
-    return {
-      icon: "exclamationmark.triangle" as const,
-      title: "Socket: disconnected",
-      detail: wsUrl || "No WebSocket URL configured",
-      borderColor: alpha(theme.colors.warning, 0.35),
-      tint: alpha(theme.colors.warning, 0.14),
-    };
-  }, [
-    bannerKind,
-    hasConnectedBefore,
-    theme.colors.accent,
-    theme.colors.success,
-    theme.colors.warning,
-    wsConnected,
-    wsUrl,
-  ]);
+    return null;
+  }, [bannerKind, theme.colors.accent, theme.colors.warning]);
+
+  if (!banner) return null;
 
   return (
     <View pointerEvents="box-none" style={styles.host}>
