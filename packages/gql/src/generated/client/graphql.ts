@@ -75,6 +75,34 @@ export type ApiTokenStatus = {
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type AppDeployment = {
+  __typename?: "AppDeployment";
+  commitSha: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  errorMessage?: Maybe<Scalars["String"]["output"]>;
+  externalJobId?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  imageDigest?: Maybe<Scalars["String"]["output"]>;
+  queuedAt: Scalars["DateTime"]["output"];
+  repoId: Scalars["ID"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceCheckpointId: Scalars["ID"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: AppDeploymentStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+  url?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type AppDeploymentStatus =
+  | "building"
+  | "deploying"
+  | "failed"
+  | "live"
+  | "queued"
+  | "stopped"
+  | "superseded";
+
 export type AppIntegrationBinding = {
   __typename?: "AppIntegrationBinding";
   allowedMethods: Array<Scalars["String"]["output"]>;
@@ -715,6 +743,8 @@ export type EventType =
   | "agent_environment_deleted"
   | "agent_environment_updated"
   | "animation_preview_updated"
+  | "app_deployment_queued"
+  | "app_deployment_updated"
   | "app_integration_binding_updated"
   | "app_integration_request_executed"
   | "app_integration_request_started"
@@ -1067,7 +1097,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
-  publishAppSession: SessionEndpoint;
+  publishAppSession: AppDeployment;
   queueSessionMessage: QueuedMessage;
   refreshDesignSystemSource: DesignSystem;
   registerPushToken: Scalars["Boolean"]["output"];
@@ -1412,7 +1442,6 @@ export type MutationMuteScopeArgs = {
 };
 
 export type MutationPublishAppSessionArgs = {
-  accessMode?: InputMaybe<SessionEndpointAccessMode>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1861,6 +1890,7 @@ export type Query = {
   agentEnvironments: Array<AgentEnvironment>;
   /** Animation-kind session groups for the org (the sidebar Animations section). */
   animationSessionGroups: Array<SessionGroup>;
+  appDeployments: Array<AppDeployment>;
   appIntegrationBindings: Array<AppIntegrationBinding>;
   /**
    * App-kind session groups for the org. Apps have no channel, so this is their
@@ -1953,6 +1983,10 @@ export type QueryAgentEnvironmentsArgs = {
 export type QueryAnimationSessionGroupsArgs = {
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryAppDeploymentsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryAppIntegrationBindingsArgs = {
@@ -4102,6 +4136,24 @@ export type SessionApplicationsStateQuery = {
     disabledAt?: string | null;
     revokedAt?: string | null;
   }>;
+  appDeployments: Array<{
+    __typename?: "AppDeployment";
+    id: string;
+    sessionGroupId: string;
+    repoId: string;
+    sourceCheckpointId: string;
+    commitSha: string;
+    status: AppDeploymentStatus;
+    externalJobId?: string | null;
+    imageDigest?: string | null;
+    url?: string | null;
+    errorMessage?: string | null;
+    queuedAt: string;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 };
 
 export type SessionApplicationProcessLogsQueryVariables = Exact<{
@@ -4175,12 +4227,16 @@ export type DisableSessionEndpointForwardingMutation = {
 
 export type PublishAppSessionMutationVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
-  accessMode?: InputMaybe<SessionEndpointAccessMode>;
 }>;
 
 export type PublishAppSessionMutation = {
   __typename?: "Mutation";
-  publishAppSession: { __typename?: "SessionEndpoint"; id: string };
+  publishAppSession: {
+    __typename?: "AppDeployment";
+    id: string;
+    status: AppDeploymentStatus;
+    commitSha: string;
+  };
 };
 
 export type CreateSessionEndpointPreviewMutationVariables = Exact<{
@@ -8825,6 +8881,37 @@ export const SessionApplicationsStateDocument = {
               ],
             },
           },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "appDeployments" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "repoId" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceCheckpointId" } },
+                { kind: "Field", name: { kind: "Name", value: "commitSha" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "externalJobId" } },
+                { kind: "Field", name: { kind: "Name", value: "imageDigest" } },
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "errorMessage" } },
+                { kind: "Field", name: { kind: "Name", value: "queuedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
         ],
       },
     },
@@ -9189,12 +9276,6 @@ export const PublishAppSessionDocument = {
             type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
           },
         },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "accessMode" } },
-          type: { kind: "NamedType", name: { kind: "Name", value: "SessionEndpointAccessMode" } },
-          defaultValue: { kind: "EnumValue", value: "private" },
-        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -9208,15 +9289,14 @@ export const PublishAppSessionDocument = {
                 name: { kind: "Name", value: "sessionGroupId" },
                 value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
               },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "accessMode" },
-                value: { kind: "Variable", name: { kind: "Name", value: "accessMode" } },
-              },
             ],
             selectionSet: {
               kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "commitSha" } },
+              ],
             },
           },
         ],

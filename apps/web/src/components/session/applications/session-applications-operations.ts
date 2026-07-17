@@ -95,6 +95,23 @@ export const APPLICATIONS_STATE_QUERY = gql`
       disabledAt
       revokedAt
     }
+    appDeployments(sessionGroupId: $sessionGroupId) {
+      id
+      sessionGroupId
+      repoId
+      sourceCheckpointId
+      commitSha
+      status
+      externalJobId
+      imageDigest
+      url
+      errorMessage
+      queuedAt
+      startedAt
+      completedAt
+      createdAt
+      updatedAt
+    }
   }
 `;
 
@@ -161,12 +178,11 @@ export const DISABLE_ENDPOINT_MUTATION = gql`
 `;
 
 export const PUBLISH_APP_MUTATION = gql`
-  mutation PublishAppSession(
-    $sessionGroupId: ID!
-    $accessMode: SessionEndpointAccessMode = private
-  ) {
-    publishAppSession(sessionGroupId: $sessionGroupId, accessMode: $accessMode) {
+  mutation PublishAppSession($sessionGroupId: ID!) {
+    publishAppSession(sessionGroupId: $sessionGroupId) {
       id
+      status
+      commitSha
     }
   }
 `;

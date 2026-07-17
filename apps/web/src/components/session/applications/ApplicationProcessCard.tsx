@@ -14,7 +14,6 @@ import { displayApplicationStatus } from "./session-applications-operations";
 export function ApplicationProcessCard({
   config,
   endpoints,
-  groupKind,
   logEntries,
   isPending,
   processPending,
@@ -23,14 +22,12 @@ export function ApplicationProcessCard({
   onCopyEndpoint,
   onOpenEndpoint,
   onOpenTraffic,
-  onPublish,
   onRefreshLogs,
   onToggleEndpoint,
   onToggleProcess,
 }: {
   config: RepoProcessDefinition;
   endpoints: SessionEndpoint[];
-  groupKind: string | null | undefined;
   logEntries: SessionApplicationLogEntry[];
   isPending: (key: string) => boolean;
   processPending: boolean;
@@ -39,7 +36,6 @@ export function ApplicationProcessCard({
   onCopyEndpoint: (endpoint: SessionEndpoint) => void;
   onOpenEndpoint: (endpoint: SessionEndpoint) => void;
   onOpenTraffic: (endpointId: string) => void;
-  onPublish: (endpointId: string) => void;
   onRefreshLogs: () => void;
   onToggleEndpoint: (endpoint: SessionEndpoint) => void;
   onToggleProcess: (active: boolean) => void;
@@ -92,13 +88,11 @@ export function ApplicationProcessCard({
         <EndpointCard
           key={endpoint.id}
           endpoint={endpoint}
-          isAppGroup={groupKind === "app"}
           isPending={isPending}
           processRunning={running}
           onCopy={() => onCopyEndpoint(endpoint)}
           onOpen={() => onOpenEndpoint(endpoint)}
           onOpenTraffic={() => onOpenTraffic(endpoint.id)}
-          onPublish={() => onPublish(endpoint.id)}
           onToggle={() => onToggleEndpoint(endpoint)}
         />
       ))}

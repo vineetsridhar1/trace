@@ -288,6 +288,18 @@ enum EventType {
   app_integration_binding_updated
   app_integration_request_started
   app_integration_request_executed
+  app_deployment_queued
+  app_deployment_updated
+}
+
+enum AppDeploymentStatus {
+  queued
+  building
+  deploying
+  live
+  failed
+  superseded
+  stopped
 }
 
 enum SessionApplicationProcessStatus {
@@ -368,6 +380,7 @@ model Organization {
   sessionSetupScriptRuns      SessionSetupScriptRun[]
   sessionApplicationProcesses SessionApplicationProcess[]
   sessionEndpoints            SessionEndpoint[]
+  appDeployments              AppDeployment[]
   agentEnvironments           AgentEnvironment[]
   orgSecrets                  OrgSecret[]
   slackInstalls               SlackInstall[]
@@ -494,6 +507,7 @@ model Repo {
   sessionApplicationProcesses SessionApplicationProcess[]
   sessionEndpoints            SessionEndpoint[]
   sourcedDesignSystems        DesignSystem[]              @relation("DesignSystemSourceRepo")
+  appDeployments              AppDeployment[]
 
   webhookId     String?
   webhookSecret String?
@@ -664,6 +678,7 @@ model SessionGroup {
   animationPreviewCapturedAt  DateTime?
   animationPreviewAttemptedAt DateTime?
   animationPreviewError       String?
+  appDeployments       AppDeployment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1249,15 +1264,44 @@ model GitCheckpoint {
   previewCapturedAt  DateTime?
   createdAt          DateTime  @default(now())
 
-  sessionGroup SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repo         Repo         @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  promptEvent  Event        @relation("GitCheckpointPromptEvent", fields: [promptEventId], references: [id], onDelete: Restrict)
+  sessionGroup   SessionGroup    @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repo           Repo            @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  promptEvent    Event           @relation("GitCheckpointPromptEvent", fields: [promptEventId], references: [id], onDelete: Restrict)
+  appDeployments AppDeployment[]
 
   @@unique([sessionGroupId, commitSha])
   @@index([sessionId, committedAt])
   @@index([sessionGroupId, committedAt])
   @@index([repoId, committedAt])
   @@index([promptEventId])
+}
+
+model AppDeployment {
+  id                 String              @id @default(uuid())
+  organizationId     String
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId     String
+  sessionGroup       SessionGroup        @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repoId             String
+  repo               Repo                @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  sourceCheckpointId String
+  sourceCheckpoint   GitCheckpoint       @relation(fields: [sourceCheckpointId], references: [id], onDelete: Restrict)
+  commitSha          String
+  status             AppDeploymentStatus @default(queued)
+  requestedByUserId  String
+  externalJobId      String?
+  imageDigest        String?
+  url                String?
+  errorMessage       String?
+  queuedAt           DateTime            @default(now())
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([organizationId, sessionGroupId, createdAt])
+  @@index([sessionGroupId, status])
+  @@index([sourceCheckpointId])
 }
 
 model BridgeRuntime {
