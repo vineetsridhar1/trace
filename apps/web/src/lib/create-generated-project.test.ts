@@ -7,6 +7,7 @@ describe("buildGeneratedProjectStartInput", () => {
       kind: "design",
       hosting: "cloud",
       prompt: "Explore onboarding",
+      tool: "codex",
     });
   });
 
@@ -15,6 +16,7 @@ describe("buildGeneratedProjectStartInput", () => {
       kind: "app",
       hosting: "cloud",
       prompt: "Build a CRM",
+      tool: "codex",
     });
   });
 });
