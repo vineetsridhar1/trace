@@ -1307,6 +1307,37 @@ export function isFullyUnloadedSession(
 }
 
 export class SessionService {
+  private async createGeneratedProjectGitCredential(input: {
+    organizationId: string;
+    sessionId: string;
+    runtimeInstanceId: string;
+    repo: { id: string; remoteUrl: string | null; defaultBranch: string };
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<{ repoId: string; repoRemoteUrl: string; defaultBranch: string }> {
+    if (!input.repo.remoteUrl) {
+      throw new ValidationError("Generated project managed git remote is unavailable");
+    }
+    const access = await managedGitService.mintAccessToken({
+      organizationId: input.organizationId,
+      repoId: input.repo.id,
+      scope: "runtime",
+      sessionId: input.sessionId,
+      subject: input.runtimeInstanceId,
+      capabilities: ["read", "write"],
+      actorType: input.actorType,
+      actorId: input.actorId,
+    });
+    const authenticatedUrl = new URL(input.repo.remoteUrl);
+    authenticatedUrl.username = "trace";
+    authenticatedUrl.password = access.token;
+    return {
+      repoId: input.repo.id,
+      repoRemoteUrl: authenticatedUrl.toString(),
+      defaultBranch: input.repo.defaultBranch,
+    };
+  }
+
   /**
    * Encapsulates the common createRuntime call used by startSession, run, and sendMessage.
    * Resolves repo/branch/hosting and delegates to the session router.
@@ -1383,26 +1414,15 @@ export class SessionService {
         sessionGroupKind: params.sessionGroupKind ?? undefined,
         prepareAppGit:
           isGeneratedProjectKind(params.sessionGroupKind) && params.repo?.remoteUrl
-            ? async (runtimeInstanceId) => {
-                const access = await managedGitService.mintAccessToken({
+            ? (runtimeInstanceId) =>
+                this.createGeneratedProjectGitCredential({
                   organizationId: params.organizationId,
-                  repoId: params.repo!.id,
-                  scope: "runtime",
                   sessionId: params.sessionId,
-                  subject: runtimeInstanceId,
-                  capabilities: ["read", "write"],
+                  runtimeInstanceId,
+                  repo: params.repo!,
                   actorType: params.actorType ?? "user",
                   actorId: params.createdById,
-                });
-                const authenticatedUrl = new URL(params.repo!.remoteUrl!);
-                authenticatedUrl.username = "trace";
-                authenticatedUrl.password = access.token;
-                return {
-                  repoId: params.repo!.id,
-                  repoRemoteUrl: authenticatedUrl.toString(),
-                  defaultBranch: params.repo!.defaultBranch,
-                };
-              }
+                })
             : undefined,
         slug: slug ?? undefined,
         preserveBranchName,
@@ -7605,28 +7625,72 @@ export class SessionService {
 
     if (session.repo) {
       const startMeta = await getSessionStartMetadata(sessionId);
+      const restoredConn: SessionConnectionData = {
+        ...conn,
+        state: "connected",
+        runtimeInstanceId: runtime.id,
+        runtimeLabel: runtime.label,
+        lastSeen: new Date().toISOString(),
+        lastError: undefined,
+        retryCount: 0,
+        autoRetryable: true,
+      };
+      const isGeneratedProject = isGeneratedProjectKind(session.sessionGroup?.kind);
+
+      // Managed-git credentials are bound to a connected runtime. A retry used
+      // to send a regular `prepare` command with the unauthenticated remote,
+      // so app/design workspaces got a 403 after their container restarted.
+      // Record the replacement runtime before minting its credential, then use
+      // the generated-project preparation path that refreshes origin.
+      if (isGeneratedProject) {
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: { connection: connJson(restoredConn) },
+        });
+        await this.syncGroupWorkspaceState(session.sessionGroupId, {
+          connection: connJson(restoredConn),
+        });
+      }
+      const retryPreparation = isGeneratedProject
+        ? {
+            type: "prepare_app" as const,
+            sessionId,
+            sessionGroupId: session.sessionGroupId ?? undefined,
+            sessionGroupKind: session.sessionGroup?.kind,
+            slug: session.sessionGroup?.slug ?? undefined,
+            checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
+            ...(await this.createGeneratedProjectGitCredential({
+              organizationId: session.organizationId,
+              sessionId,
+              runtimeInstanceId: runtime.id,
+              repo: session.repo,
+              actorType,
+              actorId,
+            })),
+          }
+        : {
+            type: "prepare" as const,
+            sessionId,
+            sessionGroupId: session.sessionGroupId ?? undefined,
+            slug: session.sessionGroup?.slug ?? undefined,
+            preserveBranchName: shouldPreserveWorkspaceBranchName({
+              slug: session.sessionGroup?.slug,
+              branch: session.branch,
+              channelBaseBranch: session.channel?.baseBranch,
+            }),
+            repoId: session.repo.id,
+            repoName: session.repo.name,
+            repoRemoteUrl: session.repo.remoteUrl,
+            defaultBranch: session.repo.defaultBranch,
+            branch: session.branch ?? undefined,
+            checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
+            readOnly: session.readOnlyWorkspace,
+          };
       // Re-run workspace preparation — pin delivery to the runtime we just
       // resolved (the home bridge) so no other bridge can intercept.
       const prepResult = sessionRouter.send(
         sessionId,
-        {
-          type: "prepare",
-          sessionId,
-          sessionGroupId: session.sessionGroupId ?? undefined,
-          slug: session.sessionGroup?.slug ?? undefined,
-          preserveBranchName: shouldPreserveWorkspaceBranchName({
-            slug: session.sessionGroup?.slug,
-            branch: session.branch,
-            channelBaseBranch: session.channel?.baseBranch,
-          }),
-          repoId: session.repo.id,
-          repoName: session.repo.name,
-          repoRemoteUrl: session.repo.remoteUrl,
-          defaultBranch: session.repo.defaultBranch,
-          branch: session.branch ?? undefined,
-          checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
-          readOnly: session.readOnlyWorkspace,
-        },
+        retryPreparation,
         { expectedHomeRuntimeId: runtime.id, organizationId: session.organizationId },
       );
 
@@ -7644,17 +7708,6 @@ export class SessionService {
       }
 
       // Restore the connection while leaving the session in its prior idle state.
-      const restoredConn: SessionConnectionData = {
-        ...conn,
-        state: "connected",
-        runtimeInstanceId: runtime.id,
-        runtimeLabel: runtime.label,
-        lastSeen: new Date().toISOString(),
-        lastError: undefined,
-        retryCount: 0,
-        autoRetryable: true,
-      };
-
       // Preserve agent/session status unless it was previously marked terminal by a retryable failure.
       const updateData: Prisma.SessionUpdateInput = {
         connection: connJson(restoredConn),
