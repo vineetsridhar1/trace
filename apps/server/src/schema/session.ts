@@ -818,6 +818,8 @@ export const sessionTypeResolvers = {
       checkpoint.captureKey
         ? storage.getGetUrl(checkpoint.captureKey, { downloadFilename: "app-checkpoint.png" })
         : (checkpoint.captureUrl ?? null),
+    previewUrl: (checkpoint: { previewKey?: string | null; previewUrl?: string | null }) =>
+      checkpoint.previewKey ? storage.getGetUrl(checkpoint.previewKey) : (checkpoint.previewUrl ?? null),
     session: async (checkpoint: { sessionId: string }, _args: unknown, ctx: Context) => {
       return ctx.sessionLoader.load(checkpoint.sessionId);
     },

@@ -900,6 +900,11 @@ model GitCheckpoint {
   captureUrl         String?
   captureContentType String?
   capturedAt         DateTime?
+  previewStatus      String?
+  previewKey         String?
+  previewUrl         String?
+  previewContentType String?
+  previewCapturedAt  DateTime?
   createdAt      DateTime @default(now())
 
   sessionGroup SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)

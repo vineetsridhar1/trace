@@ -97,6 +97,9 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         captureStatus
         captureUrl
         capturedAt
+        previewStatus
+        previewUrl
+        previewCapturedAt
         createdAt
       }
       repo {

@@ -68,6 +68,7 @@ import {
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
+import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 import { isGeneratedProjectKind } from "../lib/generated-project.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
@@ -819,6 +820,11 @@ function serializeGitCheckpoint(checkpoint: {
   captureUrl?: string | null;
   captureContentType?: string | null;
   capturedAt?: Date | null;
+  previewStatus?: string | null;
+  previewKey?: string | null;
+  previewUrl?: string | null;
+  previewContentType?: string | null;
+  previewCapturedAt?: Date | null;
   createdAt: Date;
 }) {
   return {
@@ -839,6 +845,11 @@ function serializeGitCheckpoint(checkpoint: {
     captureUrl: checkpoint.captureUrl ?? null,
     captureContentType: checkpoint.captureContentType ?? null,
     capturedAt: checkpoint.capturedAt?.toISOString() ?? null,
+    previewStatus: checkpoint.previewStatus ?? null,
+    previewKey: checkpoint.previewKey ?? null,
+    previewUrl: checkpoint.previewUrl ?? null,
+    previewContentType: checkpoint.previewContentType ?? null,
+    previewCapturedAt: checkpoint.previewCapturedAt?.toISOString() ?? null,
     createdAt: checkpoint.createdAt.toISOString(),
   };
 }
@@ -7295,10 +7306,18 @@ export class SessionService {
     // the client) carries the thumbnail once it's ready.
     const shouldCaptureAppCheckpoint =
       didPersistCheckpoint && session.sessionGroup?.kind === "app";
+    const shouldPublishDesignPreview =
+      didPersistCheckpoint && session.sessionGroup?.kind === "design";
     if (shouldCaptureAppCheckpoint && persisted) {
       persisted = await prisma.gitCheckpoint.update({
         where: { id: persisted.id },
         data: { captureStatus: "pending" },
+      });
+    }
+    if (shouldPublishDesignPreview && persisted) {
+      persisted = await prisma.gitCheckpoint.update({
+        where: { id: persisted.id },
+        data: { previewStatus: "pending" },
       });
     }
 
@@ -7340,6 +7359,15 @@ export class SessionService {
 
     if (shouldCaptureAppCheckpoint && persisted && session.sessionGroup) {
       this.captureAppCheckpointAsync({
+        checkpointId: persisted.id,
+        sessionId,
+        organizationId: session.organizationId,
+        sessionGroupId: session.sessionGroupId,
+        userId: session.sessionGroup.ownerUserId,
+      });
+    }
+    if (shouldPublishDesignPreview && persisted && session.sessionGroup) {
+      this.publishDesignCheckpointPreviewAsync({
         checkpointId: persisted.id,
         sessionId,
         organizationId: session.organizationId,
@@ -7398,6 +7426,33 @@ export class SessionService {
         // A missing row (checkpoint rewritten away) or capture failure is
         // non-fatal — the checkpoint simply keeps its pending/last status.
         console.error("[app-checkpoint] async capture failed", error);
+      }
+    })();
+  }
+
+  private publishDesignCheckpointPreviewAsync(input: {
+    checkpointId: string;
+    sessionId: string;
+    organizationId: string;
+    sessionGroupId: string;
+    userId: string;
+  }): void {
+    void (async () => {
+      try {
+        const preview = await designCheckpointPreviewService.publish(input);
+        const updated = await prisma.gitCheckpoint.update({
+          where: { id: input.checkpointId },
+          data: {
+            previewStatus: preview.previewStatus,
+            previewKey: preview.previewKey ?? null,
+            previewUrl: preview.previewUrl ?? null,
+            previewContentType: preview.previewContentType ?? null,
+            previewCapturedAt: preview.previewCapturedAt ?? null,
+          },
+        });
+        await eventService.create({ organizationId: input.organizationId, scopeType: "session", scopeId: input.sessionId, eventType: "session_output", payload: { type: "git_checkpoint", checkpoint: serializeGitCheckpoint(updated) } as Prisma.InputJsonValue, actorType: "system", actorId: "system" });
+      } catch (error) {
+        console.error("[design-checkpoint] async preview publish failed", error);
       }
     })();
   }
