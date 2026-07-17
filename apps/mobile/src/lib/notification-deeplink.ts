@@ -73,7 +73,7 @@ export function routePathFromNotificationLink(deepLink: string): string | null {
       const host = url.hostname ? `/${url.hostname}` : "";
       return notificationRoute(`${host}${url.pathname}${url.search}`);
     }
-    if (url.protocol === "https:" && url.hostname === "gettrace.org") {
+    if (url.protocol === "https:" && url.hostname === "app.gettrace.org") {
       const path = url.pathname.startsWith("/m/")
         ? `${url.pathname.slice(2)}${url.search}`
         : `${url.pathname}${url.search}`;
