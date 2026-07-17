@@ -277,27 +277,6 @@ describe("createApplication", () => {
     expect(replaceMock).toHaveBeenCalledWith("/sessions/group_design/session_design");
   });
 
-  it("creates a cloud design session and opens its canvas workspace", async () => {
-    mutationMock.mockReturnValue({
-      toPromise: async () => ({
-        data: { startSession: { id: "session_design", sessionGroupId: "group_design" } },
-      }),
-    });
-    fetchSessionGroupDetailMock.mockResolvedValue({ ok: true, error: null });
-
-    const { createDesign } = await import("./createQuickSession");
-    const created = await createDesign("  Design a launch dashboard  ");
-
-    expect(created).toBe(true);
-    expect(mutationMock).toHaveBeenCalledWith(START_SESSION_MUTATION, {
-      input: {
-        kind: "design",
-        hosting: "cloud",
-        prompt: "Design a launch dashboard",
-      },
-    });
-    expect(replaceMock).toHaveBeenCalledWith("/sessions/group_design/session_design");
-  });
 });
 
 describe("startPlanImplementationSession", () => {

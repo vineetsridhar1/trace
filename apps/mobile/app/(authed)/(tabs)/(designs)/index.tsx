@@ -1,18 +1,17 @@
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { useRouter } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { ApplicationListRow } from "@/components/applications/ApplicationListRow";
 import { Button, Text, TraceLoader } from "@/components/design-system";
 import { useDesignSessionGroups } from "@/hooks/useDesignSessionGroups";
 import { handleUnauthorized } from "@/lib/auth";
+import { createDesign } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 
 export default function DesignsScreen() {
   const theme = useTheme();
-  const router = useRouter();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const { ids, loading, error, refresh } = useDesignSessionGroups(activeOrgId);
   const [refreshing, setRefreshing] = useState(false);
@@ -24,6 +23,9 @@ export default function DesignsScreen() {
     setRefreshing(false);
     if (!result.authorized) await handleUnauthorized();
   }, [refresh]);
+  const handleCreate = useCallback(() => {
+    void createDesign();
+  }, []);
 
   if (loading && ids.length === 0) {
     return (
@@ -45,7 +47,7 @@ export default function DesignsScreen() {
       ListEmptyComponent={
         <DesignsEmpty
           error={error}
-          onCreate={() => router.push("/sheets/new-design")}
+          onCreate={handleCreate}
           onRetry={handleRefresh}
         />
       }
