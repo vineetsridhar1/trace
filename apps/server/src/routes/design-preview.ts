@@ -15,8 +15,18 @@ const DESIGN_PREVIEW_CSP = [
   "connect-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
-  "frame-ancestors 'self'",
 ].join("; ");
+
+function designPreviewCsp(): string {
+  let frameAncestors = "'self'";
+  try {
+    const webOrigin = process.env.TRACE_WEB_URL ? new URL(process.env.TRACE_WEB_URL).origin : null;
+    if (webOrigin) frameAncestors += ` ${webOrigin}`;
+  } catch {
+    // Invalid optional configuration must not weaken the preview sandbox.
+  }
+  return `${DESIGN_PREVIEW_CSP}; frame-ancestors ${frameAncestors}`;
+}
 
 router.get("/design-previews/:checkpointId", async (req: Request, res: Response) => {
   const checkpointId = typeof req.params.checkpointId === "string" ? req.params.checkpointId : null;
@@ -53,7 +63,7 @@ router.get("/design-previews/:checkpointId", async (req: Request, res: Response)
     const html = await storage.getObject(checkpoint.previewKey);
     res.set({
       "Cache-Control": "private, no-store",
-      "Content-Security-Policy": DESIGN_PREVIEW_CSP,
+      "Content-Security-Policy": designPreviewCsp(),
       "Cross-Origin-Opener-Policy": "same-origin",
       "Permissions-Policy": "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
       "Referrer-Policy": "no-referrer",

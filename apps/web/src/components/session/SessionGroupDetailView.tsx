@@ -9,7 +9,7 @@ import {
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
 import { SESSION_TERMINALS_QUERY, START_SESSION_MUTATION } from "@trace/client-core";
-import type { Terminal } from "@trace/gql";
+import type { GitCheckpoint, Terminal } from "@trace/gql";
 import { useDetailPanelStore } from "../../stores/detail-panel";
 import { useEntityField, useEntityStore } from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
@@ -30,6 +30,7 @@ import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
 import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 import { GeneratedProjectPreviewPanel } from "./applications/GeneratedProjectPreviewPanel";
+import { latestSavedDesignPreviewUrl } from "./applications/saved-design-preview";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
@@ -207,6 +208,9 @@ export function SessionGroupDetailView({
   const groupConnection = useEntityField("sessionGroups", sessionGroupId, "connection") as
     | Record<string, unknown>
     | null
+    | undefined;
+  const groupGitCheckpoints = useEntityField("sessionGroups", sessionGroupId, "gitCheckpoints") as
+    | GitCheckpoint[]
     | undefined;
   const groupWorktreeDeleted = useEntityField(
     "sessionGroups",
@@ -431,11 +435,14 @@ export function SessionGroupDetailView({
     | Record<string, unknown>
     | null
     | undefined;
-  const generatedProjectCanvasReady = isGeneratedProjectCanvasReady(
+  const liveGeneratedProjectCanvasReady = isGeneratedProjectCanvasReady(
     selectedSession?.agentStatus,
     selectedConnection?.state,
     groupConnection?.state,
   );
+  const generatedProjectCanvasReady =
+    liveGeneratedProjectCanvasReady ||
+    (groupKind === "design" && latestSavedDesignPreviewUrl(groupGitCheckpoints) !== null);
   const showApplicationsSidebarTab = selectedSession?.hosting === "cloud";
   const activeTerminal = terminals.find((t) => t.id === activeTerminalId) ?? null;
 
