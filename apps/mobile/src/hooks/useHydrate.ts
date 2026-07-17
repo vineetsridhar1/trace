@@ -14,7 +14,7 @@ import { reconcileEntitySnapshot, resetEntitySnapshots } from "@/lib/entitySnaps
 import { latestTimestamp, mergeSessionGroupEntity } from "@/lib/session-group";
 import { userFacingError } from "@/lib/requestError";
 import { timedEventIngest } from "@/lib/perf";
-import { getClient } from "@/lib/urql";
+import { getClient, recreateClient, useGqlClientGeneration } from "@/lib/urql";
 import { useConnectionStore, type ConnectionState } from "@/stores/connection";
 import { useRefreshStatusStore } from "@/stores/refresh-status";
 
@@ -293,6 +293,7 @@ function sessionGroupsFromSessions(
 }
 
 export function useHydrate(activeOrgId: string | null): void {
+  const clientGeneration = useGqlClientGeneration();
   const previousOrgIdRef = useRef<string | null>(activeOrgId);
   useEffect(() => {
     if (previousOrgIdRef.current !== activeOrgId) {
@@ -331,7 +332,7 @@ export function useHydrate(activeOrgId: string | null): void {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [activeOrgId]);
+  }, [activeOrgId, clientGeneration]);
 
   // Catch up list-level state (sessions, channels, unread counts) after a WS
   // reconnect: the server's in-memory pubsub has no replay, so events emitted
@@ -356,8 +357,16 @@ export function useHydrate(activeOrgId: string | null): void {
   // successful request. Unrelated to WS state — this is a periodic auth-staleness
   // check, independent of the reconnect-driven data refresh above.
   useEffect(() => {
+    let previousState = AppState.currentState;
     function onChange(state: AppStateStatus) {
+      const returnedToForeground = state === "active" && previousState !== "active";
+      previousState = state;
       if (state !== "active") return;
+      if (returnedToForeground && activeOrgId) {
+        // React Native can retain a dead WebSocket through backgrounding. A
+        // fresh client makes every subscription reconnect on the active server.
+        recreateClient();
+      }
       void (async () => {
         try {
           const last = await getPlatform().storage.getItem(ME_REFRESH_KEY);
@@ -372,5 +381,5 @@ export function useHydrate(activeOrgId: string | null): void {
     }
     const sub = AppState.addEventListener("change", onChange);
     return () => sub.remove();
-  }, []);
+  }, [activeOrgId]);
 }
