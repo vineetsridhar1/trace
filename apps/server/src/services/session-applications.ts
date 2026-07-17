@@ -8,7 +8,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { AuthenticationError, AuthorizationError, ValidationError } from "../lib/errors.js";
-import { canViewSessionGroup } from "./access.js";
+import { assertCanManageSessionGroup, canViewSessionGroup } from "./access.js";
 import { eventService } from "./event.js";
 import { orgSecretService } from "./org-secret.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
@@ -267,10 +267,9 @@ export class SessionApplicationService {
       organizationId,
       userId,
     );
-    const config =
-      isGeneratedProjectKind(group.kind)
-        ? DEFAULT_APP_SESSION_CONFIG
-        : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const config = isGeneratedProjectKind(group.kind)
+      ? DEFAULT_APP_SESSION_CONFIG
+      : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const script = config.setupScripts.find((candidate) => candidate.id === scriptId);
     if (!script) throw new ValidationError("Setup script not found");
     const run = await prisma.sessionSetupScriptRun.create({
@@ -1120,10 +1119,9 @@ export class SessionApplicationService {
   }
 
   private getApplication(group: ManagedSessionGroup, appConfigId: string) {
-    const config =
-      isGeneratedProjectKind(group.kind)
-        ? DEFAULT_APP_SESSION_CONFIG
-        : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const config = isGeneratedProjectKind(group.kind)
+      ? DEFAULT_APP_SESSION_CONFIG
+      : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const app = config.applications.find((candidate) => candidate.id === appConfigId);
     if (!app) throw new ValidationError("Application not found");
     return app;
@@ -1207,16 +1205,7 @@ export class SessionApplicationService {
         where: { id: sessionGroupId, organizationId },
         select: { ownerUserId: true },
       }));
-    if (group.ownerUserId === userId) return;
-    const member = await prisma.orgMember.findUnique({
-      where: { userId_organizationId: { userId, organizationId } },
-      select: { role: true },
-    });
-    if (member?.role !== "admin") {
-      throw new AuthorizationError(
-        "Only the session owner or an org admin can manage applications",
-      );
-    }
+    await assertCanManageSessionGroup(group, organizationId, userId);
   }
 }
 

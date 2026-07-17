@@ -13,5 +13,9 @@ export type AppDeploymentJob = {
     bucket: string;
     key: string;
   };
+  callback: {
+    url: string;
+    token: string;
+  };
   requestedAt: string;
 };

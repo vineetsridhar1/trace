@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
@@ -28,6 +29,7 @@ function deployment(overrides: Record<string, unknown> = {}) {
     commitSha: "a".repeat(40),
     status: "queued",
     requestedByUserId: "user-1",
+    callbackTokenHash: createHash("sha256").update("callback-secret").digest("hex"),
     externalJobId: null,
     imageDigest: null,
     url: null,
@@ -60,8 +62,11 @@ describe("AppDeploymentService", () => {
       createdAt: now,
     });
     prismaMock.appDeployment.create.mockResolvedValue(deployment());
+    prismaMock.appDeployment.findFirst.mockResolvedValue(null);
+    prismaMock.appDeployment.findMany.mockResolvedValue([]);
     prismaMock.appDeployment.update.mockImplementation(async ({ data }) => deployment(data));
     enqueue.mockResolvedValue({ externalJobId: "message-1" });
+    vi.stubEnv("TRACE_SERVER_PUBLIC_URL", "https://trace.example.com");
   });
 
   it("queues the latest durable checkpoint without exposing the preview endpoint", async () => {
@@ -90,6 +95,61 @@ describe("AppDeploymentService", () => {
       "Commit the app before publishing",
     );
     expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("reuses an active deployment for the same checkpoint", async () => {
+    prismaMock.appDeployment.findFirst.mockResolvedValueOnce(deployment());
+    const service = new AppDeploymentService({ enqueue });
+
+    const result = await service.publish("group-1", "org-1", "user-1");
+
+    expect(result.id).toBe("deployment-1");
+    expect(prismaMock.appDeployment.create).not.toHaveBeenCalled();
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("supersedes an older in-flight deployment before publishing a new checkpoint", async () => {
+    prismaMock.appDeployment.findFirst.mockResolvedValueOnce(
+      deployment({ id: "deployment-old", sourceCheckpointId: "checkpoint-old" }),
+    );
+    prismaMock.appDeployment.findMany.mockResolvedValueOnce([
+      deployment({ id: "deployment-old", sourceCheckpointId: "checkpoint-old" }),
+    ]);
+    const service = new AppDeploymentService({ enqueue });
+
+    await service.publish("group-1", "org-1", "user-1");
+
+    expect(prismaMock.appDeployment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "superseded" }) }),
+    );
+  });
+
+  it("accepts authenticated monotonic build callbacks", async () => {
+    prismaMock.appDeployment.findUnique.mockResolvedValueOnce(deployment());
+    prismaMock.appDeployment.update.mockResolvedValueOnce(
+      deployment({ status: "building", startedAt: now, externalJobId: "build-1" }),
+    );
+    const service = new AppDeploymentService({ enqueue });
+
+    const result = await service.updateFromCallback("deployment-1", "callback-secret", {
+      status: "building",
+      externalJobId: "build-1",
+    });
+
+    expect(result.status).toBe("building");
+    expect(eventServiceMock.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ eventType: "app_deployment_updated" }),
+    );
+  });
+
+  it("rejects invalid callback credentials", async () => {
+    prismaMock.appDeployment.findUnique.mockResolvedValueOnce(deployment());
+    const service = new AppDeploymentService({ enqueue });
+
+    await expect(
+      service.updateFromCallback("deployment-1", "wrong", { status: "building" }),
+    ).rejects.toThrow("Invalid deployment callback credentials");
+    expect(prismaMock.appDeployment.update).not.toHaveBeenCalled();
   });
 
   it("records dispatch failures on the durable deployment", async () => {

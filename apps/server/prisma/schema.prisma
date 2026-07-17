@@ -954,6 +954,7 @@ model AppDeployment {
   commitSha          String
   status             AppDeploymentStatus @default(queued)
   requestedByUserId  String
+  callbackTokenHash  String
   externalJobId      String?
   imageDigest        String?
   url                String?

@@ -20,6 +20,7 @@ CREATE TABLE "AppDeployment" (
   "commitSha" TEXT NOT NULL,
   "status" "AppDeploymentStatus" NOT NULL DEFAULT 'queued',
   "requestedByUserId" TEXT NOT NULL,
+  "callbackTokenHash" TEXT NOT NULL,
   "externalJobId" TEXT,
   "imageDigest" TEXT,
   "url" TEXT,
@@ -38,6 +39,9 @@ CREATE INDEX "AppDeployment_sessionGroupId_status_idx"
   ON "AppDeployment"("sessionGroupId", "status");
 CREATE INDEX "AppDeployment_sourceCheckpointId_idx"
   ON "AppDeployment"("sourceCheckpointId");
+CREATE UNIQUE INDEX "AppDeployment_one_active_per_group_idx"
+  ON "AppDeployment"("sessionGroupId")
+  WHERE "status" IN ('queued', 'building', 'deploying');
 
 ALTER TABLE "AppDeployment"
   ADD CONSTRAINT "AppDeployment_organizationId_fkey"

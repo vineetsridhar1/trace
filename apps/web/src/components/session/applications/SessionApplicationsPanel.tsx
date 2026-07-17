@@ -50,7 +50,7 @@ export function SessionApplicationsPanel({
         ) : null}
         {state.groupKind === "app" ? (
           <AppDeploymentCard
-            deployment={state.deployments[0]}
+            deploymentId={state.deployments[0]?.id}
             pending={state.isPending("publish")}
             onPublish={state.publish}
           />
