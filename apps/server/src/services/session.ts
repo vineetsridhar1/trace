@@ -4926,6 +4926,7 @@ export class SessionService {
             ownerUserId: true,
             connection: true,
             workdir: true,
+            sessions: { select: { id: true, agentStatus: true } },
           },
         },
         channel: { select: { baseBranch: true } },
@@ -4978,10 +4979,13 @@ export class SessionService {
       hasRuntimeBinding(
         this.parseConnection(prev.sessionGroup.connection),
         prev.sessionGroup.workdir,
+      ) &&
+      prev.sessionGroup.sessions.some(
+        (session) => session.id !== prev.id && session.agentStatus !== "not_started",
       )
     ) {
       throw new ValidationError(
-        "This session group already has a bridge. Use Move to switch the entire session group.",
+        "This session group already has started sessions on a bridge. Use Move to switch the entire session group.",
       );
     }
     let requestedEnvironment: Awaited<
