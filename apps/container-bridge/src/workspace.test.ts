@@ -314,6 +314,12 @@ describe("workspace repo setup", () => {
       { cwd: "/workspaces/restored-group" },
       expect.any(Function),
     );
+    expect(mocks.execFile).toHaveBeenCalledWith(
+      "git",
+      ["pull", "--ff-only", "origin", "main"],
+      { cwd: "/workspaces/restored-group" },
+      expect.any(Function),
+    );
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
   });
 

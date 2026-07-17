@@ -102,5 +102,15 @@ export async function createAppWorkspace({
     { cwd: workdir },
   );
 
+  if (checkpointSha) {
+    // A recreated cloud runtime restores the last managed checkpoint first.
+    // The remote may have advanced since that checkpoint, so fast-forward
+    // before the agent starts. `--ff-only` keeps an unpublished checkpoint
+    // intact instead of silently merging or overwriting it.
+    await execFileAsync("git", ["pull", "--ff-only", "origin", defaultBranch], {
+      cwd: workdir,
+    });
+  }
+
   return { workdir, slug: workspaceSlug };
 }
