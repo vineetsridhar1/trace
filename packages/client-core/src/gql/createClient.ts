@@ -58,6 +58,10 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
   const wsClient = createWSClient({
     url: options.wsUrl,
     webSocketImpl: createPlatformWebSocketImpl(platform),
+    // Native sockets can remain apparently open after a device changes
+    // networks or resumes from the background. Protocol heartbeats turn that
+    // silent failure into a reconnect instead of leaving subscriptions stale.
+    keepAlive: 15_000,
     connectionParams: () => {
       const { token, activeOrgId } = useAuthStore.getState();
       return {
