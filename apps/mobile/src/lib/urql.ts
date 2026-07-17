@@ -23,6 +23,10 @@ function build(): GqlClient {
   return createGqlClient({
     httpUrl,
     wsUrl,
+    // The mobile app keeps an ambient org event stream. Establish its native
+    // socket at client creation so React Native does not defer the transport
+    // indefinitely while the first subscription mounts.
+    lazy: false,
     onConnectionChange: (connected: boolean) => {
       useConnectionStore.getState().setConnected(connected);
     },

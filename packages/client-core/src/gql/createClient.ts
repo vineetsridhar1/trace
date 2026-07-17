@@ -11,6 +11,8 @@ import { getPlatform, type Platform } from "../platform.js";
 export interface CreateGqlClientOptions {
   httpUrl: string;
   wsUrl: string;
+  /** Open the GraphQL socket when the client is created instead of on first subscription. */
+  lazy?: boolean;
   /** Notified when the WebSocket transport connects or disconnects. */
   onConnectionChange?: (connected: boolean) => void;
 }
@@ -58,6 +60,7 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
   const wsClient = createWSClient({
     url: options.wsUrl,
     webSocketImpl: createPlatformWebSocketImpl(platform),
+    lazy: options.lazy ?? true,
     // Native sockets can remain apparently open after a device changes
     // networks or resumes from the background. Protocol heartbeats turn that
     // silent failure into a reconnect instead of leaving subscriptions stale.
