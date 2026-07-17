@@ -14,6 +14,7 @@ import {
 } from "../lib/git-http.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
+import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 
 const JWT_SECRET = resolveJwtSecret();
 
@@ -365,6 +366,68 @@ class ManagedGitService {
       payload: { repoId: input.repoId, provider: "managed", refs },
       actorType: input.actorType,
       actorId: input.actorId,
+    });
+
+    // A managed push is the durable source of truth for Design previews. This
+    // deliberately does not create or depend on a Trace checkpoint.
+    for (const command of input.commands) {
+      if (!command.ref.startsWith("refs/heads/") || /^0+$/.test(command.newSha)) continue;
+      const branch = command.ref.slice("refs/heads/".length);
+      void this.publishDesignCommitPreview({
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        branch,
+        commitSha: command.newSha,
+      });
+    }
+  }
+
+  private async publishDesignCommitPreview(input: {
+    organizationId: string;
+    repoId: string;
+    branch: string;
+    commitSha: string;
+  }): Promise<void> {
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        branch: input.branch,
+        kind: "design",
+      },
+      select: { id: true, ownerUserId: true },
+    });
+
+    await Promise.all(
+      groups.map(async (group) => {
+        await prisma.sessionGroup.update({
+          where: { id: group.id },
+          data: {
+            designPreviewStatus: "pending",
+            designPreviewKey: null,
+            designPreviewCommitSha: input.commitSha,
+            designPreviewCapturedAt: null,
+          },
+        });
+        const preview = await designCheckpointPreviewService.publishCommit({
+          organizationId: input.organizationId,
+          sessionGroupId: group.id,
+          commitSha: input.commitSha,
+          userId: group.ownerUserId,
+        });
+        // A later push may already be exporting. Do not let an older export
+        // overwrite the preview selected for the newest pushed revision.
+        await prisma.sessionGroup.updateMany({
+          where: { id: group.id, designPreviewCommitSha: input.commitSha },
+          data: {
+            designPreviewStatus: preview.previewStatus,
+            designPreviewKey: preview.previewKey ?? null,
+            designPreviewCapturedAt: preview.previewCapturedAt ?? null,
+          },
+        });
+      }),
+    ).catch((error: unknown) => {
+      console.error("[managed-git] design commit preview publish failed", error);
     });
   }
 }

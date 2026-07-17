@@ -1985,6 +1985,10 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  designPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
+  designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;

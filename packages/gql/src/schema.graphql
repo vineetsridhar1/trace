@@ -502,6 +502,10 @@ type SessionGroup {
   repo: Repo
   branch: String
   gitCheckpoints: [GitCheckpoint!]!
+  designPreviewStatus: GitCheckpointCaptureStatus
+  designPreviewUrl: String
+  designPreviewCommitSha: String
+  designPreviewCapturedAt: DateTime
   sessions: [Session!]!
   workdir: String
   connection: SessionConnection
