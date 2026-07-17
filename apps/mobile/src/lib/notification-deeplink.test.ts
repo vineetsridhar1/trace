@@ -11,17 +11,17 @@ describe("routePathFromNotificationLink", () => {
   });
 
   it("normalizes Trace universal links", () => {
-    expect(routePathFromNotificationLink("https://gettrace.org/m/sessions/g1/s1")).toBe(
+    expect(routePathFromNotificationLink("https://app.gettrace.org/m/sessions/g1/s1")).toBe(
       "/sessions/g1/s1",
     );
   });
 
   it("normalizes Trace web session links", () => {
-    expect(routePathFromNotificationLink("https://gettrace.org/c/c1/g/g1/s/s1")).toBe(
+    expect(routePathFromNotificationLink("https://app.gettrace.org/c/c1/g/g1/s/s1")).toBe(
       "/sessions/g1/s1",
     );
-    expect(routePathFromNotificationLink("https://gettrace.org/c/c1/g/g1")).toBe("/sessions/g1");
-    expect(routePathFromNotificationLink("https://gettrace.org/g/g1/s/s1?pane=browser")).toBe(
+    expect(routePathFromNotificationLink("https://app.gettrace.org/c/c1/g/g1")).toBe("/sessions/g1");
+    expect(routePathFromNotificationLink("https://app.gettrace.org/g/g1/s/s1?pane=browser")).toBe(
       "/sessions/g1/s1?pane=browser",
     );
   });
@@ -31,7 +31,7 @@ describe("routePathFromNotificationLink", () => {
     expect(routePathFromNotificationLink("trace://connections?requestId=req-1")).toBe(
       "/(connections)?requestId=req-1",
     );
-    expect(routePathFromNotificationLink("https://gettrace.org/m/connections")).toBe(
+    expect(routePathFromNotificationLink("https://app.gettrace.org/m/connections")).toBe(
       "/(connections)",
     );
   });

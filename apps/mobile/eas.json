@@ -16,7 +16,7 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://gettrace.org"
+        "EXPO_PUBLIC_API_URL": "https://app.gettrace.org"
       },
       "ios": {
         "simulator": false
@@ -27,7 +27,7 @@
       "channel": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://gettrace.org"
+        "EXPO_PUBLIC_API_URL": "https://app.gettrace.org"
       }
     }
   },
