@@ -135,6 +135,7 @@ export default function SessionStreamScreen() {
     },
     [browserUrl, browserUrlGroupId, hydratedGroupId, setBrowserUrl],
   );
+  const ignoreBrowserUrlChange = useCallback(() => undefined, []);
   const [overlayHeight, setOverlayHeight] = useState(0);
   const handleOverlayLayout = useCallback((e: LayoutChangeEvent) => {
     const nextHeight = e.nativeEvent.layout.height;
@@ -145,6 +146,9 @@ export default function SessionStreamScreen() {
     if (!targetGroupId) return;
     void fetchSessionGroupDetail(targetGroupId);
   }, [groupId, hydratedGroupId]);
+  const retryAppPreview = useCallback(() => {
+    void refreshAppPreview();
+  }, [refreshAppPreview]);
 
   const handoffPending =
     overlaySessionId !== null &&
@@ -246,7 +250,8 @@ export default function SessionStreamScreen() {
                   {resolvedBrowserUrl ? (
                     <BrowserPanel
                       url={resolvedBrowserUrl}
-                      onUrlChange={handleBrowserUrlChange}
+                      onUrlChange={ignoreBrowserUrlChange}
+                      onPreviewUnavailable={retryAppPreview}
                       topInset={overlayHeight}
                     />
                   ) : appPreviewLoading ? (

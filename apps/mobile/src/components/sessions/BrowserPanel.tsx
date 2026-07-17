@@ -18,6 +18,8 @@ interface BrowserPanelProps {
   url: string;
   /** Lift browser navigation so the route can persist it across remounts. */
   onUrlChange: (url: string) => void;
+  /** Refresh a managed preview after its backing runtime reports an HTTP failure. */
+  onPreviewUnavailable?: () => void;
   /** Top inset matching the Session Player's glass header height. */
   topInset?: number;
 }
@@ -27,7 +29,12 @@ interface BrowserPanelProps {
  * in the Session Player. Renders a simple URL bar + back/forward/reload
  * controls on top of a full-screen WebView.
  */
-export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: BrowserPanelProps) {
+export function BrowserPanel({
+  url: nextUrl,
+  onUrlChange,
+  onPreviewUnavailable,
+  topInset = 0,
+}: BrowserPanelProps) {
   const theme = useTheme();
   const resolvedUrl = nextUrl;
 
@@ -116,10 +123,11 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
     if (loadError) {
       setLoadError(null);
       setWebViewRevision((revision) => revision + 1);
+      onPreviewUnavailable?.();
       return;
     }
     webViewRef.current?.reload();
-  }, [loadError, loading]);
+  }, [loadError, loading, onPreviewUnavailable]);
 
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
@@ -239,6 +247,7 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
             onHttpError={(event) => {
               setLoading(false);
               setLoadError(`Couldn't load this page (HTTP ${event.nativeEvent.statusCode}).`);
+              onPreviewUnavailable?.();
             }}
             allowsInlineMediaPlayback
             sharedCookiesEnabled

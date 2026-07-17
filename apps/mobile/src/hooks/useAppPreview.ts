@@ -120,6 +120,14 @@ export function useAppPreview(
   );
 
   useEffect(() => {
+    if (!enabled || endpointId) return;
+    const timeout = setTimeout(() => {
+      void refresh();
+    }, 3_000);
+    return () => clearTimeout(timeout);
+  }, [enabled, endpointId, refresh]);
+
+  useEffect(() => {
     if (!endpointId) {
       setPreviewUrl(null);
       setPreviewLoading(false);
