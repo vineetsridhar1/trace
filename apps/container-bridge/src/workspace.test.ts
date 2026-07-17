@@ -285,7 +285,7 @@ describe("workspace repo setup", () => {
     );
   });
 
-  it("restores an app workspace from the managed checkpoint commit", async () => {
+  it("recreates an app workspace from the latest managed remote branch", async () => {
     mocks.existsSync.mockReturnValue(false);
     mocks.readdirSync.mockReturnValue([]);
     const checkpointSha = "a".repeat(40);
@@ -302,16 +302,17 @@ describe("workspace repo setup", () => {
       "git",
       [
         "clone",
-        "--no-checkout",
+        "--branch",
+        "main",
         "https://trace:token@example.test/git/org/repo.git",
         "/workspaces/restored-group",
       ],
       expect.any(Function),
     );
-    expect(mocks.execFile).toHaveBeenCalledWith(
+    expect(mocks.execFile).not.toHaveBeenCalledWith(
       "git",
       ["checkout", "-B", "main", checkpointSha],
-      { cwd: "/workspaces/restored-group" },
+      expect.anything(),
       expect.any(Function),
     );
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
