@@ -42,7 +42,7 @@ Edit `design.brief.json`, `trace.tokens.json`, `design.canvas.json`, and files u
 - Register every screen in `design.canvas.json` with a stable, unique id and a component path shaped like `./screens/Name.tsx`.
 - Put every screen id in exactly one section. Sections determine grouping and ordering.
 - Use `variation` and `state` labels for related alternatives such as Default, Loading, Empty, and Error.
-- Set the viewport and optional section-relative position in the manifest. Do not implement a second canvas or iframe.
+- Set the viewport and optional section-relative position in the manifest. Screens without positions stack vertically by default; use a position only when a different arrangement is intentional. Do not implement a second canvas or iframe.
 - Show complete compositions with realistic sample content. Create enough screens and states to communicate the requested flow rather than collapsing the work into one running route.
 - Use local assets, data URLs, or CSS-drawn visuals. The HTML exporter rejects network or local asset references that cannot be embedded.
 - Preserve the stable canvas runtime. It provides pan, zoom, fit, focus, labels, per-screen error boundaries, HMR, and whole-canvas HTML export.

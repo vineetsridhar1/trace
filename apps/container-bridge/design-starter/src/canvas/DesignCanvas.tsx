@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { DesignArtboard } from "./DesignArtboard";
-import type { DesignManifest, DesignScreen } from "./manifest";
+import { placeScreens } from "./layout";
+import type { DesignManifest } from "./manifest";
 import { resolveScreenComponent } from "./screen-modules";
 import { useCanvasViewport } from "./useCanvasViewport";
-
-const GAP = 96;
-const SECTION_GAP = 180;
-
-type PlacedScreen = { screen: DesignScreen; x: number; y: number; sectionName: string };
 
 export function DesignCanvas({
   manifest,
@@ -22,25 +18,7 @@ export function DesignCanvas({
   const { viewport, setViewport, onPointerDown, onPointerMove, endPointerDrag, zoomAtCenter } =
     useCanvasViewport(containerRef);
 
-  const placed = useMemo(() => {
-    const byId = new Map(manifest.screens.map((screen) => [screen.id, screen]));
-    let sectionX = 0;
-    const result: PlacedScreen[] = [];
-    for (const section of manifest.sections) {
-      let fallbackX = sectionX;
-      let maxRight = sectionX;
-      for (const id of section.screenIds) {
-        const screen = byId.get(id)!;
-        const x = screen.position ? sectionX + screen.position.x : fallbackX;
-        const y = screen.position?.y ?? 54;
-        result.push({ screen, x, y, sectionName: section.name });
-        fallbackX = x + screen.viewport.width + GAP;
-        maxRight = Math.max(maxRight, x + screen.viewport.width);
-      }
-      sectionX = maxRight + SECTION_GAP;
-    }
-    return result;
-  }, [manifest]);
+  const placed = useMemo(() => placeScreens(manifest), [manifest]);
 
   const fit = useCallback(
     (screenId?: string) => {
