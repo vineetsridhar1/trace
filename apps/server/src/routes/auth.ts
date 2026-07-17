@@ -33,7 +33,6 @@ import { resolveJwtSecret } from "../lib/jwt-secret.js";
 
 const router: RouterType = Router();
 
-const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID!;
 const JWT_SECRET = resolveJwtSecret();
 const EXTERNAL_LOCAL_MODE_AUTH_ERROR = "External local-mode access requires a paired mobile token";
 const GITHUB_DEVICE_AUTH_KEY_PREFIX = "auth:github-device:";
@@ -80,6 +79,10 @@ const mobilePairRateLimit: RateLimitConfig = {
   windowSeconds: 60,
 };
 
+function githubClientId(): string {
+  return process.env.GITHUB_CLIENT_ID?.trim() ?? "";
+}
+
 function preventAuthResponseCaching(req: Request, res: Response) {
   delete req.headers["if-none-match"];
   delete req.headers["if-modified-since"];
@@ -92,18 +95,18 @@ function preventAuthResponseCaching(req: Request, res: Response) {
 }
 
 function githubOAuthGrantUrl(): string {
-  return `https://github.com/settings/connections/applications/${GITHUB_CLIENT_ID}`;
+  return `https://github.com/settings/connections/applications/${githubClientId()}`;
 }
 
 async function revokeGitHubOAuthGrant(accessToken: string): Promise<boolean> {
   const clientSecret = process.env.GITHUB_CLIENT_SECRET;
   if (!clientSecret) return false;
 
-  const response = await fetch(`https://api.github.com/applications/${GITHUB_CLIENT_ID}/grant`, {
+  const response = await fetch(`https://api.github.com/applications/${githubClientId()}/grant`, {
     method: "DELETE",
     headers: {
       Accept: "application/vnd.github+json",
-      Authorization: `Basic ${Buffer.from(`${GITHUB_CLIENT_ID}:${clientSecret}`).toString("base64")}`,
+      Authorization: `Basic ${Buffer.from(`${githubClientId()}:${clientSecret}`).toString("base64")}`,
       "Content-Type": "application/json",
       "X-GitHub-Api-Version": "2022-11-28",
     },
@@ -529,60 +532,71 @@ router.post("/auth/github/device/start", async (req: Request, res: Response) => 
   if (isLocalMode()) {
     return res.status(404).json({ error: "GitHub auth is disabled in local mode" });
   }
+  const clientId = githubClientId();
+  if (!clientId) {
+    return res.status(503).json({ error: "GitHub sign-in is not configured on this server" });
+  }
   if (await consumeRateLimit(req, res, githubDeviceStartRateLimit)) {
     return;
   }
 
-  const response = await fetch("https://github.com/login/device/code", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      client_id: GITHUB_CLIENT_ID,
-      scope: "",
-    }),
-  });
-  const payload = (await response.json()) as {
-    device_code?: string;
-    user_code?: string;
-    verification_uri?: string;
-    expires_in?: number;
-    interval?: number;
-    error?: string;
-    error_description?: string;
-  };
+  try {
+    const response = await fetch("https://github.com/login/device/code", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        scope: "",
+      }),
+    });
+    const payload = (await response.json().catch(() => null)) as {
+      device_code?: string;
+      user_code?: string;
+      verification_uri?: string;
+      expires_in?: number;
+      interval?: number;
+      error?: string;
+      error_description?: string;
+    } | null;
 
-  if (
-    !response.ok ||
-    !payload.device_code ||
-    !payload.user_code ||
-    !payload.verification_uri ||
-    typeof payload.expires_in !== "number"
-  ) {
-    return res.status(400).json({
-      error: payload.error_description ?? payload.error ?? "Failed to start GitHub device login",
+    if (
+      !response.ok ||
+      !payload?.device_code ||
+      !payload.user_code ||
+      !payload.verification_uri ||
+      typeof payload.expires_in !== "number"
+    ) {
+      return res.status(400).json({
+        error: payload?.error_description ?? payload?.error ?? "Failed to start GitHub device login",
+      });
+    }
+
+    const deviceAuthId = randomUUID();
+    const intervalSeconds =
+      typeof payload.interval === "number" && payload.interval > 0 ? payload.interval : 5;
+    const expiresAt = Date.now() + payload.expires_in * 1000;
+    await saveGitHubDeviceAuth(deviceAuthId, {
+      deviceCode: payload.device_code,
+      expiresAt,
+      intervalSeconds,
+    });
+
+    res.json({
+      deviceAuthId,
+      userCode: payload.user_code,
+      verificationUri: payload.verification_uri,
+      expiresAt: new Date(expiresAt).toISOString(),
+      interval: intervalSeconds,
+    });
+  } catch (error) {
+    console.error("[auth] failed to start GitHub device login:", error);
+    res.status(502).json({
+      error: "Unable to reach GitHub sign-in. Check this server's network connection and try again.",
     });
   }
-
-  const deviceAuthId = randomUUID();
-  const intervalSeconds =
-    typeof payload.interval === "number" && payload.interval > 0 ? payload.interval : 5;
-  const expiresAt = Date.now() + payload.expires_in * 1000;
-  await saveGitHubDeviceAuth(deviceAuthId, {
-    deviceCode: payload.device_code,
-    expiresAt,
-    intervalSeconds,
-  });
-
-  res.json({
-    deviceAuthId,
-    userCode: payload.user_code,
-    verificationUri: payload.verification_uri,
-    expiresAt: new Date(expiresAt).toISOString(),
-    interval: intervalSeconds,
-  });
 });
 
 router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
@@ -612,7 +626,7 @@ router.post("/auth/github/device/poll", async (req: Request, res: Response) => {
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: new URLSearchParams({
-      client_id: GITHUB_CLIENT_ID,
+      client_id: githubClientId(),
       device_code: record.deviceCode,
       grant_type: "urn:ietf:params:oauth:grant-type:device_code",
     }),

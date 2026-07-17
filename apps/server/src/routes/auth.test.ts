@@ -1057,6 +1057,8 @@ describe("github device oauth", () => {
   const realFetch = globalThis.fetch;
 
   beforeEach(async () => {
+    vi.stubEnv("GITHUB_CLIENT_ID", "test-client-id");
+
     const app = express();
     app.use(express.json());
     app.use(authRouter);
@@ -1124,6 +1126,26 @@ describe("github device oauth", () => {
     expect(body.userCode).toBe("WDJB-MJHT");
     expect(body.verificationUri).toBe("https://github.com/login/device");
     expect(body).not.toHaveProperty("deviceCode");
+  });
+
+  it("returns an actionable error when GitHub cannot be reached", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.startsWith("http://127.0.0.1")) {
+          return realFetch(input, init);
+        }
+        throw new Error("network unreachable");
+      }),
+    );
+
+    const res = await fetch(`${baseUrl}/auth/github/device/start`, { method: "POST" });
+
+    expect(res.status).toBe(502);
+    await expect(res.json()).resolves.toEqual({
+      error: "Unable to reach GitHub sign-in. Check this server's network connection and try again.",
+    });
   });
 
   it("polls GitHub and creates a Trace session cookie after approval", async () => {
