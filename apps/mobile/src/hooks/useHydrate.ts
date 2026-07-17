@@ -8,7 +8,7 @@ import {
   useEntityStore,
   type SessionGroupEntity,
 } from "@trace/client-core";
-import type { Channel, ChannelGroup, Event, Session, SessionGroup } from "@trace/gql";
+import type { Channel, ChannelGroup, Event, QueuedMessage, Session, SessionGroup } from "@trace/gql";
 import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
 import { reconcileEntitySnapshot, resetEntitySnapshots } from "@/lib/entitySnapshots";
 import { latestTimestamp, mergeSessionGroupEntity } from "@/lib/session-group";
@@ -211,11 +211,34 @@ async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResu
     );
   }
 
-  const sessions = (sessionsResult.data?.mySessions ?? []) as Array<Session & { id: string }>;
+  const sessions = (sessionsResult.data?.mySessions ?? []) as Array<
+    Session & { id: string; queuedMessages?: QueuedMessage[] }
+  >;
   const sessionGroups = sessionGroupsFromSessions(sessions);
   if (sessionsResult.data?.mySessions) {
     if (sessionGroups.length > 0) upsertMany("sessionGroups", sessionGroups);
     if (sessions.length > 0) upsertMany("sessions", sessions);
+    useEntityStore.setState((current) => {
+      const queuedMessages = { ...current.queuedMessages };
+      const queuedMessageIdsBySession = { ...current._queuedMessageIdsBySession };
+      for (const session of sessions) {
+        const currentIds = queuedMessageIdsBySession[session.id] ?? [];
+        const nextQueuedMessages = session.queuedMessages ?? [];
+        const nextIds = nextQueuedMessages.map((message) => message.id);
+        const nextIdSet = new Set(nextIds);
+        for (const id of currentIds) {
+          if (!nextIdSet.has(id)) delete queuedMessages[id];
+        }
+        for (const message of nextQueuedMessages) {
+          queuedMessages[message.id] = message;
+        }
+        queuedMessageIdsBySession[session.id] = nextIds;
+      }
+      return {
+        queuedMessages,
+        _queuedMessageIdsBySession: queuedMessageIdsBySession,
+      };
+    });
     reconcileEntitySnapshot(
       "sessionGroups",
       `home:${activeOrgId}`,
