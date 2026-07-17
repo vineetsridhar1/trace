@@ -22,6 +22,8 @@ interface BrowserPanelProps {
   onPreviewUnavailable?: () => void;
   /** Hide browser navigation for an immersive managed canvas. */
   showToolbar?: boolean;
+  /** Suppress the design canvas's desktop-only HTML export control. */
+  hideExportHtml?: boolean;
   /** Top inset matching the Session Player's glass header height. */
   topInset?: number;
 }
@@ -36,6 +38,7 @@ export function BrowserPanel({
   onUrlChange,
   onPreviewUnavailable,
   showToolbar = true,
+  hideExportHtml = false,
   topInset = 0,
 }: BrowserPanelProps) {
   const theme = useTheme();
@@ -254,6 +257,31 @@ export function BrowserPanel({
               setLoadError(`Couldn't load this page (HTTP ${event.nativeEvent.statusCode}).`);
               onPreviewUnavailable?.();
             }}
+            injectedJavaScriptBeforeContentLoaded={
+              hideExportHtml
+                ? `
+                    (function () {
+                      var removeExport = function () {
+                        var exportLink = document.querySelector('a[href="/__trace_design_export"]');
+                        if (exportLink) exportLink.remove();
+                      };
+                      var observe = function () {
+                        if (!document.documentElement) {
+                          setTimeout(observe, 0);
+                          return;
+                        }
+                        new MutationObserver(removeExport).observe(document.documentElement, {
+                          childList: true,
+                          subtree: true,
+                        });
+                        removeExport();
+                      };
+                      observe();
+                    })();
+                    true;
+                  `
+                : undefined
+            }
             allowsInlineMediaPlayback
             sharedCookiesEnabled
           />

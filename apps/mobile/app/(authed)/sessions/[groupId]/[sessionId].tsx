@@ -257,6 +257,7 @@ export default function SessionStreamScreen() {
                       onUrlChange={ignoreBrowserUrlChange}
                       onPreviewUnavailable={retryAppPreview}
                       showToolbar={!isDesignGroup}
+                      hideExportHtml={isDesignGroup}
                       topInset={isDesignGroup ? 0 : overlayHeight}
                     />
                   ) : appPreviewLoading ? (
