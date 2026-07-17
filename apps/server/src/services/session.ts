@@ -4972,18 +4972,6 @@ export class SessionService {
     if (runtimeChanged && isGeneratedProjectKind(prev.sessionGroup?.kind)) {
       throw new ValidationError("App and Design sessions use a fixed cloud runtime");
     }
-    if (
-      runtimeChanged &&
-      prev.sessionGroup &&
-      hasRuntimeBinding(
-        this.parseConnection(prev.sessionGroup.connection),
-        prev.sessionGroup.workdir,
-      )
-    ) {
-      throw new ValidationError(
-        "This session group already has a bridge. Use Move to switch the entire session group.",
-      );
-    }
     let requestedEnvironment: Awaited<
       ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>
     > | null = null;
