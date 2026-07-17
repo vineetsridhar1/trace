@@ -294,6 +294,7 @@ enum EventType {
   session_pr_closed
   session_group_archived
   session_group_renamed
+  design_preview_updated
   chat_created
   chat_member_added
   chat_member_removed

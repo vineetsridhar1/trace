@@ -7032,6 +7032,13 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+    if (session.sessionGroupId) {
+      void managedGitService.retryPendingDesignCommitPreviews(session.sessionGroupId).catch(
+        (error: unknown) => {
+          console.error("[session] design preview retry after runtime reconnect failed", error);
+        },
+      );
+    }
   }
 
   /**

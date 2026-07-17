@@ -191,6 +191,7 @@ enum EventType {
   session_pr_closed
   session_group_archived
   session_group_renamed
+  design_preview_updated
   ticket_assigned
   ticket_unassigned
   ticket_linked
@@ -544,6 +545,7 @@ model SessionGroup {
   designPreviewKey     String?
   designPreviewCommitSha String?
   designPreviewCapturedAt DateTime?
+  designPreviewAttemptedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -554,6 +556,7 @@ model SessionGroup {
   @@index([forkedFromSessionGroupId])
   @@index([channelId, updatedAt])
   @@index([repoId, branch, updatedAt])
+  @@index([kind, designPreviewStatus])
 }
 
 model Session {

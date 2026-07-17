@@ -393,6 +393,7 @@ export type EventType =
   | "channel_member_removed"
   | "channel_updated"
   | "chat_created"
+  | "design_preview_updated"
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
