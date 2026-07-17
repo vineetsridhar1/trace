@@ -8,7 +8,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { AuthenticationError, AuthorizationError, ValidationError } from "../lib/errors.js";
-import { canViewSessionGroup } from "./access.js";
+import { assertCanManageSessionGroup, canViewSessionGroup } from "./access.js";
 import { eventService } from "./event.js";
 import { orgSecretService } from "./org-secret.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
@@ -1237,16 +1237,7 @@ export class SessionApplicationService {
         where: { id: sessionGroupId, organizationId },
         select: { ownerUserId: true },
       }));
-    if (group.ownerUserId === userId) return;
-    const member = await prisma.orgMember.findUnique({
-      where: { userId_organizationId: { userId, organizationId } },
-      select: { role: true },
-    });
-    if (member?.role !== "admin") {
-      throw new AuthorizationError(
-        "Only the session owner or an org admin can manage applications",
-      );
-    }
+    await assertCanManageSessionGroup(group, organizationId, userId);
   }
 }
 
