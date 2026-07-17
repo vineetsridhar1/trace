@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { latestSavedDesignPreviewUrl } from "./saved-design-preview";
+import { hasSavedDesignPreview, latestSavedDesignPreviewUrl } from "./saved-design-preview";
 
 describe("latestSavedDesignPreviewUrl", () => {
   it("chooses the newest completed saved design preview", () => {
@@ -25,5 +25,11 @@ describe("latestSavedDesignPreviewUrl", () => {
         },
       ] as never),
     ).toBe("/design-previews/new");
+  });
+});
+
+describe("hasSavedDesignPreview", () => {
+  it("recognizes the durable group preview when no checkpoint preview exists", () => {
+    expect(hasSavedDesignPreview("/design-previews/groups/group-1", [])).toBe(true);
   });
 });

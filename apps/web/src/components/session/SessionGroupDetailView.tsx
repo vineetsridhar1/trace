@@ -31,7 +31,7 @@ import type { SidebarTab } from "./SidebarPanel";
 import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 import { AppSessionPreviewPanel } from "./applications/AppSessionPreviewPanel";
 import { GeneratedProjectPreviewPanel } from "./applications/GeneratedProjectPreviewPanel";
-import { latestSavedDesignPreviewUrl } from "./applications/saved-design-preview";
+import { hasSavedDesignPreview } from "./applications/saved-design-preview";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { useSessionGroupSessions } from "./useSessionGroupSessions";
 import { useTerminalActions } from "./useTerminalActions";
@@ -215,6 +215,11 @@ export function SessionGroupDetailView({
   const groupGitCheckpoints = useEntityField("sessionGroups", sessionGroupId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
+  const groupDesignPreviewUrl = useEntityField(
+    "sessionGroups",
+    sessionGroupId,
+    "designPreviewUrl",
+  ) as string | null | undefined;
   const groupWorktreeDeleted = useEntityField(
     "sessionGroups",
     sessionGroupId,
@@ -447,7 +452,8 @@ export function SessionGroupDetailView({
   );
   const generatedProjectCanvasReady =
     liveGeneratedProjectCanvasReady ||
-    (groupKind === "design" && latestSavedDesignPreviewUrl(groupGitCheckpoints) !== null);
+    (groupKind === "design" &&
+      hasSavedDesignPreview(groupDesignPreviewUrl, groupGitCheckpoints));
   const appCanvasReady = isAppCanvasReady(
     selectedSession?.agentStatus,
     selectedConnection?.state,
