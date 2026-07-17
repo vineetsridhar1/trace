@@ -567,6 +567,24 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
+  if (event.eventType === "design_preview_updated") {
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+    if (sessionGroupId) {
+      batch.patch("sessionGroups", sessionGroupId, {
+        designPreviewStatus:
+          typeof payload.designPreviewStatus === "string" ? payload.designPreviewStatus : null,
+        designPreviewCommitSha:
+          typeof payload.designPreviewCommitSha === "string"
+            ? payload.designPreviewCommitSha
+            : null,
+        designPreviewUrl:
+          typeof payload.designPreviewUrl === "string" ? payload.designPreviewUrl : null,
+        updatedAt: event.timestamp,
+      } as Partial<SessionGroupEntity>);
+    }
+  }
+
   if (event.eventType === "session_group_visibility_updated") {
     const sessionGroupId =
       typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;

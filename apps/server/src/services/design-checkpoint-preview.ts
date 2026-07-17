@@ -116,4 +116,18 @@ export const designCheckpointPreviewService = {
       return { previewStatus: "failed", previewCapturedAt: new Date() };
     }
   },
+
+  async publishCommit(input: {
+    organizationId: string;
+    sessionGroupId: string;
+    commitSha: string;
+    userId: string;
+  }): Promise<DesignCheckpointPreviewResult> {
+    return this.publish({
+      ...input,
+      // The object key is intentionally commit-addressed. Unlike a Trace
+      // checkpoint, this is only an S3 artifact identifier for a pushed ref.
+      checkpointId: `commit-${input.commitSha}`,
+    });
+  },
 };

@@ -21,7 +21,10 @@ import {
 } from "../lib/session-group-status.js";
 import { assertScopeAccess, canViewSessionGroup } from "../services/access.js";
 import { storage } from "../lib/storage/index.js";
-import { designCheckpointPreviewUrl } from "../lib/design-checkpoint-preview-url.js";
+import {
+  designCheckpointPreviewUrl,
+  designCommitPreviewUrl,
+} from "../lib/design-checkpoint-preview-url.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -721,6 +724,8 @@ export const sessionMutations = {
 
 export const sessionTypeResolvers = {
   SessionGroup: {
+    designPreviewUrl: (group: { id: string; designPreviewKey?: string | null }) =>
+      group.designPreviewKey ? designCommitPreviewUrl(group.id) : null,
     status: async (
       group: {
         id: string;

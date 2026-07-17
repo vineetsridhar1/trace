@@ -88,6 +88,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       workdir
       worktreeDeleted
       worktreeAdopted
+      designPreviewUrl
       gitCheckpoints {
         id
         sessionId

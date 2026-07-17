@@ -76,6 +76,28 @@ describe("design checkpoint previews", () => {
     expect(url.searchParams.get("next")).toBe(`/__trace_design_export?ref=${"b".repeat(40)}`);
   });
 
+  it("stores a managed commit export without requiring a Trace checkpoint", async () => {
+    mocks.fetch.mockResolvedValue(
+      new Response("<!doctype html><title>Saved</title>", {
+        headers: { "content-length": "36" },
+      }),
+    );
+
+    const result = await designCheckpointPreviewService.publishCommit({
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      commitSha: "c".repeat(40),
+      userId: "user-1",
+    });
+
+    expect(mocks.putObject).toHaveBeenCalledWith(
+      expect.stringContaining(`design-previews/org-1/group-1/commit-${"c".repeat(40)}-`),
+      expect.any(Buffer),
+      "text/html; charset=utf-8",
+    );
+    expect(result.previewStatus).toBe("captured");
+  });
+
   it("records an unavailable preview when no live design endpoint exists", async () => {
     mocks.endpointFindFirst.mockResolvedValue(null);
 

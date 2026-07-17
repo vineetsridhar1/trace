@@ -394,6 +394,7 @@ export type EventType =
   | "channel_member_removed"
   | "channel_updated"
   | "chat_created"
+  | "design_preview_updated"
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
@@ -1986,6 +1987,10 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  designPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
+  designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
@@ -4531,6 +4536,10 @@ export type SessionGroupResolvers<
   channel?: Resolver<Maybe<ResolversTypes["Channel"]>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes["SessionConnection"]>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  designPreviewCapturedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  designPreviewCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  designPreviewStatus?: Resolver<Maybe<ResolversTypes["GitCheckpointCaptureStatus"]>, ParentType, ContextType>;
+  designPreviewUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   forkedFromSessionGroup?: Resolver<Maybe<ResolversTypes["SessionGroup"]>, ParentType, ContextType>;
   forkedFromSessionGroupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;

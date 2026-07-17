@@ -14,6 +14,7 @@ import {
 } from "../lib/git-http.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
+import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 
 const JWT_SECRET = resolveJwtSecret();
 
@@ -23,6 +24,9 @@ const RUNTIME_GIT_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 // User clone/export tokens are short-lived and auditable — minted on demand for
 // an explicit download/clone action.
 const USER_GIT_TOKEN_TTL_SECONDS = 60 * 60;
+// This exceeds the export request timeout so the reconciler never reclaims a
+// still-running export from another API task.
+const DESIGN_PREVIEW_RETRY_DELAY_MS = 90_000;
 
 export type GitCapability = "read" | "write";
 export type GitTokenScope = "runtime" | "user";
@@ -365,6 +369,168 @@ class ManagedGitService {
       payload: { repoId: input.repoId, provider: "managed", refs },
       actorType: input.actorType,
       actorId: input.actorId,
+    });
+
+    // A managed push is the durable source of truth for Design previews. This
+    // deliberately does not create or depend on a Trace checkpoint.
+    for (const command of input.commands) {
+      if (!command.ref.startsWith("refs/heads/") || /^0+$/.test(command.newSha)) continue;
+      const branch = command.ref.slice("refs/heads/".length);
+      await this.enqueueDesignCommitPreview({
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        branch,
+        commitSha: command.newSha,
+      });
+    }
+  }
+
+  async retryPendingDesignCommitPreviews(sessionGroupId?: string): Promise<void> {
+    const retryBefore = new Date(Date.now() - DESIGN_PREVIEW_RETRY_DELAY_MS);
+    await prisma.sessionGroup.updateMany({
+      where: {
+        ...(sessionGroupId ? { id: sessionGroupId } : {}),
+        kind: "design",
+        designPreviewStatus: "publishing",
+        designPreviewAttemptedAt: { lt: retryBefore },
+      },
+      data: { designPreviewStatus: "pending" },
+    });
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        ...(sessionGroupId ? { id: sessionGroupId } : {}),
+        kind: "design",
+        designPreviewCommitSha: { not: null },
+        designPreviewStatus: { in: ["pending", "failed", "unavailable"] },
+        OR: [{ designPreviewAttemptedAt: null }, { designPreviewAttemptedAt: { lt: retryBefore } }],
+      },
+      select: { id: true, organizationId: true, ownerUserId: true, designPreviewCommitSha: true },
+    });
+    await Promise.all(
+      groups.map((group) =>
+        this.publishDesignCommitPreview({
+          organizationId: group.organizationId,
+          sessionGroupId: group.id,
+          userId: group.ownerUserId,
+          commitSha: group.designPreviewCommitSha!,
+        }),
+      ),
+    );
+  }
+
+  private async enqueueDesignCommitPreview(input: {
+    organizationId: string;
+    repoId: string;
+    branch: string;
+    commitSha: string;
+  }): Promise<void> {
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        branch: input.branch,
+        kind: "design",
+      },
+      select: { id: true, ownerUserId: true },
+    });
+
+    await Promise.all(
+      groups.map(async (group) => {
+        const pending = await prisma.sessionGroup.update({
+          where: { id: group.id },
+          data: {
+            designPreviewStatus: "pending",
+            designPreviewKey: null,
+            designPreviewCommitSha: input.commitSha,
+            designPreviewCapturedAt: null,
+            designPreviewAttemptedAt: null,
+          },
+          select: { id: true, designPreviewStatus: true, designPreviewCommitSha: true },
+        });
+        await this.emitDesignPreviewUpdate(input.organizationId, pending);
+        void this.publishDesignCommitPreview({
+          organizationId: input.organizationId,
+          sessionGroupId: group.id,
+          commitSha: input.commitSha,
+          userId: group.ownerUserId,
+        }).catch((error: unknown) => {
+          console.error("[managed-git] design commit preview publish failed", error);
+        });
+      }),
+    );
+  }
+
+  private async publishDesignCommitPreview(input: {
+    organizationId: string;
+    sessionGroupId: string;
+    userId: string;
+    commitSha: string;
+  }): Promise<void> {
+    const attemptedAt = new Date();
+    const claimed = await prisma.sessionGroup.updateMany({
+      where: {
+        id: input.sessionGroupId,
+        designPreviewCommitSha: input.commitSha,
+        designPreviewStatus: { in: ["pending", "failed", "unavailable"] },
+      },
+      data: { designPreviewStatus: "publishing", designPreviewAttemptedAt: attemptedAt },
+    });
+    if (claimed.count === 0) return;
+
+    let preview: Awaited<ReturnType<typeof designCheckpointPreviewService.publishCommit>>;
+    try {
+      preview = await designCheckpointPreviewService.publishCommit(input);
+    } catch (error) {
+      console.error("[managed-git] design commit preview export failed", error);
+      preview = { previewStatus: "failed", previewCapturedAt: new Date() };
+    }
+    const updated = await prisma.sessionGroup.updateMany({
+      where: {
+        id: input.sessionGroupId,
+        designPreviewCommitSha: input.commitSha,
+        designPreviewStatus: "publishing",
+        designPreviewAttemptedAt: attemptedAt,
+      },
+      data: {
+        designPreviewStatus: preview.previewStatus,
+        designPreviewKey: preview.previewKey ?? null,
+        designPreviewCapturedAt: preview.previewCapturedAt ?? null,
+      },
+    });
+    if (updated.count > 0) {
+      await this.emitDesignPreviewUpdate(input.organizationId, {
+        id: input.sessionGroupId,
+        designPreviewStatus: preview.previewStatus,
+        designPreviewCommitSha: input.commitSha,
+        designPreviewKey: preview.previewKey ?? null,
+      });
+    }
+  }
+
+  private async emitDesignPreviewUpdate(
+    organizationId: string,
+    sessionGroup: {
+      id: string;
+      designPreviewStatus: string | null;
+      designPreviewCommitSha: string | null;
+      designPreviewKey?: string | null;
+    },
+  ): Promise<void> {
+    await eventService.create({
+      organizationId,
+      scopeType: "system",
+      scopeId: sessionGroup.id,
+      eventType: "design_preview_updated",
+      payload: {
+        sessionGroupId: sessionGroup.id,
+        designPreviewStatus: sessionGroup.designPreviewStatus,
+        designPreviewCommitSha: sessionGroup.designPreviewCommitSha,
+        designPreviewUrl: sessionGroup.designPreviewKey
+          ? `/design-previews/groups/${encodeURIComponent(sessionGroup.id)}`
+          : null,
+      },
+      actorType: "system",
+      actorId: "system",
     });
   }
 }

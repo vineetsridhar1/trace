@@ -79,4 +79,49 @@ router.get("/design-previews/:checkpointId", async (req: Request, res: Response)
   }
 });
 
+router.get("/design-previews/groups/:sessionGroupId", async (req: Request, res: Response) => {
+  const sessionGroupId =
+    typeof req.params.sessionGroupId === "string" ? req.params.sessionGroupId : null;
+  if (!sessionGroupId) return res.status(404).end();
+  const token = getRequestToken(req);
+  if (!token) return res.status(401).json({ error: "Not authenticated" });
+  const auth = await authenticateAccessToken(token);
+  if (!auth) return res.status(401).json({ error: "Invalid token" });
+
+  const sessionGroup = await prisma.sessionGroup.findUnique({
+    where: { id: sessionGroupId },
+    select: { organizationId: true, visibility: true, ownerUserId: true, designPreviewKey: true },
+  });
+  if (!sessionGroup?.designPreviewKey) return res.status(404).end();
+  const membership = await prisma.orgMember.findUnique({
+    where: {
+      userId_organizationId: {
+        userId: auth.userId,
+        organizationId: sessionGroup.organizationId,
+      },
+    },
+    select: { userId: true },
+  });
+  if (!membership || !canViewSessionGroup(sessionGroup, auth.userId)) return res.status(403).end();
+
+  try {
+    const html = await storage.getObject(sessionGroup.designPreviewKey);
+    res.set({
+      "Cache-Control": "private, no-store",
+      "Content-Security-Policy": designPreviewCsp(),
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Permissions-Policy": "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    });
+    return res.type("html").send(html);
+  } catch (error) {
+    console.warn("[design-preview] saved commit preview read failed", {
+      sessionGroupId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return res.status(404).end();
+  }
+});
+
 export { router as designPreviewRouter };
