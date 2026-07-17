@@ -71,6 +71,9 @@ let latestOnFailure: ((draft: string, message: string) => void) | null = null;
 let latestOnSuccess: (() => void) | null = null;
 let draftAttachments: MockDraftAttachment[] = [];
 let mockTool = "codex";
+let mockAgentStatus = "idle";
+let mockSessionGroupKind: string | null = null;
+let runtimePickerRenderCount = 0;
 const submitMock = vi.fn();
 const routerPushMock = vi.fn();
 
@@ -163,7 +166,7 @@ vi.mock("@trace/client-core", () => ({
   useEntityField: (_entity: string, _id: string, field: string) => {
     switch (field) {
       case "agentStatus":
-        return "idle";
+        return mockAgentStatus;
       case "sessionStatus":
         return "running";
       case "worktreeDeleted":
@@ -180,6 +183,8 @@ vi.mock("@trace/client-core", () => ({
         return { id: "channel-1" };
       case "sessionGroupId":
         return "group-1";
+      case "kind":
+        return mockSessionGroupKind;
       case "_optimistic":
         return false;
       default:
@@ -313,7 +318,10 @@ vi.mock("./SessionModelPickerSheetContent", () => ({
 }));
 
 vi.mock("./SessionRuntimePickerSheetContent", () => ({
-  SessionRuntimePickerSheetContent: () => null,
+  SessionRuntimePickerSheetContent: () => {
+    runtimePickerRenderCount += 1;
+    return null;
+  },
 }));
 
 vi.mock("./session-input-composer/SessionComposerActionButton", () => ({
@@ -387,6 +395,9 @@ describe("SessionInputComposer", () => {
     latestOnSuccess = null;
     draftAttachments = [];
     mockTool = "codex";
+    mockAgentStatus = "idle";
+    mockSessionGroupKind = null;
+    runtimePickerRenderCount = 0;
     submitMock.mockClear();
     routerPushMock.mockClear();
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -466,6 +477,28 @@ describe("SessionInputComposer", () => {
       "pi\n/login",
     );
   });
+
+  it.each(["app", "design"])(
+    "sends a new cloud-only %s session without opening the runtime picker",
+    async (kind) => {
+      mockAgentStatus = "not_started";
+      mockSessionGroupKind = kind;
+      const { SessionInputComposer } = await import("./SessionInputComposer");
+
+      await act(async () => {
+        TestRenderer.create(React.createElement(SessionInputComposer, { sessionId: "session-1" }));
+      });
+      await act(async () => {
+        latestComposerProps?.onChangeText?.("Start from this brief");
+      });
+      await act(async () => {
+        latestActionButtonProps?.onPress();
+      });
+
+      expect(submitMock).toHaveBeenCalledWith("Start from this brief", "code");
+      expect(runtimePickerRenderCount).toBe(0);
+    },
+  );
 
   it("opens an attachment sheet and stores picked files", async () => {
     const DocumentPicker = await import("expo-document-picker");

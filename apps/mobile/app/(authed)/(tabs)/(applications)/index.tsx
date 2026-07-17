@@ -6,7 +6,7 @@ import { ApplicationListRow } from "@/components/applications/ApplicationListRow
 import { Button, Text, TraceLoader } from "@/components/design-system";
 import { useAppSessionGroups } from "@/hooks/useAppSessionGroups";
 import { handleUnauthorized } from "@/lib/auth";
-import { createApplication } from "@/lib/createQuickSession";
+import { createApplication, createDesign } from "@/lib/createQuickSession";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 
@@ -25,6 +25,9 @@ export default function ApplicationsScreen() {
   }, [refresh]);
   const handleCreate = useCallback(() => {
     void createApplication();
+  }, []);
+  const handleCreateDesign = useCallback(() => {
+    void createDesign();
   }, []);
 
   if (loading && ids.length === 0) {
@@ -48,6 +51,7 @@ export default function ApplicationsScreen() {
         <ApplicationsEmpty
           error={error}
           onCreate={handleCreate}
+          onCreateDesign={handleCreateDesign}
           onRetry={handleRefresh}
         />
       }
@@ -68,10 +72,12 @@ function ApplicationSeparator() {
 function ApplicationsEmpty({
   error,
   onCreate,
+  onCreateDesign,
   onRetry,
 }: {
   error: string | null;
   onCreate: () => void;
+  onCreateDesign: () => void;
   onRetry: () => Promise<void>;
 }) {
   return (
@@ -92,6 +98,12 @@ function ApplicationsEmpty({
           </Text>
           <View style={styles.emptyAction}>
             <Button title="Build an application" size="sm" onPress={onCreate} />
+            <Button
+              title="Create a design"
+              size="sm"
+              variant="secondary"
+              onPress={onCreateDesign}
+            />
           </View>
         </>
       )}
@@ -118,6 +130,7 @@ const styles = StyleSheet.create({
   emptyAction: {
     alignSelf: "stretch",
     marginTop: 10,
+    gap: 8,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
