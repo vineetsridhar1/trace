@@ -1,6 +1,7 @@
 import { Stack, useRouter } from "expo-router";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { TopBarPill } from "@/components/navigation/TopBarPill";
+import { createApplication } from "@/lib/createQuickSession";
 
 export default function ApplicationsLayout() {
   const user = useAuthStore((s: AuthState) => s.user);
@@ -26,7 +27,7 @@ export default function ApplicationsLayout() {
                   id: "new-application",
                   accessibilityLabel: "Build a new application",
                   symbol: "plus",
-                  onPress: () => router.push("/sheets/new-application"),
+                  onPress: () => void createApplication(),
                 },
               ]}
               avatar={

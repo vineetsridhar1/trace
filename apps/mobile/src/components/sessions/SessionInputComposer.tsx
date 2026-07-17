@@ -118,6 +118,11 @@ export function SessionInputComposer({
     | string
     | null
     | undefined;
+  const sessionGroupKind = useEntityField(
+    "sessionGroups",
+    sessionGroupId ?? "",
+    "kind",
+  ) as string | null | undefined;
   const groupConnection = useEntityField(
     "sessionGroups",
     sessionGroupId ?? "",
@@ -281,7 +286,9 @@ export function SessionInputComposer({
     groupConnection === undefined ? connection : groupConnection,
     groupWorkdir === undefined ? workdir : groupWorkdir,
   );
-  const canChangeBridge = isNotStarted && !isOptimistic && !groupHasSelectedBridge;
+  const cloudOnlyGeneratedSession = sessionGroupKind === "app" || sessionGroupKind === "design";
+  const canChangeBridge =
+    isNotStarted && !isOptimistic && !cloudOnlyGeneratedSession && !groupHasSelectedBridge;
 
   const inputHeight = useSharedValue(MIN_INPUT_HEIGHT);
   useEffect(() => {
