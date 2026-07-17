@@ -4,6 +4,7 @@ import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import {
   appSessionSubtitle,
   buildAppSessionGroupIds,
+  buildDesignSessionGroupIds,
   findReadyAppPreviewUrl,
 } from "./app-sessions";
 
@@ -68,6 +69,29 @@ describe("buildAppSessionGroupIds", () => {
     });
 
     expect(buildAppSessionGroupIds(state)).toEqual(["active"]);
+  });
+});
+
+describe("buildDesignSessionGroupIds", () => {
+  it("returns only active design groups newest first", () => {
+    const state = stateWithGroups({
+      app: { id: "app", kind: "app", status: "in_progress" },
+      older: {
+        id: "older",
+        kind: "design",
+        status: "in_progress",
+        updatedAt: "2026-07-10T12:00:00.000Z",
+      },
+      newer: {
+        id: "newer",
+        kind: "design",
+        status: "needs_input",
+        updatedAt: "2026-07-11T12:00:00.000Z",
+      },
+      archived: { id: "archived", kind: "design", status: "archived" },
+    });
+
+    expect(buildDesignSessionGroupIds(state)).toEqual(["newer", "older"]);
   });
 });
 

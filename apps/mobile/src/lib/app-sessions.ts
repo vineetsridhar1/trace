@@ -25,8 +25,19 @@ export function appSessionSubtitle({
 }
 
 export function buildAppSessionGroupIds(state: EntityState): string[] {
+  return buildGeneratedProjectSessionGroupIds(state, "app");
+}
+
+export function buildDesignSessionGroupIds(state: EntityState): string[] {
+  return buildGeneratedProjectSessionGroupIds(state, "design");
+}
+
+function buildGeneratedProjectSessionGroupIds(
+  state: EntityState,
+  kind: "app" | "design",
+): string[] {
   return (Object.values(state.sessionGroups) as SessionGroupEntity[])
-    .filter((group) => group.kind === "app" && !group.archivedAt && group.status !== "archived")
+    .filter((group) => group.kind === kind && !group.archivedAt && group.status !== "archived")
     .sort(
       (a, b) =>
         timestamp(b._sortTimestamp ?? b.updatedAt ?? b.createdAt) -

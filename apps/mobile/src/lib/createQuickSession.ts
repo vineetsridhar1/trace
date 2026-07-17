@@ -66,11 +66,15 @@ export async function createQuickSession(channelId: string): Promise<void> {
   }
 }
 
-/** Create a standalone cloud-generated session and open its empty composer. */
-export async function createGeneratedSession(kind: "app" | "design"): Promise<boolean> {
+/** Create a standalone cloud-generated session and open its workspace. */
+export async function createGeneratedSession(
+  kind: "app" | "design",
+  prompt?: string,
+): Promise<boolean> {
   if (pendingGeneratedSessionKinds.has(kind)) return false;
   pendingGeneratedSessionKinds.add(kind);
   const label = kind === "design" ? "design" : "application";
+  const trimmedPrompt = prompt?.trim();
 
   void haptic.light();
 
@@ -80,6 +84,7 @@ export async function createGeneratedSession(kind: "app" | "design"): Promise<bo
         input: {
           kind,
           hosting: "cloud",
+          ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
         },
       })
       .toPromise();
@@ -107,12 +112,12 @@ export async function createGeneratedSession(kind: "app" | "design"): Promise<bo
   }
 }
 
-export function createApplication(): Promise<boolean> {
-  return createGeneratedSession("app");
+export function createApplication(prompt?: string): Promise<boolean> {
+  return createGeneratedSession("app", prompt);
 }
 
-export function createDesign(): Promise<boolean> {
-  return createGeneratedSession("design");
+export function createDesign(prompt?: string): Promise<boolean> {
+  return createGeneratedSession("design", prompt);
 }
 
 /**

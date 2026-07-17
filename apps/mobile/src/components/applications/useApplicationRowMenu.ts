@@ -12,6 +12,7 @@ import { getClient } from "@/lib/urql";
 export function useApplicationRowMenu(
   groupId: string,
   isArchived: boolean,
+  kind: "app" | "design" = "app",
 ): {
   actions: ContextMenuAction[];
   onPress: (event: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => void;
@@ -35,11 +36,15 @@ export function useApplicationRowMenu(
   const actions = useMemo<ContextMenuAction[]>(() => {
     const items: ContextMenuAction[] = [];
     if (!isArchived) {
-      items.push({ title: "Archive application", systemIcon: "archivebox", destructive: true });
+      items.push({
+        title: `Archive ${kind === "design" ? "design" : "application"}`,
+        systemIcon: "archivebox",
+        destructive: true,
+      });
     }
     items.push({ title: "Copy link", systemIcon: "link" });
     return items;
-  }, [isArchived]);
+  }, [isArchived, kind]);
 
   const onPress = useCallback(
     (event: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {

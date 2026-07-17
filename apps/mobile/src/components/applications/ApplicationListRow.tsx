@@ -14,8 +14,10 @@ import { alpha, useTheme } from "@/theme";
 
 export const ApplicationListRow = memo(function ApplicationListRow({
   groupId,
+  kind = "app",
 }: {
   groupId: string;
+  kind?: "app" | "design";
 }) {
   const theme = useTheme();
   const name = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
@@ -51,7 +53,7 @@ export const ApplicationListRow = memo(function ApplicationListRow({
   }, [latestSessionId]);
 
   const isArchived = Boolean(archivedAt) || status === "archived";
-  const menu = useApplicationRowMenu(groupId, isArchived);
+  const menu = useApplicationRowMenu(groupId, isArchived, kind);
 
   if (!name) return null;
 

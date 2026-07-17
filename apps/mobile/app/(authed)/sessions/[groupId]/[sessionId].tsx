@@ -75,23 +75,24 @@ export default function SessionStreamScreen() {
     | string
     | null
     | undefined;
-  const isAppGroup = groupKind === "app";
+  const isGeneratedProjectGroup = groupKind === "app" || groupKind === "design";
+  const generatedProjectLabel = groupKind === "design" ? "design" : "app";
   const {
     url: appPreviewUrl,
     loading: appPreviewLoading,
     error: appPreviewError,
     refresh: refreshAppPreview,
-  } = useAppPreview(hydratedGroupId, isAppGroup);
+  } = useAppPreview(hydratedGroupId, isGeneratedProjectGroup);
   const resolvedBrowserUrl = useMemo(() => {
     const persistedUrl = browserUrlGroupId === hydratedGroupId ? browserUrl : null;
-    if (isAppGroup) return persistedUrl || appPreviewUrl || "";
+    if (isGeneratedProjectGroup) return persistedUrl || appPreviewUrl || "";
     return resolveBrowserUrl(persistedUrl, prUrl, repo?.remoteUrl);
   }, [
     appPreviewUrl,
     browserUrl,
     browserUrlGroupId,
     hydratedGroupId,
-    isAppGroup,
+    isGeneratedProjectGroup,
     prUrl,
     repo?.remoteUrl,
   ]);
@@ -110,14 +111,14 @@ export default function SessionStreamScreen() {
     [groupId, router, sessionId],
   );
   const openBrowser = useCallback(() => {
-    if (isAppGroup) {
+    if (isGeneratedProjectGroup) {
       pagerRef.current?.setPage(1);
       setAppPage(1);
       return;
     }
     if (activePane === "browser") return;
     router.push(`/sessions/${groupId}/${sessionId}?pane=browser`);
-  }, [activePane, groupId, isAppGroup, router, sessionId]);
+  }, [activePane, groupId, isGeneratedProjectGroup, router, sessionId]);
 
   const handleSelectSession = useCallback(
     (nextId: string) => {
@@ -156,7 +157,7 @@ export default function SessionStreamScreen() {
   const headerPane: SessionPaneMode =
     activePane === "terminal"
       ? "terminal"
-      : isAppGroup
+      : isGeneratedProjectGroup
         ? appPage === 1
           ? "browser"
           : "session"
@@ -185,7 +186,7 @@ export default function SessionStreamScreen() {
               onBack={
                 activePane === "terminal"
                   ? () => navigateToPane("session")
-                  : isAppGroup && appPage === 1
+                  : isGeneratedProjectGroup && appPage === 1
                     ? () => {
                         pagerRef.current?.setPage(0);
                         setAppPage(0);
@@ -225,7 +226,7 @@ export default function SessionStreamScreen() {
           </View>
         ) : (
           <View key={hydratedGroupId} style={styles.overlayPaddedScene}>
-            {isAppGroup && activePane !== "terminal" ? (
+            {isGeneratedProjectGroup && activePane !== "terminal" ? (
               <PagerView
                 ref={pagerRef}
                 initialPage={pane === "browser" ? 1 : 0}
@@ -256,11 +257,15 @@ export default function SessionStreamScreen() {
                     <View style={styles.center}>
                       <EmptyState
                         icon={appPreviewError ? "exclamationmark.triangle" : "globe"}
-                        title={appPreviewError ? "Couldn't load the app" : "App is starting"}
+                        title={
+                          appPreviewError
+                            ? `Couldn't load the ${generatedProjectLabel}`
+                            : `${generatedProjectLabel === "design" ? "Design" : "App"} is starting`
+                        }
                         subtitle={
                           appPreviewError
                             ? appPreviewError
-                            : "The preview will appear when the application is running."
+                            : `The canvas will appear when the ${generatedProjectLabel} is running.`
                         }
                         action={{
                           label: "Retry",
