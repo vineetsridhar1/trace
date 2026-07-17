@@ -5787,7 +5787,13 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
 
-    it("requires the group move action when a group already has a bridge", async () => {
+    it("switches the group bridge before the session starts", async () => {
+      const selectedRuntime = {
+        key: "org-1:runtime-b",
+        id: "runtime-b",
+        label: "Laptop B",
+        hostingMode: "local",
+      };
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
           id: "session-1",
@@ -5799,21 +5805,34 @@ describe("SessionService", () => {
           }),
         }),
       );
+      sessionRouterMock.getRuntime.mockReturnValueOnce(
+        selectedRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntime>,
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          connection: { runtimeInstanceId: "runtime-b", runtimeLabel: "Laptop B" },
+        }),
+      );
+      prismaMock.$transaction.mockImplementation(async (callback) => callback(prismaMock));
 
-      await expect(
-        service.updateConfig(
-          "session-1",
-          "org-1",
-          { runtimeInstanceId: "runtime-b" },
-          "user",
-          "user-1",
-        ),
-      ).rejects.toThrow(
-        "This session group already has a bridge. Use Move to switch the entire session group.",
+      await service.updateConfig(
+        "session-1",
+        "org-1",
+        { runtimeInstanceId: "runtime-b" },
+        "user",
+        "user-1",
       );
 
-      expect(prismaMock.session.update).not.toHaveBeenCalled();
-      expect(terminalRelayMock.destroyAllForSessionGroup).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "group-1" },
+          data: expect.objectContaining({
+            connection: expect.objectContaining({ runtimeInstanceId: "runtime-b" }),
+          }),
+        }),
+      );
+      expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
     });
   });
 
