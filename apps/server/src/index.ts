@@ -20,6 +20,7 @@ import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
 import { gitRouter } from "./routes/git.js";
+import { designPreviewRouter } from "./routes/design-preview.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -45,6 +46,7 @@ import { buildAppleAppSiteAssociation } from "./lib/apple-app-site-association.j
 import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.js";
 import { endpointProxyService } from "./services/endpoint-proxy.js";
 import { sessionApplicationService } from "./services/session-applications.js";
+import { managedGitService } from "./services/managed-git.js";
 import {
   assertPreviewHostIsolated,
   endpointTrafficRetentionHours,
@@ -62,6 +64,7 @@ const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
 const ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
 const ENDPOINT_TRAFFIC_CLEANUP_LOCK_KEY = "trace:jobs:endpoint-traffic-cleanup";
+const DESIGN_PREVIEW_RECONCILE_INTERVAL_MS = 30 * 1000;
 
 function readDurationEnv(name: string, fallbackMs: number): number {
   const raw = process.env[name]?.trim();
@@ -199,6 +202,7 @@ async function main() {
   // Managed git smart-HTTP streams binary pack bodies and reads the request
   // stream directly — register BEFORE express.json() so the body is untouched.
   app.use("/git", gitRouter);
+  app.use(designPreviewRouter);
 
   app.use(express.json());
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -319,6 +323,18 @@ async function main() {
         });
       });
   }, 30_000);
+
+  const reconcileDesignPreviews = () => {
+    void managedGitService.retryPendingDesignCommitPreviews().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[design-preview-reconciler] iteration failed: ${message}`);
+    });
+  };
+  reconcileDesignPreviews();
+  const designPreviewReconciler = setInterval(
+    reconcileDesignPreviews,
+    DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
+  );
 
   const cloudIdleCleanupAfterMs = readDurationEnv(
     "TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS",
@@ -500,6 +516,7 @@ async function main() {
               await wsServerCleanup.dispose();
               clearInterval(staleRuntimeMonitor);
               clearInterval(deprovisionReconciler);
+              clearInterval(designPreviewReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               clearInterval(endpointTrafficCleanup);
               bridgeWss.close();

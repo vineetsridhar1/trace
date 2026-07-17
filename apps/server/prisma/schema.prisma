@@ -191,6 +191,7 @@ enum EventType {
   session_pr_closed
   session_group_archived
   session_group_renamed
+  design_preview_updated
   ticket_assigned
   ticket_unassigned
   ticket_linked
@@ -547,14 +548,19 @@ model SessionGroup {
   setupStatus              String                 @default("idle")
   setupError               String?
 
-  sessions             Session[]
-  gitCheckpoints       GitCheckpoint[]
-  bridgeAccessGrants   BridgeAccessGrant[]
-  bridgeAccessRequests BridgeAccessRequest[]
-  setupScriptRuns      SessionSetupScriptRun[]
-  applicationProcesses SessionApplicationProcess[]
-  endpoints            SessionEndpoint[]
-  appDeployments       AppDeployment[]
+  sessions                 Session[]
+  gitCheckpoints           GitCheckpoint[]
+  bridgeAccessGrants       BridgeAccessGrant[]
+  bridgeAccessRequests     BridgeAccessRequest[]
+  setupScriptRuns          SessionSetupScriptRun[]
+  applicationProcesses     SessionApplicationProcess[]
+  endpoints                SessionEndpoint[]
+  appDeployments           AppDeployment[]
+  designPreviewStatus      String?
+  designPreviewKey         String?
+  designPreviewCommitSha   String?
+  designPreviewCapturedAt  DateTime?
+  designPreviewAttemptedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -565,6 +571,7 @@ model SessionGroup {
   @@index([forkedFromSessionGroupId])
   @@index([channelId, updatedAt])
   @@index([repoId, branch, updatedAt])
+  @@index([kind, designPreviewStatus])
 }
 
 model Session {
@@ -915,6 +922,11 @@ model GitCheckpoint {
   captureUrl         String?
   captureContentType String?
   capturedAt         DateTime?
+  previewStatus      String?
+  previewKey         String?
+  previewUrl         String?
+  previewContentType String?
+  previewCapturedAt  DateTime?
   createdAt          DateTime  @default(now())
 
   sessionGroup   SessionGroup    @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)

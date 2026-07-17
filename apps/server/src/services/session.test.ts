@@ -5635,6 +5635,72 @@ describe("SessionService", () => {
       );
     });
 
+    it("refreshes managed-git credentials before re-preparing a retried app session", async () => {
+      const appRepo = {
+        id: "repo-1",
+        name: "Generated app",
+        remoteUrl: "https://trace.test/git/org-1/repo-1.git",
+        defaultBranch: "main",
+      };
+      const appSession = makeSession({
+        connection: {
+          state: "disconnected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Cloud A",
+          retryCount: 1,
+          canRetry: true,
+          canMove: true,
+        },
+        repo: appRepo,
+        sessionGroup: makeSessionGroup({ kind: "app", repo: appRepo }),
+      });
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(appSession);
+      prismaMock.session.update.mockResolvedValue(makeSession({ repo: appRepo }));
+      managedGitServiceMock.mintAccessToken.mockResolvedValue({
+        token: "replacement-runtime-token",
+        expiresAt: new Date("2026-01-01T00:00:00.000Z"),
+      });
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-a",
+        key: "org-1:runtime-a",
+        label: "Cloud A",
+        hostingMode: "cloud",
+        ws: { readyState: 1, OPEN: 1 },
+      });
+
+      await service.retryConnection("session-1", "org-1", "user", "user-1");
+
+      expect(managedGitServiceMock.mintAccessToken).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: "runtime",
+          sessionId: "session-1",
+          subject: "runtime-a",
+          capabilities: ["read", "write"],
+        }),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "prepare_app",
+          repoRemoteUrl: "https://trace:replacement-runtime-token@trace.test/git/org-1/repo-1.git",
+        }),
+        { expectedHomeRuntimeId: "runtime-a", organizationId: "org-1" },
+      );
+      const connectedUpdateIndex = prismaMock.session.update.mock.calls.findIndex((call) => {
+        const data = call[0].data as { connection?: { state?: string } };
+        return data.connection?.state === "connected";
+      });
+      expect(connectedUpdateIndex).toBeGreaterThanOrEqual(0);
+      const connectedUpdate = prismaMock.session.update.mock.calls[connectedUpdateIndex];
+      expect(connectedUpdate?.[0].data.connection).toEqual(
+        expect.objectContaining({ runtimeInstanceId: "runtime-a" }),
+      );
+      expect(prismaMock.session.update.mock.invocationCallOrder[connectedUpdateIndex]!).toBeLessThan(
+        sessionRouterMock.send.mock.invocationCallOrder[0]!,
+      );
+    });
+
     it("retries failed sessions when the connection is explicitly retryable", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({

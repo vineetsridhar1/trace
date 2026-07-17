@@ -18,6 +18,12 @@ interface BrowserPanelProps {
   url: string;
   /** Lift browser navigation so the route can persist it across remounts. */
   onUrlChange: (url: string) => void;
+  /** Refresh a managed preview after its backing runtime reports an HTTP failure. */
+  onPreviewUnavailable?: () => void;
+  /** Hide browser navigation for an immersive managed canvas. */
+  showToolbar?: boolean;
+  /** Suppress the design canvas's desktop-only HTML export control. */
+  hideExportHtml?: boolean;
   /** Top inset matching the Session Player's glass header height. */
   topInset?: number;
 }
@@ -27,7 +33,14 @@ interface BrowserPanelProps {
  * in the Session Player. Renders a simple URL bar + back/forward/reload
  * controls on top of a full-screen WebView.
  */
-export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: BrowserPanelProps) {
+export function BrowserPanel({
+  url: nextUrl,
+  onUrlChange,
+  onPreviewUnavailable,
+  showToolbar = true,
+  hideExportHtml = false,
+  topInset = 0,
+}: BrowserPanelProps) {
   const theme = useTheme();
   const resolvedUrl = nextUrl;
 
@@ -36,6 +49,8 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [webViewRevision, setWebViewRevision] = useState(0);
   const webViewRef = useRef<WebView>(null);
   const latestUrlRef = useRef(resolvedUrl);
   const lastPropUrlRef = useRef(resolvedUrl);
@@ -52,6 +67,7 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
     setCanGoBack(false);
     setCanGoForward(false);
     setLoading(false);
+    setLoadError(null);
   }, [resolvedUrl]);
 
   useEffect(() => {
@@ -110,24 +126,31 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
       setLoading(false);
       return;
     }
+    if (loadError) {
+      setLoadError(null);
+      setWebViewRevision((revision) => revision + 1);
+      onPreviewUnavailable?.();
+      return;
+    }
     webViewRef.current?.reload();
-  }, [loading]);
+  }, [loadError, loading, onPreviewUnavailable]);
 
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
-      <View style={{ height: topInset }} />
+      {showToolbar ? <View style={{ height: topInset }} /> : null}
 
-      <View
-        style={[
-          styles.toolbar,
-          {
-            backgroundColor: theme.colors.surface,
-            borderBottomColor: theme.colors.border,
-            paddingHorizontal: theme.spacing.md,
-            gap: theme.spacing.sm,
-          },
-        ]}
-      >
+      {showToolbar ? (
+        <View
+          style={[
+            styles.toolbar,
+            {
+              backgroundColor: theme.colors.surface,
+              borderBottomColor: theme.colors.border,
+              paddingHorizontal: theme.spacing.md,
+              gap: theme.spacing.sm,
+            },
+          ]}
+        >
         <Pressable
           onPress={handleBack}
           disabled={!canGoBack}
@@ -201,21 +224,68 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
             resizeMode="scaleAspectFit"
           />
         </Pressable>
-      </View>
+        </View>
+      ) : null}
 
       {url ? (
-        <WebView
-          ref={webViewRef}
-          source={webSource}
-          style={styles.webView}
-          automaticallyAdjustContentInsets={false}
-          contentInsetAdjustmentBehavior="never"
-          onNavigationStateChange={handleNavStateChange}
-          onLoadStart={() => setLoading(true)}
-          onLoadEnd={() => setLoading(false)}
-          allowsInlineMediaPlayback
-          sharedCookiesEnabled
-        />
+        loadError ? (
+          <View style={[styles.empty, { backgroundColor: theme.colors.surfaceDeep }]}>
+            <Text variant="body" color="mutedForeground" align="center">
+              {loadError}
+            </Text>
+          </View>
+        ) : (
+          <WebView
+            key={webViewRevision}
+            ref={webViewRef}
+            source={webSource}
+            style={styles.webView}
+            automaticallyAdjustContentInsets={false}
+            contentInsetAdjustmentBehavior="never"
+            onNavigationStateChange={handleNavStateChange}
+            onLoadStart={() => {
+              setLoadError(null);
+              setLoading(true);
+            }}
+            onLoadEnd={() => setLoading(false)}
+            onError={(event) => {
+              setLoading(false);
+              setLoadError(event.nativeEvent.description || "Couldn't load this page.");
+            }}
+            onHttpError={(event) => {
+              setLoading(false);
+              setLoadError(`Couldn't load this page (HTTP ${event.nativeEvent.statusCode}).`);
+              onPreviewUnavailable?.();
+            }}
+            injectedJavaScriptBeforeContentLoaded={
+              hideExportHtml
+                ? `
+                    (function () {
+                      var removeExport = function () {
+                        var exportLink = document.querySelector('a[href="/__trace_design_export"]');
+                        if (exportLink) exportLink.remove();
+                      };
+                      var observe = function () {
+                        if (!document.documentElement) {
+                          setTimeout(observe, 0);
+                          return;
+                        }
+                        new MutationObserver(removeExport).observe(document.documentElement, {
+                          childList: true,
+                          subtree: true,
+                        });
+                        removeExport();
+                      };
+                      observe();
+                    })();
+                    true;
+                  `
+                : undefined
+            }
+            allowsInlineMediaPlayback
+            sharedCookiesEnabled
+          />
+        )
       ) : (
         <View style={[styles.empty, { backgroundColor: theme.colors.surfaceDeep }]}>
           <Text variant="body" color="mutedForeground">

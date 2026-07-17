@@ -21,6 +21,10 @@ import {
 } from "../lib/session-group-status.js";
 import { assertScopeAccess, canViewSessionGroup } from "../services/access.js";
 import { storage } from "../lib/storage/index.js";
+import {
+  designCheckpointPreviewUrl,
+  designCommitPreviewUrl,
+} from "../lib/design-checkpoint-preview-url.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -720,6 +724,8 @@ export const sessionMutations = {
 
 export const sessionTypeResolvers = {
   SessionGroup: {
+    designPreviewUrl: (group: { id: string; designPreviewKey?: string | null }) =>
+      group.designPreviewKey ? designCommitPreviewUrl(group.id) : null,
     status: async (
       group: {
         id: string;
@@ -818,6 +824,14 @@ export const sessionTypeResolvers = {
       checkpoint.captureKey
         ? storage.getGetUrl(checkpoint.captureKey, { downloadFilename: "app-checkpoint.png" })
         : (checkpoint.captureUrl ?? null),
+    previewUrl: (checkpoint: {
+      id: string;
+      previewKey?: string | null;
+      previewUrl?: string | null;
+    }) =>
+      checkpoint.previewKey
+        ? designCheckpointPreviewUrl(checkpoint.id)
+        : (checkpoint.previewUrl ?? null),
     session: async (checkpoint: { sessionId: string }, _args: unknown, ctx: Context) => {
       return ctx.sessionLoader.load(checkpoint.sessionId);
     },

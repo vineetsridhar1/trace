@@ -276,6 +276,7 @@ describe("createApplication", () => {
     });
     expect(replaceMock).toHaveBeenCalledWith("/sessions/group_design/session_design");
   });
+
 });
 
 describe("startPlanImplementationSession", () => {

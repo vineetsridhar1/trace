@@ -82,7 +82,7 @@ git pull --ff-only
 
 cp deploy/docker-compose.ec2.yml docker-compose.yml
 cp deploy/Caddyfile Caddyfile
-sed -i "s/gettrace.org/${TRACE_DOMAIN}/g" Caddyfile
+sed -i "s/app.gettrace.org/${TRACE_DOMAIN}/g" Caddyfile
 
 JWT_SECRET="$(openssl rand -base64 48)"
 TOKEN_ENCRYPTION_KEY="$(openssl rand -base64 32)"

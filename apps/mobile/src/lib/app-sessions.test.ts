@@ -4,7 +4,9 @@ import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import {
   appSessionSubtitle,
   buildAppSessionGroupIds,
+  buildDesignSessionGroupIds,
   findReadyAppPreviewUrl,
+  findReadyAppPreviewEndpointId,
 } from "./app-sessions";
 
 function stateWithGroups(sessionGroups: Record<string, Record<string, unknown>>): EntityState {
@@ -71,6 +73,29 @@ describe("buildAppSessionGroupIds", () => {
   });
 });
 
+describe("buildDesignSessionGroupIds", () => {
+  it("returns only active design groups newest first", () => {
+    const state = stateWithGroups({
+      app: { id: "app", kind: "app", status: "in_progress" },
+      older: {
+        id: "older",
+        kind: "design",
+        status: "in_progress",
+        updatedAt: "2026-07-10T12:00:00.000Z",
+      },
+      newer: {
+        id: "newer",
+        kind: "design",
+        status: "needs_input",
+        updatedAt: "2026-07-11T12:00:00.000Z",
+      },
+      archived: { id: "archived", kind: "design", status: "archived" },
+    });
+
+    expect(buildDesignSessionGroupIds(state)).toEqual(["newer", "older"]);
+  });
+});
+
 describe("appSessionSubtitle", () => {
   it("prioritizes actionable and active states over event previews", () => {
     expect(
@@ -109,5 +134,11 @@ describe("findReadyAppPreviewUrl", () => {
     expect(
       findReadyAppPreviewUrl("group", [endpoint()], [process({ appConfigId: "other" })]),
     ).toBeNull();
+  });
+});
+
+describe("findReadyAppPreviewEndpointId", () => {
+  it("returns the running endpoint ID used to create a preview credential", () => {
+    expect(findReadyAppPreviewEndpointId("group", [endpoint()], [process()])).toBe("endpoint");
   });
 });

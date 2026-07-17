@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,6 +38,18 @@ test("builds the design runtime as one self-contained HTML file", async () => {
   assert.match(html, /<style>/);
   assert.doesNotMatch(html, /<script\b[^>]*\bsrc=/i);
   assert.doesNotMatch(html, /<link\b[^>]*\bhref=["'](?!data:)/i);
+  validateSelfContainedHtml(html);
+});
+
+test("builds a saved preview from the requested commit", async () => {
+  const commitSha = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: starterRoot,
+    encoding: "utf8",
+  }).trim();
+
+  const html = await buildSelfContainedHtml(starterRoot, commitSha);
+
+  assert.match(html, /<script type="module">/);
   validateSelfContainedHtml(html);
 });
 

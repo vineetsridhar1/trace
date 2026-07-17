@@ -424,6 +424,7 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_preview_updated"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -499,6 +500,10 @@ export type GitCheckpoint = {
   filesChanged: Scalars["Int"]["output"];
   id: Scalars["ID"]["output"];
   parentShas: Array<Scalars["String"]["output"]>;
+  previewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  previewContentType?: Maybe<Scalars["String"]["output"]>;
+  previewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  previewUrl?: Maybe<Scalars["String"]["output"]>;
   promptEvent?: Maybe<Event>;
   promptEventId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
@@ -2014,6 +2019,10 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  designPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
+  designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;

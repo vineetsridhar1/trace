@@ -294,6 +294,7 @@ enum EventType {
   session_pr_closed
   session_group_archived
   session_group_renamed
+  design_preview_updated
   chat_created
   chat_member_added
   chat_member_removed
@@ -514,6 +515,10 @@ type SessionGroup {
   repo: Repo
   branch: String
   gitCheckpoints: [GitCheckpoint!]!
+  designPreviewStatus: GitCheckpointCaptureStatus
+  designPreviewUrl: String
+  designPreviewCommitSha: String
+  designPreviewCapturedAt: DateTime
   sessions: [Session!]!
   workdir: String
   connection: SessionConnection
@@ -617,6 +622,10 @@ type GitCheckpoint {
   captureUrl: String
   captureContentType: String
   capturedAt: DateTime
+  previewStatus: GitCheckpointCaptureStatus
+  previewUrl: String
+  previewContentType: String
+  previewCapturedAt: DateTime
   createdAt: DateTime!
 }
 
