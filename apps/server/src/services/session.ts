@@ -4926,6 +4926,7 @@ export class SessionService {
             ownerUserId: true,
             connection: true,
             workdir: true,
+            sessions: { select: { id: true, agentStatus: true } },
           },
         },
         channel: { select: { baseBranch: true } },
@@ -4971,6 +4972,21 @@ export class SessionService {
       (config.hosting != null || config.runtimeInstanceId != null);
     if (runtimeChanged && isGeneratedProjectKind(prev.sessionGroup?.kind)) {
       throw new ValidationError("App and Design sessions use a fixed cloud runtime");
+    }
+    if (
+      runtimeChanged &&
+      prev.sessionGroup &&
+      hasRuntimeBinding(
+        this.parseConnection(prev.sessionGroup.connection),
+        prev.sessionGroup.workdir,
+      ) &&
+      prev.sessionGroup.sessions.some(
+        (session) => session.id !== prev.id && session.agentStatus !== "not_started",
+      )
+    ) {
+      throw new ValidationError(
+        "This session group already has started sessions on a bridge. Use Move to switch the entire session group.",
+      );
     }
     let requestedEnvironment: Awaited<
       ReturnType<typeof agentEnvironmentService.resolveForSessionRequest>

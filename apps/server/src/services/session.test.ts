@@ -5802,6 +5802,7 @@ describe("SessionService", () => {
           connection: { runtimeInstanceId: "runtime-a" },
           sessionGroup: makeSessionGroup({
             connection: { runtimeInstanceId: "runtime-a" },
+            sessions: [{ id: "session-1", agentStatus: "not_started" }],
           }),
         }),
       );
@@ -5833,6 +5834,39 @@ describe("SessionService", () => {
         }),
       );
       expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
+    });
+
+    it("requires a group move when a peer session has started", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          agentStatus: "not_started",
+          sessionGroupId: "group-1",
+          connection: { runtimeInstanceId: "runtime-a" },
+          sessionGroup: makeSessionGroup({
+            connection: { runtimeInstanceId: "runtime-a" },
+            sessions: [
+              { id: "session-1", agentStatus: "not_started" },
+              { id: "session-2", agentStatus: "done" },
+            ],
+          }),
+        }),
+      );
+
+      await expect(
+        service.updateConfig(
+          "session-1",
+          "org-1",
+          { runtimeInstanceId: "runtime-b" },
+          "user",
+          "user-1",
+        ),
+      ).rejects.toThrow(
+        "This session group already has started sessions on a bridge. Use Move to switch the entire session group.",
+      );
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+      expect(terminalRelayMock.destroyAllForSessionGroup).not.toHaveBeenCalled();
     });
   });
 
