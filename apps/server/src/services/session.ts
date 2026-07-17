@@ -3198,9 +3198,6 @@ export class SessionService {
       if (!existingGroup && !input.restoreCheckpointId && input.repoId) {
         throw new ValidationError(`${label} sessions cannot start from a linked repo`);
       }
-      if (!existingGroup && !input.restoreCheckpointId && !input.prompt?.trim()) {
-        throw new ValidationError(`${label} sessions require an initial prompt`);
-      }
       if (input.hosting === "local") {
         throw new ValidationError(`${label} sessions require cloud hosting`);
       }

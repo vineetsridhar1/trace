@@ -16,7 +16,7 @@ import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 import { useMobileUIStore } from "@/stores/ui";
 
 const pendingQuickSessionChannels = new Set<string>();
-let appCreationPending = false;
+const pendingGeneratedSessionKinds = new Set<"app" | "design">();
 
 interface CreateAgentTabOptions {
   navigate?: (sessionGroupId: string, sessionId: string) => void;
@@ -66,13 +66,11 @@ export async function createQuickSession(channelId: string): Promise<void> {
   }
 }
 
-/**
- * Create a standalone cloud app session and open its chat/preview workspace.
- */
-export async function createApplication(prompt: string): Promise<boolean> {
-  const trimmedPrompt = prompt.trim();
-  if (!trimmedPrompt || appCreationPending) return false;
-  appCreationPending = true;
+/** Create a standalone cloud-generated session and open its empty composer. */
+export async function createGeneratedSession(kind: "app" | "design"): Promise<boolean> {
+  if (pendingGeneratedSessionKinds.has(kind)) return false;
+  pendingGeneratedSessionKinds.add(kind);
+  const label = kind === "design" ? "design" : "application";
 
   void haptic.light();
 
@@ -80,9 +78,8 @@ export async function createApplication(prompt: string): Promise<boolean> {
     const result = await getClient()
       .mutation<{ startSession: { id: string; sessionGroupId: string } }>(START_SESSION_MUTATION, {
         input: {
-          kind: "app",
+          kind,
           hosting: "cloud",
-          prompt: trimmedPrompt,
         },
       })
       .toPromise();
@@ -93,7 +90,7 @@ export async function createApplication(prompt: string): Promise<boolean> {
     }
 
     void fetchSessionGroupDetail(session.sessionGroupId).catch((error: unknown) => {
-      console.warn("[createApplication] failed to prefetch session group", error);
+      console.warn("[createGeneratedSession] failed to prefetch session group", error);
     });
 
     const ui = useMobileUIStore.getState();
@@ -103,11 +100,19 @@ export async function createApplication(prompt: string): Promise<boolean> {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Please try again.";
     void haptic.error();
-    Alert.alert("Couldn't build application", message);
+    Alert.alert(`Couldn't create ${label}`, message);
     return false;
   } finally {
-    appCreationPending = false;
+    pendingGeneratedSessionKinds.delete(kind);
   }
+}
+
+export function createApplication(): Promise<boolean> {
+  return createGeneratedSession("app");
+}
+
+export function createDesign(): Promise<boolean> {
+  return createGeneratedSession("design");
 }
 
 /**

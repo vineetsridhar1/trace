@@ -76,25 +76,23 @@ export async function createQuickSession(
   }
 }
 
-export async function createAppSession(prompt: string): Promise<boolean> {
-  return createGeneratedProjectSession("app", prompt);
+export async function createAppSession(): Promise<boolean> {
+  return createGeneratedProjectSession("app");
 }
 
-export function buildGeneratedProjectStartInput(kind: "app" | "design", prompt: string) {
+export function buildGeneratedProjectStartInput(kind: "app" | "design") {
   return {
     kind,
     hosting: "cloud" as const,
-    prompt: prompt.trim(),
   };
 }
 
-export async function createDesignSession(prompt: string): Promise<boolean> {
-  return createGeneratedProjectSession("design", prompt);
+export async function createDesignSession(): Promise<boolean> {
+  return createGeneratedProjectSession("design");
 }
 
 async function createGeneratedProjectSession(
   kind: "app" | "design",
-  prompt: string,
 ): Promise<boolean> {
   if (pendingGeneratedProjectKinds.has(kind)) return false;
   pendingGeneratedProjectKinds.add(kind);
@@ -103,7 +101,7 @@ async function createGeneratedProjectSession(
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
-        input: buildGeneratedProjectStartInput(kind, prompt),
+        input: buildGeneratedProjectStartInput(kind),
       })
       .toPromise();
 
