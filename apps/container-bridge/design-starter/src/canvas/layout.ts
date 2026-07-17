@@ -10,21 +10,21 @@ export type PlacedScreen = {
   sectionName: string;
 };
 
-/** Arrange unspecified screens and sections in a vertical reading flow. */
+/** Arrange each section as a horizontal flow row, with sections stacked vertically. */
 export function placeScreens(manifest: DesignManifest): PlacedScreen[] {
   const byId = new Map(manifest.screens.map((screen) => [screen.id, screen]));
   let sectionY = 0;
   const result: PlacedScreen[] = [];
 
   for (const section of manifest.sections) {
-    let fallbackY = sectionY + 54;
+    let fallbackX = 0;
     let maxBottom = sectionY;
     for (const id of section.screenIds) {
       const screen = byId.get(id)!;
-      const x = screen.position?.x ?? 0;
-      const y = screen.position ? sectionY + screen.position.y : fallbackY;
+      const x = screen.position?.x ?? fallbackX;
+      const y = screen.position ? sectionY + screen.position.y : sectionY + 54;
       result.push({ screen, x, y, sectionName: section.name });
-      fallbackY = Math.max(fallbackY, y + screen.viewport.height + GAP);
+      fallbackX = Math.max(fallbackX, x + screen.viewport.width + GAP);
       maxBottom = Math.max(maxBottom, y + screen.viewport.height);
     }
     sectionY = maxBottom + SECTION_GAP;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { placeScreens } from "./layout";
 
-test("stacks screens and sections vertically when positions are omitted", () => {
+test("lays out screens as rows and stacks sections vertically when positions are omitted", () => {
   const placed = placeScreens({
     version: 1,
     sections: [
@@ -35,13 +35,13 @@ test("stacks screens and sections vertically when positions are omitted", () => 
     placed.map(({ x, y }) => ({ x, y })),
     [
       { x: 0, y: 54 },
-      { x: 0, y: 950 },
-      { x: 0, y: 1784 },
+      { x: 496, y: 54 },
+      { x: 0, y: 1088 },
     ],
   );
 });
 
-test("keeps explicit screen coordinates relative to its vertically stacked section", () => {
+test("keeps explicit screen coordinates relative to its section row", () => {
   const [placed] = placeScreens({
     version: 1,
     sections: [{ id: "main", name: "Main", screenIds: ["screen"] }],
