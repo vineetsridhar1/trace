@@ -1,95 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { gql } from "@urql/core";
-import type { GitCheckpoint, SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
+import { useMemo } from "react";
+import type { GitCheckpoint } from "@trace/gql";
 import { useEntityStore } from "@trace/client-core";
-import { client } from "../../../lib/urql";
 import { AppPreview } from "./AppPreview";
 import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
-import { findReadyPreviewEndpoint } from "./app-preview-readiness";
 import { SavedDesignPreview } from "./SavedDesignPreview";
 import { latestSavedDesignPreviewUrl } from "./saved-design-preview";
-
-const APP_PREVIEW_ENDPOINTS_QUERY = gql`
-  query AppPreviewState($sessionGroupId: ID!) {
-    sessionEndpoints(sessionGroupId: $sessionGroupId) {
-      id
-      sessionGroupId
-      appConfigId
-      processConfigId
-      portConfigId
-      label
-      targetPort
-      url
-      status
-      accessMode
-      trafficCaptureMode
-      enabledAt
-      disabledAt
-      revokedAt
-    }
-    sessionApplicationProcesses(sessionGroupId: $sessionGroupId) {
-      id
-      sessionGroupId
-      appConfigId
-      processConfigId
-      label
-      status
-      runtimeInstanceId
-      startedAt
-      stoppedAt
-      exitCode
-      lastError
-    }
-  }
-`;
+import { useProjectPreviewData } from "./useProjectPreviewData";
 
 export function GeneratedProjectPreviewPanel({ sessionGroupId }: { sessionGroupId: string }) {
-  const endpointTable = useEntityStore((s) => s.sessionEndpoints);
-  const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
   const gitCheckpoints = useEntityStore(
     (s) => s.sessionGroups[sessionGroupId]?.gitCheckpoints as GitCheckpoint[] | undefined,
   );
-  const upsertMany = useEntityStore((s) => s.upsertMany);
-  const projectKind = useEntityStore((s) =>
-    s.sessionGroups[sessionGroupId]?.kind === "design" ? "design" : "app",
-  );
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setError(null);
-    try {
-      const result = await client
-        .query(APP_PREVIEW_ENDPOINTS_QUERY, { sessionGroupId }, { requestPolicy: "network-only" })
-        .toPromise();
-      if (result.error) throw new Error(result.error.message);
-      const endpoints = (result.data?.sessionEndpoints as SessionEndpoint[] | undefined) ?? [];
-      upsertMany("sessionEndpoints", endpoints);
-      const processes =
-        (result.data?.sessionApplicationProcesses as SessionApplicationProcess[] | undefined) ?? [];
-      upsertMany("sessionApplicationProcesses", processes);
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : `Failed to load the ${projectKind} preview`,
-      );
-    }
-  }, [projectKind, sessionGroupId, upsertMany]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  const endpoint = useMemo(
-    () =>
-      findReadyPreviewEndpoint(
-        sessionGroupId,
-        Object.values(endpointTable),
-        Object.values(processTable),
-      ),
-    [endpointTable, processTable, sessionGroupId],
-  );
+  const { endpoint, error, refresh } = useProjectPreviewData(sessionGroupId, "design");
   const savedDesignPreviewUrl = useMemo(
-    () => (projectKind === "design" ? latestSavedDesignPreviewUrl(gitCheckpoints) : null),
-    [gitCheckpoints, projectKind],
+    () => latestSavedDesignPreviewUrl(gitCheckpoints),
+    [gitCheckpoints],
   );
 
   if (endpoint)
@@ -99,7 +24,7 @@ export function GeneratedProjectPreviewPanel({ sessionGroupId }: { sessionGroupI
         endpointId={endpoint.id}
         status="running"
         fill
-        title={projectKind === "design" ? "Live design preview" : "Live app preview"}
+        title="Live design preview"
       />
     );
 
@@ -109,7 +34,7 @@ export function GeneratedProjectPreviewPanel({ sessionGroupId }: { sessionGroupI
     <AppPreviewCanvasSkeleton
       error={error}
       onRetry={() => void refresh()}
-      projectKind={projectKind}
+      projectKind="design"
     />
   );
 }

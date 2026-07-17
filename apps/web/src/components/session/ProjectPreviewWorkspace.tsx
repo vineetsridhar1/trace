@@ -4,13 +4,14 @@ import { cn } from "../../lib/utils";
 import { useSidebar } from "../ui/sidebar";
 import { SessionDetailView } from "./SessionDetailView";
 
-export function GeneratedProjectWorkspace({
+export function ProjectPreviewWorkspace({
   sessionId,
   scrollToEventId,
   onScrollComplete,
   onForkSession,
   canForkSession,
   canvasReady,
+  canvasKey,
   canvas,
 }: {
   sessionId: string | null;
@@ -19,6 +20,7 @@ export function GeneratedProjectWorkspace({
   onForkSession: (eventId: string) => void;
   canForkSession: boolean;
   canvasReady: boolean;
+  canvasKey: string;
   canvas: ReactNode;
 }) {
   const [canvasRevealed, setCanvasRevealed] = useState(canvasReady);
@@ -39,8 +41,6 @@ export function GeneratedProjectWorkspace({
     setCanvasRevealed(true);
     if (hasCollapsedRef.current) return;
     hasCollapsedRef.current = true;
-    // Only collapse (and later restore) if the sidebar was open — if the user
-    // had already collapsed it themselves, leave it alone.
     const wasOpen = isMobile ? openMobile : open;
     if (!wasOpen) return;
     collapsedByUsRef.current = true;
@@ -48,18 +48,16 @@ export function GeneratedProjectWorkspace({
     else setOpen(false);
   }, [canvasReady, isMobile, open, openMobile, setOpen, setOpenMobile]);
 
-  // Restore the shared sidebar when leaving the app canvas, but only if we were
-  // the ones who collapsed it.
   useEffect(() => {
     return () => {
       if (!collapsedByUsRef.current) return;
       const {
         isMobile: mobile,
-        setOpen: open_,
-        setOpenMobile: openMobile_,
+        setOpen: setDesktopOpen,
+        setOpenMobile: setMobileOpen,
       } = sidebarApiRef.current;
-      if (mobile) openMobile_(true);
-      else open_(true);
+      if (mobile) setMobileOpen(true);
+      else setDesktopOpen(true);
     };
   }, []);
 
@@ -94,7 +92,7 @@ export function GeneratedProjectWorkspace({
       <AnimatePresence initial={false}>
         {canvasRevealed ? (
           <motion.main
-            key="generated-project-canvas"
+            key={canvasKey}
             initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: 48 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 48 }}
