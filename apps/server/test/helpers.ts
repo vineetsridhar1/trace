@@ -287,6 +287,14 @@ export function createPrismaMock() {
       update: vi.fn(),
       delete: vi.fn(),
     },
+    appDeployment: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
     sessionProject: {
       create: vi.fn(),
       findMany: vi.fn(),

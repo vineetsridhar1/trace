@@ -207,6 +207,8 @@ export {
   hasVisibleUserSessionContent,
 } from "./session-content.js";
 export { PROVISIONED_RUNTIME_PREFIX, isProvisionedRuntimeId } from "./runtime-ids.js";
+export { APP_DEPLOYMENT_JOB_VERSION } from "./app-deployment.js";
+export type { AppDeploymentJob } from "./app-deployment.js";
 export {
   branchNameFromGitRef,
   branchNamesFromGitRefsOutput,

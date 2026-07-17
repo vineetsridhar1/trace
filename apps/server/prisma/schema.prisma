@@ -234,6 +234,18 @@ enum EventType {
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  app_deployment_queued
+  app_deployment_updated
+}
+
+enum AppDeploymentStatus {
+  queued
+  building
+  deploying
+  live
+  failed
+  superseded
+  stopped
 }
 
 enum SessionApplicationProcessStatus {
@@ -291,6 +303,7 @@ model Organization {
   sessionSetupScriptRuns      SessionSetupScriptRun[]
   sessionApplicationProcesses SessionApplicationProcess[]
   sessionEndpoints            SessionEndpoint[]
+  appDeployments              AppDeployment[]
   agentEnvironments           AgentEnvironment[]
   orgSecrets                  OrgSecret[]
   slackInstalls               SlackInstall[]
@@ -403,6 +416,7 @@ model Repo {
   sessionSetupScriptRuns      SessionSetupScriptRun[]
   sessionApplicationProcesses SessionApplicationProcess[]
   sessionEndpoints            SessionEndpoint[]
+  appDeployments              AppDeployment[]
 
   webhookId     String?
   webhookSecret String?
@@ -540,6 +554,7 @@ model SessionGroup {
   setupScriptRuns      SessionSetupScriptRun[]
   applicationProcesses SessionApplicationProcess[]
   endpoints            SessionEndpoint[]
+  appDeployments       AppDeployment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -883,34 +898,63 @@ model Event {
 }
 
 model GitCheckpoint {
-  id             String   @id @default(uuid())
-  sessionId      String
-  sessionGroupId String
-  repoId         String
-  promptEventId  String
-  commitSha      String
-  parentShas     String[]
-  treeSha        String
-  subject        String
-  author         String
-  committedAt    DateTime
-  filesChanged   Int
+  id                 String    @id @default(uuid())
+  sessionId          String
+  sessionGroupId     String
+  repoId             String
+  promptEventId      String
+  commitSha          String
+  parentShas         String[]
+  treeSha            String
+  subject            String
+  author             String
+  committedAt        DateTime
+  filesChanged       Int
   captureStatus      String?
   captureKey         String?
   captureUrl         String?
   captureContentType String?
   capturedAt         DateTime?
-  createdAt      DateTime @default(now())
+  createdAt          DateTime  @default(now())
 
-  sessionGroup SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
-  repo         Repo         @relation(fields: [repoId], references: [id], onDelete: Cascade)
-  promptEvent  Event        @relation("GitCheckpointPromptEvent", fields: [promptEventId], references: [id], onDelete: Restrict)
+  sessionGroup   SessionGroup    @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repo           Repo            @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  promptEvent    Event           @relation("GitCheckpointPromptEvent", fields: [promptEventId], references: [id], onDelete: Restrict)
+  appDeployments AppDeployment[]
 
   @@unique([sessionGroupId, commitSha])
   @@index([sessionId, committedAt])
   @@index([sessionGroupId, committedAt])
   @@index([repoId, committedAt])
   @@index([promptEventId])
+}
+
+model AppDeployment {
+  id                 String              @id @default(uuid())
+  organizationId     String
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId     String
+  sessionGroup       SessionGroup        @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
+  repoId             String
+  repo               Repo                @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  sourceCheckpointId String
+  sourceCheckpoint   GitCheckpoint       @relation(fields: [sourceCheckpointId], references: [id], onDelete: Restrict)
+  commitSha          String
+  status             AppDeploymentStatus @default(queued)
+  requestedByUserId  String
+  externalJobId      String?
+  imageDigest        String?
+  url                String?
+  errorMessage       String?
+  queuedAt           DateTime            @default(now())
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([organizationId, sessionGroupId, createdAt])
+  @@index([sessionGroupId, status])
+  @@index([sourceCheckpointId])
 }
 
 model BridgeRuntime {

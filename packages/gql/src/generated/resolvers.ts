@@ -76,6 +76,34 @@ export type ApiTokenStatus = {
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type AppDeployment = {
+  __typename?: "AppDeployment";
+  commitSha: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  errorMessage?: Maybe<Scalars["String"]["output"]>;
+  externalJobId?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  imageDigest?: Maybe<Scalars["String"]["output"]>;
+  queuedAt: Scalars["DateTime"]["output"];
+  repoId: Scalars["ID"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceCheckpointId: Scalars["ID"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: AppDeploymentStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+  url?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type AppDeploymentStatus =
+  | "building"
+  | "deploying"
+  | "failed"
+  | "live"
+  | "queued"
+  | "stopped"
+  | "superseded";
+
 export type ApplicationProcessStatus =
   | "exited"
   | "failed"
@@ -380,6 +408,8 @@ export type EventType =
   | "agent_environment_created"
   | "agent_environment_deleted"
   | "agent_environment_updated"
+  | "app_deployment_queued"
+  | "app_deployment_updated"
   | "application_config_updated"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
@@ -649,7 +679,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
-  publishAppSession: SessionEndpoint;
+  publishAppSession: AppDeployment;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -1317,6 +1347,7 @@ export type PushPlatform = "android" | "ios";
 export type Query = {
   __typename?: "Query";
   agentEnvironments: Array<AgentEnvironment>;
+  appDeployments: Array<AppDeployment>;
   /**
    * App-kind session groups for the org. Apps have no channel, so this is their
    * listing surface (the sidebar Apps section).
@@ -1387,6 +1418,10 @@ export type Query = {
 
 export type QueryAgentEnvironmentsArgs = {
   orgId: Scalars["ID"]["input"];
+};
+
+export type QueryAppDeploymentsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryAppSessionGroupsArgs = {
@@ -2426,6 +2461,8 @@ export type ResolversTypes = ResolversObject<{
   AgentStatus: AgentStatus;
   ApiTokenProvider: ApiTokenProvider;
   ApiTokenStatus: ResolverTypeWrapper<ApiTokenStatus>;
+  AppDeployment: ResolverTypeWrapper<AppDeployment>;
+  AppDeploymentStatus: AppDeploymentStatus;
   ApplicationProcessStatus: ApplicationProcessStatus;
   Boolean: ResolverTypeWrapper<Scalars["Boolean"]["output"]>;
   BranchDiffFile: ResolverTypeWrapper<BranchDiffFile>;
@@ -2575,6 +2612,7 @@ export type ResolversParentTypes = ResolversObject<{
   AgentEnvironment: AgentEnvironment;
   AgentEnvironmentTestResult: AgentEnvironmentTestResult;
   ApiTokenStatus: ApiTokenStatus;
+  AppDeployment: AppDeployment;
   Boolean: Scalars["Boolean"]["output"];
   BranchDiffFile: BranchDiffFile;
   BridgeAccessGrant: BridgeAccessGrant;
@@ -2725,6 +2763,28 @@ export type ApiTokenStatusResolvers<
   isSet?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   provider?: Resolver<ResolversTypes["ApiTokenProvider"], ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type AppDeploymentResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["AppDeployment"] = ResolversParentTypes["AppDeployment"],
+> = ResolversObject<{
+  commitSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  completedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  errorMessage?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  externalJobId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  imageDigest?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  queuedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  repoId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sourceCheckpointId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  startedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["AppDeploymentStatus"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  url?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3454,7 +3514,7 @@ export type MutationResolvers<
     RequireFields<MutationMuteScopeArgs, "scopeId" | "scopeType">
   >;
   publishAppSession?: Resolver<
-    ResolversTypes["SessionEndpoint"],
+    ResolversTypes["AppDeployment"],
     ParentType,
     ContextType,
     RequireFields<MutationPublishAppSessionArgs, "sessionGroupId">
@@ -3900,6 +3960,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryAgentEnvironmentsArgs, "orgId">
+  >;
+  appDeployments?: Resolver<
+    Array<ResolversTypes["AppDeployment"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryAppDeploymentsArgs, "sessionGroupId">
   >;
   appSessionGroups?: Resolver<
     Array<ResolversTypes["SessionGroup"]>,
@@ -4831,6 +4897,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   AgentEnvironment?: AgentEnvironmentResolvers<ContextType>;
   AgentEnvironmentTestResult?: AgentEnvironmentTestResultResolvers<ContextType>;
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
+  AppDeployment?: AppDeploymentResolvers<ContextType>;
   BranchDiffFile?: BranchDiffFileResolvers<ContextType>;
   BridgeAccessGrant?: BridgeAccessGrantResolvers<ContextType>;
   BridgeAccessRequest?: BridgeAccessRequestResolvers<ContextType>;

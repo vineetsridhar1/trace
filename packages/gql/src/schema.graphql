@@ -333,6 +333,18 @@ enum EventType {
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  app_deployment_queued
+  app_deployment_updated
+}
+
+enum AppDeploymentStatus {
+  queued
+  building
+  deploying
+  live
+  failed
+  superseded
+  stopped
 }
 
 # --- Core Types ---
@@ -507,7 +519,9 @@ type SessionGroup {
   connection: SessionConnection
   prUrl: String
   worktreeDeleted: Boolean!
-  """True when the workspace is a user-owned worktree imported into Trace."""
+  """
+  True when the workspace is a user-owned worktree imported into Trace.
+  """
   worktreeAdopted: Boolean!
   archivedAt: DateTime
   setupStatus: SetupStatus!
@@ -516,13 +530,17 @@ type SessionGroup {
   updatedAt: DateTime!
 }
 
-"""An existing git worktree of a repo on a local runtime, offered for import."""
+"""
+An existing git worktree of a repo on a local runtime, offered for import.
+"""
 type RepoWorktree {
   path: String!
   branch: String
   head: String
   isMain: Boolean!
-  """True when the worktree is already managed by Trace (not a candidate for import)."""
+  """
+  True when the worktree is already managed by Trace (not a candidate for import).
+  """
   isTraceManaged: Boolean!
 }
 
@@ -847,6 +865,24 @@ type SessionEndpointPreview {
   expiresAt: DateTime!
 }
 
+type AppDeployment {
+  id: ID!
+  sessionGroupId: ID!
+  repoId: ID!
+  sourceCheckpointId: ID!
+  commitSha: String!
+  status: AppDeploymentStatus!
+  externalJobId: String
+  imageDigest: String
+  url: String
+  errorMessage: String
+  queuedAt: DateTime!
+  startedAt: DateTime
+  completedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
 type EndpointTrafficEntry {
   id: ID!
   endpointId: ID!
@@ -1101,7 +1137,9 @@ input StartSessionInput {
   projectId: ID
   prompt: String
   interactionMode: String
-  """Absolute path to an existing local worktree to adopt instead of creating one. Local hosting only."""
+  """
+  Absolute path to an existing local worktree to adopt instead of creating one. Local hosting only.
+  """
   worktreePath: String
 }
 
@@ -1337,7 +1375,9 @@ type Query {
   myConnections: [ConnectionsBridge!]!
   bridgeRuntimeAccess(runtimeInstanceId: ID!, sessionGroupId: ID): BridgeRuntimeAccess!
   repoBranches(repoId: ID!, runtimeInstanceId: ID, sessionGroupId: ID): [String!]!
-  """Existing on-disk worktrees of a repo on a local runtime, available to import."""
+  """
+  Existing on-disk worktrees of a repo on a local runtime, available to import.
+  """
   repoWorktrees(repoId: ID!, runtimeInstanceId: ID): [RepoWorktree!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
   sessionGroupFileTree(sessionGroupId: ID!): SessionGroupFileTree!
@@ -1386,6 +1426,7 @@ type Query {
     beforeSequence: Int
   ): [SessionApplicationLogEntry!]!
   sessionEndpoints(sessionGroupId: ID!): [SessionEndpoint!]!
+  appDeployments(sessionGroupId: ID!): [AppDeployment!]!
   endpointTraffic(endpointId: ID!, limit: Int, before: DateTime): [EndpointTrafficEntry!]!
   searchUsers(query: String!): [User!]!
 }
@@ -1468,7 +1509,9 @@ type Mutation {
   reorderChannels(input: ReorderChannelsInput!): [Channel!]!
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
-  """Adopt an existing local worktree into a not-yet-started session's group (local hosting only)."""
+  """
+  Adopt an existing local worktree into a not-yet-started session's group (local hosting only).
+  """
   importWorktree(sessionId: ID!, worktreePath: String!, branch: String): SessionGroup!
   forkSession(eventId: ID!): Session!
   runSession(id: ID!, prompt: String, interactionMode: String): Session!
@@ -1618,7 +1661,7 @@ type Mutation {
   ): SessionEndpoint!
   clearEndpointTraffic(endpointId: ID!): Boolean!
   createSessionEndpointPreview(endpointId: ID!): SessionEndpointPreview!
-  publishAppSession(sessionGroupId: ID!): SessionEndpoint!
+  publishAppSession(sessionGroupId: ID!): AppDeployment!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!

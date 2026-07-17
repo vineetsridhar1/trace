@@ -73,6 +73,34 @@ export type ApiTokenStatus = {
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type AppDeployment = {
+  __typename?: "AppDeployment";
+  commitSha: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  errorMessage?: Maybe<Scalars["String"]["output"]>;
+  externalJobId?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  imageDigest?: Maybe<Scalars["String"]["output"]>;
+  queuedAt: Scalars["DateTime"]["output"];
+  repoId: Scalars["ID"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceCheckpointId: Scalars["ID"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: AppDeploymentStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+  url?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type AppDeploymentStatus =
+  | "building"
+  | "deploying"
+  | "failed"
+  | "live"
+  | "queued"
+  | "stopped"
+  | "superseded";
+
 export type ApplicationProcessStatus =
   | "exited"
   | "failed"
@@ -377,6 +405,8 @@ export type EventType =
   | "agent_environment_created"
   | "agent_environment_deleted"
   | "agent_environment_updated"
+  | "app_deployment_queued"
+  | "app_deployment_updated"
   | "application_config_updated"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
@@ -646,7 +676,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
-  publishAppSession: SessionEndpoint;
+  publishAppSession: AppDeployment;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -1314,6 +1344,7 @@ export type PushPlatform = "android" | "ios";
 export type Query = {
   __typename?: "Query";
   agentEnvironments: Array<AgentEnvironment>;
+  appDeployments: Array<AppDeployment>;
   /**
    * App-kind session groups for the org. Apps have no channel, so this is their
    * listing surface (the sidebar Apps section).
@@ -1384,6 +1415,10 @@ export type Query = {
 
 export type QueryAgentEnvironmentsArgs = {
   orgId: Scalars["ID"]["input"];
+};
+
+export type QueryAppDeploymentsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryAppSessionGroupsArgs = {
