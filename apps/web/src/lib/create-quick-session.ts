@@ -85,11 +85,6 @@ export function buildGeneratedProjectStartInput(kind: "app" | "design", prompt: 
     kind,
     hosting: "cloud" as const,
     prompt: prompt.trim(),
-    // Generated-project dialogs deliberately have no runtime picker. Codex is
-    // the cloud runtime's built-in path, whereas the historical Claude default
-    // requires a separately configured Anthropic key and otherwise leaves a
-    // newly-created design session unable to run its initial prompt.
-    tool: "codex" as const,
   };
 }
 
