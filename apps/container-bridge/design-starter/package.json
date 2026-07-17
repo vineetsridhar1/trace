@@ -11,7 +11,7 @@
     "design:check": "tsx scripts/check-design.ts",
     "design:review": "tsx scripts/review-design.ts",
     "smoke": "vite build",
-    "test": "tsx --test src/canvas/artboard.test.tsx src/canvas/manifest.test.ts src/canvas/viewport.test.ts src/design/brief.test.ts src/design/tokens.test.ts src/design/primitives/primitives.test.tsx scripts/design-qa.test.ts server/export-html.test.ts docs/agent-contract.test.ts"
+    "test": "tsx --test src/canvas/artboard.test.tsx src/canvas/layout.test.ts src/canvas/manifest.test.ts src/canvas/viewport.test.ts src/design/brief.test.ts src/design/tokens.test.ts src/design/primitives/primitives.test.tsx scripts/design-qa.test.ts server/export-html.test.ts docs/agent-contract.test.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.0",
