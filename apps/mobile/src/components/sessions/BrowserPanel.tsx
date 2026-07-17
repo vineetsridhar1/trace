@@ -20,6 +20,8 @@ interface BrowserPanelProps {
   onUrlChange: (url: string) => void;
   /** Refresh a managed preview after its backing runtime reports an HTTP failure. */
   onPreviewUnavailable?: () => void;
+  /** Hide browser navigation for an immersive managed canvas. */
+  showToolbar?: boolean;
   /** Top inset matching the Session Player's glass header height. */
   topInset?: number;
 }
@@ -33,6 +35,7 @@ export function BrowserPanel({
   url: nextUrl,
   onUrlChange,
   onPreviewUnavailable,
+  showToolbar = true,
   topInset = 0,
 }: BrowserPanelProps) {
   const theme = useTheme();
@@ -131,19 +134,20 @@ export function BrowserPanel({
 
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
-      <View style={{ height: topInset }} />
+      {showToolbar ? <View style={{ height: topInset }} /> : null}
 
-      <View
-        style={[
-          styles.toolbar,
-          {
-            backgroundColor: theme.colors.surface,
-            borderBottomColor: theme.colors.border,
-            paddingHorizontal: theme.spacing.md,
-            gap: theme.spacing.sm,
-          },
-        ]}
-      >
+      {showToolbar ? (
+        <View
+          style={[
+            styles.toolbar,
+            {
+              backgroundColor: theme.colors.surface,
+              borderBottomColor: theme.colors.border,
+              paddingHorizontal: theme.spacing.md,
+              gap: theme.spacing.sm,
+            },
+          ]}
+        >
         <Pressable
           onPress={handleBack}
           disabled={!canGoBack}
@@ -217,7 +221,8 @@ export function BrowserPanel({
             resizeMode="scaleAspectFit"
           />
         </Pressable>
-      </View>
+        </View>
+      ) : null}
 
       {url ? (
         loadError ? (

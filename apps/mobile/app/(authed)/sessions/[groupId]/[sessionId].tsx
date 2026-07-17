@@ -76,6 +76,7 @@ export default function SessionStreamScreen() {
     | null
     | undefined;
   const isGeneratedProjectGroup = groupKind === "app" || groupKind === "design";
+  const isDesignGroup = groupKind === "design";
   const generatedProjectLabel = groupKind === "design" ? "design" : "app";
   const {
     url: appPreviewUrl,
@@ -166,6 +167,7 @@ export default function SessionStreamScreen() {
           ? "browser"
           : "session"
         : activePane;
+  const showDesignCanvas = isDesignGroup && appPage === 1 && activePane !== "terminal";
   useSessionPorts(sessionId, browserEnabled);
 
   useEffect(() => {
@@ -187,6 +189,7 @@ export default function SessionStreamScreen() {
               activePane={headerPane}
               browserEnabled={browserEnabled}
               onOpenBrowser={openBrowser}
+              minimal={showDesignCanvas}
               onBack={
                 activePane === "terminal"
                   ? () => navigateToPane("session")
@@ -200,7 +203,7 @@ export default function SessionStreamScreen() {
                       : closeSessionPlayer
               }
             />
-            <ActiveTodoStrip sessionId={sessionId} />
+            {showDesignCanvas ? null : <ActiveTodoStrip sessionId={sessionId} />}
           </View>
         )}
       </View>
@@ -235,6 +238,7 @@ export default function SessionStreamScreen() {
                 ref={pagerRef}
                 initialPage={pane === "browser" ? 1 : 0}
                 onPageSelected={(event) => setAppPage(event.nativeEvent.position)}
+                scrollEnabled={!isDesignGroup || appPage === 0}
                 overdrag
                 style={styles.pager}
               >
@@ -252,7 +256,8 @@ export default function SessionStreamScreen() {
                       url={resolvedBrowserUrl}
                       onUrlChange={ignoreBrowserUrlChange}
                       onPreviewUnavailable={retryAppPreview}
-                      topInset={overlayHeight}
+                      showToolbar={!isDesignGroup}
+                      topInset={isDesignGroup ? 0 : overlayHeight}
                     />
                   ) : appPreviewLoading ? (
                     <View style={styles.center}>
