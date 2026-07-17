@@ -36,6 +36,9 @@ const channelsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> 
 const applicationsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
   sfSymbol: "globe",
 });
+const designsIcon: NonNullable<NativeBottomTabNavigationOptions["tabBarIcon"]> = () => ({
+  sfSymbol: "paintpalette",
+});
 
 export default function TabsLayout() {
   const needsInputCount = useEntityStore(selectNeedsInputCount);
@@ -63,6 +66,7 @@ export default function TabsLayout() {
         name="(applications)"
         options={{ title: "Applications", tabBarIcon: applicationsIcon }}
       />
+      <NativeTabs.Screen name="(designs)" options={{ title: "Designs", tabBarIcon: designsIcon }} />
       <NativeTabs.Screen name="(connections)" options={{ tabBarItemHidden: true }} />
     </NativeTabs>
   );

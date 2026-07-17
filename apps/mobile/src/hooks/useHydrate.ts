@@ -8,13 +8,13 @@ import {
   useEntityStore,
   type SessionGroupEntity,
 } from "@trace/client-core";
-import type { Channel, ChannelGroup, Event, Session, SessionGroup } from "@trace/gql";
+import type { Channel, ChannelGroup, Event, QueuedMessage, Session, SessionGroup } from "@trace/gql";
 import { handleUnauthorized, isUnauthorized } from "@/lib/auth";
 import { reconcileEntitySnapshot, resetEntitySnapshots } from "@/lib/entitySnapshots";
 import { latestTimestamp, mergeSessionGroupEntity } from "@/lib/session-group";
 import { userFacingError } from "@/lib/requestError";
 import { timedEventIngest } from "@/lib/perf";
-import { getClient } from "@/lib/urql";
+import { getClient, recreateClient, useGqlClientGeneration } from "@/lib/urql";
 import { useConnectionStore, type ConnectionState } from "@/stores/connection";
 import { useRefreshStatusStore } from "@/stores/refresh-status";
 
@@ -211,11 +211,34 @@ async function doRefreshOrgData(activeOrgId: string): Promise<RefreshOrgDataResu
     );
   }
 
-  const sessions = (sessionsResult.data?.mySessions ?? []) as Array<Session & { id: string }>;
+  const sessions = (sessionsResult.data?.mySessions ?? []) as Array<
+    Session & { id: string; queuedMessages?: QueuedMessage[] }
+  >;
   const sessionGroups = sessionGroupsFromSessions(sessions);
   if (sessionsResult.data?.mySessions) {
     if (sessionGroups.length > 0) upsertMany("sessionGroups", sessionGroups);
     if (sessions.length > 0) upsertMany("sessions", sessions);
+    useEntityStore.setState((current) => {
+      const queuedMessages = { ...current.queuedMessages };
+      const queuedMessageIdsBySession = { ...current._queuedMessageIdsBySession };
+      for (const session of sessions) {
+        const currentIds = queuedMessageIdsBySession[session.id] ?? [];
+        const nextQueuedMessages = session.queuedMessages ?? [];
+        const nextIds = nextQueuedMessages.map((message) => message.id);
+        const nextIdSet = new Set(nextIds);
+        for (const id of currentIds) {
+          if (!nextIdSet.has(id)) delete queuedMessages[id];
+        }
+        for (const message of nextQueuedMessages) {
+          queuedMessages[message.id] = message;
+        }
+        queuedMessageIdsBySession[session.id] = nextIds;
+      }
+      return {
+        queuedMessages,
+        _queuedMessageIdsBySession: queuedMessageIdsBySession,
+      };
+    });
     reconcileEntitySnapshot(
       "sessionGroups",
       `home:${activeOrgId}`,
@@ -293,6 +316,7 @@ function sessionGroupsFromSessions(
 }
 
 export function useHydrate(activeOrgId: string | null): void {
+  const clientGeneration = useGqlClientGeneration();
   const previousOrgIdRef = useRef<string | null>(activeOrgId);
   useEffect(() => {
     if (previousOrgIdRef.current !== activeOrgId) {
@@ -331,7 +355,7 @@ export function useHydrate(activeOrgId: string | null): void {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [activeOrgId]);
+  }, [activeOrgId, clientGeneration]);
 
   // Catch up list-level state (sessions, channels, unread counts) after a WS
   // reconnect: the server's in-memory pubsub has no replay, so events emitted
@@ -356,8 +380,16 @@ export function useHydrate(activeOrgId: string | null): void {
   // successful request. Unrelated to WS state — this is a periodic auth-staleness
   // check, independent of the reconnect-driven data refresh above.
   useEffect(() => {
+    let previousState = AppState.currentState;
     function onChange(state: AppStateStatus) {
+      const returnedToForeground = state === "active" && previousState !== "active";
+      previousState = state;
       if (state !== "active") return;
+      if (returnedToForeground && activeOrgId) {
+        // React Native can retain a dead WebSocket through backgrounding. A
+        // fresh client makes every subscription reconnect on the active server.
+        recreateClient();
+      }
       void (async () => {
         try {
           const last = await getPlatform().storage.getItem(ME_REFRESH_KEY);
@@ -372,5 +404,5 @@ export function useHydrate(activeOrgId: string | null): void {
     }
     const sub = AppState.addEventListener("change", onChange);
     return () => sub.remove();
-  }, []);
+  }, [activeOrgId]);
 }

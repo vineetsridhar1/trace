@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Pressable, StyleSheet } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { BlurView } from "expo-blur";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
@@ -14,6 +14,7 @@ interface SessionPageHeaderProps {
   browserEnabled?: boolean;
   onOpenBrowser?: () => void;
   onBack: () => void;
+  minimal?: boolean;
 }
 
 const TRIGGER_SIZE = 48;
@@ -25,12 +26,64 @@ export function SessionPageHeader({
   browserEnabled = true,
   onOpenBrowser,
   onBack,
+  minimal = false,
 }: SessionPageHeaderProps) {
   const theme = useTheme();
   const handleBack = useCallback(() => {
     void haptic.light();
     onBack();
   }, [onBack]);
+
+  const backButton = isLiquidGlassAvailable() ? (
+    <GlassView
+      glassEffectStyle="regular"
+      isInteractive
+      colorScheme={theme.scheme === "dark" ? "dark" : "light"}
+      style={styles.backGlass}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        hitSlop={8}
+        onPress={handleBack}
+        style={styles.backButton}
+      >
+        <SymbolView
+          name="chevron.left"
+          size={18}
+          tintColor={theme.colors.foreground}
+          weight="semibold"
+          resizeMode="scaleAspectFit"
+          style={styles.icon}
+        />
+      </Pressable>
+    </GlassView>
+  ) : (
+    <BlurView
+      tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
+      intensity={60}
+      style={styles.backGlass}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        hitSlop={8}
+        onPress={handleBack}
+        style={styles.backButton}
+      >
+        <SymbolView
+          name="chevron.left"
+          size={18}
+          tintColor={theme.colors.foreground}
+          weight="semibold"
+          resizeMode="scaleAspectFit"
+          style={styles.icon}
+        />
+      </Pressable>
+    </BlurView>
+  );
+
+  if (minimal) return <View style={styles.floatingBack}>{backButton}</View>;
 
   return (
     <SessionGroupHeader
@@ -39,61 +92,16 @@ export function SessionPageHeader({
       activePane={activePane}
       browserEnabled={browserEnabled}
       onOpenBrowser={onOpenBrowser}
-      leadingAccessory={
-        isLiquidGlassAvailable() ? (
-          <GlassView
-            glassEffectStyle="regular"
-            isInteractive
-            colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-            style={styles.backGlass}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              hitSlop={8}
-              onPress={handleBack}
-              style={styles.backButton}
-            >
-              <SymbolView
-                name="chevron.left"
-                size={18}
-                tintColor={theme.colors.foreground}
-                weight="semibold"
-                resizeMode="scaleAspectFit"
-                style={styles.icon}
-              />
-            </Pressable>
-          </GlassView>
-        ) : (
-          <BlurView
-            tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
-            intensity={60}
-            style={styles.backGlass}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              hitSlop={8}
-              onPress={handleBack}
-              style={styles.backButton}
-            >
-              <SymbolView
-                name="chevron.left"
-                size={18}
-                tintColor={theme.colors.foreground}
-                weight="semibold"
-                resizeMode="scaleAspectFit"
-                style={styles.icon}
-              />
-            </Pressable>
-          </BlurView>
-        )
-      }
+      leadingAccessory={backButton}
     />
   );
 }
 
 const styles = StyleSheet.create({
+  floatingBack: {
+    alignSelf: "flex-start",
+    marginLeft: 16,
+  },
   backGlass: {
     width: TRIGGER_SIZE,
     height: TRIGGER_SIZE,
