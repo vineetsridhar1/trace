@@ -722,6 +722,37 @@ describe("handleOrgEvent", () => {
     expect(session.gitCheckpoints[0].id).toBe("ckpt-1");
   });
 
+  it("upserts app deployment lifecycle events", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "app_deployment_queued",
+        scopeId: "group-1",
+        payload: {
+          deployment: {
+            id: "deployment-1",
+            sessionGroupId: "group-1",
+            commitSha: "a".repeat(40),
+            status: "queued",
+          },
+        },
+      }),
+    );
+    handleOrgEvent(
+      makeEvent({
+        eventType: "app_deployment_updated",
+        scopeId: "group-1",
+        payload: {
+          deployment: { id: "deployment-1", status: "building" },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().appDeployments["deployment-1"]).toMatchObject({
+      sessionGroupId: "group-1",
+      status: "building",
+    });
+  });
+
   it("handles queued message add, update, reorder, and removal events", () => {
     handleOrgEvent(
       makeEvent({

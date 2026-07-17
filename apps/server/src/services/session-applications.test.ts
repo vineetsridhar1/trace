@@ -282,62 +282,6 @@ describe("SessionApplicationService", () => {
     ).rejects.toThrow("Start the process first (current status: stopped)");
   });
 
-  it("publishes the primary enabled endpoint for an app session", async () => {
-    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
-      id: "group-1",
-      kind: "app",
-      ownerUserId: "user-1",
-    });
-    prismaMock.sessionEndpoint.findFirst.mockResolvedValueOnce({
-      id: "endpoint-1",
-      key: "endpointkey1",
-      organizationId: "org-1",
-      sessionGroupId: "group-1",
-      appConfigId: "app",
-      processConfigId: "dev",
-      portConfigId: "web",
-      label: "Preview",
-      targetPort: 3000,
-      status: "enabled",
-      accessMode: "private",
-      trafficCaptureMode: "metadata",
-      enabledAt: new Date("2026-07-09T00:00:00.000Z"),
-      disabledAt: null,
-      revokedAt: null,
-    });
-    prismaMock.sessionEndpoint.update.mockImplementationOnce(async ({ data }) => ({
-      id: "endpoint-1",
-      key: "endpointkey1",
-      sessionGroupId: "group-1",
-      appConfigId: "app",
-      processConfigId: "dev",
-      portConfigId: "web",
-      label: "Preview",
-      targetPort: 3000,
-      status: "enabled",
-      accessMode: "private",
-      trafficCaptureMode: "metadata",
-      enabledAt: new Date("2026-07-09T00:00:00.000Z"),
-      disabledAt: null,
-      revokedAt: null,
-      ...data,
-    }));
-
-    const endpoint = await new SessionApplicationService().publishAppSession(
-      "group-1",
-      "org-1",
-      "user-1",
-    );
-
-    expect(endpoint.accessMode).toBe("public");
-    expect(eventServiceMock.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        scopeId: "group-1",
-        payload: expect.objectContaining({ published: true }),
-      }),
-    );
-  });
-
   it("ignores stale bridge logs for missing process rows", async () => {
     prismaMock.sessionApplicationProcess.findFirst.mockResolvedValueOnce(null);
 

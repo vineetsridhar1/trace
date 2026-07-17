@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 import type {
+  AppDeployment,
   RepoApplicationConfig,
   SessionApplicationLogEntry,
   SessionApplicationProcess,
@@ -46,6 +47,7 @@ export function useSessionApplicationsData(sessionGroupId: string) {
   const processLogTable = useEntityStore((state) => state.sessionApplicationLogs);
   const endpointTable = useEntityStore((state) => state.sessionEndpoints);
   const setupRunTable = useEntityStore((state) => state.sessionSetupScriptRuns);
+  const deploymentTable = useEntityStore((state) => state.appDeployments);
 
   const refresh = useCallback(async () => {
     const result = await client
@@ -92,6 +94,12 @@ export function useSessionApplicationsData(sessionGroupId: string) {
         result.data.sessionEndpoints as Array<SessionEndpoint & { id: string }>,
       );
     }
+    if (result.data?.appDeployments) {
+      upsertMany(
+        "appDeployments",
+        result.data.appDeployments as Array<AppDeployment & { id: string }>,
+      );
+    }
   }, [sessionGroupId, upsert, upsertMany]);
 
   const loadProcessLogs = useCallback(async (processId: string) => {
@@ -117,6 +125,13 @@ export function useSessionApplicationsData(sessionGroupId: string) {
   const setupRuns = useMemo(
     () => Object.values(setupRunTable).filter((run) => run.sessionGroupId === sessionGroupId),
     [sessionGroupId, setupRunTable],
+  );
+  const deployments = useMemo(
+    () =>
+      Object.values(deploymentTable)
+        .filter((deployment) => deployment.sessionGroupId === sessionGroupId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [deploymentTable, sessionGroupId],
   );
 
   // Depend on a stable key derived from the group's process IDs, not the
@@ -173,6 +188,7 @@ export function useSessionApplicationsData(sessionGroupId: string) {
 
   return {
     config,
+    deployments,
     endpointsByProcess,
     groupKind,
     latestSetupRunByScript,

@@ -3,6 +3,7 @@ import type { Context } from "../context.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import { buildEndpointUrl } from "../services/endpoint-utils.js";
+import { appDeploymentService } from "../services/app-deployment.js";
 import { sessionApplicationService } from "../services/session-applications.js";
 
 function requireUser(ctx: Context): string {
@@ -11,6 +12,8 @@ function requireUser(ctx: Context): string {
 }
 
 export const sessionApplicationQueries = {
+  appDeployments: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>
+    appDeploymentService.list(args.sessionGroupId, requireOrgContext(ctx), requireUser(ctx)),
   sessionSetupScriptRuns: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>
     sessionApplicationService.listSetupScriptRuns(
       args.sessionGroupId,
@@ -175,11 +178,7 @@ export const sessionApplicationMutations = {
       requireUser(ctx),
     ),
   publishAppSession: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>
-    sessionApplicationService.publishAppSession(
-      args.sessionGroupId,
-      requireOrgContext(ctx),
-      requireUser(ctx),
-    ),
+    appDeploymentService.publish(args.sessionGroupId, requireOrgContext(ctx), requireUser(ctx)),
 };
 
 export const sessionApplicationTypeResolvers = {

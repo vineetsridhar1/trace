@@ -75,6 +75,34 @@ export type ApiTokenStatus = {
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type AppDeployment = {
+  __typename?: "AppDeployment";
+  commitSha: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  errorMessage?: Maybe<Scalars["String"]["output"]>;
+  externalJobId?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  imageDigest?: Maybe<Scalars["String"]["output"]>;
+  queuedAt: Scalars["DateTime"]["output"];
+  repoId: Scalars["ID"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceCheckpointId: Scalars["ID"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  status: AppDeploymentStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+  url?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type AppDeploymentStatus =
+  | "building"
+  | "deploying"
+  | "failed"
+  | "live"
+  | "queued"
+  | "stopped"
+  | "superseded";
+
 export type ApplicationProcessStatus =
   | "exited"
   | "failed"
@@ -379,6 +407,8 @@ export type EventType =
   | "agent_environment_created"
   | "agent_environment_deleted"
   | "agent_environment_updated"
+  | "app_deployment_queued"
+  | "app_deployment_updated"
   | "application_config_updated"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
@@ -393,10 +423,10 @@ export type EventType =
   | "channel_member_removed"
   | "channel_updated"
   | "chat_created"
-  | "design_preview_updated"
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_preview_updated"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -653,7 +683,7 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
-  publishAppSession: SessionEndpoint;
+  publishAppSession: AppDeployment;
   queueSessionMessage: QueuedMessage;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
@@ -1321,6 +1351,7 @@ export type PushPlatform = "android" | "ios";
 export type Query = {
   __typename?: "Query";
   agentEnvironments: Array<AgentEnvironment>;
+  appDeployments: Array<AppDeployment>;
   /**
    * App-kind session groups for the org. Apps have no channel, so this is their
    * listing surface (the sidebar Apps section).
@@ -1391,6 +1422,10 @@ export type Query = {
 
 export type QueryAgentEnvironmentsArgs = {
   orgId: Scalars["ID"]["input"];
+};
+
+export type QueryAppDeploymentsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryAppSessionGroupsArgs = {
@@ -2746,6 +2781,7 @@ export type SessionDetailQuery = {
       prUrl?: string | null;
       workdir?: string | null;
       worktreeDeleted: boolean;
+      designPreviewUrl?: string | null;
       createdAt: string;
       updatedAt: string;
       setupStatus: SetupStatus;
@@ -2874,6 +2910,7 @@ export type SessionGroupDetailQuery = {
     workdir?: string | null;
     worktreeDeleted: boolean;
     worktreeAdopted: boolean;
+    designPreviewUrl?: string | null;
     setupStatus: SetupStatus;
     setupError?: string | null;
     createdAt: string;
@@ -2955,45 +2992,6 @@ export type SessionGroupDetailQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   } | null;
-};
-
-export type AppPreviewStateQueryVariables = Exact<{
-  sessionGroupId: Scalars["ID"]["input"];
-}>;
-
-export type AppPreviewStateQuery = {
-  __typename?: "Query";
-  sessionEndpoints: Array<{
-    __typename?: "SessionEndpoint";
-    id: string;
-    sessionGroupId: string;
-    appConfigId: string;
-    processConfigId: string;
-    portConfigId: string;
-    label: string;
-    targetPort: number;
-    url: string;
-    status: SessionEndpointStatus;
-    accessMode: SessionEndpointAccessMode;
-    trafficCaptureMode: EndpointTrafficCaptureMode;
-    enabledAt?: string | null;
-    disabledAt?: string | null;
-    revokedAt?: string | null;
-  }>;
-  sessionApplicationProcesses: Array<{
-    __typename?: "SessionApplicationProcess";
-    id: string;
-    sessionGroupId: string;
-    appConfigId: string;
-    processConfigId: string;
-    label: string;
-    status: ApplicationProcessStatus;
-    runtimeInstanceId?: string | null;
-    startedAt?: string | null;
-    stoppedAt?: string | null;
-    exitCode?: number | null;
-    lastError?: string | null;
-  }>;
 };
 
 export type SessionEndpointTrafficEndpointsQueryVariables = Exact<{
@@ -3147,6 +3145,24 @@ export type SessionApplicationsStateQuery = {
     disabledAt?: string | null;
     revokedAt?: string | null;
   }>;
+  appDeployments: Array<{
+    __typename?: "AppDeployment";
+    id: string;
+    sessionGroupId: string;
+    repoId: string;
+    sourceCheckpointId: string;
+    commitSha: string;
+    status: AppDeploymentStatus;
+    externalJobId?: string | null;
+    imageDigest?: string | null;
+    url?: string | null;
+    errorMessage?: string | null;
+    queuedAt: string;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 };
 
 export type SessionApplicationProcessLogsQueryVariables = Exact<{
@@ -3224,7 +3240,12 @@ export type PublishAppSessionMutationVariables = Exact<{
 
 export type PublishAppSessionMutation = {
   __typename?: "Mutation";
-  publishAppSession: { __typename?: "SessionEndpoint"; id: string };
+  publishAppSession: {
+    __typename?: "AppDeployment";
+    id: string;
+    status: AppDeploymentStatus;
+    commitSha: string;
+  };
 };
 
 export type CreateSessionEndpointPreviewMutationVariables = Exact<{
@@ -3238,6 +3259,45 @@ export type CreateSessionEndpointPreviewMutation = {
     url: string;
     expiresAt: string;
   };
+};
+
+export type AppPreviewStateQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type AppPreviewStateQuery = {
+  __typename?: "Query";
+  sessionEndpoints: Array<{
+    __typename?: "SessionEndpoint";
+    id: string;
+    sessionGroupId: string;
+    appConfigId: string;
+    processConfigId: string;
+    portConfigId: string;
+    label: string;
+    targetPort: number;
+    url: string;
+    status: SessionEndpointStatus;
+    accessMode: SessionEndpointAccessMode;
+    trafficCaptureMode: EndpointTrafficCaptureMode;
+    enabledAt?: string | null;
+    disabledAt?: string | null;
+    revokedAt?: string | null;
+  }>;
+  sessionApplicationProcesses: Array<{
+    __typename?: "SessionApplicationProcess";
+    id: string;
+    sessionGroupId: string;
+    appConfigId: string;
+    processConfigId: string;
+    label: string;
+    status: ApplicationProcessStatus;
+    runtimeInstanceId?: string | null;
+    startedAt?: string | null;
+    stoppedAt?: string | null;
+    exitCode?: number | null;
+    lastError?: string | null;
+  }>;
 };
 
 export type SessionGroupFileTreeQueryVariables = Exact<{
@@ -5673,6 +5733,7 @@ export const SessionDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "workdir" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "gitCheckpoints" },
@@ -5996,6 +6057,7 @@ export const SessionGroupDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "workdir" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeAdopted" } },
+                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "gitCheckpoints" },
@@ -6149,88 +6211,6 @@ export const SessionGroupDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupDetailQuery, SessionGroupDetailQueryVariables>;
-export const AppPreviewStateDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "AppPreviewState" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sessionEndpoints" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "portConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "label" } },
-                { kind: "Field", name: { kind: "Name", value: "targetPort" } },
-                { kind: "Field", name: { kind: "Name", value: "url" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "accessMode" } },
-                { kind: "Field", name: { kind: "Name", value: "trafficCaptureMode" } },
-                { kind: "Field", name: { kind: "Name", value: "enabledAt" } },
-                { kind: "Field", name: { kind: "Name", value: "disabledAt" } },
-                { kind: "Field", name: { kind: "Name", value: "revokedAt" } },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sessionApplicationProcesses" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "label" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
-                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "stoppedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "exitCode" } },
-                { kind: "Field", name: { kind: "Name", value: "lastError" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AppPreviewStateQuery, AppPreviewStateQueryVariables>;
 export const SessionEndpointTrafficEndpointsDocument = {
   kind: "Document",
   definitions: [
@@ -6645,6 +6625,37 @@ export const SessionApplicationsStateDocument = {
               ],
             },
           },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "appDeployments" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "repoId" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceCheckpointId" } },
+                { kind: "Field", name: { kind: "Name", value: "commitSha" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "externalJobId" } },
+                { kind: "Field", name: { kind: "Name", value: "imageDigest" } },
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "errorMessage" } },
+                { kind: "Field", name: { kind: "Name", value: "queuedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
         ],
       },
     },
@@ -7025,7 +7036,11 @@ export const PublishAppSessionDocument = {
             ],
             selectionSet: {
               kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "commitSha" } },
+              ],
             },
           },
         ],
@@ -7079,6 +7094,88 @@ export const CreateSessionEndpointPreviewDocument = {
   CreateSessionEndpointPreviewMutation,
   CreateSessionEndpointPreviewMutationVariables
 >;
+export const AppPreviewStateDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "AppPreviewState" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionEndpoints" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "portConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "targetPort" } },
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "accessMode" } },
+                { kind: "Field", name: { kind: "Name", value: "trafficCaptureMode" } },
+                { kind: "Field", name: { kind: "Name", value: "enabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "disabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "revokedAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionApplicationProcesses" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "stoppedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "exitCode" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<AppPreviewStateQuery, AppPreviewStateQueryVariables>;
 export const SessionGroupFileTreeDocument = {
   kind: "Document",
   definitions: [

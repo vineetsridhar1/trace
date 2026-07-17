@@ -3,6 +3,7 @@ import type { JsonObject } from "@trace/shared";
 import type {
   AgentStatus,
   AgentEnvironment,
+  AppDeployment,
   Channel,
   ChannelGroup,
   Chat,
@@ -261,6 +262,18 @@ export function handleOrgEvent(event: Event): void {
         "sessionEndpoints",
         endpoint.id,
         (existing ? { ...existing, ...endpoint } : endpoint) as unknown as SessionEndpoint,
+      );
+    }
+  }
+
+  if (event.eventType === "app_deployment_queued" || event.eventType === "app_deployment_updated") {
+    const deployment = asJsonObject(payload.deployment);
+    if (deployment && typeof deployment.id === "string") {
+      const existing = batch.get("appDeployments", deployment.id);
+      batch.upsert(
+        "appDeployments",
+        deployment.id,
+        (existing ? { ...existing, ...deployment } : deployment) as unknown as AppDeployment,
       );
     }
   }

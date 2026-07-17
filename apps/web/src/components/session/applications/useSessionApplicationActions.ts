@@ -119,8 +119,8 @@ export function useSessionApplicationActions({
           )
           .toPromise(),
       ),
-    publish: (endpointId: string) =>
-      void execute(`publish:${endpointId}`, () =>
+    publish: () =>
+      void execute("publish", () =>
         client.mutation(PUBLISH_APP_MUTATION, { sessionGroupId }).toPromise(),
       ),
     openEndpoint: async (endpoint: EndpointReference) => {

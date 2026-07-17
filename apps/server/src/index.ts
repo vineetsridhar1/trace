@@ -21,6 +21,7 @@ import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
 import { gitRouter } from "./routes/git.js";
 import { designPreviewRouter } from "./routes/design-preview.js";
+import { appDeploymentCallbackRouter } from "./routes/app-deployment-callback.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -224,6 +225,7 @@ async function main() {
   });
   app.use(authRouter);
   app.use(uploadRouter);
+  app.use(appDeploymentCallbackRouter);
 
   // GraphQL subscriptions
   const wsServer = new WebSocketServer({ noServer: true });
@@ -364,7 +366,9 @@ async function main() {
             key: CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY,
             ttlMs: cloudIdleCleanupLockTtlMs,
             run: () =>
-              sessionService.cleanupIdleCloudSessionGroups({ idleAfterMs: cloudIdleCleanupAfterMs }),
+              sessionService.cleanupIdleCloudSessionGroups({
+                idleAfterMs: cloudIdleCleanupAfterMs,
+              }),
           })
             .then((result) => {
               if (!result) {
