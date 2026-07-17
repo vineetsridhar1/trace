@@ -4,13 +4,14 @@ import { cn } from "../../lib/utils";
 import { useSidebar } from "../ui/sidebar";
 import { SessionDetailView } from "./SessionDetailView";
 
-export function AppSessionWorkspace({
+export function ProjectPreviewWorkspace({
   sessionId,
   scrollToEventId,
   onScrollComplete,
   onForkSession,
   canForkSession,
   canvasReady,
+  canvasKey,
   canvas,
 }: {
   sessionId: string | null;
@@ -19,6 +20,7 @@ export function AppSessionWorkspace({
   onForkSession: (eventId: string) => void;
   canForkSession: boolean;
   canvasReady: boolean;
+  canvasKey: string;
   canvas: ReactNode;
 }) {
   const [canvasRevealed, setCanvasRevealed] = useState(canvasReady);
@@ -27,6 +29,8 @@ export function AppSessionWorkspace({
   const reduceMotion = useReducedMotion();
   const { isMobile, open, openMobile, setOpen, setOpenMobile } = useSidebar();
 
+  // Keep the sidebar API fresh for the unmount cleanup below without re-running
+  // the restore effect on every dependency change.
   const sidebarApiRef = useRef({ isMobile, setOpen, setOpenMobile });
   useEffect(() => {
     sidebarApiRef.current = { isMobile, setOpen, setOpenMobile };
@@ -47,8 +51,11 @@ export function AppSessionWorkspace({
   useEffect(() => {
     return () => {
       if (!collapsedByUsRef.current) return;
-      const { isMobile: mobile, setOpen: setDesktopOpen, setOpenMobile: setMobileOpen } =
-        sidebarApiRef.current;
+      const {
+        isMobile: mobile,
+        setOpen: setDesktopOpen,
+        setOpenMobile: setMobileOpen,
+      } = sidebarApiRef.current;
       if (mobile) setMobileOpen(true);
       else setDesktopOpen(true);
     };
@@ -85,7 +92,7 @@ export function AppSessionWorkspace({
       <AnimatePresence initial={false}>
         {canvasRevealed ? (
           <motion.main
-            key="app-canvas"
+            key={canvasKey}
             initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: 48 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 48 }}

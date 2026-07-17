@@ -22,8 +22,7 @@ import { GroupTabStrip } from "./GroupTabStrip";
 import { FileCommandPalette } from "./FileCommandPalette";
 import { ForkSessionDialog } from "./ForkSessionDialog";
 import { SessionGroupContentArea } from "./SessionGroupContentArea";
-import { AppSessionWorkspace } from "./AppSessionWorkspace";
-import { GeneratedProjectWorkspace } from "./GeneratedProjectWorkspace";
+import { ProjectPreviewWorkspace } from "./ProjectPreviewWorkspace";
 import { CheckpointOpenContext } from "./CheckpointOpenContext";
 import { AttachmentOpenContext, UploadedAttachmentOpenContext } from "./AttachmentOpenContext";
 import { FileOpenContext } from "./FileOpenContext";
@@ -42,7 +41,7 @@ import { useSessionGroupDirectoryTree } from "./useSessionGroupDirectoryTree";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
 import { isAppCanvasReady } from "./app-session-readiness";
 import { isGeneratedProjectCanvasReady } from "./generated-project-readiness";
-import { usesGeneratedProjectWorkspace } from "./generated-project-kind";
+import { getProjectWorkspaceKind } from "./project-workspace-kind";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
 import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
@@ -433,8 +432,9 @@ export function SessionGroupDetailView({
     };
   }, [groupSessions, sessionGroupId, addTerminal]);
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
-  const isAppGroup = groupKind === "app";
-  const isGeneratedProjectGroup = usesGeneratedProjectWorkspace(groupKind);
+  const projectWorkspaceKind = getProjectWorkspaceKind(groupKind);
+  const isAppGroup = projectWorkspaceKind === "app";
+  const isGeneratedProjectGroup = projectWorkspaceKind === "design";
   const selectedConnection = selectedSession?.connection as
     | Record<string, unknown>
     | null
@@ -975,13 +975,14 @@ export function SessionGroupDetailView({
               <div className="flex min-h-0 flex-1 overflow-hidden">
                 <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
                   {isAppGroup ? (
-                    <AppSessionWorkspace
+                    <ProjectPreviewWorkspace
                       sessionId={selectedSession?.id ?? null}
                       scrollToEventId={scrollToEventId}
                       onScrollComplete={handleScrollComplete}
                       onForkSession={handleOpenForkDialog}
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                       canvasReady={appCanvasReady}
+                      canvasKey="app-canvas"
                       canvas={
                         <SessionGroupContentArea
                           sessionGroupId={sessionGroupId}
@@ -1007,13 +1008,14 @@ export function SessionGroupDetailView({
                       }
                     />
                   ) : isGeneratedProjectGroup ? (
-                    <GeneratedProjectWorkspace
+                    <ProjectPreviewWorkspace
                       sessionId={selectedSession?.id ?? null}
                       scrollToEventId={scrollToEventId}
                       onScrollComplete={handleScrollComplete}
                       onForkSession={handleOpenForkDialog}
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                       canvasReady={generatedProjectCanvasReady}
+                      canvasKey="generated-project-canvas"
                       canvas={
                         <SessionGroupContentArea
                           sessionGroupId={sessionGroupId}
