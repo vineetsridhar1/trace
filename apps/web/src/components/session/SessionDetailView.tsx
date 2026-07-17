@@ -122,6 +122,9 @@ const SESSION_DETAIL_QUERY = gql`
           captureStatus
           captureUrl
           capturedAt
+          previewStatus
+          previewUrl
+          previewCapturedAt
           createdAt
         }
         channel {
@@ -194,6 +197,9 @@ const SESSION_DETAIL_QUERY = gql`
         captureStatus
         captureUrl
         capturedAt
+        previewStatus
+        previewUrl
+        previewCapturedAt
         createdAt
       }
       channel {

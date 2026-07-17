@@ -471,6 +471,10 @@ export type GitCheckpoint = {
   filesChanged: Scalars["Int"]["output"];
   id: Scalars["ID"]["output"];
   parentShas: Array<Scalars["String"]["output"]>;
+  previewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  previewContentType?: Maybe<Scalars["String"]["output"]>;
+  previewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  previewUrl?: Maybe<Scalars["String"]["output"]>;
   promptEvent?: Maybe<Event>;
   promptEventId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
@@ -2754,6 +2758,9 @@ export type SessionDetailQuery = {
         captureStatus?: GitCheckpointCaptureStatus | null;
         captureUrl?: string | null;
         capturedAt?: string | null;
+        previewStatus?: GitCheckpointCaptureStatus | null;
+        previewUrl?: string | null;
+        previewCapturedAt?: string | null;
         createdAt: string;
       }>;
       channel?: { __typename?: "Channel"; id: string } | null;
@@ -2822,6 +2829,9 @@ export type SessionDetailQuery = {
       captureStatus?: GitCheckpointCaptureStatus | null;
       captureUrl?: string | null;
       capturedAt?: string | null;
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+      previewCapturedAt?: string | null;
       createdAt: string;
     }>;
     channel?: { __typename?: "Channel"; id: string } | null;
@@ -2877,6 +2887,9 @@ export type SessionGroupDetailQuery = {
       captureStatus?: GitCheckpointCaptureStatus | null;
       captureUrl?: string | null;
       capturedAt?: string | null;
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+      previewCapturedAt?: string | null;
       createdAt: string;
     }>;
     repo?: {
@@ -5672,6 +5685,9 @@ export const SessionDetailDocument = {
                             { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
                             { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
                             { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                            { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                            { kind: "Field", name: { kind: "Name", value: "previewCapturedAt" } },
                             { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                           ],
                         },
@@ -5872,6 +5888,9 @@ export const SessionDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewCapturedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },
@@ -5989,6 +6008,9 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewCapturedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },

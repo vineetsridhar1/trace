@@ -1,13 +1,14 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { validateDesignProject } from "../scripts/design-qa";
 
 const execFileAsync = promisify(execFile);
 const viteCli = fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import.meta.url));
+const COMMIT_SHA = /^[a-f0-9]{40,64}$/i;
 
 export function validateSelfContainedHtml(html: string): void {
   const assetTag =
@@ -26,7 +27,38 @@ export function validateSelfContainedHtml(html: string): void {
   }
 }
 
-export async function buildSelfContainedHtml(root: string): Promise<string> {
+export async function buildSelfContainedHtml(root: string, commitSha?: string): Promise<string> {
+  if (!commitSha) return buildSelfContainedHtmlFromRoot(root);
+  if (!COMMIT_SHA.test(commitSha)) throw new Error("Invalid design export commit");
+
+  const exportRoot = await mkdtemp(join(tmpdir(), "trace-design-checkpoint-"));
+  const worktree = join(exportRoot, "repository");
+  try {
+    const { stdout: repositoryRootOutput } = await execFileAsync(
+      "git",
+      ["rev-parse", "--show-toplevel"],
+      { cwd: root },
+    );
+    const repositoryRoot = repositoryRootOutput.trim();
+    const projectPath = relative(repositoryRoot, root);
+    if (projectPath.startsWith(".."))
+      throw new Error("Design export root is outside its repository");
+    await execFileAsync("git", ["rev-parse", "--verify", `${commitSha}^{commit}`], { cwd: root });
+    await execFileAsync("git", ["worktree", "add", "--detach", worktree, commitSha], { cwd: root });
+    const projectRoot = join(worktree, projectPath);
+    // Worktrees intentionally exclude untracked files. Reuse the already-installed
+    // dependencies from the live workspace without letting the export read its source.
+    await symlink(join(root, "node_modules"), join(projectRoot, "node_modules"), "junction");
+    return await buildSelfContainedHtmlFromRoot(projectRoot);
+  } finally {
+    await execFileAsync("git", ["worktree", "remove", "--force", worktree], { cwd: root }).catch(
+      () => {},
+    );
+    await rm(exportRoot, { recursive: true, force: true });
+  }
+}
+
+async function buildSelfContainedHtmlFromRoot(root: string): Promise<string> {
   const report = await validateDesignProject(root);
   if (report.errors.length > 0) {
     throw new Error(`Design validation failed:\n${report.errors.join("\n")}`);

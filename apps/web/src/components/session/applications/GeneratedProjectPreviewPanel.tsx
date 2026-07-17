@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { gql } from "@urql/core";
-import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
+import type { GitCheckpoint, SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import { useEntityStore } from "@trace/client-core";
 import { client } from "../../../lib/urql";
 import { AppPreview } from "./AppPreview";
 import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
 import { findReadyPreviewEndpoint } from "./app-preview-readiness";
+import { SavedDesignPreview } from "./SavedDesignPreview";
+import { latestSavedDesignPreviewUrl } from "./saved-design-preview";
 
 const APP_PREVIEW_ENDPOINTS_QUERY = gql`
   query AppPreviewState($sessionGroupId: ID!) {
@@ -44,6 +46,9 @@ const APP_PREVIEW_ENDPOINTS_QUERY = gql`
 export function GeneratedProjectPreviewPanel({ sessionGroupId }: { sessionGroupId: string }) {
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
+  const gitCheckpoints = useEntityStore(
+    (s) => s.sessionGroups[sessionGroupId]?.gitCheckpoints as GitCheckpoint[] | undefined,
+  );
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const projectKind = useEntityStore((s) =>
     s.sessionGroups[sessionGroupId]?.kind === "design" ? "design" : "app",
@@ -82,6 +87,10 @@ export function GeneratedProjectPreviewPanel({ sessionGroupId }: { sessionGroupI
       ),
     [endpointTable, processTable, sessionGroupId],
   );
+  const savedDesignPreviewUrl = useMemo(
+    () => (projectKind === "design" ? latestSavedDesignPreviewUrl(gitCheckpoints) : null),
+    [gitCheckpoints, projectKind],
+  );
 
   if (endpoint)
     return (
@@ -93,6 +102,8 @@ export function GeneratedProjectPreviewPanel({ sessionGroupId }: { sessionGroupI
         title={projectKind === "design" ? "Live design preview" : "Live app preview"}
       />
     );
+
+  if (savedDesignPreviewUrl) return <SavedDesignPreview url={savedDesignPreviewUrl} />;
 
   return (
     <AppPreviewCanvasSkeleton

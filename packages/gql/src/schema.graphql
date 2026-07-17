@@ -599,6 +599,10 @@ type GitCheckpoint {
   captureUrl: String
   captureContentType: String
   capturedAt: DateTime
+  previewStatus: GitCheckpointCaptureStatus
+  previewUrl: String
+  previewContentType: String
+  previewCapturedAt: DateTime
   createdAt: DateTime!
 }
 
