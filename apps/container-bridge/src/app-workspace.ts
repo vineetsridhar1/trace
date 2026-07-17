@@ -3,7 +3,6 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "util";
-import { assertValidCommitSha } from "@trace/shared";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 
 const execFileAsync = promisify(execFile);
@@ -68,9 +67,10 @@ export async function createAppWorkspace({
   const workdir = `${WORKSPACES_DIR}/${workspaceSlug}`;
 
   if (!fs.existsSync(workdir) && checkpointSha) {
-    assertValidCommitSha(checkpointSha);
-    await execFileAsync("git", ["clone", "--no-checkout", repoRemoteUrl, workdir]);
-    await execFileAsync("git", ["checkout", "-B", defaultBranch, checkpointSha], { cwd: workdir });
+    // Cloud runtimes are disposable. Their managed remote is the source of
+    // truth, so recreate from its current default branch rather than from a
+    // potentially stale session checkpoint.
+    await execFileAsync("git", ["clone", "--branch", defaultBranch, repoRemoteUrl, workdir]);
   } else if (!fs.existsSync(workdir)) {
     fs.mkdirSync(workdir, { recursive: true });
     fs.cpSync(starterDir(sessionGroupKind), workdir, {
@@ -101,16 +101,6 @@ export async function createAppWorkspace({
       : ["remote", "add", "origin", repoRemoteUrl],
     { cwd: workdir },
   );
-
-  if (checkpointSha) {
-    // A recreated cloud runtime restores the last managed checkpoint first.
-    // The remote may have advanced since that checkpoint, so fast-forward
-    // before the agent starts. `--ff-only` keeps an unpublished checkpoint
-    // intact instead of silently merging or overwriting it.
-    await execFileAsync("git", ["pull", "--ff-only", "origin", defaultBranch], {
-      cwd: workdir,
-    });
-  }
 
   return { workdir, slug: workspaceSlug };
 }
