@@ -3215,7 +3215,11 @@ export type CreateSessionEndpointPreviewMutationVariables = Exact<{
 
 export type CreateSessionEndpointPreviewMutation = {
   __typename?: "Mutation";
-  createSessionEndpointPreview: { __typename?: "SessionEndpointPreview"; url: string };
+  createSessionEndpointPreview: {
+    __typename?: "SessionEndpointPreview";
+    url: string;
+    expiresAt: string;
+  };
 };
 
 export type SessionGroupFileTreeQueryVariables = Exact<{
@@ -3431,20 +3435,13 @@ export type AgentEnvironmentsSettingsQuery = {
     createdAt: string;
     updatedAt: string;
   }>;
-  myConnections: Array<{
-    __typename?: "ConnectionsBridge";
-    bridge: {
-      __typename?: "BridgeRuntime";
-      id: string;
-      instanceId: string;
-      label: string;
-      hostingMode: HostingMode;
-      connected: boolean;
-    };
-    repos: Array<{
-      __typename?: "ConnectionsRepoEntry";
-      repo: { __typename?: "Repo"; id: string; name: string };
-    }>;
+  myBridgeRuntimes: Array<{
+    __typename?: "BridgeRuntime";
+    instanceId: string;
+    label: string;
+    hostingMode: HostingMode;
+    connected: boolean;
+    registeredRepoIds: Array<string>;
   }>;
 };
 
@@ -7041,7 +7038,10 @@ export const CreateSessionEndpointPreviewDocument = {
             ],
             selectionSet: {
               kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "url" } }],
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "expiresAt" } },
+              ],
             },
           },
         ],
@@ -7801,44 +7801,15 @@ export const AgentEnvironmentsSettingsDocument = {
           },
           {
             kind: "Field",
-            name: { kind: "Name", value: "myConnections" },
+            name: { kind: "Name", value: "myBridgeRuntimes" },
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "bridge" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "instanceId" } },
-                      { kind: "Field", name: { kind: "Name", value: "label" } },
-                      { kind: "Field", name: { kind: "Name", value: "hostingMode" } },
-                      { kind: "Field", name: { kind: "Name", value: "connected" } },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "repos" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "repo" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "name" } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
+                { kind: "Field", name: { kind: "Name", value: "instanceId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "hostingMode" } },
+                { kind: "Field", name: { kind: "Name", value: "connected" } },
+                { kind: "Field", name: { kind: "Name", value: "registeredRepoIds" } },
               ],
             },
           },

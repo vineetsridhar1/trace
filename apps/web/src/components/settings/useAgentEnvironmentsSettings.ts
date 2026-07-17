@@ -56,9 +56,10 @@ export function useAgentEnvironmentsSettings() {
         (result.data?.agentEnvironments as Array<AgentEnvironment & { id: string }> | undefined) ??
           [],
       );
-      upsertMany("repos", (result.data?.repos as Array<Repo & { id: string }> | undefined) ?? []);
+      const repos = (result.data?.repos as Array<Repo & { id: string }> | undefined) ?? [];
+      upsertMany("repos", repos);
       setOrgSecrets((result.data?.orgSecrets as OrgSecret[] | undefined) ?? []);
-      setLocalBridges(parseLocalBridges(result.data?.myConnections));
+      setLocalBridges(parseLocalBridges(result.data?.myBridgeRuntimes, repos));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load agent environments");
     } finally {
@@ -144,48 +145,47 @@ function compareEnvironments(a: unknown, b: unknown): number {
   return envA.name.localeCompare(envB.name);
 }
 
-function parseLocalBridges(value: unknown): LocalBridgeSummary[] {
+function parseLocalBridges(
+  value: unknown,
+  repos: Array<Pick<Repo, "id" | "name">>,
+): LocalBridgeSummary[] {
   if (!Array.isArray(value)) return [];
+  const repoNamesById = new Map(repos.map((repo) => [repo.id, repo.name]));
   const bridges: LocalBridgeSummary[] = [];
   for (const item of value) {
     if (!item || typeof item !== "object") continue;
     const record = item as {
-      bridge?: {
-        instanceId?: unknown;
-        label?: unknown;
-        hostingMode?: unknown;
-        connected?: unknown;
-      };
-      repos?: Array<{ repo?: { id?: unknown; name?: unknown } | null }>;
+      instanceId?: unknown;
+      label?: unknown;
+      hostingMode?: unknown;
+      connected?: unknown;
+      registeredRepoIds?: unknown;
     };
-    const bridge = record.bridge;
     if (
-      !bridge ||
-      bridge.hostingMode !== "local" ||
-      typeof bridge.instanceId !== "string" ||
-      typeof bridge.label !== "string"
+      record.hostingMode !== "local" ||
+      typeof record.instanceId !== "string" ||
+      typeof record.label !== "string"
     ) {
       continue;
     }
     bridges.push({
-      id: bridge.instanceId,
-      label: bridge.label,
-      connected: bridge.connected === true,
-      registeredRepos: parseRegisteredRepos(record.repos),
+      id: record.instanceId,
+      label: record.label,
+      connected: record.connected === true,
+      registeredRepos: parseRegisteredRepos(record.registeredRepoIds, repoNamesById),
     });
   }
   return bridges;
 }
 
 function parseRegisteredRepos(
-  value: Array<{ repo?: { id?: unknown; name?: unknown } | null }> | undefined,
+  value: unknown,
+  repoNamesById: Map<string, string>,
 ): Array<{ id: string; name: string }> {
-  return (
-    value
-      ?.map((entry) => entry.repo)
-      .filter(
-        (repo): repo is { id: string; name: string } =>
-          typeof repo?.id === "string" && typeof repo.name === "string",
-      ) ?? []
-  );
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((id) => {
+    if (typeof id !== "string") return [];
+    const name = repoNamesById.get(id);
+    return name ? [{ id, name }] : [];
+  });
 }
