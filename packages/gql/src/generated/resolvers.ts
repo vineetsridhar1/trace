@@ -472,6 +472,10 @@ export type GitCheckpoint = {
   filesChanged: Scalars["Int"]["output"];
   id: Scalars["ID"]["output"];
   parentShas: Array<Scalars["String"]["output"]>;
+  previewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  previewContentType?: Maybe<Scalars["String"]["output"]>;
+  previewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  previewUrl?: Maybe<Scalars["String"]["output"]>;
   promptEvent?: Maybe<Event>;
   promptEventId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
@@ -3008,6 +3012,14 @@ export type GitCheckpointResolvers<
   filesChanged?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   parentShas?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
+  previewCapturedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  previewContentType?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  previewStatus?: Resolver<
+    Maybe<ResolversTypes["GitCheckpointCaptureStatus"]>,
+    ParentType,
+    ContextType
+  >;
+  previewUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   promptEvent?: Resolver<Maybe<ResolversTypes["Event"]>, ParentType, ContextType>;
   promptEventId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;

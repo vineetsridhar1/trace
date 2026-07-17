@@ -469,6 +469,10 @@ export type GitCheckpoint = {
   filesChanged: Scalars["Int"]["output"];
   id: Scalars["ID"]["output"];
   parentShas: Array<Scalars["String"]["output"]>;
+  previewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  previewContentType?: Maybe<Scalars["String"]["output"]>;
+  previewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  previewUrl?: Maybe<Scalars["String"]["output"]>;
   promptEvent?: Maybe<Event>;
   promptEventId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;

@@ -43,6 +43,14 @@ export class S3StorageAdapter implements StorageAdapter {
     );
   }
 
+  async getObject(key: string): Promise<Buffer> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    if (!response.Body) throw new Error("Storage object has no body");
+    return Buffer.from(await response.Body.transformToByteArray());
+  }
+
   async getGetUrl(key: string, options?: { downloadFilename?: string }): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,

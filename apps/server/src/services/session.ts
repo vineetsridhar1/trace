@@ -284,10 +284,10 @@ function hasRuntimeBindingChanged(
 function hasRuntimeBinding(connection: SessionConnectionData, workdir?: string | null): boolean {
   return Boolean(
     workdir ||
-      connection.runtimeInstanceId ||
-      connection.environmentId ||
-      connection.providerRuntimeId ||
-      connection.adapterType === "provisioned",
+    connection.runtimeInstanceId ||
+    connection.environmentId ||
+    connection.providerRuntimeId ||
+    connection.adapterType === "provisioned",
   );
 }
 
@@ -3346,11 +3346,11 @@ export class SessionService {
           ? resolvedKind === "design"
             ? "Untitled Design"
             : "Untitled App"
-        : restoreCheckpoint
-          ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
-              .trim()
-              .slice(0, MAX_SESSION_NAME_LENGTH)
-          : `Session ${new Date().toLocaleString()}`;
+          : restoreCheckpoint
+            ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
+                .trim()
+                .slice(0, MAX_SESSION_NAME_LENGTH)
+            : `Session ${new Date().toLocaleString()}`;
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
     // default to local in TRACE_LOCAL_MODE and cloud everywhere else.
@@ -3373,9 +3373,7 @@ export class SessionService {
       );
     }
     const reuseExistingGroupRuntimeSelection =
-      !input.environmentId &&
-      !!existingGroup?.id &&
-      existingGroupHasRuntimeSelection;
+      !input.environmentId && !!existingGroup?.id && existingGroupHasRuntimeSelection;
     const deferRuntimeSelection =
       (input.deferRuntimeSelection === true && resolvedKind !== "app") ||
       (resolvedKind !== "app" &&
@@ -3506,9 +3504,7 @@ export class SessionService {
         select: { id: true },
       });
       if (conflictingGroup) {
-        throw new ValidationError(
-          "This worktree is already imported by another session group",
-        );
+        throw new ValidationError("This worktree is already imported by another session group");
       }
     }
     let runtimeLabel: string | undefined;
@@ -3731,175 +3727,178 @@ export class SessionService {
     const hasInitialUserContent = !!input.prompt || !!input.imageKeys?.length;
 
     let startEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
-    const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const sessionGroup = existingGroup
-        ? await (async () => {
-            const nextGroupData: Prisma.SessionGroupUncheckedUpdateInput = {};
-            if (resolvedChannelId !== undefined && existingGroup.channelId !== resolvedChannelId) {
-              nextGroupData.channelId = resolvedChannelId;
-            }
-            if (existingGroup.repoId == null && resolvedRepoId !== undefined) {
-              nextGroupData.repoId = resolvedRepoId;
-            }
-            if (existingGroup.branch == null && resolvedBranch !== undefined) {
-              nextGroupData.branch = resolvedBranch;
-            }
-            if (Object.keys(nextGroupData).length === 0) {
-              return existingGroup;
-            }
-            return tx.sessionGroup.update({
-              where: { id: existingGroup.id },
-              data: nextGroupData,
+    const session = await prisma
+      .$transaction(async (tx: Prisma.TransactionClient) => {
+        const sessionGroup = existingGroup
+          ? await (async () => {
+              const nextGroupData: Prisma.SessionGroupUncheckedUpdateInput = {};
+              if (
+                resolvedChannelId !== undefined &&
+                existingGroup.channelId !== resolvedChannelId
+              ) {
+                nextGroupData.channelId = resolvedChannelId;
+              }
+              if (existingGroup.repoId == null && resolvedRepoId !== undefined) {
+                nextGroupData.repoId = resolvedRepoId;
+              }
+              if (existingGroup.branch == null && resolvedBranch !== undefined) {
+                nextGroupData.branch = resolvedBranch;
+              }
+              if (Object.keys(nextGroupData).length === 0) {
+                return existingGroup;
+              }
+              return tx.sessionGroup.update({
+                where: { id: existingGroup.id },
+                data: nextGroupData,
+                select: SESSION_GROUP_SUMMARY_SELECT,
+              });
+            })()
+          : await tx.sessionGroup.create({
+              data: {
+                name,
+                kind: resolvedKind,
+                organizationId: input.organizationId,
+                ownerUserId: input.createdById,
+                visibility: newGroupVisibility,
+                forkedFromSessionGroupId: input.forkedFromSessionGroupId ?? undefined,
+                channelId: resolvedChannelId,
+                repoId: resolvedRepoId ?? undefined,
+                branch: resolvedBranch ?? undefined,
+                connection: initialConnection,
+                // Adopting an existing worktree: record the path and flag the group
+                // so re-provisioning re-adopts it and teardown never removes it.
+                ...(adoptWorktreePath ? { workdir: adoptWorktreePath, worktreeAdopted: true } : {}),
+              },
               select: SESSION_GROUP_SUMMARY_SELECT,
             });
-          })()
-        : await tx.sessionGroup.create({
-            data: {
-              name,
-              kind: resolvedKind,
-              organizationId: input.organizationId,
-              ownerUserId: input.createdById,
-              visibility: newGroupVisibility,
-              forkedFromSessionGroupId: input.forkedFromSessionGroupId ?? undefined,
-              channelId: resolvedChannelId,
-              repoId: resolvedRepoId ?? undefined,
-              branch: resolvedBranch ?? undefined,
-              connection: initialConnection,
-              // Adopting an existing worktree: record the path and flag the group
-              // so re-provisioning re-adopts it and teardown never removes it.
-              ...(adoptWorktreePath
-                ? { workdir: adoptWorktreePath, worktreeAdopted: true }
-                : {}),
-            },
-            select: SESSION_GROUP_SUMMARY_SELECT,
-          });
 
-      const projectIds = input.projectId != null ? [input.projectId] : sourceProjectIds;
+        const projectIds = input.projectId != null ? [input.projectId] : sourceProjectIds;
 
-      const session = await tx.session.create({
-        data: {
-          name,
-          agentStatus: initialAgentStatus,
-          sessionStatus: initialSessionStatus,
-          tool,
-          model: model ?? undefined,
-          reasoningEffort: reasoningEffort ?? undefined,
-          hosting,
-          organizationId: input.organizationId,
-          createdById: input.createdById,
-          repoId: resolvedRepoId ?? undefined,
-          branch: resolvedBranch ?? undefined,
-          workdir: sessionGroup.workdir ?? undefined,
-          channelId: resolvedChannelId,
-          sessionGroupId: sessionGroup.id,
-          connection: sessionGroup.connection ?? initialConnection,
-          pendingRun: queueInitialRun
-            ? pendingRunValue([
-                {
-                  type: "run",
-                  prompt: input.prompt ?? null,
-                  interactionMode: input.interactionMode ?? null,
-                  clientSource: normalizeClientSource(input.clientSource),
-                  checkpointContext: null,
-                  ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
-                },
-              ])
-            : undefined,
-          lastUserMessageAt: hasInitialUserContent ? new Date() : undefined,
-          lastMessageAt: hasInitialUserContent ? new Date() : undefined,
-          worktreeDeleted: sessionGroup.worktreeDeleted,
-          readOnlyWorkspace,
-          ...(projectIds.length > 0 && {
-            projects: {
-              create: projectIds.map((projectId: string) => ({ projectId })),
-            },
-          }),
-        },
-        include: SESSION_INCLUDE,
-      });
-
-      if (sourceTicketLinks.length > 0) {
-        await tx.ticketLink.createMany({
-          data: sourceTicketLinks.map((ticketLink: { ticketId: string }) => ({
-            ticketId: ticketLink.ticketId,
-            entityType: "session",
-            entityId: session.id,
-          })),
-          skipDuplicates: true,
+        const session = await tx.session.create({
+          data: {
+            name,
+            agentStatus: initialAgentStatus,
+            sessionStatus: initialSessionStatus,
+            tool,
+            model: model ?? undefined,
+            reasoningEffort: reasoningEffort ?? undefined,
+            hosting,
+            organizationId: input.organizationId,
+            createdById: input.createdById,
+            repoId: resolvedRepoId ?? undefined,
+            branch: resolvedBranch ?? undefined,
+            workdir: sessionGroup.workdir ?? undefined,
+            channelId: resolvedChannelId,
+            sessionGroupId: sessionGroup.id,
+            connection: sessionGroup.connection ?? initialConnection,
+            pendingRun: queueInitialRun
+              ? pendingRunValue([
+                  {
+                    type: "run",
+                    prompt: input.prompt ?? null,
+                    interactionMode: input.interactionMode ?? null,
+                    clientSource: normalizeClientSource(input.clientSource),
+                    checkpointContext: null,
+                    ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
+                  },
+                ])
+              : undefined,
+            lastUserMessageAt: hasInitialUserContent ? new Date() : undefined,
+            lastMessageAt: hasInitialUserContent ? new Date() : undefined,
+            worktreeDeleted: sessionGroup.worktreeDeleted,
+            readOnlyWorkspace,
+            ...(projectIds.length > 0 && {
+              projects: {
+                create: projectIds.map((projectId: string) => ({ projectId })),
+              },
+            }),
+          },
+          include: SESSION_INCLUDE,
         });
-      }
 
-      const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
-        { agentStatus: initialAgentStatus, sessionStatus: initialSessionStatus },
-      ]);
+        if (sourceTicketLinks.length > 0) {
+          await tx.ticketLink.createMany({
+            data: sourceTicketLinks.map((ticketLink: { ticketId: string }) => ({
+              ticketId: ticketLink.ticketId,
+              entityType: "session",
+              entityId: session.id,
+            })),
+            skipDuplicates: true,
+          });
+        }
 
-      const startEventId = input.startEventId ?? randomUUID();
-      const startEventPayload = {
-        session: serializeSession(session),
-        sessionGroup: sessionGroupSnapshot,
-        prompt: input.prompt ?? null,
-        clientSource: normalizeClientSource(input.clientSource),
-        sourceSessionId: input.sourceSessionId ?? null,
-        restoreCheckpointId: restoreCheckpoint?.id ?? null,
-        restoreCheckpointSha: restoreCheckpoint?.commitSha ?? null,
-        ...(input.imageKeys?.length
-          ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
-          : {}),
-      } as Prisma.InputJsonValue;
-      const startEventMetadata = initialCheckpointContextId
-        ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
-        : undefined;
-      const startEventOverride = input.buildStartEvent?.({
-        session,
-        sessionGroup,
-        sessionGroupSnapshot,
-        startEventId,
-        defaultPayload: startEventPayload,
-        defaultMetadata: startEventMetadata,
-      });
+        const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
+          { agentStatus: initialAgentStatus, sessionStatus: initialSessionStatus },
+        ]);
 
-      startEventToPublish = await eventService.create(
-        {
-          id: startEventId,
-          organizationId: input.organizationId,
-          scopeType: "session",
-          scopeId: session.id,
-          eventType: "session_started",
-          payload: startEventOverride?.payload ?? startEventPayload,
-          metadata: startEventOverride?.metadata ?? startEventMetadata,
-          actorType: startEventOverride?.actorType ?? "user",
-          actorId: startEventOverride?.actorId ?? input.createdById,
-          timestamp: startEventOverride?.timestamp,
-          deferPublish: true,
-        },
-        tx,
-      );
-
-      if (input.afterCreate) {
-        await input.afterCreate({
-          tx,
+        const startEventId = input.startEventId ?? randomUUID();
+        const startEventPayload = {
+          session: serializeSession(session),
+          sessionGroup: sessionGroupSnapshot,
+          prompt: input.prompt ?? null,
+          clientSource: normalizeClientSource(input.clientSource),
+          sourceSessionId: input.sourceSessionId ?? null,
+          restoreCheckpointId: restoreCheckpoint?.id ?? null,
+          restoreCheckpointSha: restoreCheckpoint?.commitSha ?? null,
+          ...(input.imageKeys?.length
+            ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
+            : {}),
+        } as Prisma.InputJsonValue;
+        const startEventMetadata = initialCheckpointContextId
+          ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
+          : undefined;
+        const startEventOverride = input.buildStartEvent?.({
           session,
           sessionGroup,
+          sessionGroupSnapshot,
           startEventId,
-          startEventPayload: startEventOverride?.payload ?? startEventPayload,
+          defaultPayload: startEventPayload,
+          defaultMetadata: startEventMetadata,
         });
-      }
 
-      return session;
-    }).catch(async (error: unknown) => {
-      // Don't leak the managed repo minted above if the session row never persists.
-      if (createdManagedRepoId) {
-        await managedGitService
-          .deleteManagedRepo({
+        startEventToPublish = await eventService.create(
+          {
+            id: startEventId,
             organizationId: input.organizationId,
-            repoId: createdManagedRepoId,
-            actorType: input.actorType ?? "user",
-            actorId: input.createdById,
-          })
-          .catch(() => {});
-      }
-      throw error;
-    });
+            scopeType: "session",
+            scopeId: session.id,
+            eventType: "session_started",
+            payload: startEventOverride?.payload ?? startEventPayload,
+            metadata: startEventOverride?.metadata ?? startEventMetadata,
+            actorType: startEventOverride?.actorType ?? "user",
+            actorId: startEventOverride?.actorId ?? input.createdById,
+            timestamp: startEventOverride?.timestamp,
+            deferPublish: true,
+          },
+          tx,
+        );
+
+        if (input.afterCreate) {
+          await input.afterCreate({
+            tx,
+            session,
+            sessionGroup,
+            startEventId,
+            startEventPayload: startEventOverride?.payload ?? startEventPayload,
+          });
+        }
+
+        return session;
+      })
+      .catch(async (error: unknown) => {
+        // Don't leak the managed repo minted above if the session row never persists.
+        if (createdManagedRepoId) {
+          await managedGitService
+            .deleteManagedRepo({
+              organizationId: input.organizationId,
+              repoId: createdManagedRepoId,
+              actorType: input.actorType ?? "user",
+              actorId: input.createdById,
+            })
+            .catch(() => {});
+        }
+        throw error;
+      });
 
     // Publish the start event only after the transaction commits so subscribers
     // don't query for the session before its row is visible (e.g. long-running forks).
@@ -7304,8 +7303,7 @@ export class SessionService {
     // for seconds per commit). Mark it pending, emit the checkpoint now, and run
     // the capture off-queue — a follow-up git_checkpoint event (merged by id on
     // the client) carries the thumbnail once it's ready.
-    const shouldCaptureAppCheckpoint =
-      didPersistCheckpoint && session.sessionGroup?.kind === "app";
+    const shouldCaptureAppCheckpoint = didPersistCheckpoint && session.sessionGroup?.kind === "app";
     const shouldPublishDesignPreview =
       didPersistCheckpoint && session.sessionGroup?.kind === "design";
     if (shouldCaptureAppCheckpoint && persisted) {
@@ -7372,6 +7370,7 @@ export class SessionService {
         sessionId,
         organizationId: session.organizationId,
         sessionGroupId: session.sessionGroupId,
+        commitSha: persisted.commitSha,
         userId: session.sessionGroup.ownerUserId,
       });
     }
@@ -7435,6 +7434,7 @@ export class SessionService {
     sessionId: string;
     organizationId: string;
     sessionGroupId: string;
+    commitSha: string;
     userId: string;
   }): void {
     void (async () => {
@@ -7450,7 +7450,18 @@ export class SessionService {
             previewCapturedAt: preview.previewCapturedAt ?? null,
           },
         });
-        await eventService.create({ organizationId: input.organizationId, scopeType: "session", scopeId: input.sessionId, eventType: "session_output", payload: { type: "git_checkpoint", checkpoint: serializeGitCheckpoint(updated) } as Prisma.InputJsonValue, actorType: "system", actorId: "system" });
+        await eventService.create({
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: input.sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "git_checkpoint",
+            checkpoint: serializeGitCheckpoint(updated),
+          } as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        });
       } catch (error) {
         console.error("[design-checkpoint] async preview publish failed", error);
       }
@@ -9391,10 +9402,10 @@ export class SessionService {
         });
         const bindingChanged = Boolean(
           currentGroup &&
-            hasRuntimeBindingChanged(
-              this.parseConnection(currentGroup.connection),
-              this.parseConnection(patch.connection),
-            ),
+          hasRuntimeBindingChanged(
+            this.parseConnection(currentGroup.connection),
+            this.parseConnection(patch.connection),
+          ),
         );
         shouldRebindSessions ||= bindingChanged;
         shouldDestroyGroupTerminals ||= bindingChanged;
