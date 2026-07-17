@@ -6,6 +6,7 @@ import {
   buildAppSessionGroupIds,
   buildDesignSessionGroupIds,
   findReadyAppPreviewUrl,
+  findReadyAppPreviewEndpointId,
 } from "./app-sessions";
 
 function stateWithGroups(sessionGroups: Record<string, Record<string, unknown>>): EntityState {
@@ -133,5 +134,11 @@ describe("findReadyAppPreviewUrl", () => {
     expect(
       findReadyAppPreviewUrl("group", [endpoint()], [process({ appConfigId: "other" })]),
     ).toBeNull();
+  });
+});
+
+describe("findReadyAppPreviewEndpointId", () => {
+  it("returns the running endpoint ID used to create a preview credential", () => {
+    expect(findReadyAppPreviewEndpointId("group", [endpoint()], [process()])).toBe("endpoint");
   });
 });

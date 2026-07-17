@@ -51,6 +51,20 @@ export function findReadyAppPreviewUrl(
   endpoints: SessionEndpoint[],
   processes: SessionApplicationProcess[],
 ): string | null {
+  const endpointId = findReadyAppPreviewEndpointId(sessionGroupId, endpoints, processes);
+  return endpoints.find((endpoint) => endpoint.id === endpointId)?.url ?? null;
+}
+
+/**
+ * Finds the endpoint whose short-lived preview credential should be loaded.
+ * Endpoint URLs are private, so mobile must request a credential before opening
+ * one in a WebView.
+ */
+export function findReadyAppPreviewEndpointId(
+  sessionGroupId: string,
+  endpoints: SessionEndpoint[],
+  processes: SessionApplicationProcess[],
+): string | null {
   const runningProcessKeys = new Set(
     processes
       .filter(
@@ -65,6 +79,6 @@ export function findReadyAppPreviewUrl(
         endpoint.status === "enabled" &&
         Boolean(endpoint.url) &&
         runningProcessKeys.has(`${endpoint.appConfigId}:${endpoint.processConfigId}`),
-    )?.url ?? null
+    )?.id ?? null
   );
 }

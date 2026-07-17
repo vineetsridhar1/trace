@@ -36,6 +36,8 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [webViewRevision, setWebViewRevision] = useState(0);
   const webViewRef = useRef<WebView>(null);
   const latestUrlRef = useRef(resolvedUrl);
   const lastPropUrlRef = useRef(resolvedUrl);
@@ -52,6 +54,7 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
     setCanGoBack(false);
     setCanGoForward(false);
     setLoading(false);
+    setLoadError(null);
   }, [resolvedUrl]);
 
   useEffect(() => {
@@ -110,8 +113,13 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
       setLoading(false);
       return;
     }
+    if (loadError) {
+      setLoadError(null);
+      setWebViewRevision((revision) => revision + 1);
+      return;
+    }
     webViewRef.current?.reload();
-  }, [loading]);
+  }, [loadError, loading]);
 
   return (
     <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
@@ -204,18 +212,38 @@ export function BrowserPanel({ url: nextUrl, onUrlChange, topInset = 0 }: Browse
       </View>
 
       {url ? (
-        <WebView
-          ref={webViewRef}
-          source={webSource}
-          style={styles.webView}
-          automaticallyAdjustContentInsets={false}
-          contentInsetAdjustmentBehavior="never"
-          onNavigationStateChange={handleNavStateChange}
-          onLoadStart={() => setLoading(true)}
-          onLoadEnd={() => setLoading(false)}
-          allowsInlineMediaPlayback
-          sharedCookiesEnabled
-        />
+        loadError ? (
+          <View style={[styles.empty, { backgroundColor: theme.colors.surfaceDeep }]}>
+            <Text variant="body" color="mutedForeground" align="center">
+              {loadError}
+            </Text>
+          </View>
+        ) : (
+          <WebView
+            key={webViewRevision}
+            ref={webViewRef}
+            source={webSource}
+            style={styles.webView}
+            automaticallyAdjustContentInsets={false}
+            contentInsetAdjustmentBehavior="never"
+            onNavigationStateChange={handleNavStateChange}
+            onLoadStart={() => {
+              setLoadError(null);
+              setLoading(true);
+            }}
+            onLoadEnd={() => setLoading(false)}
+            onError={(event) => {
+              setLoading(false);
+              setLoadError(event.nativeEvent.description || "Couldn't load this page.");
+            }}
+            onHttpError={(event) => {
+              setLoading(false);
+              setLoadError(`Couldn't load this page (HTTP ${event.nativeEvent.statusCode}).`);
+            }}
+            allowsInlineMediaPlayback
+            sharedCookiesEnabled
+          />
+        )
       ) : (
         <View style={[styles.empty, { backgroundColor: theme.colors.surfaceDeep }]}>
           <Text variant="body" color="mutedForeground">
