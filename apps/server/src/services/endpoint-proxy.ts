@@ -13,6 +13,7 @@ import {
 } from "./endpoint-preview-auth.js";
 import {
   bodyPreview,
+  buildEndpointUrl,
   endpointProxyMaxRequestBodyBytes,
   endpointProxyMaxResponseBodyBytes,
   endpointProxyRequestTimeoutMs,
@@ -186,10 +187,29 @@ export class EndpointProxyService {
   }
 
   async handleHttpRequest(req: IncomingMessage, res: ServerResponse, endpointKey: string) {
-    const endpoint = await prisma.sessionEndpoint.findUnique({
+    let endpoint = await prisma.sessionEndpoint.findUnique({
       where: { key: endpointKey },
     });
     if (!endpoint) {
+      // Preview credentials name the stable endpoint ID, while the hostname
+      // contains its rotatable key. A browser can briefly hold an old hostname
+      // during endpoint setup or key rotation. Recover only on the signed auth
+      // entrypoint, then redirect to the endpoint's current hostname.
+      const url = requestUrl(req);
+      const token = url.pathname === "/__trace_preview_auth" ? url.searchParams.get("token") : null;
+      const credential = token ? verifyEndpointPreviewToken(token) : null;
+      if (credential) {
+        endpoint = await prisma.sessionEndpoint.findFirst({
+          where: { id: credential.endpointId, organizationId: credential.organizationId },
+        });
+        if (endpoint) {
+          const currentUrl = new URL(buildEndpointUrl(endpoint.key));
+          currentUrl.pathname = url.pathname;
+          currentUrl.search = url.search;
+          res.writeHead(307, { location: currentUrl.toString() }).end();
+          return;
+        }
+      }
       res.writeHead(404).end("Endpoint not found");
       return;
     }
