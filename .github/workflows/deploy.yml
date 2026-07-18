@@ -74,6 +74,11 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
             "cd ~/trace && \
             docker tag '${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}' '${ECR_REGISTRY}/${ECR_REPOSITORY}:latest' && \
+            echo '[trace] Applying database migrations...' && \
+            if ! IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose -f docker-compose.ec2.yml run --rm --no-deps -e ROLE=migrate backend; then \
+              echo '[trace] Migrations failed; aborting deploy before rolling the backend.'; \
+              exit 1; \
+            fi && \
             if ! IMAGE_TAG='${GITHUB_SHA}' ECR_REGISTRY='${ECR_REGISTRY}' docker compose -f docker-compose.ec2.yml up -d --wait --remove-orphans; then \
               docker compose -f docker-compose.ec2.yml ps; \
               docker compose -f docker-compose.ec2.yml logs --no-color --tail=200 backend; \

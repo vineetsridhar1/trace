@@ -38,3 +38,52 @@ jobs:
 
       - name: Format check
         run: pnpm format:check
+
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: trace
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/trace
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      # Replays every committed migration against an empty database, exactly as
+      # `prisma migrate deploy` does on production. Catches broken/partial
+      # migration SQL before it can reach a deploy.
+      - name: Apply migrations to a fresh database
+        run: pnpm --filter @trace/server exec prisma migrate deploy
+
+      # Fails if schema.prisma has changes that no migration captures — the
+      # "edited the model but forgot to add a migration" divergence that leaves
+      # production missing columns.
+      - name: Assert schema has no unmigrated changes
+        run: >-
+          pnpm --filter @trace/server exec prisma migrate diff
+          --from-url "$DATABASE_URL"
+          --to-schema-datamodel prisma/schema.prisma
+          --exit-code
