@@ -318,6 +318,50 @@ describe("workspace repo setup", () => {
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
   });
 
+  it("recreates an expired app workspace from the remote without a checkpoint", async () => {
+    mocks.existsSync.mockReturnValue(false);
+    mocks.readdirSync.mockReturnValue([]);
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const gitArgs = args[1];
+      const callback = callbackFrom(args);
+      if (Array.isArray(gitArgs) && gitArgs[0] === "ls-remote") {
+        callback(null, `${"a".repeat(40)}\trefs/heads/main\n`, "");
+        return;
+      }
+      callback(null, "", "");
+    });
+
+    await createAppWorkspace({
+      sessionId: "session-1",
+      sessionGroupId: "expired-group",
+      repoRemoteUrl: "https://trace:token@example.test/git/org/repo.git",
+      defaultBranch: "main",
+    });
+
+    expect(mocks.execFile).toHaveBeenCalledWith(
+      "git",
+      [
+        "ls-remote",
+        "--heads",
+        "https://trace:token@example.test/git/org/repo.git",
+        "refs/heads/main",
+      ],
+      expect.any(Function),
+    );
+    expect(mocks.execFile).toHaveBeenCalledWith(
+      "git",
+      [
+        "clone",
+        "--branch",
+        "main",
+        "https://trace:token@example.test/git/org/repo.git",
+        "/workspaces/expired-group",
+      ],
+      expect.any(Function),
+    );
+    expect(mocks.cpSync).not.toHaveBeenCalled();
+  });
+
   it("creates the requested branch from the default branch when clone reports it missing", async () => {
     mocks.existsSync.mockReturnValue(false);
     mocks.execFile.mockImplementation((...args: unknown[]) => {
