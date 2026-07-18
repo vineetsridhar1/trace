@@ -16,9 +16,10 @@ vi.mock("../lib/storage/index.js", () => ({
 
 vi.mock("./endpoint-preview-auth.js", () => ({
   createEndpointPreviewToken: vi.fn(() => ({ token: "preview-token", expiresAt: new Date() })),
+  ENDPOINT_PREVIEW_COOKIE: "__trace_endpoint_preview",
 }));
 
-import { designCheckpointPreviewService, designExportUrl } from "./design-checkpoint-preview.js";
+import { designCheckpointPreviewService, designExportRequest } from "./design-checkpoint-preview.js";
 
 describe("design checkpoint previews", () => {
   beforeEach(() => {
@@ -49,8 +50,13 @@ describe("design checkpoint previews", () => {
     });
 
     expect(mocks.fetch).toHaveBeenCalledWith(
-      expect.stringContaining(encodeURIComponent("/__trace_design_export?ref=" + "a".repeat(40))),
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      expect.stringContaining("/__trace_design_export?ref=" + "a".repeat(40)),
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        headers: expect.objectContaining({
+          cookie: expect.stringContaining("__trace_endpoint_preview="),
+        }),
+      }),
     );
     expect(mocks.putObject).toHaveBeenCalledWith(
       expect.stringContaining("design-previews/org-1/group-1/checkpoint-1-"),
@@ -63,17 +69,32 @@ describe("design checkpoint previews", () => {
     });
   });
 
-  it("encodes the checkpoint ref in the private preview redirect", () => {
-    const url = new URL(
-      designExportUrl(
-        { id: "endpoint-1", key: "preview-key", organizationId: "org-1", accessMode: "private" },
-        "user-1",
-        "b".repeat(40),
-      ),
+  it("authenticates a private export with a direct preview cookie, not a browser redirect", () => {
+    const { url, headers } = designExportRequest(
+      { id: "endpoint-1", key: "preview-key", organizationId: "org-1", accessMode: "private" },
+      "user-1",
+      "b".repeat(40),
     );
+    const parsed = new URL(url);
 
-    expect(url.pathname).toBe("/__trace_preview_auth");
-    expect(url.searchParams.get("next")).toBe(`/__trace_design_export?ref=${"b".repeat(40)}`);
+    // Server-side fetch has no cookie jar, so the export must hit the export path
+    // directly (no /__trace_preview_auth redirect) and carry the token as a cookie.
+    expect(parsed.pathname).toBe("/__trace_design_export");
+    expect(parsed.searchParams.get("ref")).toBe("b".repeat(40));
+    expect(headers.cookie).toContain("__trace_endpoint_preview=");
+  });
+
+  it("omits the preview cookie for a public export", () => {
+    const { url, headers } = designExportRequest(
+      { id: "endpoint-1", key: "preview-key", organizationId: "org-1", accessMode: "public" },
+      "user-1",
+      "b".repeat(40),
+    );
+    const parsed = new URL(url);
+
+    expect(parsed.pathname).toBe("/__trace_design_export");
+    expect(parsed.searchParams.get("ref")).toBe("b".repeat(40));
+    expect(headers.cookie).toBeUndefined();
   });
 
   it("stores a managed commit export without requiring a Trace checkpoint", async () => {

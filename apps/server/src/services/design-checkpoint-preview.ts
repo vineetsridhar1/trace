@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "../lib/db.js";
 import { storage } from "../lib/storage/index.js";
-import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
+import { createEndpointPreviewToken, ENDPOINT_PREVIEW_COOKIE } from "./endpoint-preview-auth.js";
 import { buildEndpointUrl } from "./endpoint-utils.js";
 import { designCheckpointPreviewUrl } from "../lib/design-checkpoint-preview-url.js";
 
@@ -19,26 +19,31 @@ export type DesignCheckpointPreviewResult = {
   previewCapturedAt?: Date;
 };
 
-export function designExportUrl(
+export function designExportRequest(
   endpoint: { id: string; key: string; organizationId: string; accessMode: string },
   userId: string,
   commitSha: string,
-): string {
+): { url: string; headers: Record<string, string> } {
   const url = new URL(buildEndpointUrl(endpoint.key));
+  url.pathname = "/__trace_design_export";
+  url.searchParams.set("ref", commitSha);
   if (endpoint.accessMode === "public") {
-    url.pathname = "/__trace_design_export";
-    url.searchParams.set("ref", commitSha);
-    return url.toString();
+    return { url: url.toString(), headers: {} };
   }
+  // A private endpoint gates on the endpoint-preview cookie. This capture is a
+  // server-side fetch with no cookie jar, so the browser preview-auth flow
+  // (Set-Cookie on /__trace_preview_auth → 302 → export) drops the cookie across
+  // the redirect and the proxy answers 403. Send the preview token directly as
+  // the cookie the proxy reads, hitting the export path without a redirect.
   const credential = createEndpointPreviewToken({
     userId,
     organizationId: endpoint.organizationId,
     endpointId: endpoint.id,
   });
-  url.pathname = "/__trace_preview_auth";
-  url.searchParams.set("token", credential.token);
-  url.searchParams.set("next", `/__trace_design_export?ref=${encodeURIComponent(commitSha)}`);
-  return url.toString();
+  return {
+    url: url.toString(),
+    headers: { cookie: `${ENDPOINT_PREVIEW_COOKIE}=${encodeURIComponent(credential.token)}` },
+  };
 }
 
 async function withExportSlot<T>(operation: () => Promise<T>): Promise<T> {
@@ -54,11 +59,11 @@ async function withExportSlot<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-async function fetchExport(url: string): Promise<Response> {
+async function fetchExport(url: string, headers: Record<string, string>): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), EXPORT_TIMEOUT_MS);
   try {
-    return await fetch(url, { signal: controller.signal });
+    return await fetch(url, { signal: controller.signal, headers });
   } finally {
     clearTimeout(timeout);
   }
@@ -86,9 +91,8 @@ export const designCheckpointPreviewService = {
     if (!endpoint) return { previewStatus: "unavailable" };
     try {
       const { previewKey } = await withExportSlot(async () => {
-        const response = await fetchExport(
-          designExportUrl(endpoint, input.userId, input.commitSha),
-        );
+        const { url, headers } = designExportRequest(endpoint, input.userId, input.commitSha);
+        const response = await fetchExport(url, headers);
         if (!response.ok) throw new Error(`Design export returned ${response.status}`);
         const length = Number(response.headers.get("content-length") ?? "0");
         if (length > MAX_EXPORT_BYTES) throw new Error("Design export exceeds size limit");
