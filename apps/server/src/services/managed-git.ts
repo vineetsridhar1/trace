@@ -306,6 +306,14 @@ class ManagedGitService {
     const hasWrite = auth.capabilities.includes("write");
     const hasRead = auth.capabilities.includes("read") || hasWrite;
     if (needsWrite ? !hasWrite : !hasRead) {
+      console.warn("[managed-git] authorize denied: missing capability", {
+        service: input.service,
+        needsWrite,
+        scope: auth.scope,
+        subject: auth.subject,
+        capabilities: auth.capabilities,
+        repoId: input.repoId,
+      });
       throw new AuthorizationError("Managed git token lacks the required capability");
     }
     if (auth.scope === "runtime" && !(await this.isLiveRuntimeBinding(auth))) {
@@ -338,7 +346,20 @@ class ManagedGitService {
       return false;
     }
     const connection = session.connection as Record<string, unknown>;
-    return connection.runtimeInstanceId === auth.subject && connection.state === "connected";
+    const live =
+      connection.runtimeInstanceId === auth.subject && connection.state === "connected";
+    if (!live) {
+      // Diagnostic for push 403s: shows exactly which side is stale — the
+      // token's runtime instance vs. the session's current live runtime/state.
+      console.warn("[managed-git] runtime binding mismatch (push will 403)", {
+        sessionId: auth.sessionId,
+        repoId: auth.repoId,
+        tokenSubject: auth.subject,
+        connectionRuntimeInstanceId: connection.runtimeInstanceId,
+        connectionState: connection.state,
+      });
+    }
+    return live;
   }
 
   /**
