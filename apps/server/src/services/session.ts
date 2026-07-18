@@ -1600,12 +1600,19 @@ export class SessionService {
     if (!session) return;
 
     const result = await this.updateConnectionConditional(sessionId, (conn) => {
-      if (
-        update.runtimeInstanceId &&
-        conn.runtimeInstanceId &&
-        conn.runtimeInstanceId !== update.runtimeInstanceId
-      ) {
-        return null;
+      if (update.runtimeInstanceId) {
+        const isNewRuntimeRequest = eventType === "session_runtime_start_requested";
+        // A new launch may claim an unbound session, but every subsequent
+        // lifecycle event must belong to the runtime generation that is
+        // currently persisted. In particular, an old stop event must not
+        // apply after another path has cleared the binding while a new
+        // runtime is starting.
+        if (
+          conn.runtimeInstanceId !== update.runtimeInstanceId &&
+          !(isNewRuntimeRequest && !conn.runtimeInstanceId)
+        ) {
+          return null;
+        }
       }
 
       if (

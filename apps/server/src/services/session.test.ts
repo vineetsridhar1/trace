@@ -5200,6 +5200,39 @@ describe("SessionService", () => {
         }),
       );
     });
+
+    it("ignores stale lifecycle events after a newer runtime binding was cleared", async () => {
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          sessionGroupId: "group-1",
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+        })
+        .mockResolvedValueOnce({
+          sessionGroupId: "group-1",
+          connection: {
+            state: "connecting",
+            version: 2,
+            adapterType: "provisioned",
+          },
+        });
+
+      await (
+        service as unknown as {
+          recordRuntimeLifecycle: (
+            sessionId: string,
+            eventType: "session_runtime_stopped",
+            update: { runtimeInstanceId: string },
+          ) => Promise<void>;
+        }
+      ).recordRuntimeLifecycle("session-1", "session_runtime_stopped", {
+        runtimeInstanceId: "runtime-old",
+      });
+
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
   });
 
   describe("recoverMissingToolSession", () => {
