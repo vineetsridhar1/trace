@@ -500,6 +500,34 @@ function isRuntimeComputeGone(conn: SessionConnectionData): boolean {
   return conn.state === "disconnected" && conn.deprovisionedAt != null;
 }
 
+/**
+ * Grace window during which a starting-up runtime is shielded from the idle
+ * sweep. Comfortably above the default 180s startup timeout so a healthy
+ * cold-boot (image pull + connect) is always protected.
+ */
+const RUNTIME_STARTUP_GRACE_MS = 5 * 60 * 1000;
+
+/**
+ * True when a runtime is actively starting up and that startup is still recent.
+ *
+ * Reviving an idle session provisions fresh compute without posting a new
+ * message, so the group still matches the idle query while its runtime is
+ * mid-boot. Without this guard the idle sweep reaps the just-provisioned runtime
+ * seconds into its image pull (stoppedReason `idle_session_group_cleanup`,
+ * `startedAt: null`), so an idle group can never be revived. A runtime stuck in
+ * a startup state past the grace window (well beyond the startup timeout, which
+ * the provision path settles on its own) is intentionally left reclaimable so
+ * leaked compute can't linger forever.
+ */
+function isRuntimeStartingWithinGrace(conn: SessionConnectionData, now: number): boolean {
+  if (!isRuntimeStartupState(conn.state)) return false;
+  const startedAt = conn.requestedAt ?? conn.provisioningAt ?? conn.connectingAt ?? null;
+  if (!startedAt) return true;
+  const startedMs = Date.parse(startedAt);
+  if (Number.isNaN(startedMs)) return true;
+  return now - startedMs < RUNTIME_STARTUP_GRACE_MS;
+}
+
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
   if (sessionStatus === "merged") return "merged";
   return sessionStatus === "in_review" ? "in_review" : "in_progress";
@@ -10137,9 +10165,17 @@ export class SessionService {
       // race-safely inside the conditional update below.
       if (isRuntimeComputeGone(this.parseConnection(cloudSession.connection))) continue;
 
+      // Never reap a runtime that is still coming up. Reviving an idle group
+      // provisions fresh compute without a new message, so the group keeps
+      // matching this idle query while its runtime boots — without this guard
+      // the sweep kills it mid image-pull and the group can never be revived.
+      // Re-checked race-safely inside the conditional update below.
+      if (isRuntimeStartingWithinGrace(this.parseConnection(cloudSession.connection), now)) continue;
+
       const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(
         group,
         cloudSession,
+        now,
       );
       if (!cleanedRuntime) continue;
 
@@ -10152,12 +10188,16 @@ export class SessionService {
   private async deprovisionIdleCloudSessionGroupRuntime(
     group: IdleCloudSessionGroupCandidate,
     cloudSession: IdleCloudSessionGroupCandidate["sessions"][number],
+    now: number,
   ): Promise<boolean> {
     const disconnectFlagged = await this.updateConnectionConditional(cloudSession.id, (conn) => {
       // The runtime's compute is already gone. Re-stopping it would just
       // re-emit stopping/stopped events on every idle sweep without ever
       // settling, since an idle group is re-selected each tick.
       if (isRuntimeComputeGone(conn)) return null;
+      // A runtime that began starting up between selection and this update must
+      // not be torn down mid-boot; leave it for a later sweep once it settles.
+      if (isRuntimeStartingWithinGrace(conn, now)) return null;
       return {
         ...conn,
         disconnectOnDeprovision: true,
