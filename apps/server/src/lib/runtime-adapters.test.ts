@@ -527,6 +527,77 @@ describe("ProvisionedRuntimeAdapter", () => {
     });
   });
 
+  it("settles a non-terminal stop to stopped when status confirms the compute is gone", async () => {
+    fetchMock()
+      .mockResolvedValueOnce(makeResponse({ ok: true, status: "stopping" }))
+      .mockResolvedValueOnce(makeResponse({ status: "stopped" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+    const environment = {
+      id: "env-1",
+      name: "Company Launcher",
+      adapterType: "provisioned" as const,
+      config: provisionedConfig,
+    };
+
+    await expect(
+      adapter.stopSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        environment,
+        connection: { providerRuntimeId: "provider-runtime-1" },
+        reason: "idle_session_group_cleanup",
+      }),
+    ).resolves.toEqual({ ok: true, status: "stopped", message: undefined });
+
+    // /stop then the confirming /status read.
+    expect(fetchMock()).toHaveBeenCalledTimes(2);
+    expect(fetchMock().mock.calls[1][0]).toBe("https://launcher.example/status");
+  });
+
+  it("leaves a stop in stopping when status still reports live compute", async () => {
+    fetchMock()
+      .mockResolvedValueOnce(makeResponse({ ok: true, status: "stopping" }))
+      .mockResolvedValueOnce(makeResponse({ status: "running" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.stopSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        environment: {
+          id: "env-1",
+          name: "Company Launcher",
+          adapterType: "provisioned",
+          config: provisionedConfig,
+        },
+        connection: { providerRuntimeId: "provider-runtime-1" },
+        reason: "idle_session_group_cleanup",
+      }),
+    ).resolves.toEqual({ ok: true, status: "stopping", message: undefined });
+  });
+
+  it("leaves a stop in stopping when the confirming status check fails", async () => {
+    fetchMock()
+      .mockResolvedValueOnce(makeResponse({ ok: true, status: "stopping" }))
+      .mockResolvedValueOnce(makeResponse({}, 502));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.stopSession({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        environment: {
+          id: "env-1",
+          name: "Company Launcher",
+          adapterType: "provisioned",
+          config: provisionedConfig,
+        },
+        connection: { providerRuntimeId: "provider-runtime-1" },
+        reason: "idle_session_group_cleanup",
+      }),
+    ).resolves.toEqual({ ok: true, status: "stopping", message: undefined });
+  });
+
   it("times out hung launcher requests", async () => {
     vi.useFakeTimers();
     try {
