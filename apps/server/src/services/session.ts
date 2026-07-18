@@ -1635,10 +1635,17 @@ export class SessionService {
         // currently persisted. In particular, an old stop event must not
         // apply after another path has cleared the binding while a new
         // runtime is starting.
-        if (
-          conn.runtimeInstanceId !== update.runtimeInstanceId &&
-          !(isNewRuntimeRequest && !conn.runtimeInstanceId)
-        ) {
+        //
+        // A new launch may ALSO claim a connection whose previous runtime ended
+        // in a terminal state (failed/timed_out/stopped/deprovisioned): that
+        // runtime is dead, so a fresh provision must be able to take over. Without
+        // this, a startup timeout left the connection pinned to the dead runtime's
+        // id, and every re-provision (a different id) was fenced out here — the
+        // session could never recover.
+        const canClaimStaleConnection =
+          isNewRuntimeRequest &&
+          (!conn.runtimeInstanceId || isRuntimeTerminalState(conn.state));
+        if (conn.runtimeInstanceId !== update.runtimeInstanceId && !canClaimStaleConnection) {
           return null;
         }
       }
