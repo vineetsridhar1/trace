@@ -13,6 +13,11 @@ const useGqlClientStore = create<GqlClientState>((set) => ({
   incrementGeneration: () => set((state) => ({ generation: state.generation + 1 })),
 }));
 
+// A retired client can emit its final `closed` callback after its replacement
+// has connected. Keep callbacks tied to the active client so that teardown
+// cannot make the app look disconnected while the new stream is healthy.
+let activeClientInstance = 0;
+
 /** Re-renders subscription hooks whenever the shared client is replaced. */
 export function useGqlClientGeneration(): number {
   return useGqlClientStore((state) => state.generation);
@@ -20,6 +25,7 @@ export function useGqlClientGeneration(): number {
 
 function build(): GqlClient {
   const { httpUrl, wsUrl } = getGraphqlUrls();
+  const clientInstance = ++activeClientInstance;
   return createGqlClient({
     httpUrl,
     wsUrl,
@@ -28,6 +34,7 @@ function build(): GqlClient {
     // indefinitely while the first subscription mounts.
     lazy: false,
     onConnectionChange: (connected: boolean) => {
+      if (clientInstance !== activeClientInstance) return;
       useConnectionStore.getState().setConnected(connected);
     },
   });
