@@ -13,17 +13,16 @@ const screen: DesignScreen = {
   viewport: { width: 390, height: 844 },
 };
 
-test("positions the constant-size label above the artboard", () => {
+test("positions the canvas-scaled screen label above the artboard", () => {
   const html = renderToStaticMarkup(
     <DesignArtboard
       screen={screen}
-      sectionName="Onboarding"
       component={() => <div>Screen content</div>}
       onFocus={() => undefined}
-      zoom={1}
     />,
   );
 
   assert.match(html, /bottom:856px/);
+  assert.doesNotMatch(html, /scale\(/);
   assert.match(html, /Screen content/);
 });

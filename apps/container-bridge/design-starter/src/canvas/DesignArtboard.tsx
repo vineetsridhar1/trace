@@ -4,20 +4,13 @@ import { ArtboardErrorBoundary } from "./ArtboardErrorBoundary";
 
 export function DesignArtboard({
   screen,
-  sectionName,
   component: ScreenComponent,
   onFocus,
-  zoom,
 }: {
   screen: DesignScreen;
-  sectionName: string;
   component: ComponentType;
   onFocus: () => void;
-  zoom: number;
 }) {
-  const inverseZoom = 1 / zoom;
-  const labelWidth = screen.viewport.width * zoom;
-
   return (
     <article
       data-screen-id={screen.id}
@@ -27,17 +20,10 @@ export function DesignArtboard({
       <div
         className="absolute left-0"
         style={{
-          bottom: screen.viewport.height + 12 * inverseZoom,
-          transform: `scale(${inverseZoom})`,
-          transformOrigin: "bottom left",
-          width: labelWidth,
+          bottom: screen.viewport.height + 12,
+          width: screen.viewport.width,
         }}
       >
-        <p
-          className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-600"
-        >
-          {sectionName}
-        </p>
         <header className="flex items-end justify-between gap-3 text-zinc-200">
           <div>
             <h2 className="text-sm font-medium">{screen.name}</h2>
