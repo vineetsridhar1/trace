@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { DesignArtboard } from "./DesignArtboard";
+import { DesignSectionLabel } from "./DesignSectionLabel";
 import { placeScreens } from "./layout";
 import type { DesignManifest } from "./manifest";
 import { resolveScreenComponent } from "./screen-modules";
@@ -55,6 +56,15 @@ export function DesignCanvas({
   }, [fit]);
 
   const visible = focusedId ? placed.filter((item) => item.screen.id === focusedId) : placed;
+  const sectionLabels = Array.from(
+    visible.reduce((labels, item) => {
+      const existing = labels.get(item.sectionName);
+      if (!existing || item.y < existing.y || (item.y === existing.y && item.x < existing.x)) {
+        labels.set(item.sectionName, item);
+      }
+      return labels;
+    }, new Map<string, (typeof visible)[number]>()),
+  );
 
   return (
     <div
@@ -72,16 +82,23 @@ export function DesignCanvas({
           transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
         }}
       >
-        {visible.map(({ screen, x, y, sectionName }) => {
+        {sectionLabels.map(([name, item]) => (
+          <div
+            key={name}
+            className="absolute pointer-events-none"
+            style={{ left: item.x, top: item.y - 36 / viewport.zoom }}
+          >
+            <DesignSectionLabel name={name} zoom={viewport.zoom} />
+          </div>
+        ))}
+        {visible.map(({ screen, x, y }) => {
           const component = resolveScreenComponent(screenModules, screen.component);
           return (
             <div key={screen.id} className="absolute" style={{ left: x, top: y }}>
               {component ? (
                 <DesignArtboard
                   screen={screen}
-                  sectionName={sectionName}
                   component={component}
-                  zoom={viewport.zoom}
                   onFocus={() => {
                     setFocusedId(screen.id);
                     requestAnimationFrame(() => fit(screen.id));
