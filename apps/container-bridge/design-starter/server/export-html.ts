@@ -11,18 +11,25 @@ const viteCli = fileURLToPath(new URL("../node_modules/vite/bin/vite.js", import
 const COMMIT_SHA = /^[a-f0-9]{40,64}$/i;
 
 export function validateSelfContainedHtml(html: string): void {
+  // The bundled JS is inlined into a <script> before validation, so its source
+  // text is part of `html`. Asset-tag- or url()-shaped string literals inside
+  // that JS (e.g. a format string like `<img src="%s">`) are NOT real external
+  // assets — scanning them produced false positives that failed the export.
+  // Strip inlined <script> bodies (keeping the tags, so a genuinely external
+  // `<script src>` is still caught) before scanning markup and CSS.
+  const markup = html.replace(/(<script\b[^>]*>)[\s\S]*?(<\/script>)/gi, "$1$2");
   const assetTag =
     /<(?:script|link|img|source|video|audio|use|image)\b[^>]*(?:src|href)=["']([^"']+)["'][^>]*>/gi;
-  for (const match of html.matchAll(assetTag)) {
+  for (const match of markup.matchAll(assetTag)) {
     const reference = match[1];
     if (!reference.startsWith("data:") && !reference.startsWith("#")) {
       throw new Error(`Export contains an external asset reference: ${reference}`);
     }
   }
   const cssUrl = /url\(\s*["']?(?!data:)([^)'"\s]+)["']?\s*\)/gi;
-  const cssMatch = cssUrl.exec(html);
+  const cssMatch = cssUrl.exec(markup);
   if (cssMatch) throw new Error(`Export contains an external CSS asset: ${cssMatch[1]}`);
-  if (/@import\s+(?:url\s*\(|["'])/i.test(html)) {
+  if (/@import\s+(?:url\s*\(|["'])/i.test(markup)) {
     throw new Error("Export contains an unresolved CSS import");
   }
 }
