@@ -10227,6 +10227,25 @@ export class SessionService {
     if (!session) return false;
 
     const runtimeSession = await this.withGroupRuntimeState(session);
+
+    // Final race guard: a restart can provision a fresh runtime between our flag
+    // above and this teardown. Flagging is version-checked, but the flag lands
+    // before the restart's start_requested, so it doesn't conflict — and killing
+    // the runtime now would reap what the user just started. Re-read immediately
+    // before destroying; if the session re-entered a startup state, bail out and
+    // clear the now-stale flag so a later sweep (or the restart itself) settles it.
+    const latest = await prisma.session.findUnique({
+      where: { id: cloudSession.id },
+      select: { connection: true },
+    });
+    if (latest && isRuntimeStartingWithinGrace(this.parseConnection(latest.connection), now)) {
+      await this.updateConnectionConditional(cloudSession.id, (conn) => {
+        if (conn.disconnectOnDeprovision !== true) return null;
+        return { ...conn, disconnectOnDeprovision: false, disconnectReason: undefined };
+      });
+      return false;
+    }
+
     terminalRelay.destroyAllForSessionGroup(group.id);
     try {
       await sessionRouter.destroyRuntime(
