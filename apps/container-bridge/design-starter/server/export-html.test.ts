@@ -32,6 +32,27 @@ test("rejects network and local asset references", () => {
   );
 });
 
+test("ignores asset-tag- and url()-shaped strings inside inlined script bodies", () => {
+  // A design's bundled JS can legitimately contain strings like `<img src="%s">`
+  // or `url(https://…)`; inlined into a <script>, these are not real external
+  // assets and must not fail the export.
+  assert.doesNotThrow(() =>
+    validateSelfContainedHtml(
+      '<!doctype html><div id="root"></div><script type="module">const tpl=\'<img src="%s">\';const bg=\'url(https://cdn.example.com/y.png)\';const imp=\'@import "https://example.com/x.css"\';</script>',
+    ),
+  );
+});
+
+test("still rejects a real external asset in markup alongside inlined scripts", () => {
+  assert.throws(
+    () =>
+      validateSelfContainedHtml(
+        '<!doctype html><img src="https://cdn.example.com/a.png"><script type="module">const ok="inline"</script>',
+      ),
+    /external asset/,
+  );
+});
+
 test("builds the design runtime as one self-contained HTML file", async () => {
   const html = await buildSelfContainedHtml(starterRoot);
   assert.match(html, /<script type="module">/);
