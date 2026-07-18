@@ -7103,10 +7103,16 @@ export class SessionService {
         );
       }
 
-      // Only emit connection_restored for sessions that were disconnected
-      // and are not already done — done sessions don't need event churn
+      // Emit connection_restored for sessions that were disconnected or whose
+      // provision wait timed out before this (now-connected) runtime's bridge
+      // arrived — but not for sessions already done, which don't need event
+      // churn. Healing `timed_out` here is what lets a slow-booting runtime
+      // reclaim its session after the 300s startup window elapsed.
       const conn = this.parseConnection(session.connection);
-      if (conn.state === "disconnected" && session.agentStatus !== "done") {
+      if (
+        (conn.state === "disconnected" || conn.state === "timed_out") &&
+        session.agentStatus !== "done"
+      ) {
         await this.markConnectionRestored(session.id, runtimeId);
       }
     }

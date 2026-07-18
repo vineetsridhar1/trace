@@ -522,11 +522,47 @@ describe("bridge handler auth", () => {
     expect(mocks.bindSession).not.toHaveBeenCalled();
   });
 
-  it("rejects a scoped cloud bridge after startup timeout", async () => {
+  it("reclaims a scoped cloud bridge whose own runtime connects after a startup timeout", async () => {
     const ws = createMockWs();
     mocks.sessionFindFirst.mockResolvedValue({
       id: "session-1",
       connection: { state: "timed_out", runtimeInstanceId: "runtime_owned" },
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "runtime_owned",
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "runtime_owned",
+      hostingMode: "cloud",
+      protocolVersion: 1,
+      agentVersion: "0.1.0",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    await Promise.resolve();
+
+    // The session's own runtime showing up late must reclaim, not be rejected —
+    // otherwise the timed-out session can never recover.
+    expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "runtime_owned");
+    expect(ws.close).not.toHaveBeenCalledWith(1008, "Session is not waiting for this runtime");
+  });
+
+  it("still rejects a scoped cloud bridge whose runtime differs after a startup timeout", async () => {
+    const ws = createMockWs();
+    mocks.sessionFindFirst.mockResolvedValue({
+      id: "session-1",
+      connection: { state: "timed_out", runtimeInstanceId: "other-runtime" },
     });
 
     handleBridgeConnection(ws as never, {

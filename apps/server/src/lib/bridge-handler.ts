@@ -363,9 +363,21 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               const connectionRuntimeId = scopedSession
                 ? connectionRuntimeInstanceId(scopedSession.connection)
                 : null;
+              // A provision-wait timeout leaves the connection in a terminal
+              // `timed_out` state. If the session's *own* runtime finally shows
+              // up (a slow boot that missed the 300s window), it must be allowed
+              // to reclaim and heal the session — rejecting it wedges the
+              // session forever, since every re-provision re-times-out the same
+              // way. Only the runtime the connection already points at may
+              // reclaim; a different runtime, or a `failed`/`stopped` state, is
+              // still rejected. `restoreSessionsForRuntime` (called after this
+              // hello) heals the `timed_out` connection back to `connected`.
+              const scopedState = jsonRecord(scopedSession?.connection)?.state;
+              const reclaimableTimeout =
+                connectionRuntimeId === runtimeId && scopedState === "timed_out";
               if (
                 !scopedSession ||
-                isTerminalConnectionState(scopedSession.connection) ||
+                (isTerminalConnectionState(scopedSession.connection) && !reclaimableTimeout) ||
                 (connectionRuntimeId && connectionRuntimeId !== runtimeId)
               ) {
                 runtimeDebug("cloud bridge auth rejected inactive scoped session", {
@@ -375,6 +387,12 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 });
                 ws.close(1008, "Session is not waiting for this runtime");
                 return;
+              }
+              if (reclaimableTimeout) {
+                runtimeDebug("cloud bridge reclaiming timed-out scoped session", {
+                  runtimeId,
+                  sessionId: bridgeAuth.sessionId,
+                });
               }
               sessionRouter.bindSession(bridgeAuth.sessionId, runtimeKey);
             }

@@ -125,6 +125,7 @@ vi.mock("./managed-git.js", () => ({
     createManagedRepo: vi.fn(),
     deleteManagedRepo: vi.fn(),
     mintAccessToken: vi.fn(),
+    retryPendingDesignCommitPreviews: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -6547,6 +6548,58 @@ describe("SessionService", () => {
           sessionGroupId: "group-1",
         },
         "org-1",
+      );
+    });
+
+    it("heals a timed-out cloud session when its runtime reconnects", async () => {
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "runtime-cloud",
+        id: "runtime-cloud",
+        label: "Cloud Runtime",
+        hostingMode: "cloud",
+        organizationId: "org-1",
+        supportedTools: ["codex"],
+        registeredRepoIds: [],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          agentStatus: "active",
+          connection: { state: "timed_out", runtimeInstanceId: "runtime-cloud" },
+          organizationId: "org-1",
+          workdir: null,
+          readOnlyWorkspace: false,
+          sessionGroupId: "group-1",
+        },
+      ]);
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          organizationId: "org-1",
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+          sessionGroupId: "group-1",
+          connection: { state: "timed_out", runtimeInstanceId: "runtime-cloud" },
+        }),
+      );
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        connection: { state: "timed_out", runtimeInstanceId: "runtime-cloud" },
+      });
+
+      await service.restoreSessionsForRuntime("runtime-cloud", "org-1");
+
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-1", "runtime-cloud");
+      // The timed-out connection is healed back to connected.
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: { connection: expect.objectContaining({ state: "connected" }) },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ type: "connection_restored" }),
+        }),
       );
     });
 
