@@ -7909,6 +7909,16 @@ describe("SessionService", () => {
             connection: disconnectOnDeprovisionConnection,
           }),
         )
+        // Final pre-destroy race re-read: still not starting up, reap proceeds.
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            workdir: null,
+            connection: disconnectOnDeprovisionConnection,
+          }),
+        )
         .mockResolvedValueOnce(
           makeSession({
             id: "session-1",
@@ -8289,6 +8299,86 @@ describe("SessionService", () => {
         expect.anything(),
         expect.objectContaining({ reason: "idle_session_group_cleanup" }),
       );
+    });
+
+    it("aborts the reap when a restart provisions a fresh runtime mid-sweep", async () => {
+      // Idle-at-rest (disconnected, no deprovisionedAt) → reap-worthy at flag
+      // time. A restart then flips it to provisioning before teardown; the final
+      // pre-destroy re-read must abort so we don't kill the freshly-started
+      // runtime.
+      const restingConnection = {
+        state: "disconnected",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-old",
+        providerRuntimeId: "provider-runtime-old",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      const startingConnection = {
+        state: "provisioning",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-new",
+        provisioningAt: "2026-05-12T11:44:50.000Z",
+        disconnectOnDeprovision: true,
+        disconnectReason: "idle_session_group_cleanup",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:00:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection: restingConnection,
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:00:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T11:30:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:31:00.000Z"),
+              connection: restingConnection,
+            },
+          ],
+        },
+      ]);
+      prismaMock.session.updateMany.mockResolvedValue({ count: 1 });
+      prismaMock.sessionGroup.findUnique.mockResolvedValue({
+        workdir: "/workspace/group-1",
+        repoId: "repo-1",
+        connection: restingConnection,
+      });
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce(
+          makeSession({ id: "session-1", sessionGroupId: "group-1", organizationId: "org-1", connection: restingConnection }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({ id: "session-1", sessionGroupId: "group-1", organizationId: "org-1", connection: restingConnection }),
+        )
+        // Final pre-destroy re-read: a restart is now provisioning → abort.
+        .mockResolvedValueOnce(
+          makeSession({ id: "session-1", sessionGroupId: "group-1", organizationId: "org-1", connection: startingConnection }),
+        )
+        // Clear-flag conditional read.
+        .mockResolvedValueOnce(
+          makeSession({ id: "session-1", sessionGroupId: "group-1", organizationId: "org-1", connection: startingConnection }),
+        );
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
     });
 
     it("unloads idle cloud session groups when the runtime binding is on the session", async () => {
