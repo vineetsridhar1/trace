@@ -8009,6 +8009,151 @@ describe("SessionService", () => {
       expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
     });
 
+    it("keeps a reviving cloud runtime that is still within the startup grace window", async () => {
+      // Reviving an idle group provisions fresh compute without a new message,
+      // so the group still matches the idle query while its runtime boots. The
+      // sweep must not reap a runtime mid-startup.
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:00:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection: {
+            state: "provisioning",
+            adapterType: "provisioned",
+            environmentId: "env-1",
+            runtimeInstanceId: "runtime-1",
+            providerRuntimeId: "provider-runtime-1",
+            provisioningAt: "2026-05-12T11:44:30.000Z",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:00:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T11:30:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:44:31.000Z"),
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
+
+    it("reaps a cloud runtime stuck starting up past the startup grace window", async () => {
+      const connection = {
+        state: "provisioning",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-1",
+        providerRuntimeId: "provider-runtime-1",
+        // Startup began well beyond the 5-minute grace window: genuinely stuck,
+        // so the leaked compute is still reclaimable.
+        provisioningAt: "2026-05-12T11:35:00.000Z",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:00:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection,
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:00:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T11:30:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:35:01.000Z"),
+              connection,
+            },
+          ],
+        },
+      ]);
+      const disconnectOnDeprovisionConnection = {
+        ...connection,
+        disconnectOnDeprovision: true,
+        disconnectReason: "idle_session_group_cleanup",
+        version: 1,
+      };
+      prismaMock.session.updateMany
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 1 })
+        .mockResolvedValueOnce({ count: 1 });
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            workdir: null,
+            connection,
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            workdir: null,
+            connection: disconnectOnDeprovisionConnection,
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            connection: disconnectOnDeprovisionConnection,
+          }),
+        );
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        workdir: "/workspace/group-1",
+        repoId: "repo-1",
+        connection: disconnectOnDeprovisionConnection,
+      });
+      sessionRouterMock.destroyRuntime.mockImplementationOnce(
+        async (_sessionId, _session, options) => {
+          await options?.onLifecycle?.("session_runtime_stopped", {
+            providerRuntimeId: "provider-runtime-1",
+          });
+        },
+      );
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: ["group-1"] });
+      expect(sessionRouterMock.destroyRuntime).toHaveBeenCalledWith(
+        "session-1",
+        expect.anything(),
+        expect.objectContaining({ reason: "idle_session_group_cleanup" }),
+      );
+    });
+
     it("unloads idle cloud session groups when the runtime binding is on the session", async () => {
       const connection = {
         state: "connected",
