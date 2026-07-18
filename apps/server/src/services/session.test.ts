@@ -8192,6 +8192,52 @@ describe("SessionService", () => {
       expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
     });
 
+    it("leaves a failed deprovision to the reconciler instead of re-stopping it", async () => {
+      // A prior stop already failed (e.g. a launcher returning 502). The sweep
+      // must not re-issue stops — that loops forever; the deprovision reconciler
+      // owns the bounded retry + abandon.
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-1",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:00:00.000Z"),
+          workdir: "/workspace/group-1",
+          connection: {
+            state: "deprovision_failed",
+            adapterType: "provisioned",
+            environmentId: "env-1",
+            runtimeInstanceId: "runtime-1",
+            providerRuntimeId: "provider-runtime-1",
+            deprovisionAttempts: 3,
+            retryCount: 0,
+            canRetry: true,
+            canMove: false,
+          },
+          sessions: [
+            {
+              id: "session-1",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:00:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T11:30:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:31:00.000Z"),
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
+
     it("reaps a cloud runtime stuck starting up past the startup grace window", async () => {
       const connection = {
         state: "provisioning",
