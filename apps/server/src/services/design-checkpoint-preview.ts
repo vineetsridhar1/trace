@@ -93,7 +93,18 @@ export const designCheckpointPreviewService = {
       const { previewKey } = await withExportSlot(async () => {
         const { url, headers } = designExportRequest(endpoint, input.userId, input.commitSha);
         const response = await fetchExport(url, headers);
-        if (!response.ok) throw new Error(`Design export returned ${response.status}`);
+        if (!response.ok) {
+          // The design-starter returns the real reason (e.g. a git rev-parse
+          // miss, a design-QA failure, or a vite build error) only in the body.
+          // Surface it — discarding it here is why export failures were opaque.
+          const detail = (await response.text().catch(() => ""))
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 500);
+          throw new Error(
+            `Design export returned ${response.status}${detail ? `: ${detail}` : ""}`,
+          );
+        }
         const length = Number(response.headers.get("content-length") ?? "0");
         if (length > MAX_EXPORT_BYTES) throw new Error("Design export exceeds size limit");
         const html = Buffer.from(await response.arrayBuffer());

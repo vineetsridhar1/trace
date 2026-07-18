@@ -132,4 +132,34 @@ describe("design checkpoint previews", () => {
       }),
     ).resolves.toEqual({ previewStatus: "unavailable" });
   });
+
+  it("surfaces the export error body when the design export fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mocks.fetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: "Design validation failed: Missing declared screen" }), {
+        status: 422,
+      }),
+    );
+
+    const result = await designCheckpointPreviewService.publish({
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      checkpointId: "checkpoint-1",
+      commitSha: "a".repeat(40),
+      userId: "user-1",
+    });
+
+    expect(result.previewStatus).toBe("failed");
+    expect(warn).toHaveBeenCalledWith(
+      "[design-checkpoint] preview export failed",
+      expect.objectContaining({
+        error: expect.stringContaining("Design export returned 422: "),
+      }),
+    );
+    expect(warn).toHaveBeenCalledWith(
+      "[design-checkpoint] preview export failed",
+      expect.objectContaining({ error: expect.stringContaining("Missing declared screen") }),
+    );
+    warn.mockRestore();
+  });
 });
