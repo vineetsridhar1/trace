@@ -16,5 +16,12 @@ export function hasSavedDesignPreview(
   groupPreviewUrl: string | null | undefined,
   checkpoints: GitCheckpoint[] | null | undefined,
 ): boolean {
-  return Boolean(groupPreviewUrl) || latestSavedDesignPreviewUrl(checkpoints) !== null;
+  return savedDesignPreviewUrl(groupPreviewUrl, checkpoints) !== null;
+}
+
+export function savedDesignPreviewUrl(
+  groupPreviewUrl: string | null | undefined,
+  checkpoints: GitCheckpoint[] | null | undefined,
+): string | null {
+  return groupPreviewUrl ?? latestSavedDesignPreviewUrl(checkpoints);
 }

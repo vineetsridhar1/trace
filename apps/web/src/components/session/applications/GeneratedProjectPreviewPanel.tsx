@@ -1,13 +1,19 @@
 import { useEntityStore } from "@trace/client-core";
+import type { GitCheckpoint } from "@trace/gql";
 import { AppPreview } from "./AppPreview";
 import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
 import { SavedDesignPreview } from "./SavedDesignPreview";
+import { savedDesignPreviewUrl } from "./saved-design-preview";
 import { useProjectPreviewData } from "./useProjectPreviewData";
 
 export function GeneratedProjectPreviewPanel({ sessionGroupId }: { sessionGroupId: string }) {
-  const savedDesignPreviewUrl = useEntityStore(
+  const groupPreviewUrl = useEntityStore(
     (s) => s.sessionGroups[sessionGroupId]?.designPreviewUrl as string | null | undefined,
   );
+  const checkpoints = useEntityStore(
+    (s) => s.sessionGroups[sessionGroupId]?.gitCheckpoints as GitCheckpoint[] | undefined,
+  );
+  const previewUrl = savedDesignPreviewUrl(groupPreviewUrl, checkpoints);
   const { endpoint, error, refresh } = useProjectPreviewData(sessionGroupId, "design");
 
   if (endpoint)
@@ -21,7 +27,7 @@ export function GeneratedProjectPreviewPanel({ sessionGroupId }: { sessionGroupI
       />
     );
 
-  if (savedDesignPreviewUrl) return <SavedDesignPreview url={savedDesignPreviewUrl} />;
+  if (previewUrl) return <SavedDesignPreview url={previewUrl} />;
 
   return (
     <AppPreviewCanvasSkeleton
