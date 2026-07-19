@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import formatSource from "../document.format.json";
 
 type Unit = "mm" | "in";
@@ -23,8 +23,6 @@ function validFormat(value: unknown): DocumentFormat {
 
 export function App() {
   const [format, setFormat] = useState<DocumentFormat>(() => validFormat(formatSource));
-  const [previewScale, setPreviewScale] = useState(1);
-  const previewRef = useRef<HTMLElement>(null);
   const pageSize = `${format.width}${format.unit} ${format.height}${format.unit}`;
   const pageStyle = useMemo(() => `@page { size: ${pageSize}; margin: 0; }`, [pageSize]);
 
@@ -40,28 +38,14 @@ export function App() {
     return () => window.removeEventListener("message", receiveMessage);
   }, []);
 
-  useEffect(() => {
-    const element = previewRef.current;
-    if (!element) return;
-    const pageWidth = format.width * (format.unit === "in" ? 96 : 96 / 25.4);
-    const updateScale = () => {
-      setPreviewScale(Math.min(1, Math.max(element.clientWidth - 32, 1) / pageWidth));
-    };
-    updateScale();
-    const observer = new ResizeObserver(updateScale);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [format]);
-
   return (
-    <main ref={previewRef} className="min-h-screen overflow-hidden bg-transparent text-stone-900">
+    <main className="min-h-screen bg-white text-stone-900">
       <style>{pageStyle}</style>
       <article
-        className="document mx-auto bg-white px-[18mm] py-[20mm] shadow-sm"
+        className="document bg-white px-[18mm] py-[20mm]"
         style={{
           width: `${format.width}${format.unit}`,
           minHeight: `${format.height}${format.unit}`,
-          zoom: previewScale,
         }}
       >
         <header className="border-b border-stone-200 pb-10">
