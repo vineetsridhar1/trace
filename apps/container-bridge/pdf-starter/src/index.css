@@ -3,11 +3,28 @@
 @tailwind utilities;
 
 @media print {
-  .no-print { display: none !important; }
-  html, body, #root { margin: 0; padding: 0; }
-  body, main { background: white !important; }
-  main { min-height: 0 !important; padding: 0 !important; }
-  .document { box-shadow: none !important; margin: 0 !important; }
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body,
+  #root {
+    margin: 0;
+    padding: 0;
+  }
+  body,
+  main {
+    background: white !important;
+  }
+  main {
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+  .document {
+    box-shadow: none !important;
+    margin: 0 !important;
+    zoom: 1 !important;
+  }
 }
 
 * {
