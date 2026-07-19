@@ -26,15 +26,15 @@ export function DesignArtboard({
       >
         <header className="flex items-end justify-between gap-3 text-zinc-200">
           <div>
-            <h2 className="text-sm font-medium">{screen.name}</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">
+            <h2 className="text-[24px] font-medium leading-8">{screen.name}</h2>
+            <p className="mt-2 text-[18px] leading-[26px] text-zinc-500">
               {[screen.variation, screen.state].filter(Boolean).join(" · ") || "Default"}
             </p>
           </div>
           <button
             type="button"
             onClick={onFocus}
-            className="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-white/10 hover:text-white"
+            className="rounded px-2 py-1 text-sm text-zinc-400 hover:bg-white/10 hover:text-white"
           >
             Focus
           </button>

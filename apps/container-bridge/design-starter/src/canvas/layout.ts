@@ -1,12 +1,14 @@
 import type { DesignManifest, DesignScreen } from "./manifest";
 
 const GAP = 96;
-const SECTION_GAP = 180;
+const SCREEN_LABEL_GUTTER = 90;
+const SECTION_GAP = 220;
 
 export type PlacedScreen = {
   screen: DesignScreen;
   x: number;
   y: number;
+  sectionId: string;
   sectionName: string;
 };
 
@@ -22,8 +24,8 @@ export function placeScreens(manifest: DesignManifest): PlacedScreen[] {
     for (const id of section.screenIds) {
       const screen = byId.get(id)!;
       const x = screen.position?.x ?? fallbackX;
-      const y = screen.position ? sectionY + screen.position.y : sectionY + 54;
-      result.push({ screen, x, y, sectionName: section.name });
+      const y = sectionY + SCREEN_LABEL_GUTTER + (screen.position?.y ?? 0);
+      result.push({ screen, x, y, sectionId: section.id, sectionName: section.name });
       fallbackX = Math.max(fallbackX, x + screen.viewport.width + GAP);
       maxBottom = Math.max(maxBottom, y + screen.viewport.height);
     }

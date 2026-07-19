@@ -58,9 +58,9 @@ export function DesignCanvas({
   const visible = focusedId ? placed.filter((item) => item.screen.id === focusedId) : placed;
   const sectionLabels = Array.from(
     visible.reduce((labels, item) => {
-      const existing = labels.get(item.sectionName);
+      const existing = labels.get(item.sectionId);
       if (!existing || item.y < existing.y || (item.y === existing.y && item.x < existing.x)) {
-        labels.set(item.sectionName, item);
+        labels.set(item.sectionId, item);
       }
       return labels;
     }, new Map<string, (typeof visible)[number]>()),
@@ -75,20 +75,23 @@ export function DesignCanvas({
       onPointerUp={endPointerDrag}
       onPointerCancel={endPointerDrag}
     >
-      <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(#71717a_1px,transparent_1px)] [background-size:24px_24px]" />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(#71717a_1px,transparent_1px)] [background-size:24px_24px]"
+        style={{ backgroundPosition: `${viewport.x * 0.25}px ${viewport.y * 0.25}px` }}
+      />
       <div
         className="absolute left-0 top-0 origin-top-left"
         style={{
           transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
         }}
       >
-        {sectionLabels.map(([name, item]) => (
+        {sectionLabels.map(([sectionId, item]) => (
           <div
-            key={name}
+            key={sectionId}
             className="absolute pointer-events-none"
-            style={{ left: item.x, top: item.y - 36 / viewport.zoom }}
+            style={{ left: item.x, top: item.y - 132 }}
           >
-            <DesignSectionLabel name={name} zoom={viewport.zoom} />
+            <DesignSectionLabel name={item.sectionName} />
           </div>
         ))}
         {visible.map(({ screen, x, y }) => {
