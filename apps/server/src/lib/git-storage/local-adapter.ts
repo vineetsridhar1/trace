@@ -70,13 +70,7 @@ export class LocalGitStorageAdapter implements GitStorageAdapter {
     const defaultBranch = options?.defaultBranch?.trim() || "main";
     // Arg array — never a shell string. `git init` is idempotent, but we guard
     // with repoExists above so a partially-created dir is re-initialized safely.
-    await execFileAsync("git", [
-      "init",
-      "--bare",
-      "--initial-branch",
-      defaultBranch,
-      repoPath,
-    ]);
+    await execFileAsync("git", ["init", "--bare", "--initial-branch", defaultBranch, repoPath]);
     return repoPath;
   }
 
@@ -109,5 +103,35 @@ export class LocalGitStorageAdapter implements GitStorageAdapter {
       if (sha && ref) refs.set(ref, sha);
     }
     return refs;
+  }
+
+  async readFileAtCommit(
+    organizationId: string,
+    repoId: string,
+    commitSha: string,
+    filePath: string,
+  ): Promise<string | null> {
+    const normalizedPath = path.posix.normalize(filePath);
+    if (
+      !/^[a-f0-9]{40,64}$/i.test(commitSha) ||
+      normalizedPath !== filePath ||
+      normalizedPath === "." ||
+      normalizedPath === ".." ||
+      normalizedPath.startsWith("../") ||
+      path.posix.isAbsolute(normalizedPath)
+    ) {
+      throw new Error("Invalid managed Git file request");
+    }
+    const repoPath = this.resolveRepoPath(organizationId, repoId);
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        ["--git-dir", repoPath, "show", `${commitSha}:${normalizedPath}`],
+        { maxBuffer: 1024 * 1024 },
+      );
+      return stdout;
+    } catch {
+      return null;
+    }
   }
 }

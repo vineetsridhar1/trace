@@ -532,6 +532,30 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  updatePdfSessionFormat: (
+    _: unknown,
+    args: { sessionGroupId: string; width: number; height: number; unit: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.updatePdfFormat(
+      args.sessionGroupId,
+      { width: args.width, height: args.height, unit: args.unit },
+      requireOrgContext(ctx),
+      ctx.userId,
+    );
+  },
+  requestPdfSessionExport: (
+    _: unknown,
+    args: { sessionGroupId: string },
+    ctx: Context,
+  ) => {
+    return sessionService.requestPdfExport(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      ctx.userId,
+    );
+  },
   commitSessionGroupFileChanges: (
     _: unknown,
     args: { sessionGroupId: string; message?: string | null },

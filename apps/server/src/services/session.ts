@@ -39,6 +39,7 @@ import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { storage } from "../lib/storage/index.js";
+import { validatePdfPageFormat } from "../lib/pdf-format.js";
 import {
   runtimeAccessService,
   setBridgeAccessApprovedHandler,
@@ -2375,11 +2376,12 @@ export class SessionService {
     organizationId: string,
     userId: string,
     options: { requireWrite?: boolean } = {},
-  ): Promise<{ runtimeId: string; sessionId: string; workdirHint?: string }> {
+  ): Promise<{ runtimeId: string; sessionId: string; workdirHint?: string; kind: string }> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
       select: {
         id: true,
+        kind: true,
         workdir: true,
         worktreeDeleted: true,
         connection: true,
@@ -2432,6 +2434,7 @@ export class SessionService {
       }
 
       return {
+        kind: group.kind,
         runtimeId: runtime.key,
         sessionId: sessionOnGroupRuntime.id,
         workdirHint: sessionOnGroupRuntime.workdir ?? group.workdir ?? undefined,
@@ -2464,6 +2467,7 @@ export class SessionService {
         throw error;
       }
       return {
+        kind: group.kind,
         runtimeId: runtime.key,
         sessionId: session.id,
         workdirHint: session.workdir ?? group.workdir ?? undefined,
@@ -4872,6 +4876,17 @@ export class SessionService {
 
     for (const session of sessions) {
       await this.delete(session.id, actorType, actorId, eventPayloadExtras);
+    }
+
+    for (const key of [group.pdfExportKey, group.pdfExportPendingKey]) {
+      if (key) {
+        void storage.deleteObject(key).catch((error: unknown) => {
+          console.warn("[session] failed to delete PDF object with session group", {
+            key,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
     }
 
     // If no sessions existed, the group won't have been cascade-deleted, so delete it directly
@@ -9110,9 +9125,45 @@ export class SessionService {
       content,
       runtime.workdirHint,
     );
-    if (normalizedPath === "document.format.json") {
-      await managedGitService.retryPdfCommitExport(sessionGroupId, { force: true });
-    }
+    return true;
+  }
+
+  async updatePdfFormat(
+    sessionGroupId: string,
+    value: unknown,
+    organizationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const format = validatePdfPageFormat(value);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      { requireWrite: true },
+    );
+    if (runtime.kind !== "pdf") throw new ValidationError("PDF session not found");
+    await sessionRouter.writeFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      "document.format.json",
+      `${JSON.stringify(format, null, 2)}\n`,
+      runtime.workdirHint,
+    );
+    await managedGitService.updatePdfFormat(sessionGroupId, format, {
+      actorType: "user",
+      actorId: userId,
+    });
+    return true;
+  }
+
+  async requestPdfExport(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string | null,
+  ): Promise<boolean> {
+    if (!userId) throw new AuthenticationError();
+    await assertSessionGroupAccess(sessionGroupId, userId, organizationId);
+    await managedGitService.retryPdfCommitExport(sessionGroupId);
     return true;
   }
 
@@ -9132,10 +9183,7 @@ export class SessionService {
       },
     });
     if (!group) return null;
-    if (group.pdfExportStatus !== "captured" || !group.pdfExportKey) {
-      await managedGitService.retryPdfCommitExport(sessionGroupId);
-      return null;
-    }
+    if (group.pdfExportStatus !== "captured" || !group.pdfExportKey) return null;
     return storage.getGetUrl(group.pdfExportKey, {
       downloadFilename: `document-${group.pdfExportCommitSha?.slice(0, 8) ?? "latest"}.pdf`,
     });

@@ -296,6 +296,7 @@ enum EventType {
   session_group_archived
   session_group_renamed
   design_preview_updated
+  pdf_export_updated
   chat_created
   chat_member_added
   chat_member_removed
@@ -508,6 +509,14 @@ type SessionGroup {
   designPreviewUrl: String
   designPreviewCommitSha: String
   designPreviewCapturedAt: DateTime
+  pdfExportStatus: String
+  pdfExportCommitSha: String
+  pdfExportCapturedAt: DateTime
+  pdfExportError: String
+  pdfPageWidth: Float!
+  pdfPageHeight: Float!
+  pdfPageUnit: String!
+  pdfFormatVersion: Int!
   sessions: [Session!]!
   workdir: String
   connection: SessionConnection
@@ -1528,6 +1537,13 @@ type Mutation {
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
   moveSessionToCloud(sessionId: ID!): Session!
   saveSessionGroupFile(sessionGroupId: ID!, filePath: String!, content: String!): Boolean!
+  updatePdfSessionFormat(
+    sessionGroupId: ID!
+    width: Float!
+    height: Float!
+    unit: String!
+  ): Boolean!
+  requestPdfSessionExport(sessionGroupId: ID!): Boolean!
   commitSessionGroupFileChanges(sessionGroupId: ID!, message: String): String!
   revertSessionGroupFileChange(sessionGroupId: ID!, filePath: String!): Boolean!
   requestBridgeAccess(

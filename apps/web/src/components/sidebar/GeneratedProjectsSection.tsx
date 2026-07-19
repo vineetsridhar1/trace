@@ -17,6 +17,7 @@ const GENERATED_PROJECTS_QUERY = gql`
       status
       visibility
       archivedAt
+      updatedAt
       connection {
         state
       }
@@ -41,6 +42,7 @@ const GENERATED_PROJECTS_QUERY = gql`
       status
       visibility
       archivedAt
+      updatedAt
       connection {
         state
       }
@@ -65,6 +67,15 @@ const GENERATED_PROJECTS_QUERY = gql`
       status
       visibility
       archivedAt
+      updatedAt
+      pdfExportStatus
+      pdfExportCommitSha
+      pdfExportCapturedAt
+      pdfExportError
+      pdfPageWidth
+      pdfPageHeight
+      pdfPageUnit
+      pdfFormatVersion
       connection {
         state
       }

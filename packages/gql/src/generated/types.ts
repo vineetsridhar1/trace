@@ -405,6 +405,7 @@ export type EventType =
   | "message_edited"
   | "message_sent"
   | "organization_created"
+  | "pdf_export_updated"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_message_updated"
@@ -663,6 +664,7 @@ export type Mutation = {
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
+  requestPdfSessionExport: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
@@ -701,6 +703,7 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updatePdfSessionFormat: Scalars["Boolean"]["output"];
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
   updateSessionConfig: Session;
@@ -1007,6 +1010,10 @@ export type MutationRequestBridgeAccessArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationRequestPdfSessionExportArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationRestartSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
@@ -1208,6 +1215,13 @@ export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationUpdatePdfSessionFormatArgs = {
+  height: Scalars["Float"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  unit: Scalars["String"]["input"];
+  width: Scalars["Float"]["input"];
 };
 
 export type MutationUpdateQueuedMessageArgs = {
@@ -2006,6 +2020,14 @@ export type SessionGroup = {
   kind: SessionGroupKind;
   name: Scalars["String"]["output"];
   owner: User;
+  pdfExportCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  pdfExportCommitSha?: Maybe<Scalars["String"]["output"]>;
+  pdfExportError?: Maybe<Scalars["String"]["output"]>;
+  pdfExportStatus?: Maybe<Scalars["String"]["output"]>;
+  pdfFormatVersion: Scalars["Int"]["output"];
+  pdfPageHeight: Scalars["Float"]["output"];
+  pdfPageUnit: Scalars["String"]["output"];
+  pdfPageWidth: Scalars["Float"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;

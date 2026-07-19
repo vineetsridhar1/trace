@@ -22,6 +22,7 @@ export function AppPreviewCanvas({
   pdfContentHeight,
   onPdfFormatChange,
   onPdfDownload,
+  pdfDownloading,
 }: {
   url: string | null;
   title: string;
@@ -37,6 +38,7 @@ export function AppPreviewCanvas({
   pdfContentHeight?: number;
   onPdfFormatChange?: (format: PdfPageFormat) => void;
   onPdfDownload?: () => void;
+  pdfDownloading?: boolean;
 }) {
   const frameMargin = bare ? 0 : PREVIEW_FRAME_MARGIN;
   const pixelsPerUnit = pdfFormat?.unit === "in" ? 96 : 96 / 25.4;
@@ -61,6 +63,7 @@ export function AppPreviewCanvas({
           format={pdfFormat}
           onFormatChange={onPdfFormatChange}
           onDownload={onPdfDownload}
+          downloading={pdfDownloading}
           refreshing={refreshing}
           onReload={onReload}
           zoom={viewport.zoom}
@@ -76,11 +79,6 @@ export function AppPreviewCanvas({
           refreshing={refreshing}
           onReload={onReload}
           onSelectPreset={viewport.selectPreset}
-          zoom={viewport.zoom}
-          onZoomIn={viewport.zoomIn}
-          onZoomOut={viewport.zoomOut}
-          onResetZoom={viewport.resetZoom}
-          showDeviceControls={!bare}
         />
       )}
 
@@ -88,9 +86,7 @@ export function AppPreviewCanvas({
         ref={viewport.canvasRef}
         className={cn(
           "relative min-h-0 flex-1 overflow-hidden",
-          bare
-            ? "cursor-grab touch-none bg-[#111113] active:cursor-grabbing"
-            : "bg-surface-deep",
+          bare ? "cursor-grab touch-none bg-[#111113] active:cursor-grabbing" : "bg-surface-deep",
         )}
         onPointerDown={bare ? viewport.handleCanvasPointerDown : undefined}
         onPointerMove={bare ? viewport.handleCanvasPointerMove : undefined}

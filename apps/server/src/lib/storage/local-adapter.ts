@@ -71,6 +71,10 @@ export class LocalStorageAdapter implements StorageAdapter {
     return `${this.publicUrl}/uploads/local/get/${token}`;
   }
 
+  async deleteObject(key: string): Promise<void> {
+    await fsp.rm(this.resolvePath(key), { force: true });
+  }
+
   /** Resolve a key to its on-disk path, blocking path traversal. */
   resolvePath(key: string): string {
     const resolved = path.resolve(this.rootDir, key);

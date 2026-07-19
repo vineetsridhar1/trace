@@ -4,7 +4,7 @@ import { S3StorageAdapter } from "./s3-adapter.js";
 import { LocalStorageAdapter } from "./local-adapter.js";
 import { createLocalStorageRouter } from "./local-routes.js";
 
-const mode = process.env.STORAGE_MODE ?? "s3";
+const mode = process.env.STORAGE_MODE ?? (process.env.NODE_ENV === "test" ? "local" : "s3");
 
 let adapter: StorageAdapter;
 let localRouter: Router | null = null;

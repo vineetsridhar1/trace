@@ -127,6 +127,7 @@ vi.mock("./managed-git.js", () => ({
     mintAccessToken: vi.fn(),
     retryPendingDesignCommitPreviews: vi.fn().mockResolvedValue(undefined),
     retryPdfCommitExport: vi.fn().mockResolvedValue(undefined),
+    updatePdfFormat: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -3620,6 +3621,42 @@ describe("SessionService", () => {
         "hello",
         "/tmp/trace",
       );
+    });
+
+    it("rejects PDF format updates for non-PDF session groups before writing", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        kind: "app",
+        workdir: "/tmp/trace",
+        worktreeDeleted: false,
+        connection: { runtimeInstanceId: "runtime-1" },
+        visibility: "public",
+        ownerUserId: "user-1",
+      });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+
+      await expect(
+        service.updatePdfFormat(
+          "group-1",
+          { width: 210, height: 297, unit: "mm" },
+          "org-1",
+          "user-1",
+        ),
+      ).rejects.toThrow("PDF session not found");
+
+      expect(sessionRouterMock.writeFile).not.toHaveBeenCalled();
     });
 
     it("rejects saves to visible cloud session groups owned by another user", async () => {

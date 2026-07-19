@@ -335,6 +335,17 @@ async function main() {
     reconcileDesignPreviews,
     DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
   );
+  const reconcilePdfExports = () => {
+    void managedGitService.retryPendingPdfExports().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[pdf-export-reconciler] iteration failed: ${message}`);
+    });
+  };
+  reconcilePdfExports();
+  const pdfExportReconciler = setInterval(
+    reconcilePdfExports,
+    DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
+  );
 
   const cloudIdleCleanupAfterMs = readDurationEnv(
     "TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS",
@@ -517,6 +528,7 @@ async function main() {
               clearInterval(staleRuntimeMonitor);
               clearInterval(deprovisionReconciler);
               clearInterval(designPreviewReconciler);
+              clearInterval(pdfExportReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               clearInterval(endpointTrafficCleanup);
               bridgeWss.close();

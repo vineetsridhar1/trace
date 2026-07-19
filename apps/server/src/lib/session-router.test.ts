@@ -50,6 +50,8 @@ async function flushPromises() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.agentEnvironment.findFirst.mockReset();
+  prismaMock.apiToken.findMany.mockReset().mockResolvedValue([]);
   orgSecretServiceMock.getDecryptedValue.mockResolvedValue("launcher-secret");
 });
 

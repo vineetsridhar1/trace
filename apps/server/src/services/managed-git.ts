@@ -17,6 +17,11 @@ import { assertActorOrgAccess } from "./actor-auth.js";
 import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 import { storage } from "../lib/storage/index.js";
 import { sessionRouter } from "../lib/session-router.js";
+import {
+  parsePdfPageFormat,
+  validatePdfPageFormat,
+  type PdfPageFormat,
+} from "../lib/pdf-format.js";
 
 const JWT_SECRET = resolveJwtSecret();
 
@@ -29,6 +34,22 @@ const USER_GIT_TOKEN_TTL_SECONDS = 60 * 60;
 // This exceeds the export request timeout so the reconciler never reclaims a
 // still-running export from another API task.
 const DESIGN_PREVIEW_RETRY_DELAY_MS = 90_000;
+const PDF_EXPORT_RETRY_DELAY_MS = 90_000;
+
+function isPdfStorageKeyForGroup(key: string, organizationId: string, sessionGroupId: string) {
+  return key.startsWith(`pdf-exports/${organizationId}/${sessionGroupId}/`);
+}
+
+async function deletePdfObject(key: string): Promise<void> {
+  try {
+    await storage.deleteObject(key);
+  } catch (error) {
+    console.warn("[managed-git] failed to delete superseded PDF object", {
+      key,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 export type GitCapability = "read" | "write";
 export type GitTokenScope = "runtime" | "user";
@@ -348,8 +369,7 @@ class ManagedGitService {
       return false;
     }
     const connection = session.connection as Record<string, unknown>;
-    const live =
-      connection.runtimeInstanceId === auth.subject && connection.state === "connected";
+    const live = connection.runtimeInstanceId === auth.subject && connection.state === "connected";
     if (!live) {
       // Diagnostic for push 403s: shows exactly which side is stale — the
       // token's runtime instance vs. the session's current live runtime/state.
@@ -399,18 +419,20 @@ class ManagedGitService {
     for (const command of input.commands) {
       if (!command.ref.startsWith("refs/heads/") || /^0+$/.test(command.newSha)) continue;
       const branch = command.ref.slice("refs/heads/".length);
-      await this.enqueueDesignCommitPreview({
+      const artifactInput = {
         organizationId: input.organizationId,
         repoId: input.repoId,
         branch,
         commitSha: command.newSha,
-      });
-      await this.enqueuePdfCommitExport({
-        organizationId: input.organizationId,
-        repoId: input.repoId,
-        branch,
-        commitSha: command.newSha,
-      });
+      };
+      await Promise.all([
+        this.enqueueDesignCommitPreview(artifactInput).catch((error: unknown) => {
+          console.error("[managed-git] failed to enqueue design preview", error);
+        }),
+        this.enqueuePdfCommitExport(artifactInput).catch((error: unknown) => {
+          console.error("[managed-git] failed to enqueue PDF export", error);
+        }),
+      ]);
     }
   }
 
@@ -419,7 +441,29 @@ class ManagedGitService {
     repoId: string;
     branch: string;
     commitSha: string;
+    reconcileCommittedFormat?: boolean;
   }): Promise<void> {
+    let committedFormat: PdfPageFormat | null = null;
+    const formatContent =
+      input.reconcileCommittedFormat === false
+        ? null
+        : await gitStorage.readFileAtCommit(
+            input.organizationId,
+            input.repoId,
+            input.commitSha,
+            "document.format.json",
+          );
+    if (formatContent) {
+      try {
+        committedFormat = parsePdfPageFormat(formatContent);
+      } catch (error) {
+        console.warn("[managed-git] ignoring invalid committed PDF format", {
+          repoId: input.repoId,
+          commitSha: input.commitSha,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     const groups = await prisma.sessionGroup.findMany({
       where: {
         organizationId: input.organizationId,
@@ -433,6 +477,12 @@ class ManagedGitService {
       select: {
         id: true,
         branch: true,
+        pdfPageWidth: true,
+        pdfPageHeight: true,
+        pdfPageUnit: true,
+        pdfFormatVersion: true,
+        pdfExportKey: true,
+        pdfExportPendingKey: true,
         sessions: {
           orderBy: { updatedAt: "desc" },
           select: { id: true, connection: true },
@@ -442,23 +492,70 @@ class ManagedGitService {
 
     await Promise.all(
       groups.map(async (group) => {
-        const exportKey = `pdf-exports/${input.organizationId}/${group.id}/${input.commitSha}-${randomUUID()}.pdf`;
+        const formatChanged =
+          committedFormat &&
+          (group.pdfPageWidth !== committedFormat.width ||
+            group.pdfPageHeight !== committedFormat.height ||
+            group.pdfPageUnit !== committedFormat.unit);
+        const formatVersion = group.pdfFormatVersion + (formatChanged ? 1 : 0);
+        const format =
+          committedFormat ??
+          validatePdfPageFormat({
+            width: group.pdfPageWidth,
+            height: group.pdfPageHeight,
+            unit: group.pdfPageUnit,
+          });
+        const exportKey = `pdf-exports/${input.organizationId}/${group.id}/${input.commitSha}-v${formatVersion}-${randomUUID()}.pdf`;
         const requestId = randomUUID();
-        const uploadTarget = await storage.getUploadTarget(exportKey, "application/pdf", 15 * 1024 * 1024);
-        await prisma.sessionGroup.update({
+        const publishing = await prisma.sessionGroup.update({
           where: { id: group.id },
           data: {
             ...(group.branch == null ? { branch: input.branch } : {}),
+            ...(formatChanged
+              ? {
+                  pdfPageWidth: format.width,
+                  pdfPageHeight: format.height,
+                  pdfPageUnit: format.unit,
+                  pdfFormatVersion: formatVersion,
+                }
+              : {}),
             pdfExportStatus: "publishing",
             pdfExportPendingKey: exportKey,
             pdfExportCommitSha: input.commitSha,
+            pdfExportFormatVersion: formatVersion,
             pdfExportRequestId: requestId,
             pdfExportAttemptedAt: new Date(),
+            pdfExportError: null,
+          },
+          select: {
+            id: true,
+            pdfExportStatus: true,
+            pdfExportCommitSha: true,
+            pdfExportCapturedAt: true,
+            pdfExportError: true,
+            pdfPageWidth: true,
+            pdfPageHeight: true,
+            pdfPageUnit: true,
+            pdfFormatVersion: true,
           },
         });
+        await this.emitPdfExportUpdate(input.organizationId, publishing);
+        const uploadTarget = await storage.getUploadTarget(
+          exportKey,
+          "application/pdf",
+          15 * 1024 * 1024,
+        );
+        if (group.pdfExportPendingKey && group.pdfExportPendingKey !== exportKey) {
+          void deletePdfObject(group.pdfExportPendingKey);
+        }
         const session = group.sessions.find((candidate) => {
           const connection = candidate.connection;
-          return connection && typeof connection === "object" && !Array.isArray(connection);
+          return (
+            connection &&
+            typeof connection === "object" &&
+            !Array.isArray(connection) &&
+            (connection as Record<string, unknown>).state === "connected"
+          );
         });
         if (!session) {
           await this.completePdfExport({
@@ -466,13 +563,16 @@ class ManagedGitService {
             sessionGroupId: group.id,
             commitSha: input.commitSha,
             requestId,
+            storageKey: exportKey,
             error: "No connected PDF runtime",
           });
           return;
         }
         const connection = session.connection as Record<string, unknown>;
         const runtimeInstanceId =
-          typeof connection.runtimeInstanceId === "string" ? connection.runtimeInstanceId : undefined;
+          typeof connection.runtimeInstanceId === "string"
+            ? connection.runtimeInstanceId
+            : undefined;
         const delivery = sessionRouter.send(
           session.id,
           {
@@ -481,7 +581,8 @@ class ManagedGitService {
             sessionId: session.id,
             sessionGroupId: group.id,
             commitSha: input.commitSha,
-            port: 3000,
+            format,
+            storageKey: exportKey,
             uploadTarget,
           },
           { expectedHomeRuntimeId: runtimeInstanceId, organizationId: input.organizationId },
@@ -492,6 +593,7 @@ class ManagedGitService {
             sessionGroupId: group.id,
             commitSha: input.commitSha,
             requestId,
+            storageKey: exportKey,
             error: `PDF runtime unavailable: ${delivery}`,
           });
         }
@@ -504,6 +606,7 @@ class ManagedGitService {
     sessionGroupId: string;
     commitSha: string;
     requestId: string;
+    storageKey: string;
     error?: string;
   }): Promise<void> {
     const group = await prisma.sessionGroup.findFirst({
@@ -514,20 +617,73 @@ class ManagedGitService {
         pdfExportCommitSha: input.commitSha,
         pdfExportRequestId: input.requestId,
       },
-      select: { pdfExportPendingKey: true },
+      select: { pdfExportPendingKey: true, pdfExportKey: true },
     });
-    if (!group) return;
-    await prisma.sessionGroup.update({
-      where: { id: input.sessionGroupId },
+    if (!group) {
+      if (isPdfStorageKeyForGroup(input.storageKey, input.organizationId, input.sessionGroupId)) {
+        void deletePdfObject(input.storageKey);
+      }
+      return;
+    }
+    if (group.pdfExportPendingKey !== input.storageKey) {
+      if (isPdfStorageKeyForGroup(input.storageKey, input.organizationId, input.sessionGroupId)) {
+        void deletePdfObject(input.storageKey);
+      }
+      return;
+    }
+    const completed = await prisma.sessionGroup.updateMany({
+      where: {
+        id: input.sessionGroupId,
+        pdfExportCommitSha: input.commitSha,
+        pdfExportRequestId: input.requestId,
+        pdfExportPendingKey: input.storageKey,
+      },
       data: input.error
-        ? { pdfExportStatus: "failed", pdfExportPendingKey: null }
+        ? {
+            pdfExportStatus: "failed",
+            pdfExportPendingKey: null,
+            pdfExportRequestId: null,
+            pdfExportError: input.error.slice(0, 500),
+          }
         : {
             pdfExportStatus: "captured",
             pdfExportKey: group.pdfExportPendingKey,
             pdfExportPendingKey: null,
+            pdfExportRequestId: null,
             pdfExportCapturedAt: new Date(),
+            pdfExportError: null,
           },
     });
+    if (completed.count === 0) {
+      if (isPdfStorageKeyForGroup(input.storageKey, input.organizationId, input.sessionGroupId)) {
+        void deletePdfObject(input.storageKey);
+      }
+      return;
+    }
+    if (input.error && group.pdfExportPendingKey) {
+      void deletePdfObject(group.pdfExportPendingKey);
+    } else if (
+      !input.error &&
+      group.pdfExportKey &&
+      group.pdfExportKey !== group.pdfExportPendingKey
+    ) {
+      void deletePdfObject(group.pdfExportKey);
+    }
+    const updated = await prisma.sessionGroup.findUniqueOrThrow({
+      where: { id: input.sessionGroupId },
+      select: {
+        id: true,
+        pdfExportStatus: true,
+        pdfExportCommitSha: true,
+        pdfExportCapturedAt: true,
+        pdfExportError: true,
+        pdfPageWidth: true,
+        pdfPageHeight: true,
+        pdfPageUnit: true,
+        pdfFormatVersion: true,
+      },
+    });
+    await this.emitPdfExportUpdate(input.organizationId, updated);
   }
 
   async retryPdfCommitExport(
@@ -545,6 +701,9 @@ class ManagedGitService {
         pdfExportStatus: true,
         pdfExportKey: true,
         pdfExportCommitSha: true,
+        pdfExportFormatVersion: true,
+        pdfFormatVersion: true,
+        pdfExportAttemptedAt: true,
         repo: { select: { defaultBranch: true } },
       },
     });
@@ -554,19 +713,142 @@ class ManagedGitService {
     const refs = await gitStorage.listRefs(group.organizationId, group.repoId);
     const commitSha = refs.get(`refs/heads/${branch}`);
     if (!commitSha) return;
+    const exportIsCurrent =
+      group.pdfExportCommitSha === commitSha &&
+      group.pdfExportFormatVersion === group.pdfFormatVersion;
     if (
       !options.force &&
-      group.pdfExportCommitSha === commitSha &&
-      (group.pdfExportStatus === "publishing" || group.pdfExportKey)
-    ) {
+      exportIsCurrent &&
+      group.pdfExportStatus === "captured" &&
+      group.pdfExportKey
+    )
       return;
-    }
+    if (
+      !options.force &&
+      exportIsCurrent &&
+      group.pdfExportStatus === "publishing" &&
+      group.pdfExportAttemptedAt &&
+      group.pdfExportAttemptedAt.getTime() > Date.now() - PDF_EXPORT_RETRY_DELAY_MS
+    )
+      return;
 
     await this.enqueuePdfCommitExport({
       organizationId: group.organizationId,
       repoId: group.repoId,
       branch,
       commitSha,
+      reconcileCommittedFormat: false,
+    });
+  }
+
+  async updatePdfFormat(
+    sessionGroupId: string,
+    value: unknown,
+    actor: { actorType: ActorType; actorId: string } = {
+      actorType: "system",
+      actorId: "system",
+    },
+  ): Promise<void> {
+    const format = validatePdfPageFormat(value);
+    const current = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: {
+        id: true,
+        kind: true,
+        organizationId: true,
+        pdfPageWidth: true,
+        pdfPageHeight: true,
+        pdfPageUnit: true,
+      },
+    });
+    if (!current || current.kind !== "pdf") throw new ValidationError("PDF session not found");
+    if (
+      current.pdfPageWidth === format.width &&
+      current.pdfPageHeight === format.height &&
+      current.pdfPageUnit === format.unit
+    )
+      return;
+    const updated = await prisma.sessionGroup.update({
+      where: { id: sessionGroupId },
+      data: {
+        pdfPageWidth: format.width,
+        pdfPageHeight: format.height,
+        pdfPageUnit: format.unit,
+        pdfFormatVersion: { increment: 1 },
+        pdfExportStatus: "pending",
+        pdfExportError: null,
+      },
+      select: {
+        id: true,
+        pdfExportStatus: true,
+        pdfExportCommitSha: true,
+        pdfExportCapturedAt: true,
+        pdfExportError: true,
+        pdfPageWidth: true,
+        pdfPageHeight: true,
+        pdfPageUnit: true,
+        pdfFormatVersion: true,
+      },
+    });
+    await this.emitPdfExportUpdate(current.organizationId, updated, actor);
+    await this.retryPdfCommitExport(sessionGroupId, { force: true }).catch((error: unknown) => {
+      console.error("[managed-git] failed to enqueue PDF export after a format update", error);
+    });
+  }
+
+  async retryPendingPdfExports(sessionGroupId?: string): Promise<void> {
+    const retryBefore = new Date(Date.now() - PDF_EXPORT_RETRY_DELAY_MS);
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        ...(sessionGroupId ? { id: sessionGroupId } : {}),
+        kind: "pdf",
+        OR: [
+          { pdfExportStatus: { in: ["pending", "failed"] } },
+          { pdfExportStatus: "publishing", pdfExportAttemptedAt: { lt: retryBefore } },
+        ],
+      },
+      select: { id: true },
+      take: 50,
+    });
+    await Promise.all(groups.map((group) => this.retryPdfCommitExport(group.id, { force: true })));
+  }
+
+  private async emitPdfExportUpdate(
+    organizationId: string,
+    group: {
+      id: string;
+      pdfExportStatus: string | null;
+      pdfExportCommitSha: string | null;
+      pdfExportCapturedAt: Date | null;
+      pdfExportError: string | null;
+      pdfPageWidth: number;
+      pdfPageHeight: number;
+      pdfPageUnit: string;
+      pdfFormatVersion: number;
+    },
+    actor: { actorType: ActorType; actorId: string } = {
+      actorType: "system",
+      actorId: "system",
+    },
+  ): Promise<void> {
+    await eventService.create({
+      organizationId,
+      scopeType: "system",
+      scopeId: group.id,
+      eventType: "pdf_export_updated",
+      payload: {
+        sessionGroupId: group.id,
+        pdfExportStatus: group.pdfExportStatus,
+        pdfExportCommitSha: group.pdfExportCommitSha,
+        pdfExportCapturedAt: group.pdfExportCapturedAt?.toISOString() ?? null,
+        pdfExportError: group.pdfExportError,
+        pdfPageWidth: group.pdfPageWidth,
+        pdfPageHeight: group.pdfPageHeight,
+        pdfPageUnit: group.pdfPageUnit,
+        pdfFormatVersion: group.pdfFormatVersion,
+      },
+      actorType: actor.actorType,
+      actorId: actor.actorId,
     });
   }
 

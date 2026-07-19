@@ -585,6 +585,28 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
+  if (event.eventType === "pdf_export_updated") {
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+    if (sessionGroupId) {
+      batch.patch("sessionGroups", sessionGroupId, {
+        pdfExportStatus:
+          typeof payload.pdfExportStatus === "string" ? payload.pdfExportStatus : null,
+        pdfExportCommitSha:
+          typeof payload.pdfExportCommitSha === "string" ? payload.pdfExportCommitSha : null,
+        pdfExportCapturedAt:
+          typeof payload.pdfExportCapturedAt === "string" ? payload.pdfExportCapturedAt : null,
+        pdfExportError: typeof payload.pdfExportError === "string" ? payload.pdfExportError : null,
+        pdfPageWidth: typeof payload.pdfPageWidth === "number" ? payload.pdfPageWidth : 210,
+        pdfPageHeight: typeof payload.pdfPageHeight === "number" ? payload.pdfPageHeight : 297,
+        pdfPageUnit: payload.pdfPageUnit === "in" ? "in" : "mm",
+        pdfFormatVersion:
+          typeof payload.pdfFormatVersion === "number" ? payload.pdfFormatVersion : 0,
+        updatedAt: event.timestamp,
+      } as Partial<SessionGroupEntity>);
+    }
+  }
+
   if (event.eventType === "session_group_visibility_updated") {
     const sessionGroupId =
       typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
