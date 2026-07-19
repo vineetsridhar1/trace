@@ -440,7 +440,8 @@ export function SessionGroupDetailView({
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
   const projectWorkspaceKind = getProjectWorkspaceKind(groupKind);
   const isAppGroup = projectWorkspaceKind === "app";
-  const isGeneratedProjectGroup = projectWorkspaceKind === "design" || projectWorkspaceKind === "pdf";
+  const isGeneratedProjectGroup =
+    projectWorkspaceKind === "design" || projectWorkspaceKind === "pdf";
   const selectedConnection = selectedSession?.connection as
     | Record<string, unknown>
     | null
@@ -452,8 +453,7 @@ export function SessionGroupDetailView({
   );
   const generatedProjectCanvasReady =
     liveGeneratedProjectCanvasReady ||
-    (groupKind === "design" &&
-      hasSavedDesignPreview(groupDesignPreviewUrl, groupGitCheckpoints));
+    (groupKind === "design" && hasSavedDesignPreview(groupDesignPreviewUrl, groupGitCheckpoints));
   const appCanvasReady = isAppCanvasReady(
     selectedSession?.agentStatus,
     selectedConnection?.state,
@@ -1022,6 +1022,7 @@ export function SessionGroupDetailView({
                       onForkSession={handleOpenForkDialog}
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                       canvasReady={generatedProjectCanvasReady}
+                      showCanvasWhileLoading
                       canvasKey="generated-project-canvas"
                       canvas={
                         <SessionGroupContentArea
