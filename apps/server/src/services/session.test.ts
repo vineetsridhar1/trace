@@ -126,6 +126,7 @@ vi.mock("./managed-git.js", () => ({
     deleteManagedRepo: vi.fn(),
     mintAccessToken: vi.fn(),
     retryPendingDesignCommitPreviews: vi.fn().mockResolvedValue(undefined),
+    retryPdfCommitExport: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

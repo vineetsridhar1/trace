@@ -249,6 +249,7 @@ describe("managed git PDF exports", () => {
       .mockResolvedValueOnce([
         {
           id: "pdf-group-1",
+          branch: null,
           sessions: [
             {
               id: "session-1",
@@ -282,6 +283,22 @@ describe("managed git PDF exports", () => {
         port: 3000,
       }),
       { expectedHomeRuntimeId: "runtime-1", organizationId: ORG },
+    );
+    expect(prismaMock.sessionGroup.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { branch: "main" },
+            { branch: null, repo: { is: { defaultBranch: "main" } } },
+          ],
+          kind: "pdf",
+        }),
+      }),
+    );
+    expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ branch: "main", pdfExportStatus: "publishing" }),
+      }),
     );
   });
 });

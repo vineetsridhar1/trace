@@ -424,11 +424,15 @@ class ManagedGitService {
       where: {
         organizationId: input.organizationId,
         repoId: input.repoId,
-        branch: input.branch,
+        OR: [
+          { branch: input.branch },
+          { branch: null, repo: { is: { defaultBranch: input.branch } } },
+        ],
         kind: "pdf",
       },
       select: {
         id: true,
+        branch: true,
         sessions: {
           orderBy: { updatedAt: "desc" },
           select: { id: true, connection: true },
@@ -443,6 +447,7 @@ class ManagedGitService {
         await prisma.sessionGroup.update({
           where: { id: group.id },
           data: {
+            ...(group.branch == null ? { branch: input.branch } : {}),
             pdfExportStatus: "publishing",
             pdfExportPendingKey: exportKey,
             pdfExportCommitSha: input.commitSha,
@@ -519,6 +524,42 @@ class ManagedGitService {
     });
   }
 
+  async retryPdfCommitExport(sessionGroupId: string): Promise<void> {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: {
+        id: true,
+        kind: true,
+        organizationId: true,
+        repoId: true,
+        branch: true,
+        pdfExportStatus: true,
+        pdfExportKey: true,
+        pdfExportCommitSha: true,
+        repo: { select: { defaultBranch: true } },
+      },
+    });
+    if (!group || group.kind !== "pdf" || !group.repoId || !group.repo) return;
+
+    const branch = group.branch ?? group.repo.defaultBranch;
+    const refs = await gitStorage.listRefs(group.organizationId, group.repoId);
+    const commitSha = refs.get(`refs/heads/${branch}`);
+    if (!commitSha) return;
+    if (
+      group.pdfExportCommitSha === commitSha &&
+      (group.pdfExportStatus === "publishing" || group.pdfExportKey)
+    ) {
+      return;
+    }
+
+    await this.enqueuePdfCommitExport({
+      organizationId: group.organizationId,
+      repoId: group.repoId,
+      branch,
+      commitSha,
+    });
+  }
+
   async retryPendingDesignCommitPreviews(sessionGroupId?: string): Promise<void> {
     const retryBefore = new Date(Date.now() - DESIGN_PREVIEW_RETRY_DELAY_MS);
     await prisma.sessionGroup.updateMany({
@@ -562,10 +603,13 @@ class ManagedGitService {
       where: {
         organizationId: input.organizationId,
         repoId: input.repoId,
-        branch: input.branch,
+        OR: [
+          { branch: input.branch },
+          { branch: null, repo: { is: { defaultBranch: input.branch } } },
+        ],
         kind: "design",
       },
-      select: { id: true, ownerUserId: true },
+      select: { id: true, ownerUserId: true, branch: true },
     });
 
     await Promise.all(
@@ -573,6 +617,7 @@ class ManagedGitService {
         const pending = await prisma.sessionGroup.update({
           where: { id: group.id },
           data: {
+            ...(group.branch == null ? { branch: input.branch } : {}),
             designPreviewStatus: "pending",
             designPreviewKey: null,
             designPreviewCommitSha: input.commitSha,

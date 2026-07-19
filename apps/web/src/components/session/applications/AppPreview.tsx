@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { RotateCw } from "lucide-react";
+import { toast } from "sonner";
 import { client } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
 import { TraceLoader } from "@/components/ui/trace-loader";
@@ -79,8 +80,18 @@ export function AppPreview({
     const result = await client
       .query(PDF_SESSION_DOWNLOAD_URL_QUERY, { sessionGroupId }, { requestPolicy: "network-only" })
       .toPromise();
+    if (result.error) {
+      toast.error("Failed to download PDF", { description: result.error.message });
+      return;
+    }
     const url = result.data?.pdfSessionDownloadUrl;
-    if (typeof url === "string") window.location.assign(url);
+    if (typeof url === "string") {
+      window.location.assign(url);
+      return;
+    }
+    toast.info("PDF is not ready yet", {
+      description: "Trace is generating the latest document. Try again shortly.",
+    });
   }, [sessionGroupId]);
 
   useEffect(() => {
