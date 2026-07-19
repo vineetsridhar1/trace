@@ -21,6 +21,7 @@ import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
 import { gitRouter } from "./routes/git.js";
 import { designPreviewRouter } from "./routes/design-preview.js";
+import { createAgentMcpRouter } from "./routes/agent-mcp.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -224,6 +225,7 @@ async function main() {
   });
   app.use(authRouter);
   app.use(uploadRouter);
+  app.use(createAgentMcpRouter());
 
   // GraphQL subscriptions
   const wsServer = new WebSocketServer({ noServer: true });

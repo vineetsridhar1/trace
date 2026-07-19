@@ -44,6 +44,49 @@ function setupSshKey(): void {
   console.log("[container-bridge] SSH key configured");
 }
 
+function writeFileWithPrivateMode(path: string, content: string): void {
+  fs.mkdirSync(path.slice(0, path.lastIndexOf("/")), { mode: 0o700, recursive: true });
+  fs.writeFileSync(path, content, { mode: 0o600 });
+}
+
+/**
+ * Configure the installed coding clients to call the server-hosted MCP. The
+ * token stays in the bridge environment so Codex can read it from its declared
+ * env var; app processes do not inherit *_TOKEN variables (see childEnv).
+ */
+function setupAgentMcp(): void {
+  const token = process.env.TRACE_AGENT_MCP_TOKEN;
+  const serverUrl = process.env.TRACE_SERVER_PUBLIC_URL?.replace(/\/+$/, "");
+  if (!token || !serverUrl) return;
+
+  const mcpUrl = `${serverUrl}/mcp`;
+  const claudePath = "/home/coder/.claude.json";
+  let claudeConfig: Record<string, unknown> = {};
+  try {
+    if (fs.existsSync(claudePath)) {
+      claudeConfig = JSON.parse(fs.readFileSync(claudePath, "utf8")) as Record<string, unknown>;
+    }
+  } catch {
+    // A malformed optional user config must not prevent the runtime starting.
+  }
+  const mcpServers =
+    claudeConfig.mcpServers && typeof claudeConfig.mcpServers === "object"
+      ? (claudeConfig.mcpServers as Record<string, unknown>)
+      : {};
+  claudeConfig.mcpServers = {
+    ...mcpServers,
+    trace: { type: "http", url: mcpUrl, headers: { Authorization: `Bearer ${token}` } },
+  };
+  writeFileWithPrivateMode(claudePath, `${JSON.stringify(claudeConfig, null, 2)}\n`);
+
+  const tomlString = (value: string) => JSON.stringify(value);
+  writeFileWithPrivateMode(
+    "/home/coder/.codex/config.toml",
+    `[mcp_servers.trace]\nurl = ${tomlString(mcpUrl)}\nbearer_token_env_var = "TRACE_AGENT_MCP_TOKEN"\n`,
+  );
+  console.log("[container-bridge] agent MCP configured");
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
@@ -61,6 +104,7 @@ async function main(): Promise<void> {
 
   // Set up SSH key before any git operations
   setupSshKey();
+  setupAgentMcp();
 
   await runRuntimeSetupCommands(
     parseRuntimeSetupCommands(process.env.TRACE_RUNTIME_SETUP_COMMANDS),

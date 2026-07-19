@@ -31,6 +31,7 @@ const SESSION_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
 // Sliding expiry: when an authenticated request presents a session token older
 // than this, we re-issue a fresh one so active users never hit the fixed TTL.
 const SESSION_REFRESH_THRESHOLD_SECONDS = 24 * 60 * 60;
+const AGENT_MCP_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 
 type SessionTokenPayload = {
   userId: string;
@@ -42,6 +43,15 @@ type BridgeAuthTokenPayload = {
   organizationId: string;
   instanceId: string;
   tokenType: "bridge_auth";
+};
+
+export type AgentMcpTokenPayload = {
+  userId: string;
+  organizationId: string;
+  sessionId: string;
+  sessionGroupId: string;
+  tokenType: "agent_mcp";
+  aud: "trace-mcp";
 };
 
 type SessionAuthSubject = {
@@ -65,7 +75,7 @@ function parseSessionToken(token: string): SessionTokenPayload | null {
       !payload ||
       typeof payload !== "object" ||
       typeof payload.userId !== "string" ||
-      payload.tokenType === "bridge_auth"
+      (payload.tokenType !== undefined && payload.tokenType !== "session")
     ) {
       return null;
     }
@@ -77,6 +87,40 @@ function parseSessionToken(token: string): SessionTokenPayload | null {
 
 export function signSessionToken(userId: string): string {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: SESSION_TOKEN_TTL_SECONDS });
+}
+
+/** A cloud agent gets this narrow capability, never a user or bridge token. */
+export function createAgentMcpToken(input: Omit<AgentMcpTokenPayload, "tokenType" | "aud">): {
+  token: string;
+  expiresAt: Date;
+} {
+  const expiresAt = new Date(Date.now() + AGENT_MCP_TOKEN_TTL_SECONDS * 1000);
+  const token = jwt.sign(
+    { ...input, tokenType: "agent_mcp", aud: "trace-mcp" } satisfies AgentMcpTokenPayload,
+    JWT_SECRET,
+    { expiresIn: AGENT_MCP_TOKEN_TTL_SECONDS },
+  );
+  return { token, expiresAt };
+}
+
+export function verifyAgentMcpToken(token: string): AgentMcpTokenPayload | null {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET, { audience: "trace-mcp" }) as unknown;
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      (payload as AgentMcpTokenPayload).tokenType !== "agent_mcp" ||
+      typeof (payload as AgentMcpTokenPayload).userId !== "string" ||
+      typeof (payload as AgentMcpTokenPayload).organizationId !== "string" ||
+      typeof (payload as AgentMcpTokenPayload).sessionId !== "string" ||
+      typeof (payload as AgentMcpTokenPayload).sessionGroupId !== "string"
+    ) {
+      return null;
+    }
+    return payload as AgentMcpTokenPayload;
+  } catch {
+    return null;
+  }
 }
 
 export function getSessionCookieOptions(): CookieOptions {
@@ -113,7 +157,7 @@ export function refreshSessionCookieIfNeeded(res: Response, token: string): void
   if (!decoded || typeof decoded !== "object") return;
   const payload = decoded as { userId?: unknown; tokenType?: unknown; iat?: unknown };
   if (
-    payload.tokenType === "bridge_auth" ||
+    (payload.tokenType !== undefined && payload.tokenType !== "session") ||
     typeof payload.userId !== "string" ||
     typeof payload.iat !== "number"
   ) {

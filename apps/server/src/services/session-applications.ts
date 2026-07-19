@@ -261,6 +261,7 @@ export class SessionApplicationService {
     scriptId: string,
     organizationId: string,
     userId: string,
+    options?: { actorType?: "user" | "agent" },
   ) {
     const { group, sessionId, runtimeId } = await this.resolveCloudRuntime(
       sessionGroupId,
@@ -292,7 +293,7 @@ export class SessionApplicationService {
       scopeId: sessionId,
       eventType: "session_setup_script_started",
       payload: { setupScriptRun: publicSetupRun(run) },
-      actorType: "user",
+      actorType: options?.actorType ?? "user",
       actorId: userId,
     });
     const env = await this.resolveEnv(organizationId, script.env);
@@ -337,7 +338,7 @@ export class SessionApplicationService {
     appConfigId: string,
     organizationId: string,
     userId: string,
-    options?: { asSystem?: boolean },
+    options?: { asSystem?: boolean; actorType?: "user" | "agent" },
   ) {
     const { group } = await this.resolveCloudRuntime(
       sessionGroupId,
@@ -383,7 +384,7 @@ export class SessionApplicationService {
     processConfigId: string,
     organizationId: string,
     userId: string,
-    options?: { asSystem?: boolean },
+    options?: { asSystem?: boolean; actorType?: "user" | "agent" },
   ) {
     const { group, sessionId, runtimeId } = await this.resolveCloudRuntime(
       sessionGroupId,
@@ -448,7 +449,7 @@ export class SessionApplicationService {
       payload: { process: publicProcess(process) },
       // Auto-start on workspace-ready is a system action; don't attribute it to
       // the session creator in the immutable log.
-      actorType: options?.asSystem ? "system" : "user",
+      actorType: options?.asSystem ? "system" : (options?.actorType ?? "user"),
       actorId: options?.asSystem ? "system" : userId,
     });
 
@@ -510,6 +511,7 @@ export class SessionApplicationService {
     processConfigId: string,
     organizationId: string,
     userId: string,
+    options?: { actorType?: "user" | "agent" },
   ) {
     const { sessionId, runtimeId } = await this.resolveCloudRuntime(
       sessionGroupId,
@@ -560,7 +562,7 @@ export class SessionApplicationService {
       scopeId: sessionId,
       eventType: "session_application_process_stopped",
       payload: { process: publicProcess(stopped) },
-      actorType: "user",
+      actorType: options?.actorType ?? "user",
       actorId: userId,
     });
     return stopped;
@@ -572,9 +574,10 @@ export class SessionApplicationService {
     processConfigId: string,
     organizationId: string,
     userId: string,
+    options?: { actorType?: "user" | "agent" },
   ) {
-    await this.stopProcess(sessionGroupId, appConfigId, processConfigId, organizationId, userId);
-    return this.startProcess(sessionGroupId, appConfigId, processConfigId, organizationId, userId);
+    await this.stopProcess(sessionGroupId, appConfigId, processConfigId, organizationId, userId, options);
+    return this.startProcess(sessionGroupId, appConfigId, processConfigId, organizationId, userId, options);
   }
 
   async enableEndpoint(

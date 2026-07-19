@@ -1,5 +1,6 @@
 import { createHmac, randomUUID } from "crypto";
 import jwt from "jsonwebtoken";
+import { createAgentMcpToken } from "./auth.js";
 import {
   RuntimeAdapterRegistry,
   type RuntimeAdapter,
@@ -639,6 +640,16 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       runtimeTokenTtlSeconds,
     );
     const bridgeUrl = input.bridgeUrl ?? defaultBridgeUrl();
+    const agentMcpToken =
+      input.agentMcpToken ??
+      (input.sessionGroupId
+        ? createAgentMcpToken({
+            userId: input.actorId,
+            organizationId: input.organizationId,
+            sessionId: input.sessionId,
+            sessionGroupId: input.sessionGroupId,
+          }).token
+        : undefined);
     const [runtimeEnv, userApiTokenEnv] = await Promise.all([
       resolveProvisionedRuntimeEnv(input.organizationId, config.runtimeEnv),
       resolveUserApiTokenEnv(input.actorId),
@@ -673,6 +684,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
         TRACE_RUNTIME_INSTANCE_ID: runtimeInstanceId,
         TRACE_RUNTIME_TOKEN: runtimeToken.token,
         TRACE_BRIDGE_URL: bridgeUrl,
+        ...(agentMcpToken ? { TRACE_AGENT_MCP_TOKEN: agentMcpToken } : {}),
         // The app is served through the `<key>.<previewHost>` proxy origin, not
         // the container's localhost. Dev servers (e.g. Next 15) otherwise flag
         // requests from that origin as cross-origin and block /_next/HMR/API

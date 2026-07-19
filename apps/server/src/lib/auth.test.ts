@@ -26,10 +26,12 @@ import {
   buildContext,
   buildWsContext,
   createBridgeAuthToken,
+  createAgentMcpToken,
   isLoopbackRequest,
   parseCookieToken,
   refreshSessionCookieIfNeeded,
   verifyBridgeAuthToken,
+  verifyAgentMcpToken,
   verifyToken,
 } from "./auth.js";
 
@@ -131,6 +133,25 @@ describe("auth helpers", () => {
       instanceId: "bridge-1",
       tokenType: "bridge_auth",
     });
+  });
+
+  it("accepts agent MCP tokens only through the MCP verifier", async () => {
+    const { token } = createAgentMcpToken({
+      userId: "user-1",
+      organizationId: "org-1",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+    });
+
+    expect(verifyAgentMcpToken(token)).toMatchObject({
+      userId: "user-1",
+      organizationId: "org-1",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      tokenType: "agent_mcp",
+    });
+    expect(verifyToken(token)).toBeNull();
+    await expect(authenticateAccessToken(token)).resolves.toBeNull();
   });
 
   it("authenticates opaque mobile device secrets", async () => {
