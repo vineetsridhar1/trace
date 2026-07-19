@@ -6,11 +6,23 @@ import { EndpointForwarder } from "./endpoint-forwarder.js";
 
 type SendFn = (message: BridgeMessage) => void;
 
+type ProcessStartOptions = {
+  requestId: string;
+  processInstanceId: string;
+  sessionGroupId: string;
+  sessionId: string;
+  command: string;
+  cwd: string;
+  env?: Record<string, string>;
+  ports?: number[];
+};
+
 type ManagedProcess = {
   processInstanceId: string;
   sessionGroupId: string;
   child: ChildProcessWithoutNullStreams;
   bridgeProcessId: string;
+  readyAt: number | null;
 };
 
 const MAX_LOG_CHUNK_BYTES = 16 * 1024;
@@ -18,6 +30,9 @@ const MAX_SETUP_OUTPUT_BYTES = 64 * 1024;
 // A hung setup script (interactive prompt, network stall) must not block session
 // setup forever with no result. Kill the tree and report failure past this.
 const SETUP_SCRIPT_TIMEOUT_MS = 10 * 60_000;
+const MAX_PROCESS_RESTARTS = 3;
+const PROCESS_RESTART_BASE_DELAY_MS = 500;
+const PROCESS_STABLE_AFTER_MS = 30_000;
 
 function safeRelativeCwd(baseWorkdir: string, cwd: string): string {
   const relative = cwd.trim() || ".";
@@ -137,6 +152,8 @@ export class ManagedProcessManager {
   private processes = new Map<string, ManagedProcess>();
   // Per-processInstanceId serialization for start/restart (see start()).
   private startLocks = new Map<string, Promise<void>>();
+  private pendingRestarts = new Map<string, { sessionGroupId: string; timer: NodeJS.Timeout }>();
+  private intentionalStops = new Set<string>();
   private readonly endpointForwarder: EndpointForwarder;
 
   constructor(
@@ -166,17 +183,10 @@ export class ManagedProcessManager {
     return tail;
   }
 
-  start(options: {
-    requestId: string;
-    processInstanceId: string;
-    sessionGroupId: string;
-    sessionId: string;
-    command: string;
-    cwd: string;
-    env?: Record<string, string>;
-    ports?: number[];
-  }) {
-    this.enqueue(options.processInstanceId, () => this.startReplacing(options));
+  start(options: ProcessStartOptions) {
+    this.cancelPendingRestart(options.processInstanceId);
+    this.intentionalStops.delete(options.processInstanceId);
+    this.enqueue(options.processInstanceId, () => this.startReplacing(options, 0));
   }
 
   /**
@@ -186,16 +196,10 @@ export class ManagedProcessManager {
    * process's state) and wait for it to die before spawning, so the new child
    * never races the old one for the configured ports.
    */
-  private async startReplacing(options: {
-    requestId: string;
-    processInstanceId: string;
-    sessionGroupId: string;
-    sessionId: string;
-    command: string;
-    cwd: string;
-    env?: Record<string, string>;
-    ports?: number[];
-  }): Promise<void> {
+  private async startReplacing(
+    options: ProcessStartOptions,
+    restartAttempt: number,
+  ): Promise<void> {
     const baseWorkdir = this.sessionWorkdirs.get(options.sessionId);
     if (!baseWorkdir) {
       this.send({
@@ -228,6 +232,7 @@ export class ManagedProcessManager {
         sessionGroupId: options.sessionGroupId,
         child,
         bridgeProcessId,
+        readyAt: null,
       });
       child.stdout.on("data", (chunk: Buffer) => {
         this.send({
@@ -248,16 +253,34 @@ export class ManagedProcessManager {
       child.on("error", (error) => {
         if (this.processes.get(options.processInstanceId)?.child !== child) return;
         this.processes.delete(options.processInstanceId);
-        this.send({
-          type: "app_process_error",
-          requestId: options.requestId,
-          processInstanceId: options.processInstanceId,
-          error: error.message,
-        });
+        if (!this.scheduleRestart(options, restartAttempt, error.message)) {
+          this.send({
+            type: "app_process_error",
+            requestId: options.requestId,
+            processInstanceId: options.processInstanceId,
+            error: error.message,
+          });
+        }
       });
       child.on("exit", (exitCode, signal) => {
-        if (this.processes.get(options.processInstanceId)?.child !== child) return;
+        const managed = this.processes.get(options.processInstanceId);
+        if (managed?.child !== child) return;
         this.processes.delete(options.processInstanceId);
+        if (this.intentionalStops.delete(options.processInstanceId)) {
+          this.send({
+            type: "app_process_exited",
+            processInstanceId: options.processInstanceId,
+            exitCode,
+            signal: signal ?? undefined,
+          });
+          return;
+        }
+        const priorAttempts =
+          managed.readyAt && Date.now() - managed.readyAt >= PROCESS_STABLE_AFTER_MS
+            ? 0
+            : restartAttempt;
+        if (this.scheduleRestart(options, priorAttempts, `exit ${exitCode ?? signal ?? "unknown"}`))
+          return;
         this.send({
           type: "app_process_exited",
           processInstanceId: options.processInstanceId,
@@ -267,7 +290,9 @@ export class ManagedProcessManager {
       });
       void waitForListeningPort(child, options.ports ?? [])
         .then(() => {
-          if (this.processes.get(options.processInstanceId)?.child !== child) return;
+          const managed = this.processes.get(options.processInstanceId);
+          if (managed?.child !== child) return;
+          managed.readyAt = Date.now();
           this.send({
             type: "app_process_started",
             requestId: options.requestId,
@@ -295,7 +320,44 @@ export class ManagedProcessManager {
     }
   }
 
+  private scheduleRestart(
+    options: ProcessStartOptions,
+    restartAttempt: number,
+    reason: string,
+  ): boolean {
+    if (!options.ports?.length || restartAttempt >= MAX_PROCESS_RESTARTS) return false;
+    const nextAttempt = restartAttempt + 1;
+    const delayMs = PROCESS_RESTART_BASE_DELAY_MS * 2 ** (nextAttempt - 1);
+    this.send({
+      type: "app_process_log",
+      processInstanceId: options.processInstanceId,
+      stream: "stderr",
+      data: `[trace] Process stopped unexpectedly (${reason}); restarting in ${delayMs}ms (attempt ${nextAttempt}/${MAX_PROCESS_RESTARTS}).\n`,
+    });
+    const timer = setTimeout(() => {
+      if (this.pendingRestarts.get(options.processInstanceId)?.timer !== timer) return;
+      this.pendingRestarts.delete(options.processInstanceId);
+      if (this.intentionalStops.has(options.processInstanceId)) return;
+      this.enqueue(options.processInstanceId, () => this.startReplacing(options, nextAttempt));
+    }, delayMs);
+    timer.unref();
+    this.pendingRestarts.set(options.processInstanceId, {
+      sessionGroupId: options.sessionGroupId,
+      timer,
+    });
+    return true;
+  }
+
+  private cancelPendingRestart(processInstanceId: string): void {
+    const pending = this.pendingRestarts.get(processInstanceId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pendingRestarts.delete(processInstanceId);
+  }
+
   stop(processInstanceId: string): void {
+    this.intentionalStops.add(processInstanceId);
+    this.cancelPendingRestart(processInstanceId);
     void this.enqueue(processInstanceId, async () => this.killEntry(processInstanceId));
   }
 
@@ -319,16 +381,30 @@ export class ManagedProcessManager {
     // Cover both running processes and in-flight starts (whose map entry does
     // not exist yet but whose lock key is live), so a delete arriving during a
     // start can't let the new process slip through after teardown.
-    const keys = new Set<string>([...this.processes.keys(), ...this.startLocks.keys()]);
+    const keys = new Set<string>([
+      ...this.processes.keys(),
+      ...this.startLocks.keys(),
+      ...this.pendingRestarts.keys(),
+    ]);
     for (const key of keys) {
       void this.enqueue(key, async () => {
-        if (this.processes.get(key)?.sessionGroupId === sessionGroupId) this.killEntry(key);
+        const belongsToGroup =
+          this.processes.get(key)?.sessionGroupId === sessionGroupId ||
+          this.pendingRestarts.get(key)?.sessionGroupId === sessionGroupId;
+        if (!belongsToGroup) return;
+        this.intentionalStops.add(key);
+        this.cancelPendingRestart(key);
+        this.killEntry(key);
       });
     }
   }
 
   destroyAll(): void {
-    for (const key of new Set<string>([...this.processes.keys(), ...this.startLocks.keys()])) {
+    for (const key of new Set<string>([
+      ...this.processes.keys(),
+      ...this.startLocks.keys(),
+      ...this.pendingRestarts.keys(),
+    ])) {
       this.stop(key);
     }
     this.endpointForwarder.destroy();
