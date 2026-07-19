@@ -83,8 +83,10 @@ export function AppPreviewCanvas({
       <div
         ref={viewport.canvasRef}
         className={cn(
-          "relative min-h-0 flex-1 overflow-hidden bg-surface-deep",
-          bare && "cursor-grab touch-none active:cursor-grabbing",
+          "relative min-h-0 flex-1 overflow-hidden",
+          bare
+            ? "cursor-grab touch-none bg-[#111113] active:cursor-grabbing"
+            : "bg-surface-deep",
         )}
         onPointerDown={bare ? viewport.handleCanvasPointerDown : undefined}
         onPointerMove={bare ? viewport.handleCanvasPointerMove : undefined}
@@ -93,7 +95,7 @@ export function AppPreviewCanvas({
         onWheel={bare ? viewport.handleCanvasWheel : undefined}
         style={{
           backgroundImage: bare
-            ? "radial-gradient(#71717a 1px, transparent 1px)"
+            ? "radial-gradient(rgba(113, 113, 122, 0.3) 1px, transparent 1px)"
             : "radial-gradient(rgba(148, 163, 184, 0.2) 1px, transparent 1px)",
           backgroundSize: bare ? "24px 24px" : "16px 16px",
         }}
