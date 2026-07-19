@@ -190,5 +190,11 @@ export function usePdfPreview({
     [],
   );
 
-  return { contentHeight, download, downloadRequested, format, updateFormat };
+  const downloadState = !downloadRequested
+    ? "idle"
+    : exportStatus === "publishing"
+      ? "generating"
+      : "waiting";
+
+  return { contentHeight, download, downloadState, format, updateFormat } as const;
 }

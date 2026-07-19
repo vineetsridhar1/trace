@@ -4,6 +4,7 @@ import { Button } from "../../ui/button";
 import { PdfFormatFields } from "./PdfFormatFields";
 
 export type PdfPageFormat = { width: number; height: number; unit: "mm" | "in" };
+export type PdfDownloadState = "idle" | "waiting" | "generating";
 
 export function PdfPreviewControls({
   format,
@@ -15,7 +16,7 @@ export function PdfPreviewControls({
   onZoomOut,
   refreshing,
   zoom,
-  downloading = false,
+  downloadState = "idle",
 }: {
   format: PdfPageFormat;
   onFormatChange: (format: PdfPageFormat) => void;
@@ -26,9 +27,10 @@ export function PdfPreviewControls({
   onZoomOut?: () => void;
   refreshing?: boolean;
   zoom?: number;
-  downloading?: boolean;
+  downloadState?: PdfDownloadState;
 }) {
   const showCanvasControls = zoom !== undefined && onZoomIn && onZoomOut && onResetZoom && onReload;
+  const downloading = downloadState !== "idle";
 
   return (
     <div className="grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-border bg-background px-3">
@@ -78,7 +80,11 @@ export function PdfPreviewControls({
         ) : null}
         <Button size="sm" className="h-7" onClick={onDownload} disabled={downloading}>
           <Download size={13} className="mr-1" />
-          {downloading ? "Generating…" : "Download PDF"}
+          {downloadState === "waiting"
+            ? "Waiting for save…"
+            : downloadState === "generating"
+              ? "Generating…"
+              : "Download PDF"}
         </Button>
       </div>
     </div>
