@@ -519,6 +519,20 @@ describe("SessionApplicationService", () => {
     expect(eventServiceMock.create).not.toHaveBeenCalled();
   });
 
+  it("does not overwrite an explicitly stopped process when its child exits", async () => {
+    prismaMock.sessionApplicationProcess.findFirst.mockResolvedValue({
+      id: "process-1",
+      status: "stopped",
+    });
+
+    await expect(
+      new SessionApplicationService().markProcessExited("process-1", "org-1", 143),
+    ).resolves.toBeNull();
+
+    expect(prismaMock.sessionApplicationProcess.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.create).not.toHaveBeenCalled();
+  });
+
   it("scopes bridge-driven process updates to the reporting runtime's org", async () => {
     prismaMock.sessionApplicationProcess.findFirst.mockResolvedValue(null);
 
