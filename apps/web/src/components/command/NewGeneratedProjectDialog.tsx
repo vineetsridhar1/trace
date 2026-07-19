@@ -6,7 +6,7 @@ import {
   createPdfSession,
 } from "../../lib/create-quick-session";
 import { useCommandPaletteStore } from "../../stores/command-palette";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 
 type GeneratedProjectKind = "app" | "design" | "pdf";
 
@@ -58,26 +58,23 @@ export function NewGeneratedProjectDialog() {
 
   return (
     <Dialog open={kind === "choose"} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-xl gap-5 p-6">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle className="text-2xl tracking-tight">Create new</DialogTitle>
-          <DialogDescription className="text-sm">
-            Choose the kind of work you want Trace to help you make.
-          </DialogDescription>
+          <DialogTitle>Create New</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-3">
+        <div className="flex flex-col gap-2 py-4">
           {OPTIONS.map(({ kind: optionKind, title, description, Icon }) => (
             <button
               key={optionKind}
               type="button"
               onClick={() => create(optionKind)}
-              className="flex items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Icon className="size-5 shrink-0 text-muted-foreground" />
-              <span>
-                <span className="block text-base font-semibold text-foreground">{title}</span>
-                <span className="mt-0.5 block text-sm text-muted-foreground">{description}</span>
-              </span>
+              <Icon size={20} className="text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">{title}</p>
+                <p className="text-xs text-muted-foreground">{description}</p>
+              </div>
             </button>
           ))}
         </div>
