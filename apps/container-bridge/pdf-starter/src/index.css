@@ -20,11 +20,6 @@
     min-height: 0 !important;
     padding: 0 !important;
   }
-  .document {
-    box-shadow: none !important;
-    margin: 0 !important;
-    zoom: 1 !important;
-  }
 }
 
 * {
@@ -43,5 +38,5 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  background: #09090b;
+  background: white;
 }
