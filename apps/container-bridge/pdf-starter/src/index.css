@@ -2,12 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-@page { size: A4; margin: 0; }
-
 @media print {
   .no-print { display: none !important; }
-  body { background: white; }
-  .document { box-shadow: none !important; min-height: 0 !important; }
+  html, body, #root { margin: 0; padding: 0; }
+  body, main { background: white !important; }
+  main { min-height: 0 !important; padding: 0 !important; }
+  .document { box-shadow: none !important; margin: 0 !important; }
 }
 
 * {
