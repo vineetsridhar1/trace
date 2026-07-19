@@ -15,6 +15,7 @@ export function AppPreviewCanvas({
   onLoad,
   onReload,
   iframeRef,
+  bare = false,
 }: {
   url: string | null;
   title: string;
@@ -25,6 +26,7 @@ export function AppPreviewCanvas({
   onLoad: () => void;
   onReload: () => void;
   iframeRef: RefObject<HTMLIFrameElement | null>;
+  bare?: boolean;
 }) {
   const viewport = usePreviewViewport();
 
@@ -55,7 +57,10 @@ export function AppPreviewCanvas({
           <div className="absolute inset-0 flex items-center justify-center p-8">
             <div
               className={cn(
-                "relative shrink-0 overflow-visible rounded-lg rounded-tl-none bg-background p-2 shadow-2xl",
+                "relative shrink-0 overflow-visible",
+                bare
+                  ? "bg-transparent p-0 shadow-none"
+                  : "rounded-lg rounded-tl-none bg-background p-2 shadow-2xl",
                 viewport.resizing && "select-none",
               )}
               style={{
@@ -63,13 +68,18 @@ export function AppPreviewCanvas({
                 height: viewport.displayedHeight + PREVIEW_FRAME_MARGIN * 2,
               }}
             >
-              <AppPreviewFrameControls url={url} status={status} />
+              {!bare ? <AppPreviewFrameControls url={url} status={status} /> : null}
               {!loaded ? (
                 <div className="absolute left-2 right-2 top-1.5 z-20">
                   <AppPreviewLoadingBar />
                 </div>
               ) : null}
-              <div className="size-full overflow-hidden rounded-md bg-muted/20">
+              <div
+                className={cn(
+                  "size-full overflow-hidden",
+                  bare ? "bg-transparent" : "rounded-md bg-muted/20",
+                )}
+              >
                 {url ? (
                   <iframe
                     ref={iframeRef}
@@ -91,17 +101,19 @@ export function AppPreviewCanvas({
                   />
                 ) : null}
               </div>
-              <button
-                type="button"
-                aria-label="Resize preview"
-                title="Drag to resize preview"
-                onKeyDown={viewport.handleResizeKeyDown}
-                onPointerDown={viewport.handleResizeStart}
-                onPointerMove={viewport.handleResizeMove}
-                onPointerUp={viewport.handleResizeEnd}
-                onPointerCancel={viewport.handleResizeEnd}
-                className="absolute -bottom-2 -right-2 z-10 size-4 cursor-nwse-resize touch-none rounded-full border border-border bg-foreground shadow-sm transition-transform hover:scale-125"
-              />
+              {!bare ? (
+                <button
+                  type="button"
+                  aria-label="Resize preview"
+                  title="Drag to resize preview"
+                  onKeyDown={viewport.handleResizeKeyDown}
+                  onPointerDown={viewport.handleResizeStart}
+                  onPointerMove={viewport.handleResizeMove}
+                  onPointerUp={viewport.handleResizeEnd}
+                  onPointerCancel={viewport.handleResizeEnd}
+                  className="absolute -bottom-2 -right-2 z-10 size-4 cursor-nwse-resize touch-none rounded-full border border-border bg-foreground shadow-sm transition-transform hover:scale-125"
+                />
+              ) : null}
             </div>
           </div>
         ) : null}
