@@ -28,6 +28,7 @@ import type {
   BridgeSessionGitSyncStatus,
   BridgeListWorkspaceSlugsCommand,
   BridgeRepoWorktree,
+  BridgePdfExportCommand,
 } from "@trace/shared";
 import { prisma } from "./db.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -70,6 +71,7 @@ export type SessionCommand =
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
   | BridgeListWorkspaceSlugsCommand
+  | BridgePdfExportCommand
   | { type: "session_git_sync_status"; requestId: string; sessionId: string; workdirHint?: string }
   | BridgeSessionCurrentBranchCommand
   | BridgeTerminalCreateCommand

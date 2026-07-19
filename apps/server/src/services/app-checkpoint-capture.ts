@@ -11,7 +11,6 @@ import { buildEndpointUrl } from "./endpoint-utils.js";
 
 const execFileAsync = promisify(execFile);
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const PDF_SIGNATURE = Buffer.from("%PDF-");
 const MAX_CONCURRENT_CAPTURES = 2;
 let activeCaptures = 0;
 const captureWaiters: Array<() => void> = [];
@@ -96,75 +95,7 @@ export async function renderEndpointScreenshot(url: string, checkpointId: string
   }
 }
 
-export async function renderEndpointPdf(url: string, checkpointId: string): Promise<Buffer> {
-  const workdir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "trace-pdf-export-"));
-  const outputPath = path.join(workdir, `${checkpointId}.pdf`);
-  try {
-    await execFileAsync(
-      process.env.TRACE_CHROMIUM_EXECUTABLE?.trim() || "chromium",
-      [
-        "--headless=new",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
-        "--no-first-run",
-        `--user-data-dir=${path.join(workdir, "profile")}`,
-        "--print-to-pdf-no-header",
-        `--print-to-pdf=${outputPath}`,
-        url,
-      ],
-      { timeout: 60_000, maxBuffer: 1024 * 1024 },
-    );
-    const pdf = await fs.promises.readFile(outputPath);
-    if (pdf.byteLength <= PDF_SIGNATURE.byteLength || !pdf.subarray(0, PDF_SIGNATURE.length).equals(PDF_SIGNATURE)) {
-      throw new Error("Chromium did not produce a valid PDF");
-    }
-    return pdf;
-  } finally {
-    await fs.promises.rm(workdir, { recursive: true, force: true });
-  }
-}
-
 export const appCheckpointCaptureService = {
-  async capturePdf(input: {
-    organizationId: string;
-    sessionGroupId: string;
-    checkpointId: string;
-    commitSha: string;
-    userId: string;
-  }): Promise<AppCheckpointCaptureResult> {
-    const endpoint = await prisma.sessionEndpoint.findFirst({
-      where: {
-        organizationId: input.organizationId,
-        sessionGroupId: input.sessionGroupId,
-        status: "enabled",
-        revokedAt: null,
-        protocol: "http",
-      },
-      orderBy: [{ enabledAt: "desc" }, { createdAt: "asc" }],
-      select: { id: true, key: true, organizationId: true, accessMode: true },
-    });
-    if (!endpoint) return { captureStatus: "unavailable" };
-    try {
-      const pdf = await withCaptureSlot(() =>
-        renderEndpointPdf(captureUrl(endpoint, input.userId), input.checkpointId),
-      );
-      const captureKey = `pdf-exports/${input.organizationId}/${input.sessionGroupId}/${input.commitSha}-${randomUUID()}.pdf`;
-      await storage.putObject(captureKey, pdf, "application/pdf");
-      return {
-        captureStatus: "captured",
-        captureKey,
-        captureContentType: "application/pdf",
-        capturedAt: new Date(),
-      };
-    } catch (error) {
-      console.warn("[pdf-checkpoint] export failed", {
-        checkpointId: input.checkpointId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return { captureStatus: "failed", capturedAt: new Date() };
-    }
-  },
-
   async capture(input: {
     organizationId: string;
     sessionGroupId: string;

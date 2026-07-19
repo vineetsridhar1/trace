@@ -50,7 +50,7 @@ export function AppPreview({
     dispatch({ type: "reload" });
   }, []);
 
-  const sendPdfMessage = useCallback((type: "format" | "print", format?: PdfPageFormat) => {
+  const sendPdfMessage = useCallback((type: "format", format?: PdfPageFormat) => {
     frameRef.current?.contentWindow?.postMessage(
       { source: "trace", type: `pdf:${type}`, format },
       "*",
