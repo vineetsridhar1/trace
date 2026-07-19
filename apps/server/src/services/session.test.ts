@@ -3686,6 +3686,75 @@ describe("SessionService", () => {
       });
     });
 
+    it("writes manual element styles to the dedicated design stylesheet", async () => {
+      const source = "/* Trace writes user-authored visual overrides here. */\n";
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          kind: "design",
+          visibility: "public",
+          ownerUserId: "user-1",
+        })
+        .mockResolvedValueOnce({
+          id: "group-1",
+          workdir: "/tmp/trace",
+          worktreeDeleted: false,
+          connection: { runtimeInstanceId: "runtime-1" },
+          visibility: "public",
+          ownerUserId: "user-1",
+        });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+      sessionRouterMock.readFile.mockResolvedValueOnce(source);
+
+      await expect(
+        service.updateDesignElementStyles(
+          {
+            sessionGroupId: "group-1",
+            elementId: "hero-title",
+            styles: { color: "#112233", fontSize: 32, textAlign: "center" },
+            expectedSourceHash: designSourceHash(source),
+          },
+          "org-1",
+          "user",
+          "user-1",
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          sessionGroupId: "group-1",
+          elementId: "hero-title",
+          styles: { color: "#112233", fontSize: 32, textAlign: "center" },
+        }),
+      );
+      expect(sessionRouterMock.writeFile).toHaveBeenCalledWith(
+        "org-1:runtime-1",
+        "session-1",
+        "src/design/manual.css",
+        expect.stringContaining('[data-trace-id="hero-title"]'),
+        "/tmp/trace",
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "design_element_styles_updated",
+          payload: expect.objectContaining({
+            elementId: "hero-title",
+            styles: { color: "#112233", fontSize: 32, textAlign: "center" },
+          }),
+        }),
+      );
+    });
+
     it("rejects saves to visible cloud session groups owned by another user", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",

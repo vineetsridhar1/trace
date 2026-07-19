@@ -344,6 +344,45 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignElementStyleEditResult = {
+  __typename?: "DesignElementStyleEditResult";
+  elementId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  styles: DesignElementStyles;
+};
+
+export type DesignElementStyleSource = {
+  __typename?: "DesignElementStyleSource";
+  elementId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  styles: DesignElementStyles;
+};
+
+export type DesignElementStyles = {
+  __typename?: "DesignElementStyles";
+  backgroundColor?: Maybe<Scalars["String"]["output"]>;
+  borderRadius?: Maybe<Scalars["Int"]["output"]>;
+  color?: Maybe<Scalars["String"]["output"]>;
+  fontSize?: Maybe<Scalars["Int"]["output"]>;
+  fontWeight?: Maybe<Scalars["Int"]["output"]>;
+  paddingX?: Maybe<Scalars["Int"]["output"]>;
+  paddingY?: Maybe<Scalars["Int"]["output"]>;
+  textAlign?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type DesignElementStylesInput = {
+  backgroundColor?: InputMaybe<Scalars["String"]["input"]>;
+  borderRadius?: InputMaybe<Scalars["Int"]["input"]>;
+  color?: InputMaybe<Scalars["String"]["input"]>;
+  fontSize?: InputMaybe<Scalars["Int"]["input"]>;
+  fontWeight?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingX?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingY?: InputMaybe<Scalars["Int"]["input"]>;
+  textAlign?: InputMaybe<Scalars["String"]["input"]>;
+};
+
 export type DesignElementTextEditResult = {
   __typename?: "DesignElementTextEditResult";
   elementId: Scalars["String"]["output"];
@@ -423,6 +462,7 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_element_styles_updated"
   | "design_element_text_updated"
   | "design_preview_updated"
   | "entity_linked"
@@ -734,6 +774,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateDesignElementStyles: DesignElementStyleEditResult;
   updateDesignElementText: DesignElementTextEditResult;
   updateOrgMemberRole: OrgMember;
   updatePdfSessionFormat: Scalars["Boolean"]["output"];
@@ -1248,6 +1289,13 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateDesignElementStylesArgs = {
+  elementId: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  styles: DesignElementStylesInput;
+};
+
 export type MutationUpdateDesignElementTextArgs = {
   elementId: Scalars["String"]["input"];
   expectedSourceHash: Scalars["String"]["input"];
@@ -1394,6 +1442,7 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  designElementStyleSource: DesignElementStyleSource;
   designElementTextSource: DesignElementTextSource;
   /** Design-kind session groups for the org (the sidebar Designs section). */
   designSessionGroups: Array<SessionGroup>;
@@ -1509,6 +1558,11 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignElementStyleSourceArgs = {
+  elementId: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryDesignElementTextSourceArgs = {
@@ -3332,45 +3386,6 @@ export type PdfSessionDownloadUrlQuery = {
   pdfSessionDownloadUrl?: string | null;
 };
 
-export type DesignElementTextSourceQueryVariables = Exact<{
-  sessionGroupId: Scalars["ID"]["input"];
-  filePath: Scalars["String"]["input"];
-  elementId: Scalars["String"]["input"];
-}>;
-
-export type DesignElementTextSourceQuery = {
-  __typename?: "Query";
-  designElementTextSource: {
-    __typename?: "DesignElementTextSource";
-    sessionGroupId: string;
-    filePath: string;
-    elementId: string;
-    text: string;
-    sourceHash: string;
-  };
-};
-
-export type UpdateDesignElementTextMutationVariables = Exact<{
-  sessionGroupId: Scalars["ID"]["input"];
-  filePath: Scalars["String"]["input"];
-  elementId: Scalars["String"]["input"];
-  text: Scalars["String"]["input"];
-  expectedSourceHash: Scalars["String"]["input"];
-}>;
-
-export type UpdateDesignElementTextMutation = {
-  __typename?: "Mutation";
-  updateDesignElementText: {
-    __typename?: "DesignElementTextEditResult";
-    sessionGroupId: string;
-    filePath: string;
-    elementId: string;
-    previousText: string;
-    text: string;
-    sourceHash: string;
-  };
-};
-
 export type AppPreviewStateQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
   includePdf: Scalars["Boolean"]["input"];
@@ -4584,6 +4599,88 @@ export type SidebarSessionGroupsQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   }>;
+};
+
+export type DesignElementEditorStyleSourceQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  elementId: Scalars["String"]["input"];
+}>;
+
+export type DesignElementEditorStyleSourceQuery = {
+  __typename?: "Query";
+  designElementStyleSource: {
+    __typename?: "DesignElementStyleSource";
+    sourceHash: string;
+    styles: {
+      __typename?: "DesignElementStyles";
+      color?: string | null;
+      backgroundColor?: string | null;
+      fontSize?: number | null;
+      fontWeight?: number | null;
+      textAlign?: string | null;
+      borderRadius?: number | null;
+      paddingX?: number | null;
+      paddingY?: number | null;
+    };
+  };
+};
+
+export type DesignElementEditorTextSourceQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  filePath: Scalars["String"]["input"];
+  elementId: Scalars["String"]["input"];
+}>;
+
+export type DesignElementEditorTextSourceQuery = {
+  __typename?: "Query";
+  designElementTextSource: {
+    __typename?: "DesignElementTextSource";
+    text: string;
+    sourceHash: string;
+  };
+};
+
+export type UpdateDesignElementTextMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  filePath: Scalars["String"]["input"];
+  elementId: Scalars["String"]["input"];
+  text: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+}>;
+
+export type UpdateDesignElementTextMutation = {
+  __typename?: "Mutation";
+  updateDesignElementText: {
+    __typename?: "DesignElementTextEditResult";
+    text: string;
+    sourceHash: string;
+  };
+};
+
+export type UpdateDesignElementStylesMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  elementId: Scalars["String"]["input"];
+  styles: DesignElementStylesInput;
+  expectedSourceHash: Scalars["String"]["input"];
+}>;
+
+export type UpdateDesignElementStylesMutation = {
+  __typename?: "Mutation";
+  updateDesignElementStyles: {
+    __typename?: "DesignElementStyleEditResult";
+    sourceHash: string;
+    styles: {
+      __typename?: "DesignElementStyles";
+      color?: string | null;
+      backgroundColor?: string | null;
+      fontSize?: number | null;
+      fontWeight?: number | null;
+      textAlign?: string | null;
+      borderRadius?: number | null;
+      paddingX?: number | null;
+      paddingY?: number | null;
+    };
+  };
 };
 
 export type OnboardingReposQueryVariables = Exact<{
@@ -7443,180 +7540,6 @@ export const PdfSessionDownloadUrlDocument = {
     },
   ],
 } as unknown as DocumentNode<PdfSessionDownloadUrlQuery, PdfSessionDownloadUrlQueryVariables>;
-export const DesignElementTextSourceDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "DesignElementTextSource" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "designElementTextSource" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "filePath" },
-                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "elementId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                { kind: "Field", name: { kind: "Name", value: "filePath" } },
-                { kind: "Field", name: { kind: "Name", value: "elementId" } },
-                { kind: "Field", name: { kind: "Name", value: "text" } },
-                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<DesignElementTextSourceQuery, DesignElementTextSourceQueryVariables>;
-export const UpdateDesignElementTextDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "UpdateDesignElementText" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "text" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "updateDesignElementText" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "filePath" },
-                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "elementId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "text" },
-                value: { kind: "Variable", name: { kind: "Name", value: "text" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "expectedSourceHash" },
-                value: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                { kind: "Field", name: { kind: "Name", value: "filePath" } },
-                { kind: "Field", name: { kind: "Name", value: "elementId" } },
-                { kind: "Field", name: { kind: "Name", value: "previousText" } },
-                { kind: "Field", name: { kind: "Name", value: "text" } },
-                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  UpdateDesignElementTextMutation,
-  UpdateDesignElementTextMutationVariables
->;
 export const AppPreviewStateDocument = {
   kind: "Document",
   definitions: [
@@ -11429,6 +11352,352 @@ export const SidebarSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<SidebarSessionGroupsQuery, SidebarSessionGroupsQueryVariables>;
+export const DesignElementEditorStyleSourceDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "DesignElementEditorStyleSource" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designElementStyleSource" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "elementId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "styles" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "color" } },
+                      { kind: "Field", name: { kind: "Name", value: "backgroundColor" } },
+                      { kind: "Field", name: { kind: "Name", value: "fontSize" } },
+                      { kind: "Field", name: { kind: "Name", value: "fontWeight" } },
+                      { kind: "Field", name: { kind: "Name", value: "textAlign" } },
+                      { kind: "Field", name: { kind: "Name", value: "borderRadius" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingX" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingY" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  DesignElementEditorStyleSourceQuery,
+  DesignElementEditorStyleSourceQueryVariables
+>;
+export const DesignElementEditorTextSourceDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "DesignElementEditorTextSource" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designElementTextSource" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "elementId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "text" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  DesignElementEditorTextSourceQuery,
+  DesignElementEditorTextSourceQueryVariables
+>;
+export const UpdateDesignElementTextDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "UpdateDesignElementText" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "text" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "updateDesignElementText" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "elementId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "text" },
+                value: { kind: "Variable", name: { kind: "Name", value: "text" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "expectedSourceHash" },
+                value: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "text" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  UpdateDesignElementTextMutation,
+  UpdateDesignElementTextMutationVariables
+>;
+export const UpdateDesignElementStylesDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "UpdateDesignElementStyles" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "styles" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "DesignElementStylesInput" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "updateDesignElementStyles" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "elementId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "styles" },
+                value: { kind: "Variable", name: { kind: "Name", value: "styles" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "expectedSourceHash" },
+                value: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "styles" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "color" } },
+                      { kind: "Field", name: { kind: "Name", value: "backgroundColor" } },
+                      { kind: "Field", name: { kind: "Name", value: "fontSize" } },
+                      { kind: "Field", name: { kind: "Name", value: "fontWeight" } },
+                      { kind: "Field", name: { kind: "Name", value: "textAlign" } },
+                      { kind: "Field", name: { kind: "Name", value: "borderRadius" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingX" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingY" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  UpdateDesignElementStylesMutation,
+  UpdateDesignElementStylesMutationVariables
+>;
 export const OnboardingReposDocument = {
   kind: "Document",
   definitions: [

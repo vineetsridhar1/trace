@@ -201,6 +201,7 @@ enum EventType {
   design_preview_updated
   pdf_export_updated
   design_element_text_updated
+  design_element_styles_updated
   ticket_assigned
   ticket_unassigned
   ticket_linked

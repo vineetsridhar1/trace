@@ -1,4 +1,9 @@
-import type { StartSessionInput, UpdateSessionDefaultsInput, ActorType } from "@trace/gql";
+import type {
+  StartSessionInput,
+  UpdateSessionDefaultsInput,
+  ActorType,
+  DesignElementStylesInput,
+} from "@trace/gql";
 import type { AgentStatus, SessionStatus, CodingTool, SessionGroupKind } from "@prisma/client";
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
@@ -84,6 +89,12 @@ import {
   validateDesignSourcePath,
   type DesignElementTextSource,
 } from "./design-manual-edit.js";
+import {
+  DESIGN_MANUAL_STYLE_PATH,
+  readManualDesignElementStyles,
+  updateManualDesignElementStyles,
+  type ManualDesignElementStyles,
+} from "./design-manual-style.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -1007,7 +1018,7 @@ This is a Trace app session in its own isolated cloud runtime. When present, rea
 </system-instruction>`;
 
 const DESIGN_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace Design session, not an App or Coding session. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; when the user asks to build or create a product, design its screens, flows, variants, and states instead of implementing a production application. Before editing, read and follow AGENTS.md or CLAUDE.md plus docs/ai-guidance.md, resolve design.brief.json, and read the relevant docs/playbooks guidance. Follow the workspace guide's design loop: understand the brief, ground supplied references in observable evidence, map the experience, commit to executable tokens, compose a representative screen and then the coherent screen set, and critique it before delivery. Work visibly and incrementally: render a rough but valid representative screen early, then add and refine screens in coherent runnable batches so the user can watch the canvas evolve through Vite HMR. Keep the manifest and canvas valid between edits; do not assemble the whole design offscreen and reveal it only at the end. Build and refine the artifact through design.brief.json, design.canvas.json, trace.tokens.json, and focused components under src/design, with one component per logical screen and stable screen ids. Prefer the token-driven primitives already under src/design/primitives. Give meaningful static text elements stable, unique data-trace-id attributes plus repo-relative data-trace-source attributes pointing to their owning TSX files, and preserve those attributes so manual user edits can round-trip into source. Local component state is allowed for prototype interactions, but do not build APIs, databases, authentication, persistence, real integrations, or production business logic. Do not replace src/App.tsx, the stable canvas or review runtime, server.ts, scripts, or the Vite/export configuration, and do not add routing that bypasses the canvas. Use local or embeddable assets only so Export HTML remains self-contained and works offline. The managed Vite server already runs on port 3000 and hot-reloads changes; do not start another server. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect every generated review screenshot, repair failures, and rerun the checks. Ask only blocking product questions through Trace's normal question mechanism; otherwise make explicit, reasonable assumptions and proceed. Before every response that changes the design, commit and push the changes to the configured managed origin. A successful push saves the durable Design preview.
+This is a Trace Design session, not an App or Coding session. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; when the user asks to build or create a product, design its screens, flows, variants, and states instead of implementing a production application. Before editing, read and follow AGENTS.md or CLAUDE.md plus docs/ai-guidance.md, resolve design.brief.json, and read the relevant docs/playbooks guidance. Follow the workspace guide's design loop: understand the brief, ground supplied references in observable evidence, map the experience, commit to executable tokens, compose a representative screen and then the coherent screen set, and critique it before delivery. Work visibly and incrementally: render a rough but valid representative screen early, then add and refine screens in coherent runnable batches so the user can watch the canvas evolve through Vite HMR. Keep the manifest and canvas valid between edits; do not assemble the whole design offscreen and reveal it only at the end. Build and refine the artifact through design.brief.json, design.canvas.json, trace.tokens.json, and focused components under src/design, with one component per logical screen and stable screen ids. Prefer the token-driven primitives already under src/design/primitives. Give meaningful layout, control, and text elements stable, unique data-trace-id attributes plus repo-relative data-trace-source attributes pointing to their owning TSX files, and preserve them so manual visual and static-text edits can round-trip into source. Local component state is allowed for prototype interactions, but do not build APIs, databases, authentication, persistence, real integrations, or production business logic. Do not replace src/App.tsx, the stable canvas or review runtime, server.ts, scripts, or the Vite/export configuration, and do not add routing that bypasses the canvas. Use local or embeddable assets only so Export HTML remains self-contained and works offline. The managed Vite server already runs on port 3000 and hot-reloads changes; do not start another server. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect every generated review screenshot, repair failures, and rerun the checks. Ask only blocking product questions through Trace's normal question mechanism; otherwise make explicit, reasonable assumptions and proceed. Before every response that changes the design, commit and push the changes to the configured managed origin. A successful push saves the durable Design preview.
 </system-instruction>`;
 
 const PDF_SESSION_INSTRUCTION = `\n\n<system-instruction>
@@ -9307,6 +9318,107 @@ export class SessionService {
       elementId,
       previousText: result.previousText,
       text: result.text,
+      sourceHash: result.sourceHash,
+    };
+  }
+
+  async readDesignElementStyleSource(
+    sessionGroupId: string,
+    elementId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<{
+    sessionGroupId: string;
+    elementId: string;
+    sourceHash: string;
+    styles: ManualDesignElementStyles;
+  }> {
+    const normalizedElementId = validateDesignElementId(elementId);
+    await this.assertDesignManualEditAccess(sessionGroupId, organizationId, userId);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      { requireWrite: true },
+    );
+    const source = await sessionRouter.readFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      DESIGN_MANUAL_STYLE_PATH,
+      runtime.workdirHint,
+    );
+    return {
+      sessionGroupId,
+      elementId: normalizedElementId,
+      ...readManualDesignElementStyles(source, normalizedElementId),
+    };
+  }
+
+  async updateDesignElementStyles(
+    input: {
+      sessionGroupId: string;
+      elementId: string;
+      styles: DesignElementStylesInput;
+      expectedSourceHash: string;
+    },
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<{
+    sessionGroupId: string;
+    elementId: string;
+    sourceHash: string;
+    styles: ManualDesignElementStyles;
+  }> {
+    const elementId = validateDesignElementId(input.elementId);
+    await this.assertDesignManualEditAccess(input.sessionGroupId, organizationId, actorId);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+      { requireWrite: true },
+    );
+    const source = await sessionRouter.readFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      DESIGN_MANUAL_STYLE_PATH,
+      runtime.workdirHint,
+    );
+    if (designSourceHash(source) !== input.expectedSourceHash) {
+      throw new ValidationError(
+        "The manual design styles changed. Select the element again before saving",
+      );
+    }
+
+    const result = updateManualDesignElementStyles(source, elementId, input.styles);
+    if (result.source !== source) {
+      await sessionRouter.writeFile(
+        runtime.runtimeId,
+        runtime.sessionId,
+        DESIGN_MANUAL_STYLE_PATH,
+        result.source,
+        runtime.workdirHint,
+      );
+      await eventService.create({
+        organizationId,
+        scopeType: "system",
+        scopeId: input.sessionGroupId,
+        eventType: "design_element_styles_updated",
+        payload: {
+          sessionGroupId: input.sessionGroupId,
+          elementId,
+          styles: result.styles,
+          sourceHash: result.sourceHash,
+        },
+        actorType,
+        actorId,
+      });
+    }
+
+    return {
+      sessionGroupId: input.sessionGroupId,
+      elementId,
+      styles: result.styles,
       sourceHash: result.sourceHash,
     };
   }

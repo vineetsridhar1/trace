@@ -345,6 +345,45 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignElementStyleEditResult = {
+  __typename?: "DesignElementStyleEditResult";
+  elementId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  styles: DesignElementStyles;
+};
+
+export type DesignElementStyleSource = {
+  __typename?: "DesignElementStyleSource";
+  elementId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  styles: DesignElementStyles;
+};
+
+export type DesignElementStyles = {
+  __typename?: "DesignElementStyles";
+  backgroundColor?: Maybe<Scalars["String"]["output"]>;
+  borderRadius?: Maybe<Scalars["Int"]["output"]>;
+  color?: Maybe<Scalars["String"]["output"]>;
+  fontSize?: Maybe<Scalars["Int"]["output"]>;
+  fontWeight?: Maybe<Scalars["Int"]["output"]>;
+  paddingX?: Maybe<Scalars["Int"]["output"]>;
+  paddingY?: Maybe<Scalars["Int"]["output"]>;
+  textAlign?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type DesignElementStylesInput = {
+  backgroundColor?: InputMaybe<Scalars["String"]["input"]>;
+  borderRadius?: InputMaybe<Scalars["Int"]["input"]>;
+  color?: InputMaybe<Scalars["String"]["input"]>;
+  fontSize?: InputMaybe<Scalars["Int"]["input"]>;
+  fontWeight?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingX?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingY?: InputMaybe<Scalars["Int"]["input"]>;
+  textAlign?: InputMaybe<Scalars["String"]["input"]>;
+};
+
 export type DesignElementTextEditResult = {
   __typename?: "DesignElementTextEditResult";
   elementId: Scalars["String"]["output"];
@@ -424,6 +463,7 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_element_styles_updated"
   | "design_element_text_updated"
   | "design_preview_updated"
   | "entity_linked"
@@ -735,6 +775,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateDesignElementStyles: DesignElementStyleEditResult;
   updateDesignElementText: DesignElementTextEditResult;
   updateOrgMemberRole: OrgMember;
   updatePdfSessionFormat: Scalars["Boolean"]["output"];
@@ -1249,6 +1290,13 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateDesignElementStylesArgs = {
+  elementId: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  styles: DesignElementStylesInput;
+};
+
 export type MutationUpdateDesignElementTextArgs = {
   elementId: Scalars["String"]["input"];
   expectedSourceHash: Scalars["String"]["input"];
@@ -1395,6 +1443,7 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  designElementStyleSource: DesignElementStyleSource;
   designElementTextSource: DesignElementTextSource;
   /** Design-kind session groups for the org (the sidebar Designs section). */
   designSessionGroups: Array<SessionGroup>;
@@ -1510,6 +1559,11 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignElementStyleSourceArgs = {
+  elementId: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryDesignElementTextSourceArgs = {
@@ -2563,6 +2617,10 @@ export type ResolversTypes = ResolversObject<{
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
   DeliveryResult: DeliveryResult;
+  DesignElementStyleEditResult: ResolverTypeWrapper<DesignElementStyleEditResult>;
+  DesignElementStyleSource: ResolverTypeWrapper<DesignElementStyleSource>;
+  DesignElementStyles: ResolverTypeWrapper<DesignElementStyles>;
+  DesignElementStylesInput: DesignElementStylesInput;
   DesignElementTextEditResult: ResolverTypeWrapper<DesignElementTextEditResult>;
   DesignElementTextSource: ResolverTypeWrapper<DesignElementTextSource>;
   EndpointTrafficCaptureMode: EndpointTrafficCaptureMode;
@@ -2707,6 +2765,10 @@ export type ResolversParentTypes = ResolversObject<{
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
+  DesignElementStyleEditResult: DesignElementStyleEditResult;
+  DesignElementStyleSource: DesignElementStyleSource;
+  DesignElementStyles: DesignElementStyles;
+  DesignElementStylesInput: DesignElementStylesInput;
   DesignElementTextEditResult: DesignElementTextEditResult;
   DesignElementTextSource: DesignElementTextSource;
   EndpointTrafficEntry: EndpointTrafficEntry;
@@ -3068,6 +3130,46 @@ export interface DateTimeScalarConfig extends GraphQLScalarTypeConfig<
 > {
   name: "DateTime";
 }
+
+export type DesignElementStyleEditResultResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignElementStyleEditResult"] =
+    ResolversParentTypes["DesignElementStyleEditResult"],
+> = ResolversObject<{
+  elementId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sourceHash?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  styles?: Resolver<ResolversTypes["DesignElementStyles"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type DesignElementStyleSourceResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignElementStyleSource"] =
+    ResolversParentTypes["DesignElementStyleSource"],
+> = ResolversObject<{
+  elementId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sourceHash?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  styles?: Resolver<ResolversTypes["DesignElementStyles"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type DesignElementStylesResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignElementStyles"] =
+    ResolversParentTypes["DesignElementStyles"],
+> = ResolversObject<{
+  backgroundColor?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  borderRadius?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  color?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  fontSize?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  fontWeight?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  paddingX?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  paddingY?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  textAlign?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
 
 export type DesignElementTextEditResultResolvers<
   ContextType = Context,
@@ -3926,6 +4028,15 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationUpdateChannelGroupArgs, "id" | "input">
   >;
+  updateDesignElementStyles?: Resolver<
+    ResolversTypes["DesignElementStyleEditResult"],
+    ParentType,
+    ContextType,
+    RequireFields<
+      MutationUpdateDesignElementStylesArgs,
+      "elementId" | "expectedSourceHash" | "sessionGroupId" | "styles"
+    >
+  >;
   updateDesignElementText?: Resolver<
     ResolversTypes["DesignElementTextEditResult"],
     ParentType,
@@ -4156,6 +4267,12 @@ export type QueryResolvers<
     RequireFields<QueryChatMessagesArgs, "chatId">
   >;
   chats?: Resolver<Array<ResolversTypes["Chat"]>, ParentType, ContextType>;
+  designElementStyleSource?: Resolver<
+    ResolversTypes["DesignElementStyleSource"],
+    ParentType,
+    ContextType,
+    RequireFields<QueryDesignElementStyleSourceArgs, "elementId" | "sessionGroupId">
+  >;
   designElementTextSource?: Resolver<
     ResolversTypes["DesignElementTextSource"],
     ParentType,
@@ -5079,6 +5196,9 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ConnectionsBridge?: ConnectionsBridgeResolvers<ContextType>;
   ConnectionsRepoEntry?: ConnectionsRepoEntryResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
+  DesignElementStyleEditResult?: DesignElementStyleEditResultResolvers<ContextType>;
+  DesignElementStyleSource?: DesignElementStyleSourceResolvers<ContextType>;
+  DesignElementStyles?: DesignElementStylesResolvers<ContextType>;
   DesignElementTextEditResult?: DesignElementTextEditResultResolvers<ContextType>;
   DesignElementTextSource?: DesignElementTextSourceResolvers<ContextType>;
   EndpointTrafficEntry?: EndpointTrafficEntryResolvers<ContextType>;

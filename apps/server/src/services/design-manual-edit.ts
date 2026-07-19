@@ -120,7 +120,7 @@ function findTextTarget(source: string, filePath: string, elementId: string): Te
       start: child.getFullStart(),
       end: child.getEnd(),
       replacement: (nextText) =>
-        `${leadingWhitespace}${escapeJsxText(nextText)}${trailingWhitespace}`,
+        `${leadingWhitespace}${nextText ? escapeJsxText(nextText) : '{""}'}${trailingWhitespace}`,
     };
   }
 
@@ -156,7 +156,6 @@ function hasTraceId(element: ts.JsxOpeningLikeElement, elementId: string): boole
 
 function normalizeTextValue(value: string): string {
   const normalized = value.replace(/\r\n?/gu, "\n").trim();
-  if (!normalized) throw new ValidationError("Text cannot be empty");
   if (normalized.includes("\n")) {
     throw new ValidationError("Multiline text editing is not supported yet");
   }

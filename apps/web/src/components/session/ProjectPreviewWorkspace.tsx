@@ -3,6 +3,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { cn } from "../../lib/utils";
 import { useSidebar } from "../ui/sidebar";
 import { SessionDetailView } from "./SessionDetailView";
+import { DesignManualEditPanel } from "./applications/DesignManualEditPanel";
+import { useDesignEditorStore } from "../../stores/design-editor";
 
 export function ProjectPreviewWorkspace({
   sessionId,
@@ -14,6 +16,7 @@ export function ProjectPreviewWorkspace({
   canvasKey,
   canvas,
   showCanvasWhileLoading = false,
+  designSessionGroupId,
 }: {
   sessionId: string | null;
   scrollToEventId: string | null;
@@ -24,12 +27,16 @@ export function ProjectPreviewWorkspace({
   canvasKey: string;
   canvas: ReactNode;
   showCanvasWhileLoading?: boolean;
+  designSessionGroupId?: string;
 }) {
   const [canvasRevealed, setCanvasRevealed] = useState(canvasReady || showCanvasWhileLoading);
   const hasCollapsedRef = useRef(false);
   const collapsedByUsRef = useRef(false);
   const reduceMotion = useReducedMotion();
   const { isMobile, open, openMobile, setOpen, setOpenMobile } = useSidebar();
+  const designEditing = useDesignEditorStore(
+    (state) => !!designSessionGroupId && state.activeSessionGroupId === designSessionGroupId,
+  );
 
   // Keep the sidebar API fresh for the unmount cleanup below without re-running
   // the restore effect on every dependency change.
@@ -87,7 +94,9 @@ export function ProjectPreviewWorkspace({
               : "w-full",
         )}
       >
-        {sessionId ? (
+        {designEditing && designSessionGroupId ? (
+          <DesignManualEditPanel sessionGroupId={designSessionGroupId} />
+        ) : sessionId ? (
           <SessionDetailView
             key={sessionId}
             sessionId={sessionId}

@@ -1030,6 +1030,7 @@ export function SessionGroupDetailView({
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                       canvasReady={generatedProjectCanvasReady}
                       canvasKey="generated-project-canvas"
+                      designSessionGroupId={sessionGroupId}
                       canvas={
                         <SessionGroupContentArea
                           sessionGroupId={sessionGroupId}

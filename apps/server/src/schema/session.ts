@@ -2,6 +2,7 @@ import type { Context } from "../context.js";
 import type {
   AgentStatus,
   CodingTool,
+  DesignElementStylesInput,
   SessionFilters,
   StartSessionInput,
   UpdateSessionDefaultsInput,
@@ -199,6 +200,23 @@ export const sessionQueries = {
       return await sessionService.readDesignElementTextSource(
         args.sessionGroupId,
         args.filePath,
+        args.elementId,
+        requireOrgContext(ctx),
+        ctx.userId,
+      );
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
+  },
+  designElementStyleSource: async (
+    _: unknown,
+    args: { sessionGroupId: string; elementId: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    try {
+      return await sessionService.readDesignElementStyleSource(
+        args.sessionGroupId,
         args.elementId,
         requireOrgContext(ctx),
         ctx.userId,
@@ -592,6 +610,28 @@ export const sessionMutations = {
     if (!ctx.userId) throw new AuthenticationError();
     try {
       return await sessionService.updateDesignElementText(
+        args,
+        requireOrgContext(ctx),
+        ctx.actorType,
+        ctx.userId,
+      );
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
+  },
+  updateDesignElementStyles: async (
+    _: unknown,
+    args: {
+      sessionGroupId: string;
+      elementId: string;
+      styles: DesignElementStylesInput;
+      expectedSourceHash: string;
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    try {
+      return await sessionService.updateDesignElementStyles(
         args,
         requireOrgContext(ctx),
         ctx.actorType,

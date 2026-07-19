@@ -7,17 +7,33 @@ export default function WelcomeScreen() {
   const [started, setStarted] = useState(false);
 
   return (
-    <DesignScreen className="flex flex-col justify-between p-8">
-      <div className="flex items-center justify-between text-sm font-semibold">
+    <DesignScreen
+      data-trace-id="welcome-screen"
+      data-trace-source="src/design/screens/WelcomeScreen.tsx"
+      className="flex flex-col justify-between p-8"
+    >
+      <div
+        data-trace-id="welcome-topbar"
+        data-trace-source="src/design/screens/WelcomeScreen.tsx"
+        className="flex items-center justify-between text-sm font-semibold"
+      >
         <span
           data-trace-id="welcome-brand-name"
           data-trace-source="src/design/screens/WelcomeScreen.tsx"
         >
           Northstar
         </span>
-        <DesignBadge>Preview</DesignBadge>
+        <DesignBadge
+          data-trace-id="welcome-preview-badge"
+          data-trace-source="src/design/screens/WelcomeScreen.tsx"
+        >
+          Preview
+        </DesignBadge>
       </div>
-      <section>
+      <section
+        data-trace-id="welcome-hero"
+        data-trace-source="src/design/screens/WelcomeScreen.tsx"
+      >
         <p
           data-trace-id="welcome-eyebrow"
           data-trace-source="src/design/screens/WelcomeScreen.tsx"
@@ -42,6 +58,8 @@ export default function WelcomeScreen() {
         </p>
       </section>
       <DesignButton
+        data-trace-id="welcome-action"
+        data-trace-source="src/design/screens/WelcomeScreen.tsx"
         onClick={() => setStarted((value) => !value)}
         className="justify-start active:scale-[0.98]"
       >

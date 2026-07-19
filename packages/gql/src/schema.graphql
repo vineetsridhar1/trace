@@ -304,6 +304,7 @@ enum EventType {
   design_preview_updated
   pdf_export_updated
   design_element_text_updated
+  design_element_styles_updated
   chat_created
   chat_member_added
   chat_member_removed
@@ -1073,6 +1074,42 @@ type DesignElementTextEditResult {
   sourceHash: String!
 }
 
+type DesignElementStyles {
+  color: String
+  backgroundColor: String
+  fontSize: Int
+  fontWeight: Int
+  textAlign: String
+  borderRadius: Int
+  paddingX: Int
+  paddingY: Int
+}
+
+input DesignElementStylesInput {
+  color: String
+  backgroundColor: String
+  fontSize: Int
+  fontWeight: Int
+  textAlign: String
+  borderRadius: Int
+  paddingX: Int
+  paddingY: Int
+}
+
+type DesignElementStyleSource {
+  sessionGroupId: ID!
+  elementId: String!
+  sourceHash: String!
+  styles: DesignElementStyles!
+}
+
+type DesignElementStyleEditResult {
+  sessionGroupId: ID!
+  elementId: String!
+  sourceHash: String!
+  styles: DesignElementStyles!
+}
+
 type Notification {
   id: ID!
   type: String!
@@ -1415,6 +1452,7 @@ type Query {
     filePath: String!
     elementId: String!
   ): DesignElementTextSource!
+  designElementStyleSource(sessionGroupId: ID!, elementId: String!): DesignElementStyleSource!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
   linkedCheckoutStatus(
@@ -1592,6 +1630,12 @@ type Mutation {
     text: String!
     expectedSourceHash: String!
   ): DesignElementTextEditResult!
+  updateDesignElementStyles(
+    sessionGroupId: ID!
+    elementId: String!
+    styles: DesignElementStylesInput!
+    expectedSourceHash: String!
+  ): DesignElementStyleEditResult!
   commitSessionGroupFileChanges(sessionGroupId: ID!, message: String): String!
   revertSessionGroupFileChange(sessionGroupId: ID!, filePath: String!): Boolean!
   requestBridgeAccess(

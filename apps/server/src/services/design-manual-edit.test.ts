@@ -85,13 +85,13 @@ describe("design manual text editing", () => {
     expect(() => validateDesignSourcePath("src/App.tsx")).toThrow("under src/design");
     expect(() => validateDesignSourcePath("../secret.tsx")).toThrow("under src/design");
     expect(() => validateDesignElementId("bad id")).toThrow("Invalid design element id");
-    expect(() =>
-      updateStaticDesignElementText(
-        `const screen = <span data-trace-id="status">Processing</span>;`,
-        FILE_PATH,
-        "status",
-        "  ",
-      ),
-    ).toThrow("cannot be empty");
+    const cleared = updateStaticDesignElementText(
+      `const screen = <span data-trace-id="status">Processing</span>;`,
+      FILE_PATH,
+      "status",
+      "  ",
+    );
+    expect(cleared.source).toContain('{""}');
+    expect(readStaticDesignElementText(cleared.source, FILE_PATH, "status").text).toBe("");
   });
 });

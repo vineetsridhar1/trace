@@ -12,7 +12,6 @@ import { CREATE_PREVIEW_MUTATION } from "./session-applications-operations";
 import { PdfPreviewControls } from "./PdfPreviewControls";
 import { SavedPreviewSkeleton } from "./SavedPreviewSkeleton";
 import { usePdfPreview } from "./usePdfPreview";
-import { DesignManualEditPanel } from "./DesignManualEditPanel";
 import { useDesignManualEdit } from "./useDesignManualEdit";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
@@ -160,15 +159,16 @@ export function AppPreview({
       <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       {designSessionGroupId ? (
         <Button
-          size="icon"
+          size="sm"
           variant={manualEdit.enabled ? "default" : "outline"}
           onClick={manualEdit.toggle}
           title={manualEdit.enabled ? "Exit manual editing" : "Edit design manually"}
           aria-label={manualEdit.enabled ? "Exit manual editing" : "Edit design manually"}
           aria-pressed={manualEdit.enabled}
-          className="absolute right-11 top-2 z-20 size-7 opacity-90 hover:opacity-100"
+          className="absolute right-11 top-2 z-20 h-7 gap-1.5 px-2.5 opacity-90 hover:opacity-100"
         >
           <Pencil className="size-3" />
+          {manualEdit.enabled ? "Done" : "Edit"}
         </Button>
       ) : null}
       <Button
@@ -182,19 +182,6 @@ export function AppPreview({
       >
         <RotateCw className={cn("size-3", refreshing && "animate-spin")} />
       </Button>
-      {designSessionGroupId && manualEdit.enabled ? (
-        <DesignManualEditPanel
-          target={manualEdit.target}
-          draft={manualEdit.draft}
-          loading={manualEdit.loading}
-          saving={manualEdit.saving}
-          error={manualEdit.error}
-          dirty={manualEdit.dirty}
-          onChange={manualEdit.changeDraft}
-          onCancel={manualEdit.cancel}
-          onSave={() => void manualEdit.save()}
-        />
-      ) : null}
       <iframe
         ref={designSessionGroupId ? manualEdit.frameRef : frameRef}
         key={frameRevision}

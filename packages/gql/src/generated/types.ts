@@ -342,6 +342,45 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignElementStyleEditResult = {
+  __typename?: "DesignElementStyleEditResult";
+  elementId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  styles: DesignElementStyles;
+};
+
+export type DesignElementStyleSource = {
+  __typename?: "DesignElementStyleSource";
+  elementId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  styles: DesignElementStyles;
+};
+
+export type DesignElementStyles = {
+  __typename?: "DesignElementStyles";
+  backgroundColor?: Maybe<Scalars["String"]["output"]>;
+  borderRadius?: Maybe<Scalars["Int"]["output"]>;
+  color?: Maybe<Scalars["String"]["output"]>;
+  fontSize?: Maybe<Scalars["Int"]["output"]>;
+  fontWeight?: Maybe<Scalars["Int"]["output"]>;
+  paddingX?: Maybe<Scalars["Int"]["output"]>;
+  paddingY?: Maybe<Scalars["Int"]["output"]>;
+  textAlign?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type DesignElementStylesInput = {
+  backgroundColor?: InputMaybe<Scalars["String"]["input"]>;
+  borderRadius?: InputMaybe<Scalars["Int"]["input"]>;
+  color?: InputMaybe<Scalars["String"]["input"]>;
+  fontSize?: InputMaybe<Scalars["Int"]["input"]>;
+  fontWeight?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingX?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingY?: InputMaybe<Scalars["Int"]["input"]>;
+  textAlign?: InputMaybe<Scalars["String"]["input"]>;
+};
+
 export type DesignElementTextEditResult = {
   __typename?: "DesignElementTextEditResult";
   elementId: Scalars["String"]["output"];
@@ -421,6 +460,7 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_element_styles_updated"
   | "design_element_text_updated"
   | "design_preview_updated"
   | "entity_linked"
@@ -732,6 +772,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateDesignElementStyles: DesignElementStyleEditResult;
   updateDesignElementText: DesignElementTextEditResult;
   updateOrgMemberRole: OrgMember;
   updatePdfSessionFormat: Scalars["Boolean"]["output"];
@@ -1246,6 +1287,13 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateDesignElementStylesArgs = {
+  elementId: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  styles: DesignElementStylesInput;
+};
+
 export type MutationUpdateDesignElementTextArgs = {
   elementId: Scalars["String"]["input"];
   expectedSourceHash: Scalars["String"]["input"];
@@ -1392,6 +1440,7 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  designElementStyleSource: DesignElementStyleSource;
   designElementTextSource: DesignElementTextSource;
   /** Design-kind session groups for the org (the sidebar Designs section). */
   designSessionGroups: Array<SessionGroup>;
@@ -1507,6 +1556,11 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignElementStyleSourceArgs = {
+  elementId: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryDesignElementTextSourceArgs = {
