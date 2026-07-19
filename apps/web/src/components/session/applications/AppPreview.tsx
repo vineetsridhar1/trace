@@ -184,13 +184,6 @@ export function AppPreview({
   if (desktopViewport) {
     return (
       <>
-        {projectKind === "pdf" ? (
-          <PdfPreviewControls
-            format={pdfFormat}
-            onFormatChange={updatePdfFormat}
-            onDownload={() => void downloadPdf()}
-          />
-        ) : null}
         <AppPreviewCanvas
           url={url}
           title={title}
@@ -204,6 +197,8 @@ export function AppPreview({
           bare={projectKind === "pdf"}
           pdfFormat={projectKind === "pdf" ? pdfFormat : undefined}
           pdfContentHeight={projectKind === "pdf" ? pdfContentHeight : undefined}
+          onPdfFormatChange={projectKind === "pdf" ? updatePdfFormat : undefined}
+          onPdfDownload={projectKind === "pdf" ? () => void downloadPdf() : undefined}
         />
         <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       </>
