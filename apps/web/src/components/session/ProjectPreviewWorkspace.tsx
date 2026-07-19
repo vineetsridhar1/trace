@@ -13,6 +13,7 @@ export function ProjectPreviewWorkspace({
   canvasReady,
   canvasKey,
   canvas,
+  showCanvasWhileLoading = false,
 }: {
   sessionId: string | null;
   scrollToEventId: string | null;
@@ -22,8 +23,9 @@ export function ProjectPreviewWorkspace({
   canvasReady: boolean;
   canvasKey: string;
   canvas: ReactNode;
+  showCanvasWhileLoading?: boolean;
 }) {
-  const [canvasRevealed, setCanvasRevealed] = useState(canvasReady);
+  const [canvasRevealed, setCanvasRevealed] = useState(canvasReady || showCanvasWhileLoading);
   const hasCollapsedRef = useRef(false);
   const collapsedByUsRef = useRef(false);
   const reduceMotion = useReducedMotion();
@@ -37,8 +39,9 @@ export function ProjectPreviewWorkspace({
   });
 
   useEffect(() => {
-    if (!canvasReady) return;
+    if (!canvasReady && !showCanvasWhileLoading) return;
     setCanvasRevealed(true);
+    if (!canvasReady) return;
     if (hasCollapsedRef.current) return;
     hasCollapsedRef.current = true;
     const wasOpen = isMobile ? openMobile : open;
@@ -46,7 +49,7 @@ export function ProjectPreviewWorkspace({
     collapsedByUsRef.current = true;
     if (isMobile) setOpenMobile(false);
     else setOpen(false);
-  }, [canvasReady, isMobile, open, openMobile, setOpen, setOpenMobile]);
+  }, [canvasReady, isMobile, open, openMobile, setOpen, setOpenMobile, showCanvasWhileLoading]);
 
   useEffect(() => {
     return () => {
