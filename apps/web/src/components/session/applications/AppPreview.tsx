@@ -133,6 +133,7 @@ export function AppPreview({
           onReload={reload}
           iframeRef={frameRef}
           bare={projectKind === "pdf"}
+          pdfFormat={projectKind === "pdf" ? pdfFormat : undefined}
         />
         <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       </>

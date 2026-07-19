@@ -54,10 +54,7 @@ export function App() {
   }, [format]);
 
   return (
-    <main
-      ref={previewRef}
-      className="min-h-screen overflow-hidden bg-stone-100 px-4 py-8 text-stone-900 sm:px-8"
-    >
+    <main ref={previewRef} className="min-h-screen overflow-hidden bg-transparent text-stone-900">
       <style>{pageStyle}</style>
       <article
         className="document mx-auto bg-white px-[18mm] py-[20mm] shadow-sm"
