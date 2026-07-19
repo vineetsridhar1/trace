@@ -271,6 +271,7 @@ type DesignEditorState = {
     key: Key,
     value: DesignEditorStyles[Key],
   ) => void;
+  resetChanges: () => void;
   cancelSelection: () => void;
   save: () => Promise<void>;
 };
@@ -398,6 +399,20 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
       type: "trace:design:preview-styles",
       elementId: target.elementId,
       styles: { [key]: value },
+    });
+  },
+
+  resetChanges: () => {
+    const state = get();
+    if (state.saving || !state.target || !state.activeSessionGroupId) return;
+    restoreTarget(state.activeSessionGroupId, state.target);
+    set({
+      target: {
+        ...state.target,
+        draftText: state.target.originalText,
+        draftStyles: state.target.originalStyles,
+      },
+      error: null,
     });
   },
 

@@ -1,7 +1,7 @@
-import { MousePointer2, X } from "lucide-react";
+import { MousePointer2, RotateCcw, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "../../ui/button";
-import { Input } from "../../ui/input";
+import { Textarea } from "../../ui/textarea";
 import { TraceLoader } from "../../ui/trace-loader";
 import {
   designEditorStylesDirty,
@@ -11,28 +11,44 @@ import {
 import { DesignEditorStyleControls } from "./DesignEditorStyleControls";
 
 export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: string }) {
-  const { target, loading, saving, error, stop, changeText, changeStyle, cancelSelection, save } =
-    useDesignEditorStore(
-      useShallow((state) => ({
-        target: state.target,
-        loading: state.loading,
-        saving: state.saving,
-        error: state.error,
-        stop: state.stop,
-        changeText: state.changeText,
-        changeStyle: state.changeStyle,
-        cancelSelection: state.cancelSelection,
-        save: state.save,
-      })),
-    );
+  const {
+    target,
+    loading,
+    saving,
+    error,
+    stop,
+    changeText,
+    changeStyle,
+    resetChanges,
+    cancelSelection,
+    save,
+  } = useDesignEditorStore(
+    useShallow((state) => ({
+      target: state.target,
+      loading: state.loading,
+      saving: state.saving,
+      error: state.error,
+      stop: state.stop,
+      changeText: state.changeText,
+      changeStyle: state.changeStyle,
+      resetChanges: state.resetChanges,
+      cancelSelection: state.cancelSelection,
+      save: state.save,
+    })),
+  );
   const dirty = designEditorTextDirty(target) || designEditorStylesDirty(target);
+  const title = target ? readableTargetName(target.elementId, target.draftText) : "Element editor";
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3">
-        <div>
-          <h2 className="text-sm font-medium">Element editor</h2>
-          <p className="text-[10px] text-muted-foreground">Changes preview live</p>
+      <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2">
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-medium" title={title}>
+            {title}
+          </h2>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            {dirty ? "Unsaved changes · previewing live" : "Changes preview live"}
+          </p>
         </div>
         <Button
           size="icon-sm"
@@ -50,32 +66,36 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
             <TraceLoader size={16} showLabel={false} />
           </div>
         ) : target ? (
-          <div className="space-y-5 p-4">
-            <div className="min-w-0">
+          <div>
+            <div className="min-w-0 border-b border-border px-4 py-3">
               <div className="flex items-center gap-2">
-                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
-                  {target.elementName}
+                <span className="rounded-md border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  &lt;{target.elementName.toLowerCase()}&gt;
                 </span>
-                <span className="truncate text-xs font-medium">{target.elementId}</span>
+                <span className="truncate font-mono text-[10px] text-muted-foreground">
+                  {target.elementId}
+                </span>
               </div>
               <p
-                className="mt-1 truncate text-[10px] text-muted-foreground"
+                className="mt-1.5 truncate text-[10px] text-muted-foreground/80"
                 title={target.filePath}
               >
                 {target.filePath}
               </p>
             </div>
 
-            <section className="space-y-3">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <section className="space-y-2.5 border-b border-border px-4 py-3">
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Content
               </h3>
-              <label className="block space-y-1.5 text-xs">
+              <label className="block space-y-1.5 text-[11px]">
                 <span className="text-muted-foreground">Text</span>
-                <Input
+                <Textarea
                   value={target.draftText}
                   maxLength={2_000}
                   disabled={!target.editableText}
+                  rows={4}
+                  className="min-h-20 resize-y text-xs leading-5"
                   onChange={(event) => changeText(event.target.value)}
                 />
               </label>
@@ -108,14 +128,39 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
         </p>
       ) : null}
 
-      <footer className="flex shrink-0 justify-end gap-2 border-t border-border p-3">
-        <Button size="sm" variant="outline" disabled={!target || saving} onClick={cancelSelection}>
-          Deselect
+      <footer className="flex min-h-13 shrink-0 items-center justify-between gap-2 border-t border-border px-3 py-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!target || !dirty || saving}
+          onClick={resetChanges}
+        >
+          <RotateCcw className="size-3.5" />
+          Reset
         </Button>
-        <Button size="sm" disabled={!target || !dirty || saving} onClick={() => void save()}>
-          {saving ? "Saving…" : "Save changes"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" disabled={!target || saving} onClick={cancelSelection}>
+            Deselect
+          </Button>
+          <Button size="sm" disabled={!target || !dirty || saving} onClick={() => void save()}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
       </footer>
     </div>
   );
+}
+
+function readableTargetName(elementId: string, text: string): string {
+  const readableText = text.replace(/\s+/gu, " ").trim();
+  if (readableText) {
+    return readableText.length > 42 ? `${readableText.slice(0, 39).trim()}…` : readableText;
+  }
+  const readableId = elementId
+    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
+    .replace(/[_-]+/gu, " ")
+    .trim();
+  return readableId
+    ? `${readableId.charAt(0).toUpperCase()}${readableId.slice(1)}`
+    : "Selected element";
 }

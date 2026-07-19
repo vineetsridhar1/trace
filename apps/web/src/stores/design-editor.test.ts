@@ -92,4 +92,33 @@ describe("design editor store", () => {
       false,
     );
   });
+
+  it("resets a draft in place and restores the live preview", () => {
+    const send = vi.fn();
+    const disconnect = registerDesignEditorFrame("group-1", send);
+    useDesignEditorStore.setState({ activeSessionGroupId: "group-1", target: TARGET });
+
+    useDesignEditorStore.getState().changeText("Updated");
+    useDesignEditorStore.getState().changeStyle("fontSize", 48);
+    send.mockClear();
+
+    useDesignEditorStore.getState().resetChanges();
+
+    expect(send).toHaveBeenNthCalledWith(1, {
+      type: "trace:design:preview-text",
+      elementId: "hero-title",
+      text: "Original",
+    });
+    expect(send).toHaveBeenNthCalledWith(2, {
+      type: "trace:design:preview-styles",
+      elementId: "hero-title",
+      styles: { fontSize: 32 },
+    });
+    expect(useDesignEditorStore.getState().target).toMatchObject({
+      elementId: "hero-title",
+      draftText: "Original",
+      draftStyles: TARGET.originalStyles,
+    });
+    disconnect();
+  });
 });
