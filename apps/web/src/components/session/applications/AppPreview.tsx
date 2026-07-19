@@ -132,6 +132,7 @@ export function AppPreview({
           onLoad={() => dispatch({ type: "frame-loaded" })}
           onReload={reload}
           iframeRef={frameRef}
+          bare={projectKind === "pdf"}
         />
         <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       </>
