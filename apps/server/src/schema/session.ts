@@ -173,6 +173,10 @@ export const sessionQueries = {
     const orgId = requireOrgContext(ctx);
     return sessionService.readFile(args.sessionGroupId, args.filePath, orgId, ctx.userId);
   },
+  pdfSessionPreviewUrl: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.pdfPreviewUrl(args.sessionGroupId, orgId, ctx.userId);
+  },
   pdfSessionDownloadUrl: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return sessionService.pdfDownloadUrl(args.sessionGroupId, orgId, ctx.userId);

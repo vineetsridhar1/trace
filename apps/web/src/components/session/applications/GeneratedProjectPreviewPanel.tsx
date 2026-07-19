@@ -3,6 +3,7 @@ import type { GitCheckpoint } from "@trace/gql";
 import { AppPreview } from "./AppPreview";
 import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
 import { SavedDesignPreview } from "./SavedDesignPreview";
+import { SavedPdfPreview } from "./SavedPdfPreview";
 import { savedDesignPreviewUrl } from "./saved-design-preview";
 import { useProjectPreviewData } from "./useProjectPreviewData";
 
@@ -20,7 +21,10 @@ export function GeneratedProjectPreviewPanel({
     (s) => s.sessionGroups[sessionGroupId]?.gitCheckpoints as GitCheckpoint[] | undefined,
   );
   const previewUrl = savedDesignPreviewUrl(groupPreviewUrl, checkpoints);
-  const { endpoint, error, refresh } = useProjectPreviewData(sessionGroupId, projectKind);
+  const { endpoint, error, refresh, savedPdfDownloadUrl, savedPdfUrl } = useProjectPreviewData(
+    sessionGroupId,
+    projectKind,
+  );
 
   if (endpoint)
     return (
@@ -37,6 +41,8 @@ export function GeneratedProjectPreviewPanel({
     );
 
   if (projectKind === "design" && previewUrl) return <SavedDesignPreview url={previewUrl} />;
+  if (projectKind === "pdf" && savedPdfUrl)
+    return <SavedPdfPreview url={savedPdfUrl} downloadUrl={savedPdfDownloadUrl} />;
 
   return (
     <AppPreviewCanvasSkeleton
