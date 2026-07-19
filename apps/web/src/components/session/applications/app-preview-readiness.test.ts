@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findReadyPreviewEndpoint } from "./app-preview-readiness";
+import { findFailedPreviewProcess, findReadyPreviewEndpoint } from "./app-preview-readiness";
 
 const endpoint = {
   id: "endpoint-1",
@@ -31,5 +31,49 @@ describe("findReadyPreviewEndpoint", () => {
         [{ ...endpoint, processConfigId: "worker", status: "running" }],
       ),
     ).toBeUndefined();
+  });
+});
+
+describe("findFailedPreviewProcess", () => {
+  it("returns an exhausted failed or exited process for the session group", () => {
+    const process = findFailedPreviewProcess("group-1", [
+      {
+        id: "running",
+        sessionGroupId: "group-1",
+        appConfigId: "app",
+        processConfigId: "worker",
+        status: "running",
+      },
+      {
+        id: "failed",
+        sessionGroupId: "group-1",
+        appConfigId: "app",
+        processConfigId: "dev",
+        status: "failed",
+      },
+    ]);
+
+    expect(process?.id).toBe("failed");
+  });
+
+  it("ignores intentionally stopped processes and failures from other groups", () => {
+    const process = findFailedPreviewProcess("group-1", [
+      {
+        id: "stopped",
+        sessionGroupId: "group-1",
+        appConfigId: "app",
+        processConfigId: "dev",
+        status: "stopped",
+      },
+      {
+        id: "other",
+        sessionGroupId: "group-2",
+        appConfigId: "app",
+        processConfigId: "dev",
+        status: "failed",
+      },
+    ]);
+
+    expect(process).toBeUndefined();
   });
 });

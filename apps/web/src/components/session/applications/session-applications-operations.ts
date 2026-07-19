@@ -135,6 +135,18 @@ export const STOP_PROCESS_MUTATION = gql`
   }
 `;
 
+export const RESTART_PROCESS_MUTATION = gql`
+  mutation RestartSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {
+    restartSessionProcess(
+      sessionGroupId: $sessionGroupId
+      appConfigId: $appConfigId
+      processConfigId: $processConfigId
+    ) {
+      id
+    }
+  }
+`;
+
 export const ENABLE_ENDPOINT_MUTATION = gql`
   mutation EnableSessionEndpointForwarding(
     $endpointId: ID!

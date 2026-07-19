@@ -1018,7 +1018,12 @@ export function SessionGroupDetailView({
                           onScrollComplete={handleScrollComplete}
                           onForkSession={handleOpenForkDialog}
                           canForkSession={false}
-                          emptyState={<AppSessionPreviewPanel sessionGroupId={sessionGroupId} />}
+                          emptyState={
+                            <AppSessionPreviewPanel
+                              sessionGroupId={sessionGroupId}
+                              sessionId={selectedSession?.id ?? null}
+                            />
+                          }
                         />
                       }
                     />
@@ -1055,6 +1060,7 @@ export function SessionGroupDetailView({
                           emptyState={
                             <GeneratedProjectPreviewPanel
                               sessionGroupId={sessionGroupId}
+                              sessionId={selectedSession?.id ?? null}
                               projectKind={projectWorkspaceKind === "pdf" ? "pdf" : "design"}
                             />
                           }

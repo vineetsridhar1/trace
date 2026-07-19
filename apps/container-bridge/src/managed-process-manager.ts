@@ -279,8 +279,17 @@ export class ManagedProcessManager {
           managed.readyAt && Date.now() - managed.readyAt >= PROCESS_STABLE_AFTER_MS
             ? 0
             : restartAttempt;
-        if (this.scheduleRestart(options, priorAttempts, `exit ${exitCode ?? signal ?? "unknown"}`))
+        const reason = `exit ${exitCode ?? signal ?? "unknown"}`;
+        if (this.scheduleRestart(options, priorAttempts, reason)) return;
+        if (options.ports?.length) {
+          this.send({
+            type: "app_process_error",
+            requestId: options.requestId,
+            processInstanceId: options.processInstanceId,
+            error: `Preview process stopped after ${MAX_PROCESS_RESTARTS} automatic restart attempts (${reason})`,
+          });
           return;
+        }
         this.send({
           type: "app_process_exited",
           processInstanceId: options.processInstanceId,

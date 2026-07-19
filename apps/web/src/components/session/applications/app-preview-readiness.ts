@@ -8,6 +8,7 @@ type PreviewEndpoint = {
 };
 
 type PreviewProcess = {
+  id?: string;
   sessionGroupId: string;
   appConfigId: string;
   processConfigId: string;
@@ -33,5 +34,16 @@ export function findReadyPreviewEndpoint<T extends PreviewEndpoint>(
       endpoint.status === "enabled" &&
       Boolean(endpoint.url) &&
       runningProcessKeys.has(`${endpoint.appConfigId}:${endpoint.processConfigId}`),
+  );
+}
+
+export function findFailedPreviewProcess<T extends PreviewProcess>(
+  sessionGroupId: string,
+  processes: T[],
+): T | undefined {
+  return processes.find(
+    (process) =>
+      process.sessionGroupId === sessionGroupId &&
+      (process.status === "failed" || process.status === "exited"),
   );
 }
