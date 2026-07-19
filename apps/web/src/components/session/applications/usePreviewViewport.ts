@@ -21,7 +21,7 @@ export type PreviewPreset = keyof typeof PREVIEW_PRESETS;
 type Size = { width: number; height: number };
 type ResizeOrigin = Size & { x: number; y: number };
 
-export function usePreviewViewport() {
+export function usePreviewViewport(contentSize?: Size) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const resizeOriginRef = useRef<ResizeOrigin | null>(null);
   const [canvasSize, setCanvasSize] = useState<Size>({ width: 0, height: 0 });
@@ -45,6 +45,13 @@ export function usePreviewViewport() {
     observer.observe(canvas);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!contentSize) return;
+    setViewportSize(contentSize);
+    setScaleReference(contentSize);
+    setActivePreset(null);
+  }, [contentSize?.height, contentSize?.width]);
 
   const availableWidth = Math.max(
     0,

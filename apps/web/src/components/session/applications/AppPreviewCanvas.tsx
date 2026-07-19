@@ -1,5 +1,6 @@
 import { cn } from "../../../lib/utils";
 import type { RefObject } from "react";
+import type { PdfPageFormat } from "./PdfPreviewControls";
 import { AppPreviewFrameControls } from "./AppPreviewFrameControls";
 import { AppPreviewLoadingBar } from "./AppPreviewLoadingBar";
 import { AppPreviewToolbar } from "./AppPreviewToolbar";
@@ -16,6 +17,7 @@ export function AppPreviewCanvas({
   onReload,
   iframeRef,
   bare = false,
+  pdfFormat,
 }: {
   url: string | null;
   title: string;
@@ -27,8 +29,16 @@ export function AppPreviewCanvas({
   onReload: () => void;
   iframeRef: RefObject<HTMLIFrameElement | null>;
   bare?: boolean;
+  pdfFormat?: PdfPageFormat;
 }) {
-  const viewport = usePreviewViewport();
+  const viewport = usePreviewViewport(
+    pdfFormat
+      ? {
+          width: pdfFormat.width * (pdfFormat.unit === "in" ? 96 : 96 / 25.4),
+          height: pdfFormat.height * (pdfFormat.unit === "in" ? 96 : 96 / 25.4),
+        }
+      : undefined,
+  );
 
   return (
     <div className="relative flex h-full flex-col bg-surface-deep">
@@ -43,6 +53,7 @@ export function AppPreviewCanvas({
         onZoomIn={viewport.zoomIn}
         onZoomOut={viewport.zoomOut}
         onResetZoom={viewport.resetZoom}
+        showDeviceControls={!bare}
       />
 
       <div
