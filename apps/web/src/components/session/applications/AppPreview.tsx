@@ -8,7 +8,7 @@ import { AppPreviewCanvas } from "./AppPreviewCanvas";
 import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
 import { PreviewCredentialRenewal } from "./PreviewCredentialRenewal";
 import { appPreviewReducer, initialAppPreviewState } from "./app-preview-state";
-import { CREATE_PREVIEW_MUTATION } from "./session-applications-operations";
+import { CREATE_PREVIEW_MUTATION, SAVE_PDF_FORMAT_MUTATION } from "./session-applications-operations";
 import { PdfPreviewControls, type PdfPageFormat } from "./PdfPreviewControls";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
@@ -21,6 +21,7 @@ export function AppPreview({
   desktopViewport = false,
   title = "Live app preview",
   projectKind,
+  sessionGroupId,
 }: {
   endpointId: string;
   status: string;
@@ -28,6 +29,7 @@ export function AppPreview({
   desktopViewport?: boolean;
   title?: string;
   projectKind?: "pdf";
+  sessionGroupId?: string;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [pdfFormat, setPdfFormat] = useState<PdfPageFormat>({
@@ -54,9 +56,18 @@ export function AppPreview({
   const updatePdfFormat = useCallback(
     (format: PdfPageFormat) => {
       setPdfFormat(format);
+      setPdfContentHeight(0);
       sendPdfMessage("format", format);
+      if (sessionGroupId) {
+        void client
+          .mutation(SAVE_PDF_FORMAT_MUTATION, {
+            sessionGroupId,
+            content: `${JSON.stringify(format, null, 2)}\n`,
+          })
+          .toPromise();
+      }
     },
-    [sendPdfMessage],
+    [sendPdfMessage, sessionGroupId],
   );
 
   useEffect(() => {

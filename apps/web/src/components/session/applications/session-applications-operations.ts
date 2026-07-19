@@ -171,6 +171,16 @@ export const CREATE_PREVIEW_MUTATION = gql`
   }
 `;
 
+export const SAVE_PDF_FORMAT_MUTATION = gql`
+  mutation SavePdfFormat($sessionGroupId: ID!, $content: String!) {
+    saveSessionGroupFile(
+      sessionGroupId: $sessionGroupId
+      filePath: "document.format.json"
+      content: $content
+    )
+  }
+`;
+
 export const DEFAULT_APP_CONFIG: RepoApplicationConfig = {
   setupScripts: [],
   applications: [
