@@ -30,6 +30,7 @@ export function GeneratedProjectPreviewPanel({
         status="running"
         fill
         title={`Live ${projectKind} preview`}
+        projectKind={projectKind === "pdf" ? "pdf" : undefined}
       />
     );
 
