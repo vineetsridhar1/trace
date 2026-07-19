@@ -119,7 +119,7 @@ export function AppPreview({
           pdfContentHeight={projectKind === "pdf" ? pdf.contentHeight : undefined}
           onPdfFormatChange={projectKind === "pdf" ? pdf.updateFormat : undefined}
           onPdfDownload={projectKind === "pdf" ? () => void pdf.download() : undefined}
-          pdfDownloading={projectKind === "pdf" ? pdf.downloadRequested : undefined}
+          pdfDownloadState={projectKind === "pdf" ? pdf.downloadState : undefined}
         />
         <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       </>
@@ -139,7 +139,7 @@ export function AppPreview({
           format={pdf.format}
           onFormatChange={pdf.updateFormat}
           onDownload={() => void pdf.download()}
-          downloading={pdf.downloadRequested}
+          downloadState={pdf.downloadState}
         />
       ) : null}
       <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />

@@ -1,6 +1,6 @@
 import { cn } from "../../../lib/utils";
 import type { RefObject } from "react";
-import type { PdfPageFormat } from "./PdfPreviewControls";
+import type { PdfDownloadState, PdfPageFormat } from "./PdfPreviewControls";
 import { PdfPreviewControls } from "./PdfPreviewControls";
 import { AppPreviewFrameControls } from "./AppPreviewFrameControls";
 import { AppPreviewLoadingBar } from "./AppPreviewLoadingBar";
@@ -22,7 +22,7 @@ export function AppPreviewCanvas({
   pdfContentHeight,
   onPdfFormatChange,
   onPdfDownload,
-  pdfDownloading,
+  pdfDownloadState,
 }: {
   url: string | null;
   title: string;
@@ -38,7 +38,7 @@ export function AppPreviewCanvas({
   pdfContentHeight?: number;
   onPdfFormatChange?: (format: PdfPageFormat) => void;
   onPdfDownload?: () => void;
-  pdfDownloading?: boolean;
+  pdfDownloadState?: PdfDownloadState;
 }) {
   const frameMargin = bare ? 0 : PREVIEW_FRAME_MARGIN;
   const pixelsPerUnit = pdfFormat?.unit === "in" ? 96 : 96 / 25.4;
@@ -63,7 +63,7 @@ export function AppPreviewCanvas({
           format={pdfFormat}
           onFormatChange={onPdfFormatChange}
           onDownload={onPdfDownload}
-          downloading={pdfDownloading}
+          downloadState={pdfDownloadState}
           refreshing={refreshing}
           onReload={onReload}
           zoom={viewport.zoom}
