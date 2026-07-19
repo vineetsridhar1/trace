@@ -139,7 +139,7 @@ export function GeneratedProjectsSection({
   );
 
   return (
-    <div className="pt-2">
+    <div className="pb-3 pt-2">
       <div className="group/generated-projects-header flex items-center justify-between px-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
           Create
