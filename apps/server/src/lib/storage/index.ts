@@ -14,12 +14,12 @@ if (mode === "local") {
   adapter = localAdapter;
   localRouter = createLocalStorageRouter(localAdapter);
   console.log(`[storage] Local mode — files stored in ${localAdapter.rootDir}`);
-  if (!process.env.STORAGE_PUBLIC_URL) {
+  if (!process.env.STORAGE_PUBLIC_URL && !process.env.TRACE_SERVER_PUBLIC_URL) {
     // Cloud bridges fetch attachments by URL. The default localhost URL is
     // unreachable from any machine other than the server itself, so attached
     // files will fail to load anywhere a remote bridge is involved.
     console.warn(
-      "[storage] STORAGE_PUBLIC_URL is unset; defaulting to localhost. Cloud/remote bridges will not be able to fetch uploaded files.",
+      "[storage] STORAGE_PUBLIC_URL and TRACE_SERVER_PUBLIC_URL are unset; defaulting to localhost. Cloud/remote bridges will not be able to fetch uploaded files.",
     );
   }
 } else if (mode === "s3") {
