@@ -3356,7 +3356,7 @@ export class SessionService {
     if (resolvedRepoId && !resolvedRepo) {
       throw new Error("Repo not found");
     }
-    const resolvedBranch =
+    let resolvedBranch =
       input.branch ??
       seedGroup?.branch ??
       sourceSession?.branch ??
@@ -3761,6 +3761,7 @@ export class SessionService {
       });
       resolvedRepoId = managedRepo.id;
       resolvedRepo = managedRepo;
+      resolvedBranch ??= managedRepo.defaultBranch;
       createdManagedRepoId = managedRepo.id;
     }
 
@@ -7092,6 +7093,11 @@ export class SessionService {
       void managedGitService.retryPendingDesignCommitPreviews(session.sessionGroupId).catch(
         (error: unknown) => {
           console.error("[session] design preview retry after runtime reconnect failed", error);
+        },
+      );
+      void managedGitService.retryPdfCommitExport(session.sessionGroupId).catch(
+        (error: unknown) => {
+          console.error("[session] PDF export retry after runtime reconnect failed", error);
         },
       );
     }
