@@ -1004,7 +1004,7 @@ This is a Trace Design session, not an App or Coding session. Act as a product a
 </system-instruction>`;
 
 const PDF_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace PDF session. Build a print-ready document in the provided Vite/React starter, not a full-stack application. Before changing the document, read AGENTS.md and docs/ai-guidance.md, then use the relevant guidance under docs/playbooks/. The editable document lives in src/App.tsx and is rendered live by the managed server on port 3000; do not start another server. Keep the output self-contained: use local CSS and assets, semantic HTML, and explicit print styles with stable page breaks. Do not add a backend, database, Redis, authentication, or external integrations. The starter's Download PDF control opens the browser print-to-PDF flow; preserve that control and the print stylesheet while adapting the document. Work visibly in small valid changes, check the print layout at A4 and Letter sizes, and run pnpm test before delivery. Before every response that changes the document, commit and push the changes to the configured managed origin.
+This is a Trace PDF session. Build a print-ready document in the provided Vite/React starter, not a full-stack application. Before changing the document, read AGENTS.md and docs/ai-guidance.md, then use the relevant guidance under docs/playbooks/. The editable document lives in src/App.tsx and is rendered live by the managed server on port 3000; do not start another server. Keep the output self-contained: use local CSS and assets, semantic HTML, and explicit print styles with stable page breaks. Do not add a backend, database, Redis, authentication, external integrations, or in-document download controls. Trace renders and stores the PDF after each managed Git push; preserve the print stylesheet while adapting the document. Work visibly in small valid changes, check the print layout at A4 and Letter sizes, and run pnpm test before delivery. Before every response that changes the document, commit and push the changes to the configured managed origin.
 </system-instruction>`;
 
 function generatedProjectInstruction(
@@ -7395,7 +7395,6 @@ export class SessionService {
     const shouldCaptureAppCheckpoint = didPersistCheckpoint && session.sessionGroup?.kind === "app";
     const shouldPublishDesignPreview =
       didPersistCheckpoint && session.sessionGroup?.kind === "design";
-    const shouldCapturePdfCheckpoint = didPersistCheckpoint && session.sessionGroup?.kind === "pdf";
     if (shouldCaptureAppCheckpoint && persisted) {
       persisted = await prisma.gitCheckpoint.update({
         where: { id: persisted.id },
@@ -7406,12 +7405,6 @@ export class SessionService {
       persisted = await prisma.gitCheckpoint.update({
         where: { id: persisted.id },
         data: { previewStatus: "pending" },
-      });
-    }
-    if (shouldCapturePdfCheckpoint && persisted) {
-      persisted = await prisma.gitCheckpoint.update({
-        where: { id: persisted.id },
-        data: { captureStatus: "pending" },
       });
     }
 
@@ -7470,16 +7463,6 @@ export class SessionService {
         userId: session.sessionGroup.ownerUserId,
       });
     }
-    if (shouldCapturePdfCheckpoint && persisted && session.sessionGroup) {
-      this.capturePdfCheckpointAsync({
-        checkpointId: persisted.id,
-        commitSha: persisted.commitSha,
-        sessionId,
-        organizationId: session.organizationId,
-        sessionGroupId: session.sessionGroupId,
-        userId: session.sessionGroup.ownerUserId,
-      });
-    }
 
     return persisted;
   }
@@ -7531,44 +7514,6 @@ export class SessionService {
         // A missing row (checkpoint rewritten away) or capture failure is
         // non-fatal — the checkpoint simply keeps its pending/last status.
         console.error("[app-checkpoint] async capture failed", error);
-      }
-    })();
-  }
-
-  private capturePdfCheckpointAsync(input: {
-    checkpointId: string;
-    commitSha: string;
-    sessionId: string;
-    organizationId: string;
-    sessionGroupId: string;
-    userId: string;
-  }): void {
-    void (async () => {
-      try {
-        const capture = await appCheckpointCaptureService.capturePdf(input);
-        const updated = await prisma.gitCheckpoint.update({
-          where: { id: input.checkpointId },
-          data: {
-            captureStatus: capture.captureStatus,
-            captureKey: capture.captureKey ?? null,
-            captureContentType: capture.captureContentType ?? null,
-            capturedAt: capture.capturedAt ?? null,
-          },
-        });
-        await eventService.create({
-          organizationId: input.organizationId,
-          scopeType: "session",
-          scopeId: input.sessionId,
-          eventType: "session_output",
-          payload: {
-            type: "git_checkpoint",
-            checkpoint: serializeGitCheckpoint(updated),
-          } as Prisma.InputJsonValue,
-          actorType: "system",
-          actorId: "system",
-        });
-      } catch (error) {
-        console.error("[pdf-checkpoint] async export failed", error);
       }
     })();
   }
@@ -9165,19 +9110,18 @@ export class SessionService {
   async pdfDownloadUrl(sessionGroupId: string, organizationId: string, userId: string | null) {
     if (!userId) throw new AuthenticationError();
     await assertSessionGroupAccess(sessionGroupId, userId, organizationId);
-    const checkpoint = await prisma.gitCheckpoint.findFirst({
+    const group = await prisma.sessionGroup.findFirst({
       where: {
-        sessionGroupId,
-        captureStatus: "captured",
-        captureContentType: "application/pdf",
-        captureKey: { not: null },
+        id: sessionGroupId,
+        organizationId,
+        kind: "pdf",
+        pdfExportKey: { not: null },
       },
-      orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
-      select: { captureKey: true, commitSha: true },
+      select: { pdfExportKey: true, pdfExportCommitSha: true },
     });
-    if (!checkpoint?.captureKey) return null;
-    return storage.getGetUrl(checkpoint.captureKey, {
-      downloadFilename: `document-${checkpoint.commitSha.slice(0, 8)}.pdf`,
+    if (!group?.pdfExportKey) return null;
+    return storage.getGetUrl(group.pdfExportKey, {
+      downloadFilename: `document-${group.pdfExportCommitSha?.slice(0, 8) ?? "latest"}.pdf`,
     });
   }
 

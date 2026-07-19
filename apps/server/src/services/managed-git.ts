@@ -15,6 +15,8 @@ import {
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
+import { storage } from "../lib/storage/index.js";
+import { sessionRouter } from "../lib/session-router.js";
 
 const JWT_SECRET = resolveJwtSecret();
 
@@ -403,7 +405,118 @@ class ManagedGitService {
         branch,
         commitSha: command.newSha,
       });
+      await this.enqueuePdfCommitExport({
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        branch,
+        commitSha: command.newSha,
+      });
     }
+  }
+
+  private async enqueuePdfCommitExport(input: {
+    organizationId: string;
+    repoId: string;
+    branch: string;
+    commitSha: string;
+  }): Promise<void> {
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        branch: input.branch,
+        kind: "pdf",
+      },
+      select: {
+        id: true,
+        sessions: {
+          orderBy: { updatedAt: "desc" },
+          select: { id: true, connection: true },
+        },
+      },
+    });
+
+    await Promise.all(
+      groups.map(async (group) => {
+        const exportKey = `pdf-exports/${input.organizationId}/${group.id}/${input.commitSha}-${randomUUID()}.pdf`;
+        const uploadTarget = await storage.getUploadTarget(exportKey, "application/pdf", 15 * 1024 * 1024);
+        await prisma.sessionGroup.update({
+          where: { id: group.id },
+          data: {
+            pdfExportStatus: "publishing",
+            pdfExportPendingKey: exportKey,
+            pdfExportCommitSha: input.commitSha,
+            pdfExportAttemptedAt: new Date(),
+          },
+        });
+        const session = group.sessions.find((candidate) => {
+          const connection = candidate.connection;
+          return connection && typeof connection === "object" && !Array.isArray(connection);
+        });
+        if (!session) {
+          await this.completePdfExport({
+            organizationId: input.organizationId,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            error: "No connected PDF runtime",
+          });
+          return;
+        }
+        const connection = session.connection as Record<string, unknown>;
+        const runtimeInstanceId =
+          typeof connection.runtimeInstanceId === "string" ? connection.runtimeInstanceId : undefined;
+        const delivery = sessionRouter.send(
+          session.id,
+          {
+            type: "pdf_export",
+            requestId: randomUUID(),
+            sessionId: session.id,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            port: 3000,
+            uploadTarget,
+          },
+          { expectedHomeRuntimeId: runtimeInstanceId, organizationId: input.organizationId },
+        );
+        if (delivery !== "delivered") {
+          await this.completePdfExport({
+            organizationId: input.organizationId,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            error: `PDF runtime unavailable: ${delivery}`,
+          });
+        }
+      }),
+    );
+  }
+
+  async completePdfExport(input: {
+    organizationId: string;
+    sessionGroupId: string;
+    commitSha: string;
+    error?: string;
+  }): Promise<void> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: {
+        id: input.sessionGroupId,
+        organizationId: input.organizationId,
+        kind: "pdf",
+        pdfExportCommitSha: input.commitSha,
+      },
+      select: { pdfExportPendingKey: true },
+    });
+    if (!group) return;
+    await prisma.sessionGroup.update({
+      where: { id: input.sessionGroupId },
+      data: input.error
+        ? { pdfExportStatus: "failed", pdfExportPendingKey: null }
+        : {
+            pdfExportStatus: "captured",
+            pdfExportKey: group.pdfExportPendingKey,
+            pdfExportPendingKey: null,
+            pdfExportCapturedAt: new Date(),
+          },
+    });
   }
 
   async retryPendingDesignCommitPreviews(sessionGroupId?: string): Promise<void> {

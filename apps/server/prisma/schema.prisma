@@ -547,6 +547,12 @@ model SessionGroup {
   designPreviewCommitSha String?
   designPreviewCapturedAt DateTime?
   designPreviewAttemptedAt DateTime?
+  pdfExportStatus        String?
+  pdfExportKey           String?
+  pdfExportPendingKey    String?
+  pdfExportCommitSha     String?
+  pdfExportCapturedAt    DateTime?
+  pdfExportAttemptedAt   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -558,6 +564,7 @@ model SessionGroup {
   @@index([channelId, updatedAt])
   @@index([repoId, branch, updatedAt])
   @@index([kind, designPreviewStatus])
+  @@index([kind, pdfExportStatus])
 }
 
 model Session {

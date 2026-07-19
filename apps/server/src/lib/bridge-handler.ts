@@ -17,6 +17,7 @@ import { terminalRelay } from "./terminal-relay.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { agentEnvironmentService } from "../services/agent-environment.js";
 import { sessionApplicationService } from "../services/session-applications.js";
+import { managedGitService } from "../services/managed-git.js";
 import { endpointProxyService } from "../services/endpoint-proxy.js";
 import { prisma } from "./db.js";
 import { AuthorizationError } from "./errors.js";
@@ -577,6 +578,24 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               console.error("[bridge] error appending app process log:", err);
             });
         }
+        return;
+      }
+
+      if (
+        msg.type === "pdf_export_result" &&
+        typeof msg.sessionGroupId === "string" &&
+        typeof msg.commitSha === "string"
+      ) {
+        void managedGitService
+          .completePdfExport({
+            organizationId: bridgeAuth.organizationId,
+            sessionGroupId: msg.sessionGroupId,
+            commitSha: msg.commitSha,
+            error: typeof msg.error === "string" ? msg.error : undefined,
+          })
+          .catch((error: unknown) => {
+            console.error("[bridge] error completing PDF export:", error);
+          });
         return;
       }
 

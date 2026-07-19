@@ -14,10 +14,21 @@ vi.mock("./event.js", () => ({
   },
 }));
 
+vi.mock("../lib/storage/index.js", () => ({
+  storage: {
+    getUploadTarget: vi.fn().mockResolvedValue({ method: "PUT", url: "https://upload.test" }),
+  },
+}));
+
+vi.mock("../lib/session-router.js", () => ({
+  sessionRouter: { send: vi.fn().mockReturnValue("delivered") },
+}));
+
 import { buildManagedGitUrl, managedGitService } from "./managed-git.js";
 import { eventService } from "./event.js";
 import { prisma } from "../lib/db.js";
 import { createPrismaMock } from "../../test/helpers.js";
+import { sessionRouter } from "../lib/session-router.js";
 
 const ORG = "org-1";
 const REPO = "repo-1";
@@ -228,5 +239,49 @@ describe("managed git authorization", () => {
         service: "git-upload-pack",
       }),
     ).rejects.toThrow(AuthorizationError);
+  });
+});
+
+describe("managed git PDF exports", () => {
+  it("sends a PDF export command to the bridge after an accepted branch push", async () => {
+    prismaMock.sessionGroup.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "pdf-group-1",
+          sessions: [
+            {
+              id: "session-1",
+              connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+            },
+          ],
+        },
+      ]);
+    prismaMock.sessionGroup.update.mockResolvedValue({ id: "pdf-group-1" });
+
+    await managedGitService.recordPush({
+      organizationId: ORG,
+      repoId: REPO,
+      commands: [
+        {
+          ref: "refs/heads/main",
+          oldSha: "a".repeat(40),
+          newSha: "b".repeat(40),
+        },
+      ],
+      actorType: "system",
+      actorId: "runtime-1",
+    });
+
+    expect(sessionRouter.send).toHaveBeenCalledWith(
+      "session-1",
+      expect.objectContaining({
+        type: "pdf_export",
+        sessionGroupId: "pdf-group-1",
+        commitSha: "b".repeat(40),
+        port: 3000,
+      }),
+      { expectedHomeRuntimeId: "runtime-1", organizationId: ORG },
+    );
   });
 });

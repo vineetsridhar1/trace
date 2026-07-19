@@ -31,7 +31,6 @@ export function App() {
       if (!event.data || typeof event.data !== "object") return;
       const message = event.data as { source?: unknown; type?: unknown; format?: unknown };
       if (message.source !== "trace") return;
-      if (message.type === "pdf:print") window.print();
       if (message.type === "pdf:format") setFormat(validFormat(message.format));
     };
     window.addEventListener("message", receiveMessage);
@@ -78,7 +77,7 @@ export function App() {
           </h1>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-stone-600">
             Describe the document you need, then refine it together in the live preview. When it is
-            ready, use Download PDF to save a print-ready copy.
+            ready, Trace will render and store a print-ready copy from the latest pushed commit.
           </p>
         </header>
         <section className="mt-12 break-inside-avoid">

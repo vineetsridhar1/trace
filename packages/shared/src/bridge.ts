@@ -349,6 +349,18 @@ export interface BridgeAppProcessStopCommand {
   processInstanceId: string;
 }
 
+export interface BridgePdfExportCommand {
+  type: "pdf_export";
+  requestId: string;
+  sessionId: string;
+  sessionGroupId: string;
+  commitSha: string;
+  port: number;
+  uploadTarget:
+    | { method: "PUT"; url: string }
+    | { method: "POST"; url: string; fields: Record<string, string> };
+}
+
 export interface BridgeEndpointHttpRequestCommand {
   type: "endpoint_http_request";
   requestId: string;
@@ -424,6 +436,7 @@ export type BridgeCommand =
   | BridgeSetupScriptRunCommand
   | BridgeAppProcessStartCommand
   | BridgeAppProcessStopCommand
+  | BridgePdfExportCommand
   | BridgeEndpointHttpRequestCommand
   | BridgeEndpointWebSocketOpenCommand
   | BridgeEndpointWebSocketDataCommand
@@ -811,6 +824,14 @@ export interface BridgeAppProcessError {
   error: string;
 }
 
+export interface BridgePdfExportResult {
+  type: "pdf_export_result";
+  requestId: string;
+  sessionGroupId: string;
+  commitSha: string;
+  error?: string;
+}
+
 export interface BridgeEndpointHttpResponse {
   type: "endpoint_http_response";
   requestId: string;
@@ -884,6 +905,7 @@ export type BridgeMessage =
   | BridgeAppProcessLog
   | BridgeAppProcessExited
   | BridgeAppProcessError
+  | BridgePdfExportResult
   | BridgeEndpointHttpResponse
   | BridgeEndpointHttpError
   | BridgeEndpointWebSocketOpened
