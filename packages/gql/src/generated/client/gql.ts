@@ -46,6 +46,8 @@ type Documents = {
   "\n  mutation DisableSessionEndpointForwarding($endpointId: ID!) {\n    disableSessionEndpointForwarding(endpointId: $endpointId) {\n      id\n    }\n  }\n": typeof types.DisableSessionEndpointForwardingDocument;
   "\n  mutation PublishAppSession($sessionGroupId: ID!) {\n    publishAppSession(sessionGroupId: $sessionGroupId) {\n      id\n    }\n  }\n": typeof types.PublishAppSessionDocument;
   "\n  mutation CreateSessionEndpointPreview($endpointId: ID!) {\n    createSessionEndpointPreview(endpointId: $endpointId) {\n      url\n      expiresAt\n    }\n  }\n": typeof types.CreateSessionEndpointPreviewDocument;
+  '\n  mutation SavePdfFormat($sessionGroupId: ID!, $content: String!) {\n    saveSessionGroupFile(\n      sessionGroupId: $sessionGroupId\n      filePath: "document.format.json"\n      content: $content\n    )\n  }\n': typeof types.SavePdfFormatDocument;
+  "\n  query PdfSessionDownloadUrl($sessionGroupId: ID!) {\n    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId)\n  }\n": typeof types.PdfSessionDownloadUrlDocument;
   "\n  query AppPreviewState($sessionGroupId: ID!) {\n    sessionEndpoints(sessionGroupId: $sessionGroupId) {\n      id sessionGroupId appConfigId processConfigId portConfigId label targetPort url status\n      accessMode trafficCaptureMode enabledAt disabledAt revokedAt\n    }\n    sessionApplicationProcesses(sessionGroupId: $sessionGroupId) {\n      id sessionGroupId appConfigId processConfigId label status runtimeInstanceId startedAt stoppedAt\n      exitCode lastError\n    }\n  }\n": typeof types.AppPreviewStateDocument;
   "\n  query SessionGroupFileTree($sessionGroupId: ID!) {\n    sessionGroupFileTree(sessionGroupId: $sessionGroupId) {\n      paths\n      truncated\n    }\n  }\n": typeof types.SessionGroupFileTreeDocument;
   "\n  query SessionGroupDirectoryEntries($sessionGroupId: ID!, $directoryPath: String!, $depth: Int) {\n    sessionGroupDirectoryEntries(\n      sessionGroupId: $sessionGroupId\n      directoryPath: $directoryPath\n      depth: $depth\n    ) {\n      name\n      path\n      isDirectory\n    }\n  }\n": typeof types.SessionGroupDirectoryEntriesDocument;
@@ -169,6 +171,10 @@ const documents: Documents = {
     types.PublishAppSessionDocument,
   "\n  mutation CreateSessionEndpointPreview($endpointId: ID!) {\n    createSessionEndpointPreview(endpointId: $endpointId) {\n      url\n      expiresAt\n    }\n  }\n":
     types.CreateSessionEndpointPreviewDocument,
+  '\n  mutation SavePdfFormat($sessionGroupId: ID!, $content: String!) {\n    saveSessionGroupFile(\n      sessionGroupId: $sessionGroupId\n      filePath: "document.format.json"\n      content: $content\n    )\n  }\n':
+    types.SavePdfFormatDocument,
+  "\n  query PdfSessionDownloadUrl($sessionGroupId: ID!) {\n    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId)\n  }\n":
+    types.PdfSessionDownloadUrlDocument,
   "\n  query AppPreviewState($sessionGroupId: ID!) {\n    sessionEndpoints(sessionGroupId: $sessionGroupId) {\n      id sessionGroupId appConfigId processConfigId portConfigId label targetPort url status\n      accessMode trafficCaptureMode enabledAt disabledAt revokedAt\n    }\n    sessionApplicationProcesses(sessionGroupId: $sessionGroupId) {\n      id sessionGroupId appConfigId processConfigId label status runtimeInstanceId startedAt stoppedAt\n      exitCode lastError\n    }\n  }\n":
     types.AppPreviewStateDocument,
   "\n  query SessionGroupFileTree($sessionGroupId: ID!) {\n    sessionGroupFileTree(sessionGroupId: $sessionGroupId) {\n      paths\n      truncated\n    }\n  }\n":
@@ -491,6 +497,18 @@ export function graphql(
 export function graphql(
   source: "\n  mutation CreateSessionEndpointPreview($endpointId: ID!) {\n    createSessionEndpointPreview(endpointId: $endpointId) {\n      url\n      expiresAt\n    }\n  }\n",
 ): (typeof documents)["\n  mutation CreateSessionEndpointPreview($endpointId: ID!) {\n    createSessionEndpointPreview(endpointId: $endpointId) {\n      url\n      expiresAt\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: '\n  mutation SavePdfFormat($sessionGroupId: ID!, $content: String!) {\n    saveSessionGroupFile(\n      sessionGroupId: $sessionGroupId\n      filePath: "document.format.json"\n      content: $content\n    )\n  }\n',
+): (typeof documents)['\n  mutation SavePdfFormat($sessionGroupId: ID!, $content: String!) {\n    saveSessionGroupFile(\n      sessionGroupId: $sessionGroupId\n      filePath: "document.format.json"\n      content: $content\n    )\n  }\n'];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query PdfSessionDownloadUrl($sessionGroupId: ID!) {\n    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId)\n  }\n",
+): (typeof documents)["\n  query PdfSessionDownloadUrl($sessionGroupId: ID!) {\n    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

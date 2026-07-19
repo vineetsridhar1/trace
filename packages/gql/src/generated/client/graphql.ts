@@ -1352,6 +1352,7 @@ export type Query = {
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
+  pdfSessionDownloadUrl?: Maybe<Scalars["String"]["output"]>;
   /** PDF-kind session groups for the org (the sidebar PDFs section). */
   pdfSessionGroups: Array<SessionGroup>;
   project?: Maybe<Project>;
@@ -1508,6 +1509,10 @@ export type QueryOrganizationArgs = {
 export type QueryParticipantsArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type QueryPdfSessionDownloadUrlArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryPdfSessionGroupsArgs = {
@@ -3207,6 +3212,22 @@ export type CreateSessionEndpointPreviewMutation = {
     url: string;
     expiresAt: string;
   };
+};
+
+export type SavePdfFormatMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  content: Scalars["String"]["input"];
+}>;
+
+export type SavePdfFormatMutation = { __typename?: "Mutation"; saveSessionGroupFile: boolean };
+
+export type PdfSessionDownloadUrlQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type PdfSessionDownloadUrlQuery = {
+  __typename?: "Query";
+  pdfSessionDownloadUrl?: string | null;
 };
 
 export type AppPreviewStateQueryVariables = Exact<{
@@ -7119,6 +7140,96 @@ export const CreateSessionEndpointPreviewDocument = {
   CreateSessionEndpointPreviewMutation,
   CreateSessionEndpointPreviewMutationVariables
 >;
+export const SavePdfFormatDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SavePdfFormat" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "content" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "saveSessionGroupFile" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "StringValue", value: "document.format.json", block: false },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "content" },
+                value: { kind: "Variable", name: { kind: "Name", value: "content" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SavePdfFormatMutation, SavePdfFormatMutationVariables>;
+export const PdfSessionDownloadUrlDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "PdfSessionDownloadUrl" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "pdfSessionDownloadUrl" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<PdfSessionDownloadUrlQuery, PdfSessionDownloadUrlQueryVariables>;
 export const AppPreviewStateDocument = {
   kind: "Document",
   definitions: [

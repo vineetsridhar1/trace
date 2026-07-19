@@ -181,6 +181,12 @@ export const SAVE_PDF_FORMAT_MUTATION = gql`
   }
 `;
 
+export const PDF_SESSION_DOWNLOAD_URL_QUERY = gql`
+  query PdfSessionDownloadUrl($sessionGroupId: ID!) {
+    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId)
+  }
+`;
+
 export const DEFAULT_APP_CONFIG: RepoApplicationConfig = {
   setupScripts: [],
   applications: [

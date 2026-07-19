@@ -19,7 +19,12 @@ import {
 } from "@trace/shared";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
-import { AuthorizationError, ToolNotInstalledError, ValidationError } from "../lib/errors.js";
+import {
+  AuthenticationError,
+  AuthorizationError,
+  ToolNotInstalledError,
+  ValidationError,
+} from "../lib/errors.js";
 import { eventService } from "./event.js";
 import { sessionApplicationService } from "./session-applications.js";
 import {
@@ -7390,6 +7395,7 @@ export class SessionService {
     const shouldCaptureAppCheckpoint = didPersistCheckpoint && session.sessionGroup?.kind === "app";
     const shouldPublishDesignPreview =
       didPersistCheckpoint && session.sessionGroup?.kind === "design";
+    const shouldCapturePdfCheckpoint = didPersistCheckpoint && session.sessionGroup?.kind === "pdf";
     if (shouldCaptureAppCheckpoint && persisted) {
       persisted = await prisma.gitCheckpoint.update({
         where: { id: persisted.id },
@@ -7400,6 +7406,12 @@ export class SessionService {
       persisted = await prisma.gitCheckpoint.update({
         where: { id: persisted.id },
         data: { previewStatus: "pending" },
+      });
+    }
+    if (shouldCapturePdfCheckpoint && persisted) {
+      persisted = await prisma.gitCheckpoint.update({
+        where: { id: persisted.id },
+        data: { captureStatus: "pending" },
       });
     }
 
@@ -7458,6 +7470,16 @@ export class SessionService {
         userId: session.sessionGroup.ownerUserId,
       });
     }
+    if (shouldCapturePdfCheckpoint && persisted && session.sessionGroup) {
+      this.capturePdfCheckpointAsync({
+        checkpointId: persisted.id,
+        commitSha: persisted.commitSha,
+        sessionId,
+        organizationId: session.organizationId,
+        sessionGroupId: session.sessionGroupId,
+        userId: session.sessionGroup.ownerUserId,
+      });
+    }
 
     return persisted;
   }
@@ -7509,6 +7531,44 @@ export class SessionService {
         // A missing row (checkpoint rewritten away) or capture failure is
         // non-fatal — the checkpoint simply keeps its pending/last status.
         console.error("[app-checkpoint] async capture failed", error);
+      }
+    })();
+  }
+
+  private capturePdfCheckpointAsync(input: {
+    checkpointId: string;
+    commitSha: string;
+    sessionId: string;
+    organizationId: string;
+    sessionGroupId: string;
+    userId: string;
+  }): void {
+    void (async () => {
+      try {
+        const capture = await appCheckpointCaptureService.capturePdf(input);
+        const updated = await prisma.gitCheckpoint.update({
+          where: { id: input.checkpointId },
+          data: {
+            captureStatus: capture.captureStatus,
+            captureKey: capture.captureKey ?? null,
+            captureContentType: capture.captureContentType ?? null,
+            capturedAt: capture.capturedAt ?? null,
+          },
+        });
+        await eventService.create({
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: input.sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "git_checkpoint",
+            checkpoint: serializeGitCheckpoint(updated),
+          } as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        });
+      } catch (error) {
+        console.error("[pdf-checkpoint] async export failed", error);
       }
     })();
   }
@@ -9100,6 +9160,25 @@ export class SessionService {
       runtime.workdirHint,
     );
     return true;
+  }
+
+  async pdfDownloadUrl(sessionGroupId: string, organizationId: string, userId: string | null) {
+    if (!userId) throw new AuthenticationError();
+    await assertSessionGroupAccess(sessionGroupId, userId, organizationId);
+    const checkpoint = await prisma.gitCheckpoint.findFirst({
+      where: {
+        sessionGroupId,
+        captureStatus: "captured",
+        captureContentType: "application/pdf",
+        captureKey: { not: null },
+      },
+      orderBy: [{ committedAt: "desc" }, { createdAt: "desc" }],
+      select: { captureKey: true, commitSha: true },
+    });
+    if (!checkpoint?.captureKey) return null;
+    return storage.getGetUrl(checkpoint.captureKey, {
+      downloadFilename: `document-${checkpoint.commitSha.slice(0, 8)}.pdf`,
+    });
   }
 
   async commitFileChanges(
