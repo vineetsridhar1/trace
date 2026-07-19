@@ -89,6 +89,14 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       worktreeDeleted
       worktreeAdopted
       designPreviewUrl
+      pdfExportStatus
+      pdfExportCommitSha
+      pdfExportCapturedAt
+      pdfExportError
+      pdfPageWidth
+      pdfPageHeight
+      pdfPageUnit
+      pdfFormatVersion
       gitCheckpoints {
         id
         sessionId

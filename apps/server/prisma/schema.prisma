@@ -193,6 +193,7 @@ enum EventType {
   session_group_archived
   session_group_renamed
   design_preview_updated
+  pdf_export_updated
   ticket_assigned
   ticket_unassigned
   ticket_linked
@@ -554,6 +555,12 @@ model SessionGroup {
   pdfExportRequestId     String?
   pdfExportCapturedAt    DateTime?
   pdfExportAttemptedAt   DateTime?
+  pdfExportError         String?
+  pdfPageWidth           Float     @default(210)
+  pdfPageHeight          Float     @default(297)
+  pdfPageUnit            String    @default("mm")
+  pdfFormatVersion       Int       @default(0)
+  pdfExportFormatVersion Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

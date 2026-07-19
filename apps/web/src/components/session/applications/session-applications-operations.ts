@@ -171,13 +171,20 @@ export const CREATE_PREVIEW_MUTATION = gql`
   }
 `;
 
-export const SAVE_PDF_FORMAT_MUTATION = gql`
-  mutation SavePdfFormat($sessionGroupId: ID!, $content: String!) {
-    saveSessionGroupFile(
+export const UPDATE_PDF_FORMAT_MUTATION = gql`
+  mutation UpdatePdfFormat($sessionGroupId: ID!, $width: Float!, $height: Float!, $unit: String!) {
+    updatePdfSessionFormat(
       sessionGroupId: $sessionGroupId
-      filePath: "document.format.json"
-      content: $content
+      width: $width
+      height: $height
+      unit: $unit
     )
+  }
+`;
+
+export const REQUEST_PDF_EXPORT_MUTATION = gql`
+  mutation RequestPdfExport($sessionGroupId: ID!) {
+    requestPdfSessionExport(sessionGroupId: $sessionGroupId)
   }
 `;
 

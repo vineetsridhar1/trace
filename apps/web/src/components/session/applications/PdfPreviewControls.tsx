@@ -15,6 +15,7 @@ export function PdfPreviewControls({
   onZoomOut,
   refreshing,
   zoom,
+  downloading = false,
 }: {
   format: PdfPageFormat;
   onFormatChange: (format: PdfPageFormat) => void;
@@ -25,16 +26,22 @@ export function PdfPreviewControls({
   onZoomOut?: () => void;
   refreshing?: boolean;
   zoom?: number;
+  downloading?: boolean;
 }) {
-  const showCanvasControls =
-    zoom !== undefined && onZoomIn && onZoomOut && onResetZoom && onReload;
+  const showCanvasControls = zoom !== undefined && onZoomIn && onZoomOut && onResetZoom && onReload;
 
   return (
     <div className="grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-border bg-background px-3">
       <PdfFormatFields format={format} onFormatChange={onFormatChange} />
       {showCanvasControls ? (
         <div className="flex items-center rounded-md border border-border bg-background/40 p-0.5">
-          <Button size="icon-xs" variant="ghost" title="Zoom out" aria-label="Zoom out" onClick={onZoomOut}>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            title="Zoom out"
+            aria-label="Zoom out"
+            onClick={onZoomOut}
+          >
             <Minus size={13} />
           </Button>
           <button
@@ -45,7 +52,13 @@ export function PdfPreviewControls({
           >
             {Math.round(zoom * 100)}%
           </button>
-          <Button size="icon-xs" variant="ghost" title="Zoom in" aria-label="Zoom in" onClick={onZoomIn}>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            title="Zoom in"
+            aria-label="Zoom in"
+            onClick={onZoomIn}
+          >
             <Plus size={13} />
           </Button>
         </div>
@@ -63,9 +76,9 @@ export function PdfPreviewControls({
             <RotateCw size={13} className={cn(refreshing && "animate-spin")} />
           </Button>
         ) : null}
-        <Button size="sm" className="h-7" onClick={onDownload}>
+        <Button size="sm" className="h-7" onClick={onDownload} disabled={downloading}>
           <Download size={13} className="mr-1" />
-          Download PDF
+          {downloading ? "Generating…" : "Download PDF"}
         </Button>
       </div>
     </div>

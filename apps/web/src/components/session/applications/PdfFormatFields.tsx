@@ -1,5 +1,6 @@
 import type { PdfPageFormat } from "./PdfPreviewControls";
 import { Input } from "../../ui/input";
+import { useEffect, useState } from "react";
 
 const PRESETS: Array<{ label: string; format: PdfPageFormat }> = [
   { label: "A4 portrait", format: { width: 210, height: 297, unit: "mm" } },
@@ -16,12 +17,16 @@ export function PdfFormatFields({
   format: PdfPageFormat;
   onFormatChange: (format: PdfPageFormat) => void;
 }) {
+  const presetValue = PRESETS.find(
+    ({ format: value }) =>
+      value.width === format.width && value.height === format.height && value.unit === format.unit,
+  );
   return (
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
       <span className="shrink-0 text-xs font-medium text-muted-foreground">PDF size</span>
       <select
         aria-label="PDF page size"
-        value={`${format.width}-${format.height}-${format.unit}`}
+        value={presetValue ? `${format.width}-${format.height}-${format.unit}` : "custom"}
         onChange={(event) => {
           const preset = PRESETS.find(
             ({ format: value }) =>
@@ -31,40 +36,33 @@ export function PdfFormatFields({
         }}
         className="h-7 min-w-0 max-w-36 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
       >
+        <option value="custom" disabled>
+          Custom
+        </option>
         {PRESETS.map(({ label, format: value }) => (
           <option key={label} value={`${value.width}-${value.height}-${value.unit}`}>
             {label}
           </option>
         ))}
       </select>
-      <Input
-        aria-label="PDF width"
-        type="number"
-        min="1"
-        step="0.1"
+      <DimensionInput
+        label="PDF width"
+        unit={format.unit}
         value={format.width}
-        onChange={(event) =>
-          onFormatChange({ ...format, width: Number(event.target.value) || format.width })
-        }
-        className="h-7 w-16 shrink-0 rounded-md bg-background px-2 py-0 text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        onCommit={(width) => onFormatChange({ ...format, width })}
       />
       <span className="text-xs text-muted-foreground">×</span>
-      <Input
-        aria-label="PDF height"
-        type="number"
-        min="1"
-        step="0.1"
+      <DimensionInput
+        label="PDF height"
+        unit={format.unit}
         value={format.height}
-        onChange={(event) =>
-          onFormatChange({ ...format, height: Number(event.target.value) || format.height })
-        }
-        className="h-7 w-16 shrink-0 rounded-md bg-background px-2 py-0 text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        onCommit={(height) => onFormatChange({ ...format, height })}
       />
       <select
         aria-label="PDF unit"
         value={format.unit}
         onChange={(event) =>
-          onFormatChange({ ...format, unit: event.target.value as PdfPageFormat["unit"] })
+          onFormatChange(convertUnit(format, event.target.value as PdfPageFormat["unit"]))
         }
         className="h-7 shrink-0 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
       >
@@ -73,4 +71,48 @@ export function PdfFormatFields({
       </select>
     </div>
   );
+}
+
+function DimensionInput({
+  label,
+  unit,
+  value,
+  onCommit,
+}: {
+  label: string;
+  unit: PdfPageFormat["unit"];
+  value: number;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const next = Number(draft);
+    if (Number.isFinite(next) && next > 0) onCommit(next);
+    else setDraft(String(value));
+  };
+  return (
+    <Input
+      aria-label={label}
+      type="number"
+      min="0.5"
+      max={unit === "mm" ? 5080 : 200}
+      step="0.1"
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+        if (event.key === "Escape") setDraft(String(value));
+      }}
+      className="h-7 w-16 shrink-0 rounded-md bg-background px-2 py-0 text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+    />
+  );
+}
+
+function convertUnit(format: PdfPageFormat, unit: PdfPageFormat["unit"]): PdfPageFormat {
+  if (format.unit === unit) return format;
+  const multiplier = unit === "mm" ? 25.4 : 1 / 25.4;
+  const convert = (value: number) => Math.round(value * multiplier * 100) / 100;
+  return { width: convert(format.width), height: convert(format.height), unit };
 }

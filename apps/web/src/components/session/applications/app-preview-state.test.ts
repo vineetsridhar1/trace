@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { appPreviewReducer, initialAppPreviewState, type AppPreviewState } from "./app-preview-state";
+import {
+  appPreviewReducer,
+  initialAppPreviewState,
+  MAX_FRAME_RETRIES,
+  type AppPreviewState,
+} from "./app-preview-state";
 
 describe("appPreviewReducer", () => {
   it("uses loading state for the initial preview", () => {
@@ -73,6 +78,17 @@ describe("appPreviewReducer", () => {
     expect(retried.error).toBeNull();
     expect(retried.attempts).toBe(0);
     expect(retried.requestRevision).toBe(6);
+  });
+
+  it("stops retrying a preview that remains unavailable", () => {
+    let state = appPreviewReducer(initialAppPreviewState, {
+      type: "request-succeeded",
+      url: "https://preview.test/auth-1",
+    });
+    for (let i = 0; i <= MAX_FRAME_RETRIES; i++) {
+      state = appPreviewReducer(state, { type: "frame-retry" });
+    }
+    expect(state.error).toContain("did not recover");
   });
 
   it("keeps a working preview visible when refresh authentication fails", () => {

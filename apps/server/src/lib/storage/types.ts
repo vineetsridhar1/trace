@@ -18,4 +18,6 @@ export interface StorageAdapter {
   getObject(key: string): Promise<Buffer>;
   /** Generate a URL any client (including bridges) can GET the file from. */
   getGetUrl(key: string, options?: { downloadFilename?: string }): Promise<string>;
+  /** Remove a server-owned object. Safe when the key does not exist. */
+  deleteObject(key: string): Promise<void>;
 }

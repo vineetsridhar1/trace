@@ -58,60 +58,12 @@ import {
 import { ensureToolReady } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
 import { ManagedProcessManager } from "./managed-process-manager.js";
+import { exportPdfToTarget } from "./pdf-export.js";
 
 const execFileAsync = promisify(execFile);
 const BRIDGE_PROTOCOL_VERSION = 1;
 const AGENT_VERSION = "0.1.0";
 const BRIDGE_USER_AGENT = "Trace-Container-Bridge/0.1";
-const PDF_SIGNATURE = Buffer.from("%PDF-");
-
-async function exportPdfToTarget(input: {
-  requestId: string;
-  port: number;
-  uploadTarget:
-    | { method: "PUT"; url: string }
-    | { method: "POST"; url: string; fields: Record<string, string> };
-}): Promise<void> {
-  const exportDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "trace-pdf-export-"));
-  const outputPath = path.join(exportDir, `${input.requestId}.pdf`);
-  try {
-    await execFileAsync(
-      process.env.TRACE_CHROMIUM_EXECUTABLE?.trim() || "chromium",
-      [
-        "--headless=new",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
-        "--no-first-run",
-        `--user-data-dir=${path.join(exportDir, "profile")}`,
-        "--print-to-pdf-no-header",
-        `--print-to-pdf=${outputPath}`,
-        `http://127.0.0.1:${input.port}`,
-      ],
-      { timeout: 60_000, maxBuffer: 1024 * 1024 },
-    );
-    const pdf = await fs.promises.readFile(outputPath);
-    if (pdf.length <= PDF_SIGNATURE.length || !pdf.subarray(0, PDF_SIGNATURE.length).equals(PDF_SIGNATURE)) {
-      throw new Error("Chromium did not produce a valid PDF");
-    }
-    let response: Response;
-    if (input.uploadTarget.method === "PUT") {
-      response = await fetch(input.uploadTarget.url, {
-        method: "PUT",
-        headers: { "content-type": "application/pdf" },
-        body: pdf,
-      });
-    } else {
-      const body = new FormData();
-      for (const [key, value] of Object.entries(input.uploadTarget.fields)) body.append(key, value);
-      body.append("file", new Blob([pdf], { type: "application/pdf" }), "document.pdf");
-      response = await fetch(input.uploadTarget.url, { method: "POST", body });
-    }
-    if (!response.ok) throw new Error(`PDF upload failed with status ${response.status}`);
-  } finally {
-    await fs.promises.rm(exportDir, { recursive: true, force: true });
-  }
-}
-
 function hasExecutable(command: string): boolean {
   return resolveExecutable(command) !== null;
 }
@@ -690,13 +642,26 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "pdf_export": {
-        void exportPdfToTarget(cmd)
+        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
+        if (!workdir) {
+          this.send({
+            type: "pdf_export_result",
+            requestId: cmd.requestId,
+            sessionGroupId: cmd.sessionGroupId,
+            commitSha: cmd.commitSha,
+            storageKey: cmd.storageKey,
+            error: "PDF workspace is unavailable",
+          });
+          break;
+        }
+        void exportPdfToTarget({ ...cmd, workdir })
           .then(() => {
             this.send({
               type: "pdf_export_result",
               requestId: cmd.requestId,
               sessionGroupId: cmd.sessionGroupId,
               commitSha: cmd.commitSha,
+              storageKey: cmd.storageKey,
             });
           })
           .catch((error: unknown) => {
@@ -705,6 +670,7 @@ export class ContainerBridge implements IBridgeClient {
               requestId: cmd.requestId,
               sessionGroupId: cmd.sessionGroupId,
               commitSha: cmd.commitSha,
+              storageKey: cmd.storageKey,
               error: error instanceof Error ? error.message : String(error),
             });
           });

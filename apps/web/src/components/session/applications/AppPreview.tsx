@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { RotateCw } from "lucide-react";
-import { toast } from "sonner";
 import { client } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
 import { TraceLoader } from "@/components/ui/trace-loader";
@@ -9,12 +8,9 @@ import { AppPreviewCanvas } from "./AppPreviewCanvas";
 import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
 import { PreviewCredentialRenewal } from "./PreviewCredentialRenewal";
 import { appPreviewReducer, initialAppPreviewState } from "./app-preview-state";
-import {
-  CREATE_PREVIEW_MUTATION,
-  PDF_SESSION_DOWNLOAD_URL_QUERY,
-  SAVE_PDF_FORMAT_MUTATION,
-} from "./session-applications-operations";
-import { PdfPreviewControls, type PdfPageFormat } from "./PdfPreviewControls";
+import { CREATE_PREVIEW_MUTATION } from "./session-applications-operations";
+import { PdfPreviewControls } from "./PdfPreviewControls";
+import { usePdfPreview } from "./usePdfPreview";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
 const MAX_FRAME_RETRY_MS = 30_000;
@@ -37,14 +33,11 @@ export function AppPreview({
   sessionGroupId?: string;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const [pdfFormat, setPdfFormat] = useState<PdfPageFormat>({
-    width: 210,
-    height: 297,
-    unit: "mm",
+  const pdf = usePdfPreview({
+    enabled: projectKind === "pdf",
+    frameRef,
+    sessionGroupId,
   });
-  const [pdfContentHeight, setPdfContentHeight] = useState(0);
-  const pdfFormatSaveRef = useRef<Promise<void>>(Promise.resolve());
-  const pdfFormatSaveErrorRef = useRef<string | null>(null);
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
   const [credentialExpiresAt, setCredentialExpiresAt] = useState<string | null>(null);
   const { attempts, error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
@@ -52,58 +45,6 @@ export function AppPreview({
   const reload = useCallback(() => {
     dispatch({ type: "reload" });
   }, []);
-
-  const sendPdfMessage = useCallback((type: "format", format?: PdfPageFormat) => {
-    frameRef.current?.contentWindow?.postMessage(
-      { source: "trace", type: `pdf:${type}`, format },
-      "*",
-    );
-  }, []);
-
-  const updatePdfFormat = useCallback(
-    (format: PdfPageFormat) => {
-      setPdfFormat(format);
-      setPdfContentHeight(0);
-      sendPdfMessage("format", format);
-      if (sessionGroupId) {
-        pdfFormatSaveErrorRef.current = null;
-        pdfFormatSaveRef.current = pdfFormatSaveRef.current.then(async () => {
-          const result = await client
-            .mutation(SAVE_PDF_FORMAT_MUTATION, {
-              sessionGroupId,
-              content: `${JSON.stringify(format, null, 2)}\n`,
-            })
-            .toPromise();
-          if (result.error) {
-            pdfFormatSaveErrorRef.current = result.error.message;
-            toast.error("Failed to save PDF size", { description: result.error.message });
-          }
-        });
-      }
-    },
-    [sendPdfMessage, sessionGroupId],
-  );
-
-  const downloadPdf = useCallback(async () => {
-    if (!sessionGroupId) return;
-    await pdfFormatSaveRef.current;
-    if (pdfFormatSaveErrorRef.current) return;
-    const result = await client
-      .query(PDF_SESSION_DOWNLOAD_URL_QUERY, { sessionGroupId }, { requestPolicy: "network-only" })
-      .toPromise();
-    if (result.error) {
-      toast.error("Failed to download PDF", { description: result.error.message });
-      return;
-    }
-    const url = result.data?.pdfSessionDownloadUrl;
-    if (typeof url === "string") {
-      window.location.assign(url);
-      return;
-    }
-    toast.info("PDF is not ready yet", {
-      description: "Trace is generating the latest document. Try again shortly.",
-    });
-  }, [sessionGroupId]);
 
   useEffect(() => {
     let active = true;
@@ -129,27 +70,6 @@ export function AppPreview({
       active = false;
     };
   }, [endpointId, requestRevision]);
-
-  useEffect(() => {
-    if (projectKind !== "pdf") return;
-    const receiveDocumentSize = (event: MessageEvent<unknown>) => {
-      if (event.source !== frameRef.current?.contentWindow || !event.data || typeof event.data !== "object") {
-        return;
-      }
-      const message = event.data as { source?: unknown; type?: unknown; height?: unknown };
-      if (
-        message.source !== "trace-pdf-preview" ||
-        message.type !== "content-size" ||
-        typeof message.height !== "number" ||
-        !Number.isFinite(message.height)
-      ) {
-        return;
-      }
-      setPdfContentHeight(Math.max(0, Math.ceil(message.height)));
-    };
-    window.addEventListener("message", receiveDocumentSize);
-    return () => window.removeEventListener("message", receiveDocumentSize);
-  }, [projectKind]);
 
   useEffect(() => {
     if (!url || frameLoaded || error) return;
@@ -195,10 +115,11 @@ export function AppPreview({
           onReload={reload}
           iframeRef={frameRef}
           bare={projectKind === "pdf"}
-          pdfFormat={projectKind === "pdf" ? pdfFormat : undefined}
-          pdfContentHeight={projectKind === "pdf" ? pdfContentHeight : undefined}
-          onPdfFormatChange={projectKind === "pdf" ? updatePdfFormat : undefined}
-          onPdfDownload={projectKind === "pdf" ? () => void downloadPdf() : undefined}
+          pdfFormat={projectKind === "pdf" ? pdf.format : undefined}
+          pdfContentHeight={projectKind === "pdf" ? pdf.contentHeight : undefined}
+          onPdfFormatChange={projectKind === "pdf" ? pdf.updateFormat : undefined}
+          onPdfDownload={projectKind === "pdf" ? () => void pdf.download() : undefined}
+          pdfDownloading={projectKind === "pdf" ? pdf.downloadRequested : undefined}
         />
         <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       </>
@@ -215,9 +136,10 @@ export function AppPreview({
     <div className={cn("relative", fill && "h-full")}>
       {projectKind === "pdf" ? (
         <PdfPreviewControls
-          format={pdfFormat}
-          onFormatChange={updatePdfFormat}
-          onDownload={() => void downloadPdf()}
+          format={pdf.format}
+          onFormatChange={pdf.updateFormat}
+          onDownload={() => void pdf.download()}
+          downloading={pdf.downloadRequested}
         />
       ) : null}
       <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />

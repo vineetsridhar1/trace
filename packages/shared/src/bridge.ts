@@ -355,7 +355,12 @@ export interface BridgePdfExportCommand {
   sessionId: string;
   sessionGroupId: string;
   commitSha: string;
-  port: number;
+  format: {
+    width: number;
+    height: number;
+    unit: "mm" | "in";
+  };
+  storageKey: string;
   uploadTarget:
     | { method: "PUT"; url: string }
     | { method: "POST"; url: string; fields: Record<string, string> };
@@ -829,6 +834,7 @@ export interface BridgePdfExportResult {
   requestId: string;
   sessionGroupId: string;
   commitSha: string;
+  storageKey: string;
   error?: string;
 }
 

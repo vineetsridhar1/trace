@@ -15,6 +15,9 @@ export type AppPreviewAction =
   | { type: "request-failed"; error: string }
   | { type: "request-succeeded"; url: string };
 
+export const MAX_FRAME_RETRIES = 10;
+const FRAME_RETRY_ERROR = "The preview did not recover. Retry to try again.";
+
 export const initialAppPreviewState: AppPreviewState = {
   attempts: 0,
   error: null,
@@ -36,6 +39,9 @@ export function appPreviewReducer(
       // A running dev server can briefly stop responding while the agent edits
       // files or Vite recompiles. Keep recovering quietly instead of treating
       // that expected transition as a user-facing preview failure.
+      if (state.attempts >= MAX_FRAME_RETRIES) {
+        return { ...state, error: FRAME_RETRY_ERROR, refreshing: false };
+      }
       return {
         ...state,
         attempts: state.attempts + 1,
