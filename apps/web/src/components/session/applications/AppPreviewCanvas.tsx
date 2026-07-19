@@ -49,6 +49,10 @@ export function AppPreviewCanvas({
       : undefined,
     frameMargin,
   );
+  const canvasTranslation = {
+    x: (viewport.canvasSize.width - viewport.displayedWidth) / 2 + viewport.pan.x,
+    y: (viewport.canvasSize.height - viewport.displayedHeight) / 2 + viewport.pan.y,
+  };
 
   return (
     <div className="relative flex h-full flex-col bg-surface-deep">
@@ -98,13 +102,16 @@ export function AppPreviewCanvas({
             ? "radial-gradient(rgba(113, 113, 122, 0.3) 1px, transparent 1px)"
             : "radial-gradient(rgba(148, 163, 184, 0.2) 1px, transparent 1px)",
           backgroundSize: bare ? "24px 24px" : "16px 16px",
+          backgroundPosition: bare
+            ? `${canvasTranslation.x * 0.25}px ${canvasTranslation.y * 0.25}px`
+            : undefined,
         }}
       >
         {viewport.ready ? (
           <div
             className="absolute left-0 top-0 origin-top-left"
             style={{
-              transform: `translate(${(viewport.canvasSize.width - viewport.displayedWidth) / 2 + viewport.pan.x}px, ${(viewport.canvasSize.height - viewport.displayedHeight) / 2 + viewport.pan.y}px)`,
+              transform: `translate(${canvasTranslation.x}px, ${canvasTranslation.y}px)`,
             }}
           >
             <div
