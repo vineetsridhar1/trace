@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { AppWindow, Palette, ScrollText } from "lucide-react";
+import { AppWindow, NotebookText, Palette } from "lucide-react";
 import {
   createAppSession,
   createDesignSession,
@@ -32,7 +32,7 @@ const OPTIONS: Array<{
     kind: "pdf",
     title: "Document",
     description: "Create a print-ready PDF, report, flyer, or proposal.",
-    Icon: ScrollText,
+    Icon: NotebookText,
   },
 ];
 
