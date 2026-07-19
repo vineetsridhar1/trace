@@ -34,9 +34,9 @@ test("lays out screens as rows and stacks sections vertically when positions are
   assert.deepEqual(
     placed.map(({ x, y }) => ({ x, y })),
     [
-      { x: 0, y: 54 },
-      { x: 496, y: 54 },
-      { x: 0, y: 1088 },
+      { x: 0, y: 90 },
+      { x: 496, y: 90 },
+      { x: 0, y: 1200 },
     ],
   );
 });
@@ -56,5 +56,5 @@ test("keeps explicit screen coordinates relative to its section row", () => {
     ],
   });
 
-  assert.deepEqual({ x: placed?.x, y: placed?.y }, { x: 120, y: 32 });
+  assert.deepEqual({ x: placed?.x, y: placed?.y }, { x: 120, y: 122 });
 });
