@@ -58,10 +58,10 @@ export function NewGeneratedProjectDialog() {
 
   return (
     <Dialog open={kind === "choose"} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-xl gap-7 p-8">
+      <DialogContent className="max-w-xl gap-5 p-6">
         <DialogHeader>
-          <DialogTitle className="text-3xl tracking-tight">Create new</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-2xl tracking-tight">Create new</DialogTitle>
+          <DialogDescription className="text-sm">
             Choose the kind of work you want Trace to help you make.
           </DialogDescription>
         </DialogHeader>
@@ -71,12 +71,12 @@ export function NewGeneratedProjectDialog() {
               key={optionKind}
               type="button"
               onClick={() => create(optionKind)}
-              className="flex items-center gap-5 rounded-2xl border border-border p-5 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center gap-4 rounded-xl border border-border p-4 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Icon className="size-7 shrink-0 text-muted-foreground" />
+              <Icon className="size-5 shrink-0 text-muted-foreground" />
               <span>
-                <span className="block text-xl font-semibold text-foreground">{title}</span>
-                <span className="mt-1 block text-base text-muted-foreground">{description}</span>
+                <span className="block text-base font-semibold text-foreground">{title}</span>
+                <span className="mt-0.5 block text-sm text-muted-foreground">{description}</span>
               </span>
             </button>
           ))}
