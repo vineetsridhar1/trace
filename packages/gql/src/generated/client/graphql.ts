@@ -3725,6 +3725,86 @@ export type DesignSessionGroupsQuery = {
   }>;
 };
 
+export type GeneratedProjectsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type GeneratedProjectsQuery = {
+  __typename?: "Query";
+  appSessionGroups: Array<{
+    __typename?: "SessionGroup";
+    id: string;
+    name: string;
+    slug?: string | null;
+    kind: SessionGroupKind;
+    status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
+    archivedAt?: string | null;
+    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+    sessions: Array<{
+      __typename?: "Session";
+      id: string;
+      sessionGroupId?: string | null;
+      agentStatus: AgentStatus;
+      sessionStatus: SessionStatus;
+      prUrl?: string | null;
+      worktreeDeleted: boolean;
+      lastMessageAt?: string | null;
+      lastUserMessageAt?: string | null;
+      updatedAt: string;
+      createdAt: string;
+    }>;
+  }>;
+  designSessionGroups: Array<{
+    __typename?: "SessionGroup";
+    id: string;
+    name: string;
+    slug?: string | null;
+    kind: SessionGroupKind;
+    status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
+    archivedAt?: string | null;
+    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+    sessions: Array<{
+      __typename?: "Session";
+      id: string;
+      sessionGroupId?: string | null;
+      agentStatus: AgentStatus;
+      sessionStatus: SessionStatus;
+      prUrl?: string | null;
+      worktreeDeleted: boolean;
+      lastMessageAt?: string | null;
+      lastUserMessageAt?: string | null;
+      updatedAt: string;
+      createdAt: string;
+    }>;
+  }>;
+  pdfSessionGroups: Array<{
+    __typename?: "SessionGroup";
+    id: string;
+    name: string;
+    slug?: string | null;
+    kind: SessionGroupKind;
+    status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
+    archivedAt?: string | null;
+    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+    sessions: Array<{
+      __typename?: "Session";
+      id: string;
+      sessionGroupId?: string | null;
+      agentStatus: AgentStatus;
+      sessionStatus: SessionStatus;
+      prUrl?: string | null;
+      worktreeDeleted: boolean;
+      lastMessageAt?: string | null;
+      lastUserMessageAt?: string | null;
+      updatedAt: string;
+      createdAt: string;
+    }>;
+  }>;
+};
+
 export type PdfSessionGroupsQueryVariables = Exact<{
   organizationId: Scalars["ID"]["input"];
 }>;
@@ -8757,6 +8837,181 @@ export const DesignSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<DesignSessionGroupsQuery, DesignSessionGroupsQueryVariables>;
+export const GeneratedProjectsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "GeneratedProjects" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "appSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "connection" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessions" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "connection" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessions" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "pdfSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "connection" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessions" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<GeneratedProjectsQuery, GeneratedProjectsQueryVariables>;
 export const PdfSessionGroupsDocument = {
   kind: "Document",
   definitions: [
