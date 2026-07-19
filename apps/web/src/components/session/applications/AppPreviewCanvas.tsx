@@ -1,4 +1,5 @@
 import { cn } from "../../../lib/utils";
+import type { RefObject } from "react";
 import { AppPreviewFrameControls } from "./AppPreviewFrameControls";
 import { AppPreviewLoadingBar } from "./AppPreviewLoadingBar";
 import { AppPreviewToolbar } from "./AppPreviewToolbar";
@@ -13,6 +14,7 @@ export function AppPreviewCanvas({
   status,
   onLoad,
   onReload,
+  iframeRef,
 }: {
   url: string | null;
   title: string;
@@ -22,6 +24,7 @@ export function AppPreviewCanvas({
   status: string;
   onLoad: () => void;
   onReload: () => void;
+  iframeRef: RefObject<HTMLIFrameElement | null>;
 }) {
   const viewport = usePreviewViewport();
 
@@ -58,6 +61,7 @@ export function AppPreviewCanvas({
               <div className="size-full overflow-hidden rounded-md bg-muted/20">
                 {url ? (
                   <iframe
+                    ref={iframeRef}
                     key={frameRevision}
                     src={url}
                     title={title}

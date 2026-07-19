@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { RotateCw } from "lucide-react";
 import { client } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
 import { PreviewCredentialRenewal } from "./PreviewCredentialRenewal";
 import { appPreviewReducer, initialAppPreviewState } from "./app-preview-state";
 import { CREATE_PREVIEW_MUTATION } from "./session-applications-operations";
+import { PdfPreviewControls, type PdfPageFormat } from "./PdfPreviewControls";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
 
@@ -18,13 +19,21 @@ export function AppPreview({
   fill = false,
   desktopViewport = false,
   title = "Live app preview",
+  projectKind,
 }: {
   endpointId: string;
   status: string;
   fill?: boolean;
   desktopViewport?: boolean;
   title?: string;
+  projectKind?: "pdf";
 }) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [pdfFormat, setPdfFormat] = useState<PdfPageFormat>({
+    width: 210,
+    height: 297,
+    unit: "mm",
+  });
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
   const [credentialExpiresAt, setCredentialExpiresAt] = useState<string | null>(null);
   const { error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
@@ -32,6 +41,21 @@ export function AppPreview({
   const reload = useCallback(() => {
     dispatch({ type: "reload" });
   }, []);
+
+  const sendPdfMessage = useCallback((type: "format" | "print", format?: PdfPageFormat) => {
+    frameRef.current?.contentWindow?.postMessage(
+      { source: "trace", type: `pdf:${type}`, format },
+      "*",
+    );
+  }, []);
+
+  const updatePdfFormat = useCallback(
+    (format: PdfPageFormat) => {
+      setPdfFormat(format);
+      sendPdfMessage("format", format);
+    },
+    [sendPdfMessage],
+  );
 
   useEffect(() => {
     let active = true;
@@ -91,6 +115,13 @@ export function AppPreview({
   if (desktopViewport) {
     return (
       <>
+        {projectKind === "pdf" ? (
+          <PdfPreviewControls
+            format={pdfFormat}
+            onFormatChange={updatePdfFormat}
+            onDownload={() => sendPdfMessage("print")}
+          />
+        ) : null}
         <AppPreviewCanvas
           url={url}
           title={title}
@@ -100,6 +131,7 @@ export function AppPreview({
           status={status}
           onLoad={() => dispatch({ type: "frame-loaded" })}
           onReload={reload}
+          iframeRef={frameRef}
         />
         <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       </>
@@ -114,6 +146,13 @@ export function AppPreview({
   }
   return (
     <div className={cn("relative", fill && "h-full")}>
+      {projectKind === "pdf" ? (
+        <PdfPreviewControls
+          format={pdfFormat}
+          onFormatChange={updatePdfFormat}
+          onDownload={() => sendPdfMessage("print")}
+        />
+      ) : null}
       <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       <Button
         size="icon"
@@ -127,6 +166,7 @@ export function AppPreview({
         <RotateCw className={cn("size-3", refreshing && "animate-spin")} />
       </Button>
       <iframe
+        ref={frameRef}
         key={frameRevision}
         src={url}
         title={title}
