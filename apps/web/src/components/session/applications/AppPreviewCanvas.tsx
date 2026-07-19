@@ -37,9 +37,20 @@ export function AppPreviewCanvas({
         refreshing={refreshing}
         onReload={onReload}
         onSelectPreset={viewport.selectPreset}
+        zoom={viewport.zoom}
+        onZoomIn={viewport.zoomIn}
+        onZoomOut={viewport.zoomOut}
+        onResetZoom={viewport.resetZoom}
       />
 
-      <div ref={viewport.canvasRef} className="relative min-h-0 flex-1 overflow-hidden">
+      <div
+        ref={viewport.canvasRef}
+        className="relative min-h-0 flex-1 overflow-hidden bg-surface-deep"
+        style={{
+          backgroundImage: "radial-gradient(rgba(148, 163, 184, 0.2) 1px, transparent 1px)",
+          backgroundSize: "16px 16px",
+        }}
+      >
         {viewport.ready ? (
           <div className="absolute inset-0 flex items-center justify-center p-8">
             <div
