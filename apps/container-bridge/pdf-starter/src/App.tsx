@@ -1,7 +1,92 @@
+import { useMemo, useState } from "react";
+import formatSource from "../document.format.json";
+
+type Unit = "mm" | "in";
+type DocumentFormat = { width: number; height: number; unit: Unit };
+
+const PRESETS: Array<{ label: string; format: DocumentFormat }> = [
+  { label: "A4 portrait", format: { width: 210, height: 297, unit: "mm" } },
+  { label: "A4 landscape", format: { width: 297, height: 210, unit: "mm" } },
+  { label: "US Letter portrait", format: { width: 8.5, height: 11, unit: "in" } },
+  { label: "US Letter landscape", format: { width: 11, height: 8.5, unit: "in" } },
+  { label: "Square", format: { width: 8, height: 8, unit: "in" } },
+];
+
+function validFormat(value: unknown): DocumentFormat {
+  if (!value || typeof value !== "object") return PRESETS[0]!.format;
+  const source = value as Partial<DocumentFormat>;
+  if (
+    typeof source.width !== "number" ||
+    typeof source.height !== "number" ||
+    source.width <= 0 ||
+    source.height <= 0 ||
+    (source.unit !== "mm" && source.unit !== "in")
+  ) {
+    return PRESETS[0]!.format;
+  }
+  return { width: source.width, height: source.height, unit: source.unit };
+}
+
 export function App() {
+  const [format, setFormat] = useState<DocumentFormat>(() => validFormat(formatSource));
+  const pageSize = `${format.width}${format.unit} ${format.height}${format.unit}`;
+  const pageStyle = useMemo(() => `@page { size: ${pageSize}; margin: 0; }`, [pageSize]);
+
   return (
     <main className="min-h-screen bg-stone-100 px-4 py-8 text-stone-900 sm:px-8">
-      <div className="no-print mx-auto mb-5 flex max-w-[210mm] justify-end">
+      <style>{pageStyle}</style>
+      <div className="no-print mx-auto mb-5 flex max-w-5xl flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-stone-700">
+          <label className="flex items-center gap-2">
+            Page size
+          <select
+            value={`${format.width}-${format.height}-${format.unit}`}
+            onChange={(event) => {
+              const next = PRESETS.find(
+                ({ format: preset }) => `${preset.width}-${preset.height}-${preset.unit}` === event.target.value,
+              );
+              if (next) setFormat(next.format);
+            }}
+            className="rounded-md border border-stone-300 bg-white px-2 py-1.5 text-sm"
+          >
+            {PRESETS.map(({ label, format: preset }) => (
+              <option key={label} value={`${preset.width}-${preset.height}-${preset.unit}`}>
+                {label}
+              </option>
+            ))}
+          </select>
+          </label>
+          <label className="flex items-center gap-1">
+            <span className="sr-only">Page width</span>
+            <input
+              type="number"
+              min="1"
+              step="0.1"
+              value={format.width}
+              onChange={(event) => setFormat((current) => ({ ...current, width: Number(event.target.value) || current.width }))}
+              className="w-20 rounded-md border border-stone-300 bg-white px-2 py-1.5 text-sm"
+            />
+            ×
+            <span className="sr-only">Page height</span>
+            <input
+              type="number"
+              min="1"
+              step="0.1"
+              value={format.height}
+              onChange={(event) => setFormat((current) => ({ ...current, height: Number(event.target.value) || current.height }))}
+              className="w-20 rounded-md border border-stone-300 bg-white px-2 py-1.5 text-sm"
+            />
+          </label>
+          <select
+            aria-label="Page unit"
+            value={format.unit}
+            onChange={(event) => setFormat((current) => ({ ...current, unit: event.target.value as Unit }))}
+            className="rounded-md border border-stone-300 bg-white px-2 py-1.5 text-sm"
+          >
+            <option value="mm">mm</option>
+            <option value="in">in</option>
+          </select>
+        </div>
         <button
           type="button"
           onClick={() => window.print()}
@@ -10,7 +95,10 @@ export function App() {
           Download PDF
         </button>
       </div>
-      <article className="document mx-auto min-h-[297mm] max-w-[210mm] bg-white px-[18mm] py-[20mm] shadow-sm">
+      <article
+        className="document mx-auto bg-white px-[18mm] py-[20mm] shadow-sm"
+        style={{ width: `${format.width}${format.unit}`, minHeight: `${format.height}${format.unit}` }}
+      >
         <header className="border-b border-stone-200 pb-10">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Trace document</p>
           <h1 className="mt-4 max-w-xl text-5xl font-semibold tracking-tight text-stone-950">Your document starts here.</h1>
