@@ -12,6 +12,33 @@ export function AppPreviewCanvasSkeleton({
   onRetry?: () => void;
   projectKind?: "app" | "design" | "pdf";
 }) {
+  if (projectKind !== "app") {
+    return (
+      <div
+        className="relative flex h-full items-center justify-center bg-[#111113]"
+        style={{
+          backgroundImage: "radial-gradient(rgba(113, 113, 122, 0.3) 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      >
+        <div aria-live="polite">
+          <TraceLoader size={18} showLabel={false} />
+        </div>
+        {error ? (
+          <div className="absolute bottom-5 flex items-center gap-2 rounded-md border border-destructive/30 bg-background/95 px-3 py-2 shadow-lg">
+            <span className="max-w-md truncate text-xs text-destructive">{error}</span>
+            {onRetry ? (
+              <Button size="sm" variant="outline" onClick={onRetry}>
+                <RotateCw size={12} />
+                Retry
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col bg-surface-deep">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-3">
@@ -52,13 +79,7 @@ export function AppPreviewCanvasSkeleton({
               <TraceLoader size={18} showLabel={false} />
               <p className="text-sm font-medium text-foreground">Starting live preview…</p>
               <p className="max-w-64 text-xs leading-5 text-muted-foreground">
-                Changes will appear here as the agent{" "}
-                {projectKind === "design"
-                  ? "designs"
-                  : projectKind === "pdf"
-                    ? "formats the document"
-                    : "builds"}
-                .
+                Changes will appear here as the agent builds.
               </p>
             </div>
           </div>
