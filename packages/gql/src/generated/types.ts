@@ -1350,6 +1350,7 @@ export type Query = {
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
+  pdfSessionDownloadUrl?: Maybe<Scalars["String"]["output"]>;
   /** PDF-kind session groups for the org (the sidebar PDFs section). */
   pdfSessionGroups: Array<SessionGroup>;
   project?: Maybe<Project>;
@@ -1506,6 +1507,10 @@ export type QueryOrganizationArgs = {
 export type QueryParticipantsArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type QueryPdfSessionDownloadUrlArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryPdfSessionGroupsArgs = {

@@ -1361,6 +1361,7 @@ type Query {
     depth: Int
   ): [SessionGroupDirectoryEntry!]!
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
+  pdfSessionDownloadUrl(sessionGroupId: ID!): String
   sessionGroupFileContentWithSource(
     sessionGroupId: ID!
     filePath: String!

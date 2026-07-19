@@ -8,7 +8,11 @@ import { AppPreviewCanvas } from "./AppPreviewCanvas";
 import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
 import { PreviewCredentialRenewal } from "./PreviewCredentialRenewal";
 import { appPreviewReducer, initialAppPreviewState } from "./app-preview-state";
-import { CREATE_PREVIEW_MUTATION, SAVE_PDF_FORMAT_MUTATION } from "./session-applications-operations";
+import {
+  CREATE_PREVIEW_MUTATION,
+  PDF_SESSION_DOWNLOAD_URL_QUERY,
+  SAVE_PDF_FORMAT_MUTATION,
+} from "./session-applications-operations";
 import { PdfPreviewControls, type PdfPageFormat } from "./PdfPreviewControls";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
@@ -69,6 +73,15 @@ export function AppPreview({
     },
     [sendPdfMessage, sessionGroupId],
   );
+
+  const downloadPdf = useCallback(async () => {
+    if (!sessionGroupId) return;
+    const result = await client
+      .query(PDF_SESSION_DOWNLOAD_URL_QUERY, { sessionGroupId }, { requestPolicy: "network-only" })
+      .toPromise();
+    const url = result.data?.pdfSessionDownloadUrl;
+    if (typeof url === "string") window.location.assign(url);
+  }, [sessionGroupId]);
 
   useEffect(() => {
     let active = true;
@@ -153,7 +166,7 @@ export function AppPreview({
           <PdfPreviewControls
             format={pdfFormat}
             onFormatChange={updatePdfFormat}
-            onDownload={() => sendPdfMessage("print")}
+            onDownload={() => void downloadPdf()}
           />
         ) : null}
         <AppPreviewCanvas
@@ -187,7 +200,7 @@ export function AppPreview({
         <PdfPreviewControls
           format={pdfFormat}
           onFormatChange={updatePdfFormat}
-          onDownload={() => sendPdfMessage("print")}
+          onDownload={() => void downloadPdf()}
         />
       ) : null}
       <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
