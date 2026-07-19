@@ -11,6 +11,7 @@ const TARGET: DesignEditorTarget = {
   filePath: "src/design/Hero.tsx",
   elementId: "hero-title",
   elementName: "h1",
+  autoTarget: false,
   editableText: true,
   originalText: "Original",
   draftText: "Original",

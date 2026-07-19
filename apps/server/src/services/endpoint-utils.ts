@@ -178,7 +178,7 @@ function stripTraceSessionCookie(value: string): string | null {
 // observe the caller's Trace session.
 export function forwardableRequestHeaders(
   headers: Record<string, string | string[] | undefined>,
-  options?: { websocket?: boolean },
+  options?: { websocket?: boolean; authoringOverlay?: boolean },
 ): Record<string, string | string[]> {
   const forwarded: Record<string, string | string[]> = {};
   for (const [rawName, value] of Object.entries(headers)) {
@@ -187,6 +187,7 @@ export function forwardableRequestHeaders(
     if (name === "authorization" || name === "proxy-authorization") continue;
     if (HOP_BY_HOP_HEADERS.has(name)) continue;
     if (options?.websocket && WS_HANDSHAKE_HEADERS.has(name)) continue;
+    if (options?.authoringOverlay && name === "accept-encoding") continue;
     if (name === "cookie") {
       const cookie = Array.isArray(value) ? value.join("; ") : value;
       const stripped = stripTraceSessionCookie(cookie);

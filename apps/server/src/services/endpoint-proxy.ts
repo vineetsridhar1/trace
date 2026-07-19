@@ -115,7 +115,7 @@ function safeRedirectPath(value: string | null): string {
   return value;
 }
 
-function injectAuthoringOverlay(
+export function injectAuthoringOverlay(
   headers: Record<string, string | string[]>,
   body: Buffer,
 ): { headers: Record<string, string | string[]>; body: Buffer } {
@@ -137,9 +137,68 @@ try{if(TRACE_ORIGIN==="*"&&document.referrer)TRACE_ORIGIN=new URL(document.refer
 var editEnabled=false;
 var selectedId=null;
 var hoverEl=null;
+var screenSources={};
+var annotationFrame=null;
+var discoverySelector='main,nav,section,article,aside,header,footer,div,h1,h2,h3,h4,h5,h6,p,a,button,img,ul,ol,li,table,thead,tbody,tfoot,tr,td,th,blockquote,figure,figcaption,label,pre,code,strong,em,small,span,input,textarea';
 function post(event,payload){if(TRACE_ORIGIN!=="*"&&window.parent&&window.parent!==window)window.parent.postMessage({type:"trace:app:overlay",event:event,...payload},TRACE_ORIGIN)}
 function closestSourceTarget(value){return value&&value.closest&&value.closest("[data-trace-source]")}
 function closestEditTarget(value){return value&&value.closest&&value.closest("[data-trace-id][data-trace-source]")}
+function stableHash(value){
+  var hash=2166136261;
+  for(var i=0;i<value.length;i++){hash^=value.charCodeAt(i);hash=Math.imul(hash,16777619)}
+  return (hash>>>0).toString(36);
+}
+function targetPath(root,el){
+  var parts=[];var node=el;
+  while(node&&node!==root){
+    var parent=node.parentElement;if(!parent)break;
+    parts.unshift(Array.prototype.indexOf.call(parent.children,node));node=parent;
+  }
+  return parts.join('-')||'root';
+}
+function annotateRoot(root,source){
+  if(!root||!source)return;
+  var targets=[];
+  if(root.matches&&root.matches(discoverySelector))targets.push(root);
+  var descendants=root.querySelectorAll?root.querySelectorAll(discoverySelector):[];
+  for(var i=0;i<descendants.length;i++)targets.push(descendants[i]);
+  for(var j=0;j<targets.length;j++){
+    var el=targets[j];
+    if(!el.getAttribute('data-trace-source'))el.setAttribute('data-trace-source',source);
+    if(!el.getAttribute('data-trace-id')){
+      var identity=source+'|'+el.tagName.toLowerCase()+'|'+targetPath(root,el);
+      el.setAttribute('data-trace-id','auto-'+stableHash(identity));
+      el.setAttribute('data-trace-auto-target','');
+    }
+  }
+}
+function annotateTargets(){
+  var sourceRoots=document.querySelectorAll('[data-trace-source]');
+  for(var i=0;i<sourceRoots.length;i++)annotateRoot(sourceRoots[i],sourceRoots[i].getAttribute('data-trace-source'));
+  var artboards=document.querySelectorAll('[data-screen-id]');
+  for(var j=0;j<artboards.length;j++){
+    var artboard=artboards[j];var source=screenSources[artboard.getAttribute('data-screen-id')];
+    if(source)annotateRoot(artboard,source);
+  }
+}
+function scheduleAnnotation(){
+  if(annotationFrame!==null)return;
+  annotationFrame=requestAnimationFrame(function(){annotationFrame=null;annotateTargets();restoreSelection()});
+}
+function loadScreenSources(){
+  if(typeof fetch!=="function")return;
+  fetch('/design.canvas.json',{credentials:'same-origin'}).then(function(response){
+    return response.ok?response.json():null;
+  }).then(function(manifest){
+    if(!manifest||!Array.isArray(manifest.screens))return;
+    for(var i=0;i<manifest.screens.length;i++){
+      var screen=manifest.screens[i];
+      if(!screen||typeof screen.id!=="string"||typeof screen.component!=="string")continue;
+      if(/^\.\/screens\/[A-Za-z0-9._-]+\.tsx$/.test(screen.component))screenSources[screen.id]='src/design/'+screen.component.slice(2);
+    }
+    annotateTargets();
+  }).catch(function(){});
+}
 function findEditTarget(elementId){
   var elements=document.querySelectorAll("[data-trace-id]");
   for(var i=0;i<elements.length;i++)if(elements[i].getAttribute("data-trace-id")===elementId)return elements[i];
@@ -167,7 +226,8 @@ function selectedPayload(el){
     elementId:el.getAttribute("data-trace-id"),
     elementName:el.tagName.toLowerCase(),
     text:text,
-    editableText:el.children.length===0&&el.tagName!=="INPUT"&&el.tagName!=="TEXTAREA",
+    autoTarget:el.hasAttribute("data-trace-auto-target"),
+    editableText:!el.hasAttribute("data-trace-auto-target")&&el.children.length===0&&el.tagName!=="INPUT"&&el.tagName!=="TEXTAREA",
     styles:{
       color:style.color,
       backgroundColor:style.backgroundColor,
@@ -207,7 +267,7 @@ document.addEventListener("click",function(e){
 },true);
 window.addEventListener("message",function(e){
   if(e.source!==window.parent||TRACE_ORIGIN==="*"||e.origin!==TRACE_ORIGIN||!e.data)return;
-  if(e.data.type==="trace:design:edit-mode"){setEditMode(e.data.enabled);return}
+  if(e.data.type==="trace:design:edit-mode"){setEditMode(e.data.enabled);post("edit-mode-ready",{});return}
   if(e.data.type==="trace:design:select-element"&&typeof e.data.elementId==="string"){
     selectedId=e.data.elementId;restoreSelection();return;
   }
@@ -232,10 +292,12 @@ window.addEventListener("message",function(e){
 });
 var style=document.createElement("style");
 style.setAttribute("data-trace-app-overlay-style","");
-style.textContent='html[data-trace-edit-mode] [data-trace-id][data-trace-source]{cursor:text!important}html[data-trace-edit-mode] [data-trace-edit-hover]{outline:1px dashed #3b82f6!important;outline-offset:2px!important}html[data-trace-edit-mode] [data-trace-edit-selected]{outline:2px solid #3b82f6!important;outline-offset:2px!important}';
+style.textContent='html[data-trace-edit-mode],html[data-trace-edit-mode] body,html[data-trace-edit-mode] #root{cursor:default!important}html[data-trace-edit-mode] [data-trace-id][data-trace-source]{cursor:pointer!important}html[data-trace-edit-mode] [data-trace-edit-hover]{outline:1px dashed #3b82f6!important;outline-offset:2px!important}html[data-trace-edit-mode] [data-trace-edit-selected]{outline:2px solid #3b82f6!important;outline-offset:2px!important}';
 document.head.appendChild(style);
 var root=document.getElementById("root")||document.body;
-if(window.MutationObserver&&root)new MutationObserver(function(){restoreSelection()}).observe(root,{childList:true,subtree:true});
+annotateTargets();
+loadScreenSources();
+if(window.MutationObserver&&root)new MutationObserver(scheduleAnnotation).observe(root,{childList:true,subtree:true});
 post("ready",{});
 window.addEventListener("error",function(e){post("error",{message:e.message||"Application script error",stack:e.error&&e.error.stack?String(e.error.stack):null})});
 })();</script>`;
@@ -425,7 +487,9 @@ export class EndpointProxyService {
         port: endpoint.targetPort,
         method: req.method ?? "GET",
         path: `${path}${query ? `?${query}` : ""}`,
-        headers: forwardableRequestHeaders(req.headers),
+        headers: forwardableRequestHeaders(req.headers, {
+          authoringOverlay: endpoint.accessMode === "private",
+        }),
         bodyBase64: requestBody.byteLength ? requestBody.toString("base64") : undefined,
       },
       endpoint.organizationId,

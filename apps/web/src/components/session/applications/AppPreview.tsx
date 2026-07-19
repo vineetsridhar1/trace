@@ -168,7 +168,7 @@ export function AppPreview({
           className="absolute right-11 top-2 z-20 h-7 gap-1.5 px-2.5 opacity-90 hover:opacity-100"
         >
           <Pencil className="size-3" />
-          {manualEdit.enabled ? "Done" : "Edit"}
+          {manualEdit.enabled ? (manualEdit.frameReady ? "Done" : "Connecting…") : "Edit"}
         </Button>
       ) : null}
       <Button

@@ -101,8 +101,9 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
               </label>
               {!target.editableText ? (
                 <p className="text-[10px] leading-4 text-muted-foreground">
-                  Nested or dynamic content can’t be replaced as plain text, but its appearance can
-                  still be edited.
+                  {target.autoTarget
+                    ? "This element was discovered from the rendered canvas. Its appearance can be saved now; text editing becomes available once it has a source marker."
+                    : "Nested or dynamic content can’t be replaced as plain text, but its appearance can still be edited."}
                 </p>
               ) : null}
             </section>

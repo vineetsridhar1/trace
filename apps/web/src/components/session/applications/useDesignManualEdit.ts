@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   registerDesignEditorFrame,
   useDesignEditorStore,
@@ -13,6 +13,7 @@ type OverlayMessage = {
   elementId?: string;
   elementName?: string;
   text?: string;
+  autoTarget?: boolean;
   editableText?: boolean;
   styles?: Partial<Record<keyof DesignEditorStyles, string | number>>;
 };
@@ -28,6 +29,7 @@ function overlayMessage(value: unknown): OverlayMessage | null {
     elementId: typeof record.elementId === "string" ? record.elementId : undefined,
     elementName: typeof record.elementName === "string" ? record.elementName : undefined,
     text: typeof record.text === "string" ? record.text : undefined,
+    autoTarget: typeof record.autoTarget === "boolean" ? record.autoTarget : undefined,
     editableText: typeof record.editableText === "boolean" ? record.editableText : undefined,
     styles:
       record.styles && typeof record.styles === "object"
@@ -44,11 +46,14 @@ export function useDesignManualEdit({
   url: string | null;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const [frameReady, setFrameReady] = useState(false);
   const activeSessionGroupId = useDesignEditorStore((state) => state.activeSessionGroupId);
   const start = useDesignEditorStore((state) => state.start);
   const stop = useDesignEditorStore((state) => state.stop);
   const selectElement = useDesignEditorStore((state) => state.selectElement);
   const enabled = activeSessionGroupId === sessionGroupId;
+
+  useEffect(() => setFrameReady(false), [url]);
 
   const frameOrigin = useMemo(() => {
     if (!url || typeof window === "undefined") return null;
@@ -84,7 +89,12 @@ export function useDesignManualEdit({
       }
       const message = overlayMessage(event.data);
       if (!message) return;
+      if (message.event === "edit-mode-ready") {
+        setFrameReady(true);
+        return;
+      }
       if (message.event === "ready") {
+        setFrameReady(true);
         postToFrame({ type: "trace:design:edit-mode", enabled });
         const target = useDesignEditorStore.getState().target;
         if (enabled && target) {
@@ -107,6 +117,7 @@ export function useDesignManualEdit({
         elementId: message.elementId,
         elementName: message.elementName,
         text: message.text ?? "",
+        autoTarget: message.autoTarget === true,
         editableText: message.editableText === true,
         styles: message.styles,
       };
@@ -118,6 +129,11 @@ export function useDesignManualEdit({
   }, [enabled, frameOrigin, postToFrame, selectElement, sessionGroupId]);
 
   useEffect(() => {
+    if (!sessionGroupId) return;
+    postToFrame({ type: "trace:design:edit-mode", enabled });
+  }, [enabled, postToFrame, sessionGroupId]);
+
+  useEffect(() => {
     return () => {
       if (useDesignEditorStore.getState().activeSessionGroupId === sessionGroupId) {
         useDesignEditorStore.getState().stop(sessionGroupId);
@@ -127,12 +143,15 @@ export function useDesignManualEdit({
 
   const toggle = useCallback(() => {
     if (enabled) stop(sessionGroupId);
-    else start(sessionGroupId);
+    else {
+      setFrameReady(false);
+      start(sessionGroupId);
+    }
   }, [enabled, sessionGroupId, start, stop]);
 
   const onFrameLoad = useCallback(() => {
     postToFrame({ type: "trace:design:edit-mode", enabled });
   }, [enabled, postToFrame]);
 
-  return { frameRef, enabled, toggle, onFrameLoad };
+  return { frameRef, frameReady, enabled, toggle, onFrameLoad };
 }

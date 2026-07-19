@@ -116,6 +116,7 @@ export type DesignEditorSelectionMessage = {
   elementId: string;
   elementName: string;
   text: string;
+  autoTarget: boolean;
   editableText: boolean;
   styles: Partial<Record<keyof DesignEditorStyles, string | number>>;
 };
@@ -124,6 +125,7 @@ export type DesignEditorTarget = {
   filePath: string;
   elementId: string;
   elementName: string;
+  autoTarget: boolean;
   editableText: boolean;
   originalText: string;
   draftText: string;
@@ -353,6 +355,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
           filePath: selection.filePath,
           elementId: selection.elementId,
           elementName: selection.elementName,
+          autoTarget: selection.autoTarget,
           editableText: !!textSource,
           originalText: sourceText,
           draftText: sourceText,

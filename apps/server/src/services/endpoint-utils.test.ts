@@ -166,6 +166,18 @@ describe("endpoint utils", () => {
     ).toEqual({ "x-app": "ok" });
   });
 
+  it("requests identity responses when the authoring overlay must be injected", () => {
+    expect(
+      forwardableRequestHeaders(
+        {
+          "accept-encoding": "gzip, br",
+          accept: "text/html",
+        },
+        { authoringOverlay: true },
+      ),
+    ).toEqual({ accept: "text/html" });
+  });
+
   it("extracts websocket subprotocols before stripping handshake headers", () => {
     expect(
       webSocketProtocols({
