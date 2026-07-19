@@ -1,6 +1,7 @@
 import { cn } from "../../../lib/utils";
 import type { RefObject } from "react";
 import type { PdfPageFormat } from "./PdfPreviewControls";
+import { PdfPreviewControls } from "./PdfPreviewControls";
 import { AppPreviewFrameControls } from "./AppPreviewFrameControls";
 import { AppPreviewLoadingBar } from "./AppPreviewLoadingBar";
 import { AppPreviewToolbar } from "./AppPreviewToolbar";
@@ -19,6 +20,8 @@ export function AppPreviewCanvas({
   bare = false,
   pdfFormat,
   pdfContentHeight,
+  onPdfFormatChange,
+  onPdfDownload,
 }: {
   url: string | null;
   title: string;
@@ -32,6 +35,8 @@ export function AppPreviewCanvas({
   bare?: boolean;
   pdfFormat?: PdfPageFormat;
   pdfContentHeight?: number;
+  onPdfFormatChange?: (format: PdfPageFormat) => void;
+  onPdfDownload?: () => void;
 }) {
   const frameMargin = bare ? 0 : PREVIEW_FRAME_MARGIN;
   const pixelsPerUnit = pdfFormat?.unit === "in" ? 96 : 96 / 25.4;
@@ -47,19 +52,33 @@ export function AppPreviewCanvas({
 
   return (
     <div className="relative flex h-full flex-col bg-surface-deep">
-      <AppPreviewToolbar
-        activePreset={viewport.activePreset}
-        width={viewport.viewportSize.width}
-        height={viewport.viewportSize.height}
-        refreshing={refreshing}
-        onReload={onReload}
-        onSelectPreset={viewport.selectPreset}
-        zoom={viewport.zoom}
-        onZoomIn={viewport.zoomIn}
-        onZoomOut={viewport.zoomOut}
-        onResetZoom={viewport.resetZoom}
-        showDeviceControls={!bare}
-      />
+      {bare && pdfFormat && onPdfFormatChange && onPdfDownload ? (
+        <PdfPreviewControls
+          format={pdfFormat}
+          onFormatChange={onPdfFormatChange}
+          onDownload={onPdfDownload}
+          refreshing={refreshing}
+          onReload={onReload}
+          zoom={viewport.zoom}
+          onZoomIn={viewport.zoomIn}
+          onZoomOut={viewport.zoomOut}
+          onResetZoom={viewport.resetZoom}
+        />
+      ) : (
+        <AppPreviewToolbar
+          activePreset={viewport.activePreset}
+          width={viewport.viewportSize.width}
+          height={viewport.viewportSize.height}
+          refreshing={refreshing}
+          onReload={onReload}
+          onSelectPreset={viewport.selectPreset}
+          zoom={viewport.zoom}
+          onZoomIn={viewport.zoomIn}
+          onZoomOut={viewport.zoomOut}
+          onResetZoom={viewport.resetZoom}
+          showDeviceControls={!bare}
+        />
+      )}
 
       <div
         ref={viewport.canvasRef}
