@@ -49,6 +49,8 @@ type Documents = {
   "\n  mutation UpdatePdfFormat($sessionGroupId: ID!, $width: Float!, $height: Float!, $unit: String!) {\n    updatePdfSessionFormat(\n      sessionGroupId: $sessionGroupId\n      width: $width\n      height: $height\n      unit: $unit\n    )\n  }\n": typeof types.UpdatePdfFormatDocument;
   "\n  mutation RequestPdfExport($sessionGroupId: ID!) {\n    requestPdfSessionExport(sessionGroupId: $sessionGroupId)\n  }\n": typeof types.RequestPdfExportDocument;
   "\n  query PdfSessionDownloadUrl($sessionGroupId: ID!) {\n    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId)\n  }\n": typeof types.PdfSessionDownloadUrlDocument;
+  "\n  query DesignElementTextSource($sessionGroupId: ID!, $filePath: String!, $elementId: String!) {\n    designElementTextSource(\n      sessionGroupId: $sessionGroupId\n      filePath: $filePath\n      elementId: $elementId\n    ) {\n      sessionGroupId\n      filePath\n      elementId\n      text\n      sourceHash\n    }\n  }\n": typeof types.DesignElementTextSourceDocument;
+  "\n  mutation UpdateDesignElementText(\n    $sessionGroupId: ID!\n    $filePath: String!\n    $elementId: String!\n    $text: String!\n    $expectedSourceHash: String!\n  ) {\n    updateDesignElementText(\n      sessionGroupId: $sessionGroupId\n      filePath: $filePath\n      elementId: $elementId\n      text: $text\n      expectedSourceHash: $expectedSourceHash\n    ) {\n      sessionGroupId\n      filePath\n      elementId\n      previousText\n      text\n      sourceHash\n    }\n  }\n": typeof types.UpdateDesignElementTextDocument;
   "\n  query AppPreviewState($sessionGroupId: ID!, $includePdf: Boolean!) {\n    sessionEndpoints(sessionGroupId: $sessionGroupId) {\n      id sessionGroupId appConfigId processConfigId portConfigId label targetPort url status\n      accessMode trafficCaptureMode enabledAt disabledAt revokedAt\n    }\n    sessionApplicationProcesses(sessionGroupId: $sessionGroupId) {\n      id sessionGroupId appConfigId processConfigId label status runtimeInstanceId startedAt stoppedAt\n      exitCode lastError\n    }\n    pdfSessionPreviewUrl(sessionGroupId: $sessionGroupId) @include(if: $includePdf)\n    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId) @include(if: $includePdf)\n  }\n": typeof types.AppPreviewStateDocument;
   "\n  query SessionGroupFileTree($sessionGroupId: ID!) {\n    sessionGroupFileTree(sessionGroupId: $sessionGroupId) {\n      paths\n      truncated\n    }\n  }\n": typeof types.SessionGroupFileTreeDocument;
   "\n  query SessionGroupDirectoryEntries($sessionGroupId: ID!, $directoryPath: String!, $depth: Int) {\n    sessionGroupDirectoryEntries(\n      sessionGroupId: $sessionGroupId\n      directoryPath: $directoryPath\n      depth: $depth\n    ) {\n      name\n      path\n      isDirectory\n    }\n  }\n": typeof types.SessionGroupDirectoryEntriesDocument;
@@ -179,6 +181,10 @@ const documents: Documents = {
     types.RequestPdfExportDocument,
   "\n  query PdfSessionDownloadUrl($sessionGroupId: ID!) {\n    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId)\n  }\n":
     types.PdfSessionDownloadUrlDocument,
+  "\n  query DesignElementTextSource($sessionGroupId: ID!, $filePath: String!, $elementId: String!) {\n    designElementTextSource(\n      sessionGroupId: $sessionGroupId\n      filePath: $filePath\n      elementId: $elementId\n    ) {\n      sessionGroupId\n      filePath\n      elementId\n      text\n      sourceHash\n    }\n  }\n":
+    types.DesignElementTextSourceDocument,
+  "\n  mutation UpdateDesignElementText(\n    $sessionGroupId: ID!\n    $filePath: String!\n    $elementId: String!\n    $text: String!\n    $expectedSourceHash: String!\n  ) {\n    updateDesignElementText(\n      sessionGroupId: $sessionGroupId\n      filePath: $filePath\n      elementId: $elementId\n      text: $text\n      expectedSourceHash: $expectedSourceHash\n    ) {\n      sessionGroupId\n      filePath\n      elementId\n      previousText\n      text\n      sourceHash\n    }\n  }\n":
+    types.UpdateDesignElementTextDocument,
   "\n  query AppPreviewState($sessionGroupId: ID!, $includePdf: Boolean!) {\n    sessionEndpoints(sessionGroupId: $sessionGroupId) {\n      id sessionGroupId appConfigId processConfigId portConfigId label targetPort url status\n      accessMode trafficCaptureMode enabledAt disabledAt revokedAt\n    }\n    sessionApplicationProcesses(sessionGroupId: $sessionGroupId) {\n      id sessionGroupId appConfigId processConfigId label status runtimeInstanceId startedAt stoppedAt\n      exitCode lastError\n    }\n    pdfSessionPreviewUrl(sessionGroupId: $sessionGroupId) @include(if: $includePdf)\n    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId) @include(if: $includePdf)\n  }\n":
     types.AppPreviewStateDocument,
   "\n  query SessionGroupFileTree($sessionGroupId: ID!) {\n    sessionGroupFileTree(sessionGroupId: $sessionGroupId) {\n      paths\n      truncated\n    }\n  }\n":
@@ -521,6 +527,18 @@ export function graphql(
 export function graphql(
   source: "\n  query PdfSessionDownloadUrl($sessionGroupId: ID!) {\n    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId)\n  }\n",
 ): (typeof documents)["\n  query PdfSessionDownloadUrl($sessionGroupId: ID!) {\n    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query DesignElementTextSource($sessionGroupId: ID!, $filePath: String!, $elementId: String!) {\n    designElementTextSource(\n      sessionGroupId: $sessionGroupId\n      filePath: $filePath\n      elementId: $elementId\n    ) {\n      sessionGroupId\n      filePath\n      elementId\n      text\n      sourceHash\n    }\n  }\n",
+): (typeof documents)["\n  query DesignElementTextSource($sessionGroupId: ID!, $filePath: String!, $elementId: String!) {\n    designElementTextSource(\n      sessionGroupId: $sessionGroupId\n      filePath: $filePath\n      elementId: $elementId\n    ) {\n      sessionGroupId\n      filePath\n      elementId\n      text\n      sourceHash\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation UpdateDesignElementText(\n    $sessionGroupId: ID!\n    $filePath: String!\n    $elementId: String!\n    $text: String!\n    $expectedSourceHash: String!\n  ) {\n    updateDesignElementText(\n      sessionGroupId: $sessionGroupId\n      filePath: $filePath\n      elementId: $elementId\n      text: $text\n      expectedSourceHash: $expectedSourceHash\n    ) {\n      sessionGroupId\n      filePath\n      elementId\n      previousText\n      text\n      sourceHash\n    }\n  }\n",
+): (typeof documents)["\n  mutation UpdateDesignElementText(\n    $sessionGroupId: ID!\n    $filePath: String!\n    $elementId: String!\n    $text: String!\n    $expectedSourceHash: String!\n  ) {\n    updateDesignElementText(\n      sessionGroupId: $sessionGroupId\n      filePath: $filePath\n      elementId: $elementId\n      text: $text\n      expectedSourceHash: $expectedSourceHash\n    ) {\n      sessionGroupId\n      filePath\n      elementId\n      previousText\n      text\n      sourceHash\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

@@ -133,8 +133,77 @@ function injectAuthoringOverlay(
   if (html.includes("data-trace-app-overlay")) return { headers, body };
   const script = `<script data-trace-app-overlay>(function(){
 var TRACE_ORIGIN=${JSON.stringify(TRACE_APP_ORIGIN)};
+try{if(TRACE_ORIGIN==="*"&&document.referrer)TRACE_ORIGIN=new URL(document.referrer).origin}catch(e){}
+var editEnabled=false;
+var selectedId=null;
+var hoverEl=null;
 function post(event,payload){if(TRACE_ORIGIN!=="*"&&window.parent&&window.parent!==window)window.parent.postMessage({type:"trace:app:overlay",event:event,...payload},TRACE_ORIGIN)}
-document.addEventListener("click",function(e){var el=e.target&&e.target.closest&&e.target.closest("[data-trace-source]");if(el)post("element-selected",{sourceLocation:el.getAttribute("data-trace-source"),text:(el.textContent||"").trim().slice(0,500)})},true);
+function closestSourceTarget(value){return value&&value.closest&&value.closest("[data-trace-source]")}
+function closestEditTarget(value){return value&&value.closest&&value.closest("[data-trace-id][data-trace-source]")}
+function findEditTarget(elementId){
+  var elements=document.querySelectorAll("[data-trace-id]");
+  for(var i=0;i<elements.length;i++)if(elements[i].getAttribute("data-trace-id")===elementId)return elements[i];
+  return null;
+}
+function clearHover(){if(hoverEl){hoverEl.removeAttribute("data-trace-edit-hover");hoverEl=null}}
+function clearSelection(){selectedId=null;restoreSelection()}
+function restoreSelection(){
+  var selected=document.querySelectorAll("[data-trace-edit-selected]");
+  for(var i=0;i<selected.length;i++)selected[i].removeAttribute("data-trace-edit-selected");
+  if(!selectedId)return;
+  var el=findEditTarget(selectedId);
+  if(el)el.setAttribute("data-trace-edit-selected","");
+}
+function setEditMode(enabled){
+  editEnabled=!!enabled;
+  document.documentElement.toggleAttribute("data-trace-edit-mode",editEnabled);
+  if(!editEnabled){clearHover();clearSelection()}
+}
+function selectedPayload(el){
+  var text=(el.textContent||"").trim().slice(0,2000);
+  return {sourceLocation:el.getAttribute("data-trace-source"),elementId:el.getAttribute("data-trace-id"),text:text,editableText:el.children.length===0};
+}
+document.addEventListener("pointerover",function(e){
+  if(!editEnabled)return;
+  var el=closestEditTarget(e.target);
+  if(el===hoverEl)return;
+  clearHover();
+  if(el){hoverEl=el;el.setAttribute("data-trace-edit-hover","")}
+},true);
+document.addEventListener("pointerout",function(e){
+  if(!editEnabled||!hoverEl)return;
+  var next=e.relatedTarget;
+  if(next&&hoverEl.contains(next))return;
+  clearHover();
+},true);
+document.addEventListener("click",function(e){
+  var el=editEnabled?closestEditTarget(e.target):closestSourceTarget(e.target);
+  if(!el)return;
+  if(editEnabled){
+    e.preventDefault();e.stopPropagation();
+    selectedId=el.getAttribute("data-trace-id");
+    restoreSelection();
+    post("element-selected",selectedPayload(el));
+    return;
+  }
+  post("element-selected",{sourceLocation:el.getAttribute("data-trace-source"),text:(el.textContent||"").trim().slice(0,500)});
+},true);
+window.addEventListener("message",function(e){
+  if(e.source!==window.parent||TRACE_ORIGIN==="*"||e.origin!==TRACE_ORIGIN||!e.data)return;
+  if(e.data.type==="trace:design:edit-mode"){setEditMode(e.data.enabled);return}
+  if(e.data.type==="trace:design:clear-selection"){clearSelection();return}
+  if(e.data.type==="trace:design:preview-text"&&typeof e.data.elementId==="string"&&typeof e.data.text==="string"){
+    var el=findEditTarget(e.data.elementId);
+    if(el&&el.children.length===0)el.textContent=e.data.text;
+  }
+});
+var style=document.createElement("style");
+style.setAttribute("data-trace-app-overlay-style","");
+style.textContent='html[data-trace-edit-mode] [data-trace-id][data-trace-source]{cursor:text!important}html[data-trace-edit-mode] [data-trace-edit-hover]{outline:1px dashed #3b82f6!important;outline-offset:2px!important}html[data-trace-edit-mode] [data-trace-edit-selected]{outline:2px solid #3b82f6!important;outline-offset:2px!important}';
+document.head.appendChild(style);
+var root=document.getElementById("root")||document.body;
+if(window.MutationObserver&&root)new MutationObserver(function(){restoreSelection()}).observe(root,{childList:true,subtree:true});
+post("ready",{});
 window.addEventListener("error",function(e){post("error",{message:e.message||"Application script error",stack:e.error&&e.error.stack?String(e.error.stack):null})});
 })();</script>`;
   const nextBody = Buffer.from(

@@ -303,6 +303,7 @@ enum EventType {
   session_group_renamed
   design_preview_updated
   pdf_export_updated
+  design_element_text_updated
   chat_created
   chat_member_added
   chat_member_removed
@@ -1055,6 +1056,23 @@ type SessionGroupFileContentResult {
   usedFallback: Boolean!
 }
 
+type DesignElementTextSource {
+  sessionGroupId: ID!
+  filePath: String!
+  elementId: String!
+  text: String!
+  sourceHash: String!
+}
+
+type DesignElementTextEditResult {
+  sessionGroupId: ID!
+  filePath: String!
+  elementId: String!
+  previousText: String!
+  text: String!
+  sourceHash: String!
+}
+
 type Notification {
   id: ID!
   type: String!
@@ -1392,6 +1410,11 @@ type Query {
     sessionGroupId: ID!
     filePath: String!
   ): SessionGroupFileContentResult!
+  designElementTextSource(
+    sessionGroupId: ID!
+    filePath: String!
+    elementId: String!
+  ): DesignElementTextSource!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
   linkedCheckoutStatus(
@@ -1562,6 +1585,13 @@ type Mutation {
     unit: String!
   ): Boolean!
   requestPdfSessionExport(sessionGroupId: ID!): Boolean!
+  updateDesignElementText(
+    sessionGroupId: ID!
+    filePath: String!
+    elementId: String!
+    text: String!
+    expectedSourceHash: String!
+  ): DesignElementTextEditResult!
   commitSessionGroupFileChanges(sessionGroupId: ID!, message: String): String!
   revertSessionGroupFileChange(sessionGroupId: ID!, filePath: String!): Boolean!
   requestBridgeAccess(

@@ -200,6 +200,7 @@ enum EventType {
   session_group_renamed
   design_preview_updated
   pdf_export_updated
+  design_element_text_updated
   ticket_assigned
   ticket_unassigned
   ticket_linked

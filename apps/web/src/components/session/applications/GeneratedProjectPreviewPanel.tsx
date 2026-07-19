@@ -37,6 +37,7 @@ export function GeneratedProjectPreviewPanel({
         title={`Live ${projectKind} preview`}
         projectKind={projectKind}
         sessionGroupId={projectKind === "pdf" ? sessionGroupId : undefined}
+        designSessionGroupId={projectKind === "design" ? sessionGroupId : undefined}
       />
     );
 

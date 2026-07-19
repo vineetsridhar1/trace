@@ -342,6 +342,25 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignElementTextEditResult = {
+  __typename?: "DesignElementTextEditResult";
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  previousText: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  text: Scalars["String"]["output"];
+};
+
+export type DesignElementTextSource = {
+  __typename?: "DesignElementTextSource";
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  text: Scalars["String"]["output"];
+};
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -402,6 +421,7 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_element_text_updated"
   | "design_preview_updated"
   | "entity_linked"
   | "inbox_item_created"
@@ -712,6 +732,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateDesignElementText: DesignElementTextEditResult;
   updateOrgMemberRole: OrgMember;
   updatePdfSessionFormat: Scalars["Boolean"]["output"];
   updateQueuedMessage: QueuedMessage;
@@ -1225,6 +1246,14 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateDesignElementTextArgs = {
+  elementId: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  text: Scalars["String"]["input"];
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1363,6 +1392,7 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  designElementTextSource: DesignElementTextSource;
   /** Design-kind session groups for the org (the sidebar Designs section). */
   designSessionGroups: Array<SessionGroup>;
   endpointTraffic: Array<EndpointTrafficEntry>;
@@ -1477,6 +1507,12 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignElementTextSourceArgs = {
+  elementId: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryDesignSessionGroupsArgs = {

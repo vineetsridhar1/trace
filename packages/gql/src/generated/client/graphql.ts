@@ -2,7 +2,7 @@
 import { JsonValue } from "../../json";
 import { TypedDocumentNode as DocumentNode } from "@graphql-typed-document-node/core";
 export type Maybe<T> = T | null;
-export type InputMaybe<T> = T | null | undefined;
+export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
 export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
 export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
@@ -344,6 +344,25 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignElementTextEditResult = {
+  __typename?: "DesignElementTextEditResult";
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  previousText: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  text: Scalars["String"]["output"];
+};
+
+export type DesignElementTextSource = {
+  __typename?: "DesignElementTextSource";
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  text: Scalars["String"]["output"];
+};
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -404,6 +423,7 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_element_text_updated"
   | "design_preview_updated"
   | "entity_linked"
   | "inbox_item_created"
@@ -714,6 +734,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateDesignElementText: DesignElementTextEditResult;
   updateOrgMemberRole: OrgMember;
   updatePdfSessionFormat: Scalars["Boolean"]["output"];
   updateQueuedMessage: QueuedMessage;
@@ -1227,6 +1248,14 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateDesignElementTextArgs = {
+  elementId: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  text: Scalars["String"]["input"];
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1365,6 +1394,7 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  designElementTextSource: DesignElementTextSource;
   /** Design-kind session groups for the org (the sidebar Designs section). */
   designSessionGroups: Array<SessionGroup>;
   endpointTraffic: Array<EndpointTrafficEntry>;
@@ -1479,6 +1509,12 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignElementTextSourceArgs = {
+  elementId: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryDesignSessionGroupsArgs = {
@@ -3294,6 +3330,45 @@ export type PdfSessionDownloadUrlQueryVariables = Exact<{
 export type PdfSessionDownloadUrlQuery = {
   __typename?: "Query";
   pdfSessionDownloadUrl?: string | null;
+};
+
+export type DesignElementTextSourceQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  filePath: Scalars["String"]["input"];
+  elementId: Scalars["String"]["input"];
+}>;
+
+export type DesignElementTextSourceQuery = {
+  __typename?: "Query";
+  designElementTextSource: {
+    __typename?: "DesignElementTextSource";
+    sessionGroupId: string;
+    filePath: string;
+    elementId: string;
+    text: string;
+    sourceHash: string;
+  };
+};
+
+export type UpdateDesignElementTextMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  filePath: Scalars["String"]["input"];
+  elementId: Scalars["String"]["input"];
+  text: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+}>;
+
+export type UpdateDesignElementTextMutation = {
+  __typename?: "Mutation";
+  updateDesignElementText: {
+    __typename?: "DesignElementTextEditResult";
+    sessionGroupId: string;
+    filePath: string;
+    elementId: string;
+    previousText: string;
+    text: string;
+    sourceHash: string;
+  };
 };
 
 export type AppPreviewStateQueryVariables = Exact<{
@@ -7368,6 +7443,180 @@ export const PdfSessionDownloadUrlDocument = {
     },
   ],
 } as unknown as DocumentNode<PdfSessionDownloadUrlQuery, PdfSessionDownloadUrlQueryVariables>;
+export const DesignElementTextSourceDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "DesignElementTextSource" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designElementTextSource" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "elementId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "filePath" } },
+                { kind: "Field", name: { kind: "Name", value: "elementId" } },
+                { kind: "Field", name: { kind: "Name", value: "text" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DesignElementTextSourceQuery, DesignElementTextSourceQueryVariables>;
+export const UpdateDesignElementTextDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "UpdateDesignElementText" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "text" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "updateDesignElementText" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "elementId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "text" },
+                value: { kind: "Variable", name: { kind: "Name", value: "text" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "expectedSourceHash" },
+                value: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "filePath" } },
+                { kind: "Field", name: { kind: "Name", value: "elementId" } },
+                { kind: "Field", name: { kind: "Name", value: "previousText" } },
+                { kind: "Field", name: { kind: "Name", value: "text" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  UpdateDesignElementTextMutation,
+  UpdateDesignElementTextMutationVariables
+>;
 export const AppPreviewStateDocument = {
   kind: "Document",
   definitions: [

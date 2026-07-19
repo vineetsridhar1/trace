@@ -189,6 +189,24 @@ export const sessionQueries = {
     const orgId = requireOrgContext(ctx);
     return sessionService.readFileWithSource(args.sessionGroupId, args.filePath, orgId, ctx.userId);
   },
+  designElementTextSource: async (
+    _: unknown,
+    args: { sessionGroupId: string; filePath: string; elementId: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    try {
+      return await sessionService.readDesignElementTextSource(
+        args.sessionGroupId,
+        args.filePath,
+        args.elementId,
+        requireOrgContext(ctx),
+        ctx.userId,
+      );
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
+  },
   sessionGroupBranchDiff: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     return sessionService.branchDiff(args.sessionGroupId, orgId, ctx.userId);
@@ -559,6 +577,29 @@ export const sessionMutations = {
       requireOrgContext(ctx),
       ctx.userId,
     );
+  },
+  updateDesignElementText: async (
+    _: unknown,
+    args: {
+      sessionGroupId: string;
+      filePath: string;
+      elementId: string;
+      text: string;
+      expectedSourceHash: string;
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    try {
+      return await sessionService.updateDesignElementText(
+        args,
+        requireOrgContext(ctx),
+        ctx.actorType,
+        ctx.userId,
+      );
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
   },
   commitSessionGroupFileChanges: (
     _: unknown,

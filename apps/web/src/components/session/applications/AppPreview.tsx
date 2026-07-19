@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { RotateCw } from "lucide-react";
+import { Pencil, RotateCw } from "lucide-react";
 import { client } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
 import { TraceLoader } from "@/components/ui/trace-loader";
@@ -12,6 +12,8 @@ import { CREATE_PREVIEW_MUTATION } from "./session-applications-operations";
 import { PdfPreviewControls } from "./PdfPreviewControls";
 import { SavedPreviewSkeleton } from "./SavedPreviewSkeleton";
 import { usePdfPreview } from "./usePdfPreview";
+import { DesignManualEditPanel } from "./DesignManualEditPanel";
+import { useDesignManualEdit } from "./useDesignManualEdit";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
 const MAX_FRAME_RETRY_MS = 30_000;
@@ -24,6 +26,7 @@ export function AppPreview({
   title = "Live app preview",
   projectKind,
   sessionGroupId,
+  designSessionGroupId,
 }: {
   endpointId: string;
   status: string;
@@ -32,6 +35,7 @@ export function AppPreview({
   title?: string;
   projectKind?: "design" | "pdf";
   sessionGroupId?: string;
+  designSessionGroupId?: string;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const pdf = usePdfPreview({
@@ -42,6 +46,10 @@ export function AppPreview({
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
   const [credentialExpiresAt, setCredentialExpiresAt] = useState<string | null>(null);
   const { attempts, error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
+  const manualEdit = useDesignManualEdit({
+    sessionGroupId: designSessionGroupId ?? "",
+    url,
+  });
 
   const reload = useCallback(() => {
     dispatch({ type: "reload" });
@@ -150,6 +158,19 @@ export function AppPreview({
         />
       ) : null}
       <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
+      {designSessionGroupId ? (
+        <Button
+          size="icon"
+          variant={manualEdit.enabled ? "default" : "outline"}
+          onClick={manualEdit.toggle}
+          title={manualEdit.enabled ? "Exit manual editing" : "Edit design manually"}
+          aria-label={manualEdit.enabled ? "Exit manual editing" : "Edit design manually"}
+          aria-pressed={manualEdit.enabled}
+          className="absolute right-11 top-2 z-20 size-7 opacity-90 hover:opacity-100"
+        >
+          <Pencil className="size-3" />
+        </Button>
+      ) : null}
       <Button
         size="icon"
         variant="outline"
@@ -161,12 +182,28 @@ export function AppPreview({
       >
         <RotateCw className={cn("size-3", refreshing && "animate-spin")} />
       </Button>
+      {designSessionGroupId && manualEdit.enabled ? (
+        <DesignManualEditPanel
+          target={manualEdit.target}
+          draft={manualEdit.draft}
+          loading={manualEdit.loading}
+          saving={manualEdit.saving}
+          error={manualEdit.error}
+          dirty={manualEdit.dirty}
+          onChange={manualEdit.changeDraft}
+          onCancel={manualEdit.cancel}
+          onSave={() => void manualEdit.save()}
+        />
+      ) : null}
       <iframe
-        ref={frameRef}
+        ref={designSessionGroupId ? manualEdit.frameRef : frameRef}
         key={frameRevision}
         src={url}
         title={title}
-        onLoad={() => dispatch({ type: "frame-loaded" })}
+        onLoad={() => {
+          dispatch({ type: "frame-loaded" });
+          manualEdit.onFrameLoad();
+        }}
         className={cn(
           "w-full bg-background",
           !frameLoaded && projectKind && "opacity-0",

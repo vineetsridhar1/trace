@@ -345,6 +345,25 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignElementTextEditResult = {
+  __typename?: "DesignElementTextEditResult";
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  previousText: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  text: Scalars["String"]["output"];
+};
+
+export type DesignElementTextSource = {
+  __typename?: "DesignElementTextSource";
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  text: Scalars["String"]["output"];
+};
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -405,6 +424,7 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_element_text_updated"
   | "design_preview_updated"
   | "entity_linked"
   | "inbox_item_created"
@@ -715,6 +735,7 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateDesignElementText: DesignElementTextEditResult;
   updateOrgMemberRole: OrgMember;
   updatePdfSessionFormat: Scalars["Boolean"]["output"];
   updateQueuedMessage: QueuedMessage;
@@ -1228,6 +1249,14 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateDesignElementTextArgs = {
+  elementId: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  text: Scalars["String"]["input"];
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1366,6 +1395,7 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  designElementTextSource: DesignElementTextSource;
   /** Design-kind session groups for the org (the sidebar Designs section). */
   designSessionGroups: Array<SessionGroup>;
   endpointTraffic: Array<EndpointTrafficEntry>;
@@ -1480,6 +1510,12 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignElementTextSourceArgs = {
+  elementId: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryDesignSessionGroupsArgs = {
@@ -2527,6 +2563,8 @@ export type ResolversTypes = ResolversObject<{
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
   DeliveryResult: DeliveryResult;
+  DesignElementTextEditResult: ResolverTypeWrapper<DesignElementTextEditResult>;
+  DesignElementTextSource: ResolverTypeWrapper<DesignElementTextSource>;
   EndpointTrafficCaptureMode: EndpointTrafficCaptureMode;
   EndpointTrafficEntry: ResolverTypeWrapper<EndpointTrafficEntry>;
   EntityType: EntityType;
@@ -2669,6 +2707,8 @@ export type ResolversParentTypes = ResolversObject<{
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
+  DesignElementTextEditResult: DesignElementTextEditResult;
+  DesignElementTextSource: DesignElementTextSource;
   EndpointTrafficEntry: EndpointTrafficEntry;
   Event: Event;
   Float: Scalars["Float"]["output"];
@@ -3028,6 +3068,33 @@ export interface DateTimeScalarConfig extends GraphQLScalarTypeConfig<
 > {
   name: "DateTime";
 }
+
+export type DesignElementTextEditResultResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignElementTextEditResult"] =
+    ResolversParentTypes["DesignElementTextEditResult"],
+> = ResolversObject<{
+  elementId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  filePath?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  previousText?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sourceHash?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  text?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type DesignElementTextSourceResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignElementTextSource"] =
+    ResolversParentTypes["DesignElementTextSource"],
+> = ResolversObject<{
+  elementId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  filePath?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sourceHash?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  text?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
 
 export type EndpointTrafficEntryResolvers<
   ContextType = Context,
@@ -3859,6 +3926,15 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationUpdateChannelGroupArgs, "id" | "input">
   >;
+  updateDesignElementText?: Resolver<
+    ResolversTypes["DesignElementTextEditResult"],
+    ParentType,
+    ContextType,
+    RequireFields<
+      MutationUpdateDesignElementTextArgs,
+      "elementId" | "expectedSourceHash" | "filePath" | "sessionGroupId" | "text"
+    >
+  >;
   updateOrgMemberRole?: Resolver<
     ResolversTypes["OrgMember"],
     ParentType,
@@ -4080,6 +4156,12 @@ export type QueryResolvers<
     RequireFields<QueryChatMessagesArgs, "chatId">
   >;
   chats?: Resolver<Array<ResolversTypes["Chat"]>, ParentType, ContextType>;
+  designElementTextSource?: Resolver<
+    ResolversTypes["DesignElementTextSource"],
+    ParentType,
+    ContextType,
+    RequireFields<QueryDesignElementTextSourceArgs, "elementId" | "filePath" | "sessionGroupId">
+  >;
   designSessionGroups?: Resolver<
     Array<ResolversTypes["SessionGroup"]>,
     ParentType,
@@ -4997,6 +5079,8 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ConnectionsBridge?: ConnectionsBridgeResolvers<ContextType>;
   ConnectionsRepoEntry?: ConnectionsRepoEntryResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
+  DesignElementTextEditResult?: DesignElementTextEditResultResolvers<ContextType>;
+  DesignElementTextSource?: DesignElementTextSourceResolvers<ContextType>;
   EndpointTrafficEntry?: EndpointTrafficEntryResolvers<ContextType>;
   Event?: EventResolvers<ContextType>;
   GitCheckpoint?: GitCheckpointResolvers<ContextType>;

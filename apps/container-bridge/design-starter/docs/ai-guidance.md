@@ -39,6 +39,10 @@ Read `docs/playbooks/README.md`, then use the playbook matching the requested su
 Edit `design.brief.json`, `trace.tokens.json`, `design.canvas.json`, and files under `src/design/`.
 
 - Keep one default-exported React component per logical screen in `src/design/screens/`.
+- Give meaningful static text elements a stable, unique `data-trace-id` and a repo-relative
+  `data-trace-source` pointing to their owning TSX file. Preserve these attributes across edits so
+  users can select the rendered element and save manual text changes back into source. Do not mark
+  dynamic expressions or elements with nested markup as manually text-editable.
 - Register every screen in `design.canvas.json` with a stable, unique id and a component path shaped like `./screens/Name.tsx`.
 - Put every screen id in exactly one section. A section is one related user flow and renders as a horizontal row; new sections begin below the previous row. Keep sequential screens in the same section, and create a new section for a distinct flow, feature area, or alternate journey.
 - Use `variation` and `state` labels for related alternatives such as Default, Loading, Empty, and Error.
