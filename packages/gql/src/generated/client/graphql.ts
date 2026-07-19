@@ -1369,6 +1369,7 @@ export type Query = {
   pdfSessionDownloadUrl?: Maybe<Scalars["String"]["output"]>;
   /** PDF-kind session groups for the org (the sidebar PDFs section). */
   pdfSessionGroups: Array<SessionGroup>;
+  pdfSessionPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   project?: Maybe<Project>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
@@ -1531,6 +1532,10 @@ export type QueryPdfSessionDownloadUrlArgs = {
 
 export type QueryPdfSessionGroupsArgs = {
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryPdfSessionPreviewUrlArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryProjectArgs = {
@@ -3273,10 +3278,13 @@ export type PdfSessionDownloadUrlQuery = {
 
 export type AppPreviewStateQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
+  includePdf: Scalars["Boolean"]["input"];
 }>;
 
 export type AppPreviewStateQuery = {
   __typename?: "Query";
+  pdfSessionPreviewUrl?: string | null;
+  pdfSessionDownloadUrl?: string | null;
   sessionEndpoints: Array<{
     __typename?: "SessionEndpoint";
     id: string;
@@ -7331,6 +7339,14 @@ export const AppPreviewStateDocument = {
             type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
           },
         },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "includePdf" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
+          },
+        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -7391,6 +7407,54 @@ export const AppPreviewStateDocument = {
                 { kind: "Field", name: { kind: "Name", value: "lastError" } },
               ],
             },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "pdfSessionPreviewUrl" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            directives: [
+              {
+                kind: "Directive",
+                name: { kind: "Name", value: "include" },
+                arguments: [
+                  {
+                    kind: "Argument",
+                    name: { kind: "Name", value: "if" },
+                    value: { kind: "Variable", name: { kind: "Name", value: "includePdf" } },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "pdfSessionDownloadUrl" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            directives: [
+              {
+                kind: "Directive",
+                name: { kind: "Name", value: "include" },
+                arguments: [
+                  {
+                    kind: "Argument",
+                    name: { kind: "Name", value: "if" },
+                    value: { kind: "Variable", name: { kind: "Name", value: "includePdf" } },
+                  },
+                ],
+              },
+            ],
           },
         ],
       },

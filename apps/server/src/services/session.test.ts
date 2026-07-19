@@ -154,6 +154,7 @@ import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
+import { storage } from "../lib/storage/index.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { inboxService } from "./inbox.js";
 import { apiTokenService } from "./api-token.js";
@@ -184,6 +185,7 @@ const prismaMock = prisma as unknown as MockedDeep<typeof prisma>;
 const eventServiceMock = eventService as unknown as MockedDeep<typeof eventService>;
 const sessionRouterMock = sessionRouter as unknown as MockedDeep<typeof sessionRouter>;
 const terminalRelayMock = terminalRelay as unknown as MockedDeep<typeof terminalRelay>;
+const storageMock = storage as unknown as MockedDeep<typeof storage>;
 const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
   typeof runtimeAccessService
 >;
@@ -3657,6 +3659,31 @@ describe("SessionService", () => {
       ).rejects.toThrow("PDF session not found");
 
       expect(sessionRouterMock.writeFile).not.toHaveBeenCalled();
+    });
+
+    it("serves captured PDFs inline for saved previews and as attachments for downloads", async () => {
+      const artifact = {
+        pdfExportStatus: "captured",
+        pdfExportKey: "pdf-exports/org-1/group-1/commit.pdf",
+        pdfExportCommitSha: "abcdef1234567890",
+      };
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: "group-1", visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce(artifact)
+        .mockResolvedValueOnce({ id: "group-1", visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce(artifact);
+
+      await expect(service.pdfPreviewUrl("group-1", "org-1", "user-1")).resolves.toBe(
+        `https://example.test/${artifact.pdfExportKey}`,
+      );
+      expect(storageMock.getGetUrl).toHaveBeenNthCalledWith(1, artifact.pdfExportKey, undefined);
+
+      await expect(service.pdfDownloadUrl("group-1", "org-1", "user-1")).resolves.toBe(
+        `https://example.test/${artifact.pdfExportKey}`,
+      );
+      expect(storageMock.getGetUrl).toHaveBeenNthCalledWith(2, artifact.pdfExportKey, {
+        downloadFilename: "document-abcdef12.pdf",
+      });
     });
 
     it("rejects saves to visible cloud session groups owned by another user", async () => {

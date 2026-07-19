@@ -9167,7 +9167,12 @@ export class SessionService {
     return true;
   }
 
-  async pdfDownloadUrl(sessionGroupId: string, organizationId: string, userId: string | null) {
+  private async pdfArtifactUrl(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string | null,
+    download: boolean,
+  ) {
     if (!userId) throw new AuthenticationError();
     await assertSessionGroupAccess(sessionGroupId, userId, organizationId);
     const group = await prisma.sessionGroup.findFirst({
@@ -9184,9 +9189,20 @@ export class SessionService {
     });
     if (!group) return null;
     if (group.pdfExportStatus !== "captured" || !group.pdfExportKey) return null;
-    return storage.getGetUrl(group.pdfExportKey, {
-      downloadFilename: `document-${group.pdfExportCommitSha?.slice(0, 8) ?? "latest"}.pdf`,
-    });
+    return storage.getGetUrl(
+      group.pdfExportKey,
+      download
+        ? { downloadFilename: `document-${group.pdfExportCommitSha?.slice(0, 8) ?? "latest"}.pdf` }
+        : undefined,
+    );
+  }
+
+  async pdfPreviewUrl(sessionGroupId: string, organizationId: string, userId: string | null) {
+    return this.pdfArtifactUrl(sessionGroupId, organizationId, userId, false);
+  }
+
+  async pdfDownloadUrl(sessionGroupId: string, organizationId: string, userId: string | null) {
+    return this.pdfArtifactUrl(sessionGroupId, organizationId, userId, true);
   }
 
   async commitFileChanges(
