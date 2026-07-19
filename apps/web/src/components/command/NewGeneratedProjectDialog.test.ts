@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
 
 vi.mock("react", () => ({
   useEffect: (effect: () => void) => effect(),
+  useCallback: <T,>(callback: T) => callback,
 }));
 
 vi.mock("../../lib/create-quick-session", () => ({

@@ -4,9 +4,7 @@ import type { TopLevelItem } from "../../hooks/useSidebarData";
 import { features } from "../../lib/features";
 import { BrowseChannelsDialog } from "./BrowseChannelsDialog";
 import { CreateChannelDialog } from "./CreateChannelDialog";
-import { AppsSection } from "./AppsSection";
-import { DesignsSection } from "./DesignsSection";
-import { PdfsSection } from "./PdfsSection";
+import { GeneratedProjectsSection } from "./GeneratedProjectsSection";
 import { HomeButton } from "./HomeButton";
 import { InboxButton } from "./InboxButton";
 import { TicketsButton } from "./TicketsButton";
@@ -80,9 +78,10 @@ export function SidebarChannelsPane({
           {features.tickets && <TicketsButton />}
         </div>
 
-        <DesignsSection activeOrgId={activeOrgId} activeSessionGroupId={activeSessionGroupId} />
-        <PdfsSection activeOrgId={activeOrgId} activeSessionGroupId={activeSessionGroupId} />
-        <AppsSection activeOrgId={activeOrgId} activeSessionGroupId={activeSessionGroupId} />
+        <GeneratedProjectsSection
+          activeOrgId={activeOrgId}
+          activeSessionGroupId={activeSessionGroupId}
+        />
 
         <div className="group/projects-header flex items-center justify-between px-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
