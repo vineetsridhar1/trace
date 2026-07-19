@@ -29,6 +29,7 @@ export function usePreviewViewport() {
   const [scaleReference, setScaleReference] = useState<Size>(PREVIEW_PRESETS.desktop);
   const [activePreset, setActivePreset] = useState<PreviewPreset | null>("desktop");
   const [resizing, setResizing] = useState(false);
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -53,10 +54,11 @@ export function usePreviewViewport() {
     0,
     canvasSize.height - CANVAS_GUTTER * 2 - PREVIEW_FRAME_MARGIN * 2,
   );
-  const scale =
+  const fitScale =
     availableWidth > 0 && availableHeight > 0
       ? Math.min(1, availableWidth / scaleReference.width, availableHeight / scaleReference.height)
       : 1;
+  const scale = fitScale * zoom;
   const maxViewportWidth = scale > 0 ? availableWidth / scale : viewportSize.width;
   const maxViewportHeight = scale > 0 ? availableHeight / scale : viewportSize.height;
 
@@ -66,6 +68,10 @@ export function usePreviewViewport() {
     setScaleReference(size);
     setActivePreset(preset);
   }, []);
+
+  const zoomIn = useCallback(() => setZoom((value) => Math.min(2, value + 0.1)), []);
+  const zoomOut = useCallback(() => setZoom((value) => Math.max(0.25, value - 0.1)), []);
+  const resetZoom = useCallback(() => setZoom(1), []);
 
   const handleResizeStart = useCallback(
     (event: PointerEvent<HTMLButtonElement>) => {
@@ -141,6 +147,10 @@ export function usePreviewViewport() {
     ready: canvasSize.width > 0 && canvasSize.height > 0,
     resizing,
     scale,
+    zoom,
+    zoomIn,
+    zoomOut,
+    resetZoom,
     selectPreset,
     viewportSize,
   };

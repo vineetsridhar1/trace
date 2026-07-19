@@ -22,7 +22,13 @@ export function AppPreviewCanvasSkeleton({
         </div>
         <Skeleton className="size-6 rounded" />
       </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center p-8">
+      <div
+        className="relative flex min-h-0 flex-1 items-center justify-center p-8"
+        style={{
+          backgroundImage: "radial-gradient(rgba(148, 163, 184, 0.2) 1px, transparent 1px)",
+          backgroundSize: "16px 16px",
+        }}
+      >
         <div className="flex aspect-[16/10] w-[min(88%,64rem)] flex-col overflow-hidden rounded-md border border-border bg-background shadow-2xl">
           <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-4">
             <Skeleton className="size-3 rounded-full" />
@@ -47,7 +53,12 @@ export function AppPreviewCanvasSkeleton({
               <p className="text-sm font-medium text-foreground">Starting live preview…</p>
               <p className="max-w-64 text-xs leading-5 text-muted-foreground">
                 Changes will appear here as the agent{" "}
-                {projectKind === "design" ? "designs" : projectKind === "pdf" ? "formats the document" : "builds"}.
+                {projectKind === "design"
+                  ? "designs"
+                  : projectKind === "pdf"
+                    ? "formats the document"
+                    : "builds"}
+                .
               </p>
             </div>
           </div>
