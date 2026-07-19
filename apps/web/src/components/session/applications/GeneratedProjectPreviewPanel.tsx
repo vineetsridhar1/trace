@@ -29,7 +29,7 @@ export function GeneratedProjectPreviewPanel({
         endpointId={endpoint.id}
         status="running"
         fill
-        desktopViewport
+        desktopViewport={projectKind === "pdf"}
         title={`Live ${projectKind} preview`}
         projectKind={projectKind === "pdf" ? "pdf" : undefined}
       />
