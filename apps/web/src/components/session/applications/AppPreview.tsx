@@ -34,6 +34,7 @@ export function AppPreview({
     height: 297,
     unit: "mm",
   });
+  const [pdfContentHeight, setPdfContentHeight] = useState(0);
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
   const [credentialExpiresAt, setCredentialExpiresAt] = useState<string | null>(null);
   const { error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
@@ -81,6 +82,27 @@ export function AppPreview({
       active = false;
     };
   }, [endpointId, requestRevision]);
+
+  useEffect(() => {
+    if (projectKind !== "pdf") return;
+    const receiveDocumentSize = (event: MessageEvent<unknown>) => {
+      if (event.source !== frameRef.current?.contentWindow || !event.data || typeof event.data !== "object") {
+        return;
+      }
+      const message = event.data as { source?: unknown; type?: unknown; height?: unknown };
+      if (
+        message.source !== "trace-pdf-preview" ||
+        message.type !== "content-size" ||
+        typeof message.height !== "number" ||
+        !Number.isFinite(message.height)
+      ) {
+        return;
+      }
+      setPdfContentHeight(Math.max(0, Math.ceil(message.height)));
+    };
+    window.addEventListener("message", receiveDocumentSize);
+    return () => window.removeEventListener("message", receiveDocumentSize);
+  }, [projectKind]);
 
   useEffect(() => {
     if (!url || frameLoaded || error) return;
@@ -134,6 +156,7 @@ export function AppPreview({
           iframeRef={frameRef}
           bare={projectKind === "pdf"}
           pdfFormat={projectKind === "pdf" ? pdfFormat : undefined}
+          pdfContentHeight={projectKind === "pdf" ? pdfContentHeight : undefined}
         />
         <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       </>

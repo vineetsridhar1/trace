@@ -18,6 +18,7 @@ export function AppPreviewCanvas({
   iframeRef,
   bare = false,
   pdfFormat,
+  pdfContentHeight,
 }: {
   url: string | null;
   title: string;
@@ -30,14 +31,18 @@ export function AppPreviewCanvas({
   iframeRef: RefObject<HTMLIFrameElement | null>;
   bare?: boolean;
   pdfFormat?: PdfPageFormat;
+  pdfContentHeight?: number;
 }) {
+  const frameMargin = bare ? 0 : PREVIEW_FRAME_MARGIN;
+  const pixelsPerUnit = pdfFormat?.unit === "in" ? 96 : 96 / 25.4;
   const viewport = usePreviewViewport(
     pdfFormat
       ? {
-          width: pdfFormat.width * (pdfFormat.unit === "in" ? 96 : 96 / 25.4),
-          height: pdfFormat.height * (pdfFormat.unit === "in" ? 96 : 96 / 25.4),
+          width: pdfFormat.width * pixelsPerUnit,
+          height: Math.max(pdfFormat.height * pixelsPerUnit, pdfContentHeight ?? 0),
         }
       : undefined,
+    frameMargin,
   );
 
   return (
@@ -58,25 +63,40 @@ export function AppPreviewCanvas({
 
       <div
         ref={viewport.canvasRef}
-        className="relative min-h-0 flex-1 overflow-hidden bg-surface-deep"
+        className={cn(
+          "relative min-h-0 flex-1 overflow-hidden bg-surface-deep",
+          bare && "cursor-grab touch-none active:cursor-grabbing",
+        )}
+        onPointerDown={bare ? viewport.handleCanvasPointerDown : undefined}
+        onPointerMove={bare ? viewport.handleCanvasPointerMove : undefined}
+        onPointerUp={bare ? viewport.handleCanvasPointerEnd : undefined}
+        onPointerCancel={bare ? viewport.handleCanvasPointerEnd : undefined}
+        onWheel={bare ? viewport.handleCanvasWheel : undefined}
         style={{
-          backgroundImage: "radial-gradient(rgba(148, 163, 184, 0.2) 1px, transparent 1px)",
-          backgroundSize: "16px 16px",
+          backgroundImage: bare
+            ? "radial-gradient(#71717a 1px, transparent 1px)"
+            : "radial-gradient(rgba(148, 163, 184, 0.2) 1px, transparent 1px)",
+          backgroundSize: bare ? "24px 24px" : "16px 16px",
         }}
       >
         {viewport.ready ? (
-          <div className="absolute inset-0 flex items-center justify-center p-8">
+          <div
+            className="absolute left-0 top-0 origin-top-left"
+            style={{
+              transform: `translate(${(viewport.canvasSize.width - viewport.displayedWidth) / 2 + viewport.pan.x}px, ${(viewport.canvasSize.height - viewport.displayedHeight) / 2 + viewport.pan.y}px)`,
+            }}
+          >
             <div
               className={cn(
                 "relative shrink-0 overflow-visible",
                 bare
                   ? "bg-transparent p-0 shadow-none"
                   : "rounded-lg rounded-tl-none bg-background p-2 shadow-2xl",
-                viewport.resizing && "select-none",
+                (viewport.resizing || viewport.panning) && "select-none",
               )}
               style={{
-                width: viewport.displayedWidth + PREVIEW_FRAME_MARGIN * 2,
-                height: viewport.displayedHeight + PREVIEW_FRAME_MARGIN * 2,
+                width: viewport.displayedWidth + frameMargin * 2,
+                height: viewport.displayedHeight + frameMargin * 2,
               }}
             >
               {!bare ? <AppPreviewFrameControls url={url} status={status} /> : null}
@@ -102,6 +122,7 @@ export function AppPreviewCanvas({
                       "block origin-top-left border-0 bg-background",
                       !loaded && "opacity-0",
                       viewport.resizing && "pointer-events-none",
+                      bare && "pointer-events-none",
                     )}
                     style={{
                       width: viewport.viewportSize.width,
