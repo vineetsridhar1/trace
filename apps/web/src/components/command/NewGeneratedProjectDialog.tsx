@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { AppWindow, Figma, FileText } from "lucide-react";
+import { AppWindow, FileText, Palette } from "lucide-react";
 import {
   createAppSession,
   createDesignSession,
@@ -26,7 +26,7 @@ const OPTIONS: Array<{
     kind: "design",
     title: "Design",
     description: "Explore product screens, flows, and visual directions.",
-    Icon: Figma,
+    Icon: Palette,
   },
   {
     kind: "pdf",
