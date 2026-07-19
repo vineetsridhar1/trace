@@ -38,6 +38,27 @@ export function App() {
     return () => window.removeEventListener("message", receiveMessage);
   }, []);
 
+  useEffect(() => {
+    const reportSize = () => {
+      window.parent.postMessage(
+        {
+          source: "trace-pdf-preview",
+          type: "content-size",
+          height: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
+        },
+        "*",
+      );
+    };
+    const observer = new ResizeObserver(reportSize);
+    observer.observe(document.body);
+    reportSize();
+    window.addEventListener("load", reportSize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("load", reportSize);
+    };
+  }, []);
+
   return (
     <main className="min-h-screen bg-white text-stone-900">
       <style>{pageStyle}</style>
