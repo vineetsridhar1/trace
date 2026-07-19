@@ -21,7 +21,7 @@ export function DeleteGeneratedProjectDialog({
 }: {
   groupId: string;
   groupName: string;
-  kind: "app" | "design";
+  kind: "app" | "design" | "pdf";
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -56,7 +56,7 @@ export function DeleteGeneratedProjectDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>Delete {kind === "design" ? "Design" : "App"}</DialogTitle>
+          <DialogTitle>Delete {kind === "design" ? "Design" : kind === "pdf" ? "PDF" : "App"}</DialogTitle>
           <DialogDescription>
             Are you sure you want to delete <strong>{groupName}</strong>? This permanently deletes
             its sessions and managed git repository and cannot be undone.
@@ -70,7 +70,7 @@ export function DeleteGeneratedProjectDialog({
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
           <Button variant="destructive" disabled={deleting} onClick={handleDelete}>
-            {deleting ? "Deleting…" : `Delete ${kind === "design" ? "Design" : "App"}`}
+            {deleting ? "Deleting…" : `Delete ${kind === "design" ? "Design" : kind === "pdf" ? "PDF" : "App"}`}
           </Button>
         </DialogFooter>
       </DialogContent>

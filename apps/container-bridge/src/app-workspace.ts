@@ -11,8 +11,10 @@ const IMAGE_APP_STARTER_DIR = "/opt/trace/app-starter";
 const SOURCE_APP_STARTER_DIR = fileURLToPath(new URL("../app-starter", import.meta.url));
 const IMAGE_DESIGN_STARTER_DIR = "/opt/trace/design-starter";
 const SOURCE_DESIGN_STARTER_DIR = fileURLToPath(new URL("../design-starter", import.meta.url));
+const IMAGE_PDF_STARTER_DIR = "/opt/trace/pdf-starter";
+const SOURCE_PDF_STARTER_DIR = fileURLToPath(new URL("../pdf-starter", import.meta.url));
 
-export type GeneratedProjectKind = "app" | "design";
+export type GeneratedProjectKind = "app" | "design" | "pdf";
 
 async function remoteDefaultBranchExists(repoRemoteUrl: string, defaultBranch: string): Promise<boolean> {
   const { stdout } = await execFileAsync("git", [
@@ -26,10 +28,16 @@ async function remoteDefaultBranchExists(repoRemoteUrl: string, defaultBranch: s
 
 function starterDir(kind: GeneratedProjectKind): string {
   const configured =
-    kind === "design" ? process.env.TRACE_DESIGN_STARTER_DIR : process.env.TRACE_APP_STARTER_DIR;
+    kind === "design"
+      ? process.env.TRACE_DESIGN_STARTER_DIR
+      : kind === "pdf"
+        ? process.env.TRACE_PDF_STARTER_DIR
+        : process.env.TRACE_APP_STARTER_DIR;
   if (configured) return configured;
-  const imageDir = kind === "design" ? IMAGE_DESIGN_STARTER_DIR : IMAGE_APP_STARTER_DIR;
-  const sourceDir = kind === "design" ? SOURCE_DESIGN_STARTER_DIR : SOURCE_APP_STARTER_DIR;
+  const imageDir =
+    kind === "design" ? IMAGE_DESIGN_STARTER_DIR : kind === "pdf" ? IMAGE_PDF_STARTER_DIR : IMAGE_APP_STARTER_DIR;
+  const sourceDir =
+    kind === "design" ? SOURCE_DESIGN_STARTER_DIR : kind === "pdf" ? SOURCE_PDF_STARTER_DIR : SOURCE_APP_STARTER_DIR;
   if (fs.existsSync(imageDir)) return imageDir;
   if (fs.existsSync(sourceDir)) return sourceDir;
   throw new Error(`Trace ${kind} starter is missing from the runtime`);
@@ -97,7 +105,7 @@ export async function createAppWorkspace({
   if (!fs.existsSync(`${workdir}/.git`)) {
     await execFileAsync("git", ["init", "-b", defaultBranch], { cwd: workdir });
   }
-  const agentLabel = sessionGroupKind === "design" ? "Design" : "App";
+  const agentLabel = sessionGroupKind === "design" ? "Design" : sessionGroupKind === "pdf" ? "PDF" : "App";
   await execFileAsync("git", ["config", "user.name", `Trace ${agentLabel} Agent`], {
     cwd: workdir,
   });

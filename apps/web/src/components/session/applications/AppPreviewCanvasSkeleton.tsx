@@ -10,7 +10,7 @@ export function AppPreviewCanvasSkeleton({
 }: {
   error?: string | null;
   onRetry?: () => void;
-  projectKind?: "app" | "design";
+  projectKind?: "app" | "design" | "pdf";
 }) {
   return (
     <div className="flex h-full flex-col bg-surface-deep">
@@ -47,7 +47,7 @@ export function AppPreviewCanvasSkeleton({
               <p className="text-sm font-medium text-foreground">Starting live preview…</p>
               <p className="max-w-64 text-xs leading-5 text-muted-foreground">
                 Changes will appear here as the agent{" "}
-                {projectKind === "design" ? "designs" : "builds"}.
+                {projectKind === "design" ? "designs" : projectKind === "pdf" ? "formats the document" : "builds"}.
               </p>
             </div>
           </div>

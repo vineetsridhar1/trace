@@ -1,0 +1,1 @@
+ALTER TYPE "SessionGroupKind" ADD VALUE IF NOT EXISTS 'pdf';

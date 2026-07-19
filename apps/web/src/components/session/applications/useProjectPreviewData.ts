@@ -18,7 +18,7 @@ const PROJECT_PREVIEW_ENDPOINTS_QUERY = gql`
   }
 `;
 
-export function useProjectPreviewData(sessionGroupId: string, projectKind: "app" | "design") {
+export function useProjectPreviewData(sessionGroupId: string, projectKind: "app" | "design" | "pdf") {
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
   const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
   const upsertMany = useEntityStore((s) => s.upsertMany);

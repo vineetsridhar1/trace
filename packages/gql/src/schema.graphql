@@ -25,6 +25,7 @@ enum SessionGroupKind {
   coding
   design
   app
+  pdf
 }
 
 enum SessionGroupStatus {
@@ -1301,6 +1302,10 @@ type Query {
   Design-kind session groups for the org (the sidebar Designs section).
   """
   designSessionGroups(organizationId: ID!): [SessionGroup!]!
+  """
+  PDF-kind session groups for the org (the sidebar PDFs section).
+  """
+  pdfSessionGroups(organizationId: ID!): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session

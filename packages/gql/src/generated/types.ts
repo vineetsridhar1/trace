@@ -391,10 +391,10 @@ export type EventType =
   | "channel_member_removed"
   | "channel_updated"
   | "chat_created"
-  | "design_preview_updated"
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_preview_updated"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -1350,6 +1350,8 @@ export type Query = {
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
+  /** PDF-kind session groups for the org (the sidebar PDFs section). */
+  pdfSessionGroups: Array<SessionGroup>;
   project?: Maybe<Project>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
@@ -1504,6 +1506,10 @@ export type QueryOrganizationArgs = {
 export type QueryParticipantsArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type QueryPdfSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryProjectArgs = {
@@ -2031,7 +2037,7 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "app" | "coding" | "design";
+export type SessionGroupKind = "app" | "coding" | "design" | "pdf";
 
 export type SessionGroupStatus =
   | "archived"

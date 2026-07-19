@@ -4,7 +4,7 @@ import { START_SESSION_MUTATION, useEntityStore } from "@trace/client-core";
 import { navigateToSession, navigateToSessionGroup } from "../stores/ui";
 
 const pendingQuickSessionChannels = new Set<string>();
-const pendingGeneratedProjectKinds = new Set<"app" | "design">();
+const pendingGeneratedProjectKinds = new Set<"app" | "design" | "pdf">();
 
 export function getChannelRepoId(channelId: string): string | undefined {
   const channel = useEntityStore.getState().channels[channelId];
@@ -80,7 +80,7 @@ export async function createAppSession(): Promise<boolean> {
   return createGeneratedProjectSession("app");
 }
 
-export function buildGeneratedProjectStartInput(kind: "app" | "design") {
+export function buildGeneratedProjectStartInput(kind: "app" | "design" | "pdf") {
   return {
     kind,
     hosting: "cloud" as const,
@@ -91,12 +91,16 @@ export async function createDesignSession(): Promise<boolean> {
   return createGeneratedProjectSession("design");
 }
 
+export async function createPdfSession(): Promise<boolean> {
+  return createGeneratedProjectSession("pdf");
+}
+
 async function createGeneratedProjectSession(
-  kind: "app" | "design",
+  kind: "app" | "design" | "pdf",
 ): Promise<boolean> {
   if (pendingGeneratedProjectKinds.has(kind)) return false;
   pendingGeneratedProjectKinds.add(kind);
-  const label = kind === "design" ? "design" : "app";
+  const label = kind;
 
   try {
     const result = await client

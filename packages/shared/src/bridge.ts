@@ -67,7 +67,7 @@ export interface BridgePrepareAppCommand {
   type: "prepare_app";
   sessionId: string;
   sessionGroupId?: string;
-  sessionGroupKind: "app" | "design";
+  sessionGroupKind: "app" | "design" | "pdf";
   /** Pre-assigned slug for the generated app workspace. If absent, the bridge generates one. */
   slug?: string;
   repoId: string;

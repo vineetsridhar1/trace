@@ -6,6 +6,7 @@ import { BrowseChannelsDialog } from "./BrowseChannelsDialog";
 import { CreateChannelDialog } from "./CreateChannelDialog";
 import { AppsSection } from "./AppsSection";
 import { DesignsSection } from "./DesignsSection";
+import { PdfsSection } from "./PdfsSection";
 import { HomeButton } from "./HomeButton";
 import { InboxButton } from "./InboxButton";
 import { TicketsButton } from "./TicketsButton";
@@ -80,6 +81,7 @@ export function SidebarChannelsPane({
         </div>
 
         <DesignsSection activeOrgId={activeOrgId} activeSessionGroupId={activeSessionGroupId} />
+        <PdfsSection activeOrgId={activeOrgId} activeSessionGroupId={activeSessionGroupId} />
         <AppsSection activeOrgId={activeOrgId} activeSessionGroupId={activeSessionGroupId} />
 
         <div className="group/projects-header flex items-center justify-between px-2">

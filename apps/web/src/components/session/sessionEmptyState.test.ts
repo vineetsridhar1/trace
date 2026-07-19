@@ -21,6 +21,7 @@ describe("session empty state", () => {
   it("identifies only generated project session kinds", () => {
     expect(isGeneratedProjectKind("app")).toBe(true);
     expect(isGeneratedProjectKind("design")).toBe(true);
+    expect(isGeneratedProjectKind("pdf")).toBe(true);
     expect(isGeneratedProjectKind("coding")).toBe(false);
   });
 });

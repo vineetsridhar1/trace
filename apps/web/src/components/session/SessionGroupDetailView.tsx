@@ -440,7 +440,7 @@ export function SessionGroupDetailView({
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
   const projectWorkspaceKind = getProjectWorkspaceKind(groupKind);
   const isAppGroup = projectWorkspaceKind === "app";
-  const isGeneratedProjectGroup = projectWorkspaceKind === "design";
+  const isGeneratedProjectGroup = projectWorkspaceKind === "design" || projectWorkspaceKind === "pdf";
   const selectedConnection = selectedSession?.connection as
     | Record<string, unknown>
     | null
@@ -1044,7 +1044,10 @@ export function SessionGroupDetailView({
                           onForkSession={handleOpenForkDialog}
                           canForkSession={false}
                           emptyState={
-                            <GeneratedProjectPreviewPanel sessionGroupId={sessionGroupId} />
+                            <GeneratedProjectPreviewPanel
+                              sessionGroupId={sessionGroupId}
+                              projectKind={projectWorkspaceKind === "pdf" ? "pdf" : "design"}
+                            />
                           }
                         />
                       }
