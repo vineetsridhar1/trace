@@ -9,6 +9,13 @@ describe("buildGeneratedProjectStartInput", () => {
     });
   });
 
+  it("creates a blank repo-less cloud PDF input", () => {
+    expect(buildGeneratedProjectStartInput("pdf")).toEqual({
+      kind: "pdf",
+      hosting: "cloud",
+    });
+  });
+
   it("creates a blank cloud app input", () => {
     expect(buildGeneratedProjectStartInput("app")).toEqual({
       kind: "app",

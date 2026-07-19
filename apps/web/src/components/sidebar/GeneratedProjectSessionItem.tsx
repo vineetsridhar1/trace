@@ -14,7 +14,7 @@ export function GeneratedProjectSessionItem({
 }: {
   groupId: string;
   isActive: boolean;
-  kind: "app" | "design";
+  kind: "app" | "design" | "pdf";
 }) {
   const row = useGeneratedProjectSessionGroupRow(groupId);
   const [deleteOpen, setDeleteOpen] = useState(false);

@@ -80,14 +80,27 @@ const DESIGN_EMPTY_STATE: SessionEmptyStateContent = {
   ],
 };
 
+const PDF_EMPTY_STATE: SessionEmptyStateContent = {
+  title: "What should we put in the PDF?",
+  description: "Describe the document, add content or references, or choose a starting point below.",
+  placeholder: "Describe the PDF you want to create…",
+  sendStarterImmediately: false,
+  starterPrompts: [
+    { label: "Create a project proposal", prompt: "Create a polished, print-ready project proposal with an executive summary, scope, timeline, and next steps." },
+    { label: "Make a client report", prompt: "Create a concise, professional client report with a cover page, findings, recommendations, and an appendix." },
+    { label: "Design an event flyer", prompt: "Create a bold, one-page event flyer with clear hierarchy, essential event details, and a memorable visual direction." },
+  ],
+};
+
 export function getSessionEmptyStateContent(
   kind: string | null | undefined,
 ): SessionEmptyStateContent {
   if (kind === "app") return APP_EMPTY_STATE;
   if (kind === "design") return DESIGN_EMPTY_STATE;
+  if (kind === "pdf") return PDF_EMPTY_STATE;
   return CODING_EMPTY_STATE;
 }
 
 export function isGeneratedProjectKind(kind: string | null | undefined): boolean {
-  return kind === "app" || kind === "design";
+  return kind === "app" || kind === "design" || kind === "pdf";
 }

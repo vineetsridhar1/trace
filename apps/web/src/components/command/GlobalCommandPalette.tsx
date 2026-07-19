@@ -7,6 +7,7 @@ import {
   Hash,
   Inbox,
   Figma,
+  FileText,
   MessageCircle,
   Plus,
   Search,
@@ -222,6 +223,17 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       onSelect: () => {
         onClose();
         openGeneratedProjectDialog("design");
+      },
+    });
+    list.push({
+      key: "new-pdf-session",
+      group: "Actions",
+      label: "New PDF",
+      search: "new pdf document print download create",
+      icon: <FileText size={16} />,
+      onSelect: () => {
+        onClose();
+        openGeneratedProjectDialog("pdf");
       },
     });
 

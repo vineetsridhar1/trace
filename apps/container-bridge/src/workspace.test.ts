@@ -285,6 +285,24 @@ describe("workspace repo setup", () => {
     );
   });
 
+  it("creates a PDF workspace from the bundled PDF starter", async () => {
+    mocks.existsSync.mockImplementation((path) => String(path).endsWith("/pdf-starter"));
+
+    await createAppWorkspace({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      repoRemoteUrl: "https://example.test/repo.git",
+      defaultBranch: "main",
+      sessionGroupKind: "pdf",
+    });
+
+    expect(mocks.cpSync).toHaveBeenCalledWith(
+      expect.stringMatching(/pdf-starter$/),
+      expect.any(String),
+      expect.objectContaining({ recursive: true }),
+    );
+  });
+
   it("recreates an app workspace from the latest managed remote branch", async () => {
     mocks.existsSync.mockReturnValue(false);
     mocks.readdirSync.mockReturnValue([]);

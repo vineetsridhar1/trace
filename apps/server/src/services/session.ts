@@ -998,11 +998,16 @@ const DESIGN_SESSION_INSTRUCTION = `\n\n<system-instruction>
 This is a Trace Design session, not an App or Coding session. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; when the user asks to build or create a product, design its screens, flows, variants, and states instead of implementing a production application. Before editing, read and follow AGENTS.md or CLAUDE.md plus docs/ai-guidance.md, resolve design.brief.json, and read the relevant docs/playbooks guidance. Follow the workspace guide's design loop: understand the brief, ground supplied references in observable evidence, map the experience, commit to executable tokens, compose a representative screen and then the coherent screen set, and critique it before delivery. Work visibly and incrementally: render a rough but valid representative screen early, then add and refine screens in coherent runnable batches so the user can watch the canvas evolve through Vite HMR. Keep the manifest and canvas valid between edits; do not assemble the whole design offscreen and reveal it only at the end. Build and refine the artifact through design.brief.json, design.canvas.json, trace.tokens.json, and focused components under src/design, with one component per logical screen and stable screen ids. Prefer the token-driven primitives already under src/design/primitives. Local component state is allowed for prototype interactions, but do not build APIs, databases, authentication, persistence, real integrations, or production business logic. Do not replace src/App.tsx, the stable canvas or review runtime, server.ts, scripts, or the Vite/export configuration, and do not add routing that bypasses the canvas. Use local or embeddable assets only so Export HTML remains self-contained and works offline. The managed Vite server already runs on port 3000 and hot-reloads changes; do not start another server. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect every generated review screenshot, repair failures, and rerun the checks. Ask only blocking product questions through Trace's normal question mechanism; otherwise make explicit, reasonable assumptions and proceed. Before every response that changes the design, commit and push the changes to the configured managed origin. A successful push saves the durable Design preview.
 </system-instruction>`;
 
+const PDF_SESSION_INSTRUCTION = `\n\n<system-instruction>
+This is a Trace PDF session. Build a print-ready document in the provided Vite/React starter, not a full-stack application. Before changing the document, read AGENTS.md and docs/ai-guidance.md, then use the relevant guidance under docs/playbooks/. The editable document lives in src/App.tsx and is rendered live by the managed server on port 3000; do not start another server. Keep the output self-contained: use local CSS and assets, semantic HTML, and explicit print styles with stable page breaks. Do not add a backend, database, Redis, authentication, or external integrations. The starter's Download PDF control opens the browser print-to-PDF flow; preserve that control and the print stylesheet while adapting the document. Work visibly in small valid changes, check the print layout at A4 and Letter sizes, and run pnpm test before delivery. Before every response that changes the document, commit and push the changes to the configured managed origin.
+</system-instruction>`;
+
 function generatedProjectInstruction(
   kind: SessionGroupKind | string | null | undefined,
 ): string | undefined {
   if (kind === "app") return APP_SESSION_INSTRUCTION;
   if (kind === "design") return DESIGN_SESSION_INSTRUCTION;
+  if (kind === "pdf") return PDF_SESSION_INSTRUCTION;
   return undefined;
 }
 
@@ -2657,8 +2662,12 @@ export class SessionService {
     return this.listGeneratedProjectGroups("design", organizationId, userId);
   }
 
+  async listPdfGroups(organizationId: string, userId: string) {
+    return this.listGeneratedProjectGroups("pdf", organizationId, userId);
+  }
+
   private async listGeneratedProjectGroups(
-    kind: "app" | "design",
+    kind: "app" | "design" | "pdf",
     organizationId: string,
     userId: string,
   ) {
@@ -3264,7 +3273,7 @@ export class SessionService {
       throw new ValidationError("Session kind cannot change within an existing session group");
     }
     if (isGeneratedProjectKind(resolvedKind)) {
-      const label = resolvedKind === "design" ? "Design" : "App";
+      const label = resolvedKind === "design" ? "Design" : resolvedKind === "pdf" ? "PDF" : "App";
       if (input.sourceSessionId && !input.restoreCheckpointId) {
         throw new ValidationError(`${label} sessions cannot start from a source session`);
       }
