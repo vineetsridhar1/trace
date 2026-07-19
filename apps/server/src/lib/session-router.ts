@@ -2100,7 +2100,11 @@ export class SessionRouter {
           await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
         }
 
-        if (options.sessionGroupKind === "app" || options.sessionGroupKind === "design") {
+        if (
+          options.sessionGroupKind === "app" ||
+          options.sessionGroupKind === "design" ||
+          options.sessionGroupKind === "pdf"
+        ) {
           const runtimeInstanceId = startResult.runtimeInstanceId;
           if (!runtimeInstanceId || !options.prepareAppGit) {
             options.onFailed("Generated project managed git credentials are unavailable");
