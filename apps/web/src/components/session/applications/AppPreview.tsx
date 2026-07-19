@@ -12,6 +12,7 @@ import { CREATE_PREVIEW_MUTATION } from "./session-applications-operations";
 import { PdfPreviewControls, type PdfPageFormat } from "./PdfPreviewControls";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
+const MAX_FRAME_RETRY_MS = 30_000;
 
 export function AppPreview({
   endpointId,
@@ -37,7 +38,7 @@ export function AppPreview({
   const [pdfContentHeight, setPdfContentHeight] = useState(0);
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
   const [credentialExpiresAt, setCredentialExpiresAt] = useState<string | null>(null);
-  const { error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
+  const { attempts, error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
 
   const reload = useCallback(() => {
     dispatch({ type: "reload" });
@@ -108,10 +109,10 @@ export function AppPreview({
     if (!url || frameLoaded || error) return;
     const timeout = window.setTimeout(
       () => dispatch({ type: "frame-retry" }),
-      INITIAL_FRAME_RETRY_MS,
+      Math.min(MAX_FRAME_RETRY_MS, INITIAL_FRAME_RETRY_MS * 2 ** attempts),
     );
     return () => window.clearTimeout(timeout);
-  }, [error, frameLoaded, frameRevision, url]);
+  }, [attempts, error, frameLoaded, frameRevision, url]);
 
   if (error) {
     if (desktopViewport) {
