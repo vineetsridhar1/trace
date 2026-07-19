@@ -9341,16 +9341,15 @@ export class SessionService {
       userId,
       { requireWrite: true },
     );
-    const source = await sessionRouter.readFile(
+    const styleFile = await this.readDesignManualStyleFile(
       runtime.runtimeId,
       runtime.sessionId,
-      DESIGN_MANUAL_STYLE_PATH,
       runtime.workdirHint,
     );
     return {
       sessionGroupId,
       elementId: normalizedElementId,
-      ...readManualDesignElementStyles(source, normalizedElementId),
+      ...readManualDesignElementStyles(styleFile.source, normalizedElementId),
     };
   }
 
@@ -9378,12 +9377,12 @@ export class SessionService {
       actorId,
       { requireWrite: true },
     );
-    const source = await sessionRouter.readFile(
+    const styleFile = await this.readDesignManualStyleFile(
       runtime.runtimeId,
       runtime.sessionId,
-      DESIGN_MANUAL_STYLE_PATH,
       runtime.workdirHint,
     );
+    const source = styleFile.source;
     if (designSourceHash(source) !== input.expectedSourceHash) {
       throw new ValidationError(
         "The manual design styles changed. Select the element again before saving",
@@ -9395,7 +9394,7 @@ export class SessionService {
       await sessionRouter.writeFile(
         runtime.runtimeId,
         runtime.sessionId,
-        DESIGN_MANUAL_STYLE_PATH,
+        styleFile.path,
         result.source,
         runtime.workdirHint,
       );
@@ -9421,6 +9420,35 @@ export class SessionService {
       styles: result.styles,
       sourceHash: result.sourceHash,
     };
+  }
+
+  private async readDesignManualStyleFile(
+    runtimeId: string,
+    sessionId: string,
+    workdirHint?: string,
+  ): Promise<{ path: string; source: string }> {
+    try {
+      return {
+        path: DESIGN_MANUAL_STYLE_PATH,
+        source: await sessionRouter.readFile(
+          runtimeId,
+          sessionId,
+          DESIGN_MANUAL_STYLE_PATH,
+          workdirHint,
+        ),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!/ENOENT|no such file|not found/iu.test(message)) throw error;
+
+      const files = await sessionRouter.listFiles(runtimeId, sessionId, workdirHint);
+      const fallbackPath = ["src/index.css", "src/App.css"].find((path) => files.includes(path));
+      if (!fallbackPath) throw error;
+      return {
+        path: fallbackPath,
+        source: await sessionRouter.readFile(runtimeId, sessionId, fallbackPath, workdirHint),
+      };
+    }
   }
 
   private async assertDesignManualEditAccess(

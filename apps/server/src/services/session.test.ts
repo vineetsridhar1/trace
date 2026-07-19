@@ -3755,6 +3755,68 @@ describe("SessionService", () => {
       );
     });
 
+    it("uses the existing global stylesheet for legacy designs without manual.css", async () => {
+      const source = "@tailwind base;\n";
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          kind: "design",
+          visibility: "public",
+          ownerUserId: "user-1",
+        })
+        .mockResolvedValueOnce({
+          id: "group-1",
+          workdir: "/tmp/trace",
+          worktreeDeleted: false,
+          connection: { runtimeInstanceId: "runtime-1" },
+          visibility: "public",
+          ownerUserId: "user-1",
+        });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+      sessionRouterMock.readFile
+        .mockRejectedValueOnce(new Error("ENOENT: no such file, src/design/manual.css"))
+        .mockResolvedValueOnce(source);
+      sessionRouterMock.listFiles.mockResolvedValueOnce(["src/index.css"]);
+
+      await expect(
+        service.updateDesignElementStyles(
+          {
+            sessionGroupId: "group-1",
+            elementId: "hero-title",
+            styles: { color: "#112233" },
+            expectedSourceHash: designSourceHash(source),
+          },
+          "org-1",
+          "user",
+          "user-1",
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          elementId: "hero-title",
+          styles: { color: "#112233" },
+        }),
+      );
+      expect(sessionRouterMock.writeFile).toHaveBeenCalledWith(
+        "org-1:runtime-1",
+        "session-1",
+        "src/index.css",
+        expect.stringContaining('[data-trace-id="hero-title"]'),
+        "/tmp/trace",
+      );
+    });
+
     it("rejects saves to visible cloud session groups owned by another user", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
