@@ -43,6 +43,8 @@ export function AppPreview({
     unit: "mm",
   });
   const [pdfContentHeight, setPdfContentHeight] = useState(0);
+  const pdfFormatSaveRef = useRef<Promise<void>>(Promise.resolve());
+  const pdfFormatSaveErrorRef = useRef<string | null>(null);
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
   const [credentialExpiresAt, setCredentialExpiresAt] = useState<string | null>(null);
   const { attempts, error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
@@ -64,12 +66,19 @@ export function AppPreview({
       setPdfContentHeight(0);
       sendPdfMessage("format", format);
       if (sessionGroupId) {
-        void client
-          .mutation(SAVE_PDF_FORMAT_MUTATION, {
-            sessionGroupId,
-            content: `${JSON.stringify(format, null, 2)}\n`,
-          })
-          .toPromise();
+        pdfFormatSaveErrorRef.current = null;
+        pdfFormatSaveRef.current = pdfFormatSaveRef.current.then(async () => {
+          const result = await client
+            .mutation(SAVE_PDF_FORMAT_MUTATION, {
+              sessionGroupId,
+              content: `${JSON.stringify(format, null, 2)}\n`,
+            })
+            .toPromise();
+          if (result.error) {
+            pdfFormatSaveErrorRef.current = result.error.message;
+            toast.error("Failed to save PDF size", { description: result.error.message });
+          }
+        });
       }
     },
     [sendPdfMessage, sessionGroupId],
@@ -77,6 +86,8 @@ export function AppPreview({
 
   const downloadPdf = useCallback(async () => {
     if (!sessionGroupId) return;
+    await pdfFormatSaveRef.current;
+    if (pdfFormatSaveErrorRef.current) return;
     const result = await client
       .query(PDF_SESSION_DOWNLOAD_URL_QUERY, { sessionGroupId }, { requestPolicy: "network-only" })
       .toPromise();

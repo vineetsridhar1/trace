@@ -9110,6 +9110,9 @@ export class SessionService {
       content,
       runtime.workdirHint,
     );
+    if (normalizedPath === "document.format.json") {
+      await managedGitService.retryPdfCommitExport(sessionGroupId, { force: true });
+    }
     return true;
   }
 
@@ -9122,10 +9125,14 @@ export class SessionService {
         organizationId,
         kind: "pdf",
       },
-      select: { pdfExportKey: true, pdfExportCommitSha: true },
+      select: {
+        pdfExportStatus: true,
+        pdfExportKey: true,
+        pdfExportCommitSha: true,
+      },
     });
     if (!group) return null;
-    if (!group.pdfExportKey) {
+    if (group.pdfExportStatus !== "captured" || !group.pdfExportKey) {
       await managedGitService.retryPdfCommitExport(sessionGroupId);
       return null;
     }

@@ -443,6 +443,7 @@ class ManagedGitService {
     await Promise.all(
       groups.map(async (group) => {
         const exportKey = `pdf-exports/${input.organizationId}/${group.id}/${input.commitSha}-${randomUUID()}.pdf`;
+        const requestId = randomUUID();
         const uploadTarget = await storage.getUploadTarget(exportKey, "application/pdf", 15 * 1024 * 1024);
         await prisma.sessionGroup.update({
           where: { id: group.id },
@@ -451,6 +452,7 @@ class ManagedGitService {
             pdfExportStatus: "publishing",
             pdfExportPendingKey: exportKey,
             pdfExportCommitSha: input.commitSha,
+            pdfExportRequestId: requestId,
             pdfExportAttemptedAt: new Date(),
           },
         });
@@ -463,6 +465,7 @@ class ManagedGitService {
             organizationId: input.organizationId,
             sessionGroupId: group.id,
             commitSha: input.commitSha,
+            requestId,
             error: "No connected PDF runtime",
           });
           return;
@@ -474,7 +477,7 @@ class ManagedGitService {
           session.id,
           {
             type: "pdf_export",
-            requestId: randomUUID(),
+            requestId,
             sessionId: session.id,
             sessionGroupId: group.id,
             commitSha: input.commitSha,
@@ -488,6 +491,7 @@ class ManagedGitService {
             organizationId: input.organizationId,
             sessionGroupId: group.id,
             commitSha: input.commitSha,
+            requestId,
             error: `PDF runtime unavailable: ${delivery}`,
           });
         }
@@ -499,6 +503,7 @@ class ManagedGitService {
     organizationId: string;
     sessionGroupId: string;
     commitSha: string;
+    requestId: string;
     error?: string;
   }): Promise<void> {
     const group = await prisma.sessionGroup.findFirst({
@@ -507,6 +512,7 @@ class ManagedGitService {
         organizationId: input.organizationId,
         kind: "pdf",
         pdfExportCommitSha: input.commitSha,
+        pdfExportRequestId: input.requestId,
       },
       select: { pdfExportPendingKey: true },
     });
@@ -524,7 +530,10 @@ class ManagedGitService {
     });
   }
 
-  async retryPdfCommitExport(sessionGroupId: string): Promise<void> {
+  async retryPdfCommitExport(
+    sessionGroupId: string,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
     const group = await prisma.sessionGroup.findUnique({
       where: { id: sessionGroupId },
       select: {
@@ -546,6 +555,7 @@ class ManagedGitService {
     const commitSha = refs.get(`refs/heads/${branch}`);
     if (!commitSha) return;
     if (
+      !options.force &&
       group.pdfExportCommitSha === commitSha &&
       (group.pdfExportStatus === "publishing" || group.pdfExportKey)
     ) {

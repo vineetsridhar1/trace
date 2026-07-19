@@ -551,6 +551,7 @@ model SessionGroup {
   pdfExportKey           String?
   pdfExportPendingKey    String?
   pdfExportCommitSha     String?
+  pdfExportRequestId     String?
   pdfExportCapturedAt    DateTime?
   pdfExportAttemptedAt   DateTime?
 

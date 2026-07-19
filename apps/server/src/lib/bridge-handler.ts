@@ -583,6 +583,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
       if (
         msg.type === "pdf_export_result" &&
+        typeof msg.requestId === "string" &&
         typeof msg.sessionGroupId === "string" &&
         typeof msg.commitSha === "string"
       ) {
@@ -591,6 +592,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             organizationId: bridgeAuth.organizationId,
             sessionGroupId: msg.sessionGroupId,
             commitSha: msg.commitSha,
+            requestId: msg.requestId,
             error: typeof msg.error === "string" ? msg.error : undefined,
           })
           .catch((error: unknown) => {
