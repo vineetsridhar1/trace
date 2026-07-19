@@ -9121,11 +9121,14 @@ export class SessionService {
         id: sessionGroupId,
         organizationId,
         kind: "pdf",
-        pdfExportKey: { not: null },
       },
       select: { pdfExportKey: true, pdfExportCommitSha: true },
     });
-    if (!group?.pdfExportKey) return null;
+    if (!group) return null;
+    if (!group.pdfExportKey) {
+      await managedGitService.retryPdfCommitExport(sessionGroupId);
+      return null;
+    }
     return storage.getGetUrl(group.pdfExportKey, {
       downloadFilename: `document-${group.pdfExportCommitSha?.slice(0, 8) ?? "latest"}.pdf`,
     });
