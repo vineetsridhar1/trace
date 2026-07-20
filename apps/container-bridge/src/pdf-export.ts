@@ -78,6 +78,7 @@ export async function exportPdfToTarget(input: PdfExportInput): Promise<void> {
       process.env.TRACE_CHROMIUM_EXECUTABLE?.trim() || "chromium",
       [
         "--headless=new",
+        "--no-sandbox",
         "--disable-gpu",
         "--disable-dev-shm-usage",
         "--no-first-run",
