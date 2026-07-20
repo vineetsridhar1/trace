@@ -6,7 +6,12 @@ import {
   createPdfSession,
 } from "../../lib/create-quick-session";
 import { useCommandPaletteStore } from "../../stores/command-palette";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "../ui/responsive-dialog";
 
 type GeneratedProjectKind = "app" | "design" | "pdf";
 
@@ -57,11 +62,11 @@ export function NewGeneratedProjectDialog() {
   }, [create, kind]);
 
   return (
-    <Dialog open={kind === "choose"} onOpenChange={(open) => !open && close()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create New</DialogTitle>
-        </DialogHeader>
+    <ResponsiveDialog open={kind === "choose"} onOpenChange={(open) => !open && close()}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Create New</ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
         <div className="flex flex-col gap-2 py-4">
           {OPTIONS.map(({ kind: optionKind, title, description, Icon }) => (
             <button
@@ -78,7 +83,7 @@ export function NewGeneratedProjectDialog() {
             </button>
           ))}
         </div>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
