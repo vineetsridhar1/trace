@@ -66,6 +66,32 @@ function childEnv(env?: Record<string, string>): NodeJS.ProcessEnv {
   return { ...bridgeEnv, ...(env ?? {}) };
 }
 
+function managedProcessCommand(command: string): {
+  executable: string;
+  args: string[];
+  shell: boolean;
+} {
+  const appUser = process.env.TRACE_APP_PROCESS_USER?.trim();
+  if (!appUser) return { executable: command, args: [], shell: true };
+  return {
+    executable: "sudo",
+    args: ["-n", "-E", "-u", appUser, "--", "/bin/sh", "-lc", command],
+    shell: false,
+  };
+}
+
+function managedProcessEnv(env?: Record<string, string>): NodeJS.ProcessEnv {
+  const managedEnv = childEnv(env);
+  const appUser = process.env.TRACE_APP_PROCESS_USER?.trim();
+  if (!appUser) return managedEnv;
+  return {
+    ...managedEnv,
+    HOME: `/home/${appUser}`,
+    LOGNAME: appUser,
+    USER: appUser,
+  };
+}
+
 function capChunk(data: Buffer): string {
   return data.byteLength > MAX_LOG_CHUNK_BYTES
     ? data.subarray(0, MAX_LOG_CHUNK_BYTES).toString("utf8")
@@ -216,10 +242,11 @@ export class ManagedProcessManager {
         await terminateChild(previous.child);
       }
       const cwd = safeRelativeCwd(baseWorkdir, options.cwd);
-      const child = spawn(options.command, {
+      const command = managedProcessCommand(options.command);
+      const child = spawn(command.executable, command.args, {
         cwd,
-        env: childEnv(options.env),
-        shell: true,
+        env: managedProcessEnv(options.env),
+        shell: command.shell,
         detached: true,
       });
       const bridgeProcessId = `${options.processInstanceId}:${child.pid ?? Date.now()}`;

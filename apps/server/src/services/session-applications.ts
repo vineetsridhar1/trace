@@ -268,10 +268,9 @@ export class SessionApplicationService {
       organizationId,
       userId,
     );
-    const config =
-      isGeneratedProjectKind(group.kind)
-        ? DEFAULT_APP_SESSION_CONFIG
-        : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const config = isGeneratedProjectKind(group.kind)
+      ? DEFAULT_APP_SESSION_CONFIG
+      : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const script = config.setupScripts.find((candidate) => candidate.id === scriptId);
     if (!script) throw new ValidationError("Setup script not found");
     const run = await prisma.sessionSetupScriptRun.create({
@@ -498,7 +497,9 @@ export class SessionApplicationService {
         },
       });
       if (endpoint) {
-        await this.enableEndpoint(endpoint.id, organizationId, userId);
+        await this.enableEndpoint(endpoint.id, organizationId, userId, undefined, {
+          actorType: options?.actorType,
+        });
       }
     }
 
@@ -576,8 +577,22 @@ export class SessionApplicationService {
     userId: string,
     options?: { actorType?: "user" | "agent" },
   ) {
-    await this.stopProcess(sessionGroupId, appConfigId, processConfigId, organizationId, userId, options);
-    return this.startProcess(sessionGroupId, appConfigId, processConfigId, organizationId, userId, options);
+    await this.stopProcess(
+      sessionGroupId,
+      appConfigId,
+      processConfigId,
+      organizationId,
+      userId,
+      options,
+    );
+    return this.startProcess(
+      sessionGroupId,
+      appConfigId,
+      processConfigId,
+      organizationId,
+      userId,
+      options,
+    );
   }
 
   async enableEndpoint(
@@ -585,6 +600,7 @@ export class SessionApplicationService {
     organizationId: string,
     userId: string,
     accessMode?: SessionEndpointAccessMode | null,
+    options?: { actorType?: "user" | "agent" },
   ) {
     const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
       where: { id: endpointId, organizationId },
@@ -621,7 +637,7 @@ export class SessionApplicationService {
       scopeId: endpoint.sessionGroupId,
       eventType: "session_endpoint_forwarding_enabled",
       payload: { endpoint: publicEndpoint(updated) },
-      actorType: "user",
+      actorType: options?.actorType ?? "user",
       actorId: userId,
     });
     return updated;
@@ -1164,10 +1180,9 @@ export class SessionApplicationService {
   }
 
   private getApplication(group: ManagedSessionGroup, appConfigId: string) {
-    const config =
-      isGeneratedProjectKind(group.kind)
-        ? DEFAULT_APP_SESSION_CONFIG
-        : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const config = isGeneratedProjectKind(group.kind)
+      ? DEFAULT_APP_SESSION_CONFIG
+      : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const app = config.applications.find((candidate) => candidate.id === appConfigId);
     if (!app) throw new ValidationError("Application not found");
     return app;

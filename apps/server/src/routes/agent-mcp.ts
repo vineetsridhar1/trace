@@ -8,6 +8,7 @@ import { sessionService } from "../services/session.js";
 import { sessionTimelineService } from "../services/session-timeline.js";
 
 type McpResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
+const MAX_LOG_RESPONSE_BYTES = 128 * 1024;
 
 function result(value: unknown): McpResult {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
@@ -36,14 +37,39 @@ async function scopedSession(principal: AgentMcpTokenPayload) {
 }
 
 async function scopedGroup(principal: AgentMcpTokenPayload) {
-  await scopedSession(principal);
+  const session = await scopedSession(principal);
   const group = await sessionService.getGroup(
     principal.sessionGroupId,
     principal.organizationId,
     principal.userId,
   );
   if (!group) throw new Error("Session group is unavailable");
-  return group;
+  return { session, group };
+}
+
+function boundedLogs<T extends { data: string; sequence: number }>(
+  logs: T[],
+): {
+  logs: T[];
+  truncated: boolean;
+  nextBeforeSequence: number | null;
+} {
+  const selected: T[] = [];
+  let bytes = 0;
+  for (const log of logs) {
+    const logBytes = Buffer.byteLength(log.data, "utf8");
+    if (selected.length > 0 && bytes + logBytes > MAX_LOG_RESPONSE_BYTES) break;
+    selected.push(log);
+    bytes += logBytes;
+  }
+  return {
+    logs: selected.reverse(),
+    truncated: selected.length < logs.length,
+    // The bridge returns descending logs. After reversing for presentation, the
+    // first selected entry is the oldest one returned, which is the cursor for
+    // the next (older) page.
+    nextBeforeSequence: selected.length > 0 ? selected[0]!.sequence : null,
+  };
 }
 
 function withErrors<T extends Record<string, unknown>>(
@@ -65,10 +91,14 @@ function createServer(principal: AgentMcpTokenPayload): McpServer {
     "get_current_session",
     {
       title: "Get current Trace session",
-      description: "Read the current coding, design, app, or PDF session and its session-group metadata.",
+      description:
+        "Read the current coding, design, app, or PDF session and its session-group metadata.",
       inputSchema: {},
     },
-    withErrors(async () => result({ session: await scopedSession(principal), group: await scopedGroup(principal) })),
+    withErrors(async () => {
+      const { session, group } = await scopedGroup(principal);
+      return result({ session, group });
+    }),
   );
 
   server.registerTool(
@@ -115,7 +145,8 @@ function createServer(principal: AgentMcpTokenPayload): McpServer {
     "list_application_processes",
     {
       title: "List workspace processes",
-      description: "List managed app processes and preview endpoints for this app or design workspace.",
+      description:
+        "List managed app processes and preview endpoints for this app or design workspace.",
       inputSchema: {},
     },
     withErrors(async () => {
@@ -138,10 +169,11 @@ function createServer(principal: AgentMcpTokenPayload): McpServer {
     "read_process_logs",
     {
       title: "Read process logs",
-      description: "Read recent stdout/stderr log entries for one managed process in this workspace.",
+      description:
+        "Read recent stdout/stderr log entries for one managed process in this workspace.",
       inputSchema: {
         processId: z.string().min(1),
-        limit: z.number().int().min(1).max(500).optional(),
+        limit: z.number().int().min(1).max(100).optional(),
         beforeSequence: z.number().int().positive().optional(),
       },
     },
@@ -160,7 +192,7 @@ function createServer(principal: AgentMcpTokenPayload): McpServer {
         principal.userId,
         { limit, beforeSequence },
       );
-      return result({ logs: [...logs].reverse() });
+      return result(boundedLogs(logs));
     }),
   );
 
@@ -190,7 +222,8 @@ function createServer(principal: AgentMcpTokenPayload): McpServer {
     "run_workspace_setup_script",
     {
       title: "Run a workspace setup script",
-      description: "Run a configured setup script for this workspace and return whether it was started.",
+      description:
+        "Run a configured setup script for this workspace and return whether it was started.",
       inputSchema: { scriptId: z.string().min(1) },
     },
     withErrors(async ({ scriptId }) => {
@@ -220,7 +253,11 @@ export function createAgentMcpRouter(): Router {
     const token = bearer(req);
     const principal = token ? verifyAgentMcpToken(token) : null;
     if (!principal) {
-      res.status(401).json({ jsonrpc: "2.0", error: { code: -32001, message: "Invalid agent MCP token" }, id: null });
+      res.status(401).json({
+        jsonrpc: "2.0",
+        error: { code: -32001, message: "Invalid agent MCP token" },
+        id: null,
+      });
       return;
     }
 
@@ -239,7 +276,11 @@ export function createAgentMcpRouter(): Router {
     } catch (error) {
       console.error("[agent-mcp] request failed:", error);
       if (!res.headersSent) {
-        res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "MCP request failed" }, id: null });
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: { code: -32603, message: "MCP request failed" },
+          id: null,
+        });
       }
     }
   });

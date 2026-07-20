@@ -49,6 +49,31 @@ function writeFileWithPrivateMode(path: string, content: string): void {
   fs.writeFileSync(path, content, { mode: 0o600 });
 }
 
+function updateCodexMcpConfig(path: string, mcpUrl: string): void {
+  let existing = "";
+  try {
+    if (fs.existsSync(path)) existing = fs.readFileSync(path, "utf8");
+  } catch {
+    // Replace an unreadable config with the required runtime MCP declaration.
+  }
+  // A TOML table ends at the next table header. Replace only Trace's table so
+  // user-level Codex settings and other MCP servers survive a runtime restart.
+  const table = /^\[mcp_servers\.trace\]\s*$/m.exec(existing);
+  let withoutTrace = existing;
+  if (table?.index !== undefined) {
+    const afterHeader = table.index + table[0].length;
+    const nextTable = existing.slice(afterHeader).search(/^\[/m);
+    const tableEnd = nextTable < 0 ? existing.length : afterHeader + nextTable;
+    withoutTrace = `${existing.slice(0, table.index)}${existing.slice(tableEnd)}`;
+  }
+  withoutTrace = withoutTrace.trimEnd();
+  const prefix = withoutTrace ? `${withoutTrace}\n\n` : "";
+  writeFileWithPrivateMode(
+    path,
+    `${prefix}[mcp_servers.trace]\nurl = ${JSON.stringify(mcpUrl)}\nbearer_token_env_var = "TRACE_AGENT_MCP_TOKEN"\n`,
+  );
+}
+
 /**
  * Configure the installed coding clients to call the server-hosted MCP. The
  * token stays in the bridge environment so Codex can read it from its declared
@@ -75,15 +100,15 @@ function setupAgentMcp(): void {
       : {};
   claudeConfig.mcpServers = {
     ...mcpServers,
-    trace: { type: "http", url: mcpUrl, headers: { Authorization: `Bearer ${token}` } },
+    trace: {
+      type: "http",
+      url: mcpUrl,
+      headers: { Authorization: "Bearer ${TRACE_AGENT_MCP_TOKEN}" },
+    },
   };
   writeFileWithPrivateMode(claudePath, `${JSON.stringify(claudeConfig, null, 2)}\n`);
 
-  const tomlString = (value: string) => JSON.stringify(value);
-  writeFileWithPrivateMode(
-    "/home/coder/.codex/config.toml",
-    `[mcp_servers.trace]\nurl = ${tomlString(mcpUrl)}\nbearer_token_env_var = "TRACE_AGENT_MCP_TOKEN"\n`,
-  );
+  updateCodexMcpConfig("/home/coder/.codex/config.toml", mcpUrl);
   console.log("[container-bridge] agent MCP configured");
 }
 
@@ -97,6 +122,9 @@ function requireEnv(name: string): string {
 }
 
 async function main(): Promise<void> {
+  // Generated project files inherit the shared workspace group so the isolated
+  // preview user can write build artifacts without reading coder's home.
+  process.umask(0o002);
   const bridgeUrl = requireEnv("TRACE_BRIDGE_URL");
   const bridgeToken = requireEnv("TRACE_RUNTIME_TOKEN");
   const runtimeInstanceId = requireEnv("TRACE_RUNTIME_INSTANCE_ID");

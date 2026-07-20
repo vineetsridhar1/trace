@@ -41,19 +41,26 @@ COPY apps/container-bridge/pdf-starter/ /opt/trace/pdf-starter/
 
 # Create non-root user — Claude Code refuses --dangerously-skip-permissions as root.
 # Scope sudo to exactly the Postgres bootstrap commands the entrypoint runs. App
-# child processes run as this same user, so a blanket NOPASSWD:ALL would make any
-# RCE in a previewed (agent-written) app trivially container-root and able to read
-# every stripped secret via /proc/1/environ. Only these commands are permitted.
-RUN useradd -m -s /bin/bash coder && \
+# child processes run under a separate low-privilege user, so a preview-app RCE
+# cannot read the coding agent's MCP credential or escalate to root. Only the
+# bridge may switch from coder to that app user.
+RUN groupadd trace-app && \
+    useradd -m -s /bin/bash coder && \
+    useradd -m -s /bin/bash -g trace-app app && \
+    usermod -a -G trace-app coder && \
     mkdir -p /workspace /repos /workspaces /home/coder/.npm-global && \
-    chown -R coder:coder /workspace /repos /workspaces /app /home/coder/.npm-global /opt/trace && \
+    chown -R coder:trace-app /workspace /repos /workspaces && \
+    chmod 2770 /workspace /repos /workspaces && \
+    chown -R coder:coder /app /home/coder/.npm-global /opt/trace && \
     printf '%s\n' \
       'coder ALL=(root) NOPASSWD: /usr/sbin/service postgresql start' \
       'coder ALL=(postgres) NOPASSWD: /usr/bin/psql, /usr/bin/createuser' \
+      'coder ALL=(app) SETENV: NOPASSWD: /bin/sh' \
       > /etc/sudoers.d/trace-coder && \
     chmod 0440 /etc/sudoers.d/trace-coder
 ENV NPM_CONFIG_PREFIX=/home/coder/.npm-global
 ENV PATH=/home/coder/.npm-global/bin:$PATH
+ENV TRACE_APP_PROCESS_USER=app
 USER coder
 RUN mkdir -p /home/coder/.ssh && chmod 700 /home/coder/.ssh
 

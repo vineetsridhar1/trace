@@ -38,7 +38,7 @@ const eventServiceMock = eventService as unknown as {
   publishEphemeral: ReturnType<typeof vi.fn>;
 };
 
-function mockGroup() {
+function mockGroup(defaultForwardingEnabled = false) {
   prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValue({
     id: "group-1",
     organizationId: "org-1",
@@ -68,7 +68,7 @@ function mockGroup() {
                       label: "Web",
                       port: 3000,
                       protocol: "http",
-                      defaultForwardingEnabled: false,
+                      defaultForwardingEnabled,
                     },
                   ],
                 },
@@ -196,6 +196,56 @@ describe("SessionApplicationService", () => {
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: "session_endpoint_created" }),
       prismaMock,
+    );
+  });
+
+  it("attributes automatic endpoint forwarding to the agent that started it", async () => {
+    mockGroup(true);
+    const endpoint = {
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      portConfigId: "web",
+      label: "Web",
+      targetPort: 3000,
+      protocol: "http",
+      status: "disabled",
+      accessMode: "private",
+      trafficCaptureMode: "metadata",
+      enabledAt: null,
+      disabledAt: null,
+      revokedAt: null,
+    };
+    prismaMock.sessionEndpoint.findUnique.mockImplementation(({ where }) => {
+      if ("key" in where) return Promise.resolve(null);
+      return Promise.resolve(endpoint);
+    });
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce(endpoint);
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      status: "starting",
+      runtimeInstanceId: "runtime-1",
+    });
+    prismaMock.sessionEndpoint.update.mockResolvedValueOnce({
+      ...endpoint,
+      status: "enabled",
+      enabledAt: new Date("2026-06-07T00:00:00.000Z"),
+    });
+
+    await new SessionApplicationService().startProcess("group-1", "web", "dev", "org-1", "user-1", {
+      actorType: "agent",
+    });
+
+    expect(eventServiceMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "session_endpoint_forwarding_enabled",
+        actorType: "agent",
+        actorId: "user-1",
+      }),
     );
   });
 
