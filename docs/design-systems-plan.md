@@ -30,7 +30,7 @@ to the original repository.
   workspace reports ready and before the first agent prompt runs.
 - The Design agent can use the package without reading the source repository.
 - Existing Designs remain pinned to their original package version after later workbench
-  edits and Saves.
+  edits and managed saves.
 - Mutations go through the service layer and emit events containing enough data for
   Zustand to update without refetching.
 - Corrupt, unsafe, incomplete, oversized, or inaccessible packages never become ready.
@@ -51,7 +51,7 @@ Trace:
 User repository
     -> read-only checkout in a design_system workbench
     -> live foundations/component canvas + chat iteration
-    -> explicit user Save
+    -> managed Git push (the durable save signal)
     -> package validation
     -> immutable S3 object + DesignSystemVersion row
     -> materialized into isolated Design workspace
@@ -68,13 +68,17 @@ The workbench's hidden managed repo preserves chat-driven changes, checkpoints, 
 source, and review output. The source repo remains an external reference that can be
 refreshed or removed without corrupting a saved design-system version.
 
-### Publication is an explicit Save action
+### Publication follows managed save, like Documents
 
-Agent completion does not publish a design system. The user reviews and edits the live
-canvas, then presses **Save** while the agent is idle. Save validates and packages the
-current committed workbench state, stores an immutable version, and makes it active for
-new Designs. The authoring session remains open for subsequent edits; another Save
-creates another version only when content changed.
+The authoring agent already commits and pushes managed-workbench changes after each
+completed response. That successful push is the durable Save signal. The managed Git
+post-receive pipeline queues package validation/publication for the pushed commit, just as
+Document pushes queue PDF export and Design pushes queue preview capture.
+
+There is no separate publish button or agent-decided completion step. The UI shows
+`Saving`, `Saved`, or `Publish failed`. A valid latest push stores an immutable version
+and makes it active for new Designs. A failed or superseded push leaves the previous
+active version untouched. The authoring session remains open for subsequent edits.
 
 ### Metadata is in Postgres; package bytes are in object storage
 
@@ -130,9 +134,9 @@ Design system
 
 The selector shows non-archived systems with a published active version visible to the
 active organization. A system remains selectable at its current active version while a
-workbench has unsaved changes. Each option shows the active version and source-repository
-name when one exists. The last selected system may be suggested, but the persisted
-organization default is a later feature.
+new publication is pending or failed. Each option shows the active version and
+source-repository name when one exists. The last selected system may be suggested, but
+the persisted organization default is a later feature.
 After creation, the user enters the brief through the existing Design chat exactly as
 they do today; adding a separate prompt field to this dialog is not required.
 
@@ -162,7 +166,7 @@ The session layout is:
 
 ```text
 +----------------------+-----------------------------------------------+
-| Chat                 | Design System Canvas                  [Save] |
+| Chat                 | Design System Canvas               [Saved] |
 |                      |                                               |
 | Initial extraction   | Foundations                                   |
 | Agent progress       |   Colors · Type · Spacing · Radius · Motion  |
@@ -173,10 +177,11 @@ The session layout is:
 +----------------------+-----------------------------------------------+
 ```
 
-Save is enabled only when the agent is idle, the workbench has a successfully pushed
-commit, and deterministic checks pass. A successful first Save changes the system from
-`draft` to `ready` and creates version 1. Closing before Save does not discard work: the
-draft and managed session remain resumable.
+After each completed response, the agent runs deterministic checks/review, commits, and
+pushes. The header changes from `Saving` to `Saved` when publication for that commit
+succeeds. A successful first managed save changes the system from `draft` to `ready` and
+creates version 1. Closing earlier does not discard work: the draft and managed session
+remain resumable.
 
 ### Manage and update
 
@@ -186,15 +191,15 @@ A Design Systems view lists:
 - status;
 - active version;
 - source repository, path, branch, and source commit;
-- authoring session and whether it has unsaved commits;
+- authoring session and latest publish state/commit;
 - creation and last-published times;
 - open workbench, refresh source, archive, and version-history actions.
 
 Opening the workbench resumes the same `design_system` session. Refreshing the source
 checkout is an explicit chat/action flow that never overwrites user-authored decisions
-without showing the resulting canvas changes. A later Save publishes the next immutable
-version. Existing Designs may expose an explicit **Upgrade design system** action later;
-there is no silent upgrade.
+without showing the resulting canvas changes. The resulting managed push publishes the
+next immutable version when valid. Existing Designs may expose an explicit **Upgrade
+design system** action later; there is no silent upgrade.
 
 ## Design-System Workbench
 
@@ -244,13 +249,13 @@ The first release requires these visible sections:
   dialogs, and domain-specific modules.
 
 The agent may add sections for data visualization, editorial patterns, mobile-native
-controls, or other source-backed needs. It may not satisfy Save with empty placeholder
-boards.
+controls, or other source-backed needs. A managed push containing only empty placeholder
+boards does not satisfy publication validation.
 
-The workbench header owns Save state: `unsaved`, `checking`, `saving`, `saved`, or
-`failed`. Unsaved state derives from the managed workbench HEAD/digest compared with the
-active version's `workspaceCommitSha`/content digest; it is not maintained as independent
-client-only truth.
+The workbench header shows the server-owned publication state: `saving`, `saved`, or
+`failed`. While the agent is editing, the existing session state shows that work is in
+progress. Once its response is committed and pushed, the managed-push pipeline owns the
+status; there is no independent client-only dirty state or separate Save button.
 
 ## Package Contract
 
@@ -372,9 +377,9 @@ review harness visits deterministic foundation and component routes, rejects run
 errors or external network dependencies, verifies declared variants/states are present,
 then exports self-contained HTML and full-page PNG captures into `preview/`.
 
-Save fails when required specimens are missing, blank, stale relative to the manifest,
-or omit declared variants. The PNGs provide fast human thumbnails; downstream Design
-agents primarily consume the HTML, component source, tokens, and manifest.
+Publication fails when required specimens are missing, blank, stale relative to the
+manifest, or omit declared variants. The PNGs provide fast human thumbnails; downstream
+Design agents primarily consume the HTML, component source, tokens, and manifest.
 
 ### Source evidence
 
@@ -389,11 +394,12 @@ Add Prisma enums generated into GraphQL through the normal schema/codegen path:
 
 ```text
 DesignSystemStatus = draft | ready | archived
+DesignSystemPublishStatus = idle | pending | publishing | published | failed
 ```
 
 Authoring progress, runtime failure, and `needs_input` come from the linked session; they
-are not duplicated as design-system statuses. A failed Save leaves the last ready version
-active and records a save-failure event/error without changing availability.
+are not duplicated as design-system statuses. Publication state describes only the latest
+managed push. A failed or superseded publication leaves the last ready version active.
 
 Add `DesignSystem`:
 
@@ -410,11 +416,17 @@ sourcePath                 String?
 activeVersionId            String?
 authoringSessionGroupId    String
 createdById                String
-lastSaveError              String?
+publishStatus              DesignSystemPublishStatus
+pendingCommitSha           String?
+publishedCommitSha         String?
+publishAttemptedAt         DateTime?
+publishError               String?
 createdAt                  DateTime
 updatedAt                  DateTime
 archivedAt                 DateTime?
 ```
+
+`publishStatus` defaults to `idle`.
 
 Constraints and indexes:
 
@@ -468,15 +480,15 @@ Add query fields:
 Add mutations:
 
 - `createDesignSystem(input: CreateDesignSystemInput!): DesignSystem!`
-- `saveDesignSystem(id: ID!): DesignSystemVersion!`
+- `retryDesignSystemPublish(id: ID!): DesignSystem!`
 - `archiveDesignSystem(id: ID!): DesignSystem!`
 
 `CreateDesignSystemInput` contains `name`, `repoId`, optional `branch`, optional
 `sourcePath`, and optional `environmentId`. Organization comes from the authenticated
 request context. The returned DesignSystem exposes its `authoringSessionGroup`, allowing
-the caller to navigate after creation. Save derives the workbench and current commit from
-that server-owned relationship; clients cannot supply a package path, storage key, or
-session-group override.
+the caller to navigate after creation. Publication is driven by the server-observed push
+for that relationship; clients cannot supply a commit, package path, storage key, or
+session-group override. Retry only re-enqueues the server-recorded failed commit.
 
 Extend `StartSessionInput` with `designSystemVersionId: ID`. The returned mutation entity
 is used only for navigation; Zustand receives shared state through organization events.
@@ -514,29 +526,43 @@ Create `DesignSystemService` with these primary methods:
 Do not place session creation logic in the resolver or open a nested transaction around
 `SessionService.start`.
 
-### `save`
+### `enqueuePublishForManagedPush`
 
-- Authorize access to the design system and its authoring session group.
-- Require the agent to be idle and the latest workbench commit/push to have succeeded.
-- Resolve the managed workbench HEAD/checkpoint and the exact read-only source commit
-  recorded by the workbench.
-- Allocate the next version id and an S3 key.
-- Ask the owning bridge/runtime to run `design-system:check` and
-  `design-system:review`, then package `design-system/` from the expected clean managed
-  workbench commit and upload it to a signed target.
-- Download through `StorageAdapter.getObject`, independently validate the archive and
-  package, compute the digest server-side, and compare it with the bridge report.
-- In one database transaction, create the version, set it active, mark the system ready,
-  clear `lastSaveError`, and append full-entity events.
-- Delete the uploaded object if validation or the transaction fails.
-- Treat an existing `(designSystemId, contentDigest)` as idempotent success.
-- Allocate the next version number under a transaction/unique-constraint retry so two
-  Save requests cannot publish the same ordinal.
-- Do not terminate or archive the authoring session. Subsequent chat changes make the
-  workbench unsaved again, and another Save may create the next version.
+- Invoke this from `ManagedGitService.recordPush` for each updated branch, beside the
+  existing Design-preview and PDF-export consumers.
+- Resolve `design_system` authoring groups whose hidden managed repo and branch match the
+  push; never accept that association from an agent or client.
+- Set `publishStatus: pending`, record `pendingCommitSha`, clear the previous transient
+  error, append a full-entity update event, and enqueue asynchronous publication.
+- Coalesce rapid pushes with latest-commit-wins semantics. A publisher may proceed only
+  while its commit still matches `pendingCommitSha`.
+- Ignore an initial starter commit that has no v1 manifest and leave the system `draft`.
+  Once a package manifest or active version exists, an invalid pushed package is a real
+  publication failure; the next valid push automatically retries through the normal
+  path.
 
-If validation or upload fails, record `lastSaveError`, append
-`design_system_save_failed`, retain the active version, and return a user-facing failure.
+### `publishManagedCommit`
+
+- Claim a pending commit with a compare-and-set transition to `publishing`.
+- Resolve the exact `design-system/` tree from the server-owned managed bare Git repo at
+  that commit, plus the source commit recorded in its evidence.
+- Create a normalized deterministic archive, enforce path/type/size limits, validate all
+  required package files and specimens, and compute the digest server-side.
+- Upload through `StorageAdapter.putObject` under a server-owned S3 key.
+- In one database transaction, and only if the commit is still current, create the
+  immutable version, set it active, mark the system ready and `published`, record
+  `publishedCommitSha`, clear `pendingCommitSha`/`publishError`, and append full-entity
+  events.
+- Treat an existing `(designSystemId, contentDigest)` as idempotent success and allocate
+  ordinals under a transaction/unique-constraint retry.
+- Delete an unreferenced uploaded object if validation, supersession, or the transaction
+  fails. A superseded job must never create or activate a version.
+- Do not terminate or archive the authoring session. Each later valid managed push may
+  create and activate the next immutable version.
+
+If publication fails, set `publishStatus: failed`, record a concise `publishError`, append
+an update event, and retain the active version. `retryDesignSystemPublish` and a startup
+reconciler can re-enqueue the same server-recorded commit without trusting client input.
 
 ### `archive`
 
@@ -567,7 +593,7 @@ When `SessionService.start` receives `kind: design` and a version id:
 
 - authorize the version through its organization-scoped design system;
 - require the requested published version to exist and its parent system not to be
-  archived; unsaved authoring-session changes do not affect the active version;
+  archived; pending or failed authoring commits do not affect the active version;
 - persist `designSystemVersionId` on the new group;
 - include the full selected-version reference in `session_started` payloads;
 - reject design-system versions for non-design groups in v1.
@@ -582,7 +608,7 @@ Add event types:
 - `design_system_created`
 - `design_system_version_created`
 - `design_system_updated`
-- `design_system_save_failed`
+- `design_system_publish_updated`
 - `design_system_archived`
 
 Payloads for entity-changing events include the complete normalized `DesignSystem` and,
@@ -591,10 +617,10 @@ when relevant, complete `DesignSystemVersion`. The client handler upserts them i
 mutation results do not update shared state.
 
 Authoring output remains ordinary session output. Do not create a second progress-log
-system. Design-system events record entity/save lifecycle transitions, while the linked
-session is the detailed audit trail. Selecting a version for a new Design is recorded by
-the normal `session_started` event and its complete session-group payload; it does not
-need a duplicative design-system event.
+system. Design-system events record entity/publication lifecycle transitions, while the
+linked session is the detailed audit trail. Selecting a version for a new Design is
+recorded by the normal `session_started` event and its complete session-group payload; it
+does not need a duplicative design-system event.
 
 ## Read-Only Source Checkout
 
@@ -646,10 +672,11 @@ start a replacement session.
 
 The skill must ask when it finds multiple unrelated design systems or cannot determine
 the intended application/package. It should not ask about choices that can be safely
-derived and recorded with evidence. The agent never decides that the artifact is
-published; only the user's Save action does that.
+derived and recorded with evidence. The agent never calls publication APIs or creates
+versions. It runs local checks and pushes through the normal managed-session flow; the
+server-owned managed-push consumer decides whether that exact commit is publishable.
 
-## Packaging and S3 Lifecycle
+## Managed-Push Publication and S3 Lifecycle
 
 ### Object key
 
@@ -661,36 +688,27 @@ design-systems/{organizationId}/{designSystemId}/{versionId}/package.tar.gz
 
 The key is generated by the service and never accepted from a client or agent.
 
-### Bridge packaging command
+### Managed Git publication pipeline
 
-Extend the shared bridge protocol with a command and result, for example:
+Extend the managed Git storage abstraction with a safe `archiveSubtreeAtCommit`-style
+operation. It reads `design-system/` directly from the server-owned bare repo at the
+recorded commit, so publication does not depend on a still-running bridge or a
+client-supplied workspace path.
 
-```text
-package_design_system
-design_system_package_result
-```
+The authoring skill runs `design-system:check` and `design-system:review` before its
+normal commit/push, and commits the required HTML and PNG specimens. The server then
+independently:
 
-The command carries:
-
-- request id and session id;
-- expected managed-workbench commit SHA;
-- package path relative to the verified session workdir;
-- signed upload target;
-- maximum uncompressed bytes, archive bytes, and file count.
-
-The bridge:
-
-- resolves the package under the session workdir;
-- confirms HEAD matches the expected commit and package/workbench files are clean;
-- runs the design-system check/review commands and returns their structured summaries;
-- rejects symlinks, sockets, devices, hard links, traversal, and files outside the root;
-- applies limits while walking, not after loading everything;
-- creates a deterministic archive with normalized paths and timestamps;
-- computes SHA-256 over the uploaded bytes;
-- uploads it and returns digest, byte size, and file count.
-
-The server does not trust this result. It downloads and validates the object before
-creating a version.
+- verifies the pushed commit belongs to the linked workbench repo and branch;
+- resolves only the expected subtree from that exact commit;
+- rejects links, special files, traversal, unsafe paths, secrets, and out-of-bounds
+  content while constructing a normalized archive;
+- validates manifest/specimen completeness and recomputes the package digest;
+- uploads via `StorageAdapter.putObject` and activates it only through the guarded
+  database transaction;
+- discards output when a newer push supersedes the commit;
+- retries pending work after process restarts, following the existing managed-push
+  Design-preview and PDF-export recovery pattern.
 
 ### Retention
 
@@ -811,16 +829,18 @@ boundary or not rendered in Trace v1; it must never execute on the main app orig
 - If authoring-session creation fails, the shared transaction rolls back the draft.
 - If the agent needs input, keep the draft/ready entity unchanged and use normal session
   `needs_input` behavior; the canvas remains visible.
-- If packaging or validation fails, retain the authoring session, set Save state to
-  failed, record the concise validation error, and allow the user to ask the agent for a
-  repair before pressing Save again.
+- If packaging or validation fails, retain the authoring session, set publication state
+  to failed, record the concise validation error, and allow the user to ask the agent for
+  a repair. Its next valid managed push publishes automatically; retry may re-enqueue the
+  unchanged server-recorded commit.
 - If upload succeeds but publication fails, delete the unreferenced object best-effort.
 - If publication is retried with the same digest, return the existing version.
-- If a runtime expires before Save, restore the authoring workbench from its managed
-  remote, rehydrate the pinned source checkout, and retry from the pushed commit.
+- If a runtime expires before its push, restore the authoring workbench from its managed
+  remote and rehydrate the pinned source checkout. Publication of an already pushed
+  commit proceeds server-side without that runtime.
 - If materialization fails, the Design session remains recoverable through the existing
   workspace retry path and requests a fresh signed URL.
-- Unsaved or failed workbench edits never replace an active version.
+- Failed or superseded workbench commits never replace an active version.
 
 ## Frontend and Zustand
 
@@ -838,7 +858,8 @@ components/design-system/
 ├── DesignSystemDetails.tsx
 ├── DesignSystemStatus.tsx
 ├── DesignSystemPreview.tsx
-└── DesignSystemSaveButton.tsx
+├── DesignSystemPublishStatus.tsx
+└── RetryDesignSystemPublishButton.tsx
 ```
 
 Split the existing generated-project dialog so selecting Design opens a focused Design
@@ -847,11 +868,11 @@ React context; dialog-local form state may remain local, while fetched entities 
 cross-screen creation state belong in Zustand.
 
 Route `design_system` groups to the same immersive chat/preview shell used by Design,
-with the design-system canvas title and Save control in its header. Add a dedicated
-Design Systems sidebar section derived from `DesignSystem.authoringSessionGroupId`; do
-not mix these groups into the ordinary Designs or Apps lists. The existing virtualized
-session message list and preview components should be reused with kind-specific empty
-state, labels, and toolbar actions.
+with the design-system canvas title and managed publication indicator in its header. Add
+a dedicated Design Systems sidebar section derived from
+`DesignSystem.authoringSessionGroupId`; do not mix these groups into the ordinary Designs
+or Apps lists. The existing virtualized session message list and preview components
+should be reused with kind-specific empty state, labels, and toolbar actions.
 
 The mobile app should initially support selecting an existing ready system if parity is
 required for launch. Creating or managing systems can route users to web in the first
@@ -872,7 +893,7 @@ Track metrics for:
 - compressed and uncompressed sizes;
 - materialization latency and failure rate;
 - Designs created by default versus custom system;
-- Save attempts/success/failure and version-upgrade counts.
+- Publication attempts/success/failure/supersession and version-upgrade counts.
 
 ## Migration and Rollout
 
@@ -884,9 +905,8 @@ default changes cannot silently alter a pinned custom choice.
 Deploy in this order:
 
 1. Add nullable database columns/tables and server read compatibility.
-2. Deploy bridge support for the new starter, read-only source checkout, package Save,
-   and downstream package materialization while the server does not yet send those
-   fields.
+2. Deploy bridge support for the new starter, read-only source checkout, and downstream
+   package materialization while the server does not yet send those fields.
 3. Deploy `design_system` authoring and publication behind server feature flags.
 4. Publish and validate the bundled Trace Default package.
 5. Enable internal authoring and end-to-end tests.
@@ -913,7 +933,8 @@ retaining already referenced immutable objects.
 - Implement `DesignSystemService.list/create/archive` with authorization and events.
 
 Exit criteria: creating a DesignSystem atomically creates a draft and navigable
-`design_system` group with a hidden managed repo; no source extraction or Save yet.
+`design_system` group with a hidden managed repo; no source extraction or publication
+yet.
 
 ### Phase 2 — Interactive authoring workbench
 
@@ -929,21 +950,25 @@ Exit criteria: creating a DesignSystem atomically creates a draft and navigable
 - Verify follow-up chat edits the same package/canvas and pushes the managed workbench.
 
 Exit criteria: a user can open a draft workbench, watch the initial foundations and
-components appear, chat to change them, reload/resume, and see unsaved state. Nothing is
-published automatically.
+components appear, chat to change them, and reload/resume the same managed workbench.
+Package publication is not enabled in this phase.
 
-### Phase 3 — Explicit Save and version publication
+### Phase 3 — Managed-save publication
 
-- Add bridge package/upload command and response.
-- Add the Save button/state machine and `saveDesignSystem` mutation.
-- Run deterministic workbench checks and browser specimen review as part of Save.
+- Add the managed-push consumer and exact-commit subtree archive helper.
+- Add the pending/publishing/published/failed state machine, startup reconciliation, and
+  retry mutation.
+- Run deterministic workbench checks and browser specimen review before the normal agent
+  commit/push, then validate their committed outputs again on the server.
 - Implement S3 key allocation, server-side validation, digesting, idempotency, concurrent
-  ordinal protection, events, and cleanup.
+  ordinal protection, latest-commit-wins guards, events, and cleanup.
 - Require self-contained HTML and PNG foundation/component specimens.
-- Preserve the authoring session after Save and detect later unsaved commits.
+- Preserve the authoring session after publication so later chat responses can publish
+  later immutable versions.
 
-Exit criteria: the user—not agent completion—publishes version 1 from a reviewed canvas;
-later edits remain unsaved until another explicit Save creates a changed version.
+Exit criteria: a valid managed push automatically publishes version 1 from the reviewed
+canvas; a later valid push creates the next version, and failed or superseded pushes
+retain the previous active version.
 
 ### Phase 4 — Design selection and materialization
 
@@ -962,10 +987,10 @@ the selected package.
 - Add the Design creation form and design-system combobox.
 - Add the nested Create Design System flow.
 - Add a Design Systems sidebar/list entry that opens/resumes authoring sessions.
-- Add status, active version, unsaved state, source provenance, archive, source-refresh,
-  and version-history UI.
+- Add publication status, active version, source provenance, archive, source-refresh, and
+  version-history UI.
 - Wire queries into Zustand and rely on events for mutation reconciliation.
-- Add loading, draft, ready, saving, save-failed, archived, and stale-source states.
+- Add loading, draft, ready, saving, publish-failed, archived, and stale-source states.
 
 Exit criteria: the full flow is usable without GraphQL tooling or manual database work.
 
@@ -990,26 +1015,29 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 - Component validator catches external imports and undeclared assets.
 - S3 keys are server-derived and organization scoped.
 - Publication is digest-idempotent.
-- Failed/unchanged Save preserves the older active version and ordinal.
-- Unsaved state derives from workbench commit/digest versus the active version.
+- Failed, unchanged, or superseded publication preserves the older active version and
+  ordinal.
+- Only the current `pendingCommitSha` can become active.
 - Session start rejects inaccessible, missing, or invalid versions.
 
 ### Service tests
 
 - Create authorizes the source repo, creates a managed `design_system` session, and emits
   full events atomically.
-- Agent completion does not create a version.
-- Save rejects an active agent/unpushed workbench and creates a version/active pointer
-  atomically when idle and valid.
+- Agent output alone does not create a version; the server-observed managed push does.
+- A valid managed push creates a version/active pointer atomically without an explicit
+  client publication call.
+- Two rapid pushes coalesce safely and only the latest commit may publish.
 - Failed DB publication removes the uploaded object.
 - Archive preserves pinned Designs.
 - Private group and organization boundaries cannot be crossed by ids supplied by clients.
 - Event payloads can upsert entities without a follow-up query.
 
-### Bridge tests
+### Managed Git and bridge tests
 
-- Packaging stays within the verified workdir.
-- Packaging is deterministic for identical inputs.
+- Exact-commit subtree archival stays within the package root.
+- Packaging is deterministic for identical Git trees.
+- Publication succeeds after the authoring runtime has stopped.
 - Source checkout is separate, read-only, pinned to the requested commit, and excluded
   from managed-workbench commits/packages.
 - Restoring a workbench rehydrates both the managed repo and exact source commit.
@@ -1022,14 +1050,15 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 ### Frontend tests
 
 - The selector lists systems with an active published version and Trace Default,
-  including a system whose workbench has unsaved changes.
+  including a system whose latest publication is pending or failed.
 - Creating an App or PDF remains unchanged.
 - Creating a Design sends the selected version id.
-- Create-new navigates to the authoring canvas and does not publish automatically.
-- Chat changes visibly update boards and unsaved state.
-- Save is unavailable while the agent runs and reports checking/saving/saved/failed.
-- Events update active version and save errors.
-- Archived or never-saved systems cannot be newly selected for a Design.
+- Create-new navigates to the authoring canvas; the first complete managed push publishes
+  automatically.
+- Chat changes visibly update boards and the header reports saving/saved/failed after the
+  managed push.
+- Events update active version and publication errors.
+- Archived or never-published systems cannot be newly selected for a Design.
 
 ### End-to-end test
 
@@ -1038,17 +1067,20 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 3. Assert the `design_system` workbench uses a managed repo and separate read-only source
    checkout.
 4. Watch the initial color, typography, component-variant, state, and composition boards
-   render without publishing a version.
+   render and verify the completed response's managed push publishes version 1.
 5. Use chat to change a token and add a component variant; verify HMR, screenshots, and
-   unsaved state.
-6. Press Save and verify version 1 is stored through the local storage adapter.
-7. Make another chat edit and confirm version 1 remains active until a second Save.
+   the automatic publication of version 2 through the local storage adapter.
+6. Push an invalid change and confirm version 2 remains active while publication shows a
+   repairable error.
+7. Push two valid edits rapidly and confirm only the latest pending commit becomes the
+   next active version.
 8. Remove source-repo access from the ordinary Design runtime.
 9. Create a Design with version 1 and assert the package exists before its first agent
    run.
 10. Ask for a screen using a known token and portable component.
 11. Verify the committed design and exported HTML contain the expected styling/component.
-12. Save version 2 and confirm the original Design remains pinned to version 1.
+12. Publish a later managed save and confirm the original Design remains pinned to
+    version 1.
 
 ## Expected File Touchpoints
 
@@ -1093,13 +1125,14 @@ The implementation should remain surgical, but likely touches:
 
 - [ ] A source repo can seed a first-class chat-and-canvas authoring session without
       becoming the workbench repo.
-- [ ] No version is published until the user explicitly presses Save.
+- [ ] Every complete valid managed save publishes automatically; no explicit publication
+      button or client-supplied package location exists.
 - [ ] The package is immutable and retrievable through both S3 and local adapters.
 - [ ] Postgres stores no package binaries.
 - [ ] A Design pins a version and starts without source-repo access.
 - [ ] Materialization completes before `workspace_ready` and the first prompt.
 - [ ] The agent reads and uses guidance, tokens, components, and assets from local files.
-- [ ] Existing Designs survive later Saves, archival, and source-repo access loss.
+- [ ] Existing Designs survive later saves, archival, and source-repo access loss.
 - [ ] Every mutation is service-owned and event-producing.
 - [ ] Zustand reconciles from events rather than mutation results.
 - [ ] Archive and package validation covers traversal, links, limits, secrets, and digest
