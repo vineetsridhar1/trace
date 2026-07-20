@@ -19,16 +19,18 @@ to the original repository.
 
 - A user can create a design system from any repository they are authorized to use in
   Trace.
-- An agent session inspects the source repository and produces a validated, portable
-  design-system package.
+- A first-class `design_system` session gives the user chat plus a live canvas showing
+  foundations, assets, components, variants, states, and representative compositions.
+- The session inspects a read-only source-repository checkout and edits a separate
+  Trace-managed workbench; it never writes design-system output into the user's repo.
 - Trace stores every published package version as an immutable object through the
   existing storage adapter (S3 in production and local storage in development).
 - A user can select a ready design-system version before creating a Design.
 - The selected version is materialized in the isolated Design workspace before the
   workspace reports ready and before the first agent prompt runs.
 - The Design agent can use the package without reading the source repository.
-- Existing Designs remain pinned to their original package version when the design
-  system is regenerated.
+- Existing Designs remain pinned to their original package version after later workbench
+  edits and Saves.
 - Mutations go through the service layer and emit events containing enough data for
   Zustand to update without refetching.
 - Corrupt, unsafe, incomplete, oversized, or inaccessible packages never become ready.
@@ -38,21 +40,41 @@ to the original repository.
 
 ### The source repository is not runtime storage
 
-The user's repository is an extraction input and provenance source. Trace may write an
-inspectable package back to `.trace/design-systems/<slug>/` in that repository, but a
-Design session never depends on being able to read it.
+The user's repository is a read-only extraction input and provenance source. The
+authoring session uses a separate Trace-managed repository, and an ordinary Design
+session never depends on being able to read the source repository.
 
 The durable runtime artifact is an immutable `DesignSystemVersion` archive owned by
 Trace:
 
 ```text
 User repository
-    -> generation coding session
-    -> portable package
-    -> Trace validation
+    -> read-only checkout in a design_system workbench
+    -> live foundations/component canvas + chat iteration
+    -> explicit user Save
+    -> package validation
     -> immutable S3 object + DesignSystemVersion row
     -> materialized into isolated Design workspace
 ```
+
+### Authoring is a first-class session kind
+
+Add `design_system` to `SessionGroupKind`. It is a cloud-hosted managed-workspace session
+like `design`, but it uses a dedicated design-system starter and may receive a secondary
+read-only source checkout. It is not a coding session and does not use the user's repo as
+its primary `SessionGroup.repo`.
+
+The workbench's hidden managed repo preserves chat-driven changes, checkpoints, canvas
+source, and review output. The source repo remains an external reference that can be
+refreshed or removed without corrupting a saved design-system version.
+
+### Publication is an explicit Save action
+
+Agent completion does not publish a design system. The user reviews and edits the live
+canvas, then presses **Save** while the agent is idle. Save validates and packages the
+current committed workbench state, stores an immutable version, and makes it active for
+new Designs. The authoring session remains open for subsequent edits; another Save
+creates another version only when content changed.
 
 ### Metadata is in Postgres; package bytes are in object storage
 
@@ -84,7 +106,7 @@ The product only claims direct component reuse for `portable` entries.
 
 The package is centered on agent-readable guidance, compiled semantic tokens, component
 inventory, previews, assets, and source evidence. Trace owns discovery, persistence,
-permissions, generation sessions, events, and runtime delivery.
+permissions, authoring sessions, events, and runtime delivery.
 
 ## Product Experience
 
@@ -108,7 +130,7 @@ Design system
 
 The selector shows non-archived systems with a published active version visible to the
 active organization. A system remains selectable at its current active version while a
-new version is generating. Each option shows the active version and source-repository
+workbench has unsaved changes. Each option shows the active version and source-repository
 name when one exists. The last selected system may be suggested, but the persisted
 organization default is a later feature.
 After creation, the user enters the brief through the existing Design chat exactly as
@@ -125,16 +147,36 @@ The first release asks for:
 - source repository;
 - source branch, defaulting to the repository default branch;
 - optional source subdirectory for monorepos;
-- generation environment when the normal session flow cannot select one automatically.
+- authoring environment when the normal session flow cannot select one automatically.
 
-Submitting creates a draft design-system entity and a normal repo-linked coding session.
-Trace routes the user to that session so they can see progress, answer agent questions,
-and review source changes. The session uses a dedicated built-in generation skill and a
-system instruction that limits the task to extracting the package.
+Submitting creates a draft design-system entity and a `design_system` session backed by
+a hidden managed repo. Trace provisions the design-system starter, attaches a read-only
+checkout of the selected source repo, and opens the workbench immediately.
 
-When generation succeeds, the design system becomes `ready`. Returning to Create Design
-automatically selects it. If the user leaves, it remains available in the organization's
-Design Systems view.
+The initial agent run inventories the source and builds the first complete canvas. The
+user then iterates through ordinary chat: “make the primary green darker,” “add compact
+button sizes,” “remove this font,” or “show the table loading state.” Every response
+updates the actual package and the live canvas through Vite HMR.
+
+The session layout is:
+
+```text
++----------------------+-----------------------------------------------+
+| Chat                 | Design System Canvas                  [Save] |
+|                      |                                               |
+| Initial extraction   | Foundations                                   |
+| Agent progress       |   Colors · Type · Spacing · Radius · Motion  |
+| Questions            |                                               |
+| Follow-up changes    | Components                                    |
+|                      |   Buttons · Forms · Navigation · Data display |
+|                      |   Variants · Sizes · States · Compositions    |
++----------------------+-----------------------------------------------+
+```
+
+Save is enabled only when the agent is idle, the workbench has a successfully pushed
+commit, and deterministic checks pass. A successful first Save changes the system from
+`draft` to `ready` and creates version 1. Closing before Save does not discard work: the
+draft and managed session remain resumable.
 
 ### Manage and update
 
@@ -144,14 +186,71 @@ A Design Systems view lists:
 - status;
 - active version;
 - source repository, path, branch, and source commit;
-- generating session when active;
+- authoring session and whether it has unsaved commits;
 - creation and last-published times;
-- preview, regenerate, archive, and version-history actions.
+- open workbench, refresh source, archive, and version-history actions.
 
-Regeneration starts a new repo-linked session and publishes a new immutable version. The
-new version becomes active for future Designs only after successful validation. Existing
-Designs may expose an explicit **Upgrade design system** action later; there is no silent
-upgrade.
+Opening the workbench resumes the same `design_system` session. Refreshing the source
+checkout is an explicit chat/action flow that never overwrites user-authored decisions
+without showing the resulting canvas changes. A later Save publishes the next immutable
+version. Existing Designs may expose an explicit **Upgrade design system** action later;
+there is no silent upgrade.
+
+## Design-System Workbench
+
+Create `apps/container-bridge/design-system-starter/` by reusing the stable canvas,
+artboard, token, review, export, and error-boundary infrastructure from the existing
+Design starter. Do not fork those primitives blindly: move genuinely shared canvas
+runtime pieces into a shared starter package/directory and keep the authoring contracts
+separate.
+
+The managed workbench contains:
+
+```text
+design-system/                  # saved package root; agent-owned
+├── manifest.json
+├── DESIGN.md
+├── tokens.css
+├── components.manifest.json
+├── components/
+├── assets/
+├── preview/
+└── source/evidence.json
+design-system.canvas.json       # workbench board/section manifest
+src/workbench/                  # visual specimen boards
+├── FoundationsBoard.tsx
+├── AssetsBoard.tsx
+├── ComponentsBoard.tsx
+└── CompositionsBoard.tsx
+src/canvas/                     # stable shared runtime; not agent-owned
+scripts/
+├── check-design-system.ts
+└── review-design-system.ts
+```
+
+`design-system.canvas.json` indexes stable visual boards and their viewport/layout
+metadata. It is workbench state, not part of the downstream package. The boards render
+directly from the package's `tokens.css`, portable components, component recipes, and
+local assets so the canvas and saved artifact cannot drift into separate representations.
+
+The first release requires these visible sections:
+
+- **Foundations:** colors and semantic roles, typography specimens, spacing, grids,
+  radii, borders, elevation, focus, and motion.
+- **Assets:** logos, icons, imagery, and fonts with usage guidance.
+- **Components:** component families with every declared variant, size, and meaningful
+  default/hover/focus/disabled/loading/empty/error state.
+- **Compositions:** representative combinations such as navigation, forms, cards, tables,
+  dialogs, and domain-specific modules.
+
+The agent may add sections for data visualization, editorial patterns, mobile-native
+controls, or other source-backed needs. It may not satisfy Save with empty placeholder
+boards.
+
+The workbench header owns Save state: `unsaved`, `checking`, `saving`, `saved`, or
+`failed`. Unsaved state derives from the managed workbench HEAD/digest compared with the
+active version's `workspaceCommitSha`/content digest; it is not maintained as independent
+client-only truth.
 
 ## Package Contract
 
@@ -170,7 +269,9 @@ design-system/
 │   └── ...fonts, icons, logos, and images
 ├── preview/
 │   ├── foundations.html
-│   └── components.html
+│   ├── components.html
+│   ├── foundations.png
+│   └── components.png
 └── source/
     └── evidence.json
 ```
@@ -181,9 +282,12 @@ Required files for v1:
 - `DESIGN.md`
 - `tokens.css`
 - `components.manifest.json`
+- `preview/foundations.html` and `preview/components.html`
+- `preview/foundations.png` and `preview/components.png`
 - `source/evidence.json`
 
-Other directories are optional. Empty directories are omitted.
+`components/` is required only when at least one manifest entry is `portable`; `assets/`
+is required only when declared files need it. Other empty directories are omitted.
 
 ### Manifest
 
@@ -260,10 +364,22 @@ Portable components must import only files inside the package and dependencies e
 supported by the Design starter. Validation rejects unresolved aliases, imports outside
 the package, Node/server imports, network access, and undeclared assets.
 
+### Visual specimens
+
+The visual portion is executable evidence, not an image-generation output. Workbench
+boards render real tokens, portable components, and recipe fixtures in a browser. The
+review harness visits deterministic foundation and component routes, rejects runtime
+errors or external network dependencies, verifies declared variants/states are present,
+then exports self-contained HTML and full-page PNG captures into `preview/`.
+
+Save fails when required specimens are missing, blank, stale relative to the manifest,
+or omit declared variants. The PNGs provide fast human thumbnails; downstream Design
+agents primarily consume the HTML, component source, tokens, and manifest.
+
 ### Source evidence
 
 `source/evidence.json` records the source commit and the files used to derive each major
-decision. This supports review and regeneration without making the source repo a runtime
+decision. This supports review and source refresh without making the source repo a runtime
 dependency. It must not include secrets, environment files, complete unrelated source
 files, or credentials.
 
@@ -272,8 +388,12 @@ files, or credentials.
 Add Prisma enums generated into GraphQL through the normal schema/codegen path:
 
 ```text
-DesignSystemStatus = draft | generating | ready | failed | archived
+DesignSystemStatus = draft | ready | archived
 ```
+
+Authoring progress, runtime failure, and `needs_input` come from the linked session; they
+are not duplicated as design-system statuses. A failed Save leaves the last ready version
+active and records a save-failure event/error without changing availability.
 
 Add `DesignSystem`:
 
@@ -288,9 +408,9 @@ sourceRepoId               String?
 sourceBranch               String?
 sourcePath                 String?
 activeVersionId            String?
-generationSessionGroupId   String?
+authoringSessionGroupId    String
 createdById                String
-lastError                  String?
+lastSaveError              String?
 createdAt                  DateTime
 updatedAt                  DateTime
 archivedAt                 DateTime?
@@ -301,7 +421,7 @@ Constraints and indexes:
 - unique `(organizationId, slug)`;
 - index `(organizationId, status, updatedAt)`;
 - index `sourceRepoId`;
-- named relations for active version and generation session group;
+- named relations for active version and authoring session group;
 - the source-repo relation uses `onDelete: SetNull`, while source name/URL/path/commit
   provenance remains preserved in each published version's manifest and evidence.
 
@@ -315,8 +435,9 @@ storageKey            String
 contentDigest         String
 byteSize              Int
 sourceCommitSha       String?
-generationSessionGroupId String?
-sourceCheckpointId    String?
+authoringSessionGroupId String
+workspaceCheckpointId String?
+workspaceCommitSha    String
 manifest              Json
 validationSummary     Json
 createdById           String
@@ -328,7 +449,7 @@ Constraints and indexes:
 - unique `(designSystemId, version)`;
 - unique `(designSystemId, contentDigest)` to make repeated publication idempotent;
 - index `(designSystemId, createdAt)`;
-- indexes for generation session group and source checkpoint provenance.
+- indexes for authoring session group and workspace checkpoint provenance.
 
 Add nullable `SessionGroup.designSystemVersionId`. Only `design` groups may set it in v1.
 The relation uses `onDelete: Restrict`; a referenced version cannot be deleted.
@@ -347,20 +468,21 @@ Add query fields:
 Add mutations:
 
 - `createDesignSystem(input: CreateDesignSystemInput!): DesignSystem!`
-- `regenerateDesignSystem(id: ID!, input: RegenerateDesignSystemInput): DesignSystem!`
+- `saveDesignSystem(id: ID!): DesignSystemVersion!`
 - `archiveDesignSystem(id: ID!): DesignSystem!`
-- `retryDesignSystemPublication(id: ID!): DesignSystem!`
 
 `CreateDesignSystemInput` contains `name`, `repoId`, optional `branch`, optional
 `sourcePath`, and optional `environmentId`. Organization comes from the authenticated
-request context. `RegenerateDesignSystemInput` may override branch, source path, or
-environment while defaulting to the current source configuration.
+request context. The returned DesignSystem exposes its `authoringSessionGroup`, allowing
+the caller to navigate after creation. Save derives the workbench and current commit from
+that server-owned relationship; clients cannot supply a package path, storage key, or
+session-group override.
 
 Extend `StartSessionInput` with `designSystemVersionId: ID`. The returned mutation entity
 is used only for navigation; Zustand receives shared state through organization events.
 
 Resolvers validate input shape, call services, and format results. They contain no
-generation, storage, authorization, or state-transition logic.
+authoring, storage, authorization, or state-transition logic.
 
 ## Service Layer
 
@@ -376,13 +498,15 @@ Create `DesignSystemService` with these primary methods:
 
 - Authorize access to the organization and source repository.
 - Validate the requested branch/path and unique slug.
-- Allocate the design-system id before session creation so the generation prompt and
+- Allocate the design-system id before session creation so the initial prompt and
   output path are deterministic.
-- Call `SessionService.start` for a repo-linked coding session and use its existing
-  `afterCreate({ tx, session, sessionGroup })` seam to create the design system, associate
-  the generation group, set status to `generating`, and append deferred
-  `design_system_created` plus `design_system_generation_started` events inside the same
-  transaction as the session rows.
+- Call `SessionService.start` with `kind: design_system`, cloud hosting, an initial
+  source-inventory prompt, and internal source-checkout metadata. The session service
+  creates a hidden managed repo for the workbench rather than using `sourceRepoId` as the
+  group's primary repo.
+- Use its existing `afterCreate({ tx, session, sessionGroup })` seam to create the draft
+  design system, associate the authoring group, and append a deferred
+  `design_system_created` event inside the same transaction as the session rows.
 - Collect those deferred events in the coordinating service and publish them only after
   `SessionService.start` returns successfully. A failed session transaction therefore
   leaves no draft design system behind.
@@ -390,32 +514,29 @@ Create `DesignSystemService` with these primary methods:
 Do not place session creation logic in the resolver or open a nested transaction around
 `SessionService.start`.
 
-### `publishFromSession`
+### `save`
 
-- Confirm the completing session group is the current generation session for the design
-  system.
-- Resolve the source commit/checkpoint.
+- Authorize access to the design system and its authoring session group.
+- Require the agent to be idle and the latest workbench commit/push to have succeeded.
+- Resolve the managed workbench HEAD/checkpoint and the exact read-only source commit
+  recorded by the workbench.
 - Allocate the next version id and an S3 key.
-- Ask the owning bridge/runtime to package the configured source path and upload it to a
-  signed target.
+- Ask the owning bridge/runtime to run `design-system:check` and
+  `design-system:review`, then package `design-system/` from the expected clean managed
+  workbench commit and upload it to a signed target.
 - Download through `StorageAdapter.getObject`, independently validate the archive and
   package, compute the digest server-side, and compare it with the bridge report.
 - In one database transaction, create the version, set it active, mark the system ready,
-  clear errors, and append full-entity events.
+  clear `lastSaveError`, and append full-entity events.
 - Delete the uploaded object if validation or the transaction fails.
 - Treat an existing `(designSystemId, contentDigest)` as idempotent success.
 - Allocate the next version number under a transaction/unique-constraint retry so two
-  completion signals cannot publish the same ordinal.
+  Save requests cannot publish the same ordinal.
+- Do not terminate or archive the authoring session. Subsequent chat changes make the
+  workbench unsaved again, and another Save may create the next version.
 
-### `regenerate`
-
-- Keep the current active version usable.
-- Reject a second concurrent regeneration while the current generation session is
-  active; retrying the same request returns the current generation association.
-- Start a new generation session against the selected source ref.
-- Set status to `generating` without clearing `activeVersionId`.
-- A failed regeneration returns the system to `ready` with `lastError` when an older
-  active version exists; it becomes `failed` only when it has never published a version.
+If validation or upload fails, record `lastSaveError`, append
+`design_system_save_failed`, retain the active version, and return a user-facing failure.
 
 ### `archive`
 
@@ -423,13 +544,30 @@ Do not place session creation logic in the resolver or open a nested transaction
 - Do not delete versions or package objects.
 - Existing Designs continue to resolve pinned versions.
 
-### Session creation integration
+### Authoring-session integration
+
+Treat `design_system` as a managed workspace kind alongside App, Design, and PDF for
+cloud provisioning, managed-repo creation, cleanup, runtime locking, auto-save, and
+checkpoint durability. Give it explicit labels, starter selection, preview routing, and
+system instructions; do not scatter ad hoc `kind === "design_system"` checks.
+
+The existing `isGeneratedProjectKind` helper currently encodes product assumptions for
+App/Design/PDF. Either extend and audit every caller or introduce a more precise
+`isManagedWorkspaceKind` helper so authoring sessions get shared infrastructure without
+accidentally appearing in the Apps or Designs lists.
+
+The `design_system` system instruction requires reading the source checkout and workbench
+guidance, editing only agent-owned package/board files, keeping the canvas valid, running
+checks and browser review, and pushing managed-workbench changes after each response. It
+must explicitly prohibit writing to the read-only source checkout.
+
+### Design-session selection integration
 
 When `SessionService.start` receives `kind: design` and a version id:
 
 - authorize the version through its organization-scoped design system;
 - require the requested published version to exist and its parent system not to be
-  archived; a parent currently generating a newer version remains selectable;
+  archived; unsaved authoring-session changes do not affect the active version;
 - persist `designSystemVersionId` on the new group;
 - include the full selected-version reference in `session_started` payloads;
 - reject design-system versions for non-design groups in v1.
@@ -442,10 +580,9 @@ merely because the parent system was later archived.
 Add event types:
 
 - `design_system_created`
-- `design_system_generation_started`
-- `design_system_generation_failed`
 - `design_system_version_created`
 - `design_system_updated`
+- `design_system_save_failed`
 - `design_system_archived`
 
 Payloads for entity-changing events include the complete normalized `DesignSystem` and,
@@ -453,17 +590,37 @@ when relevant, complete `DesignSystemVersion`. The client handler upserts them i
 `designSystems` and `designSystemVersions` entity tables. Lists derive from those tables;
 mutation results do not update shared state.
 
-Generation output remains ordinary session output. Do not create a second progress-log
-system. Design-system events record lifecycle transitions, while the linked session is
-the detailed audit trail. Selecting a version for a new Design is recorded by the normal
-`session_started` event and its complete session-group payload; it does not need a
-duplicative design-system event.
+Authoring output remains ordinary session output. Do not create a second progress-log
+system. Design-system events record entity/save lifecycle transitions, while the linked
+session is the detailed audit trail. Selecting a version for a new Design is recorded by
+the normal `session_started` event and its complete session-group payload; it does not
+need a duplicative design-system event.
 
-## Generation Skill
+## Read-Only Source Checkout
 
-Add a built-in `generate-design-system` skill to supported cloud agent images and keep
-the Claude and Codex copies aligned. It is selected by the server-owned generation prompt
-rather than requiring the user to install it in their repository.
+The workbench managed repo and source repo are distinct. Extend `prepare_app` (or a
+focused managed-workspace preparation command) for `design_system` with a server-resolved
+source descriptor containing repository identity, exact ref/commit, source subdirectory,
+and short-lived read credentials. Credentials are never committed, stored in package
+evidence, or persisted in events/connection JSON.
+
+The bridge materializes the source under a separate protected root such as
+`/sources/<sessionGroupId>`, marks it read-only for the agent process where practical,
+and returns `sourceWorkdir` with `workspace_ready`. The coding tool runs with the managed
+workbench as CWD and may read the source path. Git pushes, auto-save, checkpoints, and
+cleanup target only the managed workbench repo.
+
+On runtime recreation, Trace restores the managed workbench from its managed remote and
+rehydrates the exact source commit. Refreshing source is explicit and records the new
+source commit in workbench evidence. If source access is later revoked, the existing
+workbench and saved versions remain usable; only refresh/rescan is unavailable.
+
+## Authoring Skill
+
+Add a built-in `author-design-system` skill to supported cloud agent images and keep the
+Claude and Codex copies aligned. It is selected by the server-owned `design_system`
+instruction rather than requiring installation in the user's repository. The skill
+handles both initial extraction and later chat-directed edits.
 
 The skill workflow is:
 
@@ -475,18 +632,22 @@ The skill workflow is:
 5. Produce source-backed `DESIGN.md` guidance.
 6. Normalize semantic tokens into `tokens.css` while recording source mappings.
 7. Produce the component manifest and portable components where safe.
-8. Produce minimal foundation and component previews.
+8. Build complete foundation, asset, component, state, and composition boards.
 9. Write source evidence, excluding secrets and irrelevant files.
-10. Run the package validator and repair failures.
-11. Write `manifest.json` last, commit, and push through the normal session flow.
+10. Run deterministic checks and browser review, inspect every screenshot, and repair
+    failures.
+11. Keep `manifest.json`, package files, and visual boards synchronized, then commit and
+    push the managed workbench through the normal session flow.
 
-The system instruction must prohibit production application refactors. The only expected
-repository changes are inside the configured design-system output directory unless the
-user explicitly requests otherwise.
+The system instruction must prohibit changes to the source checkout. Expected edits are
+the agent-owned package and workbench-board files in the managed repo. A follow-up chat
+request edits the same artifact and reruns the affected validation/review; it does not
+start a replacement session.
 
 The skill must ask when it finds multiple unrelated design systems or cannot determine
 the intended application/package. It should not ask about choices that can be safely
-derived and recorded with evidence.
+derived and recorded with evidence. The agent never decides that the artifact is
+published; only the user's Save action does that.
 
 ## Packaging and S3 Lifecycle
 
@@ -512,6 +673,7 @@ design_system_package_result
 The command carries:
 
 - request id and session id;
+- expected managed-workbench commit SHA;
 - package path relative to the verified session workdir;
 - signed upload target;
 - maximum uncompressed bytes, archive bytes, and file count.
@@ -519,6 +681,8 @@ The command carries:
 The bridge:
 
 - resolves the package under the session workdir;
+- confirms HEAD matches the expected commit and package/workbench files are clean;
+- runs the design-system check/review commands and returns their structured summaries;
 - rejects symlinks, sockets, devices, hard links, traversal, and files outside the root;
 - applies limits while walking, not after loading everything;
 - creates a deterministic archive with normalized paths and timestamps;
@@ -604,8 +768,8 @@ token values and has primitives consume semantic CSS properties directly.
 ## Authorization
 
 - Every service lookup scopes by active organization.
-- Creating or regenerating requires access to the source repository through the same
-  authorization used by coding sessions.
+- Creating or refreshing the source checkout requires access to the source repository
+  through the same authorization used by coding sessions.
 - Listing and selecting require visibility of the organization-scoped design system, not
   continuing access to its original source repo.
 - A Design may continue using its pinned version after source-repo access is revoked.
@@ -644,19 +808,19 @@ boundary or not rendered in Trace v1; it must never execute on the main app orig
 
 ## Failure and Recovery
 
-- If session creation fails, mark the draft failed and retain an actionable error.
-- If the agent needs input, keep status `generating` and use normal session
-  `needs_input` behavior.
-- If packaging or validation fails, retain the generation session, record the concise
-  validation error, and allow retry after the agent repairs files.
+- If authoring-session creation fails, the shared transaction rolls back the draft.
+- If the agent needs input, keep the draft/ready entity unchanged and use normal session
+  `needs_input` behavior; the canvas remains visible.
+- If packaging or validation fails, retain the authoring session, set Save state to
+  failed, record the concise validation error, and allow the user to ask the agent for a
+  repair before pressing Save again.
 - If upload succeeds but publication fails, delete the unreferenced object best-effort.
 - If publication is retried with the same digest, return the existing version.
-- If a runtime expires before packaging, restore the generation session normally and
-  retry from the pushed commit.
+- If a runtime expires before Save, restore the authoring workbench from its managed
+  remote, rehydrate the pinned source checkout, and retry from the pushed commit.
 - If materialization fails, the Design session remains recoverable through the existing
   workspace retry path and requests a fresh signed URL.
-- If regeneration fails and an active version exists, keep the active version ready for
-  selection.
+- Unsaved or failed workbench edits never replace an active version.
 
 ## Frontend and Zustand
 
@@ -673,13 +837,21 @@ components/design-system/
 ├── DesignSystemListItem.tsx
 ├── DesignSystemDetails.tsx
 ├── DesignSystemStatus.tsx
-└── DesignSystemPreview.tsx
+├── DesignSystemPreview.tsx
+└── DesignSystemSaveButton.tsx
 ```
 
 Split the existing generated-project dialog so selecting Design opens a focused Design
 creation form. Keep App and PDF creation unchanged. Do not add shared selection state via
 React context; dialog-local form state may remain local, while fetched entities and
 cross-screen creation state belong in Zustand.
+
+Route `design_system` groups to the same immersive chat/preview shell used by Design,
+with the design-system canvas title and Save control in its header. Add a dedicated
+Design Systems sidebar section derived from `DesignSystem.authoringSessionGroupId`; do
+not mix these groups into the ordinary Designs or Apps lists. The existing virtualized
+session message list and preview components should be reused with kind-specific empty
+state, labels, and toolbar actions.
 
 The mobile app should initially support selecting an existing ready system if parity is
 required for launch. Creating or managing systems can route users to web in the first
@@ -694,13 +866,13 @@ stage. Never log signed URLs or package contents.
 
 Track metrics for:
 
-- generation started/completed/failed;
-- generation duration;
+- authoring sessions created/resumed/failed;
+- initial extraction duration;
 - package validation failure reason;
 - compressed and uncompressed sizes;
 - materialization latency and failure rate;
 - Designs created by default versus custom system;
-- regeneration and version-upgrade counts.
+- Save attempts/success/failure and version-upgrade counts.
 
 ## Migration and Rollout
 
@@ -712,10 +884,12 @@ default changes cannot silently alter a pinned custom choice.
 Deploy in this order:
 
 1. Add nullable database columns/tables and server read compatibility.
-2. Deploy bridge protocol support while the server still sends no package descriptor.
-3. Deploy publication and materialization behind server feature flags.
+2. Deploy bridge support for the new starter, read-only source checkout, package Save,
+   and downstream package materialization while the server does not yet send those
+   fields.
+3. Deploy `design_system` authoring and publication behind server feature flags.
 4. Publish and validate the bundled Trace Default package.
-5. Enable internal generation and end-to-end tests.
+5. Enable internal authoring and end-to-end tests.
 6. Enable the web selector and creation flow for selected organizations.
 7. Remove flags only after publication and materialization metrics are healthy.
 
@@ -727,32 +901,51 @@ retaining already referenced immutable objects.
 
 ## Implementation Phases
 
-### Phase 1 — Contracts and persistence
+### Phase 1 — Contracts, persistence, and session kind
 
 - Add GraphQL types, inputs, queries, mutations, and event enum values.
 - Add Prisma models, relations, indexes, and migration.
+- Add `design_system` to GraphQL/Prisma session-kind enums and generated types.
+- Introduce/audit managed-workspace kind helpers and every kind switch.
 - Run `pnpm gql:codegen` and `pnpm db:generate`.
 - Add client-core entity types and event upserts.
 - Implement package manifest/token/component validators with fixtures.
 - Implement `DesignSystemService.list/create/archive` with authorization and events.
 
-Exit criteria: entity lifecycle works with fixture packages; no generation or Design
-selection yet.
+Exit criteria: creating a DesignSystem atomically creates a draft and navigable
+`design_system` group with a hidden managed repo; no source extraction or Save yet.
 
-### Phase 2 — Generation and publication
+### Phase 2 — Interactive authoring workbench
 
-- Package the built-in skill for supported cloud coding tools.
-- Add the generation prompt and session association.
+- Extract reusable canvas/review infrastructure from the Design starter without changing
+  ordinary Design behavior.
+- Add the design-system starter, fixed foundation/component canvas contract, HMR preview,
+  error boundaries, and browser review scripts.
+- Extend workspace preparation with a read-only secondary source checkout and exact source
+  commit provenance.
+- Package the `author-design-system` skill for supported cloud coding tools.
+- Add the `design_system` system instruction, initial inventory prompt, empty states, and
+  preview routing.
+- Verify follow-up chat edits the same package/canvas and pushes the managed workbench.
+
+Exit criteria: a user can open a draft workbench, watch the initial foundations and
+components appear, chat to change them, reload/resume, and see unsaved state. Nothing is
+published automatically.
+
+### Phase 3 — Explicit Save and version publication
+
 - Add bridge package/upload command and response.
-- Implement `publishFromSession`, S3 key allocation, server-side validation, digesting,
-  idempotency, and cleanup.
-- Trigger publication from the linked session completion/checkpoint flow.
-- Add retry and regeneration behavior.
+- Add the Save button/state machine and `saveDesignSystem` mutation.
+- Run deterministic workbench checks and browser specimen review as part of Save.
+- Implement S3 key allocation, server-side validation, digesting, idempotency, concurrent
+  ordinal protection, events, and cleanup.
+- Require self-contained HTML and PNG foundation/component specimens.
+- Preserve the authoring session after Save and detect later unsaved commits.
 
-Exit criteria: a real repo-linked session produces a ready immutable version in both S3
-and local-storage modes.
+Exit criteria: the user—not agent completion—publishes version 1 from a reviewed canvas;
+later edits remain unsaved until another explicit Save creates a changed version.
 
-### Phase 3 — Selection and materialization
+### Phase 4 — Design selection and materialization
 
 - Add `SessionGroup.designSystemVersionId` and `StartSessionInput` support.
 - Extend session authorization, persistence, snapshot payloads, and events.
@@ -764,20 +957,22 @@ and local-storage modes.
 Exit criteria: a Design starts with no source-repo access and the agent successfully uses
 the selected package.
 
-### Phase 4 — Product UI
+### Phase 5 — Product UI and management
 
-- Add the Design creation prompt and design-system combobox.
+- Add the Design creation form and design-system combobox.
 - Add the nested Create Design System flow.
-- Add design-system list, status, details, preview, archive, regenerate, and retry UI.
+- Add a Design Systems sidebar/list entry that opens/resumes authoring sessions.
+- Add status, active version, unsaved state, source provenance, archive, source-refresh,
+  and version-history UI.
 - Wire queries into Zustand and rely on events for mutation reconciliation.
-- Add loading, empty, generating, failed, archived, and stale-source states.
+- Add loading, draft, ready, saving, save-failed, archived, and stale-source states.
 
 Exit criteria: the full flow is usable without GraphQL tooling or manual database work.
 
-### Phase 5 — Component fidelity and token cleanup
+### Phase 6 — Component fidelity and token cleanup
 
 - Add portable-component runtime validation and import seam.
-- Improve generation recipes for framework-specific systems.
+- Improve extraction/authoring recipes for framework-specific systems.
 - Move Design primitives from duplicated JSON values toward direct semantic CSS tokens.
 - Add explicit Design version upgrade with agent-assisted migration.
 
@@ -795,13 +990,17 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 - Component validator catches external imports and undeclared assets.
 - S3 keys are server-derived and organization scoped.
 - Publication is digest-idempotent.
-- Status transitions preserve an older active version on regeneration failure.
+- Failed/unchanged Save preserves the older active version and ordinal.
+- Unsaved state derives from workbench commit/digest versus the active version.
 - Session start rejects inaccessible, missing, or invalid versions.
 
 ### Service tests
 
-- Create authorizes the repo, creates the linked session, and emits full events.
-- Publish creates a version and active pointer atomically.
+- Create authorizes the source repo, creates a managed `design_system` session, and emits
+  full events atomically.
+- Agent completion does not create a version.
+- Save rejects an active agent/unpushed workbench and creates a version/active pointer
+  atomically when idle and valid.
 - Failed DB publication removes the uploaded object.
 - Archive preserves pinned Designs.
 - Private group and organization boundaries cannot be crossed by ids supplied by clients.
@@ -811,6 +1010,9 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 
 - Packaging stays within the verified workdir.
 - Packaging is deterministic for identical inputs.
+- Source checkout is separate, read-only, pinned to the requested commit, and excluded
+  from managed-workbench commits/packages.
+- Restoring a workbench rehydrates both the managed repo and exact source commit.
 - Limits are enforced while walking and extracting.
 - Materialization verifies digest before extraction.
 - Atomic replacement never leaves a partial package.
@@ -820,24 +1022,33 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 ### Frontend tests
 
 - The selector lists systems with an active published version and Trace Default,
-  including a system that is generating its next version.
+  including a system whose workbench has unsaved changes.
 - Creating an App or PDF remains unchanged.
 - Creating a Design sends the selected version id.
-- Create-new returns to the flow with the published system selected.
-- Events update generation state, active version, and errors.
-- Archived/failed systems cannot be newly selected.
+- Create-new navigates to the authoring canvas and does not publish automatically.
+- Chat changes visibly update boards and unsaved state.
+- Save is unavailable while the agent runs and reports checking/saving/saved/failed.
+- Events update active version and save errors.
+- Archived or never-saved systems cannot be newly selected for a Design.
 
 ### End-to-end test
 
 1. Connect a fixture repository containing Tailwind tokens and shared components.
 2. Create a design system from it.
-3. Let the generation session publish a version to the local storage adapter.
-4. Remove source-repo access from the Design runtime.
-5. Create a Design with the published version.
-6. Assert the package exists before the first agent run.
-7. Ask for a screen using a known token and portable component.
-8. Verify the committed design and exported HTML contain the expected styling/component.
-9. Regenerate the system and confirm the original Design remains pinned to v1.
+3. Assert the `design_system` workbench uses a managed repo and separate read-only source
+   checkout.
+4. Watch the initial color, typography, component-variant, state, and composition boards
+   render without publishing a version.
+5. Use chat to change a token and add a component variant; verify HMR, screenshots, and
+   unsaved state.
+6. Press Save and verify version 1 is stored through the local storage adapter.
+7. Make another chat edit and confirm version 1 remains active until a second Save.
+8. Remove source-repo access from the ordinary Design runtime.
+9. Create a Design with version 1 and assert the package exists before its first agent
+   run.
+10. Ask for a screen using a known token and portable component.
+11. Verify the committed design and exported HTML contain the expected styling/component.
+12. Save version 2 and confirm the original Design remains pinned to version 1.
 
 ## Expected File Touchpoints
 
@@ -848,6 +1059,7 @@ The implementation should remain surgical, but likely touches:
 - `apps/server/prisma/schema.prisma` and a new migration
 - `apps/server/src/services/design-system.ts` and tests
 - `apps/server/src/services/session.ts` and tests
+- `apps/server/src/lib/generated-project.ts` or a new managed-workspace kind helper
 - `apps/server/src/schema/` thin resolver modules
 - `apps/server/src/lib/storage/` only if streaming helpers are needed
 - shared package contracts/validators under `packages/shared/` or a focused package if
@@ -857,10 +1069,13 @@ The implementation should remain surgical, but likely touches:
 - `apps/container-bridge/src/bridge.ts`
 - `apps/container-bridge/src/app-workspace.ts`
 - `apps/container-bridge/design-starter/`
+- new `apps/container-bridge/design-system-starter/`
 - `packages/client-core/src/events/handlers.ts` and entity state
 - `apps/web/src/components/command/NewGeneratedProjectDialog.tsx`
+- `apps/web/src/components/session/project-workspace-kind.ts`
+- `apps/web/src/components/sidebar/` for the Design Systems section
 - new `apps/web/src/components/design-system/` components
-- generation-skill assets for both supported agent ecosystems
+- authoring-skill assets for both supported agent ecosystems
 
 ## Non-Goals for V1
 
@@ -876,13 +1091,15 @@ The implementation should remain surgical, but likely touches:
 
 ## Final Acceptance Checklist
 
-- [ ] A source repo can produce a validated package through an observable agent session.
+- [ ] A source repo can seed a first-class chat-and-canvas authoring session without
+      becoming the workbench repo.
+- [ ] No version is published until the user explicitly presses Save.
 - [ ] The package is immutable and retrievable through both S3 and local adapters.
 - [ ] Postgres stores no package binaries.
 - [ ] A Design pins a version and starts without source-repo access.
 - [ ] Materialization completes before `workspace_ready` and the first prompt.
 - [ ] The agent reads and uses guidance, tokens, components, and assets from local files.
-- [ ] Existing Designs survive regeneration, archival, and source-repo access loss.
+- [ ] Existing Designs survive later Saves, archival, and source-repo access loss.
 - [ ] Every mutation is service-owned and event-producing.
 - [ ] Zustand reconciles from events rather than mutation results.
 - [ ] Archive and package validation covers traversal, links, limits, secrets, and digest
