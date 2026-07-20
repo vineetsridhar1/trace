@@ -29,8 +29,10 @@ to the original repository.
 - The selected version is materialized in the isolated Design workspace before the
   workspace reports ready and before the first agent prompt runs.
 - The Design agent can use the package without reading the source repository.
+- Every pushed authoring commit is archived to S3 as a durable draft checkpoint, even
+  before the user publishes a version.
 - Existing Designs remain pinned to their original package version after later workbench
-  edits and managed saves.
+  edits, checkpoints, and publications.
 - Mutations go through the service layer and emit events containing enough data for
   Zustand to update without refetching.
 - Corrupt, unsafe, incomplete, oversized, or inaccessible packages never become ready.
@@ -51,8 +53,10 @@ Trace:
 User repository
     -> read-only checkout in a design_system workbench
     -> live foundations/component canvas + chat iteration
-    -> managed Git push (the durable save signal)
-    -> package validation
+    -> managed Git push
+    -> immutable S3 workbench checkpoint for that commit
+    -> explicit user Save of the latest valid checkpoint
+    -> package validation and version publication
     -> immutable S3 object + DesignSystemVersion row
     -> materialized into isolated Design workspace
 ```
@@ -68,17 +72,25 @@ The workbench's hidden managed repo preserves chat-driven changes, checkpoints, 
 source, and review output. The source repo remains an external reference that can be
 refreshed or removed without corrupting a saved design-system version.
 
-### Publication follows managed save, like Documents
+### Every commit is saved to S3; publication remains explicit
 
 The authoring agent already commits and pushes managed-workbench changes after each
-completed response. That successful push is the durable Save signal. The managed Git
-post-receive pipeline queues package validation/publication for the pushed commit, just as
-Document pushes queue PDF export and Design pushes queue preview capture.
+completed response. Each successful push queues an immutable S3 checkpoint of that exact
+tracked workbench tree, similar to the per-commit artifact pipeline used by Documents.
+The managed Git remote is already enough to restore after a container dies; the S3
+checkpoint adds an independently durable artifact and makes the package available without
+the original runtime.
 
-There is no separate publish button or agent-decided completion step. The UI shows
-`Saving`, `Saved`, or `Publish failed`. A valid latest push stores an immutable version
-and makes it active for new Designs. A failed or superseded push leaves the previous
-active version untouched. The authoring session remains open for subsequent edits.
+The durability boundary is the managed push: Trace's authoring checkpoint flow must push
+immediately after each commit rather than deferring until session shutdown. Once the
+managed Git server acknowledges the push, the container may disappear; the server can
+finish or retry the S3 write from its bare repo.
+
+Checkpointing does not make a draft selectable by Designs. When the user is satisfied,
+they press **Save** to validate and promote the latest fully uploaded checkpoint into an
+immutable `DesignSystemVersion`. The UI therefore distinguishes cloud-save state
+(`Saving`, `Saved`, `Save failed`) from publication state. A failed checkpoint or Save
+leaves the previous active version untouched, and the authoring session remains open.
 
 ### Metadata is in Postgres; package bytes are in object storage
 
@@ -133,10 +145,10 @@ Design system
 ```
 
 The selector shows non-archived systems with a published active version visible to the
-active organization. A system remains selectable at its current active version while a
-new publication is pending or failed. Each option shows the active version and
-source-repository name when one exists. The last selected system may be suggested, but
-the persisted organization default is a later feature.
+active organization. A system remains selectable at its current active version while
+newer draft checkpoints exist. Each option shows the active version and source-repository
+name when one exists. The last selected system may be suggested, but the persisted
+organization default is a later feature.
 After creation, the user enters the brief through the existing Design chat exactly as
 they do today; adding a separate prompt field to this dialog is not required.
 
@@ -166,7 +178,7 @@ The session layout is:
 
 ```text
 +----------------------+-----------------------------------------------+
-| Chat                 | Design System Canvas               [Saved] |
+| Chat                 | Design System Canvas  [Cloud saved] [Save] |
 |                      |                                               |
 | Initial extraction   | Foundations                                   |
 | Agent progress       |   Colors · Type · Spacing · Radius · Motion  |
@@ -178,10 +190,10 @@ The session layout is:
 ```
 
 After each completed response, the agent runs deterministic checks/review, commits, and
-pushes. The header changes from `Saving` to `Saved` when publication for that commit
-succeeds. A successful first managed save changes the system from `draft` to `ready` and
-creates version 1. Closing earlier does not discard work: the draft and managed session
-remain resumable.
+pushes. The header changes from `Saving` to `Cloud saved` when the checkpoint object for
+that commit reaches S3. The first explicit Save changes the system from `draft` to `ready`
+and creates version 1 from the latest saved checkpoint. Closing earlier does not discard
+work: the draft, managed Git commit, S3 checkpoint, and managed session remain resumable.
 
 ### Manage and update
 
@@ -191,15 +203,16 @@ A Design Systems view lists:
 - status;
 - active version;
 - source repository, path, branch, and source commit;
-- authoring session and latest publish state/commit;
+- authoring session, latest checkpoint state/commit, and last-published commit;
 - creation and last-published times;
 - open workbench, refresh source, archive, and version-history actions.
 
 Opening the workbench resumes the same `design_system` session. Refreshing the source
 checkout is an explicit chat/action flow that never overwrites user-authored decisions
-without showing the resulting canvas changes. The resulting managed push publishes the
-next immutable version when valid. Existing Designs may expose an explicit **Upgrade
-design system** action later; there is no silent upgrade.
+without showing the resulting canvas changes. The resulting managed push stores the next
+S3 checkpoint; the user reviews it and presses Save to publish the next immutable
+version. Existing Designs may expose an explicit **Upgrade design system** action later;
+there is no silent upgrade.
 
 ## Design-System Workbench
 
@@ -250,12 +263,14 @@ The first release requires these visible sections:
 
 The agent may add sections for data visualization, editorial patterns, mobile-native
 controls, or other source-backed needs. A managed push containing only empty placeholder
-boards does not satisfy publication validation.
+boards is still checkpointed for durability, but does not satisfy publication validation.
 
-The workbench header shows the server-owned publication state: `saving`, `saved`, or
-`failed`. While the agent is editing, the existing session state shows that work is in
-progress. Once its response is committed and pushed, the managed-push pipeline owns the
-status; there is no independent client-only dirty state or separate Save button.
+The workbench header shows server-owned checkpoint state: `saving`, `saved`, or `failed`,
+plus whether its valid package digest differs from the active published version. While
+the agent is editing, the existing session state shows that work is in progress. **Save**
+is enabled only when the agent is idle, the latest pushed commit has a completed S3
+checkpoint, and deterministic package validation passes. None of these states are
+maintained as independent client-only truth.
 
 ## Package Contract
 
@@ -377,9 +392,10 @@ review harness visits deterministic foundation and component routes, rejects run
 errors or external network dependencies, verifies declared variants/states are present,
 then exports self-contained HTML and full-page PNG captures into `preview/`.
 
-Publication fails when required specimens are missing, blank, stale relative to the
-manifest, or omit declared variants. The PNGs provide fast human thumbnails; downstream
-Design agents primarily consume the HTML, component source, tokens, and manifest.
+Every commit is checkpointed even when required specimens are missing, blank, stale
+relative to the manifest, or omit declared variants. Save refuses to publish such a
+checkpoint. The PNGs provide fast human thumbnails; downstream Design agents primarily
+consume the HTML, component source, tokens, and manifest.
 
 ### Source evidence
 
@@ -394,12 +410,14 @@ Add Prisma enums generated into GraphQL through the normal schema/codegen path:
 
 ```text
 DesignSystemStatus = draft | ready | archived
-DesignSystemPublishStatus = idle | pending | publishing | published | failed
+DesignSystemCheckpointStatus = pending | saving | saved | failed
+DesignSystemPublishStatus = idle | publishing | published | failed
 ```
 
 Authoring progress, runtime failure, and `needs_input` come from the linked session; they
-are not duplicated as design-system statuses. Publication state describes only the latest
-managed push. A failed or superseded publication leaves the last ready version active.
+are not duplicated as design-system statuses. Checkpoint state describes whether the
+latest pushed commit has reached S3. Publication state describes the explicit Save. A
+failed checkpoint or publication leaves the last ready version active.
 
 Add `DesignSystem`:
 
@@ -414,10 +432,13 @@ sourceRepoId               String?
 sourceBranch               String?
 sourcePath                 String?
 activeVersionId            String?
+latestCheckpointId         String?
+latestPushedCommitSha      String?
 authoringSessionGroupId    String
 createdById                String
+checkpointStatus           DesignSystemCheckpointStatus?
+checkpointError            String?
 publishStatus              DesignSystemPublishStatus
-pendingCommitSha           String?
 publishedCommitSha         String?
 publishAttemptedAt         DateTime?
 publishError               String?
@@ -426,7 +447,8 @@ updatedAt                  DateTime
 archivedAt                 DateTime?
 ```
 
-`publishStatus` defaults to `idle`.
+`checkpointStatus` is null before the first managed push; `publishStatus` defaults to
+`idle`.
 
 Constraints and indexes:
 
@@ -436,6 +458,35 @@ Constraints and indexes:
 - named relations for active version and authoring session group;
 - the source-repo relation uses `onDelete: SetNull`, while source name/URL/path/commit
   provenance remains preserved in each published version's manifest and evidence.
+
+Add `DesignSystemCheckpoint`:
+
+```text
+id                    String @id
+designSystemId        String
+sequence              Int
+storageKey            String
+contentDigest         String?
+byteSize              Int?
+workspaceCommitSha    String
+status                DesignSystemCheckpointStatus
+packageValid          Boolean?
+packageDigest         String?
+validationSummary     Json?
+error                  String?
+createdById           String?
+createdAt             DateTime
+savedAt               DateTime?
+```
+
+Constraints and indexes:
+
+- unique `(designSystemId, sequence)`;
+- unique `(designSystemId, workspaceCommitSha)` so push retries are idempotent;
+- index `(designSystemId, createdAt)`;
+- `DesignSystem.latestCheckpointId` points only to the greatest successfully saved
+  sequence, so out-of-order workers cannot move the pointer backward.
+- checkpoints referenced by a published version use `onDelete: Restrict`.
 
 Add `DesignSystemVersion`:
 
@@ -448,7 +499,7 @@ contentDigest         String
 byteSize              Int
 sourceCommitSha       String?
 authoringSessionGroupId String
-workspaceCheckpointId String?
+designSystemCheckpointId String
 workspaceCommitSha    String
 manifest              Json
 validationSummary     Json
@@ -460,8 +511,10 @@ Constraints and indexes:
 
 - unique `(designSystemId, version)`;
 - unique `(designSystemId, contentDigest)` to make repeated publication idempotent;
+- unique `designSystemCheckpointId` so saving the same checkpoint twice cannot create two
+  versions;
 - index `(designSystemId, createdAt)`;
-- indexes for authoring session group and workspace checkpoint provenance.
+- indexes for authoring session group and design-system checkpoint provenance.
 
 Add nullable `SessionGroup.designSystemVersionId`. Only `design` groups may set it in v1.
 The relation uses `onDelete: Restrict`; a referenced version cannot be deleted.
@@ -475,20 +528,24 @@ Add query fields:
 
 - `designSystems(organizationId: ID!, includeArchived: Boolean): [DesignSystem!]!`
 - `designSystem(id: ID!): DesignSystem`
+- `designSystemCheckpoints(designSystemId: ID!, first: Int, after: String):`
+  `DesignSystemCheckpointConnection!`
 - `designSystemVersions(designSystemId: ID!): [DesignSystemVersion!]!`
 
 Add mutations:
 
 - `createDesignSystem(input: CreateDesignSystemInput!): DesignSystem!`
-- `retryDesignSystemPublish(id: ID!): DesignSystem!`
+- `saveDesignSystem(id: ID!): DesignSystemVersion!`
+- `retryDesignSystemCheckpoint(designSystemId: ID!): DesignSystem!`
 - `archiveDesignSystem(id: ID!): DesignSystem!`
 
 `CreateDesignSystemInput` contains `name`, `repoId`, optional `branch`, optional
 `sourcePath`, and optional `environmentId`. Organization comes from the authenticated
 request context. The returned DesignSystem exposes its `authoringSessionGroup`, allowing
-the caller to navigate after creation. Publication is driven by the server-observed push
-for that relationship; clients cannot supply a commit, package path, storage key, or
-session-group override. Retry only re-enqueues the server-recorded failed commit.
+the caller to navigate after creation. Managed pushes create checkpoints for that
+server-owned relationship. Save derives the latest successfully uploaded checkpoint from
+the relationship; clients cannot supply a commit, package path, storage key, or
+session-group override. Retry only re-enqueues the server-recorded failed checkpoint.
 
 Extend `StartSessionInput` with `designSystemVersionId: ID`. The returned mutation entity
 is used only for navigation; Zustand receives shared state through organization events.
@@ -526,43 +583,68 @@ Create `DesignSystemService` with these primary methods:
 Do not place session creation logic in the resolver or open a nested transaction around
 `SessionService.start`.
 
-### `enqueuePublishForManagedPush`
+### `enqueueCheckpointForManagedPush`
 
-- Invoke this from `ManagedGitService.recordPush` for each updated branch, beside the
-  existing Design-preview and PDF-export consumers.
+- Invoke this from `ManagedGitService.recordPush` for every updated authoring branch,
+  beside the existing Design-preview and PDF-export consumers.
 - Resolve `design_system` authoring groups whose hidden managed repo and branch match the
   push; never accept that association from an agent or client.
-- Set `publishStatus: pending`, record `pendingCommitSha`, clear the previous transient
-  error, append a full-entity update event, and enqueue asynchronous publication.
-- Coalesce rapid pushes with latest-commit-wins semantics. A publisher may proceed only
-  while its commit still matches `pendingCommitSha`.
-- Ignore an initial starter commit that has no v1 manifest and leave the system `draft`.
-  Once a package manifest or active version exists, an invalid pushed package is a real
-  publication failure; the next valid push automatically retries through the normal
-  path.
+- Enumerate every newly introduced commit from the received old/new ref pair in
+  topological order; a push containing several commits must create several checkpoints,
+  not merely one for its new branch head. Branch deletion creates none.
+- Allocate monotonically increasing checkpoint sequences and idempotently create a
+  `pending` row for every distinct commit, processing unusually large pushes in bounded
+  batches rather than dropping intermediate commits.
+- Record the newest commit as `latestPushedCommitSha`, set checkpoint status to `pending`,
+  append full-entity/checkpoint events, and enqueue asynchronous S3 persistence.
+- Do not coalesce pushes: every distinct pushed commit receives its own checkpoint row
+  and object. Workers may run concurrently, but sequence guards prevent out-of-order
+  completion from moving `latestCheckpointId` backward.
 
-### `publishManagedCommit`
+### `persistManagedCheckpoint`
 
-- Claim a pending commit with a compare-and-set transition to `publishing`.
-- Resolve the exact `design-system/` tree from the server-owned managed bare Git repo at
-  that commit, plus the source commit recorded in its evidence.
-- Create a normalized deterministic archive, enforce path/type/size limits, validate all
-  required package files and specimens, and compute the digest server-side.
-- Upload through `StorageAdapter.putObject` under a server-owned S3 key.
-- In one database transaction, and only if the commit is still current, create the
-  immutable version, set it active, mark the system ready and `published`, record
-  `publishedCommitSha`, clear `pendingCommitSha`/`publishError`, and append full-entity
-  events.
-- Treat an existing `(designSystemId, contentDigest)` as idempotent success and allocate
-  ordinals under a transaction/unique-constraint retry.
-- Delete an unreferenced uploaded object if validation, supersession, or the transaction
-  fails. A superseded job must never create or activate a version.
-- Do not terminate or archive the authoring session. Each later valid managed push may
-  create and activate the next immutable version.
+- Claim the pending row with a compare-and-set transition to `saving` so retries cannot
+  upload the same checkpoint concurrently.
+- Resolve the complete tracked workbench tree from the server-owned managed bare Git repo
+  at the checkpoint commit. This includes the package, canvas sources, and review output,
+  but excludes ignored runtime files such as dependencies and credentials.
+- Create a normalized deterministic archive and enforce path/type/size/secret limits.
+- Independently inspect `design-system/` and record whether the checkpoint currently
+  satisfies the package and visual-specimen contract, including its normalized package
+  digest. Invalid drafts are still archived.
+- Upload through `StorageAdapter.putObject` under a server-owned checkpoint key.
+- Mark that row `saved`; if its sequence is newer than the current pointer, update
+  `latestCheckpointId` in one transaction and append events. Update the design-system
+  checkpoint status only if this row still matches `latestPushedCommitSha`, so an older
+  worker cannot overwrite the latest commit's state.
+- Treat an existing `(designSystemId, workspaceCommitSha)` as idempotent success.
+- On failure, mark only that checkpoint failed, update the design-system status only when
+  it is the latest pushed commit, and retain the managed Git commit. A retry or startup
+  reconciler can rebuild the object without the original container.
 
-If publication fails, set `publishStatus: failed`, record a concise `publishError`, append
-an update event, and retain the active version. `retryDesignSystemPublish` and a startup
-reconciler can re-enqueue the same server-recorded commit without trusting client input.
+### `save`
+
+- Authorize access to the design system and its authoring session group.
+- Require the agent to be idle, managed push to have succeeded, and
+  `latestCheckpoint.workspaceCommitSha` to equal `latestPushedCommitSha`.
+- Require the checkpoint object to be fully uploaded and its package validation to pass.
+- Set `publishStatus: publishing`, record `publishAttemptedAt`, and append an update event
+  before package promotion begins.
+- Read the server-owned checkpoint object, extract only `design-system/`, create the
+  normalized package archive, validate it again, and verify the version digest matches
+  the checkpoint's recorded package digest.
+- Upload through `StorageAdapter.putObject` under a server-owned version key.
+- In one database transaction, create the immutable version, set it active, mark the
+  system ready and `published`, record `publishedCommitSha`, clear `publishError`, and
+  append full-entity/version events.
+- Treat repeated Save for the same checkpoint or content digest as idempotent success and
+  allocate ordinals under a transaction/unique-constraint retry.
+- Delete an unreferenced version object if validation or the transaction fails.
+- Do not terminate or archive the authoring session. Later commits continue creating S3
+  checkpoints but do not replace the active version until the user presses Save again.
+
+If Save fails, set `publishStatus: failed`, record a concise `publishError`, append an
+update event, and retain both the latest checkpoint and active version.
 
 ### `archive`
 
@@ -606,21 +688,24 @@ merely because the parent system was later archived.
 Add event types:
 
 - `design_system_created`
+- `design_system_checkpoint_created`
+- `design_system_checkpoint_updated`
 - `design_system_version_created`
 - `design_system_updated`
 - `design_system_publish_updated`
 - `design_system_archived`
 
 Payloads for entity-changing events include the complete normalized `DesignSystem` and,
-when relevant, complete `DesignSystemVersion`. The client handler upserts them into new
-`designSystems` and `designSystemVersions` entity tables. Lists derive from those tables;
-mutation results do not update shared state.
+when relevant, complete `DesignSystemCheckpoint` or `DesignSystemVersion`. The client
+handler upserts them into new `designSystems`, `designSystemCheckpoints`, and
+`designSystemVersions` entity tables. Lists derive from those tables; mutation results do
+not update shared state.
 
 Authoring output remains ordinary session output. Do not create a second progress-log
-system. Design-system events record entity/publication lifecycle transitions, while the
-linked session is the detailed audit trail. Selecting a version for a new Design is
-recorded by the normal `session_started` event and its complete session-group payload; it
-does not need a duplicative design-system event.
+system. Design-system events record checkpoint and publication lifecycle transitions,
+while the linked session is the detailed audit trail. Selecting a version for a new
+Design is recorded by the normal `session_started` event and its complete session-group
+payload; it does not need a duplicative design-system event.
 
 ## Read-Only Source Checkout
 
@@ -673,26 +758,28 @@ start a replacement session.
 The skill must ask when it finds multiple unrelated design systems or cannot determine
 the intended application/package. It should not ask about choices that can be safely
 derived and recorded with evidence. The agent never calls publication APIs or creates
-versions. It runs local checks and pushes through the normal managed-session flow; the
-server-owned managed-push consumer decides whether that exact commit is publishable.
+versions. It runs local checks and pushes through the normal managed-session flow. That
+push always creates a server-owned S3 checkpoint; only the user's Save action promotes a
+valid checkpoint to a published version.
 
-## Managed-Push Publication and S3 Lifecycle
+## Per-Commit S3 Checkpoints and Published Versions
 
 ### Object key
 
 Use a server-owned namespace separate from arbitrary uploads:
 
 ```text
+design-system-checkpoints/{organizationId}/{designSystemId}/{checkpointId}/workbench.tar.gz
 design-systems/{organizationId}/{designSystemId}/{versionId}/package.tar.gz
 ```
 
-The key is generated by the service and never accepted from a client or agent.
+Both keys are generated by the service and never accepted from a client or agent.
 
-### Managed Git publication pipeline
+### Managed Git checkpoint pipeline
 
-Extend the managed Git storage abstraction with a safe `archiveSubtreeAtCommit`-style
-operation. It reads `design-system/` directly from the server-owned bare repo at the
-recorded commit, so publication does not depend on a still-running bridge or a
+Extend the managed Git storage abstraction with a safe `archiveTreeAtCommit`-style
+operation. It reads the tracked workbench tree directly from the server-owned bare repo
+at the recorded commit, so checkpointing does not depend on a still-running bridge or a
 client-supplied workspace path.
 
 The authoring skill runs `design-system:check` and `design-system:review` before its
@@ -700,21 +787,29 @@ normal commit/push, and commits the required HTML and PNG specimens. The server 
 independently:
 
 - verifies the pushed commit belongs to the linked workbench repo and branch;
-- resolves only the expected subtree from that exact commit;
+- resolves the complete tracked tree from that exact commit;
 - rejects links, special files, traversal, unsafe paths, secrets, and out-of-bounds
   content while constructing a normalized archive;
-- validates manifest/specimen completeness and recomputes the package digest;
-- uploads via `StorageAdapter.putObject` and activates it only through the guarded
-  database transaction;
-- discards output when a newer push supersedes the commit;
+- records package/specimen validation results without rejecting an incomplete draft;
+- uploads every distinct commit via `StorageAdapter.putObject` and records its digest;
+- updates the latest pointer only when the completed checkpoint has the greatest
+  sequence, without deleting or skipping earlier commits;
 - retries pending work after process restarts, following the existing managed-push
   Design-preview and PDF-export recovery pattern.
 
+The explicit Save path reads the selected latest checkpoint through `StorageAdapter`,
+extracts and revalidates only `design-system/`, and writes the smaller immutable published
+package. It does not need the bridge, source repository, or authoring container to still
+exist.
+
 ### Retention
 
-- Published version objects are immutable.
-- Failed staging objects are deleted best-effort.
-- Archiving a design system does not delete objects.
+- Checkpoint and published-version objects are immutable.
+- V1 retains one checkpoint record/object for every distinct pushed commit. A later,
+  explicit retention policy may expire unreferenced draft checkpoints only after the
+  managed Git remote and every published version remain recoverable.
+- Failed partial uploads are deleted best-effort; the checkpoint row remains retryable.
+- Archiving a design system does not delete checkpoint or version objects.
 - A future garbage collector may remove versions only when no `SessionGroup`, active
   version, retained event policy, or legal hold references them.
 - Version deletion is not exposed in v1.
@@ -808,18 +903,24 @@ Initial configurable limits should default to:
 - maximum path length and directory depth;
 - UTF-8 validation for manifest, Markdown, JSON, CSS, and source components.
 
-Reject:
+Reject a workbench checkpoint entirely when it contains storage/security violations:
 
 - absolute or parent-traversing paths;
 - duplicate normalized paths;
 - symlinks, hard links, sockets, and device files;
-- undeclared executable binaries;
-- imports escaping the component package;
 - secret-like files such as `.env`, credentials, private keys, and VCS internals;
-- remote scripts or code fetched at runtime;
-- malformed CSS/JSON or missing required manifest files;
 - digest or size mismatches;
 - archives that exceed limits during streaming extraction.
+
+An incomplete or syntactically invalid design-system package is still a recoverable draft,
+so its workbench checkpoint is stored with `packageValid: false`. Save additionally
+rejects:
+
+- undeclared executable binaries;
+- imports escaping the component package;
+- remote scripts or code fetched at runtime;
+- malformed CSS/JSON or missing required manifest files;
+- missing or stale required visual specimens.
 
 Preview HTML is untrusted content. It is either shown through the existing user-content
 boundary or not rendered in Trace v1; it must never execute on the main app origin.
@@ -829,23 +930,26 @@ boundary or not rendered in Trace v1; it must never execute on the main app orig
 - If authoring-session creation fails, the shared transaction rolls back the draft.
 - If the agent needs input, keep the draft/ready entity unchanged and use normal session
   `needs_input` behavior; the canvas remains visible.
-- If packaging or validation fails, retain the authoring session, set publication state
-  to failed, record the concise validation error, and allow the user to ask the agent for
-  a repair. Its next valid managed push publishes automatically; retry may re-enqueue the
-  unchanged server-recorded commit.
-- If upload succeeds but publication fails, delete the unreferenced object best-effort.
-- If publication is retried with the same digest, return the existing version.
+- If a checkpoint upload fails, retain the managed Git commit, mark the checkpoint
+  failed, and retry it from the bare repo. No authoring container is required.
+- If package validation fails, still store the workbench checkpoint but disable Save and
+  expose the concise validation error so the user can ask the agent for a repair.
+- If version upload succeeds but Save fails, delete the unreferenced version object
+  best-effort while retaining the checkpoint object.
+- If Save is retried with the same checkpoint or digest, return the existing version.
 - If a runtime expires before its push, restore the authoring workbench from its managed
-  remote and rehydrate the pinned source checkout. Publication of an already pushed
-  commit proceeds server-side without that runtime.
+  remote and rehydrate the pinned source checkout. Checkpointing and publication of an
+  already pushed commit proceed server-side without that runtime.
 - If materialization fails, the Design session remains recoverable through the existing
   workspace retry path and requests a fresh signed URL.
-- Failed or superseded workbench commits never replace an active version.
+- New, failed, or superseded workbench checkpoints never replace an active version until
+  the user explicitly Saves one.
 
 ## Frontend and Zustand
 
-Add normalized `designSystems` and `designSystemVersions` tables to client-core entity
-state and event handlers. Select individual fields with fine-grained selectors.
+Add normalized `designSystems`, `designSystemCheckpoints`, and `designSystemVersions`
+tables to client-core entity state and event handlers. Select individual fields with
+fine-grained selectors.
 
 Suggested web components:
 
@@ -858,8 +962,9 @@ components/design-system/
 ├── DesignSystemDetails.tsx
 ├── DesignSystemStatus.tsx
 ├── DesignSystemPreview.tsx
-├── DesignSystemPublishStatus.tsx
-└── RetryDesignSystemPublishButton.tsx
+├── DesignSystemCheckpointStatus.tsx
+├── RetryDesignSystemCheckpointButton.tsx
+└── DesignSystemSaveButton.tsx
 ```
 
 Split the existing generated-project dialog so selecting Design opens a focused Design
@@ -868,8 +973,8 @@ React context; dialog-local form state may remain local, while fetched entities 
 cross-screen creation state belong in Zustand.
 
 Route `design_system` groups to the same immersive chat/preview shell used by Design,
-with the design-system canvas title and managed publication indicator in its header. Add
-a dedicated Design Systems sidebar section derived from
+with the design-system canvas title, cloud-checkpoint indicator, and Save button in its
+header. Add a dedicated Design Systems sidebar section derived from
 `DesignSystem.authoringSessionGroupId`; do not mix these groups into the ordinary Designs
 or Apps lists. The existing virtualized session message list and preview components
 should be reused with kind-specific empty state, labels, and toolbar actions.
@@ -881,19 +986,21 @@ selected.
 
 ## Observability
 
-Log structured lifecycle records with organization, design-system, version, session,
-source repo, source commit, byte size, file count, digest prefix, duration, and failure
-stage. Never log signed URLs or package contents.
+Log structured lifecycle records with organization, design-system, checkpoint, version,
+session, source repo, source/workspace commits, byte size, file count, digest prefix,
+duration, and failure stage. Never log signed URLs or package contents.
 
 Track metrics for:
 
 - authoring sessions created/resumed/failed;
 - initial extraction duration;
+- checkpoint queue/upload/retry latency and failure rate;
+- checkpoint bytes stored per system;
 - package validation failure reason;
 - compressed and uncompressed sizes;
 - materialization latency and failure rate;
 - Designs created by default versus custom system;
-- Publication attempts/success/failure/supersession and version-upgrade counts.
+- Save/publication attempts, success/failure, and version-upgrade counts.
 
 ## Migration and Rollout
 
@@ -907,17 +1014,19 @@ Deploy in this order:
 1. Add nullable database columns/tables and server read compatibility.
 2. Deploy bridge support for the new starter, read-only source checkout, and downstream
    package materialization while the server does not yet send those fields.
-3. Deploy `design_system` authoring and publication behind server feature flags.
+3. Deploy `design_system` authoring, per-commit checkpointing, and publication behind
+   server feature flags.
 4. Publish and validate the bundled Trace Default package.
 5. Enable internal authoring and end-to-end tests.
 6. Enable the web selector and creation flow for selected organizations.
-7. Remove flags only after publication and materialization metrics are healthy.
+7. Remove flags only after checkpoint, publication, and materialization metrics are
+   healthy.
 
 The shared bridge protocol addition must be capability/version gated. An older bridge
 must receive a clear unsupported-runtime error for a selected custom system, never a
 Design that starts without its package. Database rollback remains safe while new columns
-are nullable; object-storage rollback consists of disabling new publication while
-retaining already referenced immutable objects.
+are nullable; object-storage rollback consists of disabling new checkpoints/publication
+while retaining already referenced immutable objects.
 
 ## Implementation Phases
 
@@ -933,8 +1042,8 @@ retaining already referenced immutable objects.
 - Implement `DesignSystemService.list/create/archive` with authorization and events.
 
 Exit criteria: creating a DesignSystem atomically creates a draft and navigable
-`design_system` group with a hidden managed repo; no source extraction or publication
-yet.
+`design_system` group with a hidden managed repo; no source extraction, checkpointing, or
+publication yet.
 
 ### Phase 2 — Interactive authoring workbench
 
@@ -951,24 +1060,28 @@ yet.
 
 Exit criteria: a user can open a draft workbench, watch the initial foundations and
 components appear, chat to change them, and reload/resume the same managed workbench.
-Package publication is not enabled in this phase.
+S3 checkpointing and package publication are not enabled in this phase.
 
-### Phase 3 — Managed-save publication
+### Phase 3 — Per-commit checkpoints and explicit Save
 
-- Add the managed-push consumer and exact-commit subtree archive helper.
-- Add the pending/publishing/published/failed state machine, startup reconciliation, and
-  retry mutation.
+- Add the managed-push consumer and exact-commit workbench-tree archive helper.
+- Persist every distinct pushed commit to its own S3 checkpoint object and row.
+- Add checkpoint pending/saving/saved/failed state, monotonic latest-pointer guards,
+  startup reconciliation, and retry mutation.
 - Run deterministic workbench checks and browser specimen review before the normal agent
-  commit/push, then validate their committed outputs again on the server.
+  commit/push, then record server validation results without rejecting incomplete draft
+  checkpoints.
+- Add the explicit Save button and `saveDesignSystem` mutation to promote the latest
+  saved, valid checkpoint.
 - Implement S3 key allocation, server-side validation, digesting, idempotency, concurrent
-  ordinal protection, latest-commit-wins guards, events, and cleanup.
+  ordinal protection, events, and cleanup for both object types.
 - Require self-contained HTML and PNG foundation/component specimens.
-- Preserve the authoring session after publication so later chat responses can publish
-  later immutable versions.
+- Preserve the authoring session after publication so later chat responses keep creating
+  checkpoints and may be published by a later Save.
 
-Exit criteria: a valid managed push automatically publishes version 1 from the reviewed
-canvas; a later valid push creates the next version, and failed or superseded pushes
-retain the previous active version.
+Exit criteria: every pushed commit has an immutable S3 checkpoint even after its container
+is destroyed; no version exists until the user presses Save, and later checkpoints retain
+the previous active version until another Save.
 
 ### Phase 4 — Design selection and materialization
 
@@ -987,10 +1100,11 @@ the selected package.
 - Add the Design creation form and design-system combobox.
 - Add the nested Create Design System flow.
 - Add a Design Systems sidebar/list entry that opens/resumes authoring sessions.
-- Add publication status, active version, source provenance, archive, source-refresh, and
-  version-history UI.
+- Add cloud-checkpoint status, Save state, active version, source provenance, archive,
+  source-refresh, checkpoint history, and version-history UI.
 - Wire queries into Zustand and rely on events for mutation reconciliation.
-- Add loading, draft, ready, saving, publish-failed, archived, and stale-source states.
+- Add loading, draft, ready, checkpoint-saving, checkpoint-failed, publishing,
+  publish-failed, archived, and stale-source states.
 
 Exit criteria: the full flow is usable without GraphQL tooling or manual database work.
 
@@ -1013,31 +1127,36 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
   bombs.
 - Token validator catches missing roles, invalid aliases, and malformed CSS.
 - Component validator catches external imports and undeclared assets.
-- S3 keys are server-derived and organization scoped.
+- Checkpoint and version S3 keys are server-derived and organization scoped.
+- Every distinct pushed commit gets a durable checkpoint row/object, including invalid
+  package drafts.
+- Out-of-order checkpoint workers cannot regress `latestCheckpointId`.
 - Publication is digest-idempotent.
-- Failed, unchanged, or superseded publication preserves the older active version and
-  ordinal.
-- Only the current `pendingCommitSha` can become active.
+- Failed or unchanged Save preserves the older active version and ordinal.
+- Only the latest fully saved checkpoint may be published.
 - Session start rejects inaccessible, missing, or invalid versions.
 
 ### Service tests
 
 - Create authorizes the source repo, creates a managed `design_system` session, and emits
   full events atomically.
-- Agent output alone does not create a version; the server-observed managed push does.
-- A valid managed push creates a version/active pointer atomically without an explicit
-  client publication call.
-- Two rapid pushes coalesce safely and only the latest commit may publish.
+- Each managed push creates a checkpoint but not a version.
+- A single push containing multiple new commits creates a checkpoint for each commit in
+  topological order.
+- Two rapid pushes both reach S3 even when workers finish out of order.
+- Save rejects a missing, stale, uploading, failed, or invalid latest checkpoint.
+- Save creates a version/active pointer atomically from the latest valid checkpoint.
+- Checkpoint retry succeeds after the authoring container has stopped.
 - Failed DB publication removes the uploaded object.
 - Archive preserves pinned Designs.
 - Private group and organization boundaries cannot be crossed by ids supplied by clients.
 - Event payloads can upsert entities without a follow-up query.
 
-### Managed Git and bridge tests
+### Managed Git, storage, and bridge tests
 
-- Exact-commit subtree archival stays within the package root.
-- Packaging is deterministic for identical Git trees.
-- Publication succeeds after the authoring runtime has stopped.
+- Exact-commit workbench archival includes only tracked files and stays within its root.
+- Checkpoint packaging is deterministic for identical Git trees.
+- Checkpoint persistence and later Save succeed after the authoring runtime has stopped.
 - Source checkout is separate, read-only, pinned to the requested commit, and excluded
   from managed-workbench commits/packages.
 - Restoring a workbench rehydrates both the managed repo and exact source commit.
@@ -1050,14 +1169,16 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 ### Frontend tests
 
 - The selector lists systems with an active published version and Trace Default,
-  including a system whose latest publication is pending or failed.
+  including a system with newer unpublished checkpoints.
 - Creating an App or PDF remains unchanged.
 - Creating a Design sends the selected version id.
-- Create-new navigates to the authoring canvas; the first complete managed push publishes
-  automatically.
-- Chat changes visibly update boards and the header reports saving/saved/failed after the
-  managed push.
-- Events update active version and publication errors.
+- Create-new navigates to the authoring canvas; managed pushes checkpoint without
+  publishing.
+- Chat changes visibly update boards and the header reports cloud
+  saving/saved/save-failed after each managed push.
+- Save is disabled until the agent is idle and the latest checkpoint is saved and valid.
+- Events update latest checkpoint, active version, checkpoint errors, and publication
+  errors.
 - Archived or never-published systems cannot be newly selected for a Design.
 
 ### End-to-end test
@@ -1067,20 +1188,20 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 3. Assert the `design_system` workbench uses a managed repo and separate read-only source
    checkout.
 4. Watch the initial color, typography, component-variant, state, and composition boards
-   render and verify the completed response's managed push publishes version 1.
+   render and verify the completed response's managed push creates an S3 checkpoint but
+   no published version.
 5. Use chat to change a token and add a component variant; verify HMR, screenshots, and
-   the automatic publication of version 2 through the local storage adapter.
-6. Push an invalid change and confirm version 2 remains active while publication shows a
-   repairable error.
-7. Push two valid edits rapidly and confirm only the latest pending commit becomes the
-   next active version.
+   a second checkpoint through the local storage adapter.
+6. Destroy the authoring container, verify both checkpoint objects remain, and restore
+   the workbench at the latest managed commit.
+7. Press Save and verify the latest valid checkpoint becomes version 1.
 8. Remove source-repo access from the ordinary Design runtime.
 9. Create a Design with version 1 and assert the package exists before its first agent
    run.
 10. Ask for a screen using a known token and portable component.
 11. Verify the committed design and exported HTML contain the expected styling/component.
-12. Publish a later managed save and confirm the original Design remains pinned to
-    version 1.
+12. Make another chat edit, verify its checkpoint does not replace version 1, press Save,
+    and confirm the original Design remains pinned to version 1.
 
 ## Expected File Touchpoints
 
@@ -1090,10 +1211,12 @@ The implementation should remain surgical, but likely touches:
 - generated GraphQL files through `pnpm gql:codegen`
 - `apps/server/prisma/schema.prisma` and a new migration
 - `apps/server/src/services/design-system.ts` and tests
+- `apps/server/src/services/managed-git.ts` and managed-push recovery tests
 - `apps/server/src/services/session.ts` and tests
 - `apps/server/src/lib/generated-project.ts` or a new managed-workspace kind helper
 - `apps/server/src/schema/` thin resolver modules
 - `apps/server/src/lib/storage/` only if streaming helpers are needed
+- the managed Git storage abstraction for exact-commit tree enumeration/archival
 - shared package contracts/validators under `packages/shared/` or a focused package if
   the implementation proves too large for `shared`
 - `packages/shared/src/bridge.ts`
@@ -1125,14 +1248,18 @@ The implementation should remain surgical, but likely touches:
 
 - [ ] A source repo can seed a first-class chat-and-canvas authoring session without
       becoming the workbench repo.
-- [ ] Every complete valid managed save publishes automatically; no explicit publication
-      button or client-supplied package location exists.
-- [ ] The package is immutable and retrievable through both S3 and local adapters.
+- [ ] Every distinct pushed workbench commit is saved as an immutable S3/local checkpoint
+      and can be persisted or retried without its authoring container.
+- [ ] No DesignSystemVersion is published until the user presses Save on the latest valid
+      checkpoint; clients cannot supply a commit or package location.
+- [ ] Checkpoint and published package objects are immutable and retrievable through both
+      S3 and local adapters.
 - [ ] Postgres stores no package binaries.
 - [ ] A Design pins a version and starts without source-repo access.
 - [ ] Materialization completes before `workspace_ready` and the first prompt.
 - [ ] The agent reads and uses guidance, tokens, components, and assets from local files.
-- [ ] Existing Designs survive later saves, archival, and source-repo access loss.
+- [ ] Existing Designs survive later checkpoints, Saves, archival, and source-repo access
+      loss.
 - [ ] Every mutation is service-owned and event-producing.
 - [ ] Zustand reconciles from events rather than mutation results.
 - [ ] Archive and package validation covers traversal, links, limits, secrets, and digest
