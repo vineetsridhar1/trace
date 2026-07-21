@@ -46,6 +46,7 @@ async function resolveUserApiTokenEnv(userId: string): Promise<Record<string, st
   return {
     ...(tokens.anthropic ? { ANTHROPIC_API_KEY: tokens.anthropic } : {}),
     ...(tokens.openai ? { OPENAI_API_KEY: tokens.openai } : {}),
+    ...(tokens.codex_access_token ? { CODEX_ACCESS_TOKEN: tokens.codex_access_token } : {}),
     ...(tokens.github ? { GITHUB_TOKEN: tokens.github } : {}),
     ...(tokens.ssh_key ? { SSH_PRIVATE_KEY: tokens.ssh_key } : {}),
   };

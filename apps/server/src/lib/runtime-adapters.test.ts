@@ -175,6 +175,7 @@ describe("ProvisionedRuntimeAdapter", () => {
     vi.mocked(apiTokenService.getDecryptedTokens).mockResolvedValue({
       anthropic: "anthropic-token",
       openai: "openai-token",
+      codex_access_token: "codex-access-token",
       github: "github-token",
       ssh_key: "ssh-private-key",
     });
@@ -203,6 +204,7 @@ describe("ProvisionedRuntimeAdapter", () => {
     expect(body.bootstrapEnv).toMatchObject({
       ANTHROPIC_API_KEY: "anthropic-token",
       OPENAI_API_KEY: "openai-token",
+      CODEX_ACCESS_TOKEN: "codex-access-token",
       GITHUB_TOKEN: "github-token",
       SSH_PRIVATE_KEY: "ssh-private-key",
     });

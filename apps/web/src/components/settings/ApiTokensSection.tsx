@@ -49,7 +49,12 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
   openai: {
     label: "OpenAI",
     placeholder: "sk-...",
-    description: "Used to run Codex sessions with your personal OpenAI account",
+    description: "Used for OpenAI API integrations and Codex API-key sessions",
+  },
+  codex_access_token: {
+    label: "Codex access token",
+    placeholder: "codex_...",
+    description: "Used to run Codex cloud sessions with trusted automation access",
   },
   github: {
     label: "GitHub",
@@ -68,6 +73,9 @@ function ProviderIcon({ provider }: { provider: string }) {
     return <ClaudeIcon className="h-5 w-5 object-contain" />;
   }
   if (provider === "openai") {
+    return <CodexIcon className="h-5 w-5" />;
+  }
+  if (provider === "codex_access_token") {
     return <CodexIcon className="h-5 w-5" />;
   }
   if (provider === "github") {
