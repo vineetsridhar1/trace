@@ -7,7 +7,6 @@ import { features } from "../../lib/features";
 import { BrowseChannelsDialog } from "./BrowseChannelsDialog";
 import { CreateChannelDialog } from "./CreateChannelDialog";
 import { GeneratedProjectsSection } from "./GeneratedProjectsSection";
-import { DesignSystemsSection } from "./DesignSystemsSection";
 import { HomeButton } from "./HomeButton";
 import { InboxButton } from "./InboxButton";
 import { TicketsButton } from "./TicketsButton";
@@ -83,10 +82,6 @@ export function SidebarChannelsPane({
         </div>
 
         <GeneratedProjectsSection
-          activeOrgId={activeOrgId}
-          activeSessionGroupId={activeSessionGroupId}
-        />
-        <DesignSystemsSection
           activeOrgId={activeOrgId}
           activeSessionGroupId={activeSessionGroupId}
         />
