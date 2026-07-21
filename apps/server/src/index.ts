@@ -216,7 +216,11 @@ async function main() {
     }
     try {
       JSON.parse(authJson) as unknown;
-      await apiTokenService.set(runtime.userId, "codex_auth_json", authJson);
+      await apiTokenService.setExclusiveCodexCredential(
+        runtime.userId,
+        "codex_auth_json",
+        authJson,
+      );
       return res.status(204).end();
     } catch {
       return res.status(400).json({ error: "Invalid Codex session credential" });

@@ -10,6 +10,15 @@ const ALL_PROVIDERS: ApiTokenProvider[] = [
   "github",
   "ssh_key",
 ];
+const CODEX_AUTH_PROVIDERS: ApiTokenProvider[] = [
+  "openai",
+  "codex_access_token",
+  "codex_auth_json",
+];
+
+export function isCodexAuthProvider(provider: ApiTokenProvider): boolean {
+  return CODEX_AUTH_PROVIDERS.includes(provider);
+}
 
 export class ApiTokenService {
   async list(userId: string) {
@@ -38,6 +47,32 @@ export class ApiTokenService {
       where: { userId_provider: { userId, provider } },
       create: { userId, provider, encryptedToken: encrypted, iv },
       update: { encryptedToken: encrypted, iv },
+    });
+
+    return { provider: token.provider, isSet: true, updatedAt: token.updatedAt };
+  }
+
+  async setExclusiveCodexCredential(
+    userId: string,
+    provider: ApiTokenProvider,
+    plainToken: string,
+  ) {
+    if (!isCodexAuthProvider(provider)) {
+      throw new Error("Provider is not a Codex authentication method");
+    }
+    const { encrypted, iv } = encryptSecret(plainToken);
+    const token = await prisma.$transaction(async (tx) => {
+      await tx.apiToken.deleteMany({
+        where: {
+          userId,
+          provider: { in: CODEX_AUTH_PROVIDERS.filter((candidate) => candidate !== provider) },
+        },
+      });
+      return tx.apiToken.upsert({
+        where: { userId_provider: { userId, provider } },
+        create: { userId, provider, encryptedToken: encrypted, iv },
+        update: { encryptedToken: encrypted, iv },
+      });
     });
 
     return { provider: token.provider, isSet: true, updatedAt: token.updatedAt };
