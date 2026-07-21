@@ -20,7 +20,7 @@ export function SavedPdfPreview({ downloadUrl, url }: { downloadUrl: string | nu
         ) : null}
       </div>
       <iframe
-        src={`${url}#toolbar=0&navpanes=0&view=FitH`}
+        src={`${url}#toolbar=0&navpanes=0&view=Fit`}
         title="Saved PDF preview"
         className="size-full border-0"
       />
