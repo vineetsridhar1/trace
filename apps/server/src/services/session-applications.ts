@@ -920,9 +920,9 @@ export class SessionApplicationService {
   ) {
     const existing = await prisma.sessionApplicationProcess.findFirst({
       where: { id: processId, organizationId },
-      select: { id: true },
+      select: { id: true, status: true },
     });
-    if (!existing) return null;
+    if (!existing || existing.status === "stopped") return null;
 
     const process = await prisma.sessionApplicationProcess.update({
       where: { id: processId },

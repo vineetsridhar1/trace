@@ -4,7 +4,11 @@ import type { BridgeMessage } from "@trace/shared";
 import { WebSocketServer } from "ws";
 import { ManagedProcessManager } from "./managed-process-manager.js";
 
-function waitFor(messages: BridgeMessage[], predicate: (message: BridgeMessage) => boolean) {
+function waitFor(
+  messages: BridgeMessage[],
+  predicate: (message: BridgeMessage) => boolean,
+  timeoutMs = 3000,
+) {
   return new Promise<BridgeMessage>((resolve, reject) => {
     const started = Date.now();
     const timer = setInterval(() => {
@@ -12,9 +16,28 @@ function waitFor(messages: BridgeMessage[], predicate: (message: BridgeMessage) 
       if (match) {
         clearInterval(timer);
         resolve(match);
-      } else if (Date.now() - started > 3000) {
+      } else if (Date.now() - started > timeoutMs) {
         clearInterval(timer);
         reject(new Error("Timed out waiting for bridge message"));
+      }
+    }, 10);
+  });
+}
+
+function waitForCount(
+  messages: BridgeMessage[],
+  predicate: (message: BridgeMessage) => boolean,
+  count: number,
+) {
+  return new Promise<void>((resolve, reject) => {
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (messages.filter(predicate).length >= count) {
+        clearInterval(timer);
+        resolve();
+      } else if (Date.now() - started > 5000) {
+        clearInterval(timer);
+        reject(new Error(`Timed out waiting for ${count} bridge messages`));
       }
     }, 10);
   });
@@ -154,6 +177,100 @@ describe("ManagedProcessManager", () => {
     await waitForHttp(port);
     manager.stop("process-1");
     await waitFor(messages, (message) => message.type === "app_process_exited");
+    await waitForPortAvailable(port);
+  });
+
+  it("restarts a preview process after an unexpected exit", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>
+      messages.push(message),
+    );
+    const port = await getFreePort();
+
+    manager.start({
+      requestId: "start-1",
+      processInstanceId: "process-1",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: `node -e "const http=require('http');const s=http.createServer((req,res)=>res.end('ok')).listen(${port},'127.0.0.1');setTimeout(()=>s.close(()=>process.exit(1)),600)"`,
+      cwd: ".",
+      ports: [port],
+    });
+
+    await waitForCount(messages, (message) => message.type === "app_process_started", 2);
+    expect(
+      messages.some(
+        (message) =>
+          message.type === "app_process_log" && message.data.includes("restarting in 500ms"),
+      ),
+    ).toBe(true);
+    expect(messages.some((message) => message.type === "app_process_exited")).toBe(false);
+
+    manager.stop("process-1");
+    await waitFor(messages, (message) => message.type === "app_process_exited");
+    await waitForPortAvailable(port);
+  });
+
+  it("reports a preview failure after exhausting automatic restarts", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>
+      messages.push(message),
+    );
+    const port = await getFreePort();
+
+    manager.start({
+      requestId: "start-1",
+      processInstanceId: "process-1",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: 'node -e "process.exit(1)"',
+      cwd: ".",
+      ports: [port],
+    });
+
+    const failure = await waitFor(
+      messages,
+      (message) => message.type === "app_process_error",
+      6_000,
+    );
+    expect(failure).toMatchObject({
+      type: "app_process_error",
+      processInstanceId: "process-1",
+      error: expect.stringContaining("3 automatic restart attempts"),
+    });
+    expect(
+      messages.filter(
+        (message) => message.type === "app_process_log" && message.data.includes("restarting in"),
+      ),
+    ).toHaveLength(3);
+    expect(messages.some((message) => message.type === "app_process_exited")).toBe(false);
+  });
+
+  it("cancels an automatic restart when Trace stops the process", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>
+      messages.push(message),
+    );
+    const port = await getFreePort();
+
+    manager.start({
+      requestId: "start-1",
+      processInstanceId: "process-1",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: `node -e "const http=require('http');const s=http.createServer((req,res)=>res.end('ok')).listen(${port},'127.0.0.1');setTimeout(()=>s.close(()=>process.exit(1)),400)"`,
+      cwd: ".",
+      ports: [port],
+    });
+
+    await waitFor(
+      messages,
+      (message) => message.type === "app_process_log" && message.data.includes("restarting in"),
+    );
+    manager.stop("process-1");
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    expect(messages.filter((message) => message.type === "app_process_started")).toHaveLength(1);
     await waitForPortAvailable(port);
   });
 

@@ -3,7 +3,7 @@ import { gql } from "@urql/core";
 import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import { useEntityStore } from "@trace/client-core";
 import { client } from "../../../lib/urql";
-import { findReadyPreviewEndpoint } from "./app-preview-readiness";
+import { findFailedPreviewProcess, findReadyPreviewEndpoint } from "./app-preview-readiness";
 
 const PROJECT_PREVIEW_ENDPOINTS_QUERY = gql`
   query AppPreviewState($sessionGroupId: ID!, $includePdf: Boolean!) {
@@ -80,6 +80,10 @@ export function useProjectPreviewData(sessionGroupId: string, projectKind: "app"
       ),
     [endpointTable, processTable, sessionGroupId],
   );
+  const failedProcess = useMemo(
+    () => findFailedPreviewProcess(sessionGroupId, Object.values(processTable)),
+    [processTable, sessionGroupId],
+  );
 
-  return { endpoint, error, refresh, savedPdfDownloadUrl, savedPdfUrl };
+  return { endpoint, error, failedProcess, refresh, savedPdfDownloadUrl, savedPdfUrl };
 }
