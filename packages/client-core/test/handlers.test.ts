@@ -23,6 +23,9 @@ function resetStores() {
     sessionApplicationProcesses: {},
     sessionApplicationLogs: {},
     sessionEndpoints: {},
+    designSystems: {},
+    designSystemCommitArtifacts: {},
+    designSystemVersions: {},
     eventsByScope: {},
     _eventIdsByScope: {},
     _sessionIdsByGroup: {},
@@ -971,6 +974,38 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState().sessionSetupScriptRuns["run-1"]).toMatchObject({
       scriptConfigId: "install",
       status: "running",
+    });
+  });
+
+  it("upserts complete design-system lifecycle entities without a refetch", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "design_system_version_created",
+        scopeId: "system-1",
+        payload: {
+          designSystem: {
+            id: "system-1",
+            name: "Acme",
+            status: "ready",
+            activeVersionId: "version-1",
+          },
+          designSystemCommitArtifact: {
+            id: "artifact-1",
+            designSystemId: "system-1",
+            status: "saved",
+          },
+          designSystemVersion: { id: "version-1", designSystemId: "system-1", version: 1 },
+        },
+      }),
+    );
+    expect(useEntityStore.getState().designSystems["system-1"]).toMatchObject({
+      activeVersionId: "version-1",
+    });
+    expect(useEntityStore.getState().designSystemCommitArtifacts["artifact-1"]).toMatchObject({
+      status: "saved",
+    });
+    expect(useEntityStore.getState().designSystemVersions["version-1"]).toMatchObject({
+      version: 1,
     });
   });
 });

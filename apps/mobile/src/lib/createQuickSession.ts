@@ -67,7 +67,10 @@ export async function createQuickSession(channelId: string): Promise<void> {
 }
 
 /** Create a standalone cloud-generated session and open its empty composer. */
-export async function createGeneratedSession(kind: "app" | "design"): Promise<boolean> {
+export async function createGeneratedSession(
+  kind: "app" | "design",
+  designSystemVersionId?: string,
+): Promise<boolean> {
   if (pendingGeneratedSessionKinds.has(kind)) return false;
   pendingGeneratedSessionKinds.add(kind);
   const label = kind === "design" ? "design" : "application";
@@ -80,6 +83,7 @@ export async function createGeneratedSession(kind: "app" | "design"): Promise<bo
         input: {
           kind,
           hosting: "cloud",
+          ...(designSystemVersionId ? { designSystemVersionId } : {}),
         },
       })
       .toPromise();
@@ -111,8 +115,8 @@ export function createApplication(): Promise<boolean> {
   return createGeneratedSession("app");
 }
 
-export function createDesign(): Promise<boolean> {
-  return createGeneratedSession("design");
+export function createDesign(designSystemVersionId?: string): Promise<boolean> {
+  return createGeneratedSession("design", designSystemVersionId);
 }
 
 /**

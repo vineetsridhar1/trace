@@ -61,6 +61,43 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+describe("SessionRouter design-system protocol gate", () => {
+  it("keeps protocol v1 available for ordinary commands but rejects package preparation", () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Older runtime",
+      ws,
+      hostingMode: "cloud",
+      supportedTools: ["codex"],
+      protocolVersion: 1,
+    });
+    router.bindSession("session-1", "runtime-1");
+
+    expect(
+      router.send("session-1", { type: "send", sessionId: "session-1", prompt: "hello" }),
+    ).toBe("delivered");
+    expect(
+      router.send("session-1", {
+        type: "prepare_app",
+        sessionId: "session-1",
+        sessionGroupKind: "design",
+        repoId: "repo-1",
+        repoRemoteUrl: "https://example.test/repo.git",
+        defaultBranch: "main",
+        designSystemPackage: {
+          versionId: "version-1",
+          downloadUrl: "https://example.test/package",
+          contentDigest: "digest",
+          byteSize: 1,
+        },
+      }),
+    ).toBe("unsupported_runtime");
+    expect(ws.send).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("SessionRouter stale runtime eviction", () => {
   afterEach(() => {
     vi.restoreAllMocks();

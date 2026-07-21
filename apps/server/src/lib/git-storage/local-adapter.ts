@@ -134,4 +134,51 @@ export class LocalGitStorageAdapter implements GitStorageAdapter {
       return null;
     }
   }
+
+  async listCommitsBetween(
+    organizationId: string,
+    repoId: string,
+    oldSha: string,
+    newSha: string,
+  ): Promise<string[]> {
+    if (!/^[a-f0-9]{40,64}$/i.test(newSha)) throw new Error("Invalid new commit SHA");
+    const repoPath = this.resolveRepoPath(organizationId, repoId);
+    const args = ["--git-dir", repoPath, "rev-list", "--reverse", "--topo-order", newSha];
+    if (!/^0+$/.test(oldSha)) {
+      if (!/^[a-f0-9]{40,64}$/i.test(oldSha)) throw new Error("Invalid old commit SHA");
+      args.push(`^${oldSha}`);
+    }
+    const { stdout } = await execFileAsync("git", args, { maxBuffer: 16 * 1024 * 1024 });
+    return stdout
+      .split("\n")
+      .map((sha) => sha.trim())
+      .filter(Boolean);
+  }
+
+  async getBranchHead(
+    organizationId: string,
+    repoId: string,
+    branch: string,
+  ): Promise<string | null> {
+    if (!/^[A-Za-z0-9._/-]+$/.test(branch) || branch.includes("..")) {
+      throw new Error("Invalid managed Git branch");
+    }
+    const refs = await this.listRefs(organizationId, repoId);
+    return refs.get(`refs/heads/${branch}`) ?? null;
+  }
+
+  async archiveTreeAtCommit(
+    organizationId: string,
+    repoId: string,
+    commitSha: string,
+  ): Promise<Buffer> {
+    if (!/^[a-f0-9]{40,64}$/i.test(commitSha)) throw new Error("Invalid commit SHA");
+    const repoPath = this.resolveRepoPath(organizationId, repoId);
+    const { stdout } = await execFileAsync(
+      "git",
+      ["--git-dir", repoPath, "archive", "--format=tar", commitSha],
+      { encoding: "buffer", maxBuffer: 80 * 1024 * 1024 },
+    );
+    return Buffer.from(stdout);
+  }
 }

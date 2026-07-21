@@ -22,6 +22,7 @@ import {
   validatePdfPageFormat,
   type PdfPageFormat,
 } from "../lib/pdf-format.js";
+import { designSystemService } from "./design-system.js";
 
 const JWT_SECRET = resolveJwtSecret();
 
@@ -432,6 +433,17 @@ class ManagedGitService {
         this.enqueuePdfCommitExport(artifactInput).catch((error: unknown) => {
           console.error("[managed-git] failed to enqueue PDF export", error);
         }),
+        designSystemService
+          .enqueueCommitArtifactsForManagedPush({
+            ...artifactInput,
+            oldSha: command.oldSha,
+            newSha: command.newSha,
+            actorType: input.actorType,
+            actorId: input.actorId,
+          })
+          .catch((error: unknown) => {
+            console.error("[managed-git] failed to persist design-system commits", error);
+          }),
       ]);
     }
   }

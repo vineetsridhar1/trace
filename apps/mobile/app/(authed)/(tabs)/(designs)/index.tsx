@@ -6,7 +6,7 @@ import { ApplicationListRow } from "@/components/applications/ApplicationListRow
 import { Button, Text, TraceLoader } from "@/components/design-system";
 import { useDesignSessionGroups } from "@/hooks/useDesignSessionGroups";
 import { handleUnauthorized } from "@/lib/auth";
-import { createDesign } from "@/lib/createQuickSession";
+import { chooseDesignSystemAndCreate } from "@/lib/createDesignWithSystem";
 import { haptic } from "@/lib/haptics";
 import { useTheme } from "@/theme";
 
@@ -24,8 +24,8 @@ export default function DesignsScreen() {
     if (!result.authorized) await handleUnauthorized();
   }, [refresh]);
   const handleCreate = useCallback(() => {
-    void createDesign();
-  }, []);
+    void chooseDesignSystemAndCreate(activeOrgId);
+  }, [activeOrgId]);
 
   if (loading && ids.length === 0) {
     return (
@@ -45,11 +45,7 @@ export default function DesignsScreen() {
       refreshing={refreshing}
       ItemSeparatorComponent={DesignSeparator}
       ListEmptyComponent={
-        <DesignsEmpty
-          error={error}
-          onCreate={handleCreate}
-          onRetry={handleRefresh}
-        />
+        <DesignsEmpty error={error} onCreate={handleCreate} onRetry={handleRefresh} />
       }
       style={{ flex: 1, backgroundColor: theme.colors.background }}
     />

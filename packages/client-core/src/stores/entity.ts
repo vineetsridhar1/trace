@@ -20,6 +20,9 @@ import type {
   SessionApplicationLogEntry,
   SessionEndpoint,
   SessionSetupScriptRun,
+  DesignSystem,
+  DesignSystemCommitArtifact,
+  DesignSystemVersion,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -54,6 +57,9 @@ export type EntityTableMap = {
   sessionApplicationLogs: SessionApplicationLogEntry;
   sessionEndpoints: SessionEndpoint;
   sessionSetupScriptRuns: SessionSetupScriptRun;
+  designSystems: DesignSystem;
+  designSystemCommitArtifacts: DesignSystemCommitArtifact;
+  designSystemVersions: DesignSystemVersion;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -136,6 +142,9 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   sessionApplicationLogs: {},
   sessionEndpoints: {},
   sessionSetupScriptRuns: {},
+  designSystems: {},
+  designSystemCommitArtifacts: {},
+  designSystemVersions: {},
   eventsByScope: {},
   _eventIdsByScope: {},
   _sessionIdsByGroup: {},
@@ -379,6 +388,9 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       sessionApplicationLogs: {},
       sessionEndpoints: {},
       sessionSetupScriptRuns: {},
+      designSystems: {},
+      designSystemCommitArtifacts: {},
+      designSystemVersions: {},
       eventsByScope: {},
       _eventIdsByScope: {},
       _sessionIdsByGroup: {},
@@ -717,6 +729,9 @@ const ENTITY_KEYS: EntityType[] = [
   "sessionApplicationLogs",
   "sessionEndpoints",
   "sessionSetupScriptRuns",
+  "designSystems",
+  "designSystemCommitArtifacts",
+  "designSystemVersions",
 ];
 
 function getMessageEntityScopeKey(

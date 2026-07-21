@@ -42,4 +42,15 @@ export interface GitStorageAdapter {
     commitSha: string,
     filePath: string,
   ): Promise<string | null>;
+  /** Enumerate commits introduced by a ref update in stable topological order. */
+  listCommitsBetween(
+    organizationId: string,
+    repoId: string,
+    oldSha: string,
+    newSha: string,
+  ): Promise<string[]>;
+  /** Read a branch head directly from the authoritative bare repository. */
+  getBranchHead(organizationId: string, repoId: string, branch: string): Promise<string | null>;
+  /** Produce Git's deterministic tracked-tree tar stream for an exact commit. */
+  archiveTreeAtCommit(organizationId: string, repoId: string, commitSha: string): Promise<Buffer>;
 }

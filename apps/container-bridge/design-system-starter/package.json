@@ -1,0 +1,26 @@
+{
+  "name": "trace-design-system-starter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "design-system:check": "tsx scripts/check-design-system.ts",
+    "design-system:review": "tsx scripts/review-design-system.ts",
+    "test": "pnpm design-system:check"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.0",
+    "playwright-core": "^1.61.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  }
+}

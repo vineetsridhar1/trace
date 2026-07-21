@@ -22,4 +22,16 @@ describe("buildGeneratedProjectStartInput", () => {
       hosting: "cloud",
     });
   });
+
+  it("pins a selected design-system version only for Designs", () => {
+    expect(buildGeneratedProjectStartInput("design", "version-3")).toEqual({
+      kind: "design",
+      hosting: "cloud",
+      designSystemVersionId: "version-3",
+    });
+    expect(buildGeneratedProjectStartInput("app", "version-3")).toEqual({
+      kind: "app",
+      hosting: "cloud",
+    });
+  });
 });

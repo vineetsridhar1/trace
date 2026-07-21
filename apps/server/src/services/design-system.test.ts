@@ -1,0 +1,293 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mocks, database } = vi.hoisted(() => {
+  const mocks = {
+    transaction: vi.fn(),
+    queryRaw: vi.fn(),
+    systemCreate: vi.fn(),
+    systemFindMany: vi.fn(),
+    systemFindFirstOrThrow: vi.fn(),
+    systemFindUniqueOrThrow: vi.fn(),
+    systemUpdate: vi.fn(),
+    artifactFindFirst: vi.fn(),
+    artifactFindUnique: vi.fn(),
+    artifactCreate: vi.fn(),
+    versionFindUnique: vi.fn(),
+    versionCreate: vi.fn(),
+    listCommitsBetween: vi.fn(),
+    getBranchHead: vi.fn(),
+    eventCreate: vi.fn(),
+    publishCreated: vi.fn(),
+    sessionStart: vi.fn(),
+    storageGet: vi.fn(),
+    storagePut: vi.fn(),
+    storageDelete: vi.fn(),
+  };
+  const database = {
+    $queryRaw: mocks.queryRaw,
+    designSystem: {
+      create: mocks.systemCreate,
+      findMany: mocks.systemFindMany,
+      findFirstOrThrow: mocks.systemFindFirstOrThrow,
+      findUniqueOrThrow: mocks.systemFindUniqueOrThrow,
+      update: mocks.systemUpdate,
+    },
+    designSystemCommitArtifact: {
+      findFirst: mocks.artifactFindFirst,
+      findUnique: mocks.artifactFindUnique,
+      create: mocks.artifactCreate,
+    },
+    designSystemVersion: { findUnique: mocks.versionFindUnique, create: mocks.versionCreate },
+  };
+  return { mocks, database };
+});
+
+vi.mock("../lib/db.js", () => ({ prisma: { ...database, $transaction: mocks.transaction } }));
+vi.mock("../lib/git-storage/index.js", () => ({
+  gitStorage: {
+    listCommitsBetween: mocks.listCommitsBetween,
+    getBranchHead: mocks.getBranchHead,
+  },
+}));
+vi.mock("../lib/storage/index.js", () => ({
+  storage: {
+    getObject: mocks.storageGet,
+    putObject: mocks.storagePut,
+    deleteObject: mocks.storageDelete,
+  },
+}));
+vi.mock("./event.js", () => ({
+  eventService: { create: mocks.eventCreate, publishCreated: mocks.publishCreated },
+}));
+vi.mock("./actor-auth.js", () => ({
+  assertActorOrgAccess: vi.fn().mockResolvedValue(undefined),
+  assertActorOrgAdmin: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("./session.js", () => ({ sessionService: { start: mocks.sessionStart } }));
+
+import { DesignSystemService, shouldAdvanceLatestArtifact } from "./design-system.js";
+
+function system(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "system-1",
+    organizationId: "org-1",
+    status: "draft",
+    latestPushedCommitSha: "commit-3",
+    latestCommitArtifact: null,
+    authoringSessionGroup: {
+      id: "group-1",
+      repoId: "managed-repo-1",
+      branch: "main",
+      repo: { defaultBranch: "main" },
+      sessions: [],
+    },
+    ...overrides,
+  };
+}
+
+describe("DesignSystemService", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.transaction.mockImplementation(async (callback: (tx: typeof database) => unknown) =>
+      callback(database),
+    );
+    mocks.queryRaw.mockResolvedValue([]);
+    mocks.eventCreate.mockResolvedValue({ id: "event-1" });
+  });
+
+  it("never lets an out-of-order worker regress the latest artifact pointer", () => {
+    expect(shouldAdvanceLatestArtifact(null, 1)).toBe(true);
+    expect(shouldAdvanceLatestArtifact(1, 2)).toBe(true);
+    expect(shouldAdvanceLatestArtifact(3, 2)).toBe(false);
+    expect(shouldAdvanceLatestArtifact(3, 3)).toBe(false);
+  });
+
+  it("creates the draft and full event inside the session transaction, then publishes after commit", async () => {
+    const created = system({ name: "Acme UI", authoringSessionGroupId: "group-1" });
+    (database as typeof database & { repo: { findFirstOrThrow: ReturnType<typeof vi.fn> } }).repo =
+      {
+        findFirstOrThrow: vi.fn().mockResolvedValue({ id: "source-repo-1", defaultBranch: "main" }),
+      };
+    mocks.systemCreate.mockResolvedValue(created);
+    mocks.systemFindUniqueOrThrow.mockResolvedValue(created);
+    mocks.sessionStart.mockImplementation(
+      async (input: {
+        afterCreate: (value: {
+          tx: typeof database;
+          sessionGroup: { id: string };
+        }) => Promise<void>;
+      }) => {
+        await input.afterCreate({ tx: database, sessionGroup: { id: "group-1" } });
+        return { id: "session-1", sessionGroup: { id: "group-1" } };
+      },
+    );
+    const service = new DesignSystemService();
+
+    await service.create({
+      organizationId: "org-1",
+      actorType: "user",
+      actorId: "user-1",
+      name: "Acme UI",
+      repoId: "source-repo-1",
+      sourcePath: "packages/ui",
+    });
+
+    expect(mocks.sessionStart).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "design_system", hosting: "cloud" }),
+    );
+    expect(mocks.systemCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sourceRepoId: "source-repo-1",
+          sourcePath: "packages/ui",
+          authoringSessionGroupId: "group-1",
+        }),
+      }),
+    );
+    expect(mocks.eventCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_system_created",
+        deferPublish: true,
+        payload: expect.objectContaining({
+          designSystem: expect.objectContaining({ id: "system-1" }),
+        }),
+      }),
+      database,
+    );
+    expect(mocks.publishCreated).toHaveBeenCalledWith({ id: "event-1" });
+  });
+
+  it("creates one server-owned artifact for every commit in a multi-commit push", async () => {
+    mocks.systemFindMany.mockResolvedValue([system()]);
+    mocks.listCommitsBetween.mockResolvedValue(["commit-1", "commit-2", "commit-3"]);
+    mocks.artifactFindFirst.mockResolvedValue(null);
+    mocks.artifactFindUnique.mockResolvedValue(null);
+    mocks.artifactCreate.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => ({
+        id: `artifact-${data.sequence}`,
+        status: "pending",
+        ...data,
+      }),
+    );
+    mocks.systemUpdate.mockResolvedValue(system());
+    const service = new DesignSystemService();
+    const persist = vi.spyOn(service, "persistManagedCommitArtifact").mockResolvedValue(undefined);
+
+    await service.enqueueCommitArtifactsForManagedPush({
+      organizationId: "org-1",
+      repoId: "managed-repo-1",
+      branch: "main",
+      oldSha: "old",
+      newSha: "commit-3",
+      actorType: "user",
+      actorId: "user-1",
+    });
+
+    expect(mocks.artifactCreate).toHaveBeenCalledTimes(3);
+    expect(mocks.artifactCreate.mock.calls.map(([input]) => input.data.sequence)).toEqual([
+      1, 2, 3,
+    ]);
+    expect(mocks.artifactCreate.mock.calls[0]?.[0].data.storageKey).toBe(
+      "design-system-commits/org-1/system-1/commit-1/workbench.tar.gz",
+    );
+    await vi.waitFor(() =>
+      expect(persist.mock.calls.map(([id]) => id)).toEqual([
+        "artifact-1",
+        "artifact-2",
+        "artifact-3",
+      ]),
+    );
+    expect(mocks.eventCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_system_commit_artifact_created",
+        payload: expect.objectContaining({
+          designSystem: expect.objectContaining({ id: "system-1" }),
+        }),
+      }),
+    );
+    expect(mocks.versionCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not duplicate artifact-created events when a managed push is retried", async () => {
+    const existing = {
+      id: "artifact-1",
+      designSystemId: "system-1",
+      commitSha: "commit-1",
+      sequence: 1,
+      status: "saved",
+    };
+    mocks.systemFindMany.mockResolvedValue([system({ latestPushedCommitSha: "commit-1" })]);
+    mocks.listCommitsBetween.mockResolvedValue(["commit-1"]);
+    mocks.artifactFindFirst.mockResolvedValue({ sequence: 1 });
+    mocks.artifactFindUnique.mockResolvedValue(existing);
+    mocks.systemUpdate.mockResolvedValue(system());
+    const service = new DesignSystemService();
+    const persist = vi.spyOn(service, "persistManagedCommitArtifact").mockResolvedValue(undefined);
+
+    await service.enqueueCommitArtifactsForManagedPush({
+      organizationId: "org-1",
+      repoId: "managed-repo-1",
+      branch: "main",
+      oldSha: "old",
+      newSha: "commit-1",
+      actorType: "system",
+      actorId: "system",
+    });
+
+    expect(mocks.artifactCreate).not.toHaveBeenCalled();
+    expect(mocks.eventCreate).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(persist).toHaveBeenCalledWith("artifact-1"));
+  });
+
+  it("refuses to publish an artifact that is not managed branch HEAD", async () => {
+    mocks.systemFindFirstOrThrow.mockResolvedValue(
+      system({
+        latestCommitArtifact: {
+          id: "artifact-1",
+          commitSha: "stale",
+          status: "saved",
+          packageValid: true,
+        },
+      }),
+    );
+    mocks.getBranchHead.mockResolvedValue("current-head");
+    const service = new DesignSystemService();
+
+    await expect(
+      service.save({
+        id: "system-1",
+        organizationId: "org-1",
+        actorType: "user",
+        actorId: "user-1",
+      }),
+    ).rejects.toThrow("managed branch HEAD");
+    expect(mocks.storageGet).not.toHaveBeenCalled();
+    expect(mocks.systemUpdate).not.toHaveBeenCalled();
+  });
+
+  it("returns the immutable version when the same HEAD artifact is saved twice", async () => {
+    const artifact = {
+      id: "artifact-1",
+      commitSha: "head",
+      status: "saved",
+      packageValid: true,
+      packageDigest: "digest",
+    };
+    const version = { id: "version-1", version: 1, designSystemCommitArtifactId: artifact.id };
+    mocks.systemFindFirstOrThrow.mockResolvedValue(system({ latestCommitArtifact: artifact }));
+    mocks.getBranchHead.mockResolvedValue("head");
+    mocks.versionFindUnique.mockResolvedValue(version);
+    const service = new DesignSystemService();
+
+    await expect(
+      service.save({
+        id: "system-1",
+        organizationId: "org-1",
+        actorType: "user",
+        actorId: "user-1",
+      }),
+    ).resolves.toEqual(version);
+    expect(mocks.storageGet).not.toHaveBeenCalled();
+    expect(mocks.versionCreate).not.toHaveBeenCalled();
+  });
+});

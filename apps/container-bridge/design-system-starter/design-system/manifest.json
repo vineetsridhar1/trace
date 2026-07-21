@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "trace-design-system/v1",
+  "id": "draft-system",
+  "name": "Draft Design System",
+  "description": "Source-backed foundations and components.",
+  "platforms": ["web"],
+  "files": {
+    "guidance": "DESIGN.md",
+    "tokens": "tokens.css",
+    "components": "components.manifest.json",
+    "evidence": "source/evidence.json"
+  },
+  "componentsDirectory": "components",
+  "assetsDirectory": "assets",
+  "previewDirectory": "preview"
+}

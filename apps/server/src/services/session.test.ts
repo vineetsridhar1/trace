@@ -932,6 +932,44 @@ describe("SessionService", () => {
       ).rejects.toThrow("Design sessions require cloud hosting");
     });
 
+    it("rejects design-system versions for non-Design sessions", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "app",
+          hosting: "cloud",
+          designSystemVersionId: "version-1",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("only be selected for Design sessions");
+      expect(prismaMock.designSystemVersion.findFirst).not.toHaveBeenCalled();
+    });
+
+    it("rejects unavailable or archived design-system versions", async () => {
+      prismaMock.designSystemVersion.findFirst.mockResolvedValueOnce(null);
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "design",
+          hosting: "cloud",
+          designSystemVersionId: "version-1",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Selected design-system version is unavailable");
+      expect(prismaMock.designSystemVersion.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: "version-1",
+            designSystem: expect.objectContaining({
+              organizationId: "org-1",
+              status: "ready",
+              archivedAt: null,
+            }),
+          }),
+        }),
+      );
+    });
+
     it("creates a blank design session without provisioning a runtime", async () => {
       const repo = await managedGitServiceMock.createManagedRepo({
         organizationId: "org-1",
@@ -1003,7 +1041,12 @@ describe("SessionService", () => {
         actorId: "user-1",
       });
       managedGitServiceMock.createManagedRepo.mockClear();
-      const sessionGroup = makeSessionGroup({ kind: "design", repoId: repo.id, repo });
+      const sessionGroup = makeSessionGroup({
+        kind: "design",
+        repoId: repo.id,
+        repo,
+        designSystemVersionId: "version-1",
+      });
       const session = makeSession({
         hosting: "cloud",
         repoId: repo.id,
@@ -1012,6 +1055,21 @@ describe("SessionService", () => {
       });
       prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
       prismaMock.session.create.mockResolvedValueOnce(session);
+      prismaMock.designSystemVersion.findFirst.mockResolvedValueOnce({
+        id: "version-1",
+        designSystemId: "system-1",
+        storageKey: "design-systems/org-1/system-1/version-1/package.tar.gz",
+        contentDigest: "digest-1",
+        byteSize: 1024,
+        version: 1,
+        designSystem: {
+          id: "system-1",
+          name: "Acme",
+          organizationId: "org-1",
+          status: "ready",
+          archivedAt: null,
+        },
+      });
 
       await service.start({
         organizationId: "org-1",
@@ -1019,13 +1077,18 @@ describe("SessionService", () => {
         kind: "design",
         hosting: "cloud",
         prompt: "Explore onboarding",
+        designSystemVersionId: "version-1",
       } as unknown as StartSessionServiceInput);
       await Promise.resolve();
 
       expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalled();
       expect(prismaMock.sessionGroup.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ kind: "design", repoId: "managed-repo-1" }),
+          data: expect.objectContaining({
+            kind: "design",
+            repoId: "managed-repo-1",
+            designSystemVersionId: "version-1",
+          }),
         }),
       );
       expect(prismaMock.session.create).toHaveBeenCalledWith(
@@ -4925,7 +4988,7 @@ describe("SessionService", () => {
         "session-1",
         expect.objectContaining({
           prompt: expect.not.stringContaining("trace-<slug>-<descriptive-name>"),
-          appendSystemPrompt: expect.stringContaining("design.canvas.json"),
+          appendSystemPrompt: expect.stringContaining("design-system/manifest.json"),
         }),
         expect.any(Object),
       );
@@ -4937,12 +5000,14 @@ describe("SessionService", () => {
       );
       expect(command).toEqual(
         expect.objectContaining({
-          appendSystemPrompt: expect.stringContaining("critique it before delivery"),
+          appendSystemPrompt: expect.stringContaining("inspect and repair every screenshot"),
         }),
       );
       expect(command).toEqual(
         expect.objectContaining({
-          appendSystemPrompt: expect.stringContaining("resolve design.brief.json"),
+          appendSystemPrompt: expect.stringContaining(
+            "Read the workspace guidance and design brief",
+          ),
         }),
       );
       expect(command).toEqual(
@@ -4953,7 +5018,7 @@ describe("SessionService", () => {
       expect(command).toEqual(
         expect.objectContaining({
           appendSystemPrompt: expect.stringContaining(
-            "do not build APIs, databases, authentication, persistence",
+            "Do not build APIs, persistence, or real integrations",
           ),
         }),
       );

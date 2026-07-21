@@ -16,6 +16,15 @@ export type {
   PlanBlock,
 } from "./adapters/coding-tool.js";
 export {
+  DESIGN_SYSTEM_LIMITS,
+  DESIGN_SYSTEM_SCHEMA_VERSION,
+  validateDesignSystemPackage,
+  validateDesignSystemPath,
+  designSystemCommitStorageKey,
+  designSystemVersionStorageKey,
+} from "./design-system.js";
+export type { DesignSystemManifest, DesignSystemValidation } from "./design-system.js";
+export {
   hasPlanBlock,
   hasQuestionBlock,
   isMissingToolSessionError,

@@ -80,15 +80,19 @@ export async function createAppSession(): Promise<boolean> {
   return createGeneratedProjectSession("app");
 }
 
-export function buildGeneratedProjectStartInput(kind: "app" | "design" | "pdf") {
+export function buildGeneratedProjectStartInput(
+  kind: "app" | "design" | "pdf",
+  designSystemVersionId?: string,
+) {
   return {
     kind,
     hosting: "cloud" as const,
+    ...(kind === "design" && designSystemVersionId ? { designSystemVersionId } : {}),
   };
 }
 
-export async function createDesignSession(): Promise<boolean> {
-  return createGeneratedProjectSession("design");
+export async function createDesignSession(designSystemVersionId?: string): Promise<boolean> {
+  return createGeneratedProjectSession("design", designSystemVersionId);
 }
 
 export async function createPdfSession(): Promise<boolean> {
@@ -97,6 +101,7 @@ export async function createPdfSession(): Promise<boolean> {
 
 async function createGeneratedProjectSession(
   kind: "app" | "design" | "pdf",
+  designSystemVersionId?: string,
 ): Promise<boolean> {
   if (pendingGeneratedProjectKinds.has(kind)) return false;
   pendingGeneratedProjectKinds.add(kind);
@@ -105,7 +110,7 @@ async function createGeneratedProjectSession(
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
-        input: buildGeneratedProjectStartInput(kind),
+        input: buildGeneratedProjectStartInput(kind, designSystemVersionId),
       })
       .toPromise();
 

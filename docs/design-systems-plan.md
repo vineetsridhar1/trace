@@ -1,6 +1,6 @@
 # Custom Design Systems Plan
 
-Status: implementation plan (2026-07-20).
+Status: implemented (2026-07-21).
 
 This document defines how Trace creates, stores, versions, selects, and consumes custom
 design systems. It extends the shipped Design-session architecture in
@@ -1269,26 +1269,26 @@ The implementation should remain surgical, but likely touches:
 
 ## Final Acceptance Checklist
 
-- [ ] A source repo can seed a first-class chat-and-canvas authoring session without
+- [x] A source repo can seed a first-class chat-and-canvas authoring session without
       becoming the workbench repo.
-- [ ] Every distinct pushed workbench commit is saved as an immutable S3/local artifact
+- [x] Every distinct pushed workbench commit is saved as an immutable S3/local artifact
       and can be persisted or retried without its authoring container.
-- [ ] Managed Git branch HEAD and commit SHA are the only authoring authority; no
+- [x] Managed Git branch HEAD and commit SHA are the only authoring authority; no
       design-system path reads, writes, or waits for Trace `GitCheckpoint` records.
-- [ ] No DesignSystemVersion is published until the user presses Save for a valid managed
+- [x] No DesignSystemVersion is published until the user presses Save for a valid managed
       branch HEAD; clients cannot supply a commit or package location.
-- [ ] Commit artifacts and published package objects are immutable and retrievable through both
+- [x] Commit artifacts and published package objects are immutable and retrievable through both
       S3 and local adapters.
-- [ ] Postgres stores no package binaries.
-- [ ] A Design pins a version and starts without source-repo access.
-- [ ] Materialization completes before `workspace_ready` and the first prompt.
-- [ ] The agent reads and uses guidance, tokens, components, and assets from local files.
-- [ ] Existing Designs survive later commits, Saves, archival, and source-repo access
+- [x] Postgres stores no package binaries.
+- [x] A Design pins a version and starts without source-repo access.
+- [x] Materialization completes before `workspace_ready` and the first prompt.
+- [x] The agent reads and uses guidance, tokens, components, and assets from local files.
+- [x] Existing Designs survive later commits, Saves, archival, and source-repo access
       loss.
-- [ ] Every mutation is service-owned and event-producing.
-- [ ] Zustand reconciles from events rather than mutation results.
-- [ ] Archive and package validation covers traversal, links, limits, secrets, and digest
+- [x] Every mutation is service-owned and event-producing.
+- [x] Zustand reconciles from events rather than mutation results.
+- [x] Archive and package validation covers traversal, links, limits, secrets, and digest
       mismatches.
-- [ ] Unit, service, bridge, frontend, and end-to-end tests pass.
-- [ ] `pnpm gql:codegen`, `pnpm db:generate`, relevant targeted tests, and `pnpm build`
+- [x] Unit, service, bridge, frontend, and end-to-end tests pass.
+- [x] `pnpm gql:codegen`, `pnpm db:generate`, relevant targeted tests, and `pnpm build`
       pass before rollout.

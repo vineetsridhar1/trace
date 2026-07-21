@@ -310,6 +310,14 @@ export type CreateChatInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateDesignSystemInput = {
+  branch?: InputMaybe<Scalars["String"]["input"]>;
+  environmentId?: InputMaybe<Scalars["ID"]["input"]>;
+  name: Scalars["String"]["input"];
+  repoId: Scalars["ID"]["input"];
+  sourcePath?: InputMaybe<Scalars["String"]["input"]>;
+};
+
 export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
@@ -345,160 +353,95 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
-export type DesignElementStyleEditResult = {
-  __typename?: "DesignElementStyleEditResult";
-  elementId: Scalars["String"]["output"];
-  sessionGroupId: Scalars["ID"]["output"];
-  sourceHash: Scalars["String"]["output"];
-  styles: DesignElementStyles;
+export type DesignSystem = {
+  __typename?: "DesignSystem";
+  activeVersion?: Maybe<DesignSystemVersion>;
+  activeVersionId?: Maybe<Scalars["ID"]["output"]>;
+  archivedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  authoringSessionGroup: SessionGroup;
+  authoringSessionGroupId: Scalars["ID"]["output"];
+  commitArtifactError?: Maybe<Scalars["String"]["output"]>;
+  commitArtifactStatus?: Maybe<DesignSystemCommitArtifactStatus>;
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  latestCommitArtifact?: Maybe<DesignSystemCommitArtifact>;
+  latestCommitArtifactId?: Maybe<Scalars["ID"]["output"]>;
+  latestPushedCommitSha?: Maybe<Scalars["String"]["output"]>;
+  name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  publishAttemptedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  publishError?: Maybe<Scalars["String"]["output"]>;
+  publishStatus: DesignSystemPublishStatus;
+  publishedCommitSha?: Maybe<Scalars["String"]["output"]>;
+  slug: Scalars["String"]["output"];
+  sourceBranch?: Maybe<Scalars["String"]["output"]>;
+  sourceCommitSha?: Maybe<Scalars["String"]["output"]>;
+  sourcePath?: Maybe<Scalars["String"]["output"]>;
+  sourceRepo?: Maybe<Repo>;
+  sourceRepoId?: Maybe<Scalars["ID"]["output"]>;
+  status: DesignSystemStatus;
+  updatedAt: Scalars["DateTime"]["output"];
 };
 
-export type DesignElementStyleSource = {
-  __typename?: "DesignElementStyleSource";
-  elementId: Scalars["String"]["output"];
-  sessionGroupId: Scalars["ID"]["output"];
-  sourceHash: Scalars["String"]["output"];
-  styles: DesignElementStyles;
+export type DesignSystemCommitArtifact = {
+  __typename?: "DesignSystemCommitArtifact";
+  byteSize?: Maybe<Scalars["Int"]["output"]>;
+  commitSha: Scalars["String"]["output"];
+  contentDigest?: Maybe<Scalars["String"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  createdById?: Maybe<Scalars["ID"]["output"]>;
+  designSystem: DesignSystem;
+  designSystemId: Scalars["ID"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  packageDigest?: Maybe<Scalars["String"]["output"]>;
+  packageValid?: Maybe<Scalars["Boolean"]["output"]>;
+  savedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  sequence: Scalars["Int"]["output"];
+  status: DesignSystemCommitArtifactStatus;
+  storageKey: Scalars["String"]["output"];
+  validationSummary?: Maybe<Scalars["JSON"]["output"]>;
 };
 
-export type DesignElementStyles = {
-  __typename?: "DesignElementStyles";
-  alignItems?: Maybe<Scalars["String"]["output"]>;
-  alignSelf?: Maybe<Scalars["String"]["output"]>;
-  aspectRatio?: Maybe<Scalars["String"]["output"]>;
-  backgroundColor?: Maybe<Scalars["String"]["output"]>;
-  borderColor?: Maybe<Scalars["String"]["output"]>;
-  borderRadius?: Maybe<Scalars["Int"]["output"]>;
-  borderStyle?: Maybe<Scalars["String"]["output"]>;
-  borderWidth?: Maybe<Scalars["Int"]["output"]>;
-  bottom?: Maybe<Scalars["String"]["output"]>;
-  boxShadow?: Maybe<Scalars["String"]["output"]>;
-  boxSizing?: Maybe<Scalars["String"]["output"]>;
-  color?: Maybe<Scalars["String"]["output"]>;
-  cursor?: Maybe<Scalars["String"]["output"]>;
-  display?: Maybe<Scalars["String"]["output"]>;
-  filter?: Maybe<Scalars["String"]["output"]>;
-  flexDirection?: Maybe<Scalars["String"]["output"]>;
-  flexGrow?: Maybe<Scalars["Float"]["output"]>;
-  fontFamily?: Maybe<Scalars["String"]["output"]>;
-  fontSize?: Maybe<Scalars["Int"]["output"]>;
-  fontStyle?: Maybe<Scalars["String"]["output"]>;
-  fontWeight?: Maybe<Scalars["Int"]["output"]>;
-  gap?: Maybe<Scalars["Int"]["output"]>;
-  height?: Maybe<Scalars["String"]["output"]>;
-  justifyContent?: Maybe<Scalars["String"]["output"]>;
-  left?: Maybe<Scalars["String"]["output"]>;
-  letterSpacing?: Maybe<Scalars["Int"]["output"]>;
-  lineHeight?: Maybe<Scalars["Int"]["output"]>;
-  marginBottom?: Maybe<Scalars["Int"]["output"]>;
-  marginLeft?: Maybe<Scalars["Int"]["output"]>;
-  marginRight?: Maybe<Scalars["Int"]["output"]>;
-  marginTop?: Maybe<Scalars["Int"]["output"]>;
-  maxHeight?: Maybe<Scalars["String"]["output"]>;
-  maxWidth?: Maybe<Scalars["String"]["output"]>;
-  minHeight?: Maybe<Scalars["String"]["output"]>;
-  minWidth?: Maybe<Scalars["String"]["output"]>;
-  objectFit?: Maybe<Scalars["String"]["output"]>;
-  opacity?: Maybe<Scalars["Float"]["output"]>;
-  overflow?: Maybe<Scalars["String"]["output"]>;
-  paddingBottom?: Maybe<Scalars["Int"]["output"]>;
-  paddingLeft?: Maybe<Scalars["Int"]["output"]>;
-  paddingRight?: Maybe<Scalars["Int"]["output"]>;
-  paddingTop?: Maybe<Scalars["Int"]["output"]>;
-  paddingX?: Maybe<Scalars["Int"]["output"]>;
-  paddingY?: Maybe<Scalars["Int"]["output"]>;
-  pointerEvents?: Maybe<Scalars["String"]["output"]>;
-  position?: Maybe<Scalars["String"]["output"]>;
-  right?: Maybe<Scalars["String"]["output"]>;
-  textAlign?: Maybe<Scalars["String"]["output"]>;
-  textDecoration?: Maybe<Scalars["String"]["output"]>;
-  textOverflow?: Maybe<Scalars["String"]["output"]>;
-  textShadow?: Maybe<Scalars["String"]["output"]>;
-  textTransform?: Maybe<Scalars["String"]["output"]>;
-  top?: Maybe<Scalars["String"]["output"]>;
-  transform?: Maybe<Scalars["String"]["output"]>;
-  whiteSpace?: Maybe<Scalars["String"]["output"]>;
-  width?: Maybe<Scalars["String"]["output"]>;
-  zIndex?: Maybe<Scalars["String"]["output"]>;
+export type DesignSystemCommitArtifactConnection = {
+  __typename?: "DesignSystemCommitArtifactConnection";
+  edges: Array<DesignSystemCommitArtifactEdge>;
+  endCursor?: Maybe<Scalars["String"]["output"]>;
+  hasNextPage: Scalars["Boolean"]["output"];
 };
 
-export type DesignElementStylesInput = {
-  alignItems?: InputMaybe<Scalars["String"]["input"]>;
-  alignSelf?: InputMaybe<Scalars["String"]["input"]>;
-  aspectRatio?: InputMaybe<Scalars["String"]["input"]>;
-  backgroundColor?: InputMaybe<Scalars["String"]["input"]>;
-  borderColor?: InputMaybe<Scalars["String"]["input"]>;
-  borderRadius?: InputMaybe<Scalars["Int"]["input"]>;
-  borderStyle?: InputMaybe<Scalars["String"]["input"]>;
-  borderWidth?: InputMaybe<Scalars["Int"]["input"]>;
-  bottom?: InputMaybe<Scalars["String"]["input"]>;
-  boxShadow?: InputMaybe<Scalars["String"]["input"]>;
-  boxSizing?: InputMaybe<Scalars["String"]["input"]>;
-  color?: InputMaybe<Scalars["String"]["input"]>;
-  cursor?: InputMaybe<Scalars["String"]["input"]>;
-  display?: InputMaybe<Scalars["String"]["input"]>;
-  filter?: InputMaybe<Scalars["String"]["input"]>;
-  flexDirection?: InputMaybe<Scalars["String"]["input"]>;
-  flexGrow?: InputMaybe<Scalars["Float"]["input"]>;
-  fontFamily?: InputMaybe<Scalars["String"]["input"]>;
-  fontSize?: InputMaybe<Scalars["Int"]["input"]>;
-  fontStyle?: InputMaybe<Scalars["String"]["input"]>;
-  fontWeight?: InputMaybe<Scalars["Int"]["input"]>;
-  gap?: InputMaybe<Scalars["Int"]["input"]>;
-  height?: InputMaybe<Scalars["String"]["input"]>;
-  justifyContent?: InputMaybe<Scalars["String"]["input"]>;
-  left?: InputMaybe<Scalars["String"]["input"]>;
-  letterSpacing?: InputMaybe<Scalars["Int"]["input"]>;
-  lineHeight?: InputMaybe<Scalars["Int"]["input"]>;
-  marginBottom?: InputMaybe<Scalars["Int"]["input"]>;
-  marginLeft?: InputMaybe<Scalars["Int"]["input"]>;
-  marginRight?: InputMaybe<Scalars["Int"]["input"]>;
-  marginTop?: InputMaybe<Scalars["Int"]["input"]>;
-  maxHeight?: InputMaybe<Scalars["String"]["input"]>;
-  maxWidth?: InputMaybe<Scalars["String"]["input"]>;
-  minHeight?: InputMaybe<Scalars["String"]["input"]>;
-  minWidth?: InputMaybe<Scalars["String"]["input"]>;
-  objectFit?: InputMaybe<Scalars["String"]["input"]>;
-  opacity?: InputMaybe<Scalars["Float"]["input"]>;
-  overflow?: InputMaybe<Scalars["String"]["input"]>;
-  paddingBottom?: InputMaybe<Scalars["Int"]["input"]>;
-  paddingLeft?: InputMaybe<Scalars["Int"]["input"]>;
-  paddingRight?: InputMaybe<Scalars["Int"]["input"]>;
-  paddingTop?: InputMaybe<Scalars["Int"]["input"]>;
-  paddingX?: InputMaybe<Scalars["Int"]["input"]>;
-  paddingY?: InputMaybe<Scalars["Int"]["input"]>;
-  pointerEvents?: InputMaybe<Scalars["String"]["input"]>;
-  position?: InputMaybe<Scalars["String"]["input"]>;
-  right?: InputMaybe<Scalars["String"]["input"]>;
-  textAlign?: InputMaybe<Scalars["String"]["input"]>;
-  textDecoration?: InputMaybe<Scalars["String"]["input"]>;
-  textOverflow?: InputMaybe<Scalars["String"]["input"]>;
-  textShadow?: InputMaybe<Scalars["String"]["input"]>;
-  textTransform?: InputMaybe<Scalars["String"]["input"]>;
-  top?: InputMaybe<Scalars["String"]["input"]>;
-  transform?: InputMaybe<Scalars["String"]["input"]>;
-  whiteSpace?: InputMaybe<Scalars["String"]["input"]>;
-  width?: InputMaybe<Scalars["String"]["input"]>;
-  zIndex?: InputMaybe<Scalars["String"]["input"]>;
+export type DesignSystemCommitArtifactEdge = {
+  __typename?: "DesignSystemCommitArtifactEdge";
+  cursor: Scalars["String"]["output"];
+  node: DesignSystemCommitArtifact;
 };
 
-export type DesignElementTextEditResult = {
-  __typename?: "DesignElementTextEditResult";
-  elementId: Scalars["String"]["output"];
-  filePath: Scalars["String"]["output"];
-  previousText: Scalars["String"]["output"];
-  sessionGroupId: Scalars["ID"]["output"];
-  sourceHash: Scalars["String"]["output"];
-  text: Scalars["String"]["output"];
-};
+export type DesignSystemCommitArtifactStatus = "failed" | "pending" | "saved" | "saving";
 
-export type DesignElementTextSource = {
-  __typename?: "DesignElementTextSource";
-  elementId: Scalars["String"]["output"];
-  filePath: Scalars["String"]["output"];
-  sessionGroupId: Scalars["ID"]["output"];
-  sourceHash: Scalars["String"]["output"];
-  text: Scalars["String"]["output"];
+export type DesignSystemPublishStatus = "failed" | "idle" | "published" | "publishing";
+
+export type DesignSystemStatus = "archived" | "draft" | "ready";
+
+export type DesignSystemVersion = {
+  __typename?: "DesignSystemVersion";
+  authoringSessionGroupId: Scalars["ID"]["output"];
+  byteSize: Scalars["Int"]["output"];
+  contentDigest: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  designSystem: DesignSystem;
+  designSystemCommitArtifact: DesignSystemCommitArtifact;
+  designSystemCommitArtifactId: Scalars["ID"]["output"];
+  designSystemId: Scalars["ID"]["output"];
+  id: Scalars["ID"]["output"];
+  manifest: Scalars["JSON"]["output"];
+  sourceCommitSha?: Maybe<Scalars["String"]["output"]>;
+  storageKey: Scalars["String"]["output"];
+  validationSummary: Scalars["JSON"]["output"];
+  version: Scalars["Int"]["output"];
+  workbenchCommitSha: Scalars["String"]["output"];
 };
 
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
@@ -561,14 +504,18 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
-  | "design_element_styles_updated"
-  | "design_element_text_updated"
   | "design_preview_updated"
+  | "design_system_archived"
+  | "design_system_commit_artifact_created"
+  | "design_system_commit_artifact_updated"
+  | "design_system_created"
+  | "design_system_publish_updated"
+  | "design_system_updated"
+  | "design_system_version_created"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
   | "managed_git_token_minted"
-  | "manual_element_saved"
   | "member_joined"
   | "member_left"
   | "message_deleted"
@@ -727,27 +674,6 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
-export type ManualElementEditInput = {
-  elementId: Scalars["String"]["input"];
-  expectedStyleSourceHash?: InputMaybe<Scalars["String"]["input"]>;
-  expectedTextSourceHash?: InputMaybe<Scalars["String"]["input"]>;
-  filePath: Scalars["String"]["input"];
-  styles?: InputMaybe<DesignElementStylesInput>;
-  text?: InputMaybe<Scalars["String"]["input"]>;
-};
-
-export type ManualElementEditResult = {
-  __typename?: "ManualElementEditResult";
-  commitSha: Scalars["String"]["output"];
-  elementId: Scalars["String"]["output"];
-  filePath: Scalars["String"]["output"];
-  sessionGroupId: Scalars["ID"]["output"];
-  styleSourceHash?: Maybe<Scalars["String"]["output"]>;
-  styles?: Maybe<DesignElementStyles>;
-  text?: Maybe<Scalars["String"]["output"]>;
-  textSourceHash?: Maybe<Scalars["String"]["output"]>;
-};
-
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -795,6 +721,7 @@ export type Mutation = {
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
+  archiveDesignSystem: DesignSystem;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
@@ -807,6 +734,7 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createDesignSystem: DesignSystem;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -846,6 +774,7 @@ export type Mutation = {
   muteScope: Participant;
   publishAppSession: SessionEndpoint;
   queueSessionMessage: QueuedMessage;
+  refreshDesignSystemSource: DesignSystem;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars["Boolean"]["output"];
@@ -859,6 +788,7 @@ export type Mutation = {
   requestPdfSessionExport: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
+  retryDesignSystemCommitArtifact: DesignSystem;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   revertSessionGroupFileChange: Scalars["Boolean"]["output"];
@@ -866,8 +796,7 @@ export type Mutation = {
   rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
-  saveManualElementEdit: ManualElementEditResult;
-  saveManualElementEdits: Array<ManualElementEditResult>;
+  saveDesignSystem: DesignSystemVersion;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -897,8 +826,6 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
-  updateDesignElementStyles: DesignElementStyleEditResult;
-  updateDesignElementText: DesignElementTextEditResult;
   updateOrgMemberRole: OrgMember;
   updatePdfSessionFormat: Scalars["Boolean"]["output"];
   updateQueuedMessage: QueuedMessage;
@@ -930,6 +857,10 @@ export type MutationApproveBridgeAccessRequestArgs = {
   requestId: Scalars["ID"]["input"];
   scopeType?: InputMaybe<BridgeAccessScopeType>;
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
+export type MutationArchiveDesignSystemArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationArchiveSessionGroupArgs = {
@@ -987,6 +918,10 @@ export type MutationCreateChannelTerminalArgs = {
 
 export type MutationCreateChatArgs = {
   input: CreateChatInput;
+};
+
+export type MutationCreateDesignSystemArgs = {
+  input: CreateDesignSystemInput;
 };
 
 export type MutationCreateOrganizationArgs = {
@@ -1158,6 +1093,10 @@ export type MutationQueueSessionMessageArgs = {
   text: Scalars["String"]["input"];
 };
 
+export type MutationRefreshDesignSystemSourceArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationRegisterPushTokenArgs = {
   platform: PushPlatform;
   token: Scalars["String"]["input"];
@@ -1223,6 +1162,10 @@ export type MutationRestoreLinkedCheckoutArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationRetryDesignSystemCommitArtifactArgs = {
+  designSystemId: Scalars["ID"]["input"];
+};
+
 export type MutationRetrySessionConnectionArgs = {
   sessionId: Scalars["ID"]["input"];
 };
@@ -1255,14 +1198,8 @@ export type MutationRunSessionGroupSetupScriptArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
-export type MutationSaveManualElementEditArgs = {
-  input: ManualElementEditInput;
-  sessionGroupId: Scalars["ID"]["input"];
-};
-
-export type MutationSaveManualElementEditsArgs = {
-  inputs: Array<ManualElementEditInput>;
-  sessionGroupId: Scalars["ID"]["input"];
+export type MutationSaveDesignSystemArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationSaveSessionGroupFileArgs = {
@@ -1422,21 +1359,6 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
-export type MutationUpdateDesignElementStylesArgs = {
-  elementId: Scalars["String"]["input"];
-  expectedSourceHash: Scalars["String"]["input"];
-  sessionGroupId: Scalars["ID"]["input"];
-  styles: DesignElementStylesInput;
-};
-
-export type MutationUpdateDesignElementTextArgs = {
-  elementId: Scalars["String"]["input"];
-  expectedSourceHash: Scalars["String"]["input"];
-  filePath: Scalars["String"]["input"];
-  sessionGroupId: Scalars["ID"]["input"];
-  text: Scalars["String"]["input"];
-};
-
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1575,10 +1497,12 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
-  designElementStyleSource: DesignElementStyleSource;
-  designElementTextSource: DesignElementTextSource;
   /** Design-kind session groups for the org (the sidebar Designs section). */
   designSessionGroups: Array<SessionGroup>;
+  designSystem?: Maybe<DesignSystem>;
+  designSystemCommitArtifacts: DesignSystemCommitArtifactConnection;
+  designSystemVersions: Array<DesignSystemVersion>;
+  designSystems: Array<DesignSystem>;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
@@ -1693,18 +1617,26 @@ export type QueryChatMessagesArgs = {
   limit?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
-export type QueryDesignElementStyleSourceArgs = {
-  elementId: Scalars["String"]["input"];
-  sessionGroupId: Scalars["ID"]["input"];
-};
-
-export type QueryDesignElementTextSourceArgs = {
-  elementId: Scalars["String"]["input"];
-  filePath: Scalars["String"]["input"];
-  sessionGroupId: Scalars["ID"]["input"];
-};
-
 export type QueryDesignSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryDesignSystemArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type QueryDesignSystemCommitArtifactsArgs = {
+  after?: InputMaybe<Scalars["String"]["input"]>;
+  designSystemId: Scalars["ID"]["input"];
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignSystemVersionsArgs = {
+  designSystemId: Scalars["ID"]["input"];
+};
+
+export type QueryDesignSystemsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -2258,6 +2190,8 @@ export type SessionGroup = {
   designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
   designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
   designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
+  designSystemVersion?: Maybe<DesignSystemVersion>;
+  designSystemVersionId?: Maybe<Scalars["ID"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
@@ -2309,7 +2243,7 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "app" | "coding" | "design" | "pdf";
+export type SessionGroupKind = "app" | "coding" | "design" | "design_system" | "pdf";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2423,6 +2357,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  designSystemVersionId?: InputMaybe<Scalars["ID"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
@@ -2743,18 +2678,21 @@ export type ResolversTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
+  CreateDesignSystemInput: CreateDesignSystemInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
   DeliveryResult: DeliveryResult;
-  DesignElementStyleEditResult: ResolverTypeWrapper<DesignElementStyleEditResult>;
-  DesignElementStyleSource: ResolverTypeWrapper<DesignElementStyleSource>;
-  DesignElementStyles: ResolverTypeWrapper<DesignElementStyles>;
-  DesignElementStylesInput: DesignElementStylesInput;
-  DesignElementTextEditResult: ResolverTypeWrapper<DesignElementTextEditResult>;
-  DesignElementTextSource: ResolverTypeWrapper<DesignElementTextSource>;
+  DesignSystem: ResolverTypeWrapper<DesignSystem>;
+  DesignSystemCommitArtifact: ResolverTypeWrapper<DesignSystemCommitArtifact>;
+  DesignSystemCommitArtifactConnection: ResolverTypeWrapper<DesignSystemCommitArtifactConnection>;
+  DesignSystemCommitArtifactEdge: ResolverTypeWrapper<DesignSystemCommitArtifactEdge>;
+  DesignSystemCommitArtifactStatus: DesignSystemCommitArtifactStatus;
+  DesignSystemPublishStatus: DesignSystemPublishStatus;
+  DesignSystemStatus: DesignSystemStatus;
+  DesignSystemVersion: ResolverTypeWrapper<DesignSystemVersion>;
   EndpointTrafficCaptureMode: EndpointTrafficCaptureMode;
   EndpointTrafficEntry: ResolverTypeWrapper<EndpointTrafficEntry>;
   EntityType: EntityType;
@@ -2775,8 +2713,6 @@ export type ResolversTypes = ResolversObject<{
   LinkedCheckoutErrorCode: LinkedCheckoutErrorCode;
   LinkedCheckoutStatus: ResolverTypeWrapper<LinkedCheckoutStatus>;
   LinkedCheckoutSyncConflictStrategy: LinkedCheckoutSyncConflictStrategy;
-  ManualElementEditInput: ManualElementEditInput;
-  ManualElementEditResult: ResolverTypeWrapper<ManualElementEditResult>;
   Message: ResolverTypeWrapper<Message>;
   MessageSearchHit: ResolverTypeWrapper<MessageSearchHit>;
   MoveChannelInput: MoveChannelInput;
@@ -2894,17 +2830,17 @@ export type ResolversParentTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
+  CreateDesignSystemInput: CreateDesignSystemInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
-  DesignElementStyleEditResult: DesignElementStyleEditResult;
-  DesignElementStyleSource: DesignElementStyleSource;
-  DesignElementStyles: DesignElementStyles;
-  DesignElementStylesInput: DesignElementStylesInput;
-  DesignElementTextEditResult: DesignElementTextEditResult;
-  DesignElementTextSource: DesignElementTextSource;
+  DesignSystem: DesignSystem;
+  DesignSystemCommitArtifact: DesignSystemCommitArtifact;
+  DesignSystemCommitArtifactConnection: DesignSystemCommitArtifactConnection;
+  DesignSystemCommitArtifactEdge: DesignSystemCommitArtifactEdge;
+  DesignSystemVersion: DesignSystemVersion;
   EndpointTrafficEntry: EndpointTrafficEntry;
   Event: Event;
   Float: Scalars["Float"]["output"];
@@ -2916,8 +2852,6 @@ export type ResolversParentTypes = ResolversObject<{
   LinkedCheckoutActionResult: LinkedCheckoutActionResult;
   LinkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   LinkedCheckoutStatus: LinkedCheckoutStatus;
-  ManualElementEditInput: ManualElementEditInput;
-  ManualElementEditResult: ManualElementEditResult;
   Message: Message;
   MessageSearchHit: MessageSearchHit;
   MoveChannelInput: MoveChannelInput;
@@ -3267,119 +3201,123 @@ export interface DateTimeScalarConfig extends GraphQLScalarTypeConfig<
   name: "DateTime";
 }
 
-export type DesignElementStyleEditResultResolvers<
+export type DesignSystemResolvers<
   ContextType = Context,
-  ParentType extends ResolversParentTypes["DesignElementStyleEditResult"] =
-    ResolversParentTypes["DesignElementStyleEditResult"],
+  ParentType extends ResolversParentTypes["DesignSystem"] = ResolversParentTypes["DesignSystem"],
 > = ResolversObject<{
-  elementId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  sourceHash?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  styles?: Resolver<ResolversTypes["DesignElementStyles"], ParentType, ContextType>;
+  activeVersion?: Resolver<Maybe<ResolversTypes["DesignSystemVersion"]>, ParentType, ContextType>;
+  activeVersionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  archivedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  authoringSessionGroup?: Resolver<ResolversTypes["SessionGroup"], ParentType, ContextType>;
+  authoringSessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  commitArtifactError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  commitArtifactStatus?: Resolver<
+    Maybe<ResolversTypes["DesignSystemCommitArtifactStatus"]>,
+    ParentType,
+    ContextType
+  >;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdById?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  description?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  latestCommitArtifact?: Resolver<
+    Maybe<ResolversTypes["DesignSystemCommitArtifact"]>,
+    ParentType,
+    ContextType
+  >;
+  latestCommitArtifactId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  latestPushedCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  publishAttemptedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  publishError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  publishStatus?: Resolver<ResolversTypes["DesignSystemPublishStatus"], ParentType, ContextType>;
+  publishedCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  slug?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  sourceBranch?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  sourceCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  sourcePath?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  sourceRepo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
+  sourceRepoId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["DesignSystemStatus"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
-export type DesignElementStyleSourceResolvers<
+export type DesignSystemCommitArtifactResolvers<
   ContextType = Context,
-  ParentType extends ResolversParentTypes["DesignElementStyleSource"] =
-    ResolversParentTypes["DesignElementStyleSource"],
+  ParentType extends ResolversParentTypes["DesignSystemCommitArtifact"] =
+    ResolversParentTypes["DesignSystemCommitArtifact"],
 > = ResolversObject<{
-  elementId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  sourceHash?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  styles?: Resolver<ResolversTypes["DesignElementStyles"], ParentType, ContextType>;
+  byteSize?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  commitSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  contentDigest?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdById?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  designSystem?: Resolver<ResolversTypes["DesignSystem"], ParentType, ContextType>;
+  designSystemId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  error?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  packageDigest?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  packageValid?: Resolver<Maybe<ResolversTypes["Boolean"]>, ParentType, ContextType>;
+  savedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  sequence?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["DesignSystemCommitArtifactStatus"], ParentType, ContextType>;
+  storageKey?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  validationSummary?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
-export type DesignElementStylesResolvers<
+export type DesignSystemCommitArtifactConnectionResolvers<
   ContextType = Context,
-  ParentType extends ResolversParentTypes["DesignElementStyles"] =
-    ResolversParentTypes["DesignElementStyles"],
+  ParentType extends ResolversParentTypes["DesignSystemCommitArtifactConnection"] =
+    ResolversParentTypes["DesignSystemCommitArtifactConnection"],
 > = ResolversObject<{
-  alignItems?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  alignSelf?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  aspectRatio?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  backgroundColor?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  borderColor?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  borderRadius?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  borderStyle?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  borderWidth?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  bottom?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  boxShadow?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  boxSizing?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  color?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  cursor?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  display?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  filter?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  flexDirection?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  flexGrow?: Resolver<Maybe<ResolversTypes["Float"]>, ParentType, ContextType>;
-  fontFamily?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  fontSize?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  fontStyle?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  fontWeight?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  gap?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  height?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  justifyContent?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  left?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  letterSpacing?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  lineHeight?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  marginBottom?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  marginLeft?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  marginRight?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  marginTop?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  maxHeight?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  maxWidth?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  minHeight?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  minWidth?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  objectFit?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  opacity?: Resolver<Maybe<ResolversTypes["Float"]>, ParentType, ContextType>;
-  overflow?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  paddingBottom?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  paddingLeft?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  paddingRight?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  paddingTop?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  paddingX?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  paddingY?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
-  pointerEvents?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  position?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  right?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  textAlign?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  textDecoration?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  textOverflow?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  textShadow?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  textTransform?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  top?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  transform?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  whiteSpace?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  width?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  zIndex?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  edges?: Resolver<
+    Array<ResolversTypes["DesignSystemCommitArtifactEdge"]>,
+    ParentType,
+    ContextType
+  >;
+  endCursor?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  hasNextPage?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
-export type DesignElementTextEditResultResolvers<
+export type DesignSystemCommitArtifactEdgeResolvers<
   ContextType = Context,
-  ParentType extends ResolversParentTypes["DesignElementTextEditResult"] =
-    ResolversParentTypes["DesignElementTextEditResult"],
+  ParentType extends ResolversParentTypes["DesignSystemCommitArtifactEdge"] =
+    ResolversParentTypes["DesignSystemCommitArtifactEdge"],
 > = ResolversObject<{
-  elementId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  filePath?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  previousText?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  sourceHash?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  text?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  cursor?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  node?: Resolver<ResolversTypes["DesignSystemCommitArtifact"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
-export type DesignElementTextSourceResolvers<
+export type DesignSystemVersionResolvers<
   ContextType = Context,
-  ParentType extends ResolversParentTypes["DesignElementTextSource"] =
-    ResolversParentTypes["DesignElementTextSource"],
+  ParentType extends ResolversParentTypes["DesignSystemVersion"] =
+    ResolversParentTypes["DesignSystemVersion"],
 > = ResolversObject<{
-  elementId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  filePath?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  sourceHash?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  text?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  authoringSessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  byteSize?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  contentDigest?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdById?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  designSystem?: Resolver<ResolversTypes["DesignSystem"], ParentType, ContextType>;
+  designSystemCommitArtifact?: Resolver<
+    ResolversTypes["DesignSystemCommitArtifact"],
+    ParentType,
+    ContextType
+  >;
+  designSystemCommitArtifactId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  designSystemId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  manifest?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  sourceCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  storageKey?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  validationSummary?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  version?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  workbenchCommitSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3546,22 +3484,6 @@ export type LinkedCheckoutStatusResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
-export type ManualElementEditResultResolvers<
-  ContextType = Context,
-  ParentType extends ResolversParentTypes["ManualElementEditResult"] =
-    ResolversParentTypes["ManualElementEditResult"],
-> = ResolversObject<{
-  commitSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  elementId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  filePath?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
-  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
-  styleSourceHash?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  styles?: Resolver<Maybe<ResolversTypes["DesignElementStyles"]>, ParentType, ContextType>;
-  text?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  textSourceHash?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
-  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
-}>;
-
 export type MessageResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Message"] = ResolversParentTypes["Message"],
@@ -3627,6 +3549,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationApproveBridgeAccessRequestArgs, "requestId">
+  >;
+  archiveDesignSystem?: Resolver<
+    ResolversTypes["DesignSystem"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationArchiveDesignSystemArgs, "id">
   >;
   archiveSessionGroup?: Resolver<
     Maybe<ResolversTypes["SessionGroup"]>,
@@ -3702,6 +3630,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationCreateChatArgs, "input">
+  >;
+  createDesignSystem?: Resolver<
+    ResolversTypes["DesignSystem"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateDesignSystemArgs, "input">
   >;
   createOrganization?: Resolver<
     ResolversTypes["OrgMember"],
@@ -3926,6 +3860,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationQueueSessionMessageArgs, "sessionId" | "text">
   >;
+  refreshDesignSystemSource?: Resolver<
+    ResolversTypes["DesignSystem"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRefreshDesignSystemSourceArgs, "id">
+  >;
   registerPushToken?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -4007,6 +3947,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationRestoreLinkedCheckoutArgs, "repoId" | "sessionGroupId">
   >;
+  retryDesignSystemCommitArtifact?: Resolver<
+    ResolversTypes["DesignSystem"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRetryDesignSystemCommitArtifactArgs, "designSystemId">
+  >;
   retrySessionConnection?: Resolver<
     ResolversTypes["Session"],
     ParentType,
@@ -4049,17 +3995,11 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationRunSessionGroupSetupScriptArgs, "scriptId" | "sessionGroupId">
   >;
-  saveManualElementEdit?: Resolver<
-    ResolversTypes["ManualElementEditResult"],
+  saveDesignSystem?: Resolver<
+    ResolversTypes["DesignSystemVersion"],
     ParentType,
     ContextType,
-    RequireFields<MutationSaveManualElementEditArgs, "input" | "sessionGroupId">
-  >;
-  saveManualElementEdits?: Resolver<
-    Array<ResolversTypes["ManualElementEditResult"]>,
-    ParentType,
-    ContextType,
-    RequireFields<MutationSaveManualElementEditsArgs, "inputs" | "sessionGroupId">
+    RequireFields<MutationSaveDesignSystemArgs, "id">
   >;
   saveSessionGroupFile?: Resolver<
     ResolversTypes["Boolean"],
@@ -4240,24 +4180,6 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationUpdateChannelGroupArgs, "id" | "input">
-  >;
-  updateDesignElementStyles?: Resolver<
-    ResolversTypes["DesignElementStyleEditResult"],
-    ParentType,
-    ContextType,
-    RequireFields<
-      MutationUpdateDesignElementStylesArgs,
-      "elementId" | "expectedSourceHash" | "sessionGroupId" | "styles"
-    >
-  >;
-  updateDesignElementText?: Resolver<
-    ResolversTypes["DesignElementTextEditResult"],
-    ParentType,
-    ContextType,
-    RequireFields<
-      MutationUpdateDesignElementTextArgs,
-      "elementId" | "expectedSourceHash" | "filePath" | "sessionGroupId" | "text"
-    >
   >;
   updateOrgMemberRole?: Resolver<
     ResolversTypes["OrgMember"],
@@ -4480,23 +4402,35 @@ export type QueryResolvers<
     RequireFields<QueryChatMessagesArgs, "chatId">
   >;
   chats?: Resolver<Array<ResolversTypes["Chat"]>, ParentType, ContextType>;
-  designElementStyleSource?: Resolver<
-    ResolversTypes["DesignElementStyleSource"],
-    ParentType,
-    ContextType,
-    RequireFields<QueryDesignElementStyleSourceArgs, "elementId" | "sessionGroupId">
-  >;
-  designElementTextSource?: Resolver<
-    ResolversTypes["DesignElementTextSource"],
-    ParentType,
-    ContextType,
-    RequireFields<QueryDesignElementTextSourceArgs, "elementId" | "filePath" | "sessionGroupId">
-  >;
   designSessionGroups?: Resolver<
     Array<ResolversTypes["SessionGroup"]>,
     ParentType,
     ContextType,
     RequireFields<QueryDesignSessionGroupsArgs, "organizationId">
+  >;
+  designSystem?: Resolver<
+    Maybe<ResolversTypes["DesignSystem"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryDesignSystemArgs, "id">
+  >;
+  designSystemCommitArtifacts?: Resolver<
+    ResolversTypes["DesignSystemCommitArtifactConnection"],
+    ParentType,
+    ContextType,
+    RequireFields<QueryDesignSystemCommitArtifactsArgs, "designSystemId">
+  >;
+  designSystemVersions?: Resolver<
+    Array<ResolversTypes["DesignSystemVersion"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryDesignSystemVersionsArgs, "designSystemId">
+  >;
+  designSystems?: Resolver<
+    Array<ResolversTypes["DesignSystem"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryDesignSystemsArgs, "organizationId">
   >;
   endpointTraffic?: Resolver<
     Array<ResolversTypes["EndpointTrafficEntry"]>,
@@ -5074,6 +5008,12 @@ export type SessionGroupResolvers<
     ContextType
   >;
   designPreviewUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  designSystemVersion?: Resolver<
+    Maybe<ResolversTypes["DesignSystemVersion"]>,
+    ParentType,
+    ContextType
+  >;
+  designSystemVersionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   forkedFromSessionGroup?: Resolver<Maybe<ResolversTypes["SessionGroup"]>, ParentType, ContextType>;
   forkedFromSessionGroupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;
@@ -5409,11 +5349,11 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ConnectionsBridge?: ConnectionsBridgeResolvers<ContextType>;
   ConnectionsRepoEntry?: ConnectionsRepoEntryResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
-  DesignElementStyleEditResult?: DesignElementStyleEditResultResolvers<ContextType>;
-  DesignElementStyleSource?: DesignElementStyleSourceResolvers<ContextType>;
-  DesignElementStyles?: DesignElementStylesResolvers<ContextType>;
-  DesignElementTextEditResult?: DesignElementTextEditResultResolvers<ContextType>;
-  DesignElementTextSource?: DesignElementTextSourceResolvers<ContextType>;
+  DesignSystem?: DesignSystemResolvers<ContextType>;
+  DesignSystemCommitArtifact?: DesignSystemCommitArtifactResolvers<ContextType>;
+  DesignSystemCommitArtifactConnection?: DesignSystemCommitArtifactConnectionResolvers<ContextType>;
+  DesignSystemCommitArtifactEdge?: DesignSystemCommitArtifactEdgeResolvers<ContextType>;
+  DesignSystemVersion?: DesignSystemVersionResolvers<ContextType>;
   EndpointTrafficEntry?: EndpointTrafficEntryResolvers<ContextType>;
   Event?: EventResolvers<ContextType>;
   GitCheckpoint?: GitCheckpointResolvers<ContextType>;
@@ -5422,7 +5362,6 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   LinkedCheckoutActionResult?: LinkedCheckoutActionResultResolvers<ContextType>;
   LinkedCheckoutChangedFile?: LinkedCheckoutChangedFileResolvers<ContextType>;
   LinkedCheckoutStatus?: LinkedCheckoutStatusResolvers<ContextType>;
-  ManualElementEditResult?: ManualElementEditResultResolvers<ContextType>;
   Message?: MessageResolvers<ContextType>;
   MessageSearchHit?: MessageSearchHitResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;

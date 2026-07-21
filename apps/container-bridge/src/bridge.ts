@@ -59,6 +59,8 @@ import { ensureToolReady, syncCodexAuthFile } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
 import { ManagedProcessManager } from "./managed-process-manager.js";
 import { exportPdfToTarget } from "./pdf-export.js";
+import { materializeDesignSystemPackage } from "./design-system-package.js";
+import { prepareReadOnlySourceCheckout } from "./design-system-source.js";
 
 const execFileAsync = promisify(execFile);
 const BRIDGE_PROTOCOL_VERSION = 2;
@@ -463,6 +465,8 @@ export class ContainerBridge implements IBridgeClient {
           repoRemoteUrl,
           defaultBranch,
           checkpointSha,
+          designSystemPackage,
+          sourceRepository,
         } = cmd;
         (async () => {
           try {
@@ -475,9 +479,36 @@ export class ContainerBridge implements IBridgeClient {
               checkpointSha,
               sessionGroupKind,
             });
+            if (sessionGroupKind === "design" && designSystemPackage) {
+              await materializeDesignSystemPackage(workdir, designSystemPackage);
+            }
+            let sourceWorkdir: string | undefined;
+            let sourceCommitSha: string | undefined;
+            if (sessionGroupKind === "design_system") {
+              if (!sessionGroupId || !sourceRepository)
+                throw new Error("Design-system source descriptor is unavailable");
+              const source = await prepareReadOnlySourceCheckout(sessionGroupId, sourceRepository);
+              sourceWorkdir = source.sourceWorkdir;
+              sourceCommitSha = source.commitSha;
+              await fs.promises.mkdir(path.join(workdir, ".trace"), { recursive: true });
+              const sourceMetadataPath = path.join(workdir, ".trace", "source-workdir");
+              await fs.promises.chmod(sourceMetadataPath, 0o600).catch(() => undefined);
+              await fs.promises.writeFile(
+                sourceMetadataPath,
+                `${source.sourceWorkdir}\n${source.commitSha}\n`,
+                { mode: 0o444 },
+              );
+            }
             this.sessionWorkdirs.set(sessionId, workdir);
             this.send({ type: "register_session", sessionId });
-            this.send({ type: "workspace_ready", sessionId, workdir, slug: workspaceSlug });
+            this.send({
+              type: "workspace_ready",
+              sessionId,
+              workdir,
+              slug: workspaceSlug,
+              ...(sourceWorkdir ? { sourceWorkdir } : {}),
+              ...(sourceCommitSha ? { sourceCommitSha } : {}),
+            });
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] app workspace failed for ${sessionId}:`, message);
