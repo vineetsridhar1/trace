@@ -1,17 +1,12 @@
 import { useState } from "react";
-import { AppWindow, NotebookText, Palette, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
 import { DeleteGeneratedProjectDialog } from "./DeleteGeneratedProjectDialog";
+import { projectTypePresentation, type GeneratedProjectKind } from "./generated-project-types";
 import { useGeneratedProjectSessionGroupRow } from "./useGeneratedProjectSessionGroupRow";
-
-const projectTypePresentation = {
-  app: { Icon: AppWindow, label: "App", className: "text-cyan-400" },
-  design: { Icon: Palette, label: "Design", className: "text-pink-400" },
-  pdf: { Icon: NotebookText, label: "Document", className: "text-orange-400" },
-} as const;
 
 export function GeneratedProjectSessionItem({
   groupId,
@@ -20,13 +15,13 @@ export function GeneratedProjectSessionItem({
 }: {
   groupId: string;
   isActive: boolean;
-  kind: "app" | "design" | "pdf";
+  kind: GeneratedProjectKind;
 }) {
   const row = useGeneratedProjectSessionGroupRow(groupId);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const groupName = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
   const name = groupName ?? `Untitled ${kind}`;
-  const { Icon, label, className } = projectTypePresentation[kind];
+  const { Icon, className } = projectTypePresentation[kind];
 
   return (
     <>
@@ -43,7 +38,7 @@ export function GeneratedProjectSessionItem({
           className="flex h-full min-w-0 flex-1 cursor-pointer touch-manipulation items-center gap-2 rounded-md px-1.5 pr-7 text-left text-xs leading-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Icon
-            aria-label={label}
+            aria-label={projectTypePresentation[kind].label}
             className={cn("size-3.5 shrink-0", className)}
             strokeWidth={2}
           />
