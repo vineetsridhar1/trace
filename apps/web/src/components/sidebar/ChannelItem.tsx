@@ -120,7 +120,7 @@ export const ChannelItem = memo(function ChannelItem({
                 )}
                 <span
                   className={cn(
-                    "truncate text-[var(--th-accent-light)]",
+                    "truncate text-indigo-300",
                     hasDoneBadge && "font-semibold",
                   )}
                 >
