@@ -21,6 +21,7 @@ export function pdfExportChromiumArgs(
 ) {
   return [
     "--headless=new",
+    "--no-sandbox",
     "--disable-gpu",
     "--disable-dev-shm-usage",
     "--no-first-run",

@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { pdfExportChromiumArgs } from "./pdf-export.js";
 
 describe("pdfExportChromiumArgs", () => {
-  it("keeps Chromium's security sandbox enabled", () => {
+  it("uses the container-compatible Chromium flags", () => {
     expect(pdfExportChromiumArgs(4173, "/tmp/document.pdf", "/tmp/profile")).toEqual([
       "--headless=new",
+      "--no-sandbox",
       "--disable-gpu",
       "--disable-dev-shm-usage",
       "--no-first-run",
