@@ -134,6 +134,10 @@ const GENERATED_PROJECTS_QUERY = gql`
 
 type ProjectGroup = SessionGroup & { id: string; sessions?: Array<Session & { id: string }> };
 
+export function isCreateListKind(kind: SessionGroup["kind"]): kind is GeneratedProjectKind {
+  return kind === "app" || kind === "design" || kind === "design_system" || kind === "pdf";
+}
+
 export function GeneratedProjectsSection({
   activeOrgId,
   activeSessionGroupId,
@@ -180,13 +184,11 @@ export function GeneratedProjectsSection({
     const byKind: Record<GeneratedProjectKind, SessionGroupEntity[]> = {
       app: [],
       design: [],
+      design_system: [],
       pdf: [],
     };
     for (const group of Object.values(groups)) {
-      if (
-        !group.archivedAt &&
-        (group.kind === "app" || group.kind === "design" || group.kind === "pdf")
-      ) {
+      if (!group.archivedAt && isCreateListKind(group.kind)) {
         byKind[group.kind].push(group);
       }
     }

@@ -593,12 +593,17 @@ describe("SessionService", () => {
   });
 
   describe("listDesignGroups", () => {
-    it("lists only non-archived design groups visible to the user", async () => {
+    it("lists Design and design-system workbenches in the shared Create list", async () => {
       prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
         makeSessionGroup({
           id: "group-design",
           kind: "design",
           sessions: [makeSession({ id: "session-design" })],
+        }),
+        makeSessionGroup({
+          id: "group-design-system",
+          kind: "design_system",
+          sessions: [makeSession({ id: "session-design-system" })],
         }),
       ]);
 
@@ -606,10 +611,13 @@ describe("SessionService", () => {
 
       expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ organizationId: "org-1", kind: "design" }),
+          where: expect.objectContaining({
+            organizationId: "org-1",
+            kind: { in: ["design", "design_system"] },
+          }),
         }),
       );
-      expect(result.map((group) => group.id)).toEqual(["group-design"]);
+      expect(result.map((group) => group.id)).toEqual(["group-design", "group-design-system"]);
     });
   });
 

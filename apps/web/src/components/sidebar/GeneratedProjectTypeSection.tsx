@@ -23,6 +23,7 @@ export function GeneratedProjectTypeSection({
     (state) => state.openGeneratedProjectDialog,
   );
   const { label, emptyLabel } = projectTypePresentation[kind];
+  const createKind = kind === "design_system" ? "design" : kind;
   const sectionId = `generated-projects-${kind}`;
   const visibleGroups = useMemo(
     () =>
@@ -73,7 +74,7 @@ export function GeneratedProjectTypeSection({
             type="button"
             title={emptyLabel}
             aria-label={emptyLabel}
-            onClick={() => openGeneratedProjectDialog(kind)}
+            onClick={() => openGeneratedProjectDialog(createKind)}
             className="flex cursor-pointer items-center justify-center rounded p-0.5 text-foreground transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Plus size={14} />
@@ -93,7 +94,7 @@ export function GeneratedProjectTypeSection({
               {visibleGroups.length === 0 ? (
                 <button
                   type="button"
-                  onClick={() => openGeneratedProjectDialog(kind)}
+                  onClick={() => openGeneratedProjectDialog(createKind)}
                   className="flex h-7 w-full items-center gap-2 rounded-md px-2 pl-3 text-left text-xs text-muted-foreground hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Plus size={14} />

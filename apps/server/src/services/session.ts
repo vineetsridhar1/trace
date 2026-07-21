@@ -2749,7 +2749,7 @@ export class SessionService {
   }
 
   async listDesignGroups(organizationId: string, userId: string) {
-    return this.listGeneratedProjectGroups("design", organizationId, userId);
+    return this.listGeneratedProjectGroups(["design", "design_system"], organizationId, userId);
   }
 
   async listPdfGroups(organizationId: string, userId: string) {
@@ -2757,14 +2757,14 @@ export class SessionService {
   }
 
   private async listGeneratedProjectGroups(
-    kind: "app" | "design" | "pdf",
+    kind: "app" | "design" | "pdf" | readonly ["design", "design_system"],
     organizationId: string,
     userId: string,
   ) {
     const groups = await prisma.sessionGroup.findMany({
       where: {
         organizationId,
-        kind,
+        kind: typeof kind === "string" ? kind : { in: [...kind] },
         archivedAt: null,
         AND: [visibleSessionGroupWhere(userId)],
       },

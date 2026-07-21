@@ -39,23 +39,27 @@ export function GeneratedProjectSessionItem({
           <SessionStatusIndicator row={row} size={6} showDonePulse={false} />
           <span className="min-w-0 flex-1 truncate">{name}</span>
         </button>
-        <button
-          type="button"
-          title={`Delete ${name}`}
-          aria-label={`Delete ${name}`}
-          onClick={() => setDeleteOpen(true)}
-          className="pointer-events-none absolute right-1 flex size-5 touch-manipulation items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring group-hover/app-item:pointer-events-auto group-hover/app-item:opacity-100 group-focus-within/app-item:pointer-events-auto group-focus-within/app-item:opacity-100"
-        >
-          <Trash2 size={13} />
-        </button>
+        {kind !== "design_system" ? (
+          <button
+            type="button"
+            title={`Delete ${name}`}
+            aria-label={`Delete ${name}`}
+            onClick={() => setDeleteOpen(true)}
+            className="pointer-events-none absolute right-1 flex size-5 touch-manipulation items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring group-hover/app-item:pointer-events-auto group-hover/app-item:opacity-100 group-focus-within/app-item:pointer-events-auto group-focus-within/app-item:opacity-100"
+          >
+            <Trash2 size={13} />
+          </button>
+        ) : null}
       </div>
-      <DeleteGeneratedProjectDialog
-        groupId={groupId}
-        groupName={name}
-        kind={kind}
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-      />
+      {kind !== "design_system" ? (
+        <DeleteGeneratedProjectDialog
+          groupId={groupId}
+          groupName={name}
+          kind={kind}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+        />
+      ) : null}
     </>
   );
 }
