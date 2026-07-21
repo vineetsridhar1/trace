@@ -7,6 +7,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
+import { CodexAuthenticationDialog } from "./CodexAuthenticationDialog";
 
 const API_TOKENS_QUERY = gql`
   query MyApiTokens {
@@ -58,7 +59,7 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
   },
   codex_auth_json: {
     label: "ChatGPT session",
-    placeholder: "Paste ~/.codex/auth.json",
+    placeholder: "Managed automatically by Codex",
     description: "Used for Codex cloud sessions and refreshed after each run",
   },
   github: {
@@ -102,6 +103,7 @@ export function ApiTokensSection() {
   const [saving, setSaving] = useState(false);
   const [importingGithubToken, setImportingGithubToken] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [codexAuthenticationOpen, setCodexAuthenticationOpen] = useState(false);
 
   const fetchTokens = useCallback(async () => {
     if (!user) return;
@@ -152,18 +154,6 @@ export function ApiTokensSection() {
     );
   }
 
-  async function handleImportCodexSession() {
-    if (!window.trace?.getCodexAuthJson) {
-      setErrorMessage("Use the desktop app to import your local Codex session.");
-      return;
-    }
-    try {
-      await saveToken("codex_auth_json", await window.trace.getCodexAuthJson());
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Failed to import Codex session");
-    }
-  }
-
   async function handleUseGithubCliToken() {
     if (importingGithubToken || saving) return;
 
@@ -207,7 +197,7 @@ export function ApiTokensSection() {
           if (!meta) return null;
           const isEditing = editing === token.provider;
           const canShowGithubCliImport = token.provider === "github" && isDesktopShell;
-          const canImportCodexSession = token.provider === "codex_auth_json" && isDesktopShell;
+          const canAuthenticateCodex = token.provider === "codex_auth_json";
 
           return (
             <div
@@ -242,19 +232,21 @@ export function ApiTokensSection() {
                           {importingGithubToken ? "Importing..." : "Import from CLI"}
                         </Button>
                       )}
-                      {canImportCodexSession && (
-                        <Button variant="outline" size="sm" onClick={handleImportCodexSession}>
-                          Import from Codex
+                      {canAuthenticateCodex && (
+                        <Button variant="outline" size="sm" onClick={() => setCodexAuthenticationOpen(true)}>
+                          Authenticate
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => startEditing(token.provider)}
-                      >
-                        <Key size={14} />
-                      </Button>
+                      {!canAuthenticateCodex && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => startEditing(token.provider)}
+                        >
+                          <Key size={14} />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -267,6 +259,15 @@ export function ApiTokensSection() {
                   )}
                   {!token.isSet && !isEditing && (
                     <>
+                      {canAuthenticateCodex && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCodexAuthenticationOpen(true)}
+                        >
+                          Authenticate Codex
+                        </Button>
+                      )}
                       {canShowGithubCliImport && (
                         <Button
                           variant="outline"
@@ -279,13 +280,15 @@ export function ApiTokensSection() {
                           {importingGithubToken ? "Importing..." : "Import from CLI"}
                         </Button>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => startEditing(token.provider)}
-                      >
-                        Add key
-                      </Button>
+                      {!canAuthenticateCodex && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => startEditing(token.provider)}
+                        >
+                          Add key
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>
@@ -383,6 +386,11 @@ export function ApiTokensSection() {
           );
         })}
       </div>
+      <CodexAuthenticationDialog
+        open={codexAuthenticationOpen}
+        onOpenChange={setCodexAuthenticationOpen}
+        onSave={saveToken}
+      />
     </div>
   );
 }

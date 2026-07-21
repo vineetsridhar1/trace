@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld("trace", {
   getRepoConfig: (repoId: string) => ipcRenderer.invoke("get-repo-config", repoId),
   getGithubCliStatus: () => ipcRenderer.invoke("get-github-cli-status"),
   getGithubAuthToken: () => ipcRenderer.invoke("get-github-auth-token"),
-  getCodexAuthJson: () => ipcRenderer.invoke("get-codex-auth-json"),
+  loginCodexWithChatgpt: () => ipcRenderer.invoke("login-codex-with-chatgpt"),
   setRepoGitHooksEnabled: (repoId: string, enabled: boolean) =>
     ipcRenderer.invoke("set-repo-git-hooks-enabled", repoId, enabled),
   getRepoGitHookStatus: (repoId: string) => ipcRenderer.invoke("get-repo-git-hook-status", repoId),
