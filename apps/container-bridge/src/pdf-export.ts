@@ -18,13 +18,18 @@ export function pdfExportChromiumArgs(
   previewPort: number,
   outputPath: string,
   profilePath: string,
+  format: BridgePdfExportCommand["format"],
 ) {
+  const pixelsPerUnit = format.unit === "in" ? 96 : 96 / 25.4;
+  const width = Math.ceil(format.width * pixelsPerUnit);
+  const height = Math.ceil(format.height * pixelsPerUnit);
   return [
     "--headless=new",
     "--no-sandbox",
     "--disable-gpu",
     "--disable-dev-shm-usage",
     "--no-first-run",
+    `--window-size=${width},${height}`,
     `--user-data-dir=${profilePath}`,
     "--print-to-pdf-no-header",
     `--print-to-pdf=${outputPath}`,
@@ -94,7 +99,7 @@ export async function exportPdfToTarget(input: PdfExportInput): Promise<void> {
 
     await execFileAsync(
       process.env.TRACE_CHROMIUM_EXECUTABLE?.trim() || "chromium",
-      pdfExportChromiumArgs(previewPort, outputPath, path.join(exportDir, "profile")),
+      pdfExportChromiumArgs(previewPort, outputPath, path.join(exportDir, "profile"), input.format),
       { timeout: 60_000, maxBuffer: 1024 * 1024 },
     );
 
