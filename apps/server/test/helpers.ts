@@ -71,6 +71,7 @@ export function createPrismaMock() {
       findUnique: vi.fn(),
       upsert: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
     agentEnvironment: {
       create: vi.fn(),

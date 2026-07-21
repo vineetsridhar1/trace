@@ -62,6 +62,26 @@ describe("ApiTokenService", () => {
     expect(upsertArg.create.iv).toMatch(/[a-f0-9]{32}/);
   });
 
+  it("replaces other Codex credentials when one is selected", async () => {
+    prismaMock.$transaction.mockImplementationOnce(async (callback: (tx: typeof prismaMock) => unknown) =>
+      callback(prismaMock),
+    );
+    prismaMock.apiToken.upsert.mockImplementationOnce(async ({ create }: { create: { provider: string } }) => ({
+      provider: create.provider,
+      updatedAt: new Date("2026-03-03T00:00:00.000Z"),
+    }));
+
+    const service = new ApiTokenService();
+    await service.setExclusiveCodexCredential("user-1", "codex_auth_json", "session-json");
+
+    expect(prismaMock.apiToken.deleteMany).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        provider: { in: ["openai", "codex_access_token"] },
+      },
+    });
+  });
+
   it("deletes existing tokens and returns false for missing ones", async () => {
     prismaMock.apiToken.findUnique.mockResolvedValueOnce(null);
 
