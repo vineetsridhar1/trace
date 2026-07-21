@@ -64,7 +64,7 @@ export type AgentEnvironmentTestResult = {
 
 export type AgentStatus = "active" | "done" | "failed" | "not_started" | "stopped";
 
-export type ApiTokenProvider = "anthropic" | "github" | "openai" | "ssh_key";
+export type ApiTokenProvider = "anthropic" | "codex_access_token" | "github" | "openai" | "ssh_key";
 
 export type ApiTokenStatus = {
   __typename?: "ApiTokenStatus";

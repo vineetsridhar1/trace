@@ -9,7 +9,6 @@ let codexLoggedIn = false;
 
 const TOOL_ENV_VARS: Partial<Record<string, string>> = {
   claude_code: "ANTHROPIC_API_KEY",
-  codex: "OPENAI_API_KEY",
 };
 
 function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
@@ -34,18 +33,21 @@ function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
 
 async function loginCodex(): Promise<void> {
   if (codexLoggedIn) return;
+  const accessToken = process.env.CODEX_ACCESS_TOKEN;
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return;
+  if (!accessToken && !apiKey) return;
   if (codexLoginPromise) return codexLoginPromise;
 
   console.log("[container-bridge] logging in to codex...");
   codexLoginPromise = new Promise<void>((resolve, reject) => {
-    const child = spawn("codex", ["login", "--with-api-key"], {
+    const credential = accessToken ?? apiKey;
+    const loginArgument = accessToken ? "--with-access-token" : "--with-api-key";
+    const child = spawn("codex", ["login", loginArgument], {
       env: buildChildProcessEnv(),
       stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdin?.on("error", () => {});
-    child.stdin?.end(apiKey);
+    child.stdin?.end(credential);
 
     const outLines: string[] = [];
     const errLines: string[] = [];
@@ -85,6 +87,11 @@ export async function ensureToolReady(tool: string): Promise<void> {
   }
 
   if (tool === "codex") {
+    if (!process.env.CODEX_ACCESS_TOKEN && !process.env.OPENAI_API_KEY) {
+      throw new Error(
+        "Cannot run codex: set a Codex access token or OpenAI API key in Settings → API Tokens.",
+      );
+    }
     await loginCodex();
   } else if (tool === "pi") {
     await ensureBinaryAvailable("pi", "pi");
@@ -116,6 +123,10 @@ export async function loginAvailableTools(): Promise<void> {
   for (const [tool, envVar] of Object.entries(TOOL_ENV_VARS)) {
     if (!envVar || !process.env[envVar]) continue;
     tasks.push(ensureToolReady(tool));
+  }
+
+  if (process.env.CODEX_ACCESS_TOKEN || process.env.OPENAI_API_KEY) {
+    tasks.push(ensureToolReady("codex"));
   }
 
   await Promise.all(tasks);

@@ -243,6 +243,7 @@ enum InboxItemStatus {
 enum ApiTokenProvider {
   anthropic
   openai
+  codex_access_token
   github
   ssh_key
 }
