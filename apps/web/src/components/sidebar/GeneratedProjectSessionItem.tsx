@@ -37,7 +37,7 @@ export function GeneratedProjectSessionItem({
           className="flex h-full min-w-0 flex-1 cursor-pointer touch-manipulation items-center gap-2 rounded-md px-1.5 pr-7 text-left text-xs leading-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <SessionStatusIndicator row={row} size={6} showDonePulse={false} />
-          <span className="min-w-0 flex-1 truncate text-[var(--th-accent-light)]">{name}</span>
+          <span className="min-w-0 flex-1 truncate">{name}</span>
         </button>
         <button
           type="button"
