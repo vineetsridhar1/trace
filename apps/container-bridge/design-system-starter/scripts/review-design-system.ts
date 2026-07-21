@@ -31,9 +31,16 @@ try {
       { waitUntil: "networkidle" },
     );
     if (errors.length) throw new Error(errors.join("; "));
+    const specimenHtml = await page.evaluate(() => {
+      document.querySelectorAll("script").forEach((element) => element.remove());
+      document
+        .querySelectorAll("[data-vite-dev-id]")
+        .forEach((element) => element.removeAttribute("data-vite-dev-id"));
+      return `<!doctype html>\n${document.documentElement.outerHTML}`.replace(/[ \t]+$/gm, "");
+    });
     await writeFile(
       new URL(`../design-system/preview/${target.output}.html`, import.meta.url),
-      await page.content(),
+      specimenHtml,
     );
     await page.screenshot({
       path: new URL(`../design-system/preview/${target.output}.png`, import.meta.url).pathname,

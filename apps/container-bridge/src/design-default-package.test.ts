@@ -17,9 +17,12 @@ async function packageFiles(root: string, current = ""): Promise<Map<string, Buf
   return files;
 }
 
-describe("Trace Default design-system package", () => {
+describe.each([
+  ["Trace Default", "../design-default-package"],
+  ["the authoring starter", "../design-system-starter/design-system"],
+])("%s design-system package", (_name, packagePath) => {
   it("ships through the same strict package contract as custom versions", async () => {
-    const root = fileURLToPath(new URL("../design-default-package", import.meta.url));
+    const root = fileURLToPath(new URL(packagePath, import.meta.url));
     expect(validateDesignSystemPackage(await packageFiles(root))).toMatchObject({
       valid: true,
       errors: [],
