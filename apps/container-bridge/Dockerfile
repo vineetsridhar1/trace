@@ -48,8 +48,8 @@ COPY .claude/skills/author-design-system/ /opt/trace/skills/author-design-system
 # RCE in a previewed (agent-written) app trivially container-root and able to read
 # every stripped secret via /proc/1/environ. Only these commands are permitted.
 RUN useradd -m -s /bin/bash coder && \
-    mkdir -p /workspace /repos /workspaces /home/coder/.npm-global && \
-    chown -R coder:coder /workspace /repos /workspaces /app /home/coder/.npm-global /opt/trace && \
+    mkdir -p /workspace /repos /workspaces /sources /home/coder/.npm-global && \
+    chown -R coder:coder /workspace /repos /workspaces /sources /app /home/coder/.npm-global /opt/trace && \
     printf '%s\n' \
       'coder ALL=(root) NOPASSWD: /usr/sbin/service postgresql start' \
       'coder ALL=(postgres) NOPASSWD: /usr/bin/psql, /usr/bin/createuser' \
