@@ -169,7 +169,7 @@ export function GeneratedProjectsSection({
   return (
     <div className="space-y-1 pb-3 pt-2">
       <div className="group/generated-projects-header flex items-center justify-between px-2">
-        <span className="text-xs font-semibold uppercase tracking-wider text-fuchsia-400/80">Create</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-sidebar-primary/80">Create</span>
       </div>
       {(Object.keys(projectGroupsByKind) as GeneratedProjectKind[]).map((kind) => (
         <GeneratedProjectTypeSection
