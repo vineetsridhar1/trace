@@ -20,12 +20,12 @@ export function GeneratedProjectTypeSection({
   const openGeneratedProjectDialog = useCommandPaletteStore(
     (state) => state.openGeneratedProjectDialog,
   );
-  const { Icon, label, emptyLabel, className } = projectTypePresentation[kind];
+  const { label, emptyLabel, className } = projectTypePresentation[kind];
   const sectionId = `generated-projects-${kind}`;
 
   return (
     <section>
-      <div className="group/generated-project-type flex items-center px-2">
+      <div className="group/generated-project-type flex items-center rounded-md px-2 transition-colors hover:bg-white/10">
         <button
           type="button"
           aria-controls={sectionId}
@@ -36,8 +36,7 @@ export function GeneratedProjectTypeSection({
           <ChevronRight
             className={cn("size-3 shrink-0 transition-transform duration-200", open && "rotate-90")}
           />
-          <Icon className={cn("size-3.5 shrink-0", className)} aria-hidden="true" />
-          <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
+          <span className={cn("text-xs font-semibold uppercase tracking-wider", className)}>
             {label}
           </span>
           <span className="text-[10px] text-muted-foreground">{groups.length}</span>
