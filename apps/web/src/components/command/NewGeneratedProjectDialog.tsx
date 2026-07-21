@@ -3,6 +3,7 @@ import { AppWindow, ArrowLeft, NotebookText, Palette } from "lucide-react";
 import { gql } from "@urql/core";
 import type { AgentEnvironment, DesignSystem, Repo } from "@trace/gql";
 import { useAuthStore, useEntityStore } from "@trace/client-core";
+import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
 import {
   createAppSession,
@@ -107,13 +108,15 @@ export function NewGeneratedProjectDialog() {
   const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const upsertMany = useEntityStore((state) => state.upsertMany);
   const [view, setView] = useState<View>(kind === "design" ? "design" : "choose");
-  const systems = useEntityStore((state) => Object.values(state.designSystems));
-  const repos = useEntityStore((state) =>
-    Object.values(state.repos).filter((repo) => repo.provider !== "managed"),
+  const systems = useEntityStore(useShallow((state) => Object.values(state.designSystems)));
+  const repos = useEntityStore(
+    useShallow((state) => Object.values(state.repos).filter((repo) => repo.provider !== "managed")),
   );
-  const environments = useEntityStore((state) =>
-    Object.values(state.agentEnvironments).filter(
-      (environment) => environment.enabled && environment.adapterType === "provisioned",
+  const environments = useEntityStore(
+    useShallow((state) =>
+      Object.values(state.agentEnvironments).filter(
+        (environment) => environment.enabled && environment.adapterType === "provisioned",
+      ),
     ),
   );
   const [environmentId, setEnvironmentId] = useState("");

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import type { DesignSystemCommitArtifact, DesignSystemVersion } from "@trace/gql";
 import { useEntityStore } from "@trace/client-core";
+import { useShallow } from "zustand/react/shallow";
 import { client } from "../../lib/urql";
 import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
@@ -45,15 +46,19 @@ function shortSha(value: string | null | undefined): string {
 export function DesignSystemHistoryDialog({ designSystemId }: { designSystemId: string }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const artifacts = useEntityStore((state) =>
-    Object.values(state.designSystemCommitArtifacts)
-      .filter((item) => item.designSystemId === designSystemId)
-      .sort((a, b) => b.sequence - a.sequence),
+  const artifacts = useEntityStore(
+    useShallow((state) =>
+      Object.values(state.designSystemCommitArtifacts)
+        .filter((item) => item.designSystemId === designSystemId)
+        .sort((a, b) => b.sequence - a.sequence),
+    ),
   );
-  const versions = useEntityStore((state) =>
-    Object.values(state.designSystemVersions)
-      .filter((item) => item.designSystemId === designSystemId)
-      .sort((a, b) => b.version - a.version),
+  const versions = useEntityStore(
+    useShallow((state) =>
+      Object.values(state.designSystemVersions)
+        .filter((item) => item.designSystemId === designSystemId)
+        .sort((a, b) => b.version - a.version),
+    ),
   );
   const upsertMany = useEntityStore((state) => state.upsertMany);
 
