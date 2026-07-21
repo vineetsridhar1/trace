@@ -18,7 +18,7 @@ RUN npm install -g pnpm@10.7.0 @anthropic-ai/claude-code @openai/codex @earendil
 WORKDIR /app
 
 # Install runtime dependencies directly (avoids workspace: protocol issue)
-RUN npm init -y && npm install ws node-pty && \
+RUN npm init -y && npm install ws node-pty tar-stream && \
     (chmod +x node_modules/node-pty/prebuilds/linux-*/spawn-helper 2>/dev/null || true)
 
 # Copy pre-built shared package as a node_modules dependency
