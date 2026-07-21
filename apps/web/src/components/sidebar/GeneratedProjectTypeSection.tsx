@@ -35,29 +35,28 @@ export function GeneratedProjectTypeSection({
 
   return (
     <section>
-      <div className="group/generated-project-type flex items-center rounded-md px-2 transition-colors hover:bg-white/10">
+      <div className="group/generated-project-type flex items-center justify-between rounded-md pr-1 transition-colors hover:bg-white/10">
         <button
           type="button"
           aria-controls={sectionId}
           aria-expanded={open}
           onClick={() => setOpen((value) => !value)}
-          className="flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 pl-2 text-left text-xs font-semibold uppercase tracking-wider text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ChevronRight
-            className={cn("size-3 shrink-0 transition-transform duration-200", open && "rotate-90")}
+            size={14}
+            className={cn("shrink-0 transition-transform duration-200", open && "rotate-90")}
           />
-          <span className={cn("text-xs font-semibold uppercase tracking-wider", className)}>
-            {label}
-          </span>
-          <span className="text-[10px] text-muted-foreground">{visibleGroups.length}</span>
+          <span className={className}>{label}</span>
+          <span className="ml-1 text-[10px] text-foreground">{visibleGroups.length}</span>
         </button>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/generated-project-type:opacity-100 group-focus-within/generated-project-type:opacity-100">
           <button
             type="button"
             title={`Show ${scope === "mine" ? "all" : "my"} ${label.toLowerCase()}`}
             aria-label={`${label}: ${scope}`}
             onClick={() => setScope((value) => (value === "mine" ? "all" : "mine"))}
-            className="pointer-events-none flex h-5 w-9 items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 opacity-0 transition-[opacity,color] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring group-hover/generated-project-type:pointer-events-auto group-hover/generated-project-type:opacity-100 group-focus-within/generated-project-type:pointer-events-auto group-focus-within/generated-project-type:opacity-100"
+            className="flex h-5 w-9 cursor-pointer items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
@@ -76,7 +75,7 @@ export function GeneratedProjectTypeSection({
             title={emptyLabel}
             aria-label={emptyLabel}
             onClick={() => openGeneratedProjectDialog(kind)}
-            className="pointer-events-none flex size-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring group-hover/generated-project-type:pointer-events-auto group-hover/generated-project-type:opacity-100 group-focus-within/generated-project-type:pointer-events-auto group-focus-within/generated-project-type:opacity-100"
+            className="flex cursor-pointer items-center justify-center rounded p-0.5 text-foreground transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Plus size={14} />
           </button>
