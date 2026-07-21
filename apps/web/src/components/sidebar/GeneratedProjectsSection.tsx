@@ -177,7 +177,7 @@ export function GeneratedProjectsSection({
           aria-controls="generated-projects-list"
           aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
-          className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 pl-2 text-left text-xs font-semibold uppercase tracking-wider text-[var(--th-accent-light)] transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 pl-2 text-left text-xs font-semibold uppercase tracking-wider text-cyan-300 transition-colors focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ChevronRight
             size={14}
