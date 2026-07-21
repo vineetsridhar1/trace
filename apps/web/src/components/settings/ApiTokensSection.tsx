@@ -72,7 +72,14 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
     placeholder: "-----BEGIN OPENSSH PRIVATE KEY-----",
     description: "Used by cloud sessions to access repositories over SSH",
   },
+  codex: {
+    label: "Codex",
+    placeholder: "",
+    description: "Authenticate with ChatGPT, a Codex access token, or an OpenAI API key",
+  },
 };
+
+const CODEX_AUTH_PROVIDERS = new Set(["openai", "codex_access_token", "codex_auth_json"]);
 
 function ProviderIcon({ provider }: { provider: string }) {
   if (provider === "anthropic") {
@@ -85,6 +92,9 @@ function ProviderIcon({ provider }: { provider: string }) {
     return <CodexIcon className="h-5 w-5" />;
   }
   if (provider === "codex_auth_json") {
+    return <CodexIcon className="h-5 w-5" />;
+  }
+  if (provider === "codex") {
     return <CodexIcon className="h-5 w-5" />;
   }
   if (provider === "github") {
@@ -177,6 +187,15 @@ export function ApiTokensSection() {
   }
 
   async function handleDelete(provider: string) {
+    if (provider === "codex") {
+      await Promise.all(
+        Array.from(CODEX_AUTH_PROVIDERS).map((codexProvider) =>
+          client.mutation(DELETE_API_TOKEN, { provider: codexProvider }).toPromise(),
+        ),
+      );
+      fetchTokens();
+      return;
+    }
     await client.mutation(DELETE_API_TOKEN, { provider }).toPromise();
     // Refetch to get the updated state from the server
     fetchTokens();
@@ -192,12 +211,21 @@ export function ApiTokensSection() {
       </div>
 
       <div className="space-y-3">
-        {tokens.map((token: TokenStatus) => {
+        {[
+          ...tokens.filter((token) => !CODEX_AUTH_PROVIDERS.has(token.provider)),
+          {
+            provider: "codex",
+            isSet: tokens.some(
+              (token) => CODEX_AUTH_PROVIDERS.has(token.provider) && token.isSet,
+            ),
+            updatedAt: null,
+          },
+        ].map((token: TokenStatus) => {
           const meta = PROVIDER_META[token.provider];
           if (!meta) return null;
           const isEditing = editing === token.provider;
           const canShowGithubCliImport = token.provider === "github" && isDesktopShell;
-          const canAuthenticateCodex = token.provider === "codex_auth_json";
+          const canAuthenticateCodex = token.provider === "codex";
 
           return (
             <div
@@ -234,7 +262,7 @@ export function ApiTokensSection() {
                       )}
                       {canAuthenticateCodex && (
                         <Button variant="outline" size="sm" onClick={() => setCodexAuthenticationOpen(true)}>
-                          Authenticate
+                          Authenticate Codex
                         </Button>
                       )}
                       {!canAuthenticateCodex && (
