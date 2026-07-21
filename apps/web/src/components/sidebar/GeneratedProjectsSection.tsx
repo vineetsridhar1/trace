@@ -1,17 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useMemo } from "react";
 import { gql } from "@urql/core";
 import type { Session, SessionGroup } from "@trace/gql";
 import {
-  useAuthStore,
   useEntityStore,
-  type AuthState,
   type SessionEntity,
   type SessionGroupEntity,
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import { useCommandPaletteStore } from "../../stores/command-palette";
 import { GeneratedProjectTypeSection } from "./GeneratedProjectTypeSection";
 import type { GeneratedProjectKind } from "./generated-project-types";
 
@@ -123,11 +118,6 @@ export function GeneratedProjectsSection({
 }) {
   const upsertMany = useEntityStore((state) => state.upsertMany);
   const groups = useEntityStore((state) => state.sessionGroups);
-  const currentUserId = useAuthStore((state: AuthState) => state.user?.id ?? null);
-  const openGeneratedProjectDialog = useCommandPaletteStore(
-    (state) => state.openGeneratedProjectDialog,
-  );
-  const [scope, setScope] = useState<"mine" | "all">("mine");
 
   useEffect(() => {
     if (!activeOrgId) return;
@@ -165,10 +155,7 @@ export function GeneratedProjectsSection({
     for (const group of Object.values(groups)) {
       if (
         !group.archivedAt &&
-        (group.kind === "app" || group.kind === "design" || group.kind === "pdf") &&
-        (scope === "all" ||
-          group.id === activeSessionGroupId ||
-          group.owner?.id === currentUserId)
+        (group.kind === "app" || group.kind === "design" || group.kind === "pdf")
       ) {
         byKind[group.kind].push(group);
       }
@@ -177,42 +164,12 @@ export function GeneratedProjectsSection({
       projectGroups.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
     }
     return byKind;
-  }, [activeSessionGroupId, currentUserId, groups, scope]);
+  }, [groups]);
 
   return (
     <div className="space-y-1 pb-3 pt-2">
       <div className="group/generated-projects-header flex items-center justify-between px-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-foreground">Create</span>
-        <div className="flex items-center gap-0.5">
-          <button
-            type="button"
-            title="Toggle mine/all projects"
-            aria-label={`Generated projects: ${scope}`}
-            onClick={() => setScope((value) => (value === "mine" ? "all" : "mine"))}
-            className="flex h-5 w-9 items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.span
-                key={scope}
-                initial={{ y: 8, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -8, opacity: 0 }}
-                transition={{ duration: 0.15 }}
-              >
-                {scope}
-              </motion.span>
-            </AnimatePresence>
-          </button>
-          <button
-            type="button"
-            title="Create new"
-            aria-label="Create new"
-            onClick={() => openGeneratedProjectDialog("choose")}
-            className="pointer-events-none flex size-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring group-hover/generated-projects-header:pointer-events-auto group-hover/generated-projects-header:opacity-100 group-focus-within/generated-projects-header:pointer-events-auto group-focus-within/generated-projects-header:opacity-100"
-          >
-            <Plus size={14} />
-          </button>
-        </div>
       </div>
       {(Object.keys(projectGroupsByKind) as GeneratedProjectKind[]).map((kind) => (
         <GeneratedProjectTypeSection

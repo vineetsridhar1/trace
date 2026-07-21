@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import type { SessionGroupEntity } from "@trace/client-core";
+import { useAuthStore, type AuthState, type SessionGroupEntity } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { useCommandPaletteStore } from "../../stores/command-palette";
 import { GeneratedProjectSessionItem } from "./GeneratedProjectSessionItem";
@@ -17,11 +17,21 @@ export function GeneratedProjectTypeSection({
   kind: GeneratedProjectKind;
 }) {
   const [open, setOpen] = useState(true);
+  const [scope, setScope] = useState<"mine" | "all">("mine");
+  const currentUserId = useAuthStore((state: AuthState) => state.user?.id ?? null);
   const openGeneratedProjectDialog = useCommandPaletteStore(
     (state) => state.openGeneratedProjectDialog,
   );
   const { label, emptyLabel, className } = projectTypePresentation[kind];
   const sectionId = `generated-projects-${kind}`;
+  const visibleGroups = useMemo(
+    () =>
+      groups.filter(
+        (group) =>
+          scope === "all" || group.id === activeSessionGroupId || group.owner?.id === currentUserId,
+      ),
+    [activeSessionGroupId, currentUserId, groups, scope],
+  );
 
   return (
     <section>
@@ -39,17 +49,38 @@ export function GeneratedProjectTypeSection({
           <span className={cn("text-xs font-semibold uppercase tracking-wider", className)}>
             {label}
           </span>
-          <span className="text-[10px] text-muted-foreground">{groups.length}</span>
+          <span className="text-[10px] text-muted-foreground">{visibleGroups.length}</span>
         </button>
-        <button
-          type="button"
-          title={emptyLabel}
-          aria-label={emptyLabel}
-          onClick={() => openGeneratedProjectDialog(kind)}
-          className="pointer-events-none flex size-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring group-hover/generated-project-type:pointer-events-auto group-hover/generated-project-type:opacity-100 group-focus-within/generated-project-type:pointer-events-auto group-focus-within/generated-project-type:opacity-100"
-        >
-          <Plus size={14} />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            title={`Show ${scope === "mine" ? "all" : "my"} ${label.toLowerCase()}`}
+            aria-label={`${label}: ${scope}`}
+            onClick={() => setScope((value) => (value === "mine" ? "all" : "mine"))}
+            className="pointer-events-none flex h-5 w-9 items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 opacity-0 transition-[opacity,color] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring group-hover/generated-project-type:pointer-events-auto group-hover/generated-project-type:opacity-100 group-focus-within/generated-project-type:pointer-events-auto group-focus-within/generated-project-type:opacity-100"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={scope}
+                initial={{ y: 8, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -8, opacity: 0 }}
+                transition={{ duration: 0.15 }}
+              >
+                {scope}
+              </motion.span>
+            </AnimatePresence>
+          </button>
+          <button
+            type="button"
+            title={emptyLabel}
+            aria-label={emptyLabel}
+            onClick={() => openGeneratedProjectDialog(kind)}
+            className="pointer-events-none flex size-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring group-hover/generated-project-type:pointer-events-auto group-hover/generated-project-type:opacity-100 group-focus-within/generated-project-type:pointer-events-auto group-focus-within/generated-project-type:opacity-100"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
       </div>
       <AnimatePresence initial={false}>
         {open ? (
@@ -61,7 +92,7 @@ export function GeneratedProjectTypeSection({
             className="overflow-hidden"
           >
             <div id={sectionId} className="space-y-0.5 pl-4">
-              {groups.length === 0 ? (
+              {visibleGroups.length === 0 ? (
                 <button
                   type="button"
                   onClick={() => openGeneratedProjectDialog(kind)}
@@ -71,7 +102,7 @@ export function GeneratedProjectTypeSection({
                   <span>{emptyLabel}</span>
                 </button>
               ) : (
-                groups.map((group) => (
+                visibleGroups.map((group) => (
                   <GeneratedProjectSessionItem
                     key={group.id}
                     groupId={group.id}
