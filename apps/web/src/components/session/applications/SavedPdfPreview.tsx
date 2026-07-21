@@ -1,29 +1,44 @@
-import { Archive, Download } from "lucide-react";
-import { Button } from "../../ui/button";
+import { useRef, useState } from "react";
+import { AppPreviewCanvas } from "./AppPreviewCanvas";
+import type { PdfPageFormat } from "./PdfPreviewControls";
 
-export function SavedPdfPreview({ downloadUrl, url }: { downloadUrl: string | null; url: string }) {
+const DEFAULT_FORMAT: PdfPageFormat = { width: 210, height: 297, unit: "mm" };
+
+export function SavedPdfPreview({
+  downloadUrl,
+  format = DEFAULT_FORMAT,
+  url,
+}: {
+  downloadUrl: string | null;
+  format?: PdfPageFormat;
+  url: string;
+}) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [frameRevision, setFrameRevision] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
   return (
-    <div className="relative h-full bg-[#111113]">
-      <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background/90 px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
-        <Archive className="size-3.5" />
-        <span>Saved PDF · live preview stopped</span>
-        {downloadUrl ? (
-          <Button
-            size="xs"
-            variant="ghost"
-            className="ml-1 h-6"
-            onClick={() => window.location.assign(downloadUrl)}
-          >
-            <Download className="size-3" />
-            Download
-          </Button>
-        ) : null}
-      </div>
-      <iframe
-        src={`${url}#toolbar=0&navpanes=0&view=Fit`}
-        title="Saved PDF preview"
-        className="size-full border-0"
-      />
-    </div>
+    <AppPreviewCanvas
+      url={`${url}#toolbar=0&navpanes=0&view=Fit`}
+      title="Saved PDF preview"
+      frameRevision={frameRevision}
+      loaded={loaded}
+      refreshing={false}
+      status="saved"
+      onLoad={() => setLoaded(true)}
+      onReload={() => {
+        setLoaded(false);
+        setFrameRevision((revision) => revision + 1);
+      }}
+      iframeRef={iframeRef}
+      bare
+      pdfFormat={format}
+      onPdfFormatChange={() => undefined}
+      onPdfDownload={() => {
+        if (downloadUrl) window.location.assign(downloadUrl);
+      }}
+      pdfReadOnly
+      sandbox={false}
+    />
   );
 }
