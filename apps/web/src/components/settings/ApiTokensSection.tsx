@@ -56,6 +56,11 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
     placeholder: "codex_...",
     description: "Used to run Codex cloud sessions with trusted automation access",
   },
+  codex_auth_json: {
+    label: "ChatGPT session",
+    placeholder: "Paste ~/.codex/auth.json",
+    description: "Used for Codex cloud sessions and refreshed after each run",
+  },
   github: {
     label: "GitHub",
     placeholder: "ghp_...",
@@ -76,6 +81,9 @@ function ProviderIcon({ provider }: { provider: string }) {
     return <CodexIcon className="h-5 w-5" />;
   }
   if (provider === "codex_access_token") {
+    return <CodexIcon className="h-5 w-5" />;
+  }
+  if (provider === "codex_auth_json") {
     return <CodexIcon className="h-5 w-5" />;
   }
   if (provider === "github") {
@@ -138,7 +146,22 @@ export function ApiTokensSection() {
 
   async function handleSave(provider: string) {
     if (!inputValue.trim()) return;
-    await saveToken(provider, provider === "ssh_key" ? inputValue : inputValue.trim());
+    await saveToken(
+      provider,
+      provider === "ssh_key" || provider === "codex_auth_json" ? inputValue : inputValue.trim(),
+    );
+  }
+
+  async function handleImportCodexSession() {
+    if (!window.trace?.getCodexAuthJson) {
+      setErrorMessage("Use the desktop app to import your local Codex session.");
+      return;
+    }
+    try {
+      await saveToken("codex_auth_json", await window.trace.getCodexAuthJson());
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to import Codex session");
+    }
   }
 
   async function handleUseGithubCliToken() {
@@ -184,6 +207,7 @@ export function ApiTokensSection() {
           if (!meta) return null;
           const isEditing = editing === token.provider;
           const canShowGithubCliImport = token.provider === "github" && isDesktopShell;
+          const canImportCodexSession = token.provider === "codex_auth_json" && isDesktopShell;
 
           return (
             <div
@@ -216,6 +240,11 @@ export function ApiTokensSection() {
                         >
                           <Github size={14} />
                           {importingGithubToken ? "Importing..." : "Import from CLI"}
+                        </Button>
+                      )}
+                      {canImportCodexSession && (
+                        <Button variant="outline" size="sm" onClick={handleImportCodexSession}>
+                          Import from Codex
                         </Button>
                       )}
                       <Button

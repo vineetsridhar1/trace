@@ -34,6 +34,7 @@ describe("ApiTokenService", () => {
       { provider: "anthropic", isSet: false, updatedAt: null },
       { provider: "openai", isSet: false, updatedAt: null },
       { provider: "codex_access_token", isSet: false, updatedAt: null },
+      { provider: "codex_auth_json", isSet: false, updatedAt: null },
       { provider: "github", isSet: true, updatedAt: new Date("2026-03-01T00:00:00.000Z") },
       { provider: "ssh_key", isSet: false, updatedAt: null },
     ]);

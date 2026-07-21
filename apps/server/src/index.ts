@@ -28,6 +28,7 @@ import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/brid
 import { sessionRouter } from "./lib/session-router.js";
 import { authenticateProvisionedRuntimeToken } from "./lib/runtime-adapters.js";
 import { sessionService } from "./services/session.js";
+import { apiTokenService } from "./services/api-token.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
 import { connectRedis, disconnectRedis, redis } from "./lib/redis.js";
@@ -205,6 +206,22 @@ async function main() {
   app.use(designPreviewRouter);
 
   app.use(express.json());
+  app.post("/runtime/codex-auth", async (req: express.Request, res: express.Response) => {
+    const token = readBearerToken(req);
+    const runtime = token ? authenticateProvisionedRuntimeToken(token) : null;
+    const authJson = (req.body as { authJson?: unknown }).authJson;
+    if (!runtime || runtime.tool !== "codex") return res.status(401).json({ error: "Unauthorized" });
+    if (typeof authJson !== "string" || authJson.length > 64 * 1024) {
+      return res.status(400).json({ error: "Invalid Codex session credential" });
+    }
+    try {
+      JSON.parse(authJson) as unknown;
+      await apiTokenService.set(runtime.userId, "codex_auth_json", authJson);
+      return res.status(204).end();
+    } catch {
+      return res.status(400).json({ error: "Invalid Codex session credential" });
+    }
+  });
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (
       SAFE_HTTP_METHODS.has(req.method) ||

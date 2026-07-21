@@ -6,6 +6,7 @@ const ALL_PROVIDERS: ApiTokenProvider[] = [
   "anthropic",
   "openai",
   "codex_access_token",
+  "codex_auth_json",
   "github",
   "ssh_key",
 ];

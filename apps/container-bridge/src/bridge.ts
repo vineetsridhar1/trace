@@ -55,7 +55,7 @@ import {
   removeWorktree,
   getRepoPath,
 } from "./workspace.js";
-import { ensureToolReady } from "./tool-auth.js";
+import { ensureToolReady, syncCodexAuthFile } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
 import { ManagedProcessManager } from "./managed-process-manager.js";
 import { exportPdfToTarget } from "./pdf-export.js";
@@ -1093,6 +1093,11 @@ export class ContainerBridge implements IBridgeClient {
           this.send({ type: "session_complete", sessionId });
           activeAdapter.abort();
           cleanupImages();
+          if (resolvedTool === "codex") {
+            void syncCodexAuthFile().catch((error: unknown) => {
+              console.warn("[container-bridge] failed to persist Codex session credential:", error);
+            });
+          }
         }
       },
       onComplete: () => {
@@ -1104,6 +1109,11 @@ export class ContainerBridge implements IBridgeClient {
         this.finishRun(sessionId, runId);
         this.send({ type: "session_complete", sessionId });
         cleanupImages();
+        if (resolvedTool === "codex") {
+          void syncCodexAuthFile().catch((error: unknown) => {
+            console.warn("[container-bridge] failed to persist Codex session credential:", error);
+          });
+        }
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,

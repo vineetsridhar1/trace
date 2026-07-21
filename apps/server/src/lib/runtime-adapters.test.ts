@@ -176,6 +176,7 @@ describe("ProvisionedRuntimeAdapter", () => {
       anthropic: "anthropic-token",
       openai: "openai-token",
       codex_access_token: "codex-access-token",
+      codex_auth_json: '{"tokens":{"access_token":"chatgpt-session"}}',
       github: "github-token",
       ssh_key: "ssh-private-key",
     });
@@ -205,6 +206,7 @@ describe("ProvisionedRuntimeAdapter", () => {
       ANTHROPIC_API_KEY: "anthropic-token",
       OPENAI_API_KEY: "openai-token",
       CODEX_ACCESS_TOKEN: "codex-access-token",
+      CODEX_AUTH_JSON: '{"tokens":{"access_token":"chatgpt-session"}}',
       GITHUB_TOKEN: "github-token",
       SSH_PRIVATE_KEY: "ssh-private-key",
     });
