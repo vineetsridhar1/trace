@@ -31,7 +31,9 @@ export function shouldAdvanceLatestArtifact(
 }
 
 function eventJson(value: unknown): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+  return JSON.parse(
+    JSON.stringify(value, (_key, nested) => (typeof nested === "bigint" ? Number(nested) : nested)),
+  ) as Prisma.InputJsonValue;
 }
 
 function slugify(name: string): string {

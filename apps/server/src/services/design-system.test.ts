@@ -103,7 +103,17 @@ describe("DesignSystemService", () => {
   });
 
   it("creates the draft and full event inside the session transaction, then publishes after commit", async () => {
-    const created = system({ name: "Acme UI", authoringSessionGroupId: "group-1" });
+    const created = system({
+      name: "Acme UI",
+      authoringSessionGroupId: "group-1",
+      authoringSessionGroup: {
+        id: "group-1",
+        repoId: "managed-repo-1",
+        branch: "main",
+        repo: { defaultBranch: "main" },
+        sessions: [{ id: "session-1", inputTokens: 12n }],
+      },
+    });
     (database as typeof database & { repo: { findFirstOrThrow: ReturnType<typeof vi.fn> } }).repo =
       {
         findFirstOrThrow: vi.fn().mockResolvedValue({ id: "source-repo-1", defaultBranch: "main" }),
@@ -149,7 +159,12 @@ describe("DesignSystemService", () => {
         eventType: "design_system_created",
         deferPublish: true,
         payload: expect.objectContaining({
-          designSystem: expect.objectContaining({ id: "system-1" }),
+          designSystem: expect.objectContaining({
+            id: "system-1",
+            authoringSessionGroup: expect.objectContaining({
+              sessions: [expect.objectContaining({ inputTokens: 12 })],
+            }),
+          }),
         }),
       }),
       database,
