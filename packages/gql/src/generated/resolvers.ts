@@ -67,13 +67,7 @@ export type AgentEnvironmentTestResult = {
 
 export type AgentStatus = "active" | "done" | "failed" | "not_started" | "stopped";
 
-export type ApiTokenProvider =
-  | "anthropic"
-  | "codex_access_token"
-  | "codex_auth_json"
-  | "github"
-  | "openai"
-  | "ssh_key";
+export type ApiTokenProvider = "anthropic" | "github" | "openai" | "ssh_key";
 
 export type ApiTokenStatus = {
   __typename?: "ApiTokenStatus";
@@ -241,6 +235,14 @@ export type ChatMember = {
 };
 
 export type ChatType = "dm" | "group";
+
+export type CodexAuthMethod = "access_token" | "api_key" | "chatgpt_session";
+
+export type CodexCredentialStatus = {
+  __typename?: "CodexCredentialStatus";
+  method: CodexAuthMethod;
+  updatedAt: Scalars["DateTime"]["output"];
+};
 
 export type CodingTool =
   | "antigravity"
@@ -637,6 +639,7 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteCodexCredential: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
@@ -689,6 +692,7 @@ export type Mutation = {
   sendMessage: Event;
   sendSessionMessage: Event;
   setApiToken: ApiTokenStatus;
+  setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
@@ -1107,6 +1111,10 @@ export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
 };
 
+export type MutationSetCodexCredentialArgs = {
+  input: SetCodexCredentialInput;
+};
+
 export type MutationSetLinkedCheckoutAutoSyncArgs = {
   enabled: Scalars["Boolean"]["input"];
   repoId: Scalars["ID"]["input"];
@@ -1367,6 +1375,7 @@ export type Query = {
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
+  myCodexCredential?: Maybe<CodexCredentialStatus>;
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
@@ -2161,6 +2170,11 @@ export type SetApiTokenInput = {
   token: Scalars["String"]["input"];
 };
 
+export type SetCodexCredentialInput = {
+  credential: Scalars["String"]["input"];
+  method: CodexAuthMethod;
+};
+
 export type SetOrgSecretInput = {
   name: Scalars["String"]["input"];
   orgId: Scalars["ID"]["input"];
@@ -2497,6 +2511,8 @@ export type ResolversTypes = ResolversObject<{
   Chat: ResolverTypeWrapper<Chat>;
   ChatMember: ResolverTypeWrapper<ChatMember>;
   ChatType: ChatType;
+  CodexAuthMethod: CodexAuthMethod;
+  CodexCredentialStatus: ResolverTypeWrapper<CodexCredentialStatus>;
   CodingTool: CodingTool;
   CollapsedSessionEvents: ResolverTypeWrapper<CollapsedSessionEvents>;
   ConnectionsBridge: ResolverTypeWrapper<ConnectionsBridge>;
@@ -2593,6 +2609,7 @@ export type ResolversTypes = ResolversObject<{
   SessionTimelineMode: SessionTimelineMode;
   SessionTimelinePage: ResolverTypeWrapper<SessionTimelinePage>;
   SetApiTokenInput: SetApiTokenInput;
+  SetCodexCredentialInput: SetCodexCredentialInput;
   SetOrgSecretInput: SetOrgSecretInput;
   SetupScriptRunStatus: SetupScriptRunStatus;
   SetupStatus: SetupStatus;
@@ -2639,6 +2656,7 @@ export type ResolversParentTypes = ResolversObject<{
   ChannelMember: ChannelMember;
   Chat: Chat;
   ChatMember: ChatMember;
+  CodexCredentialStatus: CodexCredentialStatus;
   CollapsedSessionEvents: CollapsedSessionEvents;
   ConnectionsBridge: ConnectionsBridge;
   ConnectionsRepoEntry: ConnectionsRepoEntry;
@@ -2711,6 +2729,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionTimelineItem: SessionTimelineItem;
   SessionTimelinePage: SessionTimelinePage;
   SetApiTokenInput: SetApiTokenInput;
+  SetCodexCredentialInput: SetCodexCredentialInput;
   SetOrgSecretInput: SetOrgSecretInput;
   SlashCommand: SlashCommand;
   StartSessionInput: StartSessionInput;
@@ -2954,6 +2973,16 @@ export type ChatMemberResolvers<
 > = ResolversObject<{
   joinedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   user?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type CodexCredentialStatusResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["CodexCredentialStatus"] =
+    ResolversParentTypes["CodexCredentialStatus"],
+> = ResolversObject<{
+  method?: Resolver<ResolversTypes["CodexAuthMethod"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3376,6 +3405,7 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationDeleteChatMessageArgs, "messageId">
   >;
+  deleteCodexCredential?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   deleteOrgSecret?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -3684,6 +3714,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationSetApiTokenArgs, "input">
+  >;
+  setCodexCredential?: Resolver<
+    ResolversTypes["CodexCredentialStatus"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationSetCodexCredentialArgs, "input">
   >;
   setLinkedCheckoutAutoSync?: Resolver<
     ResolversTypes["LinkedCheckoutActionResult"],
@@ -4082,6 +4118,11 @@ export type QueryResolvers<
   >;
   myApiTokens?: Resolver<Array<ResolversTypes["ApiTokenStatus"]>, ParentType, ContextType>;
   myBridgeRuntimes?: Resolver<Array<ResolversTypes["BridgeRuntime"]>, ParentType, ContextType>;
+  myCodexCredential?: Resolver<
+    Maybe<ResolversTypes["CodexCredentialStatus"]>,
+    ParentType,
+    ContextType
+  >;
   myConnections?: Resolver<Array<ResolversTypes["ConnectionsBridge"]>, ParentType, ContextType>;
   myOrganizations?: Resolver<Array<ResolversTypes["OrgMember"]>, ParentType, ContextType>;
   mySessions?: Resolver<
@@ -4951,6 +4992,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ChannelMember?: ChannelMemberResolvers<ContextType>;
   Chat?: ChatResolvers<ContextType>;
   ChatMember?: ChatMemberResolvers<ContextType>;
+  CodexCredentialStatus?: CodexCredentialStatusResolvers<ContextType>;
   CollapsedSessionEvents?: CollapsedSessionEventsResolvers<ContextType>;
   ConnectionsBridge?: ConnectionsBridgeResolvers<ContextType>;
   ConnectionsRepoEntry?: ConnectionsRepoEntryResolvers<ContextType>;

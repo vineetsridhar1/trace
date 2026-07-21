@@ -998,6 +998,18 @@ export class ContainerBridge implements IBridgeClient {
     const runId = this.startRun(sessionId);
     adapter.abort();
 
+    const completeRun = () => {
+      const complete = () => this.send({ type: "session_complete", sessionId });
+      if (resolvedTool !== "codex") {
+        complete();
+        return;
+      }
+      void syncCodexAuthFile().then(complete, (error: unknown) => {
+        console.warn("[container-bridge] failed to persist Codex session credential:", error);
+        complete();
+      });
+    };
+
     const activeAdapter = adapter;
     const recoverMissingToolSession = (message: string) => {
       if (!toolSessionId || hasForwardedOutput || recoveringMissingToolSession) return false;
@@ -1090,14 +1102,9 @@ export class ContainerBridge implements IBridgeClient {
             this.pendingInputToolUseIds.delete(sessionId);
           }
           this.finishRun(sessionId, runId);
-          this.send({ type: "session_complete", sessionId });
+          completeRun();
           activeAdapter.abort();
           cleanupImages();
-          if (resolvedTool === "codex") {
-            void syncCodexAuthFile().catch((error: unknown) => {
-              console.warn("[container-bridge] failed to persist Codex session credential:", error);
-            });
-          }
         }
       },
       onComplete: () => {
@@ -1107,13 +1114,8 @@ export class ContainerBridge implements IBridgeClient {
           this.pendingInputToolUseIds.delete(sessionId);
         }
         this.finishRun(sessionId, runId);
-        this.send({ type: "session_complete", sessionId });
+        completeRun();
         cleanupImages();
-        if (resolvedTool === "codex") {
-          void syncCodexAuthFile().catch((error: unknown) => {
-            console.warn("[container-bridge] failed to persist Codex session credential:", error);
-          });
-        }
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
       model,

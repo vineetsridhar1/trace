@@ -5,6 +5,7 @@ import {
 } from "./runtime-adapters.js";
 import { orgSecretService } from "../services/org-secret.js";
 import { apiTokenService } from "../services/api-token.js";
+import { codexCredentialService } from "../services/codex-credential.js";
 
 vi.mock("../services/org-secret.js", () => ({
   orgSecretService: {
@@ -16,6 +17,10 @@ vi.mock("../services/api-token.js", () => ({
   apiTokenService: {
     getDecryptedTokens: vi.fn().mockResolvedValue({}),
   },
+}));
+
+vi.mock("../services/codex-credential.js", () => ({
+  codexCredentialService: { getDecryptedCredential: vi.fn().mockResolvedValue(null) },
 }));
 
 const provisionedConfig = {
@@ -43,6 +48,7 @@ describe("ProvisionedRuntimeAdapter", () => {
     vi.clearAllMocks();
     vi.mocked(orgSecretService.getDecryptedValue).mockResolvedValue("launcher-secret");
     vi.mocked(apiTokenService.getDecryptedTokens).mockResolvedValue({});
+    vi.mocked(codexCredentialService.getDecryptedCredential).mockResolvedValue(null);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(makeResponse({ status: "unknown" })));
     delete process.env.TRACE_SERVER_PUBLIC_URL;
     delete process.env.TRACE_CLOUD_BRIDGE_URL;
@@ -175,10 +181,12 @@ describe("ProvisionedRuntimeAdapter", () => {
     vi.mocked(apiTokenService.getDecryptedTokens).mockResolvedValue({
       anthropic: "anthropic-token",
       openai: "openai-token",
-      codex_access_token: "codex-access-token",
-      codex_auth_json: '{"tokens":{"access_token":"chatgpt-session"}}',
       github: "github-token",
       ssh_key: "ssh-private-key",
+    });
+    vi.mocked(codexCredentialService.getDecryptedCredential).mockResolvedValue({
+      method: "chatgpt_session",
+      credential: '{"tokens":{"access_token":"chatgpt-session"}}',
     });
     fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
     const adapter = new ProvisionedRuntimeAdapter();
@@ -205,7 +213,7 @@ describe("ProvisionedRuntimeAdapter", () => {
     expect(body.bootstrapEnv).toMatchObject({
       ANTHROPIC_API_KEY: "anthropic-token",
       OPENAI_API_KEY: "openai-token",
-      CODEX_ACCESS_TOKEN: "codex-access-token",
+      CODEX_AUTH_METHOD: "chatgpt_session",
       CODEX_AUTH_JSON: '{"tokens":{"access_token":"chatgpt-session"}}',
       GITHUB_TOKEN: "github-token",
       SSH_PRIVATE_KEY: "ssh-private-key",

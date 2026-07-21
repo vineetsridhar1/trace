@@ -28,7 +28,7 @@ import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/brid
 import { sessionRouter } from "./lib/session-router.js";
 import { authenticateProvisionedRuntimeToken } from "./lib/runtime-adapters.js";
 import { sessionService } from "./services/session.js";
-import { apiTokenService } from "./services/api-token.js";
+import { codexCredentialService } from "./services/codex-credential.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
 import { connectRedis, disconnectRedis, redis } from "./lib/redis.js";
@@ -216,9 +216,9 @@ async function main() {
     }
     try {
       JSON.parse(authJson) as unknown;
-      await apiTokenService.setExclusiveCodexCredential(
+      await codexCredentialService.set(
         runtime.userId,
-        "codex_auth_json",
+        "chatgpt_session",
         authJson,
       );
       return res.status(204).end();

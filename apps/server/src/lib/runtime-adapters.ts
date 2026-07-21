@@ -13,6 +13,7 @@ import {
 } from "./runtime-adapter-registry.js";
 import { orgSecretService } from "../services/org-secret.js";
 import { apiTokenService } from "../services/api-token.js";
+import { codexCredentialService } from "../services/codex-credential.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
 import { isLocalMode } from "./mode.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
@@ -42,12 +43,21 @@ const JWT_SECRET = resolveJwtSecret();
 const LAUNCHER_REQUEST_TIMEOUT_MS = 30_000;
 
 async function resolveUserApiTokenEnv(userId: string): Promise<Record<string, string>> {
-  const tokens = await apiTokenService.getDecryptedTokens(userId);
+  const [tokens, codexCredential] = await Promise.all([
+    apiTokenService.getDecryptedTokens(userId),
+    codexCredentialService.getDecryptedCredential(userId),
+  ]);
   return {
     ...(tokens.anthropic ? { ANTHROPIC_API_KEY: tokens.anthropic } : {}),
     ...(tokens.openai ? { OPENAI_API_KEY: tokens.openai } : {}),
-    ...(tokens.codex_access_token ? { CODEX_ACCESS_TOKEN: tokens.codex_access_token } : {}),
-    ...(tokens.codex_auth_json ? { CODEX_AUTH_JSON: tokens.codex_auth_json } : {}),
+    ...(codexCredential ? { CODEX_AUTH_METHOD: codexCredential.method } : {}),
+    ...(codexCredential?.method === "access_token"
+      ? { CODEX_ACCESS_TOKEN: codexCredential.credential }
+      : {}),
+    ...(codexCredential?.method === "api_key" ? { CODEX_API_KEY: codexCredential.credential } : {}),
+    ...(codexCredential?.method === "chatgpt_session"
+      ? { CODEX_AUTH_JSON: codexCredential.credential }
+      : {}),
     ...(tokens.github ? { GITHUB_TOKEN: tokens.github } : {}),
     ...(tokens.ssh_key ? { SSH_PRIVATE_KEY: tokens.ssh_key } : {}),
   };
