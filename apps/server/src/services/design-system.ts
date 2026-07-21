@@ -220,6 +220,26 @@ export class DesignSystemService {
     const branch = sourceBranch(input.branch?.trim() || repo.defaultBranch);
     const normalizedSourcePath = sourcePath(input.sourcePath);
     const slug = slugify(name);
+    const existing = await prisma.designSystem.findUnique({
+      where: { organizationId_slug: { organizationId: input.organizationId, slug } },
+      include: DESIGN_SYSTEM_INCLUDE,
+    });
+    if (existing) {
+      if (
+        !existing.archivedAt &&
+        existing.sourceRepoId === repo.id &&
+        existing.sourceBranch === branch &&
+        existing.sourcePath === normalizedSourcePath
+      ) {
+        console.info("[design-system] resuming existing authoring session", {
+          organizationId: input.organizationId,
+          designSystemId: existing.id,
+          sessionGroupId: existing.authoringSessionGroupId,
+        });
+        return existing;
+      }
+      throw new ValidationError(`A design system named "${name}" already exists`);
+    }
     const id = randomUUID();
     let createdEvent: Awaited<ReturnType<typeof eventService.create>> | null = null;
     const session = await sessionService.start({

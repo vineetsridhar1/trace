@@ -7,6 +7,7 @@ const { mocks, database } = vi.hoisted(() => {
     systemCreate: vi.fn(),
     systemFindMany: vi.fn(),
     systemFindFirstOrThrow: vi.fn(),
+    systemFindUnique: vi.fn(),
     systemFindUniqueOrThrow: vi.fn(),
     systemUpdate: vi.fn(),
     artifactFindFirst: vi.fn(),
@@ -29,6 +30,7 @@ const { mocks, database } = vi.hoisted(() => {
       create: mocks.systemCreate,
       findMany: mocks.systemFindMany,
       findFirstOrThrow: mocks.systemFindFirstOrThrow,
+      findUnique: mocks.systemFindUnique,
       findUniqueOrThrow: mocks.systemFindUniqueOrThrow,
       update: mocks.systemUpdate,
     },
@@ -93,6 +95,7 @@ describe("DesignSystemService", () => {
     );
     mocks.queryRaw.mockResolvedValue([]);
     mocks.eventCreate.mockResolvedValue({ id: "event-1" });
+    mocks.systemFindUnique.mockResolvedValue(null);
   });
 
   it("never lets an out-of-order worker regress the latest artifact pointer", () => {
@@ -170,6 +173,69 @@ describe("DesignSystemService", () => {
       database,
     );
     expect(mocks.publishCreated).toHaveBeenCalledWith({ id: "event-1" });
+  });
+
+  it("resumes an existing workbench when an identical create request is retried", async () => {
+    const existing = system({
+      name: "Acme UI",
+      slug: "acme-ui",
+      sourceRepoId: "source-repo-1",
+      sourceBranch: "main",
+      sourcePath: "packages/ui",
+      authoringSessionGroupId: "group-1",
+      archivedAt: null,
+    });
+    (database as typeof database & { repo: { findFirstOrThrow: ReturnType<typeof vi.fn> } }).repo =
+      {
+        findFirstOrThrow: vi.fn().mockResolvedValue({ id: "source-repo-1", defaultBranch: "main" }),
+      };
+    mocks.systemFindUnique.mockResolvedValue(existing);
+    const service = new DesignSystemService();
+
+    await expect(
+      service.create({
+        organizationId: "org-1",
+        actorType: "user",
+        actorId: "user-1",
+        name: "Acme UI",
+        repoId: "source-repo-1",
+        sourcePath: "packages/ui",
+      }),
+    ).resolves.toBe(existing);
+
+    expect(mocks.sessionStart).not.toHaveBeenCalled();
+    expect(mocks.systemCreate).not.toHaveBeenCalled();
+    expect(mocks.eventCreate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a same-name request for a different source without leaking Prisma errors", async () => {
+    const existing = system({
+      name: "Acme UI",
+      slug: "acme-ui",
+      sourceRepoId: "other-repo",
+      sourceBranch: "main",
+      sourcePath: null,
+      authoringSessionGroupId: "group-1",
+      archivedAt: null,
+    });
+    (database as typeof database & { repo: { findFirstOrThrow: ReturnType<typeof vi.fn> } }).repo =
+      {
+        findFirstOrThrow: vi.fn().mockResolvedValue({ id: "source-repo-1", defaultBranch: "main" }),
+      };
+    mocks.systemFindUnique.mockResolvedValue(existing);
+    const service = new DesignSystemService();
+
+    await expect(
+      service.create({
+        organizationId: "org-1",
+        actorType: "user",
+        actorId: "user-1",
+        name: "Acme UI",
+        repoId: "source-repo-1",
+      }),
+    ).rejects.toThrow('A design system named "Acme UI" already exists');
+
+    expect(mocks.sessionStart).not.toHaveBeenCalled();
   });
 
   it("creates one server-owned artifact for every commit in a multi-commit push", async () => {
