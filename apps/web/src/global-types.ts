@@ -153,6 +153,7 @@ declare global {
     getRepoConfig: (repoId: string) => Promise<DesktopRepoConfig | null>;
     getGithubCliStatus: () => Promise<DesktopGithubCliStatus>;
     getGithubAuthToken: () => Promise<string>;
+    getCodexAuthJson: () => Promise<string>;
     setRepoGitHooksEnabled: (
       repoId: string,
       enabled: boolean,

@@ -11,6 +11,7 @@ import {
 import path from "path";
 import crypto from "crypto";
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { setTimeout } from "node:timers";
 import { makeUserNotifier, updateElectronApp, UpdateSourceType } from "update-electron-app";
 import {
@@ -371,6 +372,10 @@ ipcMain.handle("get-github-cli-status", async () => {
 
 ipcMain.handle("get-github-auth-token", async () => {
   return getGithubAuthToken();
+});
+
+ipcMain.handle("get-codex-auth-json", () => {
+  return readFileSync(path.join(homedir(), ".codex", "auth.json"), "utf8");
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());

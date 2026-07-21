@@ -1,6 +1,6 @@
 import { execFile, spawn } from "child_process";
 import { buildChildProcessEnv } from "@trace/shared/adapters";
-import { existsSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
@@ -10,6 +10,42 @@ let codexLoggedIn = false;
 const TOOL_ENV_VARS: Partial<Record<string, string>> = {
   claude_code: "ANTHROPIC_API_KEY",
 };
+
+const CODEX_HOME = process.env.CODEX_HOME ?? "/home/coder/.codex";
+
+export function installCodexAuthFile(authJson = process.env.CODEX_AUTH_JSON): boolean {
+  if (!authJson) return false;
+  try {
+    JSON.parse(authJson) as unknown;
+  } catch {
+    throw new Error("Codex session credential is not valid JSON.");
+  }
+  mkdirSync(CODEX_HOME, { mode: 0o700, recursive: true });
+  writeFileSync(`${CODEX_HOME}/config.toml`, 'cli_auth_credentials_store = "file"\n', {
+    mode: 0o600,
+  });
+  writeFileSync(`${CODEX_HOME}/auth.json`, authJson, { mode: 0o600 });
+  delete process.env.CODEX_AUTH_JSON;
+  return true;
+}
+
+export async function syncCodexAuthFile(): Promise<void> {
+  const serverUrl = process.env.TRACE_SERVER_PUBLIC_URL?.trim();
+  const runtimeToken = process.env.TRACE_RUNTIME_TOKEN;
+  const authPath = `${CODEX_HOME}/auth.json`;
+  if (!serverUrl || !runtimeToken || !existsSync(authPath)) return;
+
+  const authJson = readFileSync(authPath, "utf8");
+  const response = await fetch(new URL("/runtime/codex-auth", serverUrl), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${runtimeToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ authJson }),
+  });
+  if (!response.ok) throw new Error(`Codex session credential sync failed (${response.status}).`);
+}
 
 function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -87,12 +123,16 @@ export async function ensureToolReady(tool: string): Promise<void> {
   }
 
   if (tool === "codex") {
-    if (!process.env.CODEX_ACCESS_TOKEN && !process.env.OPENAI_API_KEY) {
+    if (
+      !existsSync(`${CODEX_HOME}/auth.json`) &&
+      !process.env.CODEX_ACCESS_TOKEN &&
+      !process.env.OPENAI_API_KEY
+    ) {
       throw new Error(
-        "Cannot run codex: set a Codex access token or OpenAI API key in Settings → API Tokens.",
+        "Cannot run codex: add a ChatGPT session, Codex access token, or OpenAI API key in Settings → API Tokens.",
       );
     }
-    await loginCodex();
+    if (!existsSync(`${CODEX_HOME}/auth.json`)) await loginCodex();
   } else if (tool === "pi") {
     await ensureBinaryAvailable("pi", "pi");
   } else if (tool === "antigravity") {
