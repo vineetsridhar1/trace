@@ -14,7 +14,7 @@ export function CodexAuthenticationDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (provider: "codex_auth_json" | "codex_access_token" | "openai", token: string) => Promise<void>;
+  onSave: (method: "chatgpt_session" | "access_token" | "api_key", credential: string) => Promise<void>;
 }) {
   const [method, setMethod] = useState<AuthenticationMethod>("choose");
   const [value, setValue] = useState("");
@@ -36,7 +36,7 @@ export function CodexAuthenticationDialog({
     setIsLoggingIn(true);
     setError(null);
     try {
-      await onSave("codex_auth_json", await window.trace.loginCodexWithChatgpt());
+      await onSave("chatgpt_session", await window.trace.loginCodexWithChatgpt());
       close();
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : "ChatGPT login failed");
@@ -48,7 +48,7 @@ export function CodexAuthenticationDialog({
   async function saveToken() {
     if (!value.trim() || method === "choose" || method === "login") return;
     try {
-      await onSave(method === "access_token" ? "codex_access_token" : "openai", value.trim());
+      await onSave(method === "access_token" ? "access_token" : "api_key", value.trim());
       close();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to save credential");

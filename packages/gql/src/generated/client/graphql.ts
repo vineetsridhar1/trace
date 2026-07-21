@@ -66,13 +66,7 @@ export type AgentEnvironmentTestResult = {
 
 export type AgentStatus = "active" | "done" | "failed" | "not_started" | "stopped";
 
-export type ApiTokenProvider =
-  | "anthropic"
-  | "codex_access_token"
-  | "codex_auth_json"
-  | "github"
-  | "openai"
-  | "ssh_key";
+export type ApiTokenProvider = "anthropic" | "github" | "openai" | "ssh_key";
 
 export type ApiTokenStatus = {
   __typename?: "ApiTokenStatus";
@@ -240,6 +234,14 @@ export type ChatMember = {
 };
 
 export type ChatType = "dm" | "group";
+
+export type CodexAuthMethod = "access_token" | "api_key" | "chatgpt_session";
+
+export type CodexCredentialStatus = {
+  __typename?: "CodexCredentialStatus";
+  method: CodexAuthMethod;
+  updatedAt: Scalars["DateTime"]["output"];
+};
 
 export type CodingTool =
   | "antigravity"
@@ -636,6 +638,7 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteCodexCredential: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
@@ -688,6 +691,7 @@ export type Mutation = {
   sendMessage: Event;
   sendSessionMessage: Event;
   setApiToken: ApiTokenStatus;
+  setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
@@ -1106,6 +1110,10 @@ export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
 };
 
+export type MutationSetCodexCredentialArgs = {
+  input: SetCodexCredentialInput;
+};
+
 export type MutationSetLinkedCheckoutAutoSyncArgs = {
   enabled: Scalars["Boolean"]["input"];
   repoId: Scalars["ID"]["input"];
@@ -1366,6 +1374,7 @@ export type Query = {
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
+  myCodexCredential?: Maybe<CodexCredentialStatus>;
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
@@ -2158,6 +2167,11 @@ export type SessionTimelinePage = {
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars["String"]["input"];
+};
+
+export type SetCodexCredentialInput = {
+  credential: Scalars["String"]["input"];
+  method: CodexAuthMethod;
 };
 
 export type SetOrgSecretInput = {
@@ -3369,6 +3383,11 @@ export type MyApiTokensQuery = {
     isSet: boolean;
     updatedAt?: string | null;
   }>;
+  myCodexCredential?: {
+    __typename?: "CodexCredentialStatus";
+    method: CodexAuthMethod;
+    updatedAt: string;
+  } | null;
 };
 
 export type SetApiTokenMutationVariables = Exact<{
@@ -3390,6 +3409,26 @@ export type DeleteApiTokenMutationVariables = Exact<{
 }>;
 
 export type DeleteApiTokenMutation = { __typename?: "Mutation"; deleteApiToken: boolean };
+
+export type SetCodexCredentialMutationVariables = Exact<{
+  input: SetCodexCredentialInput;
+}>;
+
+export type SetCodexCredentialMutation = {
+  __typename?: "Mutation";
+  setCodexCredential: {
+    __typename?: "CodexCredentialStatus";
+    method: CodexAuthMethod;
+    updatedAt: string;
+  };
+};
+
+export type DeleteCodexCredentialMutationVariables = Exact<{ [key: string]: never }>;
+
+export type DeleteCodexCredentialMutation = {
+  __typename?: "Mutation";
+  deleteCodexCredential: boolean;
+};
 
 export type AddOrgMemberMutationVariables = Exact<{
   organizationId: Scalars["ID"]["input"];
@@ -7638,6 +7677,17 @@ export const MyApiTokensDocument = {
               ],
             },
           },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "myCodexCredential" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "method" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
         ],
       },
     },
@@ -7723,6 +7773,63 @@ export const DeleteApiTokenDocument = {
     },
   ],
 } as unknown as DocumentNode<DeleteApiTokenMutation, DeleteApiTokenMutationVariables>;
+export const SetCodexCredentialDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SetCodexCredential" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "SetCodexCredentialInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "setCodexCredential" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "method" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SetCodexCredentialMutation, SetCodexCredentialMutationVariables>;
+export const DeleteCodexCredentialDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "DeleteCodexCredential" },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [{ kind: "Field", name: { kind: "Name", value: "deleteCodexCredential" } }],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DeleteCodexCredentialMutation, DeleteCodexCredentialMutationVariables>;
 export const AddOrgMemberDocument = {
   kind: "Document",
   definitions: [

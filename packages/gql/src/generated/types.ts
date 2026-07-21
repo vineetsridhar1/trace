@@ -64,13 +64,7 @@ export type AgentEnvironmentTestResult = {
 
 export type AgentStatus = "active" | "done" | "failed" | "not_started" | "stopped";
 
-export type ApiTokenProvider =
-  | "anthropic"
-  | "codex_access_token"
-  | "codex_auth_json"
-  | "github"
-  | "openai"
-  | "ssh_key";
+export type ApiTokenProvider = "anthropic" | "github" | "openai" | "ssh_key";
 
 export type ApiTokenStatus = {
   __typename?: "ApiTokenStatus";
@@ -238,6 +232,14 @@ export type ChatMember = {
 };
 
 export type ChatType = "dm" | "group";
+
+export type CodexAuthMethod = "access_token" | "api_key" | "chatgpt_session";
+
+export type CodexCredentialStatus = {
+  __typename?: "CodexCredentialStatus";
+  method: CodexAuthMethod;
+  updatedAt: Scalars["DateTime"]["output"];
+};
 
 export type CodingTool =
   | "antigravity"
@@ -634,6 +636,7 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteCodexCredential: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
@@ -686,6 +689,7 @@ export type Mutation = {
   sendMessage: Event;
   sendSessionMessage: Event;
   setApiToken: ApiTokenStatus;
+  setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
@@ -1104,6 +1108,10 @@ export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
 };
 
+export type MutationSetCodexCredentialArgs = {
+  input: SetCodexCredentialInput;
+};
+
 export type MutationSetLinkedCheckoutAutoSyncArgs = {
   enabled: Scalars["Boolean"]["input"];
   repoId: Scalars["ID"]["input"];
@@ -1364,6 +1372,7 @@ export type Query = {
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
+  myCodexCredential?: Maybe<CodexCredentialStatus>;
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
@@ -2156,6 +2165,11 @@ export type SessionTimelinePage = {
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars["String"]["input"];
+};
+
+export type SetCodexCredentialInput = {
+  credential: Scalars["String"]["input"];
+  method: CodexAuthMethod;
 };
 
 export type SetOrgSecretInput = {

@@ -243,10 +243,14 @@ enum InboxItemStatus {
 enum ApiTokenProvider {
   anthropic
   openai
-  codex_access_token
-  codex_auth_json
   github
   ssh_key
+}
+
+enum CodexAuthMethod {
+  chatgpt_session
+  access_token
+  api_key
 }
 
 enum PushPlatform {
@@ -927,6 +931,11 @@ type ApiTokenStatus {
   updatedAt: DateTime
 }
 
+type CodexCredentialStatus {
+  method: CodexAuthMethod!
+  updatedAt: DateTime!
+}
+
 type SessionRuntimeInstance {
   id: ID!
   label: String!
@@ -1256,6 +1265,11 @@ input SetApiTokenInput {
   token: String!
 }
 
+input SetCodexCredentialInput {
+  method: CodexAuthMethod!
+  credential: String!
+}
+
 input CreateAgentEnvironmentInput {
   orgId: ID!
   name: String!
@@ -1403,6 +1417,7 @@ type Query {
   threadSummary(rootMessageId: ID!): ThreadSummary
   participants(scopeType: String!, scopeId: ID!): [Participant!]!
   myApiTokens: [ApiTokenStatus!]!
+  myCodexCredential: CodexCredentialStatus
   sessionTerminals(sessionId: ID!): [Terminal!]!
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
@@ -1617,6 +1632,8 @@ type Mutation {
   dismissInboxItem(id: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!
   deleteApiToken(provider: ApiTokenProvider!): Boolean!
+  setCodexCredential(input: SetCodexCredentialInput!): CodexCredentialStatus!
+  deleteCodexCredential: Boolean!
   registerPushToken(token: String!, platform: PushPlatform!): Boolean!
   unregisterPushToken(token: String!): Boolean!
   createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!

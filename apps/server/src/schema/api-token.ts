@@ -1,7 +1,7 @@
 import type { Context } from "../context.js";
 import type { ApiTokenProvider, SetApiTokenInput } from "@trace/gql";
 import type { ApiTokenProvider as ApiTokenProviderEnum } from "@prisma/client";
-import { apiTokenService, isCodexAuthProvider } from "../services/api-token.js";
+import { apiTokenService } from "../services/api-token.js";
 import { aiService } from "../services/ai.js";
 
 function isLLMTokenProvider(provider: ApiTokenProviderEnum): provider is "anthropic" | "openai" {
@@ -17,13 +17,10 @@ export const apiTokenQueries = {
 export const apiTokenMutations = {
   setApiToken: async (_: unknown, args: { input: SetApiTokenInput }, ctx: Context) => {
     const provider = args.input.provider as unknown as ApiTokenProviderEnum;
-    const result = isCodexAuthProvider(provider)
-      ? await apiTokenService.setExclusiveCodexCredential(ctx.userId, provider, args.input.token)
-      : await apiTokenService.set(ctx.userId, provider, args.input.token);
+    const result = await apiTokenService.set(ctx.userId, provider, args.input.token);
     if (isLLMTokenProvider(provider)) {
       aiService.invalidateAdapter(ctx.userId, provider);
     }
-    if (isCodexAuthProvider(provider)) aiService.invalidateAdapter(ctx.userId, "openai");
     return result;
   },
   deleteApiToken: async (_: unknown, args: { provider: ApiTokenProvider }, ctx: Context) => {

@@ -53,9 +53,11 @@ type Documents = {
   "\n  query SessionGroupFileTree($sessionGroupId: ID!) {\n    sessionGroupFileTree(sessionGroupId: $sessionGroupId) {\n      paths\n      truncated\n    }\n  }\n": typeof types.SessionGroupFileTreeDocument;
   "\n  query SessionGroupDirectoryEntries($sessionGroupId: ID!, $directoryPath: String!, $depth: Int) {\n    sessionGroupDirectoryEntries(\n      sessionGroupId: $sessionGroupId\n      directoryPath: $directoryPath\n      depth: $depth\n    ) {\n      name\n      path\n      isDirectory\n    }\n  }\n": typeof types.SessionGroupDirectoryEntriesDocument;
   "\n  query SessionGroupFiles($sessionGroupId: ID!) {\n    sessionGroupFiles(sessionGroupId: $sessionGroupId)\n  }\n": typeof types.SessionGroupFilesDocument;
-  "\n  query MyApiTokens {\n    myApiTokens {\n      provider\n      isSet\n      updatedAt\n    }\n  }\n": typeof types.MyApiTokensDocument;
+  "\n  query MyApiTokens {\n    myApiTokens {\n      provider\n      isSet\n      updatedAt\n    }\n    myCodexCredential {\n      method\n      updatedAt\n    }\n  }\n": typeof types.MyApiTokensDocument;
   "\n  mutation SetApiToken($input: SetApiTokenInput!) {\n    setApiToken(input: $input) {\n      provider\n      isSet\n      updatedAt\n    }\n  }\n": typeof types.SetApiTokenDocument;
   "\n  mutation DeleteApiToken($provider: ApiTokenProvider!) {\n    deleteApiToken(provider: $provider)\n  }\n": typeof types.DeleteApiTokenDocument;
+  "\n  mutation SetCodexCredential($input: SetCodexCredentialInput!) {\n    setCodexCredential(input: $input) { method updatedAt }\n  }\n": typeof types.SetCodexCredentialDocument;
+  "\n  mutation DeleteCodexCredential {\n    deleteCodexCredential\n  }\n": typeof types.DeleteCodexCredentialDocument;
   "\n  mutation AddOrgMember($organizationId: ID!, $userId: ID!, $role: UserRole) {\n    addOrgMember(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n        name\n        email\n        avatarUrl\n      }\n      role\n      joinedAt\n    }\n  }\n": typeof types.AddOrgMemberDocument;
   "\n  mutation RemoveOrgMember($organizationId: ID!, $userId: ID!) {\n    removeOrgMember(organizationId: $organizationId, userId: $userId)\n  }\n": typeof types.RemoveOrgMemberDocument;
   "\n  mutation UpdateOrgMemberRole($organizationId: ID!, $userId: ID!, $role: UserRole!) {\n    updateOrgMemberRole(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n      }\n      role\n    }\n  }\n": typeof types.UpdateOrgMemberRoleDocument;
@@ -185,12 +187,16 @@ const documents: Documents = {
     types.SessionGroupDirectoryEntriesDocument,
   "\n  query SessionGroupFiles($sessionGroupId: ID!) {\n    sessionGroupFiles(sessionGroupId: $sessionGroupId)\n  }\n":
     types.SessionGroupFilesDocument,
-  "\n  query MyApiTokens {\n    myApiTokens {\n      provider\n      isSet\n      updatedAt\n    }\n  }\n":
+  "\n  query MyApiTokens {\n    myApiTokens {\n      provider\n      isSet\n      updatedAt\n    }\n    myCodexCredential {\n      method\n      updatedAt\n    }\n  }\n":
     types.MyApiTokensDocument,
   "\n  mutation SetApiToken($input: SetApiTokenInput!) {\n    setApiToken(input: $input) {\n      provider\n      isSet\n      updatedAt\n    }\n  }\n":
     types.SetApiTokenDocument,
   "\n  mutation DeleteApiToken($provider: ApiTokenProvider!) {\n    deleteApiToken(provider: $provider)\n  }\n":
     types.DeleteApiTokenDocument,
+  "\n  mutation SetCodexCredential($input: SetCodexCredentialInput!) {\n    setCodexCredential(input: $input) { method updatedAt }\n  }\n":
+    types.SetCodexCredentialDocument,
+  "\n  mutation DeleteCodexCredential {\n    deleteCodexCredential\n  }\n":
+    types.DeleteCodexCredentialDocument,
   "\n  mutation AddOrgMember($organizationId: ID!, $userId: ID!, $role: UserRole) {\n    addOrgMember(organizationId: $organizationId, userId: $userId, role: $role) {\n      user {\n        id\n        name\n        email\n        avatarUrl\n      }\n      role\n      joinedAt\n    }\n  }\n":
     types.AddOrgMemberDocument,
   "\n  mutation RemoveOrgMember($organizationId: ID!, $userId: ID!) {\n    removeOrgMember(organizationId: $organizationId, userId: $userId)\n  }\n":
@@ -543,8 +549,8 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  query MyApiTokens {\n    myApiTokens {\n      provider\n      isSet\n      updatedAt\n    }\n  }\n",
-): (typeof documents)["\n  query MyApiTokens {\n    myApiTokens {\n      provider\n      isSet\n      updatedAt\n    }\n  }\n"];
+  source: "\n  query MyApiTokens {\n    myApiTokens {\n      provider\n      isSet\n      updatedAt\n    }\n    myCodexCredential {\n      method\n      updatedAt\n    }\n  }\n",
+): (typeof documents)["\n  query MyApiTokens {\n    myApiTokens {\n      provider\n      isSet\n      updatedAt\n    }\n    myCodexCredential {\n      method\n      updatedAt\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -557,6 +563,18 @@ export function graphql(
 export function graphql(
   source: "\n  mutation DeleteApiToken($provider: ApiTokenProvider!) {\n    deleteApiToken(provider: $provider)\n  }\n",
 ): (typeof documents)["\n  mutation DeleteApiToken($provider: ApiTokenProvider!) {\n    deleteApiToken(provider: $provider)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation SetCodexCredential($input: SetCodexCredentialInput!) {\n    setCodexCredential(input: $input) { method updatedAt }\n  }\n",
+): (typeof documents)["\n  mutation SetCodexCredential($input: SetCodexCredentialInput!) {\n    setCodexCredential(input: $input) { method updatedAt }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation DeleteCodexCredential {\n    deleteCodexCredential\n  }\n",
+): (typeof documents)["\n  mutation DeleteCodexCredential {\n    deleteCodexCredential\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

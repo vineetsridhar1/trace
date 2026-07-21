@@ -70,14 +70,16 @@ function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
 async function loginCodex(): Promise<void> {
   if (codexLoggedIn) return;
   const accessToken = process.env.CODEX_ACCESS_TOKEN;
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!accessToken && !apiKey) return;
+  const apiKey = process.env.CODEX_API_KEY;
+  const method = process.env.CODEX_AUTH_METHOD;
+  if (method !== "access_token" && method !== "api_key") return;
   if (codexLoginPromise) return codexLoginPromise;
 
   console.log("[container-bridge] logging in to codex...");
   codexLoginPromise = new Promise<void>((resolve, reject) => {
-    const credential = accessToken ?? apiKey;
-    const loginArgument = accessToken ? "--with-access-token" : "--with-api-key";
+    const credential = method === "access_token" ? accessToken : apiKey;
+    if (!credential) throw new Error(`Codex ${method} credential is unavailable`);
+    const loginArgument = method === "access_token" ? "--with-access-token" : "--with-api-key";
     const child = spawn("codex", ["login", loginArgument], {
       env: buildChildProcessEnv(),
       stdio: ["pipe", "pipe", "pipe"],
@@ -123,16 +125,16 @@ export async function ensureToolReady(tool: string): Promise<void> {
   }
 
   if (tool === "codex") {
-    if (
-      !existsSync(`${CODEX_HOME}/auth.json`) &&
-      !process.env.CODEX_ACCESS_TOKEN &&
-      !process.env.OPENAI_API_KEY
-    ) {
+    const method = process.env.CODEX_AUTH_METHOD;
+    if (!method) {
       throw new Error(
         "Cannot run codex: add a ChatGPT session, Codex access token, or OpenAI API key in Settings → API Tokens.",
       );
     }
-    if (!existsSync(`${CODEX_HOME}/auth.json`)) await loginCodex();
+    if (method === "chatgpt_session" && !existsSync(`${CODEX_HOME}/auth.json`)) {
+      throw new Error("Codex ChatGPT session credential is unavailable.");
+    }
+    if (method === "access_token" || method === "api_key") await loginCodex();
   } else if (tool === "pi") {
     await ensureBinaryAvailable("pi", "pi");
   } else if (tool === "antigravity") {
@@ -165,7 +167,7 @@ export async function loginAvailableTools(): Promise<void> {
     tasks.push(ensureToolReady(tool));
   }
 
-  if (process.env.CODEX_ACCESS_TOKEN || process.env.OPENAI_API_KEY) {
+  if (process.env.CODEX_AUTH_METHOD) {
     tasks.push(ensureToolReady("codex"));
   }
 

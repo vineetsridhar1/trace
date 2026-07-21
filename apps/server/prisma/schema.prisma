@@ -135,10 +135,14 @@ enum InboxItemStatus {
 enum ApiTokenProvider {
   anthropic
   openai
-  codex_access_token
-  codex_auth_json
   github
   ssh_key
+}
+
+enum CodexAuthMethod {
+  chatgpt_session
+  access_token
+  api_key
 }
 
 enum PushPlatform {
@@ -380,6 +384,7 @@ model User {
   channelMemberships           ChannelMember[]
   participants                 Participant[]
   apiTokens                    ApiToken[]
+  codexCredential              CodexCredential?
   pushTokens                   PushToken[]
   queuedMessages               QueuedMessage[]       @relation("QueuedMessageCreator")
   slackInstalls                SlackInstall[]        @relation("SlackInstallInstaller")
@@ -866,6 +871,17 @@ model ApiToken {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, provider])
+}
+
+model CodexCredential {
+  id                  String          @id @default(uuid())
+  userId              String          @unique
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  method              CodexAuthMethod
+  encryptedCredential String
+  iv                  String
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 }
 
 model PushToken {

@@ -16,6 +16,10 @@ const API_TOKENS_QUERY = gql`
       isSet
       updatedAt
     }
+    myCodexCredential {
+      method
+      updatedAt
+    }
   }
 `;
 
@@ -32,6 +36,18 @@ const SET_API_TOKEN = gql`
 const DELETE_API_TOKEN = gql`
   mutation DeleteApiToken($provider: ApiTokenProvider!) {
     deleteApiToken(provider: $provider)
+  }
+`;
+
+const SET_CODEX_CREDENTIAL = gql`
+  mutation SetCodexCredential($input: SetCodexCredentialInput!) {
+    setCodexCredential(input: $input) { method updatedAt }
+  }
+`;
+
+const DELETE_CODEX_CREDENTIAL = gql`
+  mutation DeleteCodexCredential {
+    deleteCodexCredential
   }
 `;
 
@@ -52,16 +68,6 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
     placeholder: "sk-...",
     description: "Used for OpenAI API integrations and Codex API-key sessions",
   },
-  codex_access_token: {
-    label: "Codex access token",
-    placeholder: "codex_...",
-    description: "Used to run Codex cloud sessions with trusted automation access",
-  },
-  codex_auth_json: {
-    label: "ChatGPT session",
-    placeholder: "Managed automatically by Codex",
-    description: "Used for Codex cloud sessions and refreshed after each run",
-  },
   github: {
     label: "GitHub",
     placeholder: "ghp_...",
@@ -79,19 +85,11 @@ const PROVIDER_META: Record<string, { label: string; placeholder: string; descri
   },
 };
 
-const CODEX_AUTH_PROVIDERS = new Set(["openai", "codex_access_token", "codex_auth_json"]);
-
 function ProviderIcon({ provider }: { provider: string }) {
   if (provider === "anthropic") {
     return <ClaudeIcon className="h-5 w-5 object-contain" />;
   }
   if (provider === "openai") {
-    return <CodexIcon className="h-5 w-5" />;
-  }
-  if (provider === "codex_access_token") {
-    return <CodexIcon className="h-5 w-5" />;
-  }
-  if (provider === "codex_auth_json") {
     return <CodexIcon className="h-5 w-5" />;
   }
   if (provider === "codex") {
@@ -107,6 +105,7 @@ export function ApiTokensSection() {
   const user = useAuthStore((s: { user: { id: string } | null }) => s.user);
   const isDesktopShell = typeof window !== "undefined" && typeof window.trace !== "undefined";
   const [tokens, setTokens] = useState<TokenStatus[]>([]);
+  const [codexCredential, setCodexCredential] = useState<{ method: string; updatedAt: string } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [showInput, setShowInput] = useState(false);
@@ -120,6 +119,7 @@ export function ApiTokensSection() {
     const result = await client.query(API_TOKENS_QUERY, {}).toPromise();
     if (result.data?.myApiTokens) {
       setTokens(result.data.myApiTokens as TokenStatus[]);
+      setCodexCredential(result.data.myCodexCredential as { method: string; updatedAt: string } | null);
     }
   }, [user]);
 
@@ -132,6 +132,15 @@ export function ApiTokensSection() {
     setInputValue("");
     setShowInput(false);
     setErrorMessage(null);
+  }
+
+  async function saveCodexCredential(
+    method: "chatgpt_session" | "access_token" | "api_key",
+    credential: string,
+  ) {
+    const result = await client.mutation(SET_CODEX_CREDENTIAL, { input: { method, credential } }).toPromise();
+    if (result.error) throw new Error(result.error.message);
+    fetchTokens();
   }
 
   async function saveToken(provider: string, tokenValue: string) {
@@ -188,11 +197,7 @@ export function ApiTokensSection() {
 
   async function handleDelete(provider: string) {
     if (provider === "codex") {
-      await Promise.all(
-        Array.from(CODEX_AUTH_PROVIDERS).map((codexProvider) =>
-          client.mutation(DELETE_API_TOKEN, { provider: codexProvider }).toPromise(),
-        ),
-      );
+      await client.mutation(DELETE_CODEX_CREDENTIAL, {}).toPromise();
       fetchTokens();
       return;
     }
@@ -212,12 +217,10 @@ export function ApiTokensSection() {
 
       <div className="space-y-3">
         {[
-          ...tokens.filter((token) => !CODEX_AUTH_PROVIDERS.has(token.provider)),
+          ...tokens,
           {
             provider: "codex",
-            isSet: tokens.some(
-              (token) => CODEX_AUTH_PROVIDERS.has(token.provider) && token.isSet,
-            ),
+            isSet: codexCredential !== null,
             updatedAt: null,
           },
         ].map((token: TokenStatus) => {
@@ -417,7 +420,7 @@ export function ApiTokensSection() {
       <CodexAuthenticationDialog
         open={codexAuthenticationOpen}
         onOpenChange={setCodexAuthenticationOpen}
-        onSave={saveToken}
+        onSave={saveCodexCredential}
       />
     </div>
   );
