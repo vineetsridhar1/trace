@@ -111,8 +111,8 @@ export function ChannelGroupSection({
             size={14}
             className={cn("shrink-0 transition-transform duration-200", !collapsed && "rotate-90")}
           />
-          <span className="truncate text-sidebar-primary/80">{name}</span>
-          <span className="ml-1 text-[10px] text-sidebar-primary/80">{channelIds.length}</span>
+          <span className="truncate text-[var(--th-accent-light)]">{name}</span>
+          <span className="ml-1 text-[10px] text-[var(--th-accent-light)]">{channelIds.length}</span>
         </button>
         <div
           className="flex items-center gap-0.5 opacity-0 group-hover/group-header:opacity-100 transition-opacity"

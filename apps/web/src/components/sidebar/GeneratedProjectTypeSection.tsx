@@ -47,8 +47,8 @@ export function GeneratedProjectTypeSection({
             size={14}
             className={cn("shrink-0 transition-transform duration-200", open && "rotate-90")}
           />
-          <span className="text-sidebar-primary/80">{label}</span>
-          <span className="ml-1 text-[10px] text-sidebar-primary/80">{visibleGroups.length}</span>
+          <span className="text-[var(--th-accent-light)]">{label}</span>
+          <span className="ml-1 text-[10px] text-[var(--th-accent-light)]">{visibleGroups.length}</span>
         </button>
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/generated-project-type:opacity-100 group-focus-within/generated-project-type:opacity-100">
           <button
