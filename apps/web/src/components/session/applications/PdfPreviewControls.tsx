@@ -17,6 +17,7 @@ export function PdfPreviewControls({
   refreshing,
   zoom,
   downloadState = "idle",
+  readOnly = false,
 }: {
   format: PdfPageFormat;
   onFormatChange: (format: PdfPageFormat) => void;
@@ -28,13 +29,19 @@ export function PdfPreviewControls({
   refreshing?: boolean;
   zoom?: number;
   downloadState?: PdfDownloadState;
+  readOnly?: boolean;
 }) {
   const showCanvasControls = zoom !== undefined && onZoomIn && onZoomOut && onResetZoom && onReload;
   const downloading = downloadState !== "idle";
 
   return (
-    <div className="grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-border bg-background px-3">
-      <PdfFormatFields format={format} onFormatChange={onFormatChange} />
+    <div
+      className={cn(
+        "grid h-10 shrink-0 items-center gap-3 border-b border-border bg-background px-3",
+        readOnly ? "grid-cols-[auto_auto] justify-end" : "grid-cols-[minmax(0,1fr)_auto_auto]",
+      )}
+    >
+      {!readOnly ? <PdfFormatFields format={format} onFormatChange={onFormatChange} /> : null}
       {showCanvasControls ? (
         <div className="flex items-center rounded-md border border-border bg-background/40 p-0.5">
           <Button
