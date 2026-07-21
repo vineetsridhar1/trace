@@ -14,6 +14,23 @@ type PdfExportInput = Pick<
   "commitSha" | "format" | "requestId" | "uploadTarget"
 > & { workdir: string };
 
+export function pdfExportChromiumArgs(
+  previewPort: number,
+  outputPath: string,
+  profilePath: string,
+) {
+  return [
+    "--headless=new",
+    "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--no-first-run",
+    `--user-data-dir=${profilePath}`,
+    "--print-to-pdf-no-header",
+    `--print-to-pdf=${outputPath}`,
+    `http://127.0.0.1:${previewPort}`,
+  ];
+}
+
 export async function exportPdfToTarget(input: PdfExportInput): Promise<void> {
   const exportDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "trace-pdf-export-"));
   const outputPath = path.join(exportDir, `${input.requestId}.pdf`);
@@ -76,17 +93,7 @@ export async function exportPdfToTarget(input: PdfExportInput): Promise<void> {
 
     await execFileAsync(
       process.env.TRACE_CHROMIUM_EXECUTABLE?.trim() || "chromium",
-      [
-        "--headless=new",
-        "--no-sandbox",
-        "--disable-gpu",
-        "--disable-dev-shm-usage",
-        "--no-first-run",
-        `--user-data-dir=${path.join(exportDir, "profile")}`,
-        "--print-to-pdf-no-header",
-        `--print-to-pdf=${outputPath}`,
-        `http://127.0.0.1:${previewPort}`,
-      ],
+      pdfExportChromiumArgs(previewPort, outputPath, path.join(exportDir, "profile")),
       { timeout: 60_000, maxBuffer: 1024 * 1024 },
     );
 

@@ -18,9 +18,10 @@ export function PdfPreviewControls({
   zoom,
   downloadState = "idle",
   readOnly = false,
+  showDownload = true,
 }: {
-  format: PdfPageFormat;
-  onFormatChange: (format: PdfPageFormat) => void;
+  format?: PdfPageFormat;
+  onFormatChange?: (format: PdfPageFormat) => void;
   onDownload: () => void;
   onReload?: () => void;
   onResetZoom?: () => void;
@@ -30,6 +31,7 @@ export function PdfPreviewControls({
   zoom?: number;
   downloadState?: PdfDownloadState;
   readOnly?: boolean;
+  showDownload?: boolean;
 }) {
   const showCanvasControls = zoom !== undefined && onZoomIn && onZoomOut && onResetZoom && onReload;
   const downloading = downloadState !== "idle";
@@ -41,7 +43,9 @@ export function PdfPreviewControls({
         readOnly ? "grid-cols-[auto_auto] justify-end" : "grid-cols-[minmax(0,1fr)_auto_auto]",
       )}
     >
-      {!readOnly ? <PdfFormatFields format={format} onFormatChange={onFormatChange} /> : null}
+      {!readOnly && format && onFormatChange ? (
+        <PdfFormatFields format={format} onFormatChange={onFormatChange} />
+      ) : null}
       {showCanvasControls ? (
         <div className="flex items-center rounded-md border border-border bg-background/40 p-0.5">
           <Button
@@ -85,14 +89,16 @@ export function PdfPreviewControls({
             <RotateCw size={13} className={cn(refreshing && "animate-spin")} />
           </Button>
         ) : null}
-        <Button size="sm" className="h-7" onClick={onDownload} disabled={downloading}>
-          <Download size={13} className="mr-1" />
-          {downloadState === "waiting"
-            ? "Waiting for save…"
-            : downloadState === "generating"
-              ? "Generating…"
-              : "Download PDF"}
-        </Button>
+        {showDownload ? (
+          <Button size="sm" className="h-7" onClick={onDownload} disabled={downloading}>
+            <Download size={13} className="mr-1" />
+            {downloadState === "waiting"
+              ? "Waiting for save…"
+              : downloadState === "generating"
+                ? "Generating…"
+                : "Download PDF"}
+          </Button>
+        ) : null}
       </div>
     </div>
   );

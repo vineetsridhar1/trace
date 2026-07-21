@@ -23,8 +23,6 @@ export function AppPreviewCanvas({
   onPdfFormatChange,
   onPdfDownload,
   pdfDownloadState,
-  pdfReadOnly = false,
-  sandbox = true,
 }: {
   url: string | null;
   title: string;
@@ -41,8 +39,6 @@ export function AppPreviewCanvas({
   onPdfFormatChange?: (format: PdfPageFormat) => void;
   onPdfDownload?: () => void;
   pdfDownloadState?: PdfDownloadState;
-  pdfReadOnly?: boolean;
-  sandbox?: boolean;
 }) {
   const frameMargin = bare ? 0 : PREVIEW_FRAME_MARGIN;
   const pixelsPerUnit = pdfFormat?.unit === "in" ? 96 : 96 / 25.4;
@@ -68,7 +64,6 @@ export function AppPreviewCanvas({
           onFormatChange={onPdfFormatChange}
           onDownload={onPdfDownload}
           downloadState={pdfDownloadState}
-          readOnly={pdfReadOnly}
           refreshing={refreshing}
           onReload={onReload}
           zoom={viewport.zoom}
@@ -158,11 +153,7 @@ export function AppPreviewCanvas({
                       height: viewport.viewportSize.height,
                       transform: `scale(${viewport.scale})`,
                     }}
-                    sandbox={
-                      sandbox
-                        ? "allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
-                        : undefined
-                    }
+                    sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
                   />
                 ) : null}
               </div>
