@@ -50,12 +50,12 @@ export function GeneratedProjectTypeSection({
         </button>
       </div>
       {open ? (
-        <div id={sectionId} className="space-y-0.5">
+        <div id={sectionId} className="space-y-0.5 pl-4">
           {groups.length === 0 ? (
             <button
               type="button"
               onClick={() => openGeneratedProjectDialog(kind)}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 pl-7 text-left text-sm text-muted-foreground hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 pl-3 text-left text-sm text-muted-foreground hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Plus size={16} className={className} />
               <span>{emptyLabel}</span>
