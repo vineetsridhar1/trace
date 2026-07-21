@@ -189,7 +189,7 @@ export function GeneratedProjectsSection({
             title="Toggle mine/all projects"
             aria-label={`Generated projects: ${scope}`}
             onClick={() => setScope((value) => (value === "mine" ? "all" : "mine"))}
-            className="pointer-events-none flex h-5 w-9 items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 opacity-0 transition-[opacity,color] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring group-hover/generated-projects-header:pointer-events-auto group-hover/generated-projects-header:opacity-100 group-focus-within/generated-projects-header:pointer-events-auto group-focus-within/generated-projects-header:opacity-100"
+            className="flex h-5 w-9 items-center justify-center overflow-hidden rounded px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-foreground/55 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
