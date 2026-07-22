@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { gql } from "@urql/core";
 import type { Session, SessionGroup } from "@trace/gql";
@@ -9,6 +9,7 @@ import {
   type SessionGroupEntity,
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
+import { useCommandPaletteStore } from "../../stores/command-palette";
 import { GeneratedProjectTypeSection } from "./GeneratedProjectTypeSection";
 import type { GeneratedProjectKind } from "./generated-project-types";
 
@@ -121,6 +122,9 @@ export function GeneratedProjectsSection({
   const upsertMany = useEntityStore((state) => state.upsertMany);
   const groups = useEntityStore((state) => state.sessionGroups);
   const [expanded, setExpanded] = useState(true);
+  const openGeneratedProjectDialog = useCommandPaletteStore(
+    (state) => state.openGeneratedProjectDialog,
+  );
 
   useEffect(() => {
     if (!activeOrgId) return;
@@ -184,6 +188,15 @@ export function GeneratedProjectsSection({
             className={expanded ? "shrink-0 rotate-90 transition-transform" : "shrink-0 transition-transform"}
           />
           <span>Create</span>
+        </button>
+        <button
+          type="button"
+          title="Create new"
+          aria-label="Create new"
+          onClick={() => openGeneratedProjectDialog("choose")}
+          className="pointer-events-none flex size-5 items-center justify-center rounded text-foreground opacity-0 transition-opacity hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring group-hover/generated-projects-header:pointer-events-auto group-hover/generated-projects-header:opacity-100 group-focus-within/generated-projects-header:pointer-events-auto group-focus-within/generated-projects-header:opacity-100"
+        >
+          <Plus size={14} />
         </button>
       </div>
       <AnimatePresence initial={false}>
