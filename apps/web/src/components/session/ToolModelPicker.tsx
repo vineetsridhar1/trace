@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import {
@@ -50,7 +50,7 @@ export function ToolModelPicker({
   const [pickerTool, setPickerTool] = useState<ToolOptionValue>(normalizeTool(tool));
   const [pickerProvider, setPickerProvider] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [compactSelection, setCompactSelection] = useState(false);
+  const compactSelectionRef = useRef(false);
 
   const activeModel =
     pickerTool === tool ? (model ?? getDefaultModel(pickerTool)) : getDefaultModel(pickerTool);
@@ -96,7 +96,7 @@ export function ToolModelPicker({
     } else if (getModelsForTool(nextTool).length > 0) {
       setLayer("models");
     } else {
-      if (compactSelection && reasoningEffortOptions.length > 0) {
+      if (compactSelectionRef.current && reasoningEffortOptions.length > 0) {
         setLayer("thinking");
       } else {
         setOpen(false);
@@ -146,7 +146,9 @@ export function ToolModelPicker({
         <PopoverTrigger
           disabled={disabled}
           aria-label={compactLabel}
-          onClick={() => setCompactSelection(true)}
+          onClick={() => {
+            compactSelectionRef.current = true;
+          }}
           className="flex size-7 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ToolIcon tool={tool} className="size-3.5 shrink-0" />
@@ -154,7 +156,9 @@ export function ToolModelPicker({
       </ActionTooltip>
       <PopoverTrigger
         disabled={disabled}
-        onClick={() => setCompactSelection(false)}
+        onClick={() => {
+          compactSelectionRef.current = false;
+        }}
         className="hidden h-7 w-auto max-w-[260px] cursor-pointer items-center gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 lg:flex"
       >
         <ToolIcon tool={tool} className="size-3.5 shrink-0" />
