@@ -224,6 +224,15 @@ export const DEFAULT_APP_CONFIG: RepoApplicationConfig = {
   ],
 };
 
+export function usesDefaultApplicationConfig(groupKind: string | null | undefined): boolean {
+  return (
+    groupKind === "app" ||
+    groupKind === "design" ||
+    groupKind === "design_system" ||
+    groupKind === "pdf"
+  );
+}
+
 export function displayApplicationStatus(status: string): string {
   return status.length > 0 ? `${status[0]?.toUpperCase()}${status.slice(1)}` : status;
 }
