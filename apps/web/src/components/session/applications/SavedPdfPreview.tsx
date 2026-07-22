@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { TraceLoader } from "@/components/ui/trace-loader";
 import { PdfPreviewControls } from "./PdfPreviewControls";
 import { layoutSavedPdfPages, type SavedPdfPage } from "./saved-pdf-layout";
+import { SavedPreviewSkeleton } from "./SavedPreviewSkeleton";
 import { usePreviewViewport } from "./usePreviewViewport";
 
 const PAGE_GAP = 24;
@@ -135,11 +135,7 @@ export function SavedPdfPreview({ downloadUrl, url }: { downloadUrl: string | nu
             {error}
           </p>
         ) : null}
-        {rendering && !error ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <TraceLoader size={18} showLabel={false} />
-          </div>
-        ) : null}
+        {rendering && !error ? <SavedPreviewSkeleton kind="pdf" /> : null}
         {viewport.ready && pageLayout ? (
           <div
             className="absolute left-0 top-0 origin-top-left"
