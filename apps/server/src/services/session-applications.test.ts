@@ -338,7 +338,7 @@ describe("SessionApplicationService", () => {
     );
   });
 
-  it("marks generated preview redirects for the authoring overlay", async () => {
+  it("creates a clean generated preview redirect", async () => {
     prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
       id: "endpoint-1",
       sessionGroupId: "group-1",
@@ -357,7 +357,8 @@ describe("SessionApplicationService", () => {
       "user-1",
     );
 
-    expect(new URL(preview.url).searchParams.get("next")).toBe("/?__trace_authoring=1");
+    expect(new URL(preview.url).searchParams.get("next")).toBe("/");
+    expect(preview.url).not.toContain("__trace_authoring");
   });
 
   it("ignores stale bridge logs for missing process rows", async () => {

@@ -9,7 +9,7 @@ import {
   isAttachmentResponse,
   generateEndpointKey,
   isAllowedPreviewRequestOrigin,
-  traceAppOriginFromUrl,
+  traceAppOrigins,
   sanitizeHeaders,
   webSocketProtocols,
 } from "./endpoint-utils.js";
@@ -101,10 +101,17 @@ describe("endpoint utils", () => {
     // A different endpoint or an attacker origin is rejected.
     expect(isAllowedPreviewRequestOrigin("http://other.preview.localhost", "abc123")).toBe(false);
     expect(isAllowedPreviewRequestOrigin("https://evil.test", "abc123")).toBe(false);
-    expect(traceAppOriginFromUrl("https://app.trace.test/sessions/1")).toBe(
-      "https://app.trace.test",
-    );
-    expect(traceAppOriginFromUrl("https://evil.test/embed")).toBeNull();
+    expect(traceAppOrigins().has("https://app.trace.test")).toBe(true);
+    expect(traceAppOrigins().has("https://evil.test")).toBe(false);
+  });
+
+  it("allows local Trace origins for authoring in development", () => {
+    vi.stubEnv("TRACE_WEB_URL", "");
+    vi.stubEnv("CORS_ALLOWED_ORIGINS", "");
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+    vi.stubEnv("NODE_ENV", "development");
+
+    expect(traceAppOrigins()).toEqual(new Set(["http://localhost:3000", "http://127.0.0.1:3000"]));
   });
 
   it("generates DNS-safe random keys", () => {

@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import type { EndpointTrafficCaptureMode } from "@prisma/client";
+import { getAllowedCorsOrigins } from "../lib/cors.js";
 
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 
@@ -72,7 +73,7 @@ export function extractEndpointKey(hostHeader: string | undefined | null): strin
 
 // Origins Trace itself serves from — the legitimate embedder of a preview iframe.
 // Read lazily so tests and deployments can vary the env without reload ordering.
-function traceAppOrigins(): Set<string> {
+export function traceAppOrigins(): Set<string> {
   const origins = new Set<string>();
   const add = (raw: string | undefined) => {
     const trimmed = raw?.trim();
@@ -83,20 +84,14 @@ function traceAppOrigins(): Set<string> {
       // Invalid configured origins are ignored by the request allowlist.
     }
   };
-  add(process.env.TRACE_WEB_URL);
-  for (const value of (process.env.CORS_ALLOWED_ORIGINS ?? "").split(",")) add(value);
+  const configured = getAllowedCorsOrigins({
+    localMode: process.env.TRACE_LOCAL_MODE === "1",
+    nodeEnv: process.env.NODE_ENV,
+    traceWebUrl: process.env.TRACE_WEB_URL,
+    corsAllowedOrigins: process.env.CORS_ALLOWED_ORIGINS,
+  });
+  for (const value of configured) add(value);
   return origins;
-}
-
-export function traceAppOriginFromUrl(value: string | string[] | undefined): string | null {
-  const raw = Array.isArray(value) ? value[0] : value;
-  if (!raw) return null;
-  try {
-    const origin = new URL(raw).origin;
-    return traceAppOrigins().has(origin) ? origin : null;
-  } catch {
-    return null;
-  }
 }
 
 /**

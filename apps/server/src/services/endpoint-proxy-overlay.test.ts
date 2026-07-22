@@ -12,7 +12,7 @@ describe("endpoint authoring overlay", () => {
     const result = injectAuthoringOverlay(
       { "content-type": "text/html; charset=utf-8", "content-length": "42" },
       Buffer.from('<!doctype html><html><head></head><body><div id="root"></div></body></html>'),
-      "https://app.trace.test",
+      ["https://app.trace.test", "http://localhost:3000"],
     );
     const html = result.body.toString("utf8");
 
@@ -20,9 +20,11 @@ describe("endpoint authoring overlay", () => {
     expect(html).toContain("[data-screen-id]");
     expect(html).toContain("data-trace-auto-target");
     expect(html).toContain("data-trace-id','auto-");
-    expect(html).toContain('var TRACE_ORIGIN="https://app.trace.test"');
+    expect(html).toContain('var TRACE_ORIGINS=["https://app.trace.test","http://localhost:3000"]');
+    expect(html).toContain("var TRACE_ORIGIN=null");
     expect(html).not.toContain("document.referrer");
     expect(html).toContain('e.data.type==="trace:design:handshake"');
+    expect(html).toContain("TRACE_ORIGINS.indexOf(e.origin)===-1");
     expect(html).toContain('post("ready",{},TRACE_ORIGIN)');
     expect(html).toContain('post("edit-mode-ready",{})');
     expect(html).toContain("post('dom-tree',{domTree:tree})");
@@ -40,7 +42,7 @@ describe("endpoint authoring overlay", () => {
     const result = injectAuthoringOverlay(
       { "content-type": "text/html", "content-encoding": "gzip" },
       body,
-      "https://app.trace.test",
+      ["https://app.trace.test"],
     );
 
     expect(result.body).toBe(body);

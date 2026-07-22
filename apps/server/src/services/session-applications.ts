@@ -716,7 +716,7 @@ export class SessionApplicationService {
     const url = new URL(buildEndpointUrl(endpoint.key));
     url.pathname = "/__trace_preview_auth";
     url.searchParams.set("token", credential.token);
-    url.searchParams.set("next", "/?__trace_authoring=1");
+    url.searchParams.set("next", "/");
     return { url: url.toString(), expiresAt: credential.expiresAt };
   }
 
