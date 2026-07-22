@@ -794,6 +794,12 @@ function numberFromBigInt(value: bigint | number | null | undefined): number {
   return typeof value === "number" ? value : 0;
 }
 
+function eventJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(
+    JSON.stringify(value, (_key, nested) => (typeof nested === "bigint" ? Number(nested) : nested)),
+  ) as Prisma.InputJsonValue;
+}
+
 function serializeSession(session: {
   id: string;
   name: string;
@@ -6964,7 +6970,7 @@ export class SessionService {
       scopeType: "system",
       scopeId: updated.id,
       eventType: "design_system_updated",
-      payload: JSON.parse(JSON.stringify({ designSystem: updated })) as Prisma.InputJsonValue,
+      payload: eventJson({ designSystem: updated }),
       actorType: input.actorType,
       actorId: input.actorId,
     });
@@ -7082,7 +7088,7 @@ export class SessionService {
         scopeType: "system",
         scopeId: designSystem.id,
         eventType: "design_system_updated",
-        payload: JSON.parse(JSON.stringify({ designSystem })) as Prisma.InputJsonValue,
+        payload: eventJson({ designSystem }),
         actorType: "system",
         actorId: "system",
       });
