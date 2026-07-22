@@ -8,6 +8,7 @@ import {
 import { prisma } from "../lib/db.js";
 import { ValidationError } from "../lib/errors.js";
 import { gitStorage } from "../lib/git-storage/index.js";
+import { sessionRouter } from "../lib/session-router.js";
 import { storage } from "../lib/storage/index.js";
 import {
   createDeterministicTarGz,
@@ -26,6 +27,8 @@ import { eventService } from "./event.js";
 import { sessionService } from "./session.js";
 
 const ARTIFACT_BATCH_SIZE = 100;
+const DESIGN_SYSTEM_REPAIR_SOURCE = "internal:design-system-repair";
+const MAX_CONSECUTIVE_REPAIR_ATTEMPTS = 3;
 
 export function shouldAdvanceLatestArtifact(
   currentSequence: number | null,
@@ -128,6 +131,67 @@ async function putImmutableObject(
 }
 
 export class DesignSystemService {
+  private async requestArtifactRepair(input: {
+    designSystemId: string;
+    organizationId: string;
+    sessionGroupId: string;
+    commitSha: string;
+    errors: string[];
+  }): Promise<void> {
+    const recentArtifacts = await prisma.designSystemCommitArtifact.findMany({
+      where: { designSystemId: input.designSystemId },
+      orderBy: { sequence: "desc" },
+      take: MAX_CONSECUTIVE_REPAIR_ATTEMPTS,
+      select: { packageValid: true },
+    });
+    if (
+      recentArtifacts.length >= MAX_CONSECUTIVE_REPAIR_ATTEMPTS &&
+      recentArtifacts.every((artifact) => artifact.packageValid === false)
+    ) {
+      console.warn("[design-system] repair attempt limit reached", {
+        designSystemId: input.designSystemId,
+      });
+      return;
+    }
+
+    const session = await prisma.session.findFirst({
+      where: { sessionGroupId: input.sessionGroupId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        organizationId: true,
+        workdir: true,
+        toolSessionId: true,
+        worktreeDeleted: true,
+      },
+    });
+    if (
+      !session ||
+      session.organizationId !== input.organizationId ||
+      session.worktreeDeleted ||
+      !session.workdir ||
+      !session.toolSessionId
+    ) {
+      return;
+    }
+    if (!sessionRouter.getRuntimeForSession(session.id)) return;
+
+    await sessionService.sendMessage({
+      sessionId: session.id,
+      text: [
+        "The latest design-system commit failed the server package validator.",
+        `Commit: ${input.commitSha}`,
+        "Repair the package in the managed workbench, then run the design-system checks, commit the fix, and push it.",
+        "Do not wait for user input; this is an automatic repair pass.",
+        "Validation errors:",
+        ...input.errors.slice(0, 20).map((error) => `- ${error.slice(0, 500)}`),
+      ].join("\n"),
+      actorType: "system",
+      actorId: "system",
+      clientSource: DESIGN_SYSTEM_REPAIR_SOURCE,
+    });
+  }
+
   async reconcileCommitArtifacts(): Promise<number> {
     const staleBefore = new Date(Date.now() - 90_000);
     await prisma.designSystemCommitArtifact.updateMany({
@@ -774,6 +838,22 @@ export class DesignSystemService {
             artifactId: artifact.id,
             commitSha: artifact.commitSha,
             error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+      if (!validation.valid) {
+        setImmediate(() => {
+          void this.requestArtifactRepair({
+            designSystemId: artifact.designSystemId,
+            organizationId: artifact.designSystem.organizationId,
+            sessionGroupId: group.id,
+            commitSha: artifact.commitSha,
+            errors: validation.errors,
+          }).catch((error: unknown) => {
+            console.warn("[design-system] automatic artifact repair request failed", {
+              artifactId: artifact.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
           });
         });
       }

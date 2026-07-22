@@ -1208,6 +1208,7 @@ function conversationLineSourcesFromEvent(evt: ConversationContextEvent): Conver
   }
 
   if (evt.eventType === "message_sent") {
+    if (payload.clientSource === "internal:design-system-repair") return [];
     return typeof payload.text === "string" ? [{ role: "User", text: payload.text }] : [];
   }
 
