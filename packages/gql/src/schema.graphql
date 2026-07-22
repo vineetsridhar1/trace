@@ -324,6 +324,9 @@ enum EventType {
   session_group_renamed
   design_preview_updated
   pdf_export_updated
+  design_element_text_updated
+  design_element_styles_updated
+  manual_element_saved
   chat_created
   chat_member_added
   chat_member_removed
@@ -1171,6 +1174,177 @@ type SessionGroupFileContentResult {
   usedFallback: Boolean!
 }
 
+type DesignElementTextSource {
+  sessionGroupId: ID!
+  filePath: String!
+  elementId: String!
+  text: String!
+  sourceHash: String!
+}
+
+type DesignElementTextEditResult {
+  sessionGroupId: ID!
+  filePath: String!
+  elementId: String!
+  previousText: String!
+  text: String!
+  sourceHash: String!
+}
+
+type DesignElementStyles {
+  color: String
+  backgroundColor: String
+  fontFamily: String
+  fontSize: Int
+  fontWeight: Int
+  fontStyle: String
+  textDecoration: String
+  textAlign: String
+  lineHeight: Int
+  letterSpacing: Int
+  textTransform: String
+  width: String
+  height: String
+  minWidth: String
+  maxWidth: String
+  minHeight: String
+  maxHeight: String
+  flexGrow: Float
+  alignSelf: String
+  position: String
+  top: String
+  right: String
+  bottom: String
+  left: String
+  zIndex: String
+  display: String
+  flexDirection: String
+  justifyContent: String
+  alignItems: String
+  gap: Int
+  borderRadius: Int
+  paddingX: Int
+  paddingY: Int
+  paddingTop: Int
+  paddingRight: Int
+  paddingBottom: Int
+  paddingLeft: Int
+  marginTop: Int
+  marginRight: Int
+  marginBottom: Int
+  marginLeft: Int
+  opacity: Float
+  overflow: String
+  objectFit: String
+  borderColor: String
+  borderWidth: Int
+  borderStyle: String
+  cursor: String
+  pointerEvents: String
+  whiteSpace: String
+  textOverflow: String
+  boxSizing: String
+  aspectRatio: String
+  boxShadow: String
+  textShadow: String
+  transform: String
+  filter: String
+}
+
+input DesignElementStylesInput {
+  color: String
+  backgroundColor: String
+  fontFamily: String
+  fontSize: Int
+  fontWeight: Int
+  fontStyle: String
+  textDecoration: String
+  textAlign: String
+  lineHeight: Int
+  letterSpacing: Int
+  textTransform: String
+  width: String
+  height: String
+  minWidth: String
+  maxWidth: String
+  minHeight: String
+  maxHeight: String
+  flexGrow: Float
+  alignSelf: String
+  position: String
+  top: String
+  right: String
+  bottom: String
+  left: String
+  zIndex: String
+  display: String
+  flexDirection: String
+  justifyContent: String
+  alignItems: String
+  gap: Int
+  borderRadius: Int
+  paddingX: Int
+  paddingY: Int
+  paddingTop: Int
+  paddingRight: Int
+  paddingBottom: Int
+  paddingLeft: Int
+  marginTop: Int
+  marginRight: Int
+  marginBottom: Int
+  marginLeft: Int
+  opacity: Float
+  overflow: String
+  objectFit: String
+  borderColor: String
+  borderWidth: Int
+  borderStyle: String
+  cursor: String
+  pointerEvents: String
+  whiteSpace: String
+  textOverflow: String
+  boxSizing: String
+  aspectRatio: String
+  boxShadow: String
+  textShadow: String
+  transform: String
+  filter: String
+}
+
+type DesignElementStyleSource {
+  sessionGroupId: ID!
+  elementId: String!
+  sourceHash: String!
+  styles: DesignElementStyles!
+}
+
+type DesignElementStyleEditResult {
+  sessionGroupId: ID!
+  elementId: String!
+  sourceHash: String!
+  styles: DesignElementStyles!
+}
+
+input ManualElementEditInput {
+  filePath: String!
+  elementId: String!
+  text: String
+  expectedTextSourceHash: String
+  styles: DesignElementStylesInput
+  expectedStyleSourceHash: String
+}
+
+type ManualElementEditResult {
+  sessionGroupId: ID!
+  filePath: String!
+  elementId: String!
+  text: String
+  textSourceHash: String
+  styles: DesignElementStyles
+  styleSourceHash: String
+  commitSha: String!
+}
+
 type Notification {
   id: ID!
   type: String!
@@ -1529,6 +1703,12 @@ type Query {
     sessionGroupId: ID!
     filePath: String!
   ): SessionGroupFileContentResult!
+  designElementTextSource(
+    sessionGroupId: ID!
+    filePath: String!
+    elementId: String!
+  ): DesignElementTextSource!
+  designElementStyleSource(sessionGroupId: ID!, elementId: String!): DesignElementStyleSource!
   sessionGroupBranchDiff(sessionGroupId: ID!): [BranchDiffFile!]!
   sessionGroupFileAtRef(sessionGroupId: ID!, filePath: String!, ref: String!): String!
   linkedCheckoutStatus(
@@ -1707,6 +1887,27 @@ type Mutation {
     unit: String!
   ): Boolean!
   requestPdfSessionExport(sessionGroupId: ID!): Boolean!
+  updateDesignElementText(
+    sessionGroupId: ID!
+    filePath: String!
+    elementId: String!
+    text: String!
+    expectedSourceHash: String!
+  ): DesignElementTextEditResult!
+  updateDesignElementStyles(
+    sessionGroupId: ID!
+    elementId: String!
+    styles: DesignElementStylesInput!
+    expectedSourceHash: String!
+  ): DesignElementStyleEditResult!
+  saveManualElementEdit(
+    sessionGroupId: ID!
+    input: ManualElementEditInput!
+  ): ManualElementEditResult!
+  saveManualElementEdits(
+    sessionGroupId: ID!
+    inputs: [ManualElementEditInput!]!
+  ): [ManualElementEditResult!]!
   commitSessionGroupFileChanges(sessionGroupId: ID!, message: String): String!
   revertSessionGroupFileChange(sessionGroupId: ID!, filePath: String!): Boolean!
   requestBridgeAccess(

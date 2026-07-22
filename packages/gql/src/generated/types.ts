@@ -350,6 +350,162 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignElementStyleEditResult = {
+  __typename?: "DesignElementStyleEditResult";
+  elementId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  styles: DesignElementStyles;
+};
+
+export type DesignElementStyleSource = {
+  __typename?: "DesignElementStyleSource";
+  elementId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  styles: DesignElementStyles;
+};
+
+export type DesignElementStyles = {
+  __typename?: "DesignElementStyles";
+  alignItems?: Maybe<Scalars["String"]["output"]>;
+  alignSelf?: Maybe<Scalars["String"]["output"]>;
+  aspectRatio?: Maybe<Scalars["String"]["output"]>;
+  backgroundColor?: Maybe<Scalars["String"]["output"]>;
+  borderColor?: Maybe<Scalars["String"]["output"]>;
+  borderRadius?: Maybe<Scalars["Int"]["output"]>;
+  borderStyle?: Maybe<Scalars["String"]["output"]>;
+  borderWidth?: Maybe<Scalars["Int"]["output"]>;
+  bottom?: Maybe<Scalars["String"]["output"]>;
+  boxShadow?: Maybe<Scalars["String"]["output"]>;
+  boxSizing?: Maybe<Scalars["String"]["output"]>;
+  color?: Maybe<Scalars["String"]["output"]>;
+  cursor?: Maybe<Scalars["String"]["output"]>;
+  display?: Maybe<Scalars["String"]["output"]>;
+  filter?: Maybe<Scalars["String"]["output"]>;
+  flexDirection?: Maybe<Scalars["String"]["output"]>;
+  flexGrow?: Maybe<Scalars["Float"]["output"]>;
+  fontFamily?: Maybe<Scalars["String"]["output"]>;
+  fontSize?: Maybe<Scalars["Int"]["output"]>;
+  fontStyle?: Maybe<Scalars["String"]["output"]>;
+  fontWeight?: Maybe<Scalars["Int"]["output"]>;
+  gap?: Maybe<Scalars["Int"]["output"]>;
+  height?: Maybe<Scalars["String"]["output"]>;
+  justifyContent?: Maybe<Scalars["String"]["output"]>;
+  left?: Maybe<Scalars["String"]["output"]>;
+  letterSpacing?: Maybe<Scalars["Int"]["output"]>;
+  lineHeight?: Maybe<Scalars["Int"]["output"]>;
+  marginBottom?: Maybe<Scalars["Int"]["output"]>;
+  marginLeft?: Maybe<Scalars["Int"]["output"]>;
+  marginRight?: Maybe<Scalars["Int"]["output"]>;
+  marginTop?: Maybe<Scalars["Int"]["output"]>;
+  maxHeight?: Maybe<Scalars["String"]["output"]>;
+  maxWidth?: Maybe<Scalars["String"]["output"]>;
+  minHeight?: Maybe<Scalars["String"]["output"]>;
+  minWidth?: Maybe<Scalars["String"]["output"]>;
+  objectFit?: Maybe<Scalars["String"]["output"]>;
+  opacity?: Maybe<Scalars["Float"]["output"]>;
+  overflow?: Maybe<Scalars["String"]["output"]>;
+  paddingBottom?: Maybe<Scalars["Int"]["output"]>;
+  paddingLeft?: Maybe<Scalars["Int"]["output"]>;
+  paddingRight?: Maybe<Scalars["Int"]["output"]>;
+  paddingTop?: Maybe<Scalars["Int"]["output"]>;
+  paddingX?: Maybe<Scalars["Int"]["output"]>;
+  paddingY?: Maybe<Scalars["Int"]["output"]>;
+  pointerEvents?: Maybe<Scalars["String"]["output"]>;
+  position?: Maybe<Scalars["String"]["output"]>;
+  right?: Maybe<Scalars["String"]["output"]>;
+  textAlign?: Maybe<Scalars["String"]["output"]>;
+  textDecoration?: Maybe<Scalars["String"]["output"]>;
+  textOverflow?: Maybe<Scalars["String"]["output"]>;
+  textShadow?: Maybe<Scalars["String"]["output"]>;
+  textTransform?: Maybe<Scalars["String"]["output"]>;
+  top?: Maybe<Scalars["String"]["output"]>;
+  transform?: Maybe<Scalars["String"]["output"]>;
+  whiteSpace?: Maybe<Scalars["String"]["output"]>;
+  width?: Maybe<Scalars["String"]["output"]>;
+  zIndex?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type DesignElementStylesInput = {
+  alignItems?: InputMaybe<Scalars["String"]["input"]>;
+  alignSelf?: InputMaybe<Scalars["String"]["input"]>;
+  aspectRatio?: InputMaybe<Scalars["String"]["input"]>;
+  backgroundColor?: InputMaybe<Scalars["String"]["input"]>;
+  borderColor?: InputMaybe<Scalars["String"]["input"]>;
+  borderRadius?: InputMaybe<Scalars["Int"]["input"]>;
+  borderStyle?: InputMaybe<Scalars["String"]["input"]>;
+  borderWidth?: InputMaybe<Scalars["Int"]["input"]>;
+  bottom?: InputMaybe<Scalars["String"]["input"]>;
+  boxShadow?: InputMaybe<Scalars["String"]["input"]>;
+  boxSizing?: InputMaybe<Scalars["String"]["input"]>;
+  color?: InputMaybe<Scalars["String"]["input"]>;
+  cursor?: InputMaybe<Scalars["String"]["input"]>;
+  display?: InputMaybe<Scalars["String"]["input"]>;
+  filter?: InputMaybe<Scalars["String"]["input"]>;
+  flexDirection?: InputMaybe<Scalars["String"]["input"]>;
+  flexGrow?: InputMaybe<Scalars["Float"]["input"]>;
+  fontFamily?: InputMaybe<Scalars["String"]["input"]>;
+  fontSize?: InputMaybe<Scalars["Int"]["input"]>;
+  fontStyle?: InputMaybe<Scalars["String"]["input"]>;
+  fontWeight?: InputMaybe<Scalars["Int"]["input"]>;
+  gap?: InputMaybe<Scalars["Int"]["input"]>;
+  height?: InputMaybe<Scalars["String"]["input"]>;
+  justifyContent?: InputMaybe<Scalars["String"]["input"]>;
+  left?: InputMaybe<Scalars["String"]["input"]>;
+  letterSpacing?: InputMaybe<Scalars["Int"]["input"]>;
+  lineHeight?: InputMaybe<Scalars["Int"]["input"]>;
+  marginBottom?: InputMaybe<Scalars["Int"]["input"]>;
+  marginLeft?: InputMaybe<Scalars["Int"]["input"]>;
+  marginRight?: InputMaybe<Scalars["Int"]["input"]>;
+  marginTop?: InputMaybe<Scalars["Int"]["input"]>;
+  maxHeight?: InputMaybe<Scalars["String"]["input"]>;
+  maxWidth?: InputMaybe<Scalars["String"]["input"]>;
+  minHeight?: InputMaybe<Scalars["String"]["input"]>;
+  minWidth?: InputMaybe<Scalars["String"]["input"]>;
+  objectFit?: InputMaybe<Scalars["String"]["input"]>;
+  opacity?: InputMaybe<Scalars["Float"]["input"]>;
+  overflow?: InputMaybe<Scalars["String"]["input"]>;
+  paddingBottom?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingLeft?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingRight?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingTop?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingX?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingY?: InputMaybe<Scalars["Int"]["input"]>;
+  pointerEvents?: InputMaybe<Scalars["String"]["input"]>;
+  position?: InputMaybe<Scalars["String"]["input"]>;
+  right?: InputMaybe<Scalars["String"]["input"]>;
+  textAlign?: InputMaybe<Scalars["String"]["input"]>;
+  textDecoration?: InputMaybe<Scalars["String"]["input"]>;
+  textOverflow?: InputMaybe<Scalars["String"]["input"]>;
+  textShadow?: InputMaybe<Scalars["String"]["input"]>;
+  textTransform?: InputMaybe<Scalars["String"]["input"]>;
+  top?: InputMaybe<Scalars["String"]["input"]>;
+  transform?: InputMaybe<Scalars["String"]["input"]>;
+  whiteSpace?: InputMaybe<Scalars["String"]["input"]>;
+  width?: InputMaybe<Scalars["String"]["input"]>;
+  zIndex?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type DesignElementTextEditResult = {
+  __typename?: "DesignElementTextEditResult";
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  previousText: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  text: Scalars["String"]["output"];
+};
+
+export type DesignElementTextSource = {
+  __typename?: "DesignElementTextSource";
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  text: Scalars["String"]["output"];
+};
+
 export type DesignSystem = {
   __typename?: "DesignSystem";
   activeVersion?: Maybe<DesignSystemVersion>;
@@ -501,6 +657,8 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_element_styles_updated"
+  | "design_element_text_updated"
   | "design_preview_updated"
   | "design_system_archived"
   | "design_system_commit_artifact_created"
@@ -513,6 +671,7 @@ export type EventType =
   | "inbox_item_created"
   | "inbox_item_resolved"
   | "managed_git_token_minted"
+  | "manual_element_saved"
   | "member_joined"
   | "member_left"
   | "message_deleted"
@@ -671,6 +830,27 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
+export type ManualElementEditInput = {
+  elementId: Scalars["String"]["input"];
+  expectedStyleSourceHash?: InputMaybe<Scalars["String"]["input"]>;
+  expectedTextSourceHash?: InputMaybe<Scalars["String"]["input"]>;
+  filePath: Scalars["String"]["input"];
+  styles?: InputMaybe<DesignElementStylesInput>;
+  text?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type ManualElementEditResult = {
+  __typename?: "ManualElementEditResult";
+  commitSha: Scalars["String"]["output"];
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  styleSourceHash?: Maybe<Scalars["String"]["output"]>;
+  styles?: Maybe<DesignElementStyles>;
+  text?: Maybe<Scalars["String"]["output"]>;
+  textSourceHash?: Maybe<Scalars["String"]["output"]>;
+};
+
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -794,6 +974,8 @@ export type Mutation = {
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
   saveDesignSystem: DesignSystemVersion;
+  saveManualElementEdit: ManualElementEditResult;
+  saveManualElementEdits: Array<ManualElementEditResult>;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -823,6 +1005,8 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateDesignElementStyles: DesignElementStyleEditResult;
+  updateDesignElementText: DesignElementTextEditResult;
   updateOrgMemberRole: OrgMember;
   updatePdfSessionFormat: Scalars["Boolean"]["output"];
   updateQueuedMessage: QueuedMessage;
@@ -1199,6 +1383,16 @@ export type MutationSaveDesignSystemArgs = {
   id: Scalars["ID"]["input"];
 };
 
+export type MutationSaveManualElementEditArgs = {
+  input: ManualElementEditInput;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSaveManualElementEditsArgs = {
+  inputs: Array<ManualElementEditInput>;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationSaveSessionGroupFileArgs = {
   content: Scalars["String"]["input"];
   filePath: Scalars["String"]["input"];
@@ -1356,6 +1550,21 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateDesignElementStylesArgs = {
+  elementId: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  styles: DesignElementStylesInput;
+};
+
+export type MutationUpdateDesignElementTextArgs = {
+  elementId: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  text: Scalars["String"]["input"];
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1495,6 +1704,8 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  designElementStyleSource: DesignElementStyleSource;
+  designElementTextSource: DesignElementTextSource;
   /** Design-kind session groups for the org (the sidebar Designs section). */
   designSessionGroups: Array<SessionGroup>;
   designSystem?: Maybe<DesignSystem>;
@@ -1613,6 +1824,17 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignElementStyleSourceArgs = {
+  elementId: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QueryDesignElementTextSourceArgs = {
+  elementId: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryDesignSessionGroupsArgs = {
