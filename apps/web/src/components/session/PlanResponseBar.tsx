@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { MessageSquareText, Send, X } from "lucide-react";
+import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
@@ -17,7 +18,11 @@ import {
   buildCommentPrompt,
   getCommentGroupIndex,
 } from "./planCommentPrompts";
-import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
+import {
+  CLOUD_REPO_REMOTE_REQUIRED,
+  repoRemoteKnownMissing,
+  resolveSupportedHostingForRepo,
+} from "../../lib/repo-capabilities";
 import { PendingRichTextInput } from "./PendingRichTextInput";
 
 interface PlanResponseBarProps {
@@ -84,6 +89,10 @@ export function PlanResponseBar({
 
   const handleClearContext = useCallback(async (noteOverride?: string) => {
     if (sending || !sessionGroupId) return;
+    if (hosting === "cloud" && repoRemoteKnownMissing(repo)) {
+      toast.error("Cloud is unavailable for this repo", { description: CLOUD_REPO_REMOTE_REQUIRED });
+      return;
+    }
     setSending(true);
     try {
       const note = noteOverride ?? feedback;
@@ -111,6 +120,10 @@ export function PlanResponseBar({
         .toPromise();
 
       const newSessionId = result.data?.startSession?.id;
+      if (result.error) {
+        toast.error("Failed to create session", { description: result.error.message });
+        return;
+      }
       if (newSessionId) {
         optimisticallyInsertSession({
           id: newSessionId,
@@ -145,9 +158,10 @@ export function PlanResponseBar({
     onClearPlanComments,
     tool,
     model,
+    hosting,
     defaultHosting,
     channel?.id,
-    repo?.id,
+    repo,
     branch,
     sessionId,
     openSessionTab,

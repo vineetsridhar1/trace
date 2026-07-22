@@ -12,6 +12,8 @@ import { navigateToSession, useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionChannelId, getSessionGroupChannelId } from "@trace/client-core";
 import { agentStatusColor, getDisplayAgentStatus } from "./sessionStatus";
+import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
+import { toast } from "sonner";
 
 interface SessionHistoryProps {
   sessionId: string;
@@ -66,6 +68,10 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
           | { id: string; remoteUrl?: string | null }
           | null
           | undefined;
+        if (source.hosting === "cloud" && repoRemoteKnownMissing(sourceRepo)) {
+          toast.error("Cloud is unavailable for this repo", { description: CLOUD_REPO_REMOTE_REQUIRED });
+          return;
+        }
         const result = await client
           .mutation(START_SESSION_MUTATION, {
             input: {
@@ -82,7 +88,7 @@ export function SessionHistory({ sessionId }: SessionHistoryProps) {
           .toPromise();
 
         if (result.error) {
-          console.error("[SessionHistory] mutation failed:", result.error);
+          toast.error("Failed to create session", { description: result.error.message });
           return;
         }
 
