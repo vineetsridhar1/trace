@@ -1,4 +1,5 @@
 import type { DesignSystem } from "@trace/gql";
+import { Palette } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -53,9 +54,10 @@ export function DesignSystemCombobox({
   return (
     <Select value={value} onValueChange={(next) => next && onValueChange(next)}>
       <SelectTrigger
-        className="h-7 w-auto max-w-52 cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0"
+        className="h-7 w-auto max-w-[260px] cursor-pointer gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
         aria-label="Design library"
       >
+        <Palette className="size-3.5 shrink-0" />
         <SelectValue>
           {value === TRACE_DEFAULT_DESIGN_SYSTEM
             ? "Trace Default"
