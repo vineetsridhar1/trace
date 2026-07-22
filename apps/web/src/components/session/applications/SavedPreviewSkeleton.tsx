@@ -1,5 +1,4 @@
 import { Skeleton } from "../../ui/skeleton";
-import { TraceLoader } from "../../ui/trace-loader";
 import { cn } from "../../../lib/utils";
 
 export function SavedPreviewSkeleton({
@@ -21,7 +20,6 @@ export function SavedPreviewSkeleton({
         backgroundImage: "radial-gradient(rgba(113, 113, 122, 0.3) 1px, transparent 1px)",
         backgroundSize: "24px 24px",
       }}
-      aria-live="polite"
     >
       {isDocument ? (
         <div className="flex max-h-full w-[min(78%,34rem)] flex-col gap-5 overflow-hidden">
@@ -69,14 +67,6 @@ export function SavedPreviewSkeleton({
           </div>
         </div>
       )}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-background/95 px-5 py-4 text-center shadow-lg">
-          <TraceLoader size={18} showLabel={false} />
-          <p className="text-sm font-medium text-foreground">
-            Loading saved {isDocument ? "document" : "design"}…
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
