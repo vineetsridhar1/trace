@@ -13,6 +13,7 @@ vi.mock("../lib/pubsub.js", async () => {
       channelEvents: (id: string) => `channel:${id}:events`,
       chatEvents: (id: string) => `chat:${id}:events`,
       ticketEvents: (id: string) => `ticket:${id}:events`,
+      userEvents: (orgId: string, userId: string) => `org:${orgId}:user:${userId}:events`,
       orgEvents: (id: string) => `org:${id}:events`,
     },
   };
@@ -115,6 +116,80 @@ describe("EventService", () => {
       "event",
       JSON.stringify(event),
     );
+  });
+
+  it("fans chat events out only to members with a bounded ambient payload", () => {
+    const longText = "x".repeat(500);
+    const event = {
+      id: "event-chat-1",
+      organizationId: "org-1",
+      scopeType: "chat",
+      scopeId: "chat-1",
+      eventType: "message_sent",
+      actorType: "user",
+      actorId: "user-1",
+      parentId: null,
+      metadata: {},
+      timestamp: new Date("2026-03-21T00:00:00.000Z"),
+      payload: {
+        messageId: "message-1",
+        chatId: "chat-1",
+        text: longText,
+        html: `<p>${longText}</p>`,
+        createdAt: "2026-03-21T00:00:00.000Z",
+      },
+    } as any;
+
+    const service = new EventService();
+    service.publishCreated(event, ["user-1", "user-2", "user-2"]);
+
+    expect(pubsubMock.publish).toHaveBeenCalledWith("chat:chat-1:events", {
+      chatEvents: event,
+    });
+    expect(pubsubMock.publish).toHaveBeenCalledWith(
+      "org:org-1:user:user-1:events",
+      expect.objectContaining({
+        userEvents: expect.objectContaining({
+          payload: expect.objectContaining({ text: "x".repeat(160) }),
+        }),
+      }),
+    );
+    expect(pubsubMock.publish).toHaveBeenCalledWith(
+      "org:org-1:user:user-2:events",
+      expect.any(Object),
+    );
+    expect(
+      pubsubMock.publish.mock.calls.filter(
+        ([topic]: [string]) => topic === "org:org-1:user:user-2:events",
+      ),
+    ).toHaveLength(1);
+    expect(pubsubMock.publish).not.toHaveBeenCalledWith(
+      "org:org-1:events",
+      expect.any(Object),
+    );
+    const userEnvelope = pubsubMock.publish.mock.calls.find(
+      ([topic]: [string]) => topic === "org:org-1:user:user-1:events",
+    )?.[1].userEvents;
+    expect(userEnvelope.payload.html).toBeUndefined();
+  });
+
+  it("publishes read-state events only to the requested user topic", () => {
+    const event = {
+      id: "event-read-1",
+      organizationId: "org-1",
+      scopeType: "system",
+      scopeId: "user-1",
+      eventType: "chat_read",
+      payload: { chatId: "chat-1", unreadCount: 0 },
+    } as any;
+
+    const service = new EventService();
+    service.publishPrivateUserEvent(event, ["user-1"]);
+
+    expect(pubsubMock.publish).toHaveBeenCalledTimes(1);
+    expect(pubsubMock.publish).toHaveBeenCalledWith("org:org-1:user:user-1:events", {
+      userEvents: event,
+    });
   });
 
   it("queries events in chronological order even when paginating backwards", async () => {

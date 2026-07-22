@@ -9,6 +9,7 @@ import { HomeButton } from "./HomeButton";
 import { InboxButton } from "./InboxButton";
 import { TicketsButton } from "./TicketsButton";
 import { SidebarChannelTree } from "./SidebarChannelTree";
+import { SidebarDirectMessagesSection } from "./SidebarDirectMessagesSection";
 import {
   readSidebarSessionScopes,
   toggleSidebarSessionScope,
@@ -19,6 +20,7 @@ const SIDEBAR_SESSION_SCOPE_EVENT = "trace:sidebar-session-scope-change";
 
 export interface SidebarChannelsPaneProps {
   activeChannelId: string | null;
+  activeChatId: string | null;
   activeSessionGroupId: string | null;
   activeOrgId: string | null;
   allChannelIds: string[];
@@ -26,8 +28,11 @@ export interface SidebarChannelsPaneProps {
   channelIdsByGroup: Record<string, string[]>;
   channelsById: Record<string, Channel>;
   channelsLoading: boolean;
+  chatIds: string[];
+  chatsLoading: boolean;
   groupIds: string[];
   onChannelClick: (id: string) => void;
+  onChatClick: (id: string) => void;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
   onDragActiveChange?: (active: boolean) => void;
   topLevelItems: TopLevelItem[];
@@ -35,6 +40,7 @@ export interface SidebarChannelsPaneProps {
 
 export function SidebarChannelsPane({
   activeChannelId,
+  activeChatId,
   activeSessionGroupId,
   activeOrgId,
   allChannelIds,
@@ -42,8 +48,11 @@ export function SidebarChannelsPane({
   channelIdsByGroup,
   channelsById,
   channelsLoading,
+  chatIds,
+  chatsLoading,
   groupIds,
   onChannelClick,
+  onChatClick,
   onSessionClick,
   onDragActiveChange,
   topLevelItems,
@@ -122,6 +131,15 @@ export function SidebarChannelsPane({
           sessionScopes={sessionScopes}
           topLevelItems={topLevelItems}
         />
+
+        {features.messaging && (
+          <SidebarDirectMessagesSection
+            activeChatId={activeChatId}
+            chatIds={chatIds}
+            chatsLoading={chatsLoading}
+            onChatClick={onChatClick}
+          />
+        )}
       </div>
     </section>
   );

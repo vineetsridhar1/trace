@@ -212,11 +212,15 @@ export type Chat = {
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
   id: Scalars["ID"]["output"];
+  lastMessage?: Maybe<Message>;
+  lastMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   members: Array<ChatMember>;
   messages: Array<Message>;
   name?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
   type: ChatType;
   updatedAt: Scalars["DateTime"]["output"];
+  viewerUnreadCount: Scalars["Int"]["output"];
 };
 
 export type ChatMessagesArgs = {
@@ -401,6 +405,7 @@ export type EventType =
   | "chat_created"
   | "chat_member_added"
   | "chat_member_removed"
+  | "chat_read"
   | "chat_renamed"
   | "design_preview_updated"
   | "entity_linked"
@@ -657,6 +662,7 @@ export type Mutation = {
   linkEntityToProject: Project;
   linkLinkedCheckoutRepo: LinkedCheckoutActionResult;
   linkTicket: Ticket;
+  markChatRead: Scalars["Boolean"]["output"];
   moveChannel: Channel;
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
@@ -941,6 +947,11 @@ export type MutationLinkTicketArgs = {
   ticketId: Scalars["ID"]["input"];
 };
 
+export type MutationMarkChatReadArgs = {
+  chatId: Scalars["ID"]["input"];
+  throughMessageId: Scalars["ID"]["input"];
+};
+
 export type MutationMoveChannelArgs = {
   input: MoveChannelInput;
 };
@@ -1083,7 +1094,7 @@ export type MutationSendChannelMessageArgs = {
 
 export type MutationSendChatMessageArgs = {
   chatId: Scalars["ID"]["input"];
-  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
+  clientMutationId: Scalars["String"]["input"];
   html?: InputMaybe<Scalars["String"]["input"]>;
   parentId?: InputMaybe<Scalars["ID"]["input"]>;
   text?: InputMaybe<Scalars["String"]["input"]>;
@@ -2227,6 +2238,7 @@ export type Subscription = {
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
+  userEvents: Event;
   userNotifications: Notification;
 };
 
@@ -2264,6 +2276,10 @@ export type SubscriptionSessionStatusChangedArgs = {
 export type SubscriptionTicketEventsArgs = {
   organizationId: Scalars["ID"]["input"];
   ticketId: Scalars["ID"]["input"];
+};
+
+export type SubscriptionUserEventsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type SubscriptionUserNotificationsArgs = {

@@ -1,63 +1,29 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSidebarData } from "../../hooks/useSidebarData";
-import { useSidebarTabScroll } from "../../hooks/useSidebarTabScroll";
 import { selectChannel } from "../../lib/channel-click-navigation";
-import { features } from "../../lib/features";
 import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
 import { SidebarChannelsPane } from "./SidebarChannelsPane";
-import { SidebarDirectMessagesPane } from "./SidebarDirectMessagesPane";
-import { SidebarTabSwitcher } from "./SidebarTabSwitcher";
 import { UserMenu } from "./UserMenu";
-import { getTabFromProgress, getTabIndex, type SidebarTab } from "./sidebarTabs";
 
 const SIDEBAR_TRANSITION = {
   duration: 0.2,
   ease: [0.42, 0, 0.58, 1],
 } as const;
 
-interface PeekOverlayProps {
-  currentTab: SidebarTab;
-  onMouseLeave: () => void;
-  onTabCommit: (tab: SidebarTab) => void;
-  onTabProgressChange: (progress: number) => void;
-  visible: boolean;
-}
-
 export function PeekOverlay({
-  currentTab,
   onMouseLeave,
-  onTabCommit,
-  onTabProgressChange,
   visible,
-}: PeekOverlayProps) {
+}: {
+  onMouseLeave: () => void;
+  visible: boolean;
+}) {
   const sidebarData = useSidebarData();
-  const activeChannelId = useUIStore((s: { activeChannelId: string | null }) => s.activeChannelId);
-  const activeSessionGroupId = useUIStore(
-    (s: { activeSessionGroupId: string | null }) => s.activeSessionGroupId,
-  );
-  const activeChatId = useUIStore((s: { activeChatId: string | null }) => s.activeChatId);
-  const setActiveChatId = useUIStore(
-    (s: { setActiveChatId: (id: string | null) => void }) => s.setActiveChatId,
-  );
-
-  const { handleScroll, jumpToTab, selectTab, tabProgress, viewportRef } = useSidebarTabScroll({
-    currentTab,
-    onProgressChange: onTabProgressChange,
-    onTabCommit,
-  });
-
-  const prevVisibleRef = useRef(false);
+  const activeChannelId = useUIStore((state) => state.activeChannelId);
+  const activeSessionGroupId = useUIStore((state) => state.activeSessionGroupId);
+  const activeChatId = useUIStore((state) => state.activeChatId);
+  const setActiveChatId = useUIStore((state) => state.setActiveChatId);
   const isDraggingRef = useRef(false);
-
-  useEffect(() => {
-    const wasVisible = prevVisibleRef.current;
-    prevVisibleRef.current = visible;
-
-    if (visible && !wasVisible) {
-      jumpToTab(currentTab);
-    }
-  }, [currentTab, jumpToTab, visible]);
 
   const handleChannelClick = useCallback(
     (id: string) => {
@@ -66,15 +32,13 @@ export function PeekOverlay({
     },
     [onMouseLeave],
   );
-
   const handleChatClick = useCallback(
     (id: string) => {
       setActiveChatId(id);
       onMouseLeave();
     },
-    [setActiveChatId, onMouseLeave],
+    [onMouseLeave, setActiveChatId],
   );
-
   const handleSessionClick = useCallback(
     (channelId: string, sessionGroupId: string, sessionId: string | null) => {
       navigateToSessionGroup(channelId, sessionGroupId, sessionId);
@@ -82,19 +46,6 @@ export function PeekOverlay({
     },
     [onMouseLeave],
   );
-
-  const handleDragActiveChange = useCallback((active: boolean) => {
-    isDraggingRef.current = active;
-  }, []);
-
-  const handleOverlayMouseLeave = useCallback(() => {
-    if (isDraggingRef.current) return;
-
-    const nextTab = getTabFromProgress(tabProgress);
-    onTabCommit(nextTab);
-    onTabProgressChange(getTabIndex(nextTab));
-    onMouseLeave();
-  }, [onMouseLeave, onTabCommit, onTabProgressChange, tabProgress]);
 
   return (
     <AnimatePresence>
@@ -104,63 +55,35 @@ export function PeekOverlay({
           animate={{ x: 0 }}
           exit={{ x: "-100%" }}
           transition={{ type: "tween", ...SIDEBAR_TRANSITION }}
-          onMouseLeave={handleOverlayMouseLeave}
+          onMouseLeave={() => {
+            if (!isDraggingRef.current) onMouseLeave();
+          }}
           className="fixed bottom-2 left-0 top-[calc(env(safe-area-inset-top)+3rem)] z-50 flex w-[calc(22rem+0.5rem)] flex-col pl-2"
         >
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl bg-surface shadow-2xl shadow-black/50 ring-1 ring-white/10">
-            {features.messaging ? (
-              <div
-                ref={viewportRef}
-                className="no-scrollbar flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain"
-                onScroll={handleScroll}
-              >
-                <SidebarDirectMessagesPane
-                  activeChatId={activeChatId}
-                  chatIds={sidebarData.chatIds}
-                  chatsLoading={sidebarData.chatsLoading}
-                  onChatClick={handleChatClick}
-                />
-                <SidebarChannelsPane
-                  activeChannelId={activeChannelId}
-                  activeSessionGroupId={activeSessionGroupId}
-                  activeOrgId={sidebarData.activeOrgId}
-                  allChannelIds={sidebarData.allChannelIds}
-                  channelGroupsById={sidebarData.channelGroupsById}
-                  channelIdsByGroup={sidebarData.channelIdsByGroup}
-                  channelsById={sidebarData.channelsById}
-                  channelsLoading={sidebarData.channelsLoading}
-                  groupIds={sidebarData.groupIds}
-                  onChannelClick={handleChannelClick}
-                  onSessionClick={handleSessionClick}
-                  onDragActiveChange={handleDragActiveChange}
-                  topLevelItems={sidebarData.topLevelItems}
-                />
-              </div>
-            ) : (
-              <div className="flex min-h-0 flex-1">
-                <SidebarChannelsPane
-                  activeChannelId={activeChannelId}
-                  activeSessionGroupId={activeSessionGroupId}
-                  activeOrgId={sidebarData.activeOrgId}
-                  allChannelIds={sidebarData.allChannelIds}
-                  channelGroupsById={sidebarData.channelGroupsById}
-                  channelIdsByGroup={sidebarData.channelIdsByGroup}
-                  channelsById={sidebarData.channelsById}
-                  channelsLoading={sidebarData.channelsLoading}
-                  groupIds={sidebarData.groupIds}
-                  onChannelClick={handleChannelClick}
-                  onSessionClick={handleSessionClick}
-                  onDragActiveChange={handleDragActiveChange}
-                  topLevelItems={sidebarData.topLevelItems}
-                />
-              </div>
-            )}
-
-            {features.messaging && (
-              <div className="px-3 py-2">
-                <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={selectTab} />
-              </div>
-            )}
+            <div className="flex min-h-0 flex-1">
+              <SidebarChannelsPane
+                activeChatId={activeChatId}
+                activeChannelId={activeChannelId}
+                activeSessionGroupId={activeSessionGroupId}
+                activeOrgId={sidebarData.activeOrgId}
+                allChannelIds={sidebarData.allChannelIds}
+                channelGroupsById={sidebarData.channelGroupsById}
+                channelIdsByGroup={sidebarData.channelIdsByGroup}
+                channelsById={sidebarData.channelsById}
+                channelsLoading={sidebarData.channelsLoading}
+                chatIds={sidebarData.chatIds}
+                chatsLoading={sidebarData.chatsLoading}
+                groupIds={sidebarData.groupIds}
+                onChannelClick={handleChannelClick}
+                onChatClick={handleChatClick}
+                onSessionClick={handleSessionClick}
+                onDragActiveChange={(active) => {
+                  isDraggingRef.current = active;
+                }}
+                topLevelItems={sidebarData.topLevelItems}
+              />
+            </div>
             <div className="border-t border-white/10">
               <UserMenu />
             </div>

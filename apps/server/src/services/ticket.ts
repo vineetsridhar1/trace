@@ -17,12 +17,6 @@ const TICKET_INCLUDE = {
   links: true,
 } as const;
 
-function activeChatMemberInOrgWhere(organizationId: string): Prisma.ChatMemberWhereInput {
-  return {
-    OR: [{ leftAt: { not: null } }, { user: { orgMemberships: { some: { organizationId } } } }],
-  };
-}
-
 async function assertLinkTargetAccess(
   tx: Prisma.TransactionClient,
   input: { entityType: EntityType; entityId: string; organizationId: string; actorId: string },
@@ -50,8 +44,8 @@ async function assertLinkTargetAccess(
       await tx.chat.findFirstOrThrow({
         where: {
           id: input.entityId,
+          organizationId: input.organizationId,
           members: { some: { userId: input.actorId, leftAt: null } },
-          AND: [{ members: { every: activeChatMemberInOrgWhere(input.organizationId) } }],
         },
         select: { id: true },
       });
@@ -64,8 +58,8 @@ async function assertLinkTargetAccess(
             { channel: { organizationId: input.organizationId } },
             {
               chat: {
+                organizationId: input.organizationId,
                 members: { some: { userId: input.actorId, leftAt: null } },
-                AND: [{ members: { every: activeChatMemberInOrgWhere(input.organizationId) } }],
               },
             },
           ],

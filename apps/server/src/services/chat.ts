@@ -66,6 +66,25 @@ function buildMemberKey(...userIds: string[]) {
   return userIds.sort().join(":");
 }
 
+function assertMatchingMessageRequest(
+  message: {
+    chatId: string | null;
+    text: string;
+    html: string | null;
+    parentMessageId: string | null;
+  },
+  request: { chatId: string; text: string; html: string | null; parentMessageId: string | null },
+) {
+  if (
+    message.chatId !== request.chatId ||
+    message.text !== request.text ||
+    message.html !== request.html ||
+    message.parentMessageId !== request.parentMessageId
+  ) {
+    throw new ValidationError("clientMutationId was already used for a different message");
+  }
+}
+
 export class ChatService {
   async create(
     input: CreateChatInput,
@@ -228,77 +247,143 @@ export class ChatService {
     actorType: ActorType;
     actorId: string;
   }) {
+    if (actorType !== "user") {
+      throw new AuthorizationError("Only users can send direct messages");
+    }
+    if (!clientMutationId) {
+      throw new ValidationError("clientMutationId is required");
+    }
+
     const normalized = normalizeMessageInput(text, html);
+    const requestedParentId = parentId ?? null;
 
-    const message = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const chat = await tx.chat.findFirstOrThrow({
-        where: {
-          id: chatId,
-          members: { some: { userId: actorId, leftAt: null } },
-          ...chatInOrganizationWhere(organizationId),
-        },
-        select: { id: true },
-      });
+    const execute = async () =>
+      prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const duplicate = await tx.message.findFirst({
+          where: { actorType, actorId, clientMutationId },
+        });
+        if (duplicate) {
+          assertMatchingMessageRequest(duplicate, {
+            chatId,
+            text: normalized.text,
+            html: normalized.html,
+            parentMessageId: requestedParentId,
+          });
+          return { message: duplicate, event: null, memberIds: [] as string[] };
+        }
 
-      let validatedParentId: string | null = null;
-      if (parentId) {
-        const parentMessage = await tx.message.findUniqueOrThrow({
-          where: { id: parentId },
+        const chat = await tx.chat.findFirstOrThrow({
+          where: {
+            id: chatId,
+            organizationId,
+            type: "dm",
+            members: { some: { userId: actorId, leftAt: null } },
+          },
           select: {
             id: true,
-            chatId: true,
-            parentMessageId: true,
+            members: { where: { leftAt: null }, select: { userId: true } },
           },
         });
 
-        if (parentMessage.chatId !== chat.id) {
-          throw new ValidationError("Thread parent must belong to this chat");
+        let validatedParentId: string | null = null;
+        if (parentId) {
+          const parentMessage = await tx.message.findUniqueOrThrow({
+            where: { id: parentId },
+            select: { id: true, chatId: true, parentMessageId: true },
+          });
+          if (parentMessage.chatId !== chat.id) {
+            throw new ValidationError("Thread parent must belong to this chat");
+          }
+          if (parentMessage.parentMessageId) {
+            throw new ValidationError("Thread replies must target the root message");
+          }
+          validatedParentId = parentMessage.id;
         }
 
-        if (parentMessage.parentMessageId) {
-          throw new ValidationError("Thread replies must target the root message");
-        }
+        const createdMessage = await tx.message.create({
+          data: {
+            chatId: chat.id,
+            actorType,
+            actorId,
+            text: normalized.text,
+            html: normalized.html,
+            mentions: normalized.mentions.length
+              ? (normalized.mentions as unknown as PrismaTypes.InputJsonValue)
+              : Prisma.DbNull,
+            parentMessageId: validatedParentId,
+            clientMutationId,
+          },
+        });
 
-        validatedParentId = parentMessage.id;
-      }
+        await tx.chat.update({
+          where: { id: chat.id },
+          data: {
+            lastMessageId: createdMessage.id,
+            lastMessageAt: createdMessage.createdAt,
+          },
+        });
+        await tx.chatMember.update({
+          where: { chatId_userId: { chatId: chat.id, userId: actorId } },
+          data: {
+            lastReadMessageId: createdMessage.id,
+            lastReadAt: createdMessage.createdAt,
+            unreadCount: 0,
+          },
+        });
+        await tx.chatMember.updateMany({
+          where: { chatId: chat.id, userId: { not: actorId }, leftAt: null },
+          data: { unreadCount: { increment: 1 } },
+        });
 
-      const createdMessage = await tx.message.create({
-        data: {
-          chatId: chat.id,
-          actorType,
-          actorId,
+        const event = await eventService.create(
+          {
+            organizationId,
+            scopeType: "chat",
+            scopeId: chat.id,
+            eventType: "message_sent",
+            payload: buildMessageEventPayload(
+              createdMessage,
+              clientMutationId,
+            ) as unknown as PrismaTypes.InputJsonValue,
+            actorType,
+            actorId,
+            deferPublish: true,
+          },
+          tx,
+        );
+
+        return {
+          message: createdMessage,
+          event,
+          memberIds: chat.members.map((member) => member.userId),
+        };
+      });
+
+    let result: Awaited<ReturnType<typeof execute>>;
+    try {
+      result = await execute();
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        const duplicate = await prisma.message.findFirstOrThrow({
+          where: { actorType, actorId, clientMutationId },
+        });
+        assertMatchingMessageRequest(duplicate, {
+          chatId,
           text: normalized.text,
           html: normalized.html,
-          mentions: normalized.mentions.length
-            ? (normalized.mentions as unknown as PrismaTypes.InputJsonValue)
-            : Prisma.DbNull,
-          parentMessageId: validatedParentId,
-        },
-      });
+          parentMessageId: requestedParentId,
+        });
+        result = { message: duplicate, event: null, memberIds: [] };
+      } else {
+        throw error;
+      }
+    }
 
-      await tx.chat.update({
-        where: { id: chat.id },
-        data: { updatedAt: createdMessage.createdAt },
-      });
-
-      await eventService.create(
-        {
-          organizationId,
-          scopeType: "chat",
-          scopeId: chat.id,
-          eventType: "message_sent",
-          payload: buildMessageEventPayload(
-            createdMessage,
-            clientMutationId,
-          ) as unknown as PrismaTypes.InputJsonValue,
-          actorType,
-          actorId,
-        },
-        tx,
-      );
-
-      return createdMessage;
-    });
+    const { message, event, memberIds } = result;
+    if (event) eventService.publishCreated(event, memberIds);
 
     if (message.parentMessageId) {
       await participantService.subscribe({
@@ -336,8 +421,8 @@ export class ChatService {
       where: {
         id: messageId,
         chat: {
+          organizationId,
           members: { some: { userId: actorId, leftAt: null } },
-          ...chatInOrganizationWhere(organizationId),
         },
       },
     });
@@ -383,7 +468,7 @@ export class ChatService {
         data: { updatedAt: editedAt },
       });
 
-      await eventService.create(
+      const event = await eventService.create(
         {
           organizationId,
           scopeType: "chat",
@@ -394,14 +479,17 @@ export class ChatService {
           ) as unknown as PrismaTypes.InputJsonValue,
           actorType,
           actorId,
+          deferPublish: true,
         },
         tx,
       );
 
-      return updatedMessage;
+      return { updatedMessage, event };
     });
 
-    const [hydratedMessage] = await hydrateMessages([updated]);
+    const memberIds = (await this.getMembers(chatId)).map((member) => member.userId);
+    eventService.publishCreated(updated.event, memberIds);
+    const [hydratedMessage] = await hydrateMessages([updated.updatedMessage]);
     return hydratedMessage;
   }
 
@@ -420,8 +508,8 @@ export class ChatService {
       where: {
         id: messageId,
         chat: {
+          organizationId,
           members: { some: { userId: actorId, leftAt: null } },
-          ...chatInOrganizationWhere(organizationId),
         },
       },
     });
@@ -457,7 +545,7 @@ export class ChatService {
         data: { updatedAt: deletedAt },
       });
 
-      await eventService.create(
+      const event = await eventService.create(
         {
           organizationId,
           scopeType: "chat",
@@ -471,14 +559,17 @@ export class ChatService {
           } as PrismaTypes.InputJsonValue,
           actorType,
           actorId,
+          deferPublish: true,
         },
         tx,
       );
 
-      return deletedMessage;
+      return { deletedMessage, event };
     });
 
-    const [hydratedMessage] = await hydrateMessages([updated]);
+    const memberIds = (await this.getMembers(chatId)).map((member) => member.userId);
+    eventService.publishCreated(updated.event, memberIds);
+    const [hydratedMessage] = await hydrateMessages([updated.deletedMessage]);
     return hydratedMessage;
   }
 
@@ -491,8 +582,8 @@ export class ChatService {
     await prisma.chat.findFirstOrThrow({
       where: {
         id: chatId,
+        organizationId,
         members: { some: { userId, leftAt: null } },
-        ...chatInOrganizationWhere(organizationId),
       },
       select: { id: true },
     });
@@ -554,7 +645,7 @@ export class ChatService {
         OR: [
           {
             chat: {
-              ...chatInOrganizationWhere(organizationId),
+              organizationId,
               members: { some: { userId, leftAt: null } },
             },
           },
@@ -694,8 +785,8 @@ export class ChatService {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
+          organizationId,
           members: { some: { userId: actorId, leftAt: null } },
-          ...chatInOrganizationWhere(organizationId),
         },
         select: { type: true },
       });
@@ -762,7 +853,7 @@ export class ChatService {
     });
 
     return prisma.chat.findFirstOrThrow({
-      where: { id: chatId, ...chatInOrganizationWhere(organizationId) },
+      where: { id: chatId, organizationId },
       include: { members: { where: { leftAt: null } } },
     });
   }
@@ -772,8 +863,8 @@ export class ChatService {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
+          organizationId,
           members: { some: { userId: actorId, leftAt: null } },
-          ...chatInOrganizationWhere(organizationId),
         },
         select: { type: true },
       });
@@ -823,7 +914,7 @@ export class ChatService {
     });
 
     return prisma.chat.findFirstOrThrow({
-      where: { id: chatId, ...chatInOrganizationWhere(organizationId) },
+      where: { id: chatId, organizationId },
       include: { members: { where: { leftAt: null } } },
     });
   }
@@ -839,8 +930,8 @@ export class ChatService {
       const chat = await tx.chat.findFirstOrThrow({
         where: {
           id: chatId,
+          organizationId,
           members: { some: { userId: actorId, leftAt: null } },
-          ...chatInOrganizationWhere(organizationId),
         },
         select: { type: true },
       });
@@ -872,34 +963,122 @@ export class ChatService {
     });
   }
 
+  async markRead(chatId: string, throughMessageId: string, organizationId: string, userId: string) {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.chat.findFirstOrThrow({
+        where: {
+          id: chatId,
+          organizationId,
+          type: "dm",
+          members: { some: { userId, leftAt: null } },
+        },
+        select: { id: true },
+      });
+      const message = await tx.message.findFirstOrThrow({
+        where: { id: throughMessageId, chatId },
+        select: { id: true, createdAt: true },
+      });
+      const membership = await tx.chatMember.findUniqueOrThrow({
+        where: { chatId_userId: { chatId, userId } },
+      });
+
+      if (
+        membership.lastReadAt &&
+        (membership.lastReadAt > message.createdAt ||
+          (membership.lastReadAt.getTime() === message.createdAt.getTime() &&
+            membership.lastReadMessageId !== null &&
+            membership.lastReadMessageId >= message.id))
+      ) {
+        return null;
+      }
+
+      const unreadCount = await tx.message.count({
+        where: {
+          chatId,
+          actorId: { not: userId },
+          deletedAt: null,
+          OR: [
+            { createdAt: { gt: message.createdAt } },
+            { createdAt: message.createdAt, id: { gt: message.id } },
+          ],
+        },
+      });
+      await tx.chatMember.update({
+        where: { chatId_userId: { chatId, userId } },
+        data: {
+          lastReadMessageId: message.id,
+          lastReadAt: message.createdAt,
+          unreadCount,
+        },
+      });
+      const event = await eventService.create(
+        {
+          organizationId,
+          scopeType: "system",
+          scopeId: userId,
+          eventType: "chat_read",
+          payload: {
+            chatId,
+            throughMessageId: message.id,
+            lastReadAt: message.createdAt.toISOString(),
+            unreadCount,
+          },
+          actorType: "user",
+          actorId: userId,
+          deferPublish: true,
+        },
+        tx,
+      );
+      return event;
+    });
+
+    if (!result) return false;
+    eventService.publishPrivateUserEvent(result, [userId]);
+    return true;
+  }
+
   async getChats(userId: string, organizationId: string) {
-    return prisma.chat.findMany({
+    const chats = await prisma.chat.findMany({
       where: {
+        organizationId,
+        type: "dm",
         members: { some: { userId, leftAt: null } },
-        ...chatInOrganizationWhere(organizationId),
       },
       include: {
-        members: {
-          where: { leftAt: null },
-        },
+        members: { where: { leftAt: null } },
+        lastMessage: true,
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy: [
+        { lastMessageAt: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+      ],
+      take: 50,
     });
+    return chats.map((chat) => ({
+      ...chat,
+      viewerUnreadCount:
+        chat.members.find((member) => member.userId === userId)?.unreadCount ?? 0,
+    }));
   }
 
   async getChat(chatId: string, userId: string, organizationId: string) {
-    return prisma.chat.findFirst({
+    const chat = await prisma.chat.findFirst({
       where: {
         id: chatId,
+        organizationId,
         members: { some: { userId, leftAt: null } },
-        ...chatInOrganizationWhere(organizationId),
       },
       include: {
-        members: {
-          where: { leftAt: null },
-        },
+        members: { where: { leftAt: null } },
+        lastMessage: true,
       },
     });
+    if (!chat) return null;
+    return {
+      ...chat,
+      viewerUnreadCount:
+        chat.members.find((member) => member.userId === userId)?.unreadCount ?? 0,
+    };
   }
 
   async getMembers(chatId: string) {

@@ -1,3 +1,7 @@
+import { useCallback, useEffect, useRef } from "react";
+import { gql } from "@urql/core";
+import { useEntityField } from "@trace/client-core";
+import { client } from "../../lib/urql";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { useChatMessages } from "../../hooks/useChatMessages";
 import { useIsMobile } from "../../hooks/use-mobile";
@@ -10,12 +14,45 @@ import { ThreadPanel } from "./ThreadPanel";
 
 const THREAD_WIDTH_KEY = "trace_thread_width";
 
+const MARK_CHAT_READ = gql`
+  mutation MarkChatRead($chatId: ID!, $throughMessageId: ID!) {
+    markChatRead(chatId: $chatId, throughMessageId: $throughMessageId)
+  }
+`;
+
 export function ChatView({ chatId }: { chatId: string }) {
   const activeThreadId = useUIStore((s: UIState) => s.activeThreadId);
   const { messageIds, loading, hasOlder, fetchOlderMessages } = useChatMessages(chatId);
+  const unreadCount = useEntityField("chats", chatId, "viewerUnreadCount") ?? 0;
+  const bottomMessageIdRef = useRef<string | null>(null);
+  const markingMessageIdRef = useRef<string | null>(null);
   const isMobile = useIsMobile();
   const { threadId, rendered, slideIn, threadWidth, isDragging, handleDragStart } =
     useThreadPanelLayout(activeThreadId, THREAD_WIDTH_KEY);
+
+  useEffect(() => {
+    bottomMessageIdRef.current = null;
+    markingMessageIdRef.current = null;
+  }, [chatId]);
+
+  const markVisibleMessageRead = useCallback(
+    async (messageId: string) => {
+      bottomMessageIdRef.current = messageId;
+      if (unreadCount === 0 || markingMessageIdRef.current === messageId) return;
+      markingMessageIdRef.current = messageId;
+      const result = await client
+        .mutation(MARK_CHAT_READ, { chatId, throughMessageId: messageId })
+        .toPromise();
+      if (result.error) markingMessageIdRef.current = null;
+    },
+    [chatId, unreadCount],
+  );
+
+  useEffect(() => {
+    if (unreadCount > 0 && bottomMessageIdRef.current) {
+      void markVisibleMessageRead(bottomMessageIdRef.current);
+    }
+  }, [markVisibleMessageRead, unreadCount]);
 
   return (
     <div className="flex h-full flex-col">
@@ -29,6 +66,7 @@ export function ChatView({ chatId }: { chatId: string }) {
             loading={loading}
             hasOlder={hasOlder}
             onLoadOlder={fetchOlderMessages}
+            onBottomMessageVisible={markVisibleMessageRead}
           />
           <ChatComposer chatId={chatId} />
         </div>

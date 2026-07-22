@@ -22,9 +22,12 @@ const CHANNEL_MESSAGE_EVENTS = new Set<EventType>([
 ]);
 
 function canViewSystemEvent(
-  event: { eventType: string; payload?: unknown },
+  event: { eventType: string; scopeId?: string; payload?: unknown },
   userId: string | null | undefined,
 ): boolean {
+  if (event.eventType === "chat_read") {
+    return !!userId && event.scopeId === userId;
+  }
   if (
     event.eventType !== "bridge_access_requested" &&
     event.eventType !== "bridge_access_request_resolved" &&

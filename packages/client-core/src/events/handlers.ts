@@ -794,6 +794,85 @@ export function handleOrgEvent(event: Event): void {
   notifyForEvent(event);
 }
 
+/** Apply a private, viewer-specific event without retaining background chat history. */
+export function handleUserEvent(event: Event): void {
+  const batch = new StoreBatchWriter();
+  const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
+  const currentUserId = useAuthStore.getState().user?.id;
+
+  if (event.eventType === "chat_created") {
+    const chat = asJsonObject(payload.chat);
+    if (chat && typeof chat.id === "string") {
+      batch.upsert("chats", chat.id, chat as unknown as Chat);
+    }
+  } else if (event.eventType === "chat_read") {
+    const chatId = typeof payload.chatId === "string" ? payload.chatId : null;
+    if (chatId && typeof payload.unreadCount === "number") {
+      batch.patch("chats", chatId, { viewerUnreadCount: payload.unreadCount } as Partial<Chat>);
+    }
+  } else if (event.scopeType === ("chat" satisfies ScopeType)) {
+    const chat = batch.get("chats", event.scopeId);
+    const messageId = typeof payload.messageId === "string" ? payload.messageId : null;
+
+    if (chat && messageId && event.eventType === "message_sent") {
+      const isDuplicate = chat.lastMessage?.id === messageId;
+      const isOwnMessage = event.actor?.id === currentUserId;
+      const createdAt = typeof payload.createdAt === "string" ? payload.createdAt : event.timestamp;
+      const lastMessage = {
+        id: messageId,
+        chatId: event.scopeId,
+        channelId: null,
+        actor: event.actor,
+        text: typeof payload.text === "string" ? payload.text : "",
+        html: null,
+        mentions: null,
+        parentMessageId:
+          typeof payload.parentMessageId === "string" ? payload.parentMessageId : null,
+        replyCount: 0,
+        latestReplyAt: null,
+        threadRepliers: [],
+        createdAt,
+        updatedAt: createdAt,
+        editedAt: null,
+        deletedAt: null,
+      } as Chat["lastMessage"];
+      batch.patch("chats", event.scopeId, {
+        lastMessage,
+        lastMessageAt: createdAt,
+        updatedAt: event.timestamp,
+        viewerUnreadCount:
+          isOwnMessage || isDuplicate ? chat.viewerUnreadCount : chat.viewerUnreadCount + 1,
+      } as Partial<Chat>);
+    }
+
+    if (chat && messageId && chat.lastMessage?.id === messageId) {
+      if (event.eventType === "message_edited") {
+        batch.patch("chats", event.scopeId, {
+          lastMessage: {
+            ...chat.lastMessage,
+            text: typeof payload.text === "string" ? payload.text : chat.lastMessage.text,
+            editedAt: typeof payload.editedAt === "string" ? payload.editedAt : event.timestamp,
+          },
+        } as Partial<Chat>);
+      }
+      if (event.eventType === "message_deleted") {
+        batch.patch("chats", event.scopeId, {
+          lastMessage: {
+            ...chat.lastMessage,
+            text: "",
+            html: null,
+            deletedAt:
+              typeof payload.deletedAt === "string" ? payload.deletedAt : event.timestamp,
+          },
+        } as Partial<Chat>);
+      }
+    }
+  }
+
+  batch.flush();
+  notifyForEvent(event);
+}
+
 /**
  * Apply a session-scoped event (from the per-session subscription).
  * Reuses the optimistic-resolution helper so optimistic placeholders

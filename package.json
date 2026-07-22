@@ -17,6 +17,7 @@
     "test": "pnpm -r --if-present test",
     "test:coverage": "pnpm -r --if-present test:unit:coverage",
     "test:server": "pnpm --filter @trace/server test:unit",
+    "test:dm:browser": "node ./scripts/direct-messages-browser-e2e.mjs",
     "test:server:coverage": "pnpm --filter @trace/server test:unit:coverage",
     "smoke:cloud-app-session": "node ./scripts/smoke-cloud-app-session.mjs",
     "smoke:cloud-design-session": "node ./scripts/smoke-cloud-design-session.mjs",

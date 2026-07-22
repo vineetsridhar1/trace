@@ -355,15 +355,8 @@ function handleDmMessage(event: Event): void {
   const activeChatId = useUIStore.getState().activeChatId;
   if (activeChatId === chatId) return;
 
-  // Mark the chat as unread
-  useUIStore.getState().markChatUnread(chatId);
-
-  const payload = asJsonObject(event.payload);
   const actorName = event.actor.name ?? "Someone";
-  const text = typeof payload?.text === "string" ? payload.text : "";
-  const preview = text.length > 80 ? text.slice(0, 80) + "…" : text;
-
-  const title = preview ? `${actorName}: ${preview}` : `New message from ${actorName}`;
+  const title = `New message from ${actorName}`;
 
   notify(title, {
     tag: `dm-${chatId}`,

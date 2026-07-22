@@ -18,6 +18,7 @@ import { KeyboardShortcutsDialog } from "./components/command/KeyboardShortcutsD
 import { SidebarProvider, SidebarInset, useSidebar } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { useOrgEvents } from "./hooks/useOrgEvents";
+import { useUserEvents } from "./hooks/useUserEvents";
 import { useHistorySync } from "./hooks/useHistorySync";
 import { useVisibilityRefresh } from "./hooks/useVisibilityRefresh";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
@@ -97,6 +98,7 @@ export function App() {
 
 function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null }) {
   useOrgEvents();
+  useUserEvents();
   useHistorySync();
   useVisibilityRefresh();
   useGlobalShortcuts();

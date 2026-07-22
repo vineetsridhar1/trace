@@ -60,6 +60,7 @@ const CHATS_QUERY = gql`
       id
       type
       name
+      organizationId
       members {
         user {
           id
@@ -68,6 +69,23 @@ const CHATS_QUERY = gql`
         }
         joinedAt
       }
+      lastMessage {
+        id
+        chatId
+        actor {
+          type
+          id
+          name
+          avatarUrl
+        }
+        text
+        parentMessageId
+        createdAt
+        editedAt
+        deletedAt
+      }
+      lastMessageAt
+      viewerUnreadCount
       createdAt
       updatedAt
     }
@@ -246,12 +264,18 @@ export function useSidebarData() {
   }, [activeOrgId, upsertMany]);
 
   const fetchChats = useCallback(async () => {
+    if (!activeOrgId) return;
     const result = await client.query(CHATS_QUERY, {}).toPromise();
     if (result.data?.chats) {
-      upsertMany("chats", result.data.chats as Array<Chat & { id: string }>);
+      const chats = result.data.chats as Array<Chat & { id: string }>;
+      const chatIds = new Set(chats.map((chat) => chat.id));
+      upsertMany("chats", chats);
+      for (const chatId of Object.keys(useEntityStore.getState().chats)) {
+        if (!chatIds.has(chatId)) removeEntity("chats", chatId);
+      }
     }
     setChatsLoading(false);
-  }, [upsertMany]);
+  }, [activeOrgId, removeEntity, upsertMany]);
 
   const fetchInboxItems = useCallback(async () => {
     if (!activeOrgId) return;
@@ -312,11 +336,12 @@ export function useSidebarData() {
   useEffect(() => {
     fetchChannels();
     fetchChannelGroups();
-    if (features.messaging) {
-      fetchChats();
-    }
     fetchRepos();
-  }, [fetchChannels, fetchChannelGroups, fetchChats, fetchRepos]);
+  }, [fetchChannels, fetchChannelGroups, fetchRepos]);
+
+  useEffect(() => {
+    if (features.messaging) fetchChats();
+  }, [fetchChats, refreshTick]);
 
   useEffect(() => {
     if (features.messaging) return;
@@ -330,7 +355,15 @@ export function useSidebarData() {
     fetchInboxItems();
   }, [fetchInboxItems, refreshTick]);
 
-  const chatIds = useEntityIds("chats");
+  const chatIds = useEntityIds(
+    "chats",
+    (chat) => chat.type === "dm",
+    (a, b) => {
+      const aTime = a.lastMessageAt ?? a.createdAt;
+      const bTime = b.lastMessageAt ?? b.createdAt;
+      return bTime.localeCompare(aTime) || a.id.localeCompare(b.id);
+    },
+  );
 
   const allChannelIds = useEntityIds(
     "channels",

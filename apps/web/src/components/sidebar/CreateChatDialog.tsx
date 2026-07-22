@@ -33,7 +33,7 @@ interface OrgMember {
 export function CreateChatDialog() {
   const [open, setOpen] = useState(false);
   const [members, setMembers] = useState<OrgMember[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const userId = useAuthStore((s: { user: { id: string } | null }) => s.user?.id);
@@ -53,32 +53,20 @@ export function CreateChatDialog() {
   useEffect(() => {
     if (open) {
       fetchMembers();
-      setSelectedIds(new Set());
+      setSelectedId(null);
     }
   }, [open, fetchMembers]);
 
-  function toggleMember(id: string) {
-    setSelectedIds((prev: Set<string>) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }
-
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (selectedIds.size === 0 || !activeOrgId) return;
+    if (!selectedId || !activeOrgId) return;
 
     setCreating(true);
     try {
       const result = await client
         .mutation(CREATE_CHAT_MUTATION, {
           input: {
-            memberIds: [...selectedIds],
+            memberIds: [selectedId],
           },
         })
         .toPromise();
@@ -112,17 +100,16 @@ export function CreateChatDialog() {
           </DialogHeader>
           <div className="py-4">
             <label className="mb-1.5 block text-sm text-muted-foreground">
-              Select members (
-              {selectedIds.size === 1 ? "DM" : selectedIds.size > 1 ? "Group" : "none selected"})
+              Select an organization member
             </label>
             <div className="max-h-60 space-y-1 overflow-y-auto">
               {otherMembers.map((member: OrgMember) => (
                 <button
                   key={member.id}
                   type="button"
-                  onClick={() => toggleMember(member.id)}
+                  onClick={() => setSelectedId(member.id)}
                   className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
-                    selectedIds.has(member.id)
+                    selectedId === member.id
                       ? "bg-primary/10 text-foreground"
                       : "text-muted-foreground hover:bg-surface-elevated/50 hover:text-foreground"
                   }`}
@@ -144,8 +131,8 @@ export function CreateChatDialog() {
             </div>
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={selectedIds.size === 0 || creating}>
-              {creating ? "Creating..." : "Start Chat"}
+            <Button type="submit" disabled={!selectedId || creating}>
+              {creating ? "Opening..." : "Start conversation"}
             </Button>
           </DialogFooter>
         </form>

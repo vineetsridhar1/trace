@@ -215,11 +215,15 @@ export type Chat = {
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
   id: Scalars["ID"]["output"];
+  lastMessage?: Maybe<Message>;
+  lastMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   members: Array<ChatMember>;
   messages: Array<Message>;
   name?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
   type: ChatType;
   updatedAt: Scalars["DateTime"]["output"];
+  viewerUnreadCount: Scalars["Int"]["output"];
 };
 
 export type ChatMessagesArgs = {
@@ -404,6 +408,7 @@ export type EventType =
   | "chat_created"
   | "chat_member_added"
   | "chat_member_removed"
+  | "chat_read"
   | "chat_renamed"
   | "design_preview_updated"
   | "entity_linked"
@@ -660,6 +665,7 @@ export type Mutation = {
   linkEntityToProject: Project;
   linkLinkedCheckoutRepo: LinkedCheckoutActionResult;
   linkTicket: Ticket;
+  markChatRead: Scalars["Boolean"]["output"];
   moveChannel: Channel;
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
@@ -944,6 +950,11 @@ export type MutationLinkTicketArgs = {
   ticketId: Scalars["ID"]["input"];
 };
 
+export type MutationMarkChatReadArgs = {
+  chatId: Scalars["ID"]["input"];
+  throughMessageId: Scalars["ID"]["input"];
+};
+
 export type MutationMoveChannelArgs = {
   input: MoveChannelInput;
 };
@@ -1086,7 +1097,7 @@ export type MutationSendChannelMessageArgs = {
 
 export type MutationSendChatMessageArgs = {
   chatId: Scalars["ID"]["input"];
-  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
+  clientMutationId: Scalars["String"]["input"];
   html?: InputMaybe<Scalars["String"]["input"]>;
   parentId?: InputMaybe<Scalars["ID"]["input"]>;
   text?: InputMaybe<Scalars["String"]["input"]>;
@@ -2230,6 +2241,7 @@ export type Subscription = {
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
+  userEvents: Event;
   userNotifications: Notification;
 };
 
@@ -2267,6 +2279,10 @@ export type SubscriptionSessionStatusChangedArgs = {
 export type SubscriptionTicketEventsArgs = {
   organizationId: Scalars["ID"]["input"];
   ticketId: Scalars["ID"]["input"];
+};
+
+export type SubscriptionUserEventsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type SubscriptionUserNotificationsArgs = {
@@ -2954,6 +2970,8 @@ export type ChatResolvers<
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  lastMessage?: Resolver<Maybe<ResolversTypes["Message"]>, ParentType, ContextType>;
+  lastMessageAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
   members?: Resolver<Array<ResolversTypes["ChatMember"]>, ParentType, ContextType>;
   messages?: Resolver<
     Array<ResolversTypes["Message"]>,
@@ -2962,8 +2980,10 @@ export type ChatResolvers<
     Partial<ChatMessagesArgs>
   >;
   name?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   type?: Resolver<ResolversTypes["ChatType"], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  viewerUnreadCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3520,6 +3540,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationLinkTicketArgs, "entityId" | "entityType" | "ticketId">
   >;
+  markChatRead?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationMarkChatReadArgs, "chatId" | "throughMessageId">
+  >;
   moveChannel?: Resolver<
     ResolversTypes["Channel"],
     ParentType,
@@ -3695,7 +3721,7 @@ export type MutationResolvers<
     ResolversTypes["Message"],
     ParentType,
     ContextType,
-    RequireFields<MutationSendChatMessageArgs, "chatId">
+    RequireFields<MutationSendChatMessageArgs, "chatId" | "clientMutationId">
   >;
   sendMessage?: Resolver<
     ResolversTypes["Event"],
@@ -4871,6 +4897,13 @@ export type SubscriptionResolvers<
     ParentType,
     ContextType,
     RequireFields<SubscriptionTicketEventsArgs, "organizationId" | "ticketId">
+  >;
+  userEvents?: SubscriptionResolver<
+    ResolversTypes["Event"],
+    "userEvents",
+    ParentType,
+    ContextType,
+    RequireFields<SubscriptionUserEventsArgs, "organizationId">
   >;
   userNotifications?: SubscriptionResolver<
     ResolversTypes["Notification"],

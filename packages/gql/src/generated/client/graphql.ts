@@ -214,11 +214,15 @@ export type Chat = {
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
   id: Scalars["ID"]["output"];
+  lastMessage?: Maybe<Message>;
+  lastMessageAt?: Maybe<Scalars["DateTime"]["output"]>;
   members: Array<ChatMember>;
   messages: Array<Message>;
   name?: Maybe<Scalars["String"]["output"]>;
+  organizationId: Scalars["ID"]["output"];
   type: ChatType;
   updatedAt: Scalars["DateTime"]["output"];
+  viewerUnreadCount: Scalars["Int"]["output"];
 };
 
 export type ChatMessagesArgs = {
@@ -403,6 +407,7 @@ export type EventType =
   | "chat_created"
   | "chat_member_added"
   | "chat_member_removed"
+  | "chat_read"
   | "chat_renamed"
   | "design_preview_updated"
   | "entity_linked"
@@ -659,6 +664,7 @@ export type Mutation = {
   linkEntityToProject: Project;
   linkLinkedCheckoutRepo: LinkedCheckoutActionResult;
   linkTicket: Ticket;
+  markChatRead: Scalars["Boolean"]["output"];
   moveChannel: Channel;
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
@@ -943,6 +949,11 @@ export type MutationLinkTicketArgs = {
   ticketId: Scalars["ID"]["input"];
 };
 
+export type MutationMarkChatReadArgs = {
+  chatId: Scalars["ID"]["input"];
+  throughMessageId: Scalars["ID"]["input"];
+};
+
 export type MutationMoveChannelArgs = {
   input: MoveChannelInput;
 };
@@ -1085,7 +1096,7 @@ export type MutationSendChannelMessageArgs = {
 
 export type MutationSendChatMessageArgs = {
   chatId: Scalars["ID"]["input"];
-  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
+  clientMutationId: Scalars["String"]["input"];
   html?: InputMaybe<Scalars["String"]["input"]>;
   parentId?: InputMaybe<Scalars["ID"]["input"]>;
   text?: InputMaybe<Scalars["String"]["input"]>;
@@ -2229,6 +2240,7 @@ export type Subscription = {
   sessionPortsChanged: SessionEndpoints;
   sessionStatusChanged: Session;
   ticketEvents: Event;
+  userEvents: Event;
   userNotifications: Notification;
 };
 
@@ -2266,6 +2278,10 @@ export type SubscriptionSessionStatusChangedArgs = {
 export type SubscriptionTicketEventsArgs = {
   organizationId: Scalars["ID"]["input"];
   ticketId: Scalars["ID"]["input"];
+};
+
+export type SubscriptionUserEventsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type SubscriptionUserNotificationsArgs = {
@@ -2582,7 +2598,7 @@ export type SendChatMessageMutationVariables = Exact<{
   chatId: Scalars["ID"]["input"];
   html?: InputMaybe<Scalars["String"]["input"]>;
   parentId?: InputMaybe<Scalars["ID"]["input"]>;
-  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
+  clientMutationId: Scalars["String"]["input"];
 }>;
 
 export type SendChatMessageMutation = {
@@ -2599,6 +2615,13 @@ export type RenameChatMutation = {
   __typename?: "Mutation";
   renameChat: { __typename?: "Chat"; id: string; name?: string | null };
 };
+
+export type MarkChatReadMutationVariables = Exact<{
+  chatId: Scalars["ID"]["input"];
+  throughMessageId: Scalars["ID"]["input"];
+}>;
+
+export type MarkChatReadMutation = { __typename?: "Mutation"; markChatRead: boolean };
 
 export type ThreadRepliesQueryVariables = Exact<{
   rootMessageId: Scalars["ID"]["input"];
@@ -4399,6 +4422,9 @@ export type ChatsQuery = {
     id: string;
     type: ChatType;
     name?: string | null;
+    organizationId: string;
+    lastMessageAt?: string | null;
+    viewerUnreadCount: number;
     createdAt: string;
     updatedAt: string;
     members: Array<{
@@ -4406,6 +4432,23 @@ export type ChatsQuery = {
       joinedAt: string;
       user: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     }>;
+    lastMessage?: {
+      __typename?: "Message";
+      id: string;
+      chatId?: string | null;
+      text: string;
+      parentMessageId?: string | null;
+      createdAt: string;
+      editedAt?: string | null;
+      deletedAt?: string | null;
+      actor: {
+        __typename?: "Actor";
+        type: ActorType;
+        id: string;
+        name?: string | null;
+        avatarUrl?: string | null;
+      };
+    } | null;
   }>;
 };
 
@@ -4509,6 +4552,32 @@ export type SidebarSessionGroupsQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   }>;
+};
+
+export type UserEventsSubscriptionVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type UserEventsSubscription = {
+  __typename?: "Subscription";
+  userEvents: {
+    __typename?: "Event";
+    id: string;
+    scopeType: ScopeType;
+    scopeId: string;
+    eventType: EventType;
+    payload: JsonValue;
+    parentId?: string | null;
+    timestamp: string;
+    metadata?: JsonValue | null;
+    actor: {
+      __typename?: "Actor";
+      type: ActorType;
+      id: string;
+      name?: string | null;
+      avatarUrl?: string | null;
+    };
+  };
 };
 
 export type OnboardingReposQueryVariables = Exact<{
@@ -5107,7 +5176,10 @@ export const SendChatMessageDocument = {
         {
           kind: "VariableDefinition",
           variable: { kind: "Variable", name: { kind: "Name", value: "clientMutationId" } },
-          type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
         },
       ],
       selectionSet: {
@@ -5204,6 +5276,55 @@ export const RenameChatDocument = {
     },
   ],
 } as unknown as DocumentNode<RenameChatMutation, RenameChatMutationVariables>;
+export const MarkChatReadDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "MarkChatRead" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "chatId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "throughMessageId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "markChatRead" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "chatId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "chatId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "throughMessageId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "throughMessageId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<MarkChatReadMutation, MarkChatReadMutationVariables>;
 export const ThreadRepliesDocument = {
   kind: "Document",
   definitions: [
@@ -10894,6 +11015,7 @@ export const ChatsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "type" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "organizationId" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "members" },
@@ -10916,6 +11038,37 @@ export const ChatsDocument = {
                     ],
                   },
                 },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "lastMessage" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "chatId" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "actor" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "type" } },
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "text" } },
+                      { kind: "Field", name: { kind: "Name", value: "parentMessageId" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "editedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "deletedAt" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "viewerUnreadCount" } },
                 { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                 { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
               ],
@@ -11180,6 +11333,68 @@ export const SidebarSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<SidebarSessionGroupsQuery, SidebarSessionGroupsQueryVariables>;
+export const UserEventsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "subscription",
+      name: { kind: "Name", value: "UserEvents" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "userEvents" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeType" } },
+                { kind: "Field", name: { kind: "Name", value: "scopeId" } },
+                { kind: "Field", name: { kind: "Name", value: "eventType" } },
+                { kind: "Field", name: { kind: "Name", value: "payload" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "actor" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "type" } },
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "parentId" } },
+                { kind: "Field", name: { kind: "Name", value: "timestamp" } },
+                { kind: "Field", name: { kind: "Name", value: "metadata" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<UserEventsSubscription, UserEventsSubscriptionVariables>;
 export const OnboardingReposDocument = {
   kind: "Document",
   definitions: [

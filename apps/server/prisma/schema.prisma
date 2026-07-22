@@ -1113,7 +1113,7 @@ model Chat {
   updatedAt DateTime @updatedAt
 
   @@unique([organizationId, dmKey])
-  @@index([organizationId, lastMessageAt])
+  @@index([organizationId, lastMessageAt(sort: Desc)])
 }
 
 model Message {

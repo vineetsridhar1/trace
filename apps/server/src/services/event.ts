@@ -236,6 +236,13 @@ export class EventService {
     return event;
   }
 
+  publishPrivateUserEvent(event: PrismaEvent, recipientUserIds: readonly string[]) {
+    for (const userId of new Set(recipientUserIds)) {
+      pubsub.publish(topics.userEvents(event.organizationId, userId), { userEvents: event });
+    }
+    return event;
+  }
+
   private chatUserEnvelope(event: PrismaEvent): PrismaEvent {
     if (
       event.eventType !== "message_sent" &&
@@ -262,7 +269,7 @@ export class EventService {
         editedAt: payload.editedAt,
         deletedAt: payload.deletedAt,
         ...(text !== undefined ? { text } : {}),
-      } as Prisma.InputJsonValue,
+      } as Prisma.JsonValue,
     };
   }
 

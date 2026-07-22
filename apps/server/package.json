@@ -9,6 +9,8 @@
     "start": "node dist/index.js",
     "lint": "tsc -b",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:dm": "tsx prisma/seed-direct-messages.ts",
+    "test:dm:e2e": "tsx test/direct-messages.e2e.ts",
     "test": "pnpm test:unit",
     "test:unit": "vitest run",
     "test:unit:coverage": "vitest run --coverage && node ./test/check-coverage.mjs",

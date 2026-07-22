@@ -52,7 +52,7 @@ export const chatMutations = {
       text?: string;
       html?: string;
       parentId?: string;
-      clientMutationId?: string | null;
+      clientMutationId: string;
     },
     ctx: Context,
   ) => {
@@ -61,7 +61,7 @@ export const chatMutations = {
       text: args.text,
       html: args.html,
       parentId: args.parentId,
-      clientMutationId: args.clientMutationId ?? undefined,
+      clientMutationId: args.clientMutationId,
       organizationId: requireOrgContext(ctx),
       actorType: ctx.actorType,
       actorId: ctx.userId,
@@ -102,6 +102,18 @@ export const chatMutations = {
       args.name,
       requireOrgContext(ctx),
       ctx.actorType,
+      ctx.userId,
+    );
+  },
+  markChatRead: (
+    _: unknown,
+    args: { chatId: string; throughMessageId: string },
+    ctx: Context,
+  ) => {
+    return chatService.markRead(
+      args.chatId,
+      args.throughMessageId,
+      requireOrgContext(ctx),
       ctx.userId,
     );
   },

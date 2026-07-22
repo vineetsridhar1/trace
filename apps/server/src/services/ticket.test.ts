@@ -306,19 +306,8 @@ describe("TicketService", () => {
     expect(prismaMock.chat.findFirstOrThrow).toHaveBeenCalledWith({
       where: {
         id: "chat-private",
+        organizationId: "org-1",
         members: { some: { userId: "user-1", leftAt: null } },
-        AND: [
-          {
-            members: {
-              every: {
-                OR: [
-                  { leftAt: { not: null } },
-                  { user: { orgMemberships: { some: { organizationId: "org-1" } } } },
-                ],
-              },
-            },
-          },
-        ],
       },
       select: { id: true },
     });

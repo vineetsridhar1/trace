@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import { Send } from "lucide-react";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
@@ -13,9 +13,10 @@ import {
   removeOptimisticChatMessage,
 } from "@trace/client-core";
 import { markJustSent } from "./just-sent";
+import { useChatDraftStore } from "../../stores/chat-drafts";
 
 const SEND_CHAT_MESSAGE = gql`
-  mutation SendChatMessage($chatId: ID!, $html: String, $parentId: ID, $clientMutationId: String) {
+  mutation SendChatMessage($chatId: ID!, $html: String, $parentId: ID, $clientMutationId: String!) {
     sendChatMessage(
       chatId: $chatId
       html: $html
@@ -31,6 +32,8 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
   const editorRef = useRef<ChatEditorHandle>(null);
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const mentionableUsers = useOrgMembers();
+  const draftKey = parentId ? `${chatId}:thread:${parentId}` : chatId;
+  const [initialHtml] = useState(() => useChatDraftStore.getState().drafts[draftKey]?.html ?? "");
 
   const handleSubmit = useCallback(
     async (html: string, _text: string) => {
@@ -82,6 +85,8 @@ export function ChatComposer({ chatId, parentId }: { chatId: string; parentId?: 
           ref={editorRef}
           onSubmit={handleSubmit}
           placeholder={parentId ? "Reply..." : "Type a message..."}
+          initialHtml={initialHtml}
+          onChange={(text, html) => useChatDraftStore.getState().setDraft(draftKey, { text, html })}
           mentionableUsers={mentionableUsers}
           currentUserId={currentUserId}
         />

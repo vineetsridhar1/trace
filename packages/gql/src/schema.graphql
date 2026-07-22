@@ -1683,7 +1683,7 @@ type Mutation {
     text: String
     html: String
     parentId: ID
-    clientMutationId: String
+    clientMutationId: String!
   ): Message!
   editChatMessage(messageId: ID!, html: String!): Message!
   deleteChatMessage(messageId: ID!): Message!

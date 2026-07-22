@@ -8,6 +8,8 @@ vi.mock("../lib/db.js", async () => {
 vi.mock("./event.js", () => ({
   eventService: {
     create: vi.fn(),
+    publishCreated: vi.fn(),
+    publishPrivateUserEvent: vi.fn(),
   },
 }));
 
@@ -40,6 +42,7 @@ describe("ChatService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.orgMember.findFirst.mockResolvedValue({ organizationId: "org-1" });
+    eventServiceMock.create.mockResolvedValue({ id: "event-1" });
   });
 
   it("rejects chats without members", async () => {
@@ -82,23 +85,21 @@ describe("ChatService", () => {
     expect(prismaMock.chat.create).not.toHaveBeenCalled();
   });
 
-  it("creates group chats, auto-subscribes members, and emits chat_created", async () => {
+  it("creates an organization DM, auto-subscribes both members, and emits chat_created", async () => {
     const createdAt = new Date("2026-03-21T00:00:00.000Z");
     prismaMock.orgMember.findMany.mockResolvedValueOnce([
       { user: { id: "user-1", name: "Alice" } },
       { user: { id: "user-2", name: "Bob" } },
-      { user: { id: "user-3", name: "Cara" } },
     ]);
     prismaMock.user.findMany.mockResolvedValueOnce([
       { id: "user-1", name: "Alice", avatarUrl: null },
       { id: "user-2", name: "Bob", avatarUrl: null },
-      { id: "user-3", name: "Cara", avatarUrl: null },
     ]);
     prismaMock.chat.findFirst.mockResolvedValueOnce(null);
     prismaMock.chat.create.mockResolvedValueOnce({
       id: "chat-1",
-      type: "group",
-      name: "Planning",
+      type: "dm",
+      name: null,
       createdAt,
       updatedAt: createdAt,
       members: [],
@@ -106,22 +107,27 @@ describe("ChatService", () => {
     prismaMock.chatMember.findMany.mockResolvedValueOnce([
       { userId: "user-1", joinedAt: createdAt },
       { userId: "user-2", joinedAt: createdAt },
-      { userId: "user-3", joinedAt: createdAt },
     ]);
 
     const service = new ChatService();
     const chat = await service.create(
-      {
-        memberIds: ["user-2", "user-3"],
-        name: "Planning",
-      } as any,
+      { memberIds: ["user-2"] } as any,
       "org-1",
       "user",
       "user-1",
     );
 
     expect(chat.id).toBe("chat-1");
-    expect(prismaMock.participant.create).toHaveBeenCalledTimes(3);
+    expect(prismaMock.chat.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          organizationId: "org-1",
+          type: "dm",
+          dmKey: "user-1:user-2",
+        }),
+      }),
+    );
+    expect(prismaMock.participant.create).toHaveBeenCalledTimes(2);
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
         organizationId: "org-1",
@@ -131,6 +137,25 @@ describe("ChatService", () => {
       }),
       prismaMock,
     );
+    expect(eventServiceMock.publishCreated).toHaveBeenCalledWith(
+      { id: "event-1" },
+      ["user-1", "user-2"],
+    );
+  });
+
+  it("rejects group chat creation in the direct-message MVP", async () => {
+    const service = new ChatService();
+
+    await expect(
+      service.create(
+        { memberIds: ["user-2", "user-3"], name: "Planning" } as any,
+        "org-1",
+        "user",
+        "user-1",
+      ),
+    ).rejects.toThrow("Direct messages support exactly one other member");
+
+    expect(prismaMock.chat.create).not.toHaveBeenCalled();
   });
 
   it("sends threaded messages and subscribes the author to the thread", async () => {
@@ -138,6 +163,7 @@ describe("ChatService", () => {
     prismaMock.chat.findFirstOrThrow.mockResolvedValueOnce({
       id: "chat-1",
       organizationId: "org-1",
+      members: [{ userId: "user-1" }, { userId: "user-2" }],
     });
     prismaMock.message.findUniqueOrThrow.mockResolvedValueOnce({
       id: "message-root",
@@ -163,6 +189,7 @@ describe("ChatService", () => {
       chatId: "chat-1",
       text: "hello",
       parentId: "message-root",
+      clientMutationId: "mutation-1",
       organizationId: "org-1",
       actorType: "user",
       actorId: "user-1",
@@ -182,7 +209,10 @@ describe("ChatService", () => {
   });
 
   it("checks chat membership inside the active organization before sending messages", async () => {
-    prismaMock.chat.findFirstOrThrow.mockResolvedValueOnce({ id: "chat-1" });
+    prismaMock.chat.findFirstOrThrow.mockResolvedValueOnce({
+      id: "chat-1",
+      members: [{ userId: "user-1" }, { userId: "user-2" }],
+    });
     prismaMock.message.create.mockResolvedValueOnce({
       id: "message-1",
       chatId: "chat-1",
@@ -199,6 +229,7 @@ describe("ChatService", () => {
     await service.sendMessage({
       chatId: "chat-1",
       text: "hello",
+      clientMutationId: "mutation-1",
       organizationId: "org-1",
       actorType: "user",
       actorId: "user-1",
@@ -207,22 +238,44 @@ describe("ChatService", () => {
     expect(prismaMock.chat.findFirstOrThrow).toHaveBeenCalledWith({
       where: {
         id: "chat-1",
+        organizationId: "org-1",
+        type: "dm",
         members: { some: { userId: "user-1", leftAt: null } },
-        AND: [
-          {
-            members: {
-              every: {
-                OR: [
-                  { leftAt: { not: null } },
-                  { user: { orgMemberships: { some: { organizationId: "org-1" } } } },
-                ],
-              },
-            },
-          },
-        ],
       },
-      select: { id: true },
+      select: {
+        id: true,
+        members: { where: { leftAt: null }, select: { userId: true } },
+      },
     });
+  });
+
+  it("returns an idempotent duplicate without creating another message or unread count", async () => {
+    const createdAt = new Date("2026-03-21T00:00:00.000Z");
+    prismaMock.message.findFirst.mockResolvedValueOnce({
+      id: "message-1",
+      chatId: "chat-1",
+      actorType: "user",
+      actorId: "user-1",
+      text: "hello",
+      html: null,
+      parentMessageId: null,
+      createdAt,
+    });
+
+    const service = new ChatService();
+    const message = await service.sendMessage({
+      chatId: "chat-1",
+      text: "hello",
+      clientMutationId: "mutation-1",
+      organizationId: "org-1",
+      actorType: "user",
+      actorId: "user-1",
+    });
+
+    expect(message.id).toBe("message-1");
+    expect(prismaMock.message.create).not.toHaveBeenCalled();
+    expect(prismaMock.chatMember.updateMany).not.toHaveBeenCalled();
+    expect(eventServiceMock.publishCreated).not.toHaveBeenCalled();
   });
 
   it("returns the existing message when edits are a no-op", async () => {
@@ -239,6 +292,7 @@ describe("ChatService", () => {
       parentMessageId: null,
     });
     prismaMock.message.findMany.mockResolvedValueOnce([]);
+    prismaMock.chatMember.findMany.mockResolvedValueOnce([]);
 
     const service = new ChatService();
     const message = await service.editMessage({
@@ -296,6 +350,57 @@ describe("ChatService", () => {
       }),
       prismaMock,
     );
+  });
+
+  it("persists a monotonic read cursor and emits a private user event", async () => {
+    const createdAt = new Date("2026-03-21T00:00:00.000Z");
+    prismaMock.chat.findFirstOrThrow.mockResolvedValueOnce({ id: "chat-1" });
+    prismaMock.message.findFirstOrThrow.mockResolvedValueOnce({
+      id: "message-1",
+      createdAt,
+    });
+    prismaMock.chatMember.findUniqueOrThrow.mockResolvedValueOnce({
+      lastReadAt: null,
+      lastReadMessageId: null,
+    });
+    prismaMock.message.count.mockResolvedValueOnce(2);
+
+    const service = new ChatService();
+    await expect(service.markRead("chat-1", "message-1", "org-1", "user-1")).resolves.toBe(true);
+
+    expect(prismaMock.chatMember.update).toHaveBeenCalledWith({
+      where: { chatId_userId: { chatId: "chat-1", userId: "user-1" } },
+      data: {
+        lastReadMessageId: "message-1",
+        lastReadAt: createdAt,
+        unreadCount: 2,
+      },
+    });
+    expect(eventServiceMock.publishPrivateUserEvent).toHaveBeenCalledWith(
+      { id: "event-1" },
+      ["user-1"],
+    );
+  });
+
+  it("does not regress a read cursor within the same timestamp", async () => {
+    const createdAt = new Date("2026-03-21T00:00:00.000Z");
+    prismaMock.chat.findFirstOrThrow.mockResolvedValueOnce({ id: "chat-1" });
+    prismaMock.message.findFirstOrThrow.mockResolvedValueOnce({
+      id: "message-a",
+      createdAt,
+    });
+    prismaMock.chatMember.findUniqueOrThrow.mockResolvedValueOnce({
+      lastReadAt: createdAt,
+      lastReadMessageId: "message-b",
+    });
+
+    const service = new ChatService();
+    await expect(service.markRead("chat-1", "message-a", "org-1", "user-1")).resolves.toBe(
+      false,
+    );
+
+    expect(prismaMock.chatMember.update).not.toHaveBeenCalled();
+    expect(eventServiceMock.publishPrivateUserEvent).not.toHaveBeenCalled();
   });
 
   it("returns top-level messages in ascending order when paginating backwards", async () => {
