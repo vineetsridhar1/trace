@@ -311,6 +311,14 @@ window.addEventListener("error",function(e){post("error",{message:e.message||"Ap
   const nextHeaders = { ...headers };
   delete nextHeaders["content-length"];
   delete nextHeaders["Content-Length"];
+  delete nextHeaders.etag;
+  delete nextHeaders.ETag;
+  delete nextHeaders["last-modified"];
+  delete nextHeaders["Last-Modified"];
+  // The overlay is specific to the authoring context. Cacheing this HTML can
+  // reuse a prior response without the overlay, leaving the editor waiting
+  // forever for a ready acknowledgement.
+  nextHeaders["cache-control"] = "no-store";
   // Intentionally drop the app's CSP so the injected inline overlay script runs.
   // This only affects private previews (an isolated origin serving the org's own
   // in-development app), so it weakens that untrusted app's own defense-in-depth

@@ -188,6 +188,12 @@ export function forwardableRequestHeaders(
     if (HOP_BY_HOP_HEADERS.has(name)) continue;
     if (options?.websocket && WS_HANDSHAKE_HEADERS.has(name)) continue;
     if (options?.authoringOverlay && name === "accept-encoding") continue;
+    // A 304 response has no HTML body, so the proxy cannot inject the
+    // authoring overlay. Always retrieve the document body for authoring
+    // previews; the injected response below is explicitly non-cacheable.
+    if (options?.authoringOverlay && (name === "if-none-match" || name === "if-modified-since")) {
+      continue;
+    }
     if (name === "cookie") {
       const cookie = Array.isArray(value) ? value.join("; ") : value;
       const stripped = stripTraceSessionCookie(cookie);

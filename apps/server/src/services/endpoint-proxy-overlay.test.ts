@@ -18,6 +18,7 @@ describe("endpoint authoring overlay", () => {
     expect(html).toContain('post("ready",{},e.origin)');
     expect(html).toContain('post("edit-mode-ready",{})');
     expect(result.headers).not.toHaveProperty("content-length");
+    expect(result.headers).toMatchObject({ "cache-control": "no-store" });
   });
 
   it("leaves encoded responses untouched", () => {

@@ -178,6 +178,19 @@ describe("endpoint utils", () => {
     ).toEqual({ accept: "text/html" });
   });
 
+  it("does not forward conditional cache headers for authoring previews", () => {
+    expect(
+      forwardableRequestHeaders(
+        {
+          "if-none-match": 'W/"starter-v1"',
+          "if-modified-since": "Tue, 21 Jul 2026 12:00:00 GMT",
+          accept: "text/html",
+        },
+        { authoringOverlay: true },
+      ),
+    ).toEqual({ accept: "text/html" });
+  });
+
   it("extracts websocket subprotocols before stripping handshake headers", () => {
     expect(
       webSocketProtocols({
