@@ -1,5 +1,6 @@
 export {
   formatCommandLabel,
+  formatMessageTimestamp,
   formatTime,
   getCommandPrefix,
   serializeUnknown,

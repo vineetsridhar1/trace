@@ -106,6 +106,7 @@ export {
   ASK_PREFIX,
   PLAN_PREFIX,
   formatCommandLabel,
+  formatMessageTimestamp,
   formatTime,
   getCommandPrefix,
   serializeUnknown,

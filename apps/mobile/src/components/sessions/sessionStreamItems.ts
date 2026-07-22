@@ -3,7 +3,7 @@ import type { Event } from "@trace/gql";
 import { asJsonObject } from "@trace/shared";
 import { nodeKey } from "@/hooks/useNewActivityTracker";
 import type { CollapsedSessionEventsSummary } from "@/hooks/session-events-timeline";
-import { formatTime } from "./nodes/utils";
+import { formatMessageTimestamp, formatTime } from "./nodes/utils";
 
 export type SessionStreamNode =
   | SessionNode
@@ -81,11 +81,14 @@ function describeNode(
       const payload = asJsonObject(event?.payload);
       const clientMutationId = payload?.clientMutationId;
       const key = typeof clientMutationId === "string" ? `cm:${clientMutationId}` : nodeKey(node);
+      const timestampFormatter = isUserMessageEvent(event, payload)
+        ? formatMessageTimestamp
+        : formatTime;
       return {
         identity: `event:${node.id}`,
         key,
         itemType: eventTypeFor(event, node.id),
-        timestampLabel: event?.timestamp ? formatTime(event.timestamp) : null,
+        timestampLabel: event?.timestamp ? timestampFormatter(event.timestamp) : null,
         isLast,
         reuse: true,
       };
@@ -131,6 +134,17 @@ function describeNode(
       };
     }
   }
+}
+
+function isUserMessageEvent(
+  event: Event | undefined,
+  payload: Record<string, unknown> | undefined,
+): boolean {
+  return (
+    (event?.eventType === "session_started" && typeof payload?.prompt === "string") ||
+    event?.eventType === "message_sent" ||
+    (event?.eventType === "session_output" && payload?.type === "user")
+  );
 }
 
 function eventTypeFor(event: Event | undefined, eventId: string): string {

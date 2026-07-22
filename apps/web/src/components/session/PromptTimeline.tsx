@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatMessageTimestamp } from "@trace/client-core";
 import type { SessionPromptIndexItem } from "../../hooks/useSessionPromptIndex";
 import { PromptTimelineMarkerList } from "./PromptTimelineMarkerList";
 import { PromptTimelinePreviewCard } from "./PromptTimelinePreviewCard";
@@ -33,12 +34,6 @@ function markerWidth(id: string, index: number): number {
   return 28 + ((hashString(id) + index * 17) % 36);
 }
 
-function formatPromptTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "Prompt";
-  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
-}
-
 function buildNodeIndexByEventId(nodes: readonly PromptTimelineNode[]): Map<string, number> {
   const indexByEventId = new Map<string, number>();
   for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
@@ -58,7 +53,7 @@ function buildPromptTimelineItems(
     id: prompt.eventId,
     text: prompt.preview,
     actorName: prompt.actor.name ?? "You",
-    timestamp: formatPromptTime(prompt.timestamp),
+    timestamp: formatMessageTimestamp(prompt.timestamp),
     imageCount: prompt.imageCount,
     widthPercent: markerWidth(prompt.eventId, index),
     nodeIndex: nodeIndexByEventId.get(prompt.eventId) ?? null,
