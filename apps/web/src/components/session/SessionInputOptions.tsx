@@ -407,7 +407,7 @@ export function SessionInputOptions({
   const ModeIcon = modeConfig.icon;
 
   return (
-    <div className="@container flex items-center gap-1 overflow-hidden whitespace-nowrap">
+    <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
       <button
         type="button"
         onClick={() => onModeChange(mode)}
