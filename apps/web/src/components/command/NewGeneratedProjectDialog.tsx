@@ -30,6 +30,7 @@ const DESIGN_SYSTEMS_QUERY = gql`
     repos(organizationId: $organizationId) {
       id
       name
+      remoteUrl
       provider
     }
     agentEnvironments(orgId: $organizationId) {
@@ -74,6 +75,16 @@ const OPTIONS: Array<{
     Icon: NotebookText,
   },
 ];
+
+function repoLabel(repo: Repo): string {
+  if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(repo.name) || !repo.remoteUrl) return repo.name;
+  return (
+    repo.remoteUrl
+      .replace(/\.git$/, "")
+      .split("/")
+      .pop() ?? repo.name
+  );
+}
 
 export function NewGeneratedProjectDialog() {
   const kind = useCommandPaletteStore((state) => state.newGeneratedProjectKind);
@@ -233,13 +244,13 @@ export function NewGeneratedProjectDialog() {
                   setRepoId(value ?? "");
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select a repository" />
                 </SelectTrigger>
                 <SelectContent>
                   {repos.map((repo) => (
                     <SelectItem key={repo.id} value={repo.id}>
-                      {repo.name}
+                      {repoLabel(repo)}
                     </SelectItem>
                   ))}
                 </SelectContent>
