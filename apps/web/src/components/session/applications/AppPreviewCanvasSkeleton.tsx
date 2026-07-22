@@ -2,6 +2,7 @@ import { RotateCw } from "lucide-react";
 import { Button } from "../../ui/button";
 import { Skeleton } from "../../ui/skeleton";
 import { TraceLoader } from "../../ui/trace-loader";
+import { SavedPreviewSkeleton } from "./SavedPreviewSkeleton";
 
 export function AppPreviewCanvasSkeleton({
   error,
@@ -14,16 +15,8 @@ export function AppPreviewCanvasSkeleton({
 }) {
   if (projectKind !== "app") {
     return (
-      <div
-        className="relative flex h-full items-center justify-center bg-[#111113]"
-        style={{
-          backgroundImage: "radial-gradient(rgba(113, 113, 122, 0.3) 1px, transparent 1px)",
-          backgroundSize: "24px 24px",
-        }}
-      >
-        <div aria-live="polite">
-          <TraceLoader size={18} showLabel={false} />
-        </div>
+      <div className="relative h-full">
+        <SavedPreviewSkeleton kind={projectKind} />
         {error ? (
           <div className="absolute bottom-5 flex items-center gap-2 rounded-md border border-destructive/30 bg-background/95 px-3 py-2 shadow-lg">
             <span className="max-w-md truncate text-xs text-destructive">{error}</span>
