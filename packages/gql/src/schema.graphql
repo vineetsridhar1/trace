@@ -307,6 +307,7 @@ enum EventType {
   chat_member_added
   chat_member_removed
   chat_renamed
+  chat_read
   queued_message_added
   queued_message_updated
   queued_message_removed
@@ -754,8 +755,12 @@ type Chat {
   id: ID!
   type: ChatType!
   name: String
+  organizationId: ID!
   members: [ChatMember!]!
   messages(after: DateTime, before: DateTime, limit: Int): [Message!]!
+  lastMessage: Message
+  lastMessageAt: DateTime
+  viewerUnreadCount: Int!
   createdBy: User!
   createdAt: DateTime!
   updatedAt: DateTime!
@@ -1688,6 +1693,7 @@ type Mutation {
   addChatMember(input: AddChatMemberInput!): Chat!
   leaveChat(chatId: ID!): Chat!
   renameChat(chatId: ID!, name: String!): Chat!
+  markChatRead(chatId: ID!, throughMessageId: ID!): Boolean!
   subscribe(scopeType: String!, scopeId: ID!): Participant!
   unsubscribe(scopeType: String!, scopeId: ID!): Boolean!
   muteScope(scopeType: String!, scopeId: ID!): Participant!
@@ -1711,6 +1717,7 @@ type Subscription {
   channelEvents(channelId: ID!, organizationId: ID!, types: [String!]): Event!
   ticketEvents(ticketId: ID!, organizationId: ID!): Event!
   userNotifications(organizationId: ID!): Notification!
+  userEvents(organizationId: ID!): Event!
   sessionPortsChanged(sessionId: ID!, organizationId: ID!): SessionEndpoints!
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
   chatEvents(chatId: ID!, types: [String!]): Event!

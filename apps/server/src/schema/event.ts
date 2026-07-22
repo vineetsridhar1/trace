@@ -505,6 +505,15 @@ export const eventSubscriptions = {
       return pubsub.asyncIterator(topics.userNotifications(args.organizationId, ctx.userId));
     },
   },
+  userEvents: {
+    subscribe: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+      const orgId = requireOrgContext(ctx);
+      if (orgId !== args.organizationId) {
+        throw new Error("Not authorized for this organization");
+      }
+      return pubsub.asyncIterator(topics.userEvents(args.organizationId, ctx.userId));
+    },
+  },
 
   sessionEvents: {
     subscribe: async (

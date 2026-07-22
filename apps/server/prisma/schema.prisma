@@ -208,6 +208,7 @@ enum EventType {
   chat_member_added
   chat_member_removed
   chat_renamed
+  chat_read
   queued_message_added
   queued_message_updated
   queued_message_removed
@@ -295,6 +296,7 @@ model Organization {
   sessionGroups               SessionGroup[]
   sessions                    Session[]
   tickets                     Ticket[]
+  chats                       Chat[]
   events                      Event[]
   inboxItems                  InboxItem[]
   sessionSetupScriptRuns      SessionSetupScriptRun[]
@@ -1092,24 +1094,33 @@ model InboxItem {
 }
 
 model Chat {
-  id          String   @id @default(uuid())
-  type        ChatType
-  name        String?
-  dmKey       String?  @unique
-  createdById String
-  createdBy   User     @relation("ChatCreator", fields: [createdById], references: [id])
+  id             String       @id @default(uuid())
+  type           ChatType
+  name           String?
+  dmKey          String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User         @relation("ChatCreator", fields: [createdById], references: [id])
+  lastMessageId  String?
+  lastMessageAt  DateTime?
+  lastMessage    Message?     @relation("ChatLastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
 
   members  ChatMember[]
-  messages Message[]
+  messages Message[] @relation("ChatMessages")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, dmKey])
+  @@index([organizationId, lastMessageAt])
 }
 
 model Message {
   id              String    @id @default(uuid())
   chatId          String?
-  chat            Chat?     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chat            Chat?     @relation("ChatMessages", fields: [chatId], references: [id], onDelete: Cascade)
+  lastMessageFor  Chat[]    @relation("ChatLastMessage")
   channelId       String?
   channel         Channel?  @relation(fields: [channelId], references: [id], onDelete: Cascade)
   actorType       ActorType
@@ -1122,25 +1133,30 @@ model Message {
   replies         Message[] @relation("MessageThread")
   editedAt        DateTime?
   deletedAt       DateTime?
+  clientMutationId String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  @@index([chatId, createdAt])
+  @@unique([actorType, actorId, clientMutationId])
+  @@index([chatId, createdAt, id])
   @@index([channelId, createdAt])
   @@index([channelId, deletedAt])
   @@index([parentMessageId, createdAt])
 }
 
 model ChatMember {
-  chatId   String
-  chat     Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  userId   String
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  joinedAt DateTime  @default(now())
-  leftAt   DateTime?
+  chatId            String
+  chat              Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt          DateTime  @default(now())
+  leftAt            DateTime?
+  lastReadMessageId String?
+  lastReadAt        DateTime?
+  unreadCount       Int       @default(0)
 
   @@id([chatId, userId])
-  @@index([userId])
+  @@index([userId, leftAt, chatId])
 }
 
 model Participant {

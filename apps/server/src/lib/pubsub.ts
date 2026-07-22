@@ -138,6 +138,7 @@ export const topics = {
   chatEvents: (chatId: string) => `chat:${chatId}:events`,
   ticketEvents: (ticketId: string) => `ticket:${ticketId}:events`,
   userNotifications: (orgId: string, userId: string) => `org:${orgId}:user:${userId}:notifications`,
+  userEvents: (orgId: string, userId: string) => `org:${orgId}:user:${userId}:events`,
   orgEvents: (orgId: string) => `org:${orgId}:events`,
   sessionStatus: (sessionId: string) => `session:${sessionId}:status`,
   sessionPorts: (sessionId: string) => `session:${sessionId}:ports`,

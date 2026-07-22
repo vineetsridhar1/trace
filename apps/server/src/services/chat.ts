@@ -66,23 +66,6 @@ function buildMemberKey(...userIds: string[]) {
   return userIds.sort().join(":");
 }
 
-function chatInOrganizationWhere(organizationId: string): PrismaTypes.ChatWhereInput {
-  return {
-    AND: [
-      {
-        members: {
-          every: {
-            OR: [
-              { leftAt: { not: null } },
-              { user: { orgMemberships: { some: { organizationId } } } },
-            ],
-          },
-        },
-      },
-    ],
-  };
-}
-
 export class ChatService {
   async create(
     input: CreateChatInput,
@@ -90,15 +73,22 @@ export class ChatService {
     actorType: ActorType,
     actorId: string,
   ) {
+    if (actorType !== "user") {
+      throw new AuthorizationError("Only users can create direct messages");
+    }
+
     const memberIds: string[] = [...new Set(input.memberIds as string[])];
     if (memberIds.length === 0) {
       throw new ValidationError("Chats must include at least one other member");
     }
+    if (memberIds.length !== 1) {
+      throw new ValidationError("Direct messages support exactly one other member");
+    }
 
-    const isDM = memberIds.length === 1;
-    const allMemberIds = isDM
-      ? [actorId, memberIds[0]]
-      : [actorId, ...memberIds.filter((id) => id !== actorId)];
+    const allMemberIds = [actorId, memberIds[0]];
+    if (actorId === memberIds[0]) {
+      throw new ValidationError("Cannot create a DM with yourself");
+    }
 
     // Validate all active chat members belong to the active organization.
     const validMemberRows = await prisma.orgMember.findMany({
@@ -108,23 +98,13 @@ export class ChatService {
     if (validMemberRows.length !== allMemberIds.length) {
       throw new ValidationError("One or more users are not in this organization");
     }
-    const validMembers = validMemberRows.map((row) => row.user);
-
-    // Deduplication: check for existing chat with the same members
     const memberKey = buildMemberKey(...allMemberIds);
-
-    if (isDM) {
-      const targetId = memberIds[0];
-      if (actorId === targetId) {
-        throw new ValidationError("Cannot create a DM with yourself");
-      }
-    }
 
     const existing = await prisma.chat.findFirst({
       where: {
-        type: isDM ? "dm" : "group",
+        organizationId,
+        type: "dm",
         dmKey: memberKey,
-        ...chatInOrganizationWhere(organizationId),
       },
       include: {
         members: {
@@ -135,19 +115,12 @@ export class ChatService {
 
     if (existing) return existing;
 
-    // Default group name: comma-separated member names
-    const groupName = isDM
-      ? null
-      : (input.name ??
-        validMembers
-          .map((m: { id: string; name: string | null }) => m.name ?? "Unknown")
-          .join(", "));
-
     const createChatInTx = async (tx: Prisma.TransactionClient) => {
       const chat = await tx.chat.create({
         data: {
-          type: isDM ? "dm" : "group",
-          name: groupName,
+          organizationId,
+          type: "dm",
+          name: null,
           dmKey: memberKey,
           createdById: actorId,
           members: {
@@ -184,13 +157,18 @@ export class ChatService {
               id: chat.id,
               type: chat.type,
               name: chat.name,
+              organizationId,
               members: normalizedMembers,
+              lastMessage: null,
+              lastMessageAt: null,
+              viewerUnreadCount: 0,
               createdAt: chat.createdAt.toISOString(),
               updatedAt: chat.updatedAt.toISOString(),
             },
           },
           actorType,
           actorId,
+          deferPublish: true,
         },
         tx,
       );
@@ -198,7 +176,10 @@ export class ChatService {
       return [chat, event] as const;
     };
 
-    let result: readonly [Awaited<ReturnType<typeof prisma.chat.create>>, unknown];
+    let result: readonly [
+      Awaited<ReturnType<typeof prisma.chat.create>>,
+      Awaited<ReturnType<typeof eventService.create>>,
+    ];
     try {
       result = await prisma.$transaction(createChatInTx);
     } catch (error) {
@@ -208,9 +189,9 @@ export class ChatService {
       ) {
         return prisma.chat.findFirstOrThrow({
           where: {
-            type: isDM ? "dm" : "group",
+            organizationId,
+            type: "dm",
             dmKey: memberKey,
-            ...chatInOrganizationWhere(organizationId),
           },
           include: {
             members: {
@@ -222,7 +203,8 @@ export class ChatService {
       throw error;
     }
 
-    const [chat, _event] = result;
+    const [chat, event] = result;
+    eventService.publishCreated(event, allMemberIds);
 
     return chat;
   }

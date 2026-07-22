@@ -168,7 +168,7 @@ export class EventService {
     pubsub.publish(topics.orgEvents(event.organizationId), { orgEvents: event });
   }
 
-  publishCreated(event: PrismaEvent) {
+  publishCreated(event: PrismaEvent, recipientUserIds: readonly string[] = []) {
     // Broadcast to entity-scoped topic (e.g. channel:<id>:events)
     const topicBuilder = scopeTopicMap[event.scopeType];
     if (topicBuilder) {
@@ -184,6 +184,12 @@ export class EventService {
     // Phase 3B: Skip org broadcast for chat events — they already go to chat:<id>:events
     // and broadcasting to org topic only triggers per-event membership checks for non-members.
     if (event.scopeType === "chat") {
+      const userEnvelope = this.chatUserEnvelope(event);
+      for (const userId of new Set(recipientUserIds)) {
+        pubsub.publish(topics.userEvents(event.organizationId, userId), {
+          userEvents: userEnvelope,
+        });
+      }
       // Still append to Redis stream for agent worker
       this.appendToStream(event.organizationId, event);
       return event;
@@ -228,6 +234,36 @@ export class EventService {
     });
 
     return event;
+  }
+
+  private chatUserEnvelope(event: PrismaEvent): PrismaEvent {
+    if (
+      event.eventType !== "message_sent" &&
+      event.eventType !== "message_edited" &&
+      event.eventType !== "message_deleted"
+    ) {
+      return event;
+    }
+
+    const payload =
+      event.payload && typeof event.payload === "object" && !Array.isArray(event.payload)
+        ? (event.payload as Record<string, unknown>)
+        : {};
+    const text = typeof payload.text === "string" ? payload.text.slice(0, 160) : undefined;
+
+    return {
+      ...event,
+      payload: {
+        messageId: payload.messageId,
+        chatId: payload.chatId,
+        parentMessageId: payload.parentMessageId,
+        clientMutationId: payload.clientMutationId,
+        createdAt: payload.createdAt,
+        editedAt: payload.editedAt,
+        deletedAt: payload.deletedAt,
+        ...(text !== undefined ? { text } : {}),
+      } as Prisma.InputJsonValue,
+    };
   }
 
   /**
