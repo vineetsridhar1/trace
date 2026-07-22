@@ -102,6 +102,7 @@ export function NewGeneratedProjectDialog() {
       ),
     ),
   );
+  const selectedRepo = repos.find((repo) => repo.id === repoId);
   const [environmentId, setEnvironmentId] = useState("");
   const [name, setName] = useState("");
   const [repoId, setRepoId] = useState("");
@@ -239,7 +240,9 @@ export function NewGeneratedProjectDialog() {
                 }}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a repository" />
+                  <SelectValue>
+                    {selectedRepo ? repoLabel(selectedRepo) : "Select a repository"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {repos.map((repo) => (
