@@ -13,6 +13,7 @@ describe("endpoint authoring overlay", () => {
     expect(html).toContain("[data-screen-id]");
     expect(html).toContain("data-trace-auto-target");
     expect(html).toContain("data-trace-id','auto-");
+    expect(html).toContain("if(document.referrer)TRACE_ORIGIN=new URL(document.referrer).origin");
     expect(html).toContain('post("edit-mode-ready",{})');
     expect(result.headers).not.toHaveProperty("content-length");
   });

@@ -133,7 +133,7 @@ export function injectAuthoringOverlay(
   if (html.includes("data-trace-app-overlay")) return { headers, body };
   const script = `<script data-trace-app-overlay>(function(){
 var TRACE_ORIGIN=${JSON.stringify(TRACE_APP_ORIGIN)};
-try{if(TRACE_ORIGIN==="*"&&document.referrer)TRACE_ORIGIN=new URL(document.referrer).origin}catch(e){}
+try{if(document.referrer)TRACE_ORIGIN=new URL(document.referrer).origin}catch(e){}
 var editEnabled=false;
 var selectedId=null;
 var hoverEl=null;
