@@ -95,6 +95,8 @@ export function SessionMessageList({
   const wasLoadingOlderRef = useRef(false);
   const scrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const isNearBottomRef = useRef(true);
+  const shouldFollowNewContentRef = useRef(true);
+  const hasUserScrollIntentRef = useRef(false);
   const hasScrolledInitiallyRef = useRef(false);
   const pendingTimelineAnchorRef = useRef<string | null>(null);
   const currentIndexFrameRef = useRef<number | null>(null);
@@ -156,6 +158,11 @@ export function SessionMessageList({
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
     isNearBottomRef.current = distanceFromBottom < 100;
+    if (distanceFromBottom < 1) {
+      shouldFollowNewContentRef.current = true;
+    } else if (hasUserScrollIntentRef.current) {
+      shouldFollowNewContentRef.current = false;
+    }
 
     if (currentIndexFrameRef.current == null) {
       currentIndexFrameRef.current = requestAnimationFrame(() => {
@@ -243,6 +250,23 @@ export function SessionMessageList({
     });
   }, [handleScroll, initialLoading, nodes.length]);
 
+  // Keep the view live while it is already following the tail, but once the
+  // user scrolls away, do not take control back until they return to the end.
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    const rowsEl = rowsContainerRef.current;
+    if (!container || !rowsEl) return;
+
+    const observer = new ResizeObserver(() => {
+      if (shouldFollowNewContentRef.current) {
+        container.scrollTop = container.scrollHeight;
+      }
+    });
+    observer.observe(rowsEl);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
   // A send is an explicit navigation request. Keep it separate from streaming
   // updates so a user can scroll upward without being pulled back down.
   useLayoutEffect(() => {
@@ -256,6 +280,7 @@ export function SessionMessageList({
     if (!container) return;
     container.scrollTop = container.scrollHeight;
     isNearBottomRef.current = true;
+    shouldFollowNewContentRef.current = true;
   }, [scrollToBottomRequest]);
 
   // When the floating composer height changes (grows to multiple lines, or swaps
@@ -372,6 +397,7 @@ export function SessionMessageList({
   }, [loadOlderPreservingScroll, onLoadOlder]);
 
   const handleUserScrollIntent = useCallback(() => {
+    hasUserScrollIntentRef.current = true;
     setScrollIntentVersion((version) => version + 1);
   }, []);
 
