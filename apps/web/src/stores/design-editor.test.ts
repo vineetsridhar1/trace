@@ -180,6 +180,22 @@ describe("design editor store", () => {
     disconnect();
   });
 
+  it("finishes edit mode without a save request when nothing changed", async () => {
+    const send = vi.fn();
+    const disconnect = registerDesignEditorFrame("group-1", send);
+    useDesignEditorStore.setState({ activeSessionGroupId: "group-1", target: TARGET });
+
+    await useDesignEditorStore.getState().finish("group-1");
+
+    expect(send).toHaveBeenCalledWith({ type: "trace:design:edit-mode", enabled: false });
+    expect(useDesignEditorStore.getState()).toMatchObject({
+      activeSessionGroupId: null,
+      target: null,
+      drafts: {},
+    });
+    disconnect();
+  });
+
   it("resets a draft in place and restores the live preview", () => {
     const send = vi.fn();
     const disconnect = registerDesignEditorFrame("group-1", send);

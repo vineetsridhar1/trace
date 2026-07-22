@@ -673,7 +673,8 @@ type DesignEditorState = {
   activateElement: (elementId: string) => void;
   hoverElement: (elementId: string | null) => void;
   setDomTree: (sessionGroupId: string, tree: DesignEditorDomNode[]) => void;
-  save: () => Promise<void>;
+  save: () => Promise<boolean>;
+  finish: (sessionGroupId: string) => Promise<void>;
 };
 
 export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
@@ -875,7 +876,8 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     const targets = Object.values(state.drafts).filter(
       (target) => designEditorTextDirty(target) || designEditorStylesDirty(target),
     );
-    if (!sessionGroupId || state.saving || targets.length === 0) return;
+    if (!sessionGroupId || state.saving) return false;
+    if (targets.length === 0) return true;
     const pendingSaveKeys = targets.map(targetKey);
     set({ saving: true, pendingSaveKeys, error: null });
     try {
@@ -898,13 +900,34 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
         })
         .toPromise();
       if (result.error) throw new Error(result.error.message);
+      return true;
     } catch (cause) {
-      if (get().activeSessionGroupId !== sessionGroupId) return;
+      if (get().activeSessionGroupId !== sessionGroupId) return false;
       set({
         saving: false,
         pendingSaveKeys: [],
         error: cause instanceof Error ? cause.message : "Failed to save this design element.",
       });
+      return false;
     }
+  },
+
+  finish: async (sessionGroupId) => {
+    const state = get();
+    if (state.activeSessionGroupId !== sessionGroupId || state.saving) return;
+    const saved = await state.save();
+    if (!saved || get().activeSessionGroupId !== sessionGroupId) return;
+    selectionRequest += 1;
+    post(sessionGroupId, { type: "trace:design:edit-mode", enabled: false });
+    set({
+      activeSessionGroupId: null,
+      target: null,
+      domTree: [],
+      drafts: {},
+      pendingSaveKeys: [],
+      loading: false,
+      saving: false,
+      error: null,
+    });
   },
 }));

@@ -24,10 +24,9 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
     changeText,
     changeStyle,
     resetChanges,
-    cancelSelection,
     activateElement,
     hoverElement,
-    save,
+    finish,
   } = useDesignEditorStore(
     useShallow((state) => ({
       target: state.target,
@@ -40,10 +39,9 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
       changeText: state.changeText,
       changeStyle: state.changeStyle,
       resetChanges: state.resetChanges,
-      cancelSelection: state.cancelSelection,
       activateElement: state.activateElement,
       hoverElement: state.hoverElement,
-      save: state.save,
+      finish: state.finish,
     })),
   );
   const dirty = designEditorTextDirty(target) || designEditorStylesDirty(target);
@@ -59,12 +57,6 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
             </p>
           ) : null}
         </div>
-        <Button size="sm" variant="ghost" disabled={saving} onClick={() => stop(sessionGroupId)}>
-          Discard
-        </Button>
-        <Button size="sm" disabled={draftCount === 0 || saving} onClick={() => void save()}>
-          {saving ? "Saving…" : draftCount > 1 ? `Save ${draftCount}` : "Save"}
-        </Button>
       </header>
 
       {domTree.length > 0 ? (
@@ -76,31 +68,38 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
         />
       ) : null}
 
-      {target ? (
-        <>
-          <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-2">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-foreground text-background">
-              <MousePointer2 className="size-4" />
-            </span>
-            <span className="mx-1 h-5 w-px bg-border" />
-            <span className="min-w-0 flex-1 truncate px-1 font-mono text-[10px] text-muted-foreground">
+      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-2">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-foreground text-background">
+          <MousePointer2 className="size-4" />
+        </span>
+        <span className="mx-1 h-5 w-px bg-border" />
+        <span className="min-w-0 flex-1 truncate px-1 font-mono text-[10px] text-muted-foreground">
+          {target ? (
+            <>
               &lt;{target.elementName}&gt; · {target.elementId}
-            </span>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label="Reset selected element"
-              disabled={!dirty || saving}
-              onClick={resetChanges}
-            >
-              <RotateCcw className="size-3.5" />
-            </Button>
-            <Button size="sm" variant="ghost" disabled={saving} onClick={cancelSelection}>
-              Done
-            </Button>
-          </div>
-        </>
-      ) : null}
+            </>
+          ) : (
+            "Select an element"
+          )}
+        </span>
+        {target ? (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Reset selected element"
+            disabled={!dirty || saving}
+            onClick={resetChanges}
+          >
+            <RotateCcw className="size-3.5" />
+          </Button>
+        ) : null}
+        <Button size="sm" variant="ghost" disabled={saving} onClick={() => stop(sessionGroupId)}>
+          Discard
+        </Button>
+        <Button size="sm" disabled={saving} onClick={() => void finish(sessionGroupId)}>
+          {saving ? "Saving…" : "Done"}
+        </Button>
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {loading ? (
@@ -145,8 +144,8 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
             </div>
             <p className="text-sm font-medium">Click any element on the canvas to edit it.</p>
             <p className="mt-2 max-w-56 text-xs leading-5 text-muted-foreground">
-              Move between elements freely. Your changes stay previewed until you save or discard
-              them.
+              Move between elements freely. Your changes stay previewed until you choose Done or
+              Discard.
             </p>
           </div>
         )}
