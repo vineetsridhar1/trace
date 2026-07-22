@@ -5,6 +5,7 @@ import { PdfPreviewControls } from "./PdfPreviewControls";
 import { AppPreviewFrameControls } from "./AppPreviewFrameControls";
 import { AppPreviewLoadingBar } from "./AppPreviewLoadingBar";
 import { AppPreviewToolbar } from "./AppPreviewToolbar";
+import { SavedPreviewSkeleton } from "./SavedPreviewSkeleton";
 import { PREVIEW_FRAME_MARGIN, usePreviewViewport } from "./usePreviewViewport";
 
 export function AppPreviewCanvas({
@@ -18,6 +19,7 @@ export function AppPreviewCanvas({
   onReload,
   iframeRef,
   bare = false,
+  loadingKind,
   pdfFormat,
   pdfContentHeight,
   onPdfFormatChange,
@@ -34,6 +36,7 @@ export function AppPreviewCanvas({
   onReload: () => void;
   iframeRef: RefObject<HTMLIFrameElement | null>;
   bare?: boolean;
+  loadingKind?: "design" | "pdf";
   pdfFormat?: PdfPageFormat;
   pdfContentHeight?: number;
   onPdfFormatChange?: (format: PdfPageFormat) => void;
@@ -157,6 +160,9 @@ export function AppPreviewCanvas({
                   />
                 ) : null}
               </div>
+              {!loaded && loadingKind ? (
+                <SavedPreviewSkeleton kind={loadingKind} className="absolute inset-0 z-10" />
+              ) : null}
               {!bare ? (
                 <button
                   type="button"

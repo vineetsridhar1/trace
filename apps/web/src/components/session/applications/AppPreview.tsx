@@ -10,6 +10,7 @@ import { PreviewCredentialRenewal } from "./PreviewCredentialRenewal";
 import { appPreviewReducer, initialAppPreviewState } from "./app-preview-state";
 import { CREATE_PREVIEW_MUTATION } from "./session-applications-operations";
 import { PdfPreviewControls } from "./PdfPreviewControls";
+import { SavedPreviewSkeleton } from "./SavedPreviewSkeleton";
 import { usePdfPreview } from "./usePdfPreview";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
@@ -29,7 +30,7 @@ export function AppPreview({
   fill?: boolean;
   desktopViewport?: boolean;
   title?: string;
-  projectKind?: "pdf";
+  projectKind?: "design" | "pdf";
   sessionGroupId?: string;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -115,6 +116,7 @@ export function AppPreview({
           onReload={reload}
           iframeRef={frameRef}
           bare={projectKind === "pdf"}
+          loadingKind={projectKind}
           pdfFormat={projectKind === "pdf" ? pdf.format : undefined}
           pdfContentHeight={projectKind === "pdf" ? pdf.contentHeight : undefined}
           onPdfFormatChange={projectKind === "pdf" ? pdf.updateFormat : undefined}
@@ -126,6 +128,8 @@ export function AppPreview({
     );
   }
   if (!url) {
+    if (projectKind) return <SavedPreviewSkeleton kind={projectKind} />;
+
     return (
       <div className={cn("flex items-center justify-center", fill ? "h-full" : "aspect-video")}>
         <TraceLoader size={14} showLabel={false} />
@@ -134,6 +138,9 @@ export function AppPreview({
   }
   return (
     <div className={cn("relative", fill && "h-full")}>
+      {!frameLoaded && projectKind ? (
+        <SavedPreviewSkeleton kind={projectKind} className="absolute inset-0 z-10" />
+      ) : null}
       {projectKind === "pdf" ? (
         <PdfPreviewControls
           format={pdf.format}
@@ -162,6 +169,7 @@ export function AppPreview({
         onLoad={() => dispatch({ type: "frame-loaded" })}
         className={cn(
           "w-full bg-background",
+          !frameLoaded && projectKind && "opacity-0",
           fill ? "h-full border-0" : "aspect-video rounded-md border border-border",
         )}
         sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"

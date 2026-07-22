@@ -35,7 +35,7 @@ export function GeneratedProjectPreviewPanel({
         fill
         desktopViewport={projectKind === "pdf"}
         title={`Live ${projectKind} preview`}
-        projectKind={projectKind === "pdf" ? "pdf" : undefined}
+        projectKind={projectKind}
         sessionGroupId={projectKind === "pdf" ? sessionGroupId : undefined}
       />
     );
