@@ -1,4 +1,4 @@
-import { FileText, LayoutTemplate, Rocket, type LucideIcon } from "lucide-react";
+import { FileText, LayoutTemplate, Palette, Rocket, type LucideIcon } from "lucide-react";
 import { useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { navigateToSessionGroup } from "../../stores/ui";
@@ -9,6 +9,7 @@ import { usePdfArtifactPreviewUrls } from "./usePdfArtifactPreviewUrls";
 const projectKindDetails = {
   app: { label: "App", Icon: Rocket },
   design: { label: "Design", Icon: LayoutTemplate },
+  design_system: { label: "Design System", Icon: Palette },
   pdf: { label: "Document", Icon: FileText },
 } as const;
 
@@ -18,7 +19,10 @@ export function GeneratedProjectsGallery() {
     .filter(
       (group) =>
         !group.archivedAt &&
-        (group.kind === "app" || group.kind === "design" || group.kind === "pdf"),
+        (group.kind === "app" ||
+          group.kind === "design" ||
+          group.kind === "design_system" ||
+          group.kind === "pdf"),
     )
     .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
   const pdfGroups = projectGroups.filter((group) => group.kind === "pdf");
@@ -34,7 +38,7 @@ export function GeneratedProjectsGallery() {
           <div className="mb-5">
             <h1 className="text-xl font-semibold text-foreground">Your creations</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Apps, designs, and documents created by your workspace.
+              Apps, designs, design systems, and documents created by your workspace.
             </p>
           </div>
           {projectGroups.length === 0 ? (
