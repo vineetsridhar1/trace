@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { findReadyPreviewEndpoint } from "./app-preview-readiness";
+import {
+  findReadyPreviewEndpoint,
+  isLivePreviewRuntimeAvailable,
+} from "./app-preview-readiness";
 
 const endpoint = {
   id: "endpoint-1",
@@ -31,5 +34,15 @@ describe("findReadyPreviewEndpoint", () => {
         [{ ...endpoint, processConfigId: "worker", status: "running" }],
       ),
     ).toBeUndefined();
+  });
+});
+
+describe("isLivePreviewRuntimeAvailable", () => {
+  it("only uses live endpoints while their runtime can serve traffic", () => {
+    expect(isLivePreviewRuntimeAvailable("connected")).toBe(true);
+    expect(isLivePreviewRuntimeAvailable("degraded")).toBe(true);
+    expect(isLivePreviewRuntimeAvailable("disconnected")).toBe(false);
+    expect(isLivePreviewRuntimeAvailable("deprovisioned")).toBe(false);
+    expect(isLivePreviewRuntimeAvailable("provisioning")).toBe(false);
   });
 });

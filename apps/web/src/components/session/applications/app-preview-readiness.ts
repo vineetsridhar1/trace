@@ -14,6 +14,10 @@ type PreviewProcess = {
   status: string;
 };
 
+export function isLivePreviewRuntimeAvailable(state: unknown): boolean {
+  return state === "connected" || state === "degraded";
+}
+
 export function findReadyPreviewEndpoint<T extends PreviewEndpoint>(
   sessionGroupId: string,
   endpoints: T[],
