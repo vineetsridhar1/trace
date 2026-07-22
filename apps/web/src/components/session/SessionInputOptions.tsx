@@ -545,6 +545,7 @@ export function SessionInputOptions({
         <DesignSystemCombobox
           systems={designSystems}
           value={selectedDesignSystemVersionId ?? TRACE_DEFAULT_DESIGN_SYSTEM}
+          disabled={isOptimistic}
           onValueChange={(value) => void handleDesignSystemChange(value)}
         />
       ) : null}

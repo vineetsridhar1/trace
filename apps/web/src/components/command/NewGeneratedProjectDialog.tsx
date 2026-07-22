@@ -116,6 +116,7 @@ export function NewGeneratedProjectDialog() {
     if (kind === "app" || kind === "pdf") createImmediate(kind);
     if (kind === "design") setView("design");
     if (kind === "design-system") setView("create-system");
+    if (kind === "choose" || kind === null) setView("choose");
   }, [createImmediate, kind]);
 
   useEffect(() => {

@@ -32,7 +32,10 @@ export function designSystemAvailabilityLabel(system: DesignSystem): string {
     return "Saving first version…";
   }
   if (system.commitArtifactStatus === "failed") return "Cloud save failed";
-  if (system.latestCommitArtifact?.status === "saved" && !system.latestCommitArtifact.packageValid) {
+  if (
+    system.latestCommitArtifact?.status === "saved" &&
+    !system.latestCommitArtifact.packageValid
+  ) {
     return "Needs repair";
   }
   if (system.publishStatus === "failed") return "Version failed";
@@ -43,16 +46,18 @@ export function DesignSystemCombobox({
   systems,
   value,
   onValueChange,
+  disabled = false,
 }: {
   systems: DesignSystem[];
   value: string;
   onValueChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   const unavailable = unavailableDesignSystems(systems);
   const selectable = selectableDesignSystems(systems);
   const selectedSystem = selectable.find((system) => system.activeVersionId === value);
   return (
-    <Select value={value} onValueChange={(next) => next && onValueChange(next)}>
+    <Select value={value} onValueChange={(next) => next && onValueChange(next)} disabled={disabled}>
       <SelectTrigger
         className="h-7 w-auto max-w-[260px] cursor-pointer gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
         aria-label="Design library"

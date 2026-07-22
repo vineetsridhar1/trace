@@ -5339,18 +5339,28 @@ export class SessionService {
       }
     }
 
-    if (designSystemVersionChanged && prev.sessionGroupId) {
-      await prisma.sessionGroup.update({
-        where: { id: prev.sessionGroupId },
-        data: { designSystemVersionId: selectedDesignSystemVersionId },
-      });
-    }
-
-    const session = await prisma.session.update({
-      where: { id: prev.id },
-      data,
-      include: SESSION_INCLUDE,
-    });
+    // Pinning a design library changes both the shared session group and the
+    // session's config event. Keep those writes atomic so a failed session
+    // update cannot leave the group pointing at a library the session never
+    // successfully configured.
+    const designSystemGroupId = designSystemVersionChanged ? prev.sessionGroupId : null;
+    const session = designSystemGroupId
+      ? await prisma.$transaction(async (tx) => {
+          await tx.sessionGroup.update({
+            where: { id: designSystemGroupId },
+            data: { designSystemVersionId: selectedDesignSystemVersionId },
+          });
+          return tx.session.update({
+            where: { id: prev.id },
+            data,
+            include: SESSION_INCLUDE,
+          });
+        })
+      : await prisma.session.update({
+          where: { id: prev.id },
+          data,
+          include: SESSION_INCLUDE,
+        });
 
     // Sync group connection if runtime changed
     if (runtimeChanged && session.sessionGroupId) {
