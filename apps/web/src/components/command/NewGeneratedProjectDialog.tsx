@@ -24,7 +24,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
 type GeneratedProjectKind = "app" | "design" | "pdf";
-type View = "choose" | "design" | "create-system";
+type View = "choose" | "create-system";
 const DESIGN_SYSTEMS_QUERY = gql`
   query DesignCreationOptions($organizationId: ID!) {
     repos(organizationId: $organizationId) {
@@ -83,7 +83,7 @@ export function NewGeneratedProjectDialog() {
   const sessionGroups = useEntityStore((state) => state.sessionGroups);
   const sessions = useEntityStore((state) => state.sessions);
   const [view, setView] = useState<View>(() =>
-    kind === "design-system" ? "create-system" : kind === "design" ? "design" : "choose",
+    kind === "design-system" ? "create-system" : "choose",
   );
   const repos = useEntityStore(
     useShallow((state) => Object.values(state.repos).filter((repo) => repo.provider !== "managed")),
@@ -102,22 +102,25 @@ export function NewGeneratedProjectDialog() {
   const [pendingAuthoringGroupId, setPendingAuthoringGroupId] = useState<string | null>(null);
 
   const createImmediate = useCallback(
-    (nextKind: "app" | "pdf") => {
+    (nextKind: "app" | "design" | "pdf") => {
       close();
-      void (nextKind === "app" ? createAppSession() : createPdfSession());
+      void (nextKind === "app"
+        ? createAppSession()
+        : nextKind === "design"
+          ? createDesignSession()
+          : createPdfSession());
     },
     [close],
   );
 
   useEffect(() => {
-    if (kind === "app" || kind === "pdf") createImmediate(kind);
-    if (kind === "design") setView("design");
+    if (kind === "app" || kind === "design" || kind === "pdf") createImmediate(kind);
     if (kind === "design-system") setView("create-system");
     if (kind === "choose" || kind === null) setView("choose");
   }, [createImmediate, kind]);
 
   useEffect(() => {
-    if (!activeOrgId || (view !== "design" && view !== "create-system")) return;
+    if (!activeOrgId || view !== "create-system") return;
     let active = true;
     void client
       .query(
@@ -162,17 +165,7 @@ export function NewGeneratedProjectDialog() {
     navigateToSessionGroup(null, pendingAuthoringGroupId, session?.id ?? null);
   }, [close, pendingAuthoringGroupId, sessionGroups, sessions]);
 
-  const choose = (nextKind: GeneratedProjectKind) =>
-    nextKind === "design" ? setView("design") : createImmediate(nextKind);
-  const submitDesign = async () => {
-    setSubmitting(true);
-    try {
-      const ok = await createDesignSession();
-      if (ok) close();
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const choose = (nextKind: GeneratedProjectKind) => createImmediate(nextKind);
   const submitSystem = async () => {
     if (!name.trim() || !repoId) return;
     setSubmitting(true);
@@ -198,15 +191,14 @@ export function NewGeneratedProjectDialog() {
   };
 
   return (
-    <ResponsiveDialog open={kind !== null} onOpenChange={(open) => !open && close()}>
+    <ResponsiveDialog
+      open={kind === "choose" || kind === "design-system"}
+      onOpenChange={(open) => !open && close()}
+    >
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
-            {view === "choose"
-              ? "Create New"
-              : view === "design"
-                ? "Create Design"
-                : "Create Design System"}
+            {view === "choose" ? "Create New" : "Create Design System"}
           </ResponsiveDialogTitle>
         </ResponsiveDialogHeader>
         {view === "choose" && (
@@ -225,24 +217,6 @@ export function NewGeneratedProjectDialog() {
                 </div>
               </button>
             ))}
-          </div>
-        )}
-        {view === "design" && (
-          <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground">
-              Choose a design library from the composer after the session opens.
-            </p>
-            <div className="flex justify-between">
-              <Button
-                variant="ghost"
-                onClick={() => (kind === "choose" ? setView("choose") : close())}
-              >
-                <ArrowLeft /> Back
-              </Button>
-              <Button disabled={submitting} onClick={() => void submitDesign()}>
-                {submitting ? "Creating…" : "Create Design"}
-              </Button>
-            </div>
           </div>
         )}
         {view === "create-system" && (
@@ -300,7 +274,7 @@ export function NewGeneratedProjectDialog() {
               <Button
                 variant="ghost"
                 onClick={() => {
-                  setView("design");
+                  setView("choose");
                 }}
               >
                 <ArrowLeft /> Back

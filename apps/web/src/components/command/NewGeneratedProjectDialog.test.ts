@@ -9,8 +9,8 @@ const state = vi.hoisted(() => ({
 
 vi.mock("react", () => ({
   useEffect: (effect: () => void) => effect(),
-  useCallback: <T,>(callback: T) => callback,
-  useState: <T,>(initial: T) => [initial, vi.fn()],
+  useCallback: <T>(callback: T) => callback,
+  useState: <T>(initial: T) => [initial, vi.fn()],
 }));
 
 vi.mock("../../lib/create-quick-session", () => ({
@@ -40,7 +40,7 @@ vi.mock("@trace/client-core", () => ({
 }));
 
 vi.mock("zustand/react/shallow", () => ({
-  useShallow: <T,>(selector: T) => selector,
+  useShallow: <T>(selector: T) => selector,
 }));
 
 describe("NewGeneratedProjectDialog", () => {
@@ -62,13 +62,14 @@ describe("NewGeneratedProjectDialog", () => {
     expect(state.createDesign).not.toHaveBeenCalled();
   });
 
-  it("does not create a design session until the dialog is submitted", async () => {
+  it("dispatches exactly one blank design session creation", async () => {
     state.kind = "design";
     const { NewGeneratedProjectDialog } = await import("./NewGeneratedProjectDialog");
 
     NewGeneratedProjectDialog();
 
-    expect(state.close).not.toHaveBeenCalled();
-    expect(state.createDesign).not.toHaveBeenCalled();
+    expect(state.close).toHaveBeenCalledTimes(1);
+    expect(state.createDesign).toHaveBeenCalledTimes(1);
+    expect(state.createApp).not.toHaveBeenCalled();
   });
 });
