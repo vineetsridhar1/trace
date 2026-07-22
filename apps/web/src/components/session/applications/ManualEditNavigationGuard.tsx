@@ -100,10 +100,10 @@ export function ManualEditNavigationGuard() {
             Keep editing
           </Button>
           <Button variant="destructive" onClick={discardAndLeave} disabled={saving}>
-            Discard &amp; leave
+            Discard
           </Button>
           <Button onClick={saveThenLeave} disabled={saving || draftCount === 0}>
-            {saveAndLeave || saving ? "Saving…" : "Save & leave"}
+            {saveAndLeave || saving ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>
