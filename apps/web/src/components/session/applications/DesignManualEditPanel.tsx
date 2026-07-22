@@ -26,6 +26,7 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
     resetChanges,
     cancelSelection,
     activateElement,
+    hoverElement,
     save,
   } = useDesignEditorStore(
     useShallow((state) => ({
@@ -41,6 +42,7 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
       resetChanges: state.resetChanges,
       cancelSelection: state.cancelSelection,
       activateElement: state.activateElement,
+      hoverElement: state.hoverElement,
       save: state.save,
     })),
   );
@@ -70,6 +72,7 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
           nodes={domTree}
           selectedElementId={target?.elementId ?? null}
           onSelect={activateElement}
+          onHover={hoverElement}
         />
       ) : null}
 

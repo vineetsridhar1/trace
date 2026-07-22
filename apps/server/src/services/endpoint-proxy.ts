@@ -368,6 +368,14 @@ window.addEventListener("message",function(e){
   if(e.data.type==="trace:design:activate-element"&&typeof e.data.elementId==="string"){
     activateElement(e.data.elementId);return;
   }
+  if(e.data.type==="trace:design:hover-element"){
+    clearHover();
+    if(typeof e.data.elementId==="string"){
+      hoverEl=findEditTarget(e.data.elementId);
+      if(hoverEl)hoverEl.setAttribute("data-trace-edit-hover","");
+    }
+    return;
+  }
   if(e.data.type==="trace:design:clear-selection"){clearSelection();return}
   if(e.data.type==="trace:design:preview-text"&&typeof e.data.elementId==="string"&&typeof e.data.text==="string"){
     var el=findEditTarget(e.data.elementId);

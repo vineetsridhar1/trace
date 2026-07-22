@@ -9,10 +9,12 @@ export function DesignEditorDomTree({
   nodes,
   selectedElementId,
   onSelect,
+  onHover,
 }: {
   nodes: DesignEditorDomNode[];
   selectedElementId: string | null;
   onSelect: (elementId: string) => void;
+  onHover: (elementId: string | null) => void;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const rows = useMemo(() => flattenTree(nodes, collapsed), [collapsed, nodes]);
@@ -43,6 +45,8 @@ export function DesignEditorDomTree({
               active && "bg-muted text-foreground",
             )}
             style={{ paddingLeft: `${Math.min(depth, 8) * 14 + 2}px` }}
+            onPointerEnter={() => node.elementId && onHover(node.elementId)}
+            onPointerLeave={() => node.elementId && onHover(null)}
           >
             <button
               type="button"

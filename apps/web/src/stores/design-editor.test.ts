@@ -160,6 +160,26 @@ describe("design editor store", () => {
     disconnect();
   });
 
+  it("previews a DOM tree row on hover without updating editor state", () => {
+    const send = vi.fn();
+    const disconnect = registerDesignEditorFrame("group-1", send);
+    useDesignEditorStore.setState({ activeSessionGroupId: "group-1", target: TARGET });
+
+    useDesignEditorStore.getState().hoverElement("hero-card");
+    useDesignEditorStore.getState().hoverElement(null);
+
+    expect(send).toHaveBeenNthCalledWith(1, {
+      type: "trace:design:hover-element",
+      elementId: "hero-card",
+    });
+    expect(send).toHaveBeenNthCalledWith(2, {
+      type: "trace:design:hover-element",
+      elementId: null,
+    });
+    expect(useDesignEditorStore.getState().target).toBe(TARGET);
+    disconnect();
+  });
+
   it("resets a draft in place and restores the live preview", () => {
     const send = vi.fn();
     const disconnect = registerDesignEditorFrame("group-1", send);

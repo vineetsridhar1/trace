@@ -671,6 +671,7 @@ type DesignEditorState = {
   resetChanges: () => void;
   cancelSelection: () => void;
   activateElement: (elementId: string) => void;
+  hoverElement: (elementId: string | null) => void;
   setDomTree: (sessionGroupId: string, tree: DesignEditorDomNode[]) => void;
   save: () => Promise<void>;
 };
@@ -855,6 +856,12 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     const state = get();
     if (state.saving || !state.activeSessionGroupId) return;
     post(state.activeSessionGroupId, { type: "trace:design:activate-element", elementId });
+  },
+
+  hoverElement: (elementId) => {
+    const sessionGroupId = get().activeSessionGroupId;
+    if (!sessionGroupId) return;
+    post(sessionGroupId, { type: "trace:design:hover-element", elementId });
   },
 
   setDomTree: (sessionGroupId, tree) => {

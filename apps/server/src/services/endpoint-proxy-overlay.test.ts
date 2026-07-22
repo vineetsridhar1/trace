@@ -26,6 +26,7 @@ describe("endpoint authoring overlay", () => {
     expect(html).toContain("post('dom-tree',{domTree:tree})");
     expect(injectedScript(html)).toContain("replace(/\\s+/g");
     expect(html).toContain('e.data.type==="trace:design:activate-element"');
+    expect(html).toContain('e.data.type==="trace:design:hover-element"');
     expect(html).toContain("boxShadow:style.boxShadow");
     expect(result.headers).not.toHaveProperty("content-length");
     expect(result.headers).toMatchObject({ "cache-control": "no-store" });
