@@ -61,7 +61,6 @@ export function DesignSystemCombobox({
 }) {
   const [open, setOpen] = useState(false);
   const selectable = selectableDesignSystems(systems);
-  const unavailable = unavailableDesignSystems(systems);
   const selectedSystem = selectable.find((system) => system.activeVersionId === value);
   const label = value === TRACE_DEFAULT_DESIGN_SYSTEM ? "Trace Default" : selectedSystem?.name;
 
@@ -117,35 +116,6 @@ export function DesignSystemCombobox({
               {system.activeVersionId === value ? <Check className="size-4" /> : null}
             </button>
           ))}
-          {unavailable.length > 0 ? (
-            <>
-              <div className="px-2 pb-1 pt-2 text-[11px] font-medium text-muted-foreground/70">
-                Not ready
-              </div>
-              {unavailable.map((system) => (
-                <div
-                  key={system.id}
-                  className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground/50"
-                >
-                  <Palette className="mt-0.5 size-4 shrink-0" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">
-                      {system.name} · {designSystemAvailabilityLabel(system)}
-                    </span>
-                    {designSystemValidationErrors(system).map((error) => (
-                      <span
-                        key={error}
-                        className="mt-0.5 block truncate text-[11px] text-destructive/80"
-                        title={error}
-                      >
-                        {error}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-              ))}
-            </>
-          ) : null}
           <div className="my-1 h-px bg-border/60" />
           <button
             type="button"
