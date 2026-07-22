@@ -302,7 +302,7 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       const label = chatLabel.get(chat.id) ?? "Direct Message";
       list.push({
         key: `chat-${chat.id}`,
-        group: "Direct Messages",
+        group: "People",
         label,
         search: `dm ${label} ${chat.id}`,
         icon: <MessageCircle size={16} />,

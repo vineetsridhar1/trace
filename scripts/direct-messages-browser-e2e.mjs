@@ -23,7 +23,7 @@ try {
 
   const page = await context.newPage();
   await page.goto(webUrl, { waitUntil: "domcontentloaded" });
-  await page.getByText("Direct Messages", { exact: true }).waitFor();
+  await page.getByText("People", { exact: true }).waitFor();
   await page.getByText("DM Seed Bob", { exact: true }).click();
 
   const messageList = page.getByTestId("chat-message-list");

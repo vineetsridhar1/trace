@@ -20,7 +20,7 @@ export function SidebarDirectMessagesSection({
     <div className="mt-4">
       <div className="group/direct-messages-header flex items-center justify-between px-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
-          Direct Messages
+          People
         </span>
         <div className="opacity-70 transition-opacity group-hover/direct-messages-header:opacity-100">
           <CreateChatDialog />
