@@ -61,7 +61,7 @@ import { ManagedProcessManager } from "./managed-process-manager.js";
 import { exportPdfToTarget } from "./pdf-export.js";
 
 const execFileAsync = promisify(execFile);
-const BRIDGE_PROTOCOL_VERSION = 1;
+const BRIDGE_PROTOCOL_VERSION = 2;
 const AGENT_VERSION = "0.1.0";
 const BRIDGE_USER_AGENT = "Trace-Container-Bridge/0.1";
 function hasExecutable(command: string): boolean {
@@ -830,12 +830,14 @@ export class ContainerBridge implements IBridgeClient {
         break;
       }
 
-      case "write_file": {
+      case "write_file":
+      case "write_file_guarded": {
         handleWriteFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
         break;
       }
 
-      case "commit_file_changes": {
+      case "commit_file_changes":
+      case "commit_scoped_file_changes": {
         void handleCommitFileChanges(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
           fs,
           path,

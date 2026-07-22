@@ -9,6 +9,7 @@ import {
   isAttachmentResponse,
   generateEndpointKey,
   isAllowedPreviewRequestOrigin,
+  traceAppOrigins,
   sanitizeHeaders,
   webSocketProtocols,
 } from "./endpoint-utils.js";
@@ -100,6 +101,17 @@ describe("endpoint utils", () => {
     // A different endpoint or an attacker origin is rejected.
     expect(isAllowedPreviewRequestOrigin("http://other.preview.localhost", "abc123")).toBe(false);
     expect(isAllowedPreviewRequestOrigin("https://evil.test", "abc123")).toBe(false);
+    expect(traceAppOrigins().has("https://app.trace.test")).toBe(true);
+    expect(traceAppOrigins().has("https://evil.test")).toBe(false);
+  });
+
+  it("allows local Trace origins for authoring in development", () => {
+    vi.stubEnv("TRACE_WEB_URL", "");
+    vi.stubEnv("CORS_ALLOWED_ORIGINS", "");
+    vi.stubEnv("TRACE_LOCAL_MODE", "1");
+    vi.stubEnv("NODE_ENV", "development");
+
+    expect(traceAppOrigins()).toEqual(new Set(["http://localhost:3000", "http://127.0.0.1:3000"]));
   });
 
   it("generates DNS-safe random keys", () => {
@@ -164,6 +176,31 @@ describe("endpoint utils", () => {
         { websocket: true },
       ),
     ).toEqual({ "x-app": "ok" });
+  });
+
+  it("requests identity responses when the authoring overlay must be injected", () => {
+    expect(
+      forwardableRequestHeaders(
+        {
+          "accept-encoding": "gzip, br",
+          accept: "text/html",
+        },
+        { authoringOverlay: true },
+      ),
+    ).toEqual({ accept: "text/html" });
+  });
+
+  it("does not forward conditional cache headers for authoring previews", () => {
+    expect(
+      forwardableRequestHeaders(
+        {
+          "if-none-match": 'W/"starter-v1"',
+          "if-modified-since": "Tue, 21 Jul 2026 12:00:00 GMT",
+          accept: "text/html",
+        },
+        { authoringOverlay: true },
+      ),
+    ).toEqual({ accept: "text/html" });
   });
 
   it("extracts websocket subprotocols before stripping handshake headers", () => {

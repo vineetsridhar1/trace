@@ -37,7 +37,7 @@ export function useSessionApplicationsData(sessionGroupId: string) {
   const resolvedConfig = groupRepo?.applicationConfig ?? repoConfig;
   const config = hasContent(resolvedConfig)
     ? resolvedConfig
-    : groupKind === "app"
+    : groupKind === "app" || groupKind === "design" || groupKind === "pdf"
       ? DEFAULT_APP_CONFIG
       : resolvedConfig;
   const upsert = useEntityStore((state) => state.upsert);

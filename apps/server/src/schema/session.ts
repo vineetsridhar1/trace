@@ -2,6 +2,7 @@ import type { Context } from "../context.js";
 import type {
   AgentStatus,
   CodingTool,
+  DesignElementStylesInput,
   SessionFilters,
   StartSessionInput,
   UpdateSessionDefaultsInput,
@@ -188,6 +189,41 @@ export const sessionQueries = {
   ) => {
     const orgId = requireOrgContext(ctx);
     return sessionService.readFileWithSource(args.sessionGroupId, args.filePath, orgId, ctx.userId);
+  },
+  designElementTextSource: async (
+    _: unknown,
+    args: { sessionGroupId: string; filePath: string; elementId: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    try {
+      return await sessionService.readDesignElementTextSource(
+        args.sessionGroupId,
+        args.filePath,
+        args.elementId,
+        requireOrgContext(ctx),
+        ctx.userId,
+      );
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
+  },
+  designElementStyleSource: async (
+    _: unknown,
+    args: { sessionGroupId: string; elementId: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    try {
+      return await sessionService.readDesignElementStyleSource(
+        args.sessionGroupId,
+        args.elementId,
+        requireOrgContext(ctx),
+        ctx.userId,
+      );
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
   },
   sessionGroupBranchDiff: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
@@ -549,16 +585,108 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
-  requestPdfSessionExport: (
+  requestPdfSessionExport: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    return sessionService.requestPdfExport(args.sessionGroupId, requireOrgContext(ctx), ctx.userId);
+  },
+  updateDesignElementText: async (
     _: unknown,
-    args: { sessionGroupId: string },
+    args: {
+      sessionGroupId: string;
+      filePath: string;
+      elementId: string;
+      text: string;
+      expectedSourceHash: string;
+    },
     ctx: Context,
   ) => {
-    return sessionService.requestPdfExport(
-      args.sessionGroupId,
-      requireOrgContext(ctx),
-      ctx.userId,
-    );
+    if (!ctx.userId) throw new AuthenticationError();
+    try {
+      return await sessionService.updateDesignElementText(
+        args,
+        requireOrgContext(ctx),
+        ctx.actorType,
+        ctx.userId,
+      );
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
+  },
+  updateDesignElementStyles: async (
+    _: unknown,
+    args: {
+      sessionGroupId: string;
+      elementId: string;
+      styles: DesignElementStylesInput;
+      expectedSourceHash: string;
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    try {
+      return await sessionService.updateDesignElementStyles(
+        args,
+        requireOrgContext(ctx),
+        ctx.actorType,
+        ctx.userId,
+      );
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
+  },
+  saveManualElementEdit: async (
+    _: unknown,
+    args: {
+      sessionGroupId: string;
+      input: {
+        filePath: string;
+        elementId: string;
+        text?: string | null;
+        expectedTextSourceHash?: string | null;
+        styles?: DesignElementStylesInput | null;
+        expectedStyleSourceHash?: string | null;
+      };
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    try {
+      return await sessionService.saveManualElementEdit(
+        { sessionGroupId: args.sessionGroupId, ...args.input },
+        requireOrgContext(ctx),
+        ctx.actorType,
+        ctx.userId,
+      );
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
+  },
+  saveManualElementEdits: async (
+    _: unknown,
+    args: {
+      sessionGroupId: string;
+      inputs: Array<{
+        filePath: string;
+        elementId: string;
+        text?: string | null;
+        expectedTextSourceHash?: string | null;
+        styles?: DesignElementStylesInput | null;
+        expectedStyleSourceHash?: string | null;
+      }>;
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    try {
+      return await sessionService.saveManualElementEdits(
+        args.sessionGroupId,
+        args.inputs,
+        requireOrgContext(ctx),
+        ctx.actorType,
+        ctx.userId,
+      );
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
   },
   commitSessionGroupFileChanges: (
     _: unknown,

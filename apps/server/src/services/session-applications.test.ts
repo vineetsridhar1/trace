@@ -338,6 +338,29 @@ describe("SessionApplicationService", () => {
     );
   });
 
+  it("creates a clean generated preview redirect", async () => {
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
+      id: "endpoint-1",
+      sessionGroupId: "group-1",
+      status: "enabled",
+      revokedAt: null,
+      key: "endpointkey1",
+    });
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      visibility: "public",
+      ownerUserId: "user-1",
+    });
+
+    const preview = await new SessionApplicationService().createEndpointPreview(
+      "endpoint-1",
+      "org-1",
+      "user-1",
+    );
+
+    expect(new URL(preview.url).searchParams.get("next")).toBe("/");
+    expect(preview.url).not.toContain("__trace_authoring");
+  });
+
   it("ignores stale bridge logs for missing process rows", async () => {
     prismaMock.sessionApplicationProcess.findFirst.mockResolvedValueOnce(null);
 

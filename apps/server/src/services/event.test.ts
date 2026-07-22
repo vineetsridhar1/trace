@@ -117,6 +117,52 @@ describe("EventService", () => {
     );
   });
 
+  it("persists an event batch transactionally before publishing it", async () => {
+    const events = [
+      {
+        id: "event-1",
+        organizationId: "org-1",
+        scopeType: "system",
+        scopeId: "group-1",
+        eventType: "manual_element_saved",
+      },
+      {
+        id: "event-2",
+        organizationId: "org-1",
+        scopeType: "system",
+        scopeId: "group-1",
+        eventType: "manual_element_saved",
+      },
+    ];
+    prismaMock.$transaction.mockImplementationOnce((operation: (tx: unknown) => unknown) =>
+      operation(prismaMock),
+    );
+    prismaMock.event.create.mockResolvedValueOnce(events[0]).mockResolvedValueOnce(events[1]);
+
+    const service = new EventService();
+    await service.createMany(
+      events.map((_, index) => ({
+        organizationId: "org-1",
+        scopeType: "system",
+        scopeId: "group-1",
+        eventType: "manual_element_saved",
+        payload: { index },
+        actorType: "user",
+        actorId: "user-1",
+      })),
+    );
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.event.create).toHaveBeenCalledTimes(2);
+    expect(pubsubMock.publish).toHaveBeenCalledTimes(2);
+    expect(pubsubMock.publish).toHaveBeenNthCalledWith(1, "org:org-1:events", {
+      orgEvents: events[0],
+    });
+    expect(pubsubMock.publish).toHaveBeenNthCalledWith(2, "org:org-1:events", {
+      orgEvents: events[1],
+    });
+  });
+
   it("queries events in chronological order even when paginating backwards", async () => {
     const older = { id: "older" };
     const newer = { id: "newer" };

@@ -1,7 +1,13 @@
 import { useEffect } from "react";
-import { buildPath, resolveOptimisticSessionRedirect, useUIStore } from "../stores/ui";
+import {
+  buildPath,
+  getCurrentNavigationState,
+  resolveOptimisticSessionRedirect,
+  useUIStore,
+} from "../stores/ui";
 import type { ActivePage } from "../stores/ui";
 import type { ChannelSubPage } from "../stores/ui";
+import { blockNavigation } from "../lib/navigation-blocker";
 
 type LegacyActivePage = ActivePage | "connections";
 
@@ -243,7 +249,7 @@ export function useHistorySync() {
       searchQuery,
     );
 
-    function onPopState(e: PopStateEvent) {
+    function applyPopState(e: PopStateEvent) {
       const state = e.state as {
         channelId: string | null;
         sessionGroupId: string | null;
@@ -332,6 +338,36 @@ export function useHistorySync() {
         nav.channelSubPage,
         nav.searchQuery,
       );
+    }
+
+    function onPopState(e: PopStateEvent) {
+      const targetUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const targetState = e.state as { sessionGroupId?: string | null } | null;
+      const targetSessionGroupId =
+        targetState?.sessionGroupId ?? parseNavFromPath(window.location.pathname).sessionGroupId;
+      const current = getCurrentNavigationState();
+      if (
+        current.sessionGroupId &&
+        targetSessionGroupId !== current.sessionGroupId &&
+        blockNavigation(() => {
+          history.pushState(e.state, "", targetUrl);
+          applyPopState(e);
+        })
+      ) {
+        history.replaceState(
+          current,
+          "",
+          buildPath(
+            current.channelId,
+            current.sessionGroupId,
+            current.sessionId,
+            current.page,
+            current.chatId,
+          ),
+        );
+        return;
+      }
+      applyPopState(e);
     }
 
     function onMouseUp(e: MouseEvent) {

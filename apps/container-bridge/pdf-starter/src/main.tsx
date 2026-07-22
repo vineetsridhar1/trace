@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { TracePdfRuntime } from "./TracePdfRuntime";
 import "./index.css";
+import "./manual.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

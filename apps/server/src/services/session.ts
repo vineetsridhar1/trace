@@ -1,4 +1,9 @@
-import type { StartSessionInput, UpdateSessionDefaultsInput, ActorType } from "@trace/gql";
+import type {
+  StartSessionInput,
+  UpdateSessionDefaultsInput,
+  ActorType,
+  DesignElementStylesInput,
+} from "@trace/gql";
 import type { AgentStatus, SessionStatus, CodingTool, SessionGroupKind } from "@prisma/client";
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
@@ -76,6 +81,21 @@ import { managedGitService } from "./managed-git.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 import { isGeneratedProjectKind } from "../lib/generated-project.js";
+import {
+  designSourceHash,
+  readStaticDesignElementText,
+  updateStaticDesignElementText,
+  validateDesignElementId,
+  validateManualSourcePath,
+  type DesignElementTextSource,
+  type ManualEditableProjectKind,
+} from "./design-manual-edit.js";
+import {
+  manualStylePath,
+  readManualDesignElementStyles,
+  updateManualDesignElementStyles,
+  type ManualDesignElementStyles,
+} from "./design-manual-style.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   tool?: CodingTool | null;
@@ -999,7 +1019,7 @@ This is a Trace app session in its own isolated cloud runtime. When present, rea
 </system-instruction>`;
 
 const DESIGN_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace Design session, not an App or Coding session. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; when the user asks to build or create a product, design its screens, flows, variants, and states instead of implementing a production application. Before editing, read and follow AGENTS.md or CLAUDE.md plus docs/ai-guidance.md, resolve design.brief.json, and read the relevant docs/playbooks guidance. Follow the workspace guide's design loop: understand the brief, ground supplied references in observable evidence, map the experience, commit to executable tokens, compose a representative screen and then the coherent screen set, and critique it before delivery. Work visibly and incrementally: render a rough but valid representative screen early, then add and refine screens in coherent runnable batches so the user can watch the canvas evolve through Vite HMR. Keep the manifest and canvas valid between edits; do not assemble the whole design offscreen and reveal it only at the end. Build and refine the artifact through design.brief.json, design.canvas.json, trace.tokens.json, and focused components under src/design, with one component per logical screen and stable screen ids. Prefer the token-driven primitives already under src/design/primitives. Local component state is allowed for prototype interactions, but do not build APIs, databases, authentication, persistence, real integrations, or production business logic. Do not replace src/App.tsx, the stable canvas or review runtime, server.ts, scripts, or the Vite/export configuration, and do not add routing that bypasses the canvas. Use local or embeddable assets only so Export HTML remains self-contained and works offline. The managed Vite server already runs on port 3000 and hot-reloads changes; do not start another server. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect every generated review screenshot, repair failures, and rerun the checks. Ask only blocking product questions through Trace's normal question mechanism; otherwise make explicit, reasonable assumptions and proceed. Before every response that changes the design, commit and push the changes to the configured managed origin. A successful push saves the durable Design preview.
+This is a Trace Design session, not an App or Coding session. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; when the user asks to build or create a product, design its screens, flows, variants, and states instead of implementing a production application. Before editing, read and follow AGENTS.md or CLAUDE.md plus docs/ai-guidance.md, resolve design.brief.json, and read the relevant docs/playbooks guidance. Follow the workspace guide's design loop: understand the brief, ground supplied references in observable evidence, map the experience, commit to executable tokens, compose a representative screen and then the coherent screen set, and critique it before delivery. Work visibly and incrementally: render a rough but valid representative screen early, then add and refine screens in coherent runnable batches so the user can watch the canvas evolve through Vite HMR. Keep the manifest and canvas valid between edits; do not assemble the whole design offscreen and reveal it only at the end. Build and refine the artifact through design.brief.json, design.canvas.json, trace.tokens.json, and focused components under src/design, with one component per logical screen and stable screen ids. Prefer the token-driven primitives already under src/design/primitives. Give meaningful layout, control, and text elements stable, unique data-trace-id attributes plus repo-relative data-trace-source attributes pointing to their owning TSX files, and preserve them so manual visual and static-text edits can round-trip into source. Local component state is allowed for prototype interactions, but do not build APIs, databases, authentication, persistence, real integrations, or production business logic. Do not replace src/App.tsx, the stable canvas or review runtime, server.ts, scripts, or the Vite/export configuration, and do not add routing that bypasses the canvas. Use local or embeddable assets only so Export HTML remains self-contained and works offline. The managed Vite server already runs on port 3000 and hot-reloads changes; do not start another server. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect every generated review screenshot, repair failures, and rerun the checks. Ask only blocking product questions through Trace's normal question mechanism; otherwise make explicit, reasonable assumptions and proceed. Before every response that changes the design, commit and push the changes to the configured managed origin. A successful push saves the durable Design preview.
 </system-instruction>`;
 
 const PDF_SESSION_INSTRUCTION = `\n\n<system-instruction>
@@ -1344,6 +1364,28 @@ export function isFullyUnloadedSession(
 }
 
 export class SessionService {
+  private manualElementSaveQueues = new Map<string, Promise<void>>();
+
+  private async withManualElementSaveLock<Result>(
+    sessionGroupId: string,
+    operation: () => Promise<Result>,
+  ): Promise<Result> {
+    const previous = this.manualElementSaveQueues.get(sessionGroupId) ?? Promise.resolve();
+    const run = previous.catch(() => {}).then(operation);
+    const marker = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.manualElementSaveQueues.set(sessionGroupId, marker);
+    try {
+      return await run;
+    } finally {
+      if (this.manualElementSaveQueues.get(sessionGroupId) === marker) {
+        this.manualElementSaveQueues.delete(sessionGroupId);
+      }
+    }
+  }
+
   private async createGeneratedProjectGitCredential(input: {
     organizationId: string;
     sessionId: string;
@@ -9196,6 +9238,520 @@ export class SessionService {
 
   async pdfDownloadUrl(sessionGroupId: string, organizationId: string, userId: string | null) {
     return this.pdfArtifactUrl(sessionGroupId, organizationId, userId, true);
+  }
+
+  async saveManualElementEdit(
+    input: {
+      sessionGroupId: string;
+      filePath: string;
+      elementId: string;
+      text?: string | null;
+      expectedTextSourceHash?: string | null;
+      styles?: DesignElementStylesInput | null;
+      expectedStyleSourceHash?: string | null;
+    },
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<{
+    sessionGroupId: string;
+    filePath: string;
+    elementId: string;
+    text: string | null;
+    textSourceHash: string | null;
+    styles: ManualDesignElementStyles | null;
+    styleSourceHash: string | null;
+    commitSha: string;
+  }> {
+    const [result] = await this.saveManualElementEdits(
+      input.sessionGroupId,
+      [input],
+      organizationId,
+      actorType,
+      actorId,
+    );
+    return result!;
+  }
+
+  async saveManualElementEdits(
+    sessionGroupId: string,
+    inputs: Array<{
+      filePath: string;
+      elementId: string;
+      text?: string | null;
+      expectedTextSourceHash?: string | null;
+      styles?: DesignElementStylesInput | null;
+      expectedStyleSourceHash?: string | null;
+    }>,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<
+    Array<{
+      sessionGroupId: string;
+      filePath: string;
+      elementId: string;
+      text: string | null;
+      textSourceHash: string | null;
+      styles: ManualDesignElementStyles | null;
+      styleSourceHash: string | null;
+      commitSha: string;
+    }>
+  > {
+    return this.withManualElementSaveLock(sessionGroupId, async () => {
+      if (inputs.length === 0) throw new ValidationError("Choose changes before saving");
+      const kind = await this.assertManualElementEditAccess(
+        sessionGroupId,
+        organizationId,
+        actorId,
+      );
+      const edits = inputs.map((input) => {
+        const filePath = validateManualSourcePath(input.filePath, kind);
+        const elementId = validateDesignElementId(input.elementId);
+        const savesText = input.text !== null && input.text !== undefined;
+        const savesStyles = input.styles !== null && input.styles !== undefined;
+        if (!savesText && !savesStyles) {
+          throw new ValidationError("Choose content or appearance changes before saving");
+        }
+        if (savesText && !input.expectedTextSourceHash) {
+          throw new ValidationError("The text source hash is required");
+        }
+        if (savesStyles && !input.expectedStyleSourceHash) {
+          throw new ValidationError("The style source hash is required");
+        }
+        return { ...input, filePath, elementId, savesText, savesStyles };
+      });
+      const duplicate = new Set<string>();
+      for (const edit of edits) {
+        const key = `${edit.filePath}:${edit.elementId}`;
+        if (duplicate.has(key))
+          throw new ValidationError("An element can only be saved once per batch");
+        duplicate.add(key);
+      }
+
+      const runtime = await this.resolveAccessibleSessionGroupRuntime(
+        sessionGroupId,
+        organizationId,
+        actorId,
+        { requireWrite: true },
+      );
+      const textPaths = [
+        ...new Set(edits.filter((edit) => edit.savesText).map((edit) => edit.filePath)),
+      ];
+      const textSources = new Map(
+        await Promise.all(
+          textPaths.map(
+            async (path) =>
+              [
+                path,
+                await sessionRouter.readFile(
+                  runtime.runtimeId,
+                  runtime.sessionId,
+                  path,
+                  runtime.workdirHint,
+                ),
+              ] as const,
+          ),
+        ),
+      );
+      const needsStyles = edits.some((edit) => edit.savesStyles);
+      const styleFile = needsStyles
+        ? await this.readDesignManualStyleFile(
+            runtime.runtimeId,
+            runtime.sessionId,
+            runtime.workdirHint,
+            kind,
+          )
+        : null;
+
+      for (const edit of edits) {
+        if (
+          edit.savesText &&
+          designSourceHash(textSources.get(edit.filePath) ?? "") !== edit.expectedTextSourceHash
+        ) {
+          throw new ValidationError("The source changed. Select the element again before saving");
+        }
+        if (
+          edit.savesStyles &&
+          styleFile &&
+          designSourceHash(styleFile.source) !== edit.expectedStyleSourceHash
+        ) {
+          throw new ValidationError(
+            "The manual styles changed. Select the element again before saving",
+          );
+        }
+      }
+
+      const nextTextSources = new Map(textSources);
+      let nextStyleSource = styleFile?.source ?? null;
+      const results = edits.map((edit) => {
+        let text: string | null = null;
+        let styles: ManualDesignElementStyles | null = null;
+        if (edit.savesText) {
+          const source = nextTextSources.get(edit.filePath);
+          if (!source) throw new ValidationError("The source file is unavailable");
+          const result = updateStaticDesignElementText(
+            source,
+            edit.filePath,
+            edit.elementId,
+            edit.text!,
+          );
+          nextTextSources.set(edit.filePath, result.source);
+          text = result.text;
+        }
+        if (edit.savesStyles) {
+          if (nextStyleSource === null)
+            throw new ValidationError("The manual styles file is unavailable");
+          const result = updateManualDesignElementStyles(
+            nextStyleSource,
+            edit.elementId,
+            edit.styles!,
+          );
+          nextStyleSource = result.source;
+          styles = result.styles;
+        }
+        return { edit, text, styles };
+      });
+      const writes = [
+        ...textPaths.flatMap((path) => {
+          const before = textSources.get(path)!;
+          const after = nextTextSources.get(path)!;
+          return before === after ? [] : [{ path, before, after }];
+        }),
+        ...(styleFile && nextStyleSource !== styleFile.source
+          ? [{ path: styleFile.path, before: styleFile.source, after: nextStyleSource! }]
+          : []),
+      ];
+      if (writes.length === 0)
+        throw new ValidationError("The selected edits do not change any files");
+
+      const written: typeof writes = [];
+      let commitSha: string;
+      try {
+        for (const write of writes) {
+          await sessionRouter.writeFile(
+            runtime.runtimeId,
+            runtime.sessionId,
+            write.path,
+            write.after,
+            runtime.workdirHint,
+            write.before,
+          );
+          written.push(write);
+        }
+        commitSha = await sessionRouter.commitFileChanges(
+          runtime.runtimeId,
+          runtime.sessionId,
+          edits.length === 1
+            ? `Save manual ${kind} element edit`
+            : `Save ${edits.length} manual ${kind} element edits`,
+          runtime.workdirHint,
+          writes.map((write) => write.path),
+        );
+      } catch (error) {
+        await Promise.all(
+          written
+            .reverse()
+            .map((write) =>
+              sessionRouter.writeFile(
+                runtime.runtimeId,
+                runtime.sessionId,
+                write.path,
+                write.before,
+                runtime.workdirHint,
+                write.after,
+              ),
+            ),
+        ).catch(() => {});
+        throw error;
+      }
+
+      const output = results.map(({ edit, text, styles }) => ({
+        sessionGroupId,
+        filePath: edit.filePath,
+        elementId: edit.elementId,
+        text,
+        textSourceHash: edit.savesText
+          ? designSourceHash(nextTextSources.get(edit.filePath)!)
+          : null,
+        styles,
+        styleSourceHash:
+          edit.savesStyles && nextStyleSource ? designSourceHash(nextStyleSource) : null,
+        commitSha,
+      }));
+      await eventService.createMany(
+        output.map((result) => ({
+          organizationId,
+          scopeType: "system",
+          scopeId: sessionGroupId,
+          eventType: "manual_element_saved",
+          payload: result,
+          actorType,
+          actorId,
+        })),
+      );
+      return output;
+    });
+  }
+
+  async readDesignElementTextSource(
+    sessionGroupId: string,
+    filePath: string,
+    elementId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<DesignElementTextSource & { sessionGroupId: string }> {
+    const kind = await this.assertManualElementEditAccess(sessionGroupId, organizationId, userId);
+    const normalizedPath = validateManualSourcePath(filePath, kind);
+    const normalizedElementId = validateDesignElementId(elementId);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      { requireWrite: true },
+    );
+    const source = await sessionRouter.readFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      normalizedPath,
+      runtime.workdirHint,
+    );
+    return {
+      sessionGroupId,
+      ...readStaticDesignElementText(source, normalizedPath, normalizedElementId),
+    };
+  }
+
+  async updateDesignElementText(
+    input: {
+      sessionGroupId: string;
+      filePath: string;
+      elementId: string;
+      text: string;
+      expectedSourceHash: string;
+    },
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<{
+    sessionGroupId: string;
+    filePath: string;
+    elementId: string;
+    previousText: string;
+    text: string;
+    sourceHash: string;
+  }> {
+    const kind = await this.assertManualElementEditAccess(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+    );
+    const filePath = validateManualSourcePath(input.filePath, kind);
+    const elementId = validateDesignElementId(input.elementId);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+      { requireWrite: true },
+    );
+    const source = await sessionRouter.readFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      filePath,
+      runtime.workdirHint,
+    );
+    if (designSourceHash(source) !== input.expectedSourceHash) {
+      throw new ValidationError(
+        "The design source changed. Select the element again before saving",
+      );
+    }
+
+    const result = updateStaticDesignElementText(source, filePath, elementId, input.text);
+    if (result.source !== source) {
+      await sessionRouter.writeFile(
+        runtime.runtimeId,
+        runtime.sessionId,
+        filePath,
+        result.source,
+        runtime.workdirHint,
+      );
+      await eventService.create({
+        organizationId,
+        scopeType: "system",
+        scopeId: input.sessionGroupId,
+        eventType: "design_element_text_updated",
+        payload: {
+          sessionGroupId: input.sessionGroupId,
+          filePath,
+          elementId,
+          previousText: result.previousText,
+          text: result.text,
+          sourceHash: result.sourceHash,
+        },
+        actorType,
+        actorId,
+      });
+    }
+
+    return {
+      sessionGroupId: input.sessionGroupId,
+      filePath,
+      elementId,
+      previousText: result.previousText,
+      text: result.text,
+      sourceHash: result.sourceHash,
+    };
+  }
+
+  async readDesignElementStyleSource(
+    sessionGroupId: string,
+    elementId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<{
+    sessionGroupId: string;
+    elementId: string;
+    sourceHash: string;
+    styles: ManualDesignElementStyles;
+  }> {
+    const kind = await this.assertManualElementEditAccess(sessionGroupId, organizationId, userId);
+    const normalizedElementId = validateDesignElementId(elementId);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      { requireWrite: true },
+    );
+    const styleFile = await this.readDesignManualStyleFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      runtime.workdirHint,
+      kind,
+    );
+    return {
+      sessionGroupId,
+      elementId: normalizedElementId,
+      ...readManualDesignElementStyles(styleFile.source, normalizedElementId),
+    };
+  }
+
+  async updateDesignElementStyles(
+    input: {
+      sessionGroupId: string;
+      elementId: string;
+      styles: DesignElementStylesInput;
+      expectedSourceHash: string;
+    },
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<{
+    sessionGroupId: string;
+    elementId: string;
+    sourceHash: string;
+    styles: ManualDesignElementStyles;
+  }> {
+    const kind = await this.assertManualElementEditAccess(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+    );
+    const elementId = validateDesignElementId(input.elementId);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+      { requireWrite: true },
+    );
+    const styleFile = await this.readDesignManualStyleFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      runtime.workdirHint,
+      kind,
+    );
+    const source = styleFile.source;
+    if (designSourceHash(source) !== input.expectedSourceHash) {
+      throw new ValidationError(
+        "The manual design styles changed. Select the element again before saving",
+      );
+    }
+
+    const result = updateManualDesignElementStyles(source, elementId, input.styles);
+    if (result.source !== source) {
+      await sessionRouter.writeFile(
+        runtime.runtimeId,
+        runtime.sessionId,
+        styleFile.path,
+        result.source,
+        runtime.workdirHint,
+      );
+      await eventService.create({
+        organizationId,
+        scopeType: "system",
+        scopeId: input.sessionGroupId,
+        eventType: "design_element_styles_updated",
+        payload: {
+          sessionGroupId: input.sessionGroupId,
+          elementId,
+          styles: result.styles,
+          sourceHash: result.sourceHash,
+        },
+        actorType,
+        actorId,
+      });
+    }
+
+    return {
+      sessionGroupId: input.sessionGroupId,
+      elementId,
+      styles: result.styles,
+      sourceHash: result.sourceHash,
+    };
+  }
+
+  private async readDesignManualStyleFile(
+    runtimeId: string,
+    sessionId: string,
+    workdirHint?: string,
+    kind: ManualEditableProjectKind = "design",
+  ): Promise<{ path: string; source: string }> {
+    const path = manualStylePath(kind);
+    try {
+      return {
+        path,
+        source: await sessionRouter.readFile(runtimeId, sessionId, path, workdirHint),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!/ENOENT|no such file|not found/iu.test(message)) throw error;
+
+      const files = await sessionRouter.listFiles(runtimeId, sessionId, workdirHint);
+      const fallbackPath = ["src/index.css", "src/App.css"].find((path) => files.includes(path));
+      if (!fallbackPath) throw error;
+      return {
+        path: fallbackPath,
+        source: await sessionRouter.readFile(runtimeId, sessionId, fallbackPath, workdirHint),
+      };
+    }
+  }
+
+  private async assertManualElementEditAccess(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<ManualEditableProjectKind> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true, kind: true, visibility: true, ownerUserId: true },
+    });
+    if (!group) throw new ValidationError("Generated project session not found");
+    if (group.kind !== "design" && group.kind !== "pdf") {
+      throw new ValidationError("Manual editing is only available in design and document sessions");
+    }
+    if (!canViewSessionGroup(group, userId)) {
+      throw new AuthorizationError("Not authorized for this generated project session");
+    }
+    return group.kind;
   }
 
   async commitFileChanges(

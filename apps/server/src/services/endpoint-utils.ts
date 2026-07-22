@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import type { EndpointTrafficCaptureMode } from "@prisma/client";
+import { getAllowedCorsOrigins } from "../lib/cors.js";
 
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 
@@ -72,14 +73,24 @@ export function extractEndpointKey(hostHeader: string | undefined | null): strin
 
 // Origins Trace itself serves from — the legitimate embedder of a preview iframe.
 // Read lazily so tests and deployments can vary the env without reload ordering.
-function traceAppOrigins(): Set<string> {
+export function traceAppOrigins(): Set<string> {
   const origins = new Set<string>();
   const add = (raw: string | undefined) => {
     const trimmed = raw?.trim();
-    if (trimmed) origins.add(trimmed);
+    if (!trimmed) return;
+    try {
+      origins.add(new URL(trimmed).origin);
+    } catch {
+      // Invalid configured origins are ignored by the request allowlist.
+    }
   };
-  add(process.env.TRACE_WEB_URL);
-  for (const value of (process.env.CORS_ALLOWED_ORIGINS ?? "").split(",")) add(value);
+  const configured = getAllowedCorsOrigins({
+    localMode: process.env.TRACE_LOCAL_MODE === "1",
+    nodeEnv: process.env.NODE_ENV,
+    traceWebUrl: process.env.TRACE_WEB_URL,
+    corsAllowedOrigins: process.env.CORS_ALLOWED_ORIGINS,
+  });
+  for (const value of configured) add(value);
   return origins;
 }
 
@@ -178,7 +189,7 @@ function stripTraceSessionCookie(value: string): string | null {
 // observe the caller's Trace session.
 export function forwardableRequestHeaders(
   headers: Record<string, string | string[] | undefined>,
-  options?: { websocket?: boolean },
+  options?: { websocket?: boolean; authoringOverlay?: boolean },
 ): Record<string, string | string[]> {
   const forwarded: Record<string, string | string[]> = {};
   for (const [rawName, value] of Object.entries(headers)) {
@@ -187,6 +198,13 @@ export function forwardableRequestHeaders(
     if (name === "authorization" || name === "proxy-authorization") continue;
     if (HOP_BY_HOP_HEADERS.has(name)) continue;
     if (options?.websocket && WS_HANDSHAKE_HEADERS.has(name)) continue;
+    if (options?.authoringOverlay && name === "accept-encoding") continue;
+    // A 304 response has no HTML body, so the proxy cannot inject the
+    // authoring overlay. Always retrieve the document body for authoring
+    // previews; the injected response below is explicitly non-cacheable.
+    if (options?.authoringOverlay && (name === "if-none-match" || name === "if-modified-since")) {
+      continue;
+    }
     if (name === "cookie") {
       const cookie = Array.isArray(value) ? value.join("; ") : value;
       const stripped = stripTraceSessionCookie(cookie);

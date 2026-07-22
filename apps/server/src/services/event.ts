@@ -140,6 +140,14 @@ export class EventService {
     return event;
   }
 
+  async createMany(inputs: CreateEventInput[]) {
+    const events = await prisma.$transaction((tx) =>
+      Promise.all(inputs.map((input) => this.create({ ...input, deferPublish: true }, tx))),
+    );
+    for (const event of events) this.publishCreated(event);
+    return events;
+  }
+
   /**
    * Broadcast a transient event WITHOUT persisting it (no DB row, no Redis
    * agent stream, no push notifications). For high-volume streams that already
@@ -300,10 +308,7 @@ export class EventService {
 
     const events = await prisma.event.findMany({
       where,
-      orderBy: [
-        { timestamp: isBefore ? "desc" : "asc" },
-        { id: isBefore ? "desc" : "asc" },
-      ],
+      orderBy: [{ timestamp: isBefore ? "desc" : "asc" }, { id: isBefore ? "desc" : "asc" }],
       take: limit,
     });
 

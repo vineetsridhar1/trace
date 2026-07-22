@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { useEntityStore } from "@trace/client-core";
 import type { SessionEntity } from "@trace/client-core";
+import { blockNavigation } from "../lib/navigation-blocker";
 import {
   buildPath as buildPathInternal,
   persistActiveChannelId,
@@ -200,6 +201,12 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   },
 
   setActivePage: (page: ActivePage) => {
+    if (
+      page !== get().activePage &&
+      blockNavigation(() => useUIStore.getState().setActivePage(page))
+    ) {
+      return;
+    }
     set({ activePage: page, channelSubPage: null });
     if (page === "create") {
       persistActiveChannelId(null);
@@ -240,6 +247,7 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   },
 
   openSearch: (query: string) => {
+    if (blockNavigation(() => useUIStore.getState().openSearch(query))) return;
     const trimmed = query.trim();
     persistActiveChannelId(null);
     persistActiveChatId(null);
@@ -259,6 +267,12 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   },
 
   setActiveChannelId: (id: string | null) => {
+    if (
+      (get().activeSessionGroupId !== null || id !== get().activeChannelId) &&
+      blockNavigation(() => useUIStore.getState().setActiveChannelId(id))
+    ) {
+      return;
+    }
     persistActiveChannelId(id);
     persistActiveSessionNav(null, null);
     set((s: UIState) => {
@@ -319,6 +333,12 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   },
 
   setActiveChatId: (id: string | null) => {
+    if (
+      (get().activeSessionGroupId !== null || id !== get().activeChatId) &&
+      blockNavigation(() => useUIStore.getState().setActiveChatId(id))
+    ) {
+      return;
+    }
     persistActiveChatId(id);
     set((s: UIState) => {
       let unreadChatIds = s.unreadChatIds;
@@ -342,6 +362,12 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   },
 
   setActiveSessionGroupId: (groupId: string | null, sessionId?: string | null) => {
+    if (
+      groupId !== get().activeSessionGroupId &&
+      blockNavigation(() => useUIStore.getState().setActiveSessionGroupId(groupId, sessionId))
+    ) {
+      return;
+    }
     const currentChannelId = get().activeChannelId;
     const currentSubPage = get().channelSubPage;
     if (groupId === null) {
@@ -404,6 +430,12 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     const currentSessionGroupId = get().activeSessionGroupId;
     const currentSubPage = get().channelSubPage;
     if (id === null) {
+      if (
+        currentSessionGroupId !== null &&
+        blockNavigation(() => useUIStore.getState().setActiveSessionId(null))
+      ) {
+        return;
+      }
       persistActiveSessionNav(null, null);
       set({
         activeSessionGroupId: null,
@@ -415,6 +447,12 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
     }
 
     const sessionGroupId = resolveSessionGroupIdForSession(id, currentSessionGroupId);
+    if (
+      sessionGroupId !== currentSessionGroupId &&
+      blockNavigation(() => useUIStore.getState().setActiveSessionId(id))
+    ) {
+      return;
+    }
     const channelId = resolveChannelIdForSessionGroup(
       sessionGroupId,
       resolveChannelIdForSession(id, currentChannelId),
@@ -574,6 +612,12 @@ export function navigateToSessionGroup(
   sessionGroupId: string,
   fallbackSessionId: string | null = null,
 ): void {
+  if (
+    sessionGroupId !== useUIStore.getState().activeSessionGroupId &&
+    blockNavigation(() => navigateToSessionGroup(channelId, sessionGroupId, fallbackSessionId))
+  ) {
+    return;
+  }
   const ui = useUIStore.getState();
   const fallbackChannelId = ui.activeChannelId;
   const sessionId = getPreferredSessionIdForGroup(sessionGroupId, fallbackSessionId);
@@ -606,6 +650,12 @@ export function navigateToSession(
   sessionId: string,
   options?: { replace?: boolean },
 ): void {
+  if (
+    sessionGroupId !== useUIStore.getState().activeSessionGroupId &&
+    blockNavigation(() => navigateToSession(channelId, sessionGroupId, sessionId, options))
+  ) {
+    return;
+  }
   const ui = useUIStore.getState();
   const fallbackChannelId = ui.activeChannelId;
   const resolvedChannelId = resolveChannelIdForSessionGroup(

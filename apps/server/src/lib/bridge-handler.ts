@@ -27,7 +27,8 @@ const DISCONNECT_GRACE_MS = 10_000;
 
 /** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
 const PING_INTERVAL_MS = 20_000;
-const BRIDGE_PROTOCOL_VERSION = 1;
+const BRIDGE_PROTOCOL_VERSION = 2;
+const LEGACY_BRIDGE_PROTOCOL_VERSION = 1;
 const CODING_TOOLS = new Set<CodingTool>(CODING_TOOL_IDS as CodingTool[]);
 
 type LocalBridgeAuth = {
@@ -75,7 +76,7 @@ function parseSupportedTools(value: unknown): CodingTool[] | null {
 }
 
 function isCompatibleProtocolVersion(value: unknown): boolean {
-  return value === BRIDGE_PROTOCOL_VERSION;
+  return value === LEGACY_BRIDGE_PROTOCOL_VERSION || value === BRIDGE_PROTOCOL_VERSION;
 }
 
 function jsonRecord(value: unknown): Record<string, unknown> | null {

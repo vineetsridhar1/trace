@@ -12,6 +12,8 @@ import { CREATE_PREVIEW_MUTATION } from "./session-applications-operations";
 import { PdfPreviewControls } from "./PdfPreviewControls";
 import { SavedPreviewSkeleton } from "./SavedPreviewSkeleton";
 import { usePdfPreview } from "./usePdfPreview";
+import { useDesignManualEdit } from "./useDesignManualEdit";
+import { ManualEditActions } from "./ManualEditActions";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
 const MAX_FRAME_RETRY_MS = 30_000;
@@ -24,6 +26,7 @@ export function AppPreview({
   title = "Live app preview",
   projectKind,
   sessionGroupId,
+  manualSessionGroupId,
 }: {
   endpointId: string;
   status: string;
@@ -32,16 +35,22 @@ export function AppPreview({
   title?: string;
   projectKind?: "design" | "pdf";
   sessionGroupId?: string;
+  manualSessionGroupId?: string;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const pdf = usePdfPreview({
-    enabled: projectKind === "pdf",
-    frameRef,
-    sessionGroupId,
-  });
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
   const [credentialExpiresAt, setCredentialExpiresAt] = useState<string | null>(null);
   const { attempts, error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
+  const manualEdit = useDesignManualEdit({
+    sessionGroupId: manualSessionGroupId ?? "",
+    url,
+  });
+  const activeFrameRef = manualSessionGroupId ? manualEdit.frameRef : frameRef;
+  const pdf = usePdfPreview({
+    enabled: projectKind === "pdf",
+    frameRef: activeFrameRef,
+    sessionGroupId,
+  });
 
   const reload = useCallback(() => {
     dispatch({ type: "reload" });
@@ -112,11 +121,25 @@ export function AppPreview({
           loaded={frameLoaded}
           refreshing={refreshing}
           status={status}
-          onLoad={() => dispatch({ type: "frame-loaded" })}
+          onLoad={() => {
+            dispatch({ type: "frame-loaded" });
+            manualEdit.onFrameLoad();
+          }}
           onReload={reload}
-          iframeRef={frameRef}
+          iframeRef={activeFrameRef}
           bare={projectKind === "pdf"}
           loadingKind={projectKind}
+          manualEdit={
+            manualSessionGroupId
+              ? {
+                  enabled: manualEdit.enabled,
+                  frameReady: manualEdit.frameReady,
+                  saving: manualEdit.saving,
+                  primaryAction: manualEdit.primaryAction,
+                  discard: manualEdit.discard,
+                }
+              : undefined
+          }
           pdfFormat={projectKind === "pdf" ? pdf.format : undefined}
           pdfContentHeight={projectKind === "pdf" ? pdf.contentHeight : undefined}
           onPdfFormatChange={projectKind === "pdf" ? pdf.updateFormat : undefined}
@@ -150,6 +173,16 @@ export function AppPreview({
         />
       ) : null}
       <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
+      {manualSessionGroupId ? (
+        <ManualEditActions
+          enabled={manualEdit.enabled}
+          frameReady={manualEdit.frameReady}
+          saving={manualEdit.saving}
+          onPrimaryAction={manualEdit.primaryAction}
+          onDiscard={manualEdit.discard}
+          className="absolute right-11 top-2 z-20"
+        />
+      ) : null}
       <Button
         size="icon"
         variant="outline"
@@ -162,11 +195,14 @@ export function AppPreview({
         <RotateCw className={cn("size-3", refreshing && "animate-spin")} />
       </Button>
       <iframe
-        ref={frameRef}
+        ref={activeFrameRef}
         key={frameRevision}
         src={url}
         title={title}
-        onLoad={() => dispatch({ type: "frame-loaded" })}
+        onLoad={() => {
+          dispatch({ type: "frame-loaded" });
+          manualEdit.onFrameLoad();
+        }}
         className={cn(
           "w-full bg-background",
           !frameLoaded && projectKind && "opacity-0",

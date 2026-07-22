@@ -1713,11 +1713,13 @@ export class BridgeClient implements IBridgeClient {
         handleReadFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
         break;
       }
-      case "write_file": {
+      case "write_file":
+      case "write_file_guarded": {
         handleWriteFile(cmd, this.sessionWorkdirs, (msg) => this.send(msg), { fs, path });
         break;
       }
-      case "commit_file_changes": {
+      case "commit_file_changes":
+      case "commit_scoped_file_changes": {
         void handleCommitFileChanges(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
           fs,
           path,

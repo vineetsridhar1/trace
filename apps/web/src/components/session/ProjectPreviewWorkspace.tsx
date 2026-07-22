@@ -3,6 +3,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { cn } from "../../lib/utils";
 import { useSidebar } from "../ui/sidebar";
 import { SessionDetailView } from "./SessionDetailView";
+import { DesignManualEditPanel } from "./applications/DesignManualEditPanel";
+import { useDesignEditorStore } from "../../stores/design-editor";
 
 export function ProjectPreviewWorkspace({
   sessionId,
@@ -14,6 +16,7 @@ export function ProjectPreviewWorkspace({
   canvasKey,
   canvas,
   showCanvasWhileLoading = false,
+  manualSessionGroupId,
 }: {
   sessionId: string | null;
   scrollToEventId: string | null;
@@ -24,12 +27,16 @@ export function ProjectPreviewWorkspace({
   canvasKey: string;
   canvas: ReactNode;
   showCanvasWhileLoading?: boolean;
+  manualSessionGroupId?: string;
 }) {
   const [canvasRevealed, setCanvasRevealed] = useState(canvasReady || showCanvasWhileLoading);
   const hasCollapsedRef = useRef(false);
   const collapsedByUsRef = useRef(false);
   const reduceMotion = useReducedMotion();
   const { isMobile, open, openMobile, setOpen, setOpenMobile } = useSidebar();
+  const manualEditing = useDesignEditorStore(
+    (state) => !!manualSessionGroupId && state.activeSessionGroupId === manualSessionGroupId,
+  );
 
   // Keep the sidebar API fresh for the unmount cleanup below without re-running
   // the restore effect on every dependency change.
@@ -68,9 +75,7 @@ export function ProjectPreviewWorkspace({
     <div
       className={cn(
         "flex h-full min-h-0",
-        isMobile
-          ? "snap-x snap-mandatory overflow-x-auto overscroll-x-contain"
-          : "overflow-hidden",
+        isMobile ? "snap-x snap-mandatory overflow-x-auto overscroll-x-contain" : "overflow-hidden",
       )}
     >
       <motion.aside
@@ -87,7 +92,9 @@ export function ProjectPreviewWorkspace({
               : "w-full",
         )}
       >
-        {sessionId ? (
+        {manualEditing && manualSessionGroupId ? (
+          <DesignManualEditPanel />
+        ) : sessionId ? (
           <SessionDetailView
             key={sessionId}
             sessionId={sessionId}

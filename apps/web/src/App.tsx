@@ -28,6 +28,7 @@ import { TraceLoader } from "./components/ui/trace-loader";
 import { LoginPage } from "./components/auth/LoginPage";
 import { features } from "./lib/features";
 import { createQuickSession } from "./lib/create-quick-session";
+import { ManualEditNavigationGuard } from "./components/session/applications/ManualEditNavigationGuard";
 
 export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
@@ -152,6 +153,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
       <BridgeSyncHydrator />
       <GlobalCommandPalette />
       <KeyboardShortcutsDialog />
+      <ManualEditNavigationGuard />
       <div
         className={`flex h-dvh max-h-dvh min-h-dvh flex-col pt-[env(safe-area-inset-top)] ${
           isDesktopShell ? "[background:var(--trace-window-bg)]" : "bg-surface-deep"

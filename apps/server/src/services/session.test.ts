@@ -8,6 +8,7 @@ vi.mock("../lib/db.js", async () => {
 vi.mock("./event.js", () => ({
   eventService: {
     create: vi.fn().mockResolvedValue({ id: "event-1" }),
+    createMany: vi.fn().mockResolvedValue([{ id: "event-1" }]),
     publishCreated: vi.fn(),
   },
 }));
@@ -172,6 +173,7 @@ import {
 } from "@trace/shared";
 import { SessionService, isFullyUnloadedSession } from "./session.js";
 import type { StartSessionServiceInput } from "./session.js";
+import { designSourceHash } from "./design-manual-edit.js";
 
 type MockedDeep<T> = {
   [K in keyof T]: T[K] extends (...args: infer A) => infer R
@@ -344,6 +346,7 @@ describe("SessionService", () => {
     vi.clearAllMocks();
     service = new SessionService();
     eventServiceMock.create.mockResolvedValue({ id: "event-1" });
+    eventServiceMock.createMany.mockResolvedValue([{ id: "event-1" }]);
     runtimeAccessServiceMock.assertAccess.mockResolvedValue(undefined);
     runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValue(
       new Set(["runtime-1", "runtime-a", "runtime-b"]),
@@ -3686,6 +3689,359 @@ describe("SessionService", () => {
       });
     });
 
+    it("writes manual element styles to the dedicated design stylesheet", async () => {
+      const source = "/* Trace writes user-authored visual overrides here. */\n";
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          kind: "design",
+          visibility: "public",
+          ownerUserId: "user-1",
+        })
+        .mockResolvedValueOnce({
+          id: "group-1",
+          workdir: "/tmp/trace",
+          worktreeDeleted: false,
+          connection: { runtimeInstanceId: "runtime-1" },
+          visibility: "public",
+          ownerUserId: "user-1",
+        });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+      sessionRouterMock.readFile.mockResolvedValueOnce(source);
+
+      await expect(
+        service.updateDesignElementStyles(
+          {
+            sessionGroupId: "group-1",
+            elementId: "hero-title",
+            styles: { color: "#112233", fontSize: 32, textAlign: "center" },
+            expectedSourceHash: designSourceHash(source),
+          },
+          "org-1",
+          "user",
+          "user-1",
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          sessionGroupId: "group-1",
+          elementId: "hero-title",
+          styles: { color: "#112233", fontSize: 32, textAlign: "center" },
+        }),
+      );
+      expect(sessionRouterMock.writeFile).toHaveBeenCalledWith(
+        "org-1:runtime-1",
+        "session-1",
+        "src/design/manual.css",
+        expect.stringContaining('[data-trace-id="hero-title"]'),
+        "/tmp/trace",
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "design_element_styles_updated",
+          payload: expect.objectContaining({
+            elementId: "hero-title",
+            styles: { color: "#112233", fontSize: 32, textAlign: "center" },
+          }),
+        }),
+      );
+    });
+
+    it("commits a combined manual element edit before publishing its reconciliation event", async () => {
+      const filePath = "src/design/screens/WelcomeScreen.tsx";
+      const textSource = `<h1 data-trace-id="hero-title" data-trace-source="${filePath}">Processing</h1>`;
+      const styleSource = "/* Trace writes user-authored visual overrides here. */\n";
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          kind: "design",
+          visibility: "public",
+          ownerUserId: "user-1",
+        })
+        .mockResolvedValueOnce({
+          id: "group-1",
+          workdir: "/tmp/trace",
+          worktreeDeleted: false,
+          connection: { runtimeInstanceId: "runtime-1" },
+          visibility: "public",
+          ownerUserId: "user-1",
+        });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+      sessionRouterMock.readFile
+        .mockResolvedValueOnce(textSource)
+        .mockResolvedValueOnce(styleSource);
+      sessionRouterMock.commitFileChanges.mockResolvedValueOnce("commit-123");
+
+      await expect(
+        service.saveManualElementEdit(
+          {
+            sessionGroupId: "group-1",
+            filePath,
+            elementId: "hero-title",
+            text: "Under review",
+            expectedTextSourceHash: designSourceHash(textSource),
+            styles: { color: "#112233" },
+            expectedStyleSourceHash: designSourceHash(styleSource),
+          },
+          "org-1",
+          "user",
+          "user-1",
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          filePath,
+          elementId: "hero-title",
+          text: "Under review",
+          commitSha: "commit-123",
+        }),
+      );
+      expect(sessionRouterMock.writeFile).toHaveBeenNthCalledWith(
+        1,
+        "org-1:runtime-1",
+        "session-1",
+        filePath,
+        expect.stringContaining("Under review"),
+        "/tmp/trace",
+        textSource,
+      );
+      expect(sessionRouterMock.writeFile).toHaveBeenNthCalledWith(
+        2,
+        "org-1:runtime-1",
+        "session-1",
+        "src/design/manual.css",
+        expect.stringContaining('[data-trace-id="hero-title"]'),
+        "/tmp/trace",
+        styleSource,
+      );
+      expect(sessionRouterMock.commitFileChanges).toHaveBeenCalledWith(
+        "org-1:runtime-1",
+        "session-1",
+        "Save manual design element edit",
+        "/tmp/trace",
+        [filePath, "src/design/manual.css"],
+      );
+      expect(eventServiceMock.createMany).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            eventType: "manual_element_saved",
+            payload: expect.objectContaining({ commitSha: "commit-123", elementId: "hero-title" }),
+          }),
+        ]),
+      );
+      expect(sessionRouterMock.commitFileChanges.mock.invocationCallOrder[0]!).toBeLessThan(
+        eventServiceMock.createMany.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it("commits multiple staged manual edits together", async () => {
+      const filePath = "src/design/screens/WelcomeScreen.tsx";
+      const textSource = `<><h1 data-trace-id="hero-title">Processing</h1><p data-trace-id="hero-copy">Details</p></>`;
+      const styleSource = "/* Trace writes user-authored visual overrides here. */\n";
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          kind: "design",
+          visibility: "public",
+          ownerUserId: "user-1",
+        })
+        .mockResolvedValueOnce({
+          id: "group-1",
+          workdir: "/tmp/trace",
+          worktreeDeleted: false,
+          connection: { runtimeInstanceId: "runtime-1" },
+          visibility: "public",
+          ownerUserId: "user-1",
+        });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+      sessionRouterMock.readFile
+        .mockResolvedValueOnce(textSource)
+        .mockResolvedValueOnce(styleSource);
+      sessionRouterMock.commitFileChanges.mockResolvedValueOnce("commit-123");
+
+      await expect(
+        service.saveManualElementEdits(
+          "group-1",
+          [
+            {
+              filePath,
+              elementId: "hero-title",
+              text: "Under review",
+              expectedTextSourceHash: designSourceHash(textSource),
+            },
+            {
+              filePath,
+              elementId: "hero-copy",
+              styles: { color: "#112233" },
+              expectedStyleSourceHash: designSourceHash(styleSource),
+            },
+          ],
+          "org-1",
+          "user",
+          "user-1",
+        ),
+      ).resolves.toHaveLength(2);
+      expect(sessionRouterMock.commitFileChanges).toHaveBeenCalledTimes(1);
+      expect(sessionRouterMock.commitFileChanges).toHaveBeenCalledWith(
+        "org-1:runtime-1",
+        "session-1",
+        "Save 2 manual design element edits",
+        "/tmp/trace",
+        [filePath, "src/design/manual.css"],
+      );
+      expect(eventServiceMock.createMany).toHaveBeenCalledTimes(1);
+    });
+
+    it("restores guarded writes when the manual edit commit fails", async () => {
+      const filePath = "src/design/screens/WelcomeScreen.tsx";
+      const source = `<h1 data-trace-id="hero-title">Processing</h1>`;
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          kind: "design",
+          visibility: "public",
+          ownerUserId: "user-1",
+        })
+        .mockResolvedValueOnce({
+          id: "group-1",
+          workdir: "/tmp/trace",
+          worktreeDeleted: false,
+          connection: { runtimeInstanceId: "runtime-1" },
+          visibility: "public",
+          ownerUserId: "user-1",
+        });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+      sessionRouterMock.readFile.mockResolvedValueOnce(source);
+      sessionRouterMock.commitFileChanges.mockRejectedValueOnce(new Error("commit failed"));
+
+      await expect(
+        service.saveManualElementEdit(
+          {
+            sessionGroupId: "group-1",
+            filePath,
+            elementId: "hero-title",
+            text: "Under review",
+            expectedTextSourceHash: designSourceHash(source),
+          },
+          "org-1",
+          "user",
+          "user-1",
+        ),
+      ).rejects.toThrow("commit failed");
+
+      const editedSource = sessionRouterMock.writeFile.mock.calls[0]?.[3] as string;
+      expect(sessionRouterMock.writeFile).toHaveBeenNthCalledWith(
+        2,
+        "org-1:runtime-1",
+        "session-1",
+        filePath,
+        source,
+        "/tmp/trace",
+        editedSource,
+      );
+      expect(eventServiceMock.createMany).not.toHaveBeenCalled();
+    });
+
+    it("uses the existing global stylesheet for legacy designs without manual.css", async () => {
+      const source = "@tailwind base;\n";
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          kind: "design",
+          visibility: "public",
+          ownerUserId: "user-1",
+        })
+        .mockResolvedValueOnce({
+          id: "group-1",
+          workdir: "/tmp/trace",
+          worktreeDeleted: false,
+          connection: { runtimeInstanceId: "runtime-1" },
+          visibility: "public",
+          ownerUserId: "user-1",
+        });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+      sessionRouterMock.readFile
+        .mockRejectedValueOnce(new Error("ENOENT: no such file, src/design/manual.css"))
+        .mockResolvedValueOnce(source);
+      sessionRouterMock.listFiles.mockResolvedValueOnce(["src/index.css"]);
+
+      await expect(
+        service.updateDesignElementStyles(
+          {
+            sessionGroupId: "group-1",
+            elementId: "hero-title",
+            styles: { color: "#112233" },
+            expectedSourceHash: designSourceHash(source),
+          },
+          "org-1",
+          "user",
+          "user-1",
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          elementId: "hero-title",
+          styles: { color: "#112233" },
+        }),
+      );
+      expect(sessionRouterMock.writeFile).toHaveBeenCalledWith(
+        "org-1:runtime-1",
+        "session-1",
+        "src/index.css",
+        expect.stringContaining('[data-trace-id="hero-title"]'),
+        "/tmp/trace",
+      );
+    });
+
     it("rejects saves to visible cloud session groups owned by another user", async () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
         id: "group-1",
@@ -5879,9 +6235,9 @@ describe("SessionService", () => {
       expect(connectedUpdate?.[0].data.connection).toEqual(
         expect.objectContaining({ runtimeInstanceId: "runtime-a" }),
       );
-      expect(prismaMock.session.update.mock.invocationCallOrder[connectedUpdateIndex]!).toBeLessThan(
-        sessionRouterMock.send.mock.invocationCallOrder[0]!,
-      );
+      expect(
+        prismaMock.session.update.mock.invocationCallOrder[connectedUpdateIndex]!,
+      ).toBeLessThan(sessionRouterMock.send.mock.invocationCallOrder[0]!);
     });
 
     it("retries failed sessions when the connection is explicitly retryable", async () => {
@@ -6816,13 +7172,9 @@ describe("SessionService", () => {
       await service.workspaceReady("session-1", "/tmp/trace/design");
 
       await vi.waitFor(() => {
-        expect(startApplication).toHaveBeenCalledWith(
-          "group-1",
-          "app",
-          "org-1",
-          "user-1",
-          { asSystem: true },
-        );
+        expect(startApplication).toHaveBeenCalledWith("group-1", "app", "org-1", "user-1", {
+          asSystem: true,
+        });
       });
       startApplication.mockRestore();
     });
@@ -7886,10 +8238,7 @@ describe("SessionService", () => {
         },
       });
       expect(terminalRelayMock.destroyAllForSessionGroup).toHaveBeenCalledWith("group-1");
-      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith(
-        "session-2",
-        "org-1:runtime-b",
-      );
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith("session-2", "org-1:runtime-b");
     });
   });
 
@@ -8423,18 +8772,38 @@ describe("SessionService", () => {
       });
       prismaMock.session.findUnique
         .mockResolvedValueOnce(
-          makeSession({ id: "session-1", sessionGroupId: "group-1", organizationId: "org-1", connection: restingConnection }),
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            connection: restingConnection,
+          }),
         )
         .mockResolvedValueOnce(
-          makeSession({ id: "session-1", sessionGroupId: "group-1", organizationId: "org-1", connection: restingConnection }),
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            connection: restingConnection,
+          }),
         )
         // Final pre-destroy re-read: a restart is now provisioning → abort.
         .mockResolvedValueOnce(
-          makeSession({ id: "session-1", sessionGroupId: "group-1", organizationId: "org-1", connection: startingConnection }),
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            connection: startingConnection,
+          }),
         )
         // Clear-flag conditional read.
         .mockResolvedValueOnce(
-          makeSession({ id: "session-1", sessionGroupId: "group-1", organizationId: "org-1", connection: startingConnection }),
+          makeSession({
+            id: "session-1",
+            sessionGroupId: "group-1",
+            organizationId: "org-1",
+            connection: startingConnection,
+          }),
         );
 
       const result = await service.cleanupIdleCloudSessionGroups({

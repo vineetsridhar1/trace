@@ -3,6 +3,7 @@ import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
 import { handleOrgEvent, useAuthStore } from "@trace/client-core";
 import { client } from "../lib/urql";
+import { reconcileManualElementSaved } from "../stores/design-editor";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -38,7 +39,11 @@ export function useOrgEvents() {
           console.error("[orgEvents] subscription error:", result.error);
         }
         if (!result.data?.orgEvents) return;
-        handleOrgEvent(result.data.orgEvents as Event);
+        const event = result.data.orgEvents as Event;
+        handleOrgEvent(event);
+        if (event.eventType === "manual_element_saved") {
+          reconcileManualElementSaved(event.payload);
+        }
       });
 
     return () => subscription.unsubscribe();

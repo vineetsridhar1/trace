@@ -344,6 +344,162 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DesignElementStyleEditResult = {
+  __typename?: "DesignElementStyleEditResult";
+  elementId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  styles: DesignElementStyles;
+};
+
+export type DesignElementStyleSource = {
+  __typename?: "DesignElementStyleSource";
+  elementId: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  styles: DesignElementStyles;
+};
+
+export type DesignElementStyles = {
+  __typename?: "DesignElementStyles";
+  alignItems?: Maybe<Scalars["String"]["output"]>;
+  alignSelf?: Maybe<Scalars["String"]["output"]>;
+  aspectRatio?: Maybe<Scalars["String"]["output"]>;
+  backgroundColor?: Maybe<Scalars["String"]["output"]>;
+  borderColor?: Maybe<Scalars["String"]["output"]>;
+  borderRadius?: Maybe<Scalars["Int"]["output"]>;
+  borderStyle?: Maybe<Scalars["String"]["output"]>;
+  borderWidth?: Maybe<Scalars["Int"]["output"]>;
+  bottom?: Maybe<Scalars["String"]["output"]>;
+  boxShadow?: Maybe<Scalars["String"]["output"]>;
+  boxSizing?: Maybe<Scalars["String"]["output"]>;
+  color?: Maybe<Scalars["String"]["output"]>;
+  cursor?: Maybe<Scalars["String"]["output"]>;
+  display?: Maybe<Scalars["String"]["output"]>;
+  filter?: Maybe<Scalars["String"]["output"]>;
+  flexDirection?: Maybe<Scalars["String"]["output"]>;
+  flexGrow?: Maybe<Scalars["Float"]["output"]>;
+  fontFamily?: Maybe<Scalars["String"]["output"]>;
+  fontSize?: Maybe<Scalars["Int"]["output"]>;
+  fontStyle?: Maybe<Scalars["String"]["output"]>;
+  fontWeight?: Maybe<Scalars["Int"]["output"]>;
+  gap?: Maybe<Scalars["Int"]["output"]>;
+  height?: Maybe<Scalars["String"]["output"]>;
+  justifyContent?: Maybe<Scalars["String"]["output"]>;
+  left?: Maybe<Scalars["String"]["output"]>;
+  letterSpacing?: Maybe<Scalars["Int"]["output"]>;
+  lineHeight?: Maybe<Scalars["Int"]["output"]>;
+  marginBottom?: Maybe<Scalars["Int"]["output"]>;
+  marginLeft?: Maybe<Scalars["Int"]["output"]>;
+  marginRight?: Maybe<Scalars["Int"]["output"]>;
+  marginTop?: Maybe<Scalars["Int"]["output"]>;
+  maxHeight?: Maybe<Scalars["String"]["output"]>;
+  maxWidth?: Maybe<Scalars["String"]["output"]>;
+  minHeight?: Maybe<Scalars["String"]["output"]>;
+  minWidth?: Maybe<Scalars["String"]["output"]>;
+  objectFit?: Maybe<Scalars["String"]["output"]>;
+  opacity?: Maybe<Scalars["Float"]["output"]>;
+  overflow?: Maybe<Scalars["String"]["output"]>;
+  paddingBottom?: Maybe<Scalars["Int"]["output"]>;
+  paddingLeft?: Maybe<Scalars["Int"]["output"]>;
+  paddingRight?: Maybe<Scalars["Int"]["output"]>;
+  paddingTop?: Maybe<Scalars["Int"]["output"]>;
+  paddingX?: Maybe<Scalars["Int"]["output"]>;
+  paddingY?: Maybe<Scalars["Int"]["output"]>;
+  pointerEvents?: Maybe<Scalars["String"]["output"]>;
+  position?: Maybe<Scalars["String"]["output"]>;
+  right?: Maybe<Scalars["String"]["output"]>;
+  textAlign?: Maybe<Scalars["String"]["output"]>;
+  textDecoration?: Maybe<Scalars["String"]["output"]>;
+  textOverflow?: Maybe<Scalars["String"]["output"]>;
+  textShadow?: Maybe<Scalars["String"]["output"]>;
+  textTransform?: Maybe<Scalars["String"]["output"]>;
+  top?: Maybe<Scalars["String"]["output"]>;
+  transform?: Maybe<Scalars["String"]["output"]>;
+  whiteSpace?: Maybe<Scalars["String"]["output"]>;
+  width?: Maybe<Scalars["String"]["output"]>;
+  zIndex?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type DesignElementStylesInput = {
+  alignItems?: InputMaybe<Scalars["String"]["input"]>;
+  alignSelf?: InputMaybe<Scalars["String"]["input"]>;
+  aspectRatio?: InputMaybe<Scalars["String"]["input"]>;
+  backgroundColor?: InputMaybe<Scalars["String"]["input"]>;
+  borderColor?: InputMaybe<Scalars["String"]["input"]>;
+  borderRadius?: InputMaybe<Scalars["Int"]["input"]>;
+  borderStyle?: InputMaybe<Scalars["String"]["input"]>;
+  borderWidth?: InputMaybe<Scalars["Int"]["input"]>;
+  bottom?: InputMaybe<Scalars["String"]["input"]>;
+  boxShadow?: InputMaybe<Scalars["String"]["input"]>;
+  boxSizing?: InputMaybe<Scalars["String"]["input"]>;
+  color?: InputMaybe<Scalars["String"]["input"]>;
+  cursor?: InputMaybe<Scalars["String"]["input"]>;
+  display?: InputMaybe<Scalars["String"]["input"]>;
+  filter?: InputMaybe<Scalars["String"]["input"]>;
+  flexDirection?: InputMaybe<Scalars["String"]["input"]>;
+  flexGrow?: InputMaybe<Scalars["Float"]["input"]>;
+  fontFamily?: InputMaybe<Scalars["String"]["input"]>;
+  fontSize?: InputMaybe<Scalars["Int"]["input"]>;
+  fontStyle?: InputMaybe<Scalars["String"]["input"]>;
+  fontWeight?: InputMaybe<Scalars["Int"]["input"]>;
+  gap?: InputMaybe<Scalars["Int"]["input"]>;
+  height?: InputMaybe<Scalars["String"]["input"]>;
+  justifyContent?: InputMaybe<Scalars["String"]["input"]>;
+  left?: InputMaybe<Scalars["String"]["input"]>;
+  letterSpacing?: InputMaybe<Scalars["Int"]["input"]>;
+  lineHeight?: InputMaybe<Scalars["Int"]["input"]>;
+  marginBottom?: InputMaybe<Scalars["Int"]["input"]>;
+  marginLeft?: InputMaybe<Scalars["Int"]["input"]>;
+  marginRight?: InputMaybe<Scalars["Int"]["input"]>;
+  marginTop?: InputMaybe<Scalars["Int"]["input"]>;
+  maxHeight?: InputMaybe<Scalars["String"]["input"]>;
+  maxWidth?: InputMaybe<Scalars["String"]["input"]>;
+  minHeight?: InputMaybe<Scalars["String"]["input"]>;
+  minWidth?: InputMaybe<Scalars["String"]["input"]>;
+  objectFit?: InputMaybe<Scalars["String"]["input"]>;
+  opacity?: InputMaybe<Scalars["Float"]["input"]>;
+  overflow?: InputMaybe<Scalars["String"]["input"]>;
+  paddingBottom?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingLeft?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingRight?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingTop?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingX?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingY?: InputMaybe<Scalars["Int"]["input"]>;
+  pointerEvents?: InputMaybe<Scalars["String"]["input"]>;
+  position?: InputMaybe<Scalars["String"]["input"]>;
+  right?: InputMaybe<Scalars["String"]["input"]>;
+  textAlign?: InputMaybe<Scalars["String"]["input"]>;
+  textDecoration?: InputMaybe<Scalars["String"]["input"]>;
+  textOverflow?: InputMaybe<Scalars["String"]["input"]>;
+  textShadow?: InputMaybe<Scalars["String"]["input"]>;
+  textTransform?: InputMaybe<Scalars["String"]["input"]>;
+  top?: InputMaybe<Scalars["String"]["input"]>;
+  transform?: InputMaybe<Scalars["String"]["input"]>;
+  whiteSpace?: InputMaybe<Scalars["String"]["input"]>;
+  width?: InputMaybe<Scalars["String"]["input"]>;
+  zIndex?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type DesignElementTextEditResult = {
+  __typename?: "DesignElementTextEditResult";
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  previousText: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  text: Scalars["String"]["output"];
+};
+
+export type DesignElementTextSource = {
+  __typename?: "DesignElementTextSource";
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceHash: Scalars["String"]["output"];
+  text: Scalars["String"]["output"];
+};
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -404,11 +560,14 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_element_styles_updated"
+  | "design_element_text_updated"
   | "design_preview_updated"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
   | "managed_git_token_minted"
+  | "manual_element_saved"
   | "member_joined"
   | "member_left"
   | "message_deleted"
@@ -567,6 +726,27 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
+export type ManualElementEditInput = {
+  elementId: Scalars["String"]["input"];
+  expectedStyleSourceHash?: InputMaybe<Scalars["String"]["input"]>;
+  expectedTextSourceHash?: InputMaybe<Scalars["String"]["input"]>;
+  filePath: Scalars["String"]["input"];
+  styles?: InputMaybe<DesignElementStylesInput>;
+  text?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type ManualElementEditResult = {
+  __typename?: "ManualElementEditResult";
+  commitSha: Scalars["String"]["output"];
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  styleSourceHash?: Maybe<Scalars["String"]["output"]>;
+  styles?: Maybe<DesignElementStyles>;
+  text?: Maybe<Scalars["String"]["output"]>;
+  textSourceHash?: Maybe<Scalars["String"]["output"]>;
+};
+
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -685,6 +865,8 @@ export type Mutation = {
   rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
+  saveManualElementEdit: ManualElementEditResult;
+  saveManualElementEdits: Array<ManualElementEditResult>;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -714,6 +896,8 @@ export type Mutation = {
   updateBridgeAccessGrant: BridgeAccessGrant;
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
+  updateDesignElementStyles: DesignElementStyleEditResult;
+  updateDesignElementText: DesignElementTextEditResult;
   updateOrgMemberRole: OrgMember;
   updatePdfSessionFormat: Scalars["Boolean"]["output"];
   updateQueuedMessage: QueuedMessage;
@@ -1070,6 +1254,16 @@ export type MutationRunSessionGroupSetupScriptArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationSaveManualElementEditArgs = {
+  input: ManualElementEditInput;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSaveManualElementEditsArgs = {
+  inputs: Array<ManualElementEditInput>;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationSaveSessionGroupFileArgs = {
   content: Scalars["String"]["input"];
   filePath: Scalars["String"]["input"];
@@ -1227,6 +1421,21 @@ export type MutationUpdateChannelGroupArgs = {
   input: UpdateChannelGroupInput;
 };
 
+export type MutationUpdateDesignElementStylesArgs = {
+  elementId: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  styles: DesignElementStylesInput;
+};
+
+export type MutationUpdateDesignElementTextArgs = {
+  elementId: Scalars["String"]["input"];
+  expectedSourceHash: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  text: Scalars["String"]["input"];
+};
+
 export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
@@ -1365,6 +1574,8 @@ export type Query = {
   chat?: Maybe<Chat>;
   chatMessages: Array<Message>;
   chats: Array<Chat>;
+  designElementStyleSource: DesignElementStyleSource;
+  designElementTextSource: DesignElementTextSource;
   /** Design-kind session groups for the org (the sidebar Designs section). */
   designSessionGroups: Array<SessionGroup>;
   endpointTraffic: Array<EndpointTrafficEntry>;
@@ -1479,6 +1690,17 @@ export type QueryChatMessagesArgs = {
   before?: InputMaybe<Scalars["DateTime"]["input"]>;
   chatId: Scalars["ID"]["input"];
   limit?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignElementStyleSourceArgs = {
+  elementId: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QueryDesignElementTextSourceArgs = {
+  elementId: Scalars["String"]["input"];
+  filePath: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryDesignSessionGroupsArgs = {
@@ -2482,7 +2704,6 @@ export type SessionGroupsQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -2548,7 +2769,6 @@ export type FilteredSessionGroupsQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -2779,7 +2999,6 @@ export type SessionDetailQuery = {
     outputTokens: number;
     cacheReadTokens: number;
     cacheCreationTokens: number;
-    costUsd: number;
     sessionGroupId?: string | null;
     createdAt: string;
     updatedAt: string;
@@ -3004,7 +3223,6 @@ export type SessionGroupDetailQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -3854,8 +4072,17 @@ export type GeneratedProjectsQuery = {
     kind: SessionGroupKind;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
+    designPreviewUrl?: string | null;
     archivedAt?: string | null;
     updatedAt: string;
+    owner: { __typename?: "User"; id: string };
+    gitCheckpoints: Array<{
+      __typename?: "GitCheckpoint";
+      id: string;
+      committedAt: string;
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+    }>;
     connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
     sessions: Array<{
       __typename?: "Session";
@@ -3879,8 +4106,17 @@ export type GeneratedProjectsQuery = {
     kind: SessionGroupKind;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
+    designPreviewUrl?: string | null;
     archivedAt?: string | null;
     updatedAt: string;
+    owner: { __typename?: "User"; id: string };
+    gitCheckpoints: Array<{
+      __typename?: "GitCheckpoint";
+      id: string;
+      committedAt: string;
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+    }>;
     connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
     sessions: Array<{
       __typename?: "Session";
@@ -3904,6 +4140,7 @@ export type GeneratedProjectsQuery = {
     kind: SessionGroupKind;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
+    designPreviewUrl?: string | null;
     archivedAt?: string | null;
     updatedAt: string;
     pdfExportStatus?: string | null;
@@ -3914,6 +4151,14 @@ export type GeneratedProjectsQuery = {
     pdfPageHeight: number;
     pdfPageUnit: string;
     pdfFormatVersion: number;
+    owner: { __typename?: "User"; id: string };
+    gitCheckpoints: Array<{
+      __typename?: "GitCheckpoint";
+      id: string;
+      committedAt: string;
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+    }>;
     connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
     sessions: Array<{
       __typename?: "Session";
@@ -4490,7 +4735,6 @@ export type SidebarSessionGroupsQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -4509,6 +4753,104 @@ export type SidebarSessionGroupsQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   }>;
+};
+
+export type DesignElementEditorStyleSourceQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  elementId: Scalars["String"]["input"];
+}>;
+
+export type DesignElementEditorStyleSourceQuery = {
+  __typename?: "Query";
+  designElementStyleSource: {
+    __typename?: "DesignElementStyleSource";
+    sourceHash: string;
+    styles: {
+      __typename?: "DesignElementStyles";
+      color?: string | null;
+      backgroundColor?: string | null;
+      fontFamily?: string | null;
+      fontSize?: number | null;
+      fontWeight?: number | null;
+      fontStyle?: string | null;
+      textDecoration?: string | null;
+      textAlign?: string | null;
+      lineHeight?: number | null;
+      letterSpacing?: number | null;
+      textTransform?: string | null;
+      width?: string | null;
+      height?: string | null;
+      minWidth?: string | null;
+      maxWidth?: string | null;
+      minHeight?: string | null;
+      maxHeight?: string | null;
+      flexGrow?: number | null;
+      alignSelf?: string | null;
+      position?: string | null;
+      top?: string | null;
+      right?: string | null;
+      bottom?: string | null;
+      left?: string | null;
+      zIndex?: string | null;
+      display?: string | null;
+      flexDirection?: string | null;
+      justifyContent?: string | null;
+      alignItems?: string | null;
+      gap?: number | null;
+      borderRadius?: number | null;
+      paddingX?: number | null;
+      paddingY?: number | null;
+      paddingTop?: number | null;
+      paddingRight?: number | null;
+      paddingBottom?: number | null;
+      paddingLeft?: number | null;
+      marginTop?: number | null;
+      marginRight?: number | null;
+      marginBottom?: number | null;
+      marginLeft?: number | null;
+      opacity?: number | null;
+      overflow?: string | null;
+      objectFit?: string | null;
+      borderColor?: string | null;
+      borderWidth?: number | null;
+      borderStyle?: string | null;
+      cursor?: string | null;
+      pointerEvents?: string | null;
+      whiteSpace?: string | null;
+      textOverflow?: string | null;
+      boxSizing?: string | null;
+      aspectRatio?: string | null;
+      boxShadow?: string | null;
+      textShadow?: string | null;
+      transform?: string | null;
+      filter?: string | null;
+    };
+  };
+};
+
+export type DesignElementEditorTextSourceQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  filePath: Scalars["String"]["input"];
+  elementId: Scalars["String"]["input"];
+}>;
+
+export type DesignElementEditorTextSourceQuery = {
+  __typename?: "Query";
+  designElementTextSource: {
+    __typename?: "DesignElementTextSource";
+    text: string;
+    sourceHash: string;
+  };
+};
+
+export type SaveManualElementEditsMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  inputs: Array<ManualElementEditInput> | ManualElementEditInput;
+}>;
+
+export type SaveManualElementEditsMutation = {
+  __typename?: "Mutation";
+  saveManualElementEdits: Array<{ __typename?: "ManualElementEditResult"; commitSha: string }>;
 };
 
 export type OnboardingReposQueryVariables = Exact<{
@@ -4802,7 +5144,6 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -4975,7 +5316,6 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -5844,7 +6184,6 @@ export const SessionDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                 { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                 { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "connection" },
@@ -6310,7 +6649,6 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -9249,6 +9587,28 @@ export const GeneratedProjectsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "gitCheckpoints" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                 {
@@ -9300,6 +9660,28 @@ export const GeneratedProjectsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "gitCheckpoints" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                 {
@@ -9351,6 +9733,28 @@ export const GeneratedProjectsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "gitCheckpoints" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "pdfExportStatus" } },
@@ -11118,7 +11522,6 @@ export const SidebarSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -11180,6 +11583,267 @@ export const SidebarSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<SidebarSessionGroupsQuery, SidebarSessionGroupsQueryVariables>;
+export const DesignElementEditorStyleSourceDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "DesignElementEditorStyleSource" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designElementStyleSource" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "elementId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "styles" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "color" } },
+                      { kind: "Field", name: { kind: "Name", value: "backgroundColor" } },
+                      { kind: "Field", name: { kind: "Name", value: "fontFamily" } },
+                      { kind: "Field", name: { kind: "Name", value: "fontSize" } },
+                      { kind: "Field", name: { kind: "Name", value: "fontWeight" } },
+                      { kind: "Field", name: { kind: "Name", value: "fontStyle" } },
+                      { kind: "Field", name: { kind: "Name", value: "textDecoration" } },
+                      { kind: "Field", name: { kind: "Name", value: "textAlign" } },
+                      { kind: "Field", name: { kind: "Name", value: "lineHeight" } },
+                      { kind: "Field", name: { kind: "Name", value: "letterSpacing" } },
+                      { kind: "Field", name: { kind: "Name", value: "textTransform" } },
+                      { kind: "Field", name: { kind: "Name", value: "width" } },
+                      { kind: "Field", name: { kind: "Name", value: "height" } },
+                      { kind: "Field", name: { kind: "Name", value: "minWidth" } },
+                      { kind: "Field", name: { kind: "Name", value: "maxWidth" } },
+                      { kind: "Field", name: { kind: "Name", value: "minHeight" } },
+                      { kind: "Field", name: { kind: "Name", value: "maxHeight" } },
+                      { kind: "Field", name: { kind: "Name", value: "flexGrow" } },
+                      { kind: "Field", name: { kind: "Name", value: "alignSelf" } },
+                      { kind: "Field", name: { kind: "Name", value: "position" } },
+                      { kind: "Field", name: { kind: "Name", value: "top" } },
+                      { kind: "Field", name: { kind: "Name", value: "right" } },
+                      { kind: "Field", name: { kind: "Name", value: "bottom" } },
+                      { kind: "Field", name: { kind: "Name", value: "left" } },
+                      { kind: "Field", name: { kind: "Name", value: "zIndex" } },
+                      { kind: "Field", name: { kind: "Name", value: "display" } },
+                      { kind: "Field", name: { kind: "Name", value: "flexDirection" } },
+                      { kind: "Field", name: { kind: "Name", value: "justifyContent" } },
+                      { kind: "Field", name: { kind: "Name", value: "alignItems" } },
+                      { kind: "Field", name: { kind: "Name", value: "gap" } },
+                      { kind: "Field", name: { kind: "Name", value: "borderRadius" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingX" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingY" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingTop" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingRight" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingBottom" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingLeft" } },
+                      { kind: "Field", name: { kind: "Name", value: "marginTop" } },
+                      { kind: "Field", name: { kind: "Name", value: "marginRight" } },
+                      { kind: "Field", name: { kind: "Name", value: "marginBottom" } },
+                      { kind: "Field", name: { kind: "Name", value: "marginLeft" } },
+                      { kind: "Field", name: { kind: "Name", value: "opacity" } },
+                      { kind: "Field", name: { kind: "Name", value: "overflow" } },
+                      { kind: "Field", name: { kind: "Name", value: "objectFit" } },
+                      { kind: "Field", name: { kind: "Name", value: "borderColor" } },
+                      { kind: "Field", name: { kind: "Name", value: "borderWidth" } },
+                      { kind: "Field", name: { kind: "Name", value: "borderStyle" } },
+                      { kind: "Field", name: { kind: "Name", value: "cursor" } },
+                      { kind: "Field", name: { kind: "Name", value: "pointerEvents" } },
+                      { kind: "Field", name: { kind: "Name", value: "whiteSpace" } },
+                      { kind: "Field", name: { kind: "Name", value: "textOverflow" } },
+                      { kind: "Field", name: { kind: "Name", value: "boxSizing" } },
+                      { kind: "Field", name: { kind: "Name", value: "aspectRatio" } },
+                      { kind: "Field", name: { kind: "Name", value: "boxShadow" } },
+                      { kind: "Field", name: { kind: "Name", value: "textShadow" } },
+                      { kind: "Field", name: { kind: "Name", value: "transform" } },
+                      { kind: "Field", name: { kind: "Name", value: "filter" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  DesignElementEditorStyleSourceQuery,
+  DesignElementEditorStyleSourceQueryVariables
+>;
+export const DesignElementEditorTextSourceDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "DesignElementEditorTextSource" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designElementTextSource" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "filePath" },
+                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "elementId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "text" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  DesignElementEditorTextSourceQuery,
+  DesignElementEditorTextSourceQueryVariables
+>;
+export const SaveManualElementEditsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SaveManualElementEdits" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "inputs" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "ListType",
+              type: {
+                kind: "NonNullType",
+                type: {
+                  kind: "NamedType",
+                  name: { kind: "Name", value: "ManualElementEditInput" },
+                },
+              },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "saveManualElementEdits" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "inputs" },
+                value: { kind: "Variable", name: { kind: "Name", value: "inputs" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "commitSha" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  SaveManualElementEditsMutation,
+  SaveManualElementEditsMutationVariables
+>;
 export const OnboardingReposDocument = {
   kind: "Document",
   definitions: [
