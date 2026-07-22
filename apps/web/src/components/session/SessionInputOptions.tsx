@@ -434,18 +434,23 @@ export function SessionInputOptions({
       <ToolModelPicker
         tool={currentTool}
         model={currentModel}
+        reasoningEffort={currentReasoningEffort}
+        reasoningEffortOptions={reasoningEffortOptions}
         disabled={isActive || isOptimistic}
         onToolChange={handleToolChange}
         onModelChange={handleModelChange}
+        onReasoningEffortChange={handleReasoningEffortChange}
       />
       {reasoningEffortOptions.length > 0 && (
-        <EffortCycleButton
-          key={currentTool}
-          effort={currentReasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
-          options={reasoningEffortOptions}
-          disabled={isActive || isOptimistic}
-          onChange={handleReasoningEffortChange}
-        />
+        <div className="hidden @lg:block">
+          <EffortCycleButton
+            key={currentTool}
+            effort={currentReasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
+            options={reasoningEffortOptions}
+            disabled={isActive || isOptimistic}
+            onChange={handleReasoningEffortChange}
+          />
+        </div>
       )}
       {canChangeRuntime ? (
         <Select

@@ -512,7 +512,7 @@ export function SessionInput({
             }}
           />
         </div>
-        <div className="flex items-center gap-1 pb-2 pl-1 pr-2 pt-2">
+        <div className="@container flex items-center gap-1 pb-2 pl-1 pr-2 pt-2">
           <input
             ref={fileInputRef}
             type="file"
