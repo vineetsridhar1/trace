@@ -7162,10 +7162,32 @@ export class SessionService {
     // Deliver the queued prompt after preview startup has been dispatched. The
     // process and agent then run concurrently, with the warmed dependency cache
     // making the starter visible early enough to watch incremental edits.
-    if (pendingRun) {
-      const replayResult = await this.deliverPendingCommand(sessionId, pendingRun);
+    let replayPendingRun: Prisma.InputJsonValue | undefined = pendingRun
+      ? (pendingRun as Prisma.InputJsonValue)
+      : undefined;
+    if (!replayPendingRun && session.agentStatus === "not_started") {
+      const startMeta = await getSessionStartMetadata(sessionId);
+      if (startMeta.prompt) {
+        replayPendingRun = pendingRunValue([
+          {
+            type: "run",
+            prompt: startMeta.prompt,
+            interactionMode: null,
+            clientSource: null,
+            checkpointContext: null,
+          },
+        ]) as Prisma.InputJsonValue;
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: { pendingRun: replayPendingRun },
+        });
+      }
+    }
+
+    if (replayPendingRun) {
+      const replayResult = await this.deliverPendingCommand(sessionId, replayPendingRun);
       if (replayResult && replayResult !== "delivered") {
-        const commands = this.parsePendingCommands(pendingRun);
+        const commands = this.parsePendingCommands(replayPendingRun);
         await prisma.session.update({
           where: { id: sessionId },
           data: { pendingRun: pendingRunValue(commands) },
@@ -11763,8 +11785,6 @@ export class SessionService {
     }
     return group.kind;
   }
-
-
 }
 
 export const sessionService = new SessionService();
