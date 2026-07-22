@@ -10,6 +10,7 @@ import {
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { useCommandPaletteStore } from "../../stores/command-palette";
+import { useUIStore } from "../../stores/ui";
 import { GeneratedProjectTypeSection } from "./GeneratedProjectTypeSection";
 import type { GeneratedProjectKind } from "./generated-project-types";
 
@@ -24,6 +25,13 @@ const GENERATED_PROJECTS_QUERY = gql`
       visibility
       owner {
         id
+      }
+      designPreviewUrl
+      gitCheckpoints {
+        id
+        committedAt
+        previewStatus
+        previewUrl
       }
       archivedAt
       updatedAt
@@ -53,6 +61,13 @@ const GENERATED_PROJECTS_QUERY = gql`
       owner {
         id
       }
+      designPreviewUrl
+      gitCheckpoints {
+        id
+        committedAt
+        previewStatus
+        previewUrl
+      }
       archivedAt
       updatedAt
       connection {
@@ -80,6 +95,13 @@ const GENERATED_PROJECTS_QUERY = gql`
       visibility
       owner {
         id
+      }
+      designPreviewUrl
+      gitCheckpoints {
+        id
+        committedAt
+        previewStatus
+        previewUrl
       }
       archivedAt
       updatedAt
@@ -125,6 +147,7 @@ export function GeneratedProjectsSection({
   const openGeneratedProjectDialog = useCommandPaletteStore(
     (state) => state.openGeneratedProjectDialog,
   );
+  const setActivePage = useUIStore((state) => state.setActivePage);
 
   useEffect(() => {
     if (!activeOrgId) return;
@@ -180,7 +203,7 @@ export function GeneratedProjectsSection({
           type="button"
           aria-controls="generated-projects-list"
           aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
+          onClick={() => setActivePage("create")}
           className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 pl-2 text-left text-xs font-semibold uppercase tracking-wider text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ChevronRight
