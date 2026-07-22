@@ -640,7 +640,6 @@ describe("handleOrgEvent", () => {
       outputTokens: 3,
       cacheReadTokens: 40,
       cacheCreationTokens: 0,
-      costUsd: 0.0042,
     });
   });
 

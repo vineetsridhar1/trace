@@ -72,7 +72,6 @@ export function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEnti
       ...(typeof payload.cacheCreationTokens === "number"
         ? { cacheCreationTokens: payload.cacheCreationTokens }
         : {}),
-      ...(typeof payload.costUsd === "number" ? { costUsd: payload.costUsd } : {}),
     };
   }
   if (typeof payload.type === "string" && CONNECTION_EVENT_TYPES.has(payload.type)) {

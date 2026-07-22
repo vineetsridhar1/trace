@@ -71,24 +71,6 @@ function parseAntigravityUsage(data: Record<string, unknown>): TokenUsage | unde
   return normalized;
 }
 
-function parseAntigravityCost(data: Record<string, unknown>): number | undefined {
-  const usage =
-    asRecord(data.usage) ??
-    asRecord(data.tokenUsage) ??
-    asRecord(data.token_usage) ??
-    asRecord(data.tokens);
-  const cost = asRecord(usage?.cost) ?? asRecord(data.cost);
-  const total = num(
-    data.costUsd,
-    data.cost_usd,
-    data.totalCostUsd,
-    data.total_cost_usd,
-    cost?.total,
-    cost?.usd,
-  );
-  return total > 0 ? total : undefined;
-}
-
 /**
  * Adapter for running Google's Antigravity CLI (`agy`) sessions.
  *
@@ -112,11 +94,9 @@ export class AntigravityAdapter implements CodingToolAdapter {
   private conversationId: string | null = null;
   private processGeneration = 0;
   private lastUsage: TokenUsage | undefined;
-  private lastCostUsd: number | undefined;
 
   run({ prompt, cwd, onOutput, onComplete, interactionMode, toolSessionId }: RunOptions) {
     this.lastUsage = undefined;
-    this.lastCostUsd = undefined;
 
     // Restore resume capability after a bridge restart.
     if (toolSessionId && !this.conversationId) {
@@ -204,7 +184,6 @@ export class AntigravityAdapter implements CodingToolAdapter {
         type: "result",
         subtype: isError ? "error" : "success",
         ...(this.lastUsage ? { usage: this.lastUsage } : {}),
-        ...(this.lastCostUsd != null ? { costUsd: this.lastCostUsd } : {}),
       });
       onComplete();
       this.process = null;
@@ -284,8 +263,6 @@ export class AntigravityAdapter implements CodingToolAdapter {
     if (!usage) return false;
 
     this.lastUsage = usage;
-    const costUsd = parseAntigravityCost(data);
-    if (costUsd != null) this.lastCostUsd = costUsd;
     return true;
   }
 

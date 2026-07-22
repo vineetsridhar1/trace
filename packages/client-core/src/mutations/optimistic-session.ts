@@ -86,7 +86,6 @@ function buildSessionEntity(params: {
     outputTokens: 0,
     cacheReadTokens: 0,
     cacheCreationTokens: 0,
-    costUsd: 0,
     createdAt: now,
     updatedAt: now,
     ...(params.optimistic ? { _optimistic: true } : {}),

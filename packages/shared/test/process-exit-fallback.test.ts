@@ -370,7 +370,6 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onOutput).toHaveBeenCalledWith({
       type: "result",
       subtype: "success",
-      costUsd: 0.0045,
     });
   });
 
@@ -532,7 +531,6 @@ describe("coding tool adapter process exit fallback", () => {
         cacheReadTokens: 50,
         cacheCreationTokens: 6,
       },
-      costUsd: 0.0026,
     });
     expect(onOutput).toHaveBeenCalledWith({
       type: "result",
@@ -587,7 +585,6 @@ describe("coding tool adapter process exit fallback", () => {
         cacheReadTokens: 25,
         cacheCreationTokens: 4,
       },
-      costUsd: 0.0017,
     });
   });
 
@@ -689,7 +686,6 @@ describe("coding tool adapter process exit fallback", () => {
         cacheReadTokens: 32,
         cacheCreationTokens: 3,
       },
-      costUsd: 0.0042,
     });
   });
 

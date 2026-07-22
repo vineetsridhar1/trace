@@ -375,13 +375,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       const isError = data.is_error === true || data.subtype === "error";
       this.resultEmitted = true;
       const usage = parseClaudeUsage(data.usage);
-      const costUsd = typeof data.total_cost_usd === "number" ? data.total_cost_usd : undefined;
       const includeUsage = usage && !this.emittedIncrementalUsage;
       onOutput({
         type: "result",
         subtype: isError ? "error" : "success",
         ...(includeUsage ? { usage } : {}),
-        ...(costUsd != null ? { costUsd } : {}),
       });
       return;
     }

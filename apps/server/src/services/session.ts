@@ -795,7 +795,6 @@ function serializeSession(session: {
   outputTokens?: bigint | number | null;
   cacheReadTokens?: bigint | number | null;
   cacheCreationTokens?: bigint | number | null;
-  costUsd?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -830,7 +829,6 @@ function serializeSession(session: {
     outputTokens: numberFromBigInt(session.outputTokens),
     cacheReadTokens: numberFromBigInt(session.cacheReadTokens),
     cacheCreationTokens: numberFromBigInt(session.cacheCreationTokens),
-    costUsd: session.costUsd ?? 0,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
   };
@@ -5346,7 +5344,7 @@ export class SessionService {
       });
     }
 
-    if (data.usage || typeof data.costUsd === "number") {
+    if (data.usage) {
       await this.recordUsage(sessionId, session.organizationId, data);
     }
 
@@ -5412,8 +5410,8 @@ export class SessionService {
   }
 
   /**
-   * Accumulate token usage and cost from a coding tool output message onto
-   * the session, then emit a usage_updated patch so clients update live.
+   * Accumulate token usage from a coding tool output message onto the session,
+   * then emit a usage_updated patch so clients update live.
    */
   private async recordUsage(
     sessionId: string,
@@ -5429,14 +5427,12 @@ export class SessionService {
     const outputTokens = num(usage?.outputTokens);
     const cacheReadTokens = num(usage?.cacheReadTokens);
     const cacheCreationTokens = num(usage?.cacheCreationTokens);
-    const costUsd = num(data.costUsd);
 
     if (
       inputTokens === 0 &&
       outputTokens === 0 &&
       cacheReadTokens === 0 &&
-      cacheCreationTokens === 0 &&
-      costUsd === 0
+      cacheCreationTokens === 0
     ) {
       return;
     }
@@ -5448,14 +5444,12 @@ export class SessionService {
         outputTokens: { increment: outputTokens },
         cacheReadTokens: { increment: cacheReadTokens },
         cacheCreationTokens: { increment: cacheCreationTokens },
-        costUsd: { increment: costUsd },
       },
       select: {
         inputTokens: true,
         outputTokens: true,
         cacheReadTokens: true,
         cacheCreationTokens: true,
-        costUsd: true,
       },
     });
 
@@ -5473,7 +5467,6 @@ export class SessionService {
         outputTokens: numberFromBigInt(updated.outputTokens),
         cacheReadTokens: numberFromBigInt(updated.cacheReadTokens),
         cacheCreationTokens: numberFromBigInt(updated.cacheCreationTokens),
-        costUsd: updated.costUsd,
       },
       actorType: "system",
       actorId: "system",

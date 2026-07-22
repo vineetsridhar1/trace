@@ -44,13 +44,6 @@ function parsePiUsage(raw: unknown): TokenUsage | undefined {
   return normalized;
 }
 
-function parsePiCost(raw: unknown): number | undefined {
-  const usage = asRecord(raw);
-  const cost = asRecord(usage?.cost);
-  const total = num(cost?.total);
-  return total > 0 ? total : undefined;
-}
-
 function textFromContent(content: unknown): string | null {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return null;
@@ -83,9 +76,7 @@ export class PiAdapter implements CodingToolAdapter {
   private sawErrorEvent = false;
   private lastErrorMessage: string | null = null;
   private lastUsage: TokenUsage | undefined;
-  private lastCostUsd: number | undefined;
   private emittedIncrementalUsage = false;
-  private emittedIncrementalCost = false;
 
   run({
     prompt,
@@ -100,9 +91,7 @@ export class PiAdapter implements CodingToolAdapter {
     this.sawErrorEvent = false;
     this.lastErrorMessage = null;
     this.lastUsage = undefined;
-    this.lastCostUsd = undefined;
     this.emittedIncrementalUsage = false;
-    this.emittedIncrementalCost = false;
 
     if (toolSessionId && !this.sessionId) {
       this.sessionId = toolSessionId;
@@ -226,7 +215,6 @@ export class PiAdapter implements CodingToolAdapter {
       if (message?.role === "assistant") {
         const captured = this.captureUsage(message);
         if (captured.usage) this.emittedIncrementalUsage = true;
-        if (captured.costUsd != null) this.emittedIncrementalCost = true;
         const errorMessage = this.extractPiErrorMessage(message) ?? this.extractPiErrorMessage(data);
         if (errorMessage) {
           this.emitError(errorMessage, onOutput);
@@ -237,7 +225,6 @@ export class PiAdapter implements CodingToolAdapter {
             type: "assistant",
             message: { content: blocks },
             ...(captured.usage ? { usage: captured.usage } : {}),
-            ...(captured.costUsd != null ? { costUsd: captured.costUsd } : {}),
           });
         }
       }
@@ -282,9 +269,6 @@ export class PiAdapter implements CodingToolAdapter {
         type: "result",
         subtype: this.sawErrorEvent ? "error" : "success",
         ...(!this.emittedIncrementalUsage && this.lastUsage ? { usage: this.lastUsage } : {}),
-        ...(!this.emittedIncrementalCost && this.lastCostUsd != null
-          ? { costUsd: this.lastCostUsd }
-          : {}),
       });
       return;
     }
@@ -316,17 +300,12 @@ export class PiAdapter implements CodingToolAdapter {
 
   private captureUsage(data: Record<string, unknown>): {
     usage?: TokenUsage;
-    costUsd?: number;
   } {
     const usage = parsePiUsage(data.usage);
     if (usage) this.lastUsage = usage;
 
-    const costUsd = parsePiCost(data.usage);
-    if (costUsd != null) this.lastCostUsd = costUsd;
-
     return {
       ...(usage ? { usage } : {}),
-      ...(costUsd != null ? { costUsd } : {}),
     };
   }
 

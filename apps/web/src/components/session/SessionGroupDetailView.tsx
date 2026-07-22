@@ -156,7 +156,6 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         outputTokens
         cacheReadTokens
         cacheCreationTokens
-        costUsd
         connection {
           state
           runtimeInstanceId
