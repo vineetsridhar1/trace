@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { MessageSquareText, Send, X } from "lucide-react";
+import { toast } from "sonner";
 import { SEND_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { navigateToSession, useUIStore } from "../../stores/ui";
@@ -111,6 +112,10 @@ export function PlanResponseBar({
           setFeedback("");
           onClearPlanComments?.();
         }
+      } catch (error) {
+        toast.error("Failed to create session", {
+          description: error instanceof Error ? error.message : "Try again in a moment.",
+        });
       } finally {
         setSending(false);
       }
@@ -144,6 +149,10 @@ export function PlanResponseBar({
           setFeedback("");
           onClearPlanComments?.();
         }
+      } catch (error) {
+        toast.error("Failed to approve plan", {
+          description: error instanceof Error ? error.message : "Try again in a moment.",
+        });
       } finally {
         setSending(false);
       }
