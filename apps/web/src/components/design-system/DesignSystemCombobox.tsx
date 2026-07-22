@@ -2,6 +2,7 @@ import type { DesignSystem } from "@trace/gql";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectLabel,
   SelectSeparator,
@@ -63,12 +64,14 @@ export function DesignSystemCombobox({
         {unavailable.length > 0 ? (
           <>
             <SelectSeparator />
-            <SelectLabel>Not ready</SelectLabel>
-            {unavailable.map((system) => (
-              <SelectItem key={system.id} value={`unavailable:${system.id}`} disabled>
-                {system.name} · {designSystemAvailabilityLabel(system)}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectLabel>Not ready</SelectLabel>
+              {unavailable.map((system) => (
+                <SelectItem key={system.id} value={`unavailable:${system.id}`} disabled>
+                  {system.name} · {designSystemAvailabilityLabel(system)}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </>
         ) : null}
         <SelectSeparator />
