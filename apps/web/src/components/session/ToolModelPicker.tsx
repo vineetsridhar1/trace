@@ -22,7 +22,7 @@ import {
 import { ToolLayer } from "./picker/ToolLayer";
 import { ProviderLayer } from "./picker/ProviderLayer";
 import { ModelLayer } from "./picker/ModelLayer";
-import { ReasoningEffortMenu } from "./picker/ReasoningEffortMenu";
+import { ThinkingLayer } from "./picker/ThinkingLayer";
 
 interface ToolModelPickerProps {
   tool: ToolOptionValue;
@@ -167,6 +167,10 @@ export function ToolModelPicker({
               currentTool={tool}
               pending={pending}
               onSelect={handleToolSelect}
+              thinkingLabel={effortLabel}
+              onThinkingSelect={
+                reasoningEffortOptions.length > 0 ? () => setLayer("thinking") : undefined
+              }
             />
           ) : layer === "providers" ? (
             <ProviderLayer
@@ -178,7 +182,7 @@ export function ToolModelPicker({
               onBack={() => setLayer("tools")}
               onSelect={handleProviderSelect}
             />
-          ) : (
+          ) : layer === "models" ? (
             <ModelLayer
               key="models"
               pickerTool={pickerTool}
@@ -190,16 +194,17 @@ export function ToolModelPicker({
               onBack={handleModelBack}
               onSelect={handleModelSelect}
             />
+          ) : (
+            <ThinkingLayer
+              key="thinking"
+              effort={reasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
+              options={reasoningEffortOptions}
+              pending={pending}
+              onBack={() => setLayer("tools")}
+              onSelect={handleReasoningEffortSelect}
+            />
           )}
         </AnimatePresence>
-        <div className="lg:hidden">
-          <ReasoningEffortMenu
-            effort={reasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
-            options={reasoningEffortOptions}
-            pending={pending}
-            onSelect={handleReasoningEffortSelect}
-          />
-        </div>
       </PopoverContent>
     </Popover>
   );

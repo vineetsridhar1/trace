@@ -8,9 +8,17 @@ interface ToolLayerProps {
   currentTool: string;
   pending: boolean;
   onSelect: (tool: ToolOptionValue) => void;
+  thinkingLabel?: string | null;
+  onThinkingSelect?: () => void;
 }
 
-export function ToolLayer({ currentTool, pending, onSelect }: ToolLayerProps) {
+export function ToolLayer({
+  currentTool,
+  pending,
+  onSelect,
+  thinkingLabel,
+  onThinkingSelect,
+}: ToolLayerProps) {
   const selectedIndex = Math.max(
     0,
     TOOL_OPTIONS.findIndex((option) => option.value === currentTool),
@@ -53,6 +61,21 @@ export function ToolLayer({ currentTool, pending, onSelect }: ToolLayerProps) {
           </button>
         );
       })}
+      {onThinkingSelect ? (
+        <div className="lg:hidden">
+          <div className="my-1 border-t border-border/60" />
+          <button
+            type="button"
+            disabled={pending}
+            onClick={onThinkingSelect}
+            className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm text-popover-foreground outline-none transition-colors hover:bg-white/10 focus-visible:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span className="min-w-0 flex-1 truncate">Thinking</span>
+            <span className="truncate text-xs text-muted-foreground">{thinkingLabel}</span>
+            <ChevronRight className="size-4 text-muted-foreground" />
+          </button>
+        </div>
+      ) : null}
     </motion.div>
   );
 }
