@@ -1469,12 +1469,15 @@ export class SessionService {
           organizationId,
           ORG_GITHUB_TOKEN_SECRET_NAME,
         ));
-      if (!token)
-        throw new ValidationError("GitHub access is required to prepare the source checkout");
-      const authenticated = new URL(remoteUrl);
-      authenticated.username = "x-access-token";
-      authenticated.password = token;
-      remoteUrl = authenticated.toString();
+      // Public GitHub repositories can be cloned anonymously. When a user or
+      // organization token is available, authenticate the checkout so private
+      // repositories and rate limits continue to work as before.
+      if (token) {
+        const authenticated = new URL(remoteUrl);
+        authenticated.username = "x-access-token";
+        authenticated.password = token;
+        remoteUrl = authenticated.toString();
+      }
     }
     return {
       repoId: repo.id,
