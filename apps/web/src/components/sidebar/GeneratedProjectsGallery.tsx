@@ -3,8 +3,8 @@ import { useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { savedDesignPreviewUrl } from "../session/applications/saved-design-preview";
-import { useProjectPreviewData } from "../session/applications/useProjectPreviewData";
 import type { GeneratedProjectKind } from "./generated-project-types";
+import { usePdfArtifactPreviewUrls } from "./usePdfArtifactPreviewUrls";
 
 const projectKindDetails = {
   app: { label: "App", Icon: Rocket },
@@ -21,6 +21,8 @@ export function GeneratedProjectsGallery() {
         (group.kind === "app" || group.kind === "design" || group.kind === "pdf"),
     )
     .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+  const pdfGroups = projectGroups.filter((group) => group.kind === "pdf");
+  const pdfPreviewUrls = usePdfArtifactPreviewUrls(pdfGroups);
 
   return (
     <div className="flex h-full flex-col">
@@ -42,7 +44,11 @@ export function GeneratedProjectsGallery() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {projectGroups.map((group) => (
-                <GeneratedProjectGalleryCard key={group.id} group={group} />
+                <GeneratedProjectGalleryCard
+                  key={group.id}
+                  group={group}
+                  pdfPreviewUrl={pdfPreviewUrls[group.id]}
+                />
               ))}
             </div>
           )}
@@ -52,7 +58,13 @@ export function GeneratedProjectsGallery() {
   );
 }
 
-function GeneratedProjectGalleryCard({ group }: { group: SessionGroupEntity }) {
+function GeneratedProjectGalleryCard({
+  group,
+  pdfPreviewUrl,
+}: {
+  group: SessionGroupEntity;
+  pdfPreviewUrl: string | undefined;
+}) {
   const kind = group.kind as GeneratedProjectKind;
   const { Icon, label } = projectKindDetails[kind];
   const designPreview = savedDesignPreviewUrl(
@@ -75,7 +87,7 @@ function GeneratedProjectGalleryCard({ group }: { group: SessionGroupEntity }) {
             sandbox="allow-forms allow-modals allow-popups allow-scripts"
           />
         ) : kind === "pdf" ? (
-          <PdfArtifactPreview groupId={group.id} title={group.name} />
+          <PdfArtifactPreview title={group.name} previewUrl={pdfPreviewUrl} />
         ) : (
           <ArtifactPlaceholder Icon={Icon} label={label} />
         )}
@@ -91,13 +103,12 @@ function GeneratedProjectGalleryCard({ group }: { group: SessionGroupEntity }) {
   );
 }
 
-function PdfArtifactPreview({ groupId, title }: { groupId: string; title: string }) {
-  const { savedPdfUrl } = useProjectPreviewData(groupId, "pdf");
-  if (!savedPdfUrl) return <ArtifactPlaceholder Icon={FileText} label="Document" />;
+function PdfArtifactPreview({ title, previewUrl }: { title: string; previewUrl: string | undefined }) {
+  if (!previewUrl) return <ArtifactPlaceholder Icon={FileText} label="Document" />;
 
   return (
     <iframe
-      src={`${savedPdfUrl}#toolbar=0&navpanes=0&view=FitH`}
+      src={`${previewUrl}#toolbar=0&navpanes=0&view=FitH`}
       title={`${title} preview`}
       className="pointer-events-none size-full border-0 bg-background"
     />

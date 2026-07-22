@@ -203,13 +203,20 @@ export function GeneratedProjectsSection({
           type="button"
           aria-controls="generated-projects-list"
           aria-expanded={expanded}
-          onClick={() => setActivePage("create")}
-          className="flex flex-1 cursor-pointer items-center gap-1 rounded-md px-0 py-1 pl-2 text-left text-xs font-semibold uppercase tracking-wider text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`${expanded ? "Collapse" : "Expand"} Create`}
+          onClick={() => setExpanded((current) => !current)}
+          className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-foreground transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ChevronRight
             size={14}
             className={expanded ? "shrink-0 rotate-90 transition-transform" : "shrink-0 transition-transform"}
           />
+        </button>
+        <button
+          type="button"
+          onClick={() => setActivePage("create")}
+          className="flex flex-1 cursor-pointer items-center rounded-md py-1 text-left text-xs font-semibold uppercase tracking-wider text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <span>Create</span>
         </button>
         <button
