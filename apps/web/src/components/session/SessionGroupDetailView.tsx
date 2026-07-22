@@ -1029,7 +1029,6 @@ export function SessionGroupDetailView({
                       onForkSession={handleOpenForkDialog}
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                       canvasReady={generatedProjectCanvasReady}
-                      showCanvasWhileLoading
                       canvasKey="generated-project-canvas"
                       canvas={
                         <SessionGroupContentArea
