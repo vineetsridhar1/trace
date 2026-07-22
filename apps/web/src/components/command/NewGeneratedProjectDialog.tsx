@@ -58,7 +58,6 @@ const DESIGN_SYSTEMS_QUERY = gql`
     repos(organizationId: $organizationId) {
       id
       name
-      defaultBranch
       provider
     }
     agentEnvironments(orgId: $organizationId) {
@@ -131,7 +130,6 @@ export function NewGeneratedProjectDialog() {
   const [selection, setSelection] = useState(TRACE_DEFAULT_DESIGN_SYSTEM);
   const [name, setName] = useState("");
   const [repoId, setRepoId] = useState("");
-  const [branch, setBranch] = useState("");
   const [sourcePath, setSourcePath] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -171,10 +169,7 @@ export function NewGeneratedProjectDialog() {
         upsertMany("designSystems", nextSystems);
         upsertMany("repos", nextRepos);
         upsertMany("agentEnvironments", nextEnvironments);
-        if (!repoId && nextRepos[0]) {
-          setRepoId(nextRepos[0].id);
-          setBranch(nextRepos[0].defaultBranch);
-        }
+        if (!repoId && nextRepos[0]) setRepoId(nextRepos[0].id);
         if (!environmentId)
           setEnvironmentId(
             nextEnvironments.find((environment) => environment.isDefault)?.id ??
@@ -213,7 +208,6 @@ export function NewGeneratedProjectDialog() {
           input: {
             name: name.trim(),
             repoId,
-            branch: branch.trim() || undefined,
             sourcePath: sourcePath.trim() || undefined,
             environmentId: environmentId || undefined,
           },
@@ -298,9 +292,7 @@ export function NewGeneratedProjectDialog() {
               <Select
                 value={repoId}
                 onValueChange={(value) => {
-                  const repo = repos.find((item) => item.id === value);
                   setRepoId(value ?? "");
-                  setBranch(repo?.defaultBranch ?? "");
                 }}
               >
                 <SelectTrigger>
@@ -316,16 +308,16 @@ export function NewGeneratedProjectDialog() {
               </Select>
             </label>
             <label className="grid gap-1 text-sm">
-              Branch
-              <Input value={branch} onChange={(event) => setBranch(event.target.value)} />
-            </label>
-            <label className="grid gap-1 text-sm">
-              Source path (optional)
+              Source folder (optional)
               <Input
                 value={sourcePath}
                 onChange={(event) => setSourcePath(event.target.value)}
-                placeholder="packages/ui"
+                placeholder="Repository root"
               />
+              <span className="text-xs text-muted-foreground">
+                Leave blank to use the repository root. Set this for a package in a monorepo, such
+                as <code>packages/ui</code>.
+              </span>
             </label>
             {environments.length > 1 ? (
               <label className="grid gap-1 text-sm">
