@@ -86,7 +86,6 @@ const SESSION_DETAIL_QUERY = gql`
       outputTokens
       cacheReadTokens
       cacheCreationTokens
-      costUsd
       connection {
         state
         runtimeInstanceId

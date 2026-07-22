@@ -155,7 +155,6 @@ const SIDEBAR_SESSION_GROUPS_QUERY = gql`
         outputTokens
         cacheReadTokens
         cacheCreationTokens
-        costUsd
         connection {
           state
           runtimeInstanceId
