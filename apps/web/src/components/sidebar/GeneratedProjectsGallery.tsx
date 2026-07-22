@@ -3,6 +3,7 @@ import { useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { savedDesignPreviewUrl } from "../session/applications/saved-design-preview";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
 import type { GeneratedProjectKind } from "./generated-project-types";
 import { usePdfArtifactPreviewUrls } from "./usePdfArtifactPreviewUrls";
 
@@ -58,25 +59,33 @@ export function GeneratedProjectsGallery() {
               ))}
             </div>
           )}
-          <section className="mt-10 border-t border-border pt-8">
-            <div className="mb-5">
-              <h2 className="text-xl font-semibold text-foreground">Design systems</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Shared foundations and components for your workspace.
-              </p>
-            </div>
-            {designSystemGroups.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
-                Your design systems will appear here.
-              </p>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {designSystemGroups.map((group) => (
-                  <GeneratedProjectGalleryCard key={group.id} group={group} />
-                ))}
-              </div>
-            )}
-          </section>
+          <Accordion className="mt-10 border-t border-border">
+            <AccordionItem value="design-systems" className="border-b-0">
+              <AccordionTrigger className="py-5 hover:no-underline">
+                <span className="flex flex-col gap-1">
+                  <span className="font-semibold text-foreground">Design systems</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {designSystemGroups.length === 1
+                      ? "1 shared system"
+                      : `${designSystemGroups.length} shared systems`}
+                  </span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                {designSystemGroups.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+                    Your design systems will appear here.
+                  </p>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {designSystemGroups.map((group) => (
+                      <GeneratedProjectGalleryCard key={group.id} group={group} />
+                    ))}
+                  </div>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </div>
       </main>
     </div>
