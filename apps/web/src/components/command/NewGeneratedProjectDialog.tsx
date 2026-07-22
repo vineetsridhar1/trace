@@ -102,12 +102,12 @@ export function NewGeneratedProjectDialog() {
       ),
     ),
   );
-  const selectedRepo = repos.find((repo) => repo.id === repoId);
   const [environmentId, setEnvironmentId] = useState("");
   const [name, setName] = useState("");
   const [repoId, setRepoId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [pendingAuthoringGroupId, setPendingAuthoringGroupId] = useState<string | null>(null);
+  const selectedRepo = repos.find((repo) => repo.id === repoId);
 
   const createImmediate = useCallback(
     (nextKind: "app" | "design" | "pdf") => {
