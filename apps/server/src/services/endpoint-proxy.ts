@@ -196,7 +196,7 @@ function loadScreenSources(){
     for(var i=0;i<manifest.screens.length;i++){
       var screen=manifest.screens[i];
       if(!screen||typeof screen.id!=="string"||typeof screen.component!=="string")continue;
-      if(/^\.\/screens\/[A-Za-z0-9._-]+\.tsx$/.test(screen.component))screenSources[screen.id]='src/design/'+screen.component.slice(2);
+      if(/^\\.\\/screens\\/[A-Za-z0-9._-]+\\.tsx$/.test(screen.component))screenSources[screen.id]='src/design/'+screen.component.slice(2);
     }
     annotateTargets();
   }).catch(function(){});

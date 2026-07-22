@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { injectAuthoringOverlay } from "./endpoint-proxy.js";
 
 describe("endpoint authoring overlay", () => {
+  function injectedScript(html: string): string {
+    const match = html.match(/<script data-trace-app-overlay>([\s\S]*)<\/script>/u);
+    if (!match?.[1]) throw new Error("Expected the authoring overlay script");
+    return match[1];
+  }
+
   it("discovers selectable design targets from the canvas manifest", () => {
     const result = injectAuthoringOverlay(
       { "content-type": "text/html; charset=utf-8", "content-length": "42" },
@@ -19,6 +25,7 @@ describe("endpoint authoring overlay", () => {
     expect(html).toContain('post("edit-mode-ready",{})');
     expect(result.headers).not.toHaveProperty("content-length");
     expect(result.headers).toMatchObject({ "cache-control": "no-store" });
+    expect(() => new Function(injectedScript(html))).not.toThrow();
   });
 
   it("leaves encoded responses untouched", () => {
