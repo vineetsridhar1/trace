@@ -876,3 +876,10 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     });
   },
 }));
+
+export function hasUnsavedManualEdits(): boolean {
+  const state = useDesignEditorStore.getState();
+  return (
+    state.activeSessionGroupId !== null && (state.saving || Object.keys(state.drafts).length > 0)
+  );
+}
