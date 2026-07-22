@@ -98,6 +98,10 @@ export function SessionMessageList({
   const hasScrolledInitiallyRef = useRef(false);
   const pendingTimelineAnchorRef = useRef<string | null>(null);
   const currentIndexFrameRef = useRef<number | null>(null);
+  const lastScrollRequestRef = useRef<number | null>(null);
+  const scrollToBottomRequest = useComposerStore(
+    (state) => state.scrollToBottomBySession[sessionId] ?? 0,
+  );
 
   const gitCheckpointsByPromptEventId = useMemo(() => {
     const byPromptEventId = new Map<string, GitCheckpoint[]>();
@@ -239,24 +243,20 @@ export function SessionMessageList({
     });
   }, [handleScroll, initialLoading, nodes.length]);
 
-  // Follow the bottom while content grows (streaming events, images loading,
-  // panel resize). A single ResizeObserver on the content and the container
-  // replaces per-item measurement: whenever heights change and the user was
-  // near the bottom, re-pin to the bottom.
-  useEffect(() => {
+  // A send is an explicit navigation request. Keep it separate from streaming
+  // updates so a user can scroll upward without being pulled back down.
+  useLayoutEffect(() => {
+    if (lastScrollRequestRef.current === null) {
+      lastScrollRequestRef.current = scrollToBottomRequest;
+      return;
+    }
+    if (scrollToBottomRequest === lastScrollRequestRef.current) return;
+    lastScrollRequestRef.current = scrollToBottomRequest;
     const container = scrollContainerRef.current;
-    const rowsEl = rowsContainerRef.current;
-    if (!container || !rowsEl) return;
-
-    const observer = new ResizeObserver(() => {
-      if (isNearBottomRef.current) {
-        container.scrollTop = container.scrollHeight;
-      }
-    });
-    observer.observe(rowsEl);
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, []);
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+    isNearBottomRef.current = true;
+  }, [scrollToBottomRequest]);
 
   // When the floating composer height changes (grows to multiple lines, or swaps
   // to a taller plan/question bar), the reserved bottom padding changes — re-pin

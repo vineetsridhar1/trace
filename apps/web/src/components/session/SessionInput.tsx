@@ -325,6 +325,7 @@ export function SessionInput({
 
             setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
             for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
+            useComposerStore.getState().requestScrollToBottom(sessionId);
             shouldRefocusAfterQueue = true;
           } catch (error) {
             setDraftImages(sessionId, (prev) =>
@@ -368,6 +369,7 @@ export function SessionInput({
               }
             : undefined,
         );
+        useComposerStore.getState().requestScrollToBottom(sessionId);
 
         setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
 
