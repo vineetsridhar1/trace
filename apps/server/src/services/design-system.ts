@@ -34,6 +34,20 @@ export function shouldAdvanceLatestArtifact(
   return currentSequence === null || candidateSequence > currentSequence;
 }
 
+export function shouldAutoPublishArtifact(input: {
+  packageValid: boolean;
+  artifactId: string;
+  artifactCommitSha: string;
+  latestCommitArtifactId: string | null;
+  latestPushedCommitSha: string | null;
+}): boolean {
+  return (
+    input.packageValid &&
+    input.latestCommitArtifactId === input.artifactId &&
+    input.latestPushedCommitSha === input.artifactCommitSha
+  );
+}
+
 function eventJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(
     JSON.stringify(value, (_key, nested) => (typeof nested === "bigint" ? Number(nested) : nested)),
@@ -134,6 +148,23 @@ export class DesignSystemService {
         });
       });
     }
+    const invalidSaved = await prisma.designSystemCommitArtifact.findMany({
+      where: { status: "saved", packageValid: false },
+      orderBy: [{ designSystemId: "asc" }, { sequence: "desc" }],
+      take: 100,
+      select: { id: true },
+    });
+    let revalidated = 0;
+    for (const artifact of invalidSaved) {
+      try {
+        if (await this.revalidateSavedArtifact(artifact.id)) revalidated += 1;
+      } catch (error) {
+        console.warn("[design-system] saved artifact revalidation failed", {
+          artifactId: artifact.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     const missingPreviews = await prisma.designSystem.findMany({
       where: {
         latestCommitArtifact: { status: "saved", packageValid: true },
@@ -167,7 +198,64 @@ export class DesignSystemService {
         });
       });
     }
-    return pending.length + missingPreviews.length;
+    return pending.length + revalidated + missingPreviews.length;
+  }
+
+  private async revalidateSavedArtifact(artifactId: string): Promise<boolean> {
+    const artifact = await prisma.designSystemCommitArtifact.findUniqueOrThrow({
+      where: { id: artifactId },
+      include: { designSystem: true },
+    });
+    if (artifact.status !== "saved" || artifact.packageValid !== false) return false;
+    const stored = await storage.getObject(artifact.storageKey);
+    const workbench = await parseDesignSystemTarGz(stored);
+    const validation = validateWorkbenchPackage(workbench.files);
+    if (!validation.valid) return false;
+    const packageArchive = await createDeterministicTarGz(packageArchiveFiles(workbench.files));
+    const row = await prisma.designSystemCommitArtifact.update({
+      where: { id: artifact.id },
+      data: {
+        packageValid: true,
+        packageDigest: sha256(packageArchive),
+        validationSummary: eventJson(validation),
+      },
+    });
+    const designSystem = await prisma.designSystem.findUniqueOrThrow({
+      where: { id: artifact.designSystemId },
+      include: DESIGN_SYSTEM_INCLUDE,
+    });
+    await eventService.create({
+      organizationId: artifact.designSystem.organizationId,
+      scopeType: "system",
+      scopeId: artifact.designSystemId,
+      eventType: "design_system_commit_artifact_updated",
+      payload: eventJson({ designSystem, designSystemCommitArtifact: row }),
+      actorType: "system",
+      actorId: "system",
+    });
+    if (
+      shouldAutoPublishArtifact({
+        packageValid: true,
+        artifactId: row.id,
+        artifactCommitSha: row.commitSha,
+        latestCommitArtifactId: designSystem.latestCommitArtifactId,
+        latestPushedCommitSha: designSystem.latestPushedCommitSha,
+      })
+    ) {
+      await this.save({
+        id: artifact.designSystemId,
+        organizationId: artifact.designSystem.organizationId,
+        actorType: "system",
+        actorId: "system",
+      }).catch((error: unknown) => {
+        console.warn("[design-system] revalidated artifact publication failed", {
+          designSystemId: artifact.designSystemId,
+          artifactId: artifact.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+    return true;
   }
 
   private async persistSavedArtifactPreview(input: {
@@ -658,6 +746,29 @@ export class DesignSystemService {
           artifact.commitSha,
         );
       }
+      if (
+        shouldAutoPublishArtifact({
+          packageValid: validation.valid,
+          artifactId: saved.row.id,
+          artifactCommitSha: saved.row.commitSha,
+          latestCommitArtifactId: saved.designSystem.latestCommitArtifactId,
+          latestPushedCommitSha: saved.designSystem.latestPushedCommitSha,
+        })
+      ) {
+        await this.save({
+          id: artifact.designSystemId,
+          organizationId: artifact.designSystem.organizationId,
+          actorType: "system",
+          actorId: "system",
+        }).catch((error: unknown) => {
+          console.warn("[design-system] automatic publication failed", {
+            designSystemId: artifact.designSystemId,
+            artifactId: artifact.id,
+            commitSha: artifact.commitSha,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
       console.info("[design-system] commit artifact saved", {
         organizationId: artifact.designSystem.organizationId,
         designSystemId: artifact.designSystemId,
@@ -763,7 +874,7 @@ export class DesignSystemService {
       throw new ValidationError("Archived design systems cannot be published");
     const group = system.authoringSessionGroup;
     const activeSession = group.sessions[0];
-    if (activeSession?.agentStatus === "active")
+    if (input.actorType === "user" && activeSession?.agentStatus === "active")
       throw new ValidationError("Wait for the authoring agent to finish");
     if (!group.repoId) throw new ValidationError("Authoring repository is unavailable");
     const branch = group.branch || group.repo?.defaultBranch || "main";
@@ -857,7 +968,7 @@ export class DesignSystemService {
             workbenchCommitSha: head,
             manifest: eventJson(validation.manifest as DesignSystemManifest),
             validationSummary: eventJson(validation),
-            createdById: input.actorId,
+            createdById: input.actorType === "user" ? input.actorId : system.createdById,
           },
         });
         const designSystem = await tx.designSystem.update({

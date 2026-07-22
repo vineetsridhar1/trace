@@ -37,6 +37,14 @@ const DESIGN_SYSTEMS_QUERY = gql`
       name
       status
       archivedAt
+      latestCommitArtifact {
+        id
+        status
+        packageValid
+      }
+      commitArtifactStatus
+      publishStatus
+      publishError
       activeVersionId
       activeVersion {
         id

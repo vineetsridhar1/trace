@@ -13,6 +13,8 @@ const { mocks, database } = vi.hoisted(() => {
     artifactFindFirst: vi.fn(),
     artifactFindMany: vi.fn(),
     artifactFindUnique: vi.fn(),
+    artifactFindUniqueOrThrow: vi.fn(),
+    artifactUpdate: vi.fn(),
     artifactUpdateMany: vi.fn(),
     artifactCreate: vi.fn(),
     versionFindUnique: vi.fn(),
@@ -41,6 +43,8 @@ const { mocks, database } = vi.hoisted(() => {
       findFirst: mocks.artifactFindFirst,
       findMany: mocks.artifactFindMany,
       findUnique: mocks.artifactFindUnique,
+      findUniqueOrThrow: mocks.artifactFindUniqueOrThrow,
+      update: mocks.artifactUpdate,
       updateMany: mocks.artifactUpdateMany,
       create: mocks.artifactCreate,
     },
@@ -73,7 +77,11 @@ vi.mock("./actor-auth.js", () => ({
 }));
 vi.mock("./session.js", () => ({ sessionService: { start: mocks.sessionStart } }));
 
-import { DesignSystemService, shouldAdvanceLatestArtifact } from "./design-system.js";
+import {
+  DesignSystemService,
+  shouldAdvanceLatestArtifact,
+  shouldAutoPublishArtifact,
+} from "./design-system.js";
 import { createDeterministicTarGz } from "../lib/design-system-archive.js";
 
 function system(overrides: Record<string, unknown> = {}) {
@@ -114,6 +122,36 @@ describe("DesignSystemService", () => {
     expect(shouldAdvanceLatestArtifact(1, 2)).toBe(true);
     expect(shouldAdvanceLatestArtifact(3, 2)).toBe(false);
     expect(shouldAdvanceLatestArtifact(3, 3)).toBe(false);
+  });
+
+  it("only auto-publishes the valid artifact for the latest pushed commit", () => {
+    expect(
+      shouldAutoPublishArtifact({
+        packageValid: true,
+        artifactId: "artifact-2",
+        artifactCommitSha: "commit-2",
+        latestCommitArtifactId: "artifact-2",
+        latestPushedCommitSha: "commit-2",
+      }),
+    ).toBe(true);
+    expect(
+      shouldAutoPublishArtifact({
+        packageValid: false,
+        artifactId: "artifact-2",
+        artifactCommitSha: "commit-2",
+        latestCommitArtifactId: "artifact-2",
+        latestPushedCommitSha: "commit-2",
+      }),
+    ).toBe(false);
+    expect(
+      shouldAutoPublishArtifact({
+        packageValid: true,
+        artifactId: "artifact-1",
+        artifactCommitSha: "commit-1",
+        latestCommitArtifactId: "artifact-2",
+        latestPushedCommitSha: "commit-2",
+      }),
+    ).toBe(false);
   });
 
   it("backfills an S3 static canvas for an existing saved artifact", async () => {
@@ -168,6 +206,88 @@ describe("DesignSystemService", () => {
           designPreviewUrl: "/design-previews/groups/group-1",
         }),
       }),
+    );
+  });
+
+  it("revalidates a saved artifact after a compatible validator upgrade", async () => {
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64",
+    );
+    const archive = await createDeterministicTarGz(
+      new Map<string, Buffer>([
+        [
+          "design-system/manifest.json",
+          Buffer.from(
+            JSON.stringify({
+              schemaVersion: "trace-design-system/v1",
+              id: "fixture",
+              name: "Fixture",
+              description: "Fixture",
+              platforms: ["web"],
+              files: {
+                guidance: "DESIGN.md",
+                tokens: "tokens.css",
+                components: "components.manifest.json",
+                evidence: "source/evidence.json",
+              },
+              componentsDirectory: "components",
+              assetsDirectory: "assets",
+              previewDirectory: "preview",
+            }),
+          ),
+        ],
+        ["design-system/DESIGN.md", Buffer.from("# Fixture")],
+        [
+          "design-system/tokens.css",
+          Buffer.from(
+            ":root { --background:#fff; --surface:#fff; --foreground:#111; --muted-foreground:#555; --border:#ccc; --accent:#064; --accent-foreground:#fff; --destructive:#c00; --success:#080; --warning:#a60; --font-sans:system-ui; --text-base:1rem; --space-1:.25rem; --radius:.5rem; --shadow:none; --focus-ring:none; --motion-duration:150ms; }",
+          ),
+        ],
+        ["design-system/components.manifest.json", Buffer.from('{"components":[]}')],
+        [
+          "design-system/preview/foundations.html",
+          Buffer.from("<!doctype html><html><body>Foundations</body></html>"),
+        ],
+        [
+          "design-system/preview/components.html",
+          Buffer.from("<!doctype html><html><body>Components</body></html>"),
+        ],
+        ["design-system/preview/foundations.png", png],
+        ["design-system/preview/components.png", png],
+        ["design-system/source/evidence.json", Buffer.from("{}")],
+      ]),
+    );
+    mocks.artifactFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: "artifact-1" }]);
+    mocks.artifactFindUniqueOrThrow.mockResolvedValue({
+      id: "artifact-1",
+      designSystemId: "system-1",
+      sequence: 1,
+      commitSha: "commit-1",
+      storageKey: "workbench.tar.gz",
+      status: "saved",
+      packageValid: false,
+      designSystem: { organizationId: "org-1" },
+    });
+    mocks.storageGet.mockResolvedValue(archive);
+    mocks.artifactUpdate.mockResolvedValue({
+      id: "artifact-1",
+      commitSha: "commit-1",
+      packageValid: true,
+    });
+    mocks.systemFindUniqueOrThrow.mockResolvedValue(
+      system({ latestCommitArtifactId: "newer-artifact", latestPushedCommitSha: "commit-2" }),
+    );
+
+    await expect(new DesignSystemService().reconcileCommitArtifacts()).resolves.toBe(1);
+
+    expect(mocks.artifactUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ packageValid: true }) }),
+    );
+    expect(mocks.eventCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "design_system_commit_artifact_updated" }),
     );
   });
 

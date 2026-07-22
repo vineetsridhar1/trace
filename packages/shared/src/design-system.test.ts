@@ -78,4 +78,48 @@ describe("design-system package validation", () => {
     expect(result.errors.some((error) => error.includes("unresolved token alias"))).toBe(true);
     expect(result.errors.some((error) => error.includes("unsafe import"))).toBe(true);
   });
+
+  it("allows theme selectors to override tokens declared by another rule", () => {
+    const files = validFiles();
+    files.set(
+      "tokens.css",
+      Buffer.from(
+        `${files.get("tokens.css")!.toString("utf8")} [data-theme="dark"] { --background:#111; --foreground:#fff; }`,
+      ),
+    );
+
+    expect(validateDesignSystemPackage(files)).toMatchObject({ valid: true, errors: [] });
+  });
+
+  it("accepts original v1 component metadata aliases", () => {
+    const files = validFiles();
+    files.set(
+      "components.manifest.json",
+      Buffer.from(
+        JSON.stringify({
+          components: [
+            {
+              name: "LegacyButton",
+              classification: "portable",
+              reuseMode: "portable",
+              source: ["src/Button.tsx"],
+              variants: ["primary"],
+              states: ["default"],
+              portablePath: "components/LegacyButton.tsx",
+            },
+          ],
+        }),
+      ),
+    );
+    files.set(
+      "components/LegacyButton.tsx",
+      Buffer.from("export function LegacyButton() { return null; }"),
+    );
+    files.set(
+      "preview/components.html",
+      Buffer.from("<!doctype html><html><body><h1>LegacyButton</h1></body></html>"),
+    );
+
+    expect(validateDesignSystemPackage(files)).toMatchObject({ valid: true, errors: [] });
+  });
 });

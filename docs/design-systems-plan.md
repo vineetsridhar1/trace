@@ -72,7 +72,7 @@ The workbench's hidden managed repo preserves chat-driven changes, Git history, 
 source, and review output. The source repo remains an external reference that can be
 refreshed or removed without corrupting a saved design-system version.
 
-### Every commit is saved to S3; publication remains explicit
+### Every valid commit is saved and promoted automatically
 
 The authoring agent already commits and pushes managed-workbench changes after each
 completed response. Each successful push queues an immutable S3 artifact of that exact
@@ -86,11 +86,11 @@ immediately after each commit rather than deferring until session shutdown. Once
 managed Git server acknowledges the push, the container may disappear; the server can
 finish or retry the S3 write from its bare repo.
 
-Persisting a commit artifact does not make a draft selectable by Designs. When the user
-is satisfied, they press **Save** to validate and promote the latest fully uploaded commit
-artifact into an immutable `DesignSystemVersion`. The UI therefore distinguishes cloud-save state
-(`Saving`, `Saved`, `Save failed`) from publication state. A failed commit upload or Save
-leaves the previous active version untouched, and the authoring session remains open.
+Persisting an invalid commit artifact does not make a draft selectable by Designs. After a
+successful push, Trace validates the fully uploaded commit artifact and automatically promotes a
+valid latest artifact into an immutable `DesignSystemVersion`. There is no separate Save control:
+the managed commit is the durability and publication boundary. A failed upload or validation leaves
+the previous active version untouched, and the authoring session remains open for repair.
 
 ### Git is the only authoring source of truth
 
@@ -204,11 +204,10 @@ The session layout is:
 ```
 
 After each completed response, the agent runs deterministic checks/review, commits, and
-pushes. The header changes from `Saving` to `Cloud saved` when the commit artifact for
-that commit reaches S3. The first explicit Save changes the system from `draft` to `ready`
-and creates version 1 from the latest saved commit artifact. Closing earlier does not
-discard work: the draft, managed Git commit, S3 artifact, and managed session remain
-resumable.
+pushes. Trace archives the commit artifact to S3, validates it, and promotes a valid latest commit
+from `draft` to `ready` by creating version 1. Later valid commits create later immutable versions.
+Closing earlier does not discard work: the draft, managed Git commit, S3 artifact, and managed
+session remain resumable.
 
 ### Manage and update
 
@@ -225,8 +224,8 @@ A Design Systems view lists:
 Opening the workbench resumes the same `design_system` session. Refreshing the source
 checkout is an explicit chat/action flow that never overwrites user-authored decisions
 without showing the resulting canvas changes. The resulting managed push stores the next
-S3 commit artifact; the user reviews it and presses Save to publish the next immutable
-version. Existing Designs may expose an explicit **Upgrade design system** action later;
+S3 commit artifact and automatically publishes it when validation succeeds. Existing Designs may
+expose an explicit **Upgrade design system** action later;
 there is no silent upgrade.
 
 ## Design-System Workbench
@@ -280,12 +279,10 @@ The agent may add sections for data visualization, editorial patterns, mobile-na
 controls, or other source-backed needs. A managed push containing only empty placeholder
 boards is still stored as a commit artifact, but does not satisfy publication validation.
 
-The workbench header shows server-owned commit-artifact state: `saving`, `saved`, or `failed`,
-plus whether its valid package digest differs from the active published version. While
-the agent is editing, the existing session state shows that work is in progress. **Save**
-is enabled only when the agent is idle, the latest pushed commit has a completed S3
-commit artifact, and deterministic package validation passes. None of these states are
-maintained as independent client-only truth.
+The workbench uses the existing session state while the agent is editing and does not add a
+separate save toolbar. Each managed push is archived by the server; deterministic package
+validation automatically advances the active version only for the valid latest commit. Save and
+publication state are server-owned and never maintained as independent client-only truth.
 
 ## Package Contract
 
@@ -408,8 +405,8 @@ errors or external network dependencies, verifies declared variants/states are p
 then exports self-contained HTML and full-page PNG captures into `preview/`.
 
 Every commit gets an S3 artifact even when required specimens are missing, blank, stale
-relative to the manifest, or omit declared variants. Save refuses to publish such a
-commit artifact. The PNGs provide fast human thumbnails; downstream Design agents primarily
+relative to the manifest, or omit declared variants. Automatic promotion refuses such a commit
+artifact. The PNGs provide fast human thumbnails; downstream Design agents primarily
 consume the HTML, component source, tokens, and manifest.
 
 ### Source evidence
@@ -431,7 +428,7 @@ DesignSystemPublishStatus = idle | publishing | published | failed
 
 Authoring progress, runtime failure, and `needs_input` come from the linked session; they
 are not duplicated as design-system statuses. Commit-artifact state describes whether the
-latest pushed commit has reached S3. Publication state describes the explicit Save. A
+latest pushed commit has reached S3. Publication state describes automatic promotion. A
 failed commit upload or publication leaves the last ready version active.
 
 Add `DesignSystem`:
@@ -637,10 +634,9 @@ Do not place session creation logic in the resolver or open a nested transaction
   it is the latest pushed commit, and retain the managed Git commit. A retry or startup
   reconciler can rebuild the object without the original container.
 
-### `save`
+### Automatic promotion (`save` service primitive)
 
-- Authorize access to the design system and its authoring session group.
-- Require the agent to be idle, resolve the authoring branch HEAD directly from the
+- Resolve the authoring branch HEAD directly from the
   managed bare Git repository, and require `latestCommitArtifact.commitSha` to equal that
   HEAD. Database commit fields are projections for UI/event delivery, not authority.
 - Require the commit artifact to be fully uploaded and its package validation to pass.
@@ -653,13 +649,13 @@ Do not place session creation logic in the resolver or open a nested transaction
 - In one database transaction, create the immutable version, set it active, mark the
   system ready and `published`, record `publishedCommitSha`, clear `publishError`, and
   append full-entity/version events.
-- Treat repeated Save for the same commit or content digest as idempotent success and
+- Treat repeated promotion for the same commit or content digest as idempotent success and
   allocate ordinals under a transaction/unique-constraint retry.
 - Delete an unreferenced version object if validation or the transaction fails.
-- Do not terminate or archive the authoring session. Later commits continue creating S3
-  commit artifacts but do not replace the active version until the user presses Save again.
+- Do not terminate or archive the authoring session. Each later valid latest commit creates the
+  next immutable version automatically; invalid commits leave the prior active version untouched.
 
-If Save fails, set `publishStatus: failed`, record a concise `publishError`, append an
+If promotion fails, set `publishStatus: failed`, record a concise `publishError`, append an
 update event, and retain both the latest commit artifact and active version.
 
 ### `archive`
@@ -776,8 +772,8 @@ The skill must ask when it finds multiple unrelated design systems or cannot det
 the intended application/package. It should not ask about choices that can be safely
 derived and recorded with evidence. The agent never calls publication APIs or creates
 versions. It runs local checks and pushes through the normal managed-session flow. That
-push always creates a server-owned S3 commit artifact; only the user's Save action
-promotes a valid commit to a published version.
+push always creates a server-owned S3 commit artifact; the server automatically promotes a valid
+latest commit to a published version.
 
 ## Per-Commit S3 Artifacts and Published Versions
 
@@ -814,7 +810,7 @@ independently:
 - retries pending work after process restarts, following the existing managed-push
   Design-preview and PDF-export recovery pattern.
 
-The explicit Save path reads the selected latest commit artifact through `StorageAdapter`,
+The automatic promotion path reads the selected latest commit artifact through `StorageAdapter`,
 extracts and revalidates only `design-system/`, and writes the smaller immutable published
 package. It does not need the bridge, source repository, or authoring container to still
 exist.
@@ -949,18 +945,18 @@ boundary or not rendered in Trace v1; it must never execute on the main app orig
   `needs_input` behavior; the canvas remains visible.
 - If a commit-artifact upload fails, retain the managed Git commit, mark the artifact
   failed, and retry it from the bare repo. No authoring container is required.
-- If package validation fails, still store the workbench artifact but disable Save and
-  expose the concise validation error so the user can ask the agent for a repair.
-- If version upload succeeds but Save fails, delete the unreferenced version object
+- If package validation fails, still store the workbench artifact and expose the concise
+  validation error so the user can ask the agent for a repair.
+- If version upload succeeds but promotion fails, delete the unreferenced version object
   best-effort while retaining the commit artifact.
-- If Save is retried with the same commit or digest, return the existing version.
+- If promotion is retried with the same commit or digest, return the existing version.
 - If a runtime expires before its push, restore the authoring workbench from its managed
   remote and rehydrate the pinned source checkout. S3 persistence and publication of an
   already pushed commit proceed server-side without that runtime.
 - If materialization fails, the Design session remains recoverable through the existing
   workspace retry path and requests a fresh signed URL.
-- New, failed, or superseded workbench commits never replace an active version until
-  the user explicitly Saves one.
+- New, failed, or superseded workbench commits never replace an active version; only a valid latest
+  managed commit is promoted.
 
 ## Frontend and Zustand
 
@@ -1079,7 +1075,7 @@ Exit criteria: a user can open a draft workbench, watch the initial foundations 
 components appear, chat to change them, and reload/resume the same managed workbench.
 S3 commit artifacts and package publication are not enabled in this phase.
 
-### Phase 3 — Per-commit S3 artifacts and explicit Save
+### Phase 3 — Per-commit S3 artifacts and automatic promotion
 
 - Add the managed-push consumer and exact-commit workbench-tree archive helper.
 - Drive it exclusively from managed Git ref updates and raw commit SHAs; do not integrate
@@ -1090,17 +1086,17 @@ S3 commit artifacts and package publication are not enabled in this phase.
 - Run deterministic workbench checks and browser specimen review before the normal agent
   commit/push, then record server validation results without rejecting incomplete draft
   commit artifacts.
-- Add the explicit Save button and `saveDesignSystem` mutation to promote the latest
-  saved, valid commit artifact.
+- Automatically promote the latest saved, valid commit artifact through the idempotent
+  server-side publication primitive.
 - Implement S3 key allocation, server-side validation, digesting, idempotency, concurrent
   ordinal protection, events, and cleanup for both object types.
 - Require self-contained HTML and PNG foundation/component specimens.
 - Preserve the authoring session after publication so later chat responses keep creating
-  commit artifacts and may be published by a later Save.
+  commit artifacts and valid latest commits become later versions.
 
 Exit criteria: every pushed commit has an immutable S3 artifact even after its container
-is destroyed; no version exists until the user presses Save, and later commits retain the
-previous active version until another Save.
+is destroyed; valid latest commits automatically create immutable versions, while invalid commits
+retain the previous active version.
 
 ### Phase 4 — Design selection and materialization
 
@@ -1177,7 +1173,7 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 
 - Exact-commit workbench archival includes only tracked files and stays within its root.
 - Commit-artifact packaging is deterministic for identical Git trees.
-- Artifact persistence and later Save succeed after the authoring runtime has stopped.
+- Artifact persistence and automatic promotion succeed after the authoring runtime has stopped.
 - Workbench restore clones/fetches managed branch HEAD without consulting
   `GitCheckpoint`.
 - Source checkout is separate, read-only, pinned to the requested commit, and excluded
@@ -1195,11 +1191,9 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
   including a system with newer unpublished commits.
 - Creating an App or PDF remains unchanged.
 - Creating a Design sends the selected version id.
-- Create-new navigates to the authoring canvas; managed pushes persist without
-  publishing.
-- Chat changes visibly update boards and the header reports cloud
-  saving/saved/save-failed after each managed push.
-- Save is disabled until the agent is idle and the HEAD artifact is saved and valid.
+- Create-new navigates to the authoring canvas; every managed push persists and valid latest
+  commits publish automatically.
+- Chat changes visibly update boards; server events report artifact and publication failures.
 - Events update the latest commit artifact, active version, upload errors, and publication
   errors.
 - Archived or never-published systems cannot be newly selected for a Design.
@@ -1211,20 +1205,20 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 3. Assert the `design_system` workbench uses a managed repo and separate read-only source
    checkout.
 4. Watch the initial color, typography, component-variant, state, and composition boards
-   render and verify the completed response's managed push creates an S3 artifact but
-   no published version.
+   render and verify the completed response's managed push creates an S3 artifact and
+   automatically promotes the valid commit to version 1.
 5. Use chat to change a token and add a component variant; verify HMR, screenshots, and
-   a second commit artifact through the local storage adapter.
+   a second commit artifact and version 2 through the local storage adapter.
 6. Destroy the authoring container, verify both artifact objects remain, and restore
    the workbench at the latest managed commit.
-7. Press Save and verify the valid artifact for managed branch HEAD becomes version 1.
+7. Verify the latest valid version remains usable without restarting the authoring runtime.
 8. Remove source-repo access from the ordinary Design runtime.
-9. Create a Design with version 1 and assert the package exists before its first agent
+9. Create a Design with version 2 and assert the package exists before its first agent
    run.
 10. Ask for a screen using a known token and portable component.
 11. Verify the committed design and exported HTML contain the expected styling/component.
-12. Make another chat edit, verify its commit does not replace version 1, press Save,
-    and confirm the original Design remains pinned to version 1.
+12. Make another chat edit, verify it automatically creates version 3, and confirm the original
+    Design remains pinned to version 2.
 
 ## Expected File Touchpoints
 
@@ -1275,8 +1269,8 @@ The implementation should remain surgical, but likely touches:
       and can be persisted or retried without its authoring container.
 - [x] Managed Git branch HEAD and commit SHA are the only authoring authority; no
       design-system path reads, writes, or waits for Trace `GitCheckpoint` records.
-- [x] No DesignSystemVersion is published until the user presses Save for a valid managed
-      branch HEAD; clients cannot supply a commit or package location.
+- [x] A DesignSystemVersion is automatically published only from a valid managed branch HEAD;
+      clients cannot supply a commit or package location.
 - [x] Commit artifacts and published package objects are immutable and retrievable through both
       S3 and local adapters.
 - [x] Postgres stores no package binaries.

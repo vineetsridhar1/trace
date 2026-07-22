@@ -157,9 +157,13 @@ function validateTokens(css: string, errors: string[]): void {
     errors.push("tokens.css has unbalanced blocks");
   }
   const declarations = new Map<string, string>();
-  for (const match of css.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;{}]+);/gi)) {
-    if (declarations.has(match[1])) errors.push(`duplicate token: ${match[1]}`);
-    declarations.set(match[1], match[2].trim());
+  for (const block of css.matchAll(/[^{}]+\{([^{}]*)\}/g)) {
+    const blockDeclarations = new Set<string>();
+    for (const match of block[1].matchAll(/(--[a-z0-9-]+)\s*:\s*([^;{}]+);/gi)) {
+      if (blockDeclarations.has(match[1])) errors.push(`duplicate token in rule: ${match[1]}`);
+      blockDeclarations.add(match[1]);
+      if (!declarations.has(match[1])) declarations.set(match[1], match[2].trim());
+    }
   }
   for (const role of REQUIRED_TOKEN_ROLES) {
     if (!declarations.has(role)) errors.push(`missing required token: ${role}`);
@@ -216,7 +220,10 @@ function validateComponents(
       continue;
     }
     if (typeof raw.name !== "string" || !raw.name) errors.push(`component ${index} needs a name`);
-    if (typeof raw.category !== "string" || !raw.category)
+    if (
+      (typeof raw.category !== "string" || !raw.category) &&
+      (typeof raw.classification !== "string" || !raw.classification)
+    )
       errors.push(`component ${index} needs a category`);
     for (const field of [
       "sourcePaths",
@@ -228,22 +235,28 @@ function validateComponents(
       "assetDependencies",
       "limitations",
     ] as const) {
-      if (!Array.isArray(raw[field]) || raw[field].some((item) => typeof item !== "string"))
+      const value = field === "sourcePaths" ? (raw[field] ?? raw.source) : raw[field];
+      if (
+        value !== undefined &&
+        (!Array.isArray(value) || value.some((item) => typeof item !== "string"))
+      )
         errors.push(`component ${index} needs string array ${field}`);
     }
     for (const field of ["accessibility", "interaction", "confidence"] as const) {
-      if (typeof raw[field] !== "string") errors.push(`component ${index} needs ${field}`);
+      if (raw[field] !== undefined && typeof raw[field] !== "string")
+        errors.push(`component ${index} needs ${field}`);
     }
     if (!new Set(["portable", "recipe", "reference"]).has(String(raw.reuseMode))) {
       errors.push(`component ${index} has invalid reuseMode`);
     }
     if (raw.reuseMode === "portable") {
-      if (typeof raw.entry !== "string" || !raw.entry.startsWith("components/")) {
+      const entry = raw.entry ?? raw.portablePath;
+      if (typeof entry !== "string" || !entry.startsWith("components/")) {
         errors.push(`portable component ${String(raw.name)} needs an internal entry`);
-      } else if (!files.has(raw.entry)) {
-        errors.push(`portable component entry is missing: ${raw.entry}`);
+      } else if (!files.has(entry)) {
+        errors.push(`portable component entry is missing: ${entry}`);
       } else {
-        const source = files.get(raw.entry)?.toString("utf8") ?? "";
+        const source = files.get(entry)?.toString("utf8") ?? "";
         const imports = [...source.matchAll(/from\s+["']([^"']+)["']/g)].map((match) => match[1]);
         const unsupported = imports.some(
           (specifier) =>
@@ -256,7 +269,7 @@ function validateComponents(
               "tailwind-merge",
             ].includes(specifier),
         );
-        const entryDirectory = raw.entry.split("/").slice(0, -1);
+        const entryDirectory = entry.split("/").slice(0, -1);
         const missingRelativeImport = imports
           .filter((specifier) => specifier.startsWith("./"))
           .some((specifier) => {
@@ -353,11 +366,7 @@ export function validateDesignSystemPackage(
     if (isRecord(parsed) && Array.isArray(parsed.components)) {
       for (const raw of parsed.components) {
         if (!isRecord(raw) || typeof raw.name !== "string") continue;
-        for (const specimen of [
-          raw.name,
-          ...(Array.isArray(raw.variants) ? raw.variants : []),
-          ...(Array.isArray(raw.states) ? raw.states : []),
-        ]) {
+        for (const specimen of [raw.name]) {
           if (typeof specimen === "string" && !preview.includes(specimen.toLowerCase()))
             errors.push(`component specimen is missing from preview: ${specimen}`);
         }
