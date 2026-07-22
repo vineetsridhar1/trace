@@ -1,7 +1,5 @@
 import { cn } from "../../../lib/utils";
 import type { RefObject } from "react";
-import { Pencil } from "lucide-react";
-import { Button } from "../../ui/button";
 import type { PdfDownloadState, PdfPageFormat } from "./PdfPreviewControls";
 import { PdfPreviewControls } from "./PdfPreviewControls";
 import { AppPreviewFrameControls } from "./AppPreviewFrameControls";
@@ -9,6 +7,7 @@ import { AppPreviewLoadingBar } from "./AppPreviewLoadingBar";
 import { AppPreviewToolbar } from "./AppPreviewToolbar";
 import { SavedPreviewSkeleton } from "./SavedPreviewSkeleton";
 import { PREVIEW_FRAME_MARGIN, usePreviewViewport } from "./usePreviewViewport";
+import { ManualEditActions } from "./ManualEditActions";
 
 export function AppPreviewCanvas({
   url,
@@ -72,41 +71,14 @@ export function AppPreviewCanvas({
   return (
     <div className="relative flex h-full flex-col bg-surface-deep">
       {manualEdit ? (
-        <>
-          <Button
-            size="sm"
-            variant={manualEdit.enabled ? "default" : "outline"}
-            onClick={manualEdit.primaryAction}
-            disabled={manualEdit.saving}
-            title={manualEdit.enabled ? "Save edits" : "Edit manually"}
-            aria-label={manualEdit.enabled ? "Save edits" : "Edit manually"}
-            aria-pressed={manualEdit.enabled}
-            className={cn(
-              "absolute top-1.5 z-30 h-7 gap-1.5 px-2.5",
-              bare ? "right-28" : "right-3",
-            )}
-          >
-            <Pencil className="size-3" />
-            {manualEdit.enabled
-              ? manualEdit.saving
-                ? "Saving…"
-                : manualEdit.frameReady
-                  ? "Done"
-                  : "Connecting…"
-              : "Edit"}
-          </Button>
-          {manualEdit.enabled ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={manualEdit.discard}
-              disabled={manualEdit.saving}
-              className={cn("absolute top-1.5 z-30 h-7 px-2.5", bare ? "right-48" : "right-20")}
-            >
-              Discard
-            </Button>
-          ) : null}
-        </>
+        <ManualEditActions
+          enabled={manualEdit.enabled}
+          frameReady={manualEdit.frameReady}
+          saving={manualEdit.saving}
+          onPrimaryAction={manualEdit.primaryAction}
+          onDiscard={manualEdit.discard}
+          className={cn("absolute top-1.5 z-30", bare ? "right-28" : "right-3")}
+        />
       ) : null}
       {bare && pdfFormat && onPdfFormatChange && onPdfDownload ? (
         <PdfPreviewControls

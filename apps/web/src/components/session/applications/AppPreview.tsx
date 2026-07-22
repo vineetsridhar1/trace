@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { Pencil, RotateCw } from "lucide-react";
+import { RotateCw } from "lucide-react";
 import { client } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
 import { TraceLoader } from "@/components/ui/trace-loader";
@@ -13,6 +13,7 @@ import { PdfPreviewControls } from "./PdfPreviewControls";
 import { SavedPreviewSkeleton } from "./SavedPreviewSkeleton";
 import { usePdfPreview } from "./usePdfPreview";
 import { useDesignManualEdit } from "./useDesignManualEdit";
+import { ManualEditActions } from "./ManualEditActions";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
 const MAX_FRAME_RETRY_MS = 30_000;
@@ -173,38 +174,14 @@ export function AppPreview({
       ) : null}
       <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       {manualSessionGroupId ? (
-        <>
-          <Button
-            size="sm"
-            variant={manualEdit.enabled ? "default" : "outline"}
-            onClick={manualEdit.primaryAction}
-            disabled={manualEdit.saving}
-            title={manualEdit.enabled ? "Save edits" : "Edit manually"}
-            aria-label={manualEdit.enabled ? "Save edits" : "Edit manually"}
-            aria-pressed={manualEdit.enabled}
-            className="absolute right-11 top-2 z-20 h-7 gap-1.5 px-2.5 opacity-90 hover:opacity-100"
-          >
-            <Pencil className="size-3" />
-            {manualEdit.enabled
-              ? manualEdit.saving
-                ? "Saving…"
-                : manualEdit.frameReady
-                  ? "Done"
-                  : "Connecting…"
-              : "Edit"}
-          </Button>
-          {manualEdit.enabled ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={manualEdit.discard}
-              disabled={manualEdit.saving}
-              className="absolute right-28 top-2 z-20 h-7 px-2.5 opacity-90 hover:opacity-100"
-            >
-              Discard
-            </Button>
-          ) : null}
-        </>
+        <ManualEditActions
+          enabled={manualEdit.enabled}
+          frameReady={manualEdit.frameReady}
+          saving={manualEdit.saving}
+          onPrimaryAction={manualEdit.primaryAction}
+          onDiscard={manualEdit.discard}
+          className="absolute right-11 top-2 z-20"
+        />
       ) : null}
       <Button
         size="icon"
