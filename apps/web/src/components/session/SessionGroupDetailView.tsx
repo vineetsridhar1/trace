@@ -47,7 +47,6 @@ import { toast } from "sonner";
 import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
 import { useRegisterCommands } from "../../hooks/useRegisterCommands";
 import type { RegisteredCommand } from "../../stores/command-registry";
-import { DesignSystemWorkbenchToolbar } from "../design-system/DesignSystemWorkbenchToolbar";
 
 const SESSION_SIDEBAR_WIDTH_KEY = "trace:session-sidebar-width";
 const DEFAULT_SESSION_SIDEBAR_WIDTH = 300;
@@ -954,14 +953,6 @@ export function SessionGroupDetailView({
                   selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
                 }
               />
-              {groupKind === "design_system" ? (
-                <DesignSystemWorkbenchToolbar
-                  sessionGroupId={sessionGroupId}
-                  sessionId={selectedSession?.id ?? null}
-                  agentIdle={selectedSession?.agentStatus !== "active"}
-                />
-              ) : null}
-
               {!isAppGroup && !isGeneratedProjectGroup ? (
                 <GroupTabStrip
                   sessionTabs={sessionTabs}

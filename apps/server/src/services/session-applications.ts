@@ -45,35 +45,51 @@ type ManagedSessionGroup = {
   } | null;
 };
 
-const DEFAULT_APP_SESSION_CONFIG = repoApplicationConfigService.normalize({
-  setupScripts: [],
-  applications: [
-    {
-      id: "app",
-      name: "App",
-      processes: [
-        {
-          id: "dev",
-          name: "Dev server",
-          command: "pnpm install --prefer-offline --frozen-lockfile && pnpm dev",
-          workingDirectory: ".",
-          required: true,
-          env: [],
-          ports: [
-            {
-              id: "web",
-              label: "Preview",
-              port: 3000,
-              protocol: "http",
-              defaultForwardingEnabled: true,
-              healthPath: "/",
-            },
-          ],
-        },
-      ],
-    },
-  ],
-});
+function createGeneratedProjectConfig(command: string) {
+  return repoApplicationConfigService.normalize({
+    setupScripts: [],
+    applications: [
+      {
+        id: "app",
+        name: "App",
+        processes: [
+          {
+            id: "dev",
+            name: "Dev server",
+            command,
+            workingDirectory: ".",
+            required: true,
+            env: [],
+            ports: [
+              {
+                id: "web",
+                label: "Preview",
+                port: 3000,
+                protocol: "http",
+                defaultForwardingEnabled: true,
+                healthPath: "/",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+}
+
+const DEFAULT_APP_SESSION_CONFIG = createGeneratedProjectConfig(
+  "pnpm install --prefer-offline --frozen-lockfile && pnpm dev",
+);
+
+const DESIGN_SYSTEM_APP_SESSION_CONFIG = createGeneratedProjectConfig(
+  "pnpm install --prefer-offline --frozen-lockfile && pnpm exec vite --host 0.0.0.0 --port 3000 --strictPort",
+);
+
+function generatedProjectConfig(kind: string) {
+  return kind === "design_system"
+    ? DESIGN_SYSTEM_APP_SESSION_CONFIG
+    : DEFAULT_APP_SESSION_CONFIG;
+}
 
 function connectionRecord(connection: Prisma.JsonValue): Record<string, unknown> {
   return connection && typeof connection === "object" && !Array.isArray(connection)
@@ -269,7 +285,7 @@ export class SessionApplicationService {
     );
     const config =
       isGeneratedProjectKind(group.kind)
-        ? DEFAULT_APP_SESSION_CONFIG
+        ? generatedProjectConfig(group.kind)
         : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const script = config.setupScripts.find((candidate) => candidate.id === scriptId);
     if (!script) throw new ValidationError("Setup script not found");
@@ -1163,7 +1179,7 @@ export class SessionApplicationService {
   private getApplication(group: ManagedSessionGroup, appConfigId: string) {
     const config =
       isGeneratedProjectKind(group.kind)
-        ? DEFAULT_APP_SESSION_CONFIG
+        ? generatedProjectConfig(group.kind)
         : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const app = config.applications.find((candidate) => candidate.id === appConfigId);
     if (!app) throw new ValidationError("Application not found");

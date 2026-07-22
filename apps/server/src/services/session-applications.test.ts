@@ -262,6 +262,40 @@ describe("SessionApplicationService", () => {
       "org-1",
     );
   });
+
+  it("starts design-system previews on Trace's preview port", async () => {
+    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({
+      id: "group-1",
+      kind: "design_system",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+      visibility: "public",
+      repoId: "managed-repo-1",
+      repo: null,
+      workdir: "/workspace",
+      sessions: [
+        {
+          id: "session-1",
+          workdir: "/workspace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ],
+    });
+
+    await new SessionApplicationService().startProcess("group-1", "app", "dev", "org-1", "user-1");
+
+    expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+      "runtime-1",
+      expect.objectContaining({
+        type: "app_process_start",
+        command:
+          "pnpm install --prefer-offline --frozen-lockfile && pnpm exec vite --host 0.0.0.0 --port 3000 --strictPort",
+        ports: [{ portConfigId: "web", port: 3000, protocol: "http" }],
+      }),
+      "org-1",
+    );
+  });
+
   it("requires a running process before enabling forwarding", async () => {
     prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
       id: "endpoint-1",

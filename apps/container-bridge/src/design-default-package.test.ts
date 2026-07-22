@@ -29,3 +29,17 @@ describe.each([
     });
   });
 });
+
+describe("the design-system workbench", () => {
+  it("serves its canvas on Trace's preview port", async () => {
+    const packagePath = fileURLToPath(
+      new URL("../design-system-starter/package.json", import.meta.url),
+    );
+    const packageJson = JSON.parse(await readFile(packagePath, "utf8")) as {
+      scripts?: { dev?: string };
+    };
+
+    expect(packageJson.scripts?.dev).toContain("--port 3000");
+    expect(packageJson.scripts?.dev).toContain("--strictPort");
+  });
+});
