@@ -12,6 +12,41 @@ export function formatTime(timestamp: string): string {
   });
 }
 
+const MESSAGE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  hour: "numeric",
+  minute: "2-digit",
+});
+const WEEKDAY_FORMATTER = new Intl.DateTimeFormat("en-US", { weekday: "long" });
+const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+});
+
+export function formatMessageTimestamp(timestamp: string, now = new Date()): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "Invalid Date";
+  const time = MESSAGE_TIME_FORMATTER.format(date);
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  if (date >= startOfToday && date < startOfTomorrow) return `Today ${time}`;
+
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  if (date >= startOfYesterday && date < startOfToday) return `Yesterday ${time}`;
+
+  const startOfRecentWeek = new Date(startOfToday);
+  startOfRecentWeek.setDate(startOfRecentWeek.getDate() - 6);
+  if (date >= startOfRecentWeek && date < startOfYesterday) {
+    return `${WEEKDAY_FORMATTER.format(date)} ${time}`;
+  }
+
+  return `${SHORT_DATE_FORMATTER.format(date)} at ${time}`;
+}
+
 function stripMatchingQuotes(text: string): string {
   if (text.length < 2) return text;
   const first = text[0];
