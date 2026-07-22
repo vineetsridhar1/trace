@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   GitBranch,
   SlidersHorizontal,
-  Bell,
   Key,
   Users,
   Code,
@@ -15,25 +14,21 @@ import { useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { RepositoriesSection } from "./RepositoriesSection";
 import { SessionDefaultsSection } from "./SessionDefaultsSection";
-import { NotificationsSection } from "./NotificationsSection";
 import { ApiTokensSection } from "./ApiTokensSection";
 import { MembersSection } from "./MembersSection";
 import { ChannelsSection } from "./ChannelsSection";
 import { BridgeAccessSection } from "./BridgeAccessSection";
 import { AgentEnvironmentsSection } from "./AgentEnvironmentsSection";
 import { OrgSecretsSection } from "./OrgSecretsSection";
-import { ConnectionsSection } from "./ConnectionsSection";
 import { IntegrationsSection } from "./IntegrationsSection";
 import { isLocalMode } from "../../lib/runtime-mode";
 
 type SettingsTab =
   | "repositories"
   | "session-defaults"
-  | "notifications"
   | "api-keys"
   | "members"
   | "channels"
-  | "connections"
   | "bridge-access"
   | "agent-environments"
   | "org-secrets"
@@ -41,10 +36,8 @@ type SettingsTab =
 
 const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "repositories", label: "Repositories", icon: GitBranch },
-  { id: "connections", label: "Connections", icon: Plug },
   { id: "members", label: "Members", icon: Users },
   { id: "session-defaults", label: "Session Defaults", icon: SlidersHorizontal },
-  { id: "notifications", label: "Notifications", icon: Bell },
   { id: "api-keys", label: "API Keys", icon: Key },
   { id: "bridge-access", label: "Bridge Access", icon: MonitorCog },
   { id: "agent-environments", label: "Agent Environments", icon: ServerCog },
@@ -91,7 +84,6 @@ export function SettingsPage() {
   const contentWidthClass =
     activeTab === "members" ||
     activeTab === "repositories" ||
-    activeTab === "connections" ||
     activeTab === "channels" ||
     activeTab === "bridge-access" ||
     activeTab === "agent-environments" ||
@@ -131,10 +123,8 @@ export function SettingsPage() {
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className={contentWidthClass}>
             {activeTab === "repositories" && <RepositoriesSection />}
-            {activeTab === "connections" && <ConnectionsSection />}
             {activeTab === "members" && <MembersSection />}
             {activeTab === "session-defaults" && <SessionDefaultsSection />}
-            {activeTab === "notifications" && <NotificationsSection />}
             {activeTab === "api-keys" && <ApiTokensSection />}
             {activeTab === "bridge-access" && <BridgeAccessSection />}
             {activeTab === "agent-environments" && <AgentEnvironmentsSection />}

@@ -29,7 +29,7 @@ const productionUrl = process.env.TRACE_PRODUCTION_URL;
 const updateRepo = process.env.TRACE_DESKTOP_UPDATE_REPO;
 
 if (!productionUrl) {
-  console.error("TRACE_PRODUCTION_URL must be set (e.g. https://gettrace.org)");
+  console.error("TRACE_PRODUCTION_URL must be set (e.g. https://app.gettrace.org)");
   process.exit(1);
 }
 

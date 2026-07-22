@@ -71,6 +71,12 @@ export function createPrismaMock() {
       findUnique: vi.fn(),
       upsert: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    codexCredential: {
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
     },
     agentEnvironment: {
       create: vi.fn(),
@@ -211,7 +217,9 @@ export function createPrismaMock() {
       findFirst: vi.fn(),
       findFirstOrThrow: vi.fn(),
       findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       delete: vi.fn(),
       count: vi.fn(),
     },

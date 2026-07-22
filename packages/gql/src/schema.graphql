@@ -25,6 +25,7 @@ enum SessionGroupKind {
   coding
   design
   app
+  pdf
 }
 
 enum SessionGroupStatus {
@@ -246,6 +247,12 @@ enum ApiTokenProvider {
   ssh_key
 }
 
+enum CodexAuthMethod {
+  chatgpt_session
+  access_token
+  api_key
+}
+
 enum PushPlatform {
   ios
   android
@@ -294,6 +301,8 @@ enum EventType {
   session_pr_closed
   session_group_archived
   session_group_renamed
+  design_preview_updated
+  pdf_export_updated
   chat_created
   chat_member_added
   chat_member_removed
@@ -502,6 +511,18 @@ type SessionGroup {
   repo: Repo
   branch: String
   gitCheckpoints: [GitCheckpoint!]!
+  designPreviewStatus: GitCheckpointCaptureStatus
+  designPreviewUrl: String
+  designPreviewCommitSha: String
+  designPreviewCapturedAt: DateTime
+  pdfExportStatus: String
+  pdfExportCommitSha: String
+  pdfExportCapturedAt: DateTime
+  pdfExportError: String
+  pdfPageWidth: Float!
+  pdfPageHeight: Float!
+  pdfPageUnit: String!
+  pdfFormatVersion: Int!
   sessions: [Session!]!
   workdir: String
   connection: SessionConnection
@@ -599,6 +620,10 @@ type GitCheckpoint {
   captureUrl: String
   captureContentType: String
   capturedAt: DateTime
+  previewStatus: GitCheckpointCaptureStatus
+  previewUrl: String
+  previewContentType: String
+  previewCapturedAt: DateTime
   createdAt: DateTime!
 }
 
@@ -904,6 +929,11 @@ type ApiTokenStatus {
   provider: ApiTokenProvider!
   isSet: Boolean!
   updatedAt: DateTime
+}
+
+type CodexCredentialStatus {
+  method: CodexAuthMethod!
+  updatedAt: DateTime!
 }
 
 type SessionRuntimeInstance {
@@ -1235,6 +1265,11 @@ input SetApiTokenInput {
   token: String!
 }
 
+input SetCodexCredentialInput {
+  method: CodexAuthMethod!
+  credential: String!
+}
+
 input CreateAgentEnvironmentInput {
   orgId: ID!
   name: String!
@@ -1292,6 +1327,10 @@ type Query {
   Design-kind session groups for the org (the sidebar Designs section).
   """
   designSessionGroups(organizationId: ID!): [SessionGroup!]!
+  """
+  PDF-kind session groups for the org (the sidebar PDFs section).
+  """
+  pdfSessionGroups(organizationId: ID!): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
@@ -1347,6 +1386,8 @@ type Query {
     depth: Int
   ): [SessionGroupDirectoryEntry!]!
   sessionGroupFileContent(sessionGroupId: ID!, filePath: String!): String!
+  pdfSessionPreviewUrl(sessionGroupId: ID!): String
+  pdfSessionDownloadUrl(sessionGroupId: ID!): String
   sessionGroupFileContentWithSource(
     sessionGroupId: ID!
     filePath: String!
@@ -1376,6 +1417,7 @@ type Query {
   threadSummary(rootMessageId: ID!): ThreadSummary
   participants(scopeType: String!, scopeId: ID!): [Participant!]!
   myApiTokens: [ApiTokenStatus!]!
+  myCodexCredential: CodexCredentialStatus
   sessionTerminals(sessionId: ID!): [Terminal!]!
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
@@ -1513,6 +1555,13 @@ type Mutation {
   moveSessionToRuntime(sessionId: ID!, runtimeInstanceId: ID!): Session!
   moveSessionToCloud(sessionId: ID!): Session!
   saveSessionGroupFile(sessionGroupId: ID!, filePath: String!, content: String!): Boolean!
+  updatePdfSessionFormat(
+    sessionGroupId: ID!
+    width: Float!
+    height: Float!
+    unit: String!
+  ): Boolean!
+  requestPdfSessionExport(sessionGroupId: ID!): Boolean!
   commitSessionGroupFileChanges(sessionGroupId: ID!, message: String): String!
   revertSessionGroupFileChange(sessionGroupId: ID!, filePath: String!): Boolean!
   requestBridgeAccess(
@@ -1583,6 +1632,8 @@ type Mutation {
   dismissInboxItem(id: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!
   deleteApiToken(provider: ApiTokenProvider!): Boolean!
+  setCodexCredential(input: SetCodexCredentialInput!): CodexCredentialStatus!
+  deleteCodexCredential: Boolean!
   registerPushToken(token: String!, platform: PushPlatform!): Boolean!
   unregisterPushToken(token: String!): Boolean!
   createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!

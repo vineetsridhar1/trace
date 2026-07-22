@@ -34,8 +34,14 @@ export class LocalStorageAdapter implements StorageAdapter {
     this.rootDir = process.env.LOCAL_STORAGE_DIR
       ? path.resolve(process.env.LOCAL_STORAGE_DIR)
       : path.resolve(process.cwd(), "tmp/uploads");
-    this.publicUrl =
-      process.env.STORAGE_PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+    // This adapter is selected only for STORAGE_MODE=local. Remote bridges
+    // still need a reachable signed PUT endpoint, so reuse the server's public
+    // URL unless storage has its own explicit public origin.
+    this.publicUrl = (
+      process.env.STORAGE_PUBLIC_URL?.trim() ||
+      process.env.TRACE_SERVER_PUBLIC_URL?.trim() ||
+      `http://localhost:${process.env.PORT ?? 4000}`
+    ).replace(/\/$/, "");
     fs.mkdirSync(this.rootDir, { recursive: true });
   }
 
@@ -52,6 +58,10 @@ export class LocalStorageAdapter implements StorageAdapter {
     await fsp.writeFile(filePath, body);
   }
 
+  async getObject(key: string): Promise<Buffer> {
+    return fsp.readFile(this.resolvePath(key));
+  }
+
   async getGetUrl(key: string, options?: { downloadFilename?: string }): Promise<string> {
     const token = jwt.sign(
       { key, action: "get", downloadFilename: options?.downloadFilename },
@@ -59,6 +69,10 @@ export class LocalStorageAdapter implements StorageAdapter {
       { expiresIn: "1h" },
     );
     return `${this.publicUrl}/uploads/local/get/${token}`;
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await fsp.rm(this.resolvePath(key), { force: true });
   }
 
   /** Resolve a key to its on-disk path, blocking path traversal. */

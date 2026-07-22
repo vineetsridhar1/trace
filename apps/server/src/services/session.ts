@@ -19,7 +19,12 @@ import {
 } from "@trace/shared";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
-import { AuthorizationError, ToolNotInstalledError, ValidationError } from "../lib/errors.js";
+import {
+  AuthenticationError,
+  AuthorizationError,
+  ToolNotInstalledError,
+  ValidationError,
+} from "../lib/errors.js";
 import { eventService } from "./event.js";
 import { sessionApplicationService } from "./session-applications.js";
 import {
@@ -34,6 +39,7 @@ import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { storage } from "../lib/storage/index.js";
+import { validatePdfPageFormat } from "../lib/pdf-format.js";
 import {
   runtimeAccessService,
   setBridgeAccessApprovedHandler,
@@ -68,6 +74,7 @@ import {
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
+import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 import { isGeneratedProjectKind } from "../lib/generated-project.js";
 
 export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
@@ -283,10 +290,10 @@ function hasRuntimeBindingChanged(
 function hasRuntimeBinding(connection: SessionConnectionData, workdir?: string | null): boolean {
   return Boolean(
     workdir ||
-      connection.runtimeInstanceId ||
-      connection.environmentId ||
-      connection.providerRuntimeId ||
-      connection.adapterType === "provisioned",
+    connection.runtimeInstanceId ||
+    connection.environmentId ||
+    connection.providerRuntimeId ||
+    connection.adapterType === "provisioned",
   );
 }
 
@@ -497,6 +504,34 @@ function isRuntimeTerminalState(state: SessionConnectionData["state"]): boolean 
 function isRuntimeComputeGone(conn: SessionConnectionData): boolean {
   if (conn.state === "stopped" || conn.state === "deprovisioned") return true;
   return conn.state === "disconnected" && conn.deprovisionedAt != null;
+}
+
+/**
+ * Grace window during which a starting-up runtime is shielded from the idle
+ * sweep. Comfortably above the default 180s startup timeout so a healthy
+ * cold-boot (image pull + connect) is always protected.
+ */
+const RUNTIME_STARTUP_GRACE_MS = 5 * 60 * 1000;
+
+/**
+ * True when a runtime is actively starting up and that startup is still recent.
+ *
+ * Reviving an idle session provisions fresh compute without posting a new
+ * message, so the group still matches the idle query while its runtime is
+ * mid-boot. Without this guard the idle sweep reaps the just-provisioned runtime
+ * seconds into its image pull (stoppedReason `idle_session_group_cleanup`,
+ * `startedAt: null`), so an idle group can never be revived. A runtime stuck in
+ * a startup state past the grace window (well beyond the startup timeout, which
+ * the provision path settles on its own) is intentionally left reclaimable so
+ * leaked compute can't linger forever.
+ */
+function isRuntimeStartingWithinGrace(conn: SessionConnectionData, now: number): boolean {
+  if (!isRuntimeStartupState(conn.state)) return false;
+  const startedAt = conn.requestedAt ?? conn.provisioningAt ?? conn.connectingAt ?? null;
+  if (!startedAt) return true;
+  const startedMs = Date.parse(startedAt);
+  if (Number.isNaN(startedMs)) return true;
+  return now - startedMs < RUNTIME_STARTUP_GRACE_MS;
 }
 
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
@@ -819,6 +854,11 @@ function serializeGitCheckpoint(checkpoint: {
   captureUrl?: string | null;
   captureContentType?: string | null;
   capturedAt?: Date | null;
+  previewStatus?: string | null;
+  previewKey?: string | null;
+  previewUrl?: string | null;
+  previewContentType?: string | null;
+  previewCapturedAt?: Date | null;
   createdAt: Date;
 }) {
   return {
@@ -839,6 +879,11 @@ function serializeGitCheckpoint(checkpoint: {
     captureUrl: checkpoint.captureUrl ?? null,
     captureContentType: checkpoint.captureContentType ?? null,
     capturedAt: checkpoint.capturedAt?.toISOString() ?? null,
+    previewStatus: checkpoint.previewStatus ?? null,
+    previewKey: checkpoint.previewKey ?? null,
+    previewUrl: checkpoint.previewUrl ?? null,
+    previewContentType: checkpoint.previewContentType ?? null,
+    previewCapturedAt: checkpoint.previewCapturedAt?.toISOString() ?? null,
     createdAt: checkpoint.createdAt.toISOString(),
   };
 }
@@ -941,9 +986,9 @@ const BACKGROUND_WORK_INSTRUCTION = `\n\n<system-instruction>
 If you start anything in the background, including long-running shell commands, dev servers, watchers, or subagents, keep the main agent process alive until that work is complete or intentionally stopped. Do not send a final response while background work you started is still running unless the user explicitly asks you to leave it running; in that case, report what is running and how it is being kept alive.
 </system-instruction>`;
 
-/** Instruction appended to every prompt for repo-based sessions so the AI auto-saves work. */
+/** Instruction appended to every prompt for repo-based sessions so the AI auto-saves each response. */
 const AUTO_SAVE_INSTRUCTION = `\n\n<system-instruction>
-After completing each task, silently save your work to the remote:
+Before completing every response that changes the workspace, silently save your work to the remote:
 1. Stage all changes: git add -A
 2. Commit with a short, descriptive message summarizing what changed (skip if nothing staged)
 3. Push: git push -u origin HEAD
@@ -952,11 +997,15 @@ If the user asks you to stop auto-saving or disable auto-save, stop doing this f
 </system-instruction>`;
 
 const APP_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace app session in its own isolated cloud runtime. When present, read and follow docs/ai-guidance.md and docs/trace-apps.md before changing the app. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Vite/React/Node/Tailwind/shadcn-compatible starter as the source of truth. Work visibly and incrementally: make a small, valid first UI change quickly, then build in coherent runnable batches so the user can watch each meaningful step through Vite HMR. Keep the app working between edits; do not prepare the entire replacement offscreen and swap it in only at the end. Build frontend UI in src and add API routes or other server behavior in server.ts and related Node modules. Keep browser requests to your own API same-origin. Call third-party APIs from Node routes when browser CORS would block them. Only when an external browser origin must call this app directly, add its exact origin to the comma-separated APP_CORS_ALLOWED_ORIGINS environment variable; never use a wildcard for credentialed requests. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running and ready to use — do NOT install, initialize, or reconfigure them, create roles, or edit pg_hba/auth. The \`pg\` client and its TypeScript types are already installed. For Postgres, import \`Pool\` from \`pg\`, read the DATABASE_URL environment variable, and pass it straight to \`new Pool({ connectionString: process.env.DATABASE_URL })\`; it is a complete, credentialed TCP URL (\`postgresql://user:pass@localhost:5432/app\`) for a ready database named \`app\` — do not parse it, override the user, or switch to a Unix socket. Redis is at REDIS_URL / redis://localhost:6379. Keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. IMPORTANT: the dev server is already started and managed for you on port 3000 (host 0.0.0.0) and hot-reloads your file changes — do NOT run \`pnpm dev\` or otherwise start your own server, the port is already taken and a second one will crash. Just edit files; if you need to verify, curl http://localhost:3000. Commit and push meaningful checkpoints to the configured managed origin when the app reaches a working state. Sharing the live app is a valid final outcome.
+This is a Trace app session in its own isolated cloud runtime. When present, read and follow docs/ai-guidance.md and docs/trace-apps.md before changing the app. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Vite/React/Node/Tailwind/shadcn-compatible starter as the source of truth. Work visibly and incrementally: make a small, valid first UI change quickly, then build in coherent runnable batches so the user can watch each meaningful step through Vite HMR. Keep the app working between edits; do not prepare the entire replacement offscreen and swap it in only at the end. Build frontend UI in src and add API routes or other server behavior in server.ts and related Node modules. Keep browser requests to your own API same-origin. Call third-party APIs from Node routes when browser CORS would block them. Only when an external browser origin must call this app directly, add its exact origin to the comma-separated APP_CORS_ALLOWED_ORIGINS environment variable; never use a wildcard for credentialed requests. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running and ready to use — do NOT install, initialize, or reconfigure them, create roles, or edit pg_hba/auth. The \`pg\` client and its TypeScript types are already installed. For Postgres, import \`Pool\` from \`pg\`, read the DATABASE_URL environment variable, and pass it straight to \`new Pool({ connectionString: process.env.DATABASE_URL })\`; it is a complete, credentialed TCP URL (\`postgresql://user:pass@localhost:5432/app\`) for a ready database named \`app\` — do not parse it, override the user, or switch to a Unix socket. Redis is at REDIS_URL / redis://localhost:6379. Keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. IMPORTANT: the dev server is already started and managed for you on port 3000 (host 0.0.0.0) and hot-reloads your file changes — do NOT run \`pnpm dev\` or otherwise start your own server, the port is already taken and a second one will crash. Just edit files; if you need to verify, curl http://localhost:3000. Before every response that changes the app, commit and push the changes to the configured managed origin. Sharing the live app is a valid final outcome.
 </system-instruction>`;
 
 const DESIGN_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace Design session, not an App or Coding session. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; when the user asks to build or create a product, design its screens, flows, variants, and states instead of implementing a production application. Before editing, read and follow AGENTS.md or CLAUDE.md plus docs/ai-guidance.md, resolve design.brief.json, and read the relevant docs/playbooks guidance. Follow the workspace guide's design loop: understand the brief, ground supplied references in observable evidence, map the experience, commit to executable tokens, compose a representative screen and then the coherent screen set, and critique it before delivery. Work visibly and incrementally: render a rough but valid representative screen early, then add and refine screens in coherent runnable batches so the user can watch the canvas evolve through Vite HMR. Keep the manifest and canvas valid between edits; do not assemble the whole design offscreen and reveal it only at the end. Build and refine the artifact through design.brief.json, design.canvas.json, trace.tokens.json, and focused components under src/design, with one component per logical screen and stable screen ids. Prefer the token-driven primitives already under src/design/primitives. Local component state is allowed for prototype interactions, but do not build APIs, databases, authentication, persistence, real integrations, or production business logic. Do not replace src/App.tsx, the stable canvas or review runtime, server.ts, scripts, or the Vite/export configuration, and do not add routing that bypasses the canvas. Use local or embeddable assets only so Export HTML remains self-contained and works offline. The managed Vite server already runs on port 3000 and hot-reloads changes; do not start another server. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect every generated review screenshot, repair failures, and rerun the checks. Ask only blocking product questions through Trace's normal question mechanism; otherwise make explicit, reasonable assumptions and proceed. Commit and push meaningful design checkpoints to the configured managed origin.
+This is a Trace Design session, not an App or Coding session. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; when the user asks to build or create a product, design its screens, flows, variants, and states instead of implementing a production application. Before editing, read and follow AGENTS.md or CLAUDE.md plus docs/ai-guidance.md, resolve design.brief.json, and read the relevant docs/playbooks guidance. Follow the workspace guide's design loop: understand the brief, ground supplied references in observable evidence, map the experience, commit to executable tokens, compose a representative screen and then the coherent screen set, and critique it before delivery. Work visibly and incrementally: render a rough but valid representative screen early, then add and refine screens in coherent runnable batches so the user can watch the canvas evolve through Vite HMR. Keep the manifest and canvas valid between edits; do not assemble the whole design offscreen and reveal it only at the end. Build and refine the artifact through design.brief.json, design.canvas.json, trace.tokens.json, and focused components under src/design, with one component per logical screen and stable screen ids. Prefer the token-driven primitives already under src/design/primitives. Local component state is allowed for prototype interactions, but do not build APIs, databases, authentication, persistence, real integrations, or production business logic. Do not replace src/App.tsx, the stable canvas or review runtime, server.ts, scripts, or the Vite/export configuration, and do not add routing that bypasses the canvas. Use local or embeddable assets only so Export HTML remains self-contained and works offline. The managed Vite server already runs on port 3000 and hot-reloads changes; do not start another server. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect every generated review screenshot, repair failures, and rerun the checks. Ask only blocking product questions through Trace's normal question mechanism; otherwise make explicit, reasonable assumptions and proceed. Before every response that changes the design, commit and push the changes to the configured managed origin. A successful push saves the durable Design preview.
+</system-instruction>`;
+
+const PDF_SESSION_INSTRUCTION = `\n\n<system-instruction>
+This is a Trace PDF session. Build a print-ready document in the provided Vite/React starter, not a full-stack application. Before changing the document, read AGENTS.md and docs/ai-guidance.md, then use the relevant guidance under docs/playbooks/. The editable document lives in src/App.tsx and is rendered live by the managed server on port 3000; do not start another server. Keep the output self-contained: use local CSS and assets, semantic HTML, and explicit print styles with stable page breaks. Do not add a backend, database, Redis, authentication, external integrations, or in-document download controls. Trace renders and stores the PDF after each managed Git push; preserve the print stylesheet while adapting the document. Work visibly in small valid changes, check the print layout at A4 and Letter sizes, and run pnpm test before delivery. Before every response that changes the document, commit and push the changes to the configured managed origin.
 </system-instruction>`;
 
 function generatedProjectInstruction(
@@ -964,6 +1013,7 @@ function generatedProjectInstruction(
 ): string | undefined {
   if (kind === "app") return APP_SESSION_INSTRUCTION;
   if (kind === "design") return DESIGN_SESSION_INSTRUCTION;
+  if (kind === "pdf") return PDF_SESSION_INSTRUCTION;
   return undefined;
 }
 
@@ -1296,6 +1346,37 @@ export function isFullyUnloadedSession(
 }
 
 export class SessionService {
+  private async createGeneratedProjectGitCredential(input: {
+    organizationId: string;
+    sessionId: string;
+    runtimeInstanceId: string;
+    repo: { id: string; remoteUrl: string | null; defaultBranch: string };
+    actorType: ActorType;
+    actorId: string;
+  }): Promise<{ repoId: string; repoRemoteUrl: string; defaultBranch: string }> {
+    if (!input.repo.remoteUrl) {
+      throw new ValidationError("Generated project managed git remote is unavailable");
+    }
+    const access = await managedGitService.mintAccessToken({
+      organizationId: input.organizationId,
+      repoId: input.repo.id,
+      scope: "runtime",
+      sessionId: input.sessionId,
+      subject: input.runtimeInstanceId,
+      capabilities: ["read", "write"],
+      actorType: input.actorType,
+      actorId: input.actorId,
+    });
+    const authenticatedUrl = new URL(input.repo.remoteUrl);
+    authenticatedUrl.username = "trace";
+    authenticatedUrl.password = access.token;
+    return {
+      repoId: input.repo.id,
+      repoRemoteUrl: authenticatedUrl.toString(),
+      defaultBranch: input.repo.defaultBranch,
+    };
+  }
+
   /**
    * Encapsulates the common createRuntime call used by startSession, run, and sendMessage.
    * Resolves repo/branch/hosting and delegates to the session router.
@@ -1372,26 +1453,15 @@ export class SessionService {
         sessionGroupKind: params.sessionGroupKind ?? undefined,
         prepareAppGit:
           isGeneratedProjectKind(params.sessionGroupKind) && params.repo?.remoteUrl
-            ? async (runtimeInstanceId) => {
-                const access = await managedGitService.mintAccessToken({
+            ? (runtimeInstanceId) =>
+                this.createGeneratedProjectGitCredential({
                   organizationId: params.organizationId,
-                  repoId: params.repo!.id,
-                  scope: "runtime",
                   sessionId: params.sessionId,
-                  subject: runtimeInstanceId,
-                  capabilities: ["read", "write"],
+                  runtimeInstanceId,
+                  repo: params.repo!,
                   actorType: params.actorType ?? "user",
                   actorId: params.createdById,
-                });
-                const authenticatedUrl = new URL(params.repo!.remoteUrl!);
-                authenticatedUrl.username = "trace";
-                authenticatedUrl.password = access.token;
-                return {
-                  repoId: params.repo!.id,
-                  repoRemoteUrl: authenticatedUrl.toString(),
-                  defaultBranch: params.repo!.defaultBranch,
-                };
-              }
+                })
             : undefined,
         slug: slug ?? undefined,
         preserveBranchName,
@@ -1569,12 +1639,26 @@ export class SessionService {
     if (!session) return;
 
     const result = await this.updateConnectionConditional(sessionId, (conn) => {
-      if (
-        update.runtimeInstanceId &&
-        conn.runtimeInstanceId &&
-        conn.runtimeInstanceId !== update.runtimeInstanceId
-      ) {
-        return null;
+      if (update.runtimeInstanceId) {
+        const isNewRuntimeRequest = eventType === "session_runtime_start_requested";
+        // A new launch may claim an unbound session, but every subsequent
+        // lifecycle event must belong to the runtime generation that is
+        // currently persisted. In particular, an old stop event must not
+        // apply after another path has cleared the binding while a new
+        // runtime is starting.
+        //
+        // A new launch may ALSO claim a connection whose previous runtime ended
+        // in a terminal state (failed/timed_out/stopped/deprovisioned): that
+        // runtime is dead, so a fresh provision must be able to take over. Without
+        // this, a startup timeout left the connection pinned to the dead runtime's
+        // id, and every re-provision (a different id) was fenced out here — the
+        // session could never recover.
+        const canClaimStaleConnection =
+          isNewRuntimeRequest &&
+          (!conn.runtimeInstanceId || isRuntimeTerminalState(conn.state));
+        if (conn.runtimeInstanceId !== update.runtimeInstanceId && !canClaimStaleConnection) {
+          return null;
+        }
       }
 
       if (
@@ -2292,11 +2376,12 @@ export class SessionService {
     organizationId: string,
     userId: string,
     options: { requireWrite?: boolean } = {},
-  ): Promise<{ runtimeId: string; sessionId: string; workdirHint?: string }> {
+  ): Promise<{ runtimeId: string; sessionId: string; workdirHint?: string; kind: string }> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
       select: {
         id: true,
+        kind: true,
         workdir: true,
         worktreeDeleted: true,
         connection: true,
@@ -2349,6 +2434,7 @@ export class SessionService {
       }
 
       return {
+        kind: group.kind,
         runtimeId: runtime.key,
         sessionId: sessionOnGroupRuntime.id,
         workdirHint: sessionOnGroupRuntime.workdir ?? group.workdir ?? undefined,
@@ -2381,6 +2467,7 @@ export class SessionService {
         throw error;
       }
       return {
+        kind: group.kind,
         runtimeId: runtime.key,
         sessionId: session.id,
         workdirHint: session.workdir ?? group.workdir ?? undefined,
@@ -2584,8 +2671,12 @@ export class SessionService {
     return this.listGeneratedProjectGroups("design", organizationId, userId);
   }
 
+  async listPdfGroups(organizationId: string, userId: string) {
+    return this.listGeneratedProjectGroups("pdf", organizationId, userId);
+  }
+
   private async listGeneratedProjectGroups(
-    kind: "app" | "design",
+    kind: "app" | "design" | "pdf",
     organizationId: string,
     userId: string,
   ) {
@@ -3191,15 +3282,12 @@ export class SessionService {
       throw new ValidationError("Session kind cannot change within an existing session group");
     }
     if (isGeneratedProjectKind(resolvedKind)) {
-      const label = resolvedKind === "design" ? "Design" : "App";
+      const label = resolvedKind === "design" ? "Design" : resolvedKind === "pdf" ? "PDF" : "App";
       if (input.sourceSessionId && !input.restoreCheckpointId) {
         throw new ValidationError(`${label} sessions cannot start from a source session`);
       }
       if (!existingGroup && !input.restoreCheckpointId && input.repoId) {
         throw new ValidationError(`${label} sessions cannot start from a linked repo`);
-      }
-      if (!existingGroup && !input.restoreCheckpointId && !input.prompt?.trim()) {
-        throw new ValidationError(`${label} sessions require an initial prompt`);
       }
       if (input.hosting === "local") {
         throw new ValidationError(`${label} sessions require cloud hosting`);
@@ -3272,7 +3360,7 @@ export class SessionService {
     if (resolvedRepoId && !resolvedRepo) {
       throw new Error("Repo not found");
     }
-    const resolvedBranch =
+    let resolvedBranch =
       input.branch ??
       seedGroup?.branch ??
       sourceSession?.branch ??
@@ -3338,11 +3426,11 @@ export class SessionService {
           ? resolvedKind === "design"
             ? "Untitled Design"
             : "Untitled App"
-        : restoreCheckpoint
-          ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
-              .trim()
-              .slice(0, MAX_SESSION_NAME_LENGTH)
-          : `Session ${new Date().toLocaleString()}`;
+          : restoreCheckpoint
+            ? `Restore ${shortCommitSha(restoreCheckpoint.commitSha)} ${restoreCheckpoint.subject}`
+                .trim()
+                .slice(0, MAX_SESSION_NAME_LENGTH)
+            : `Session ${new Date().toLocaleString()}`;
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
     // default to local in TRACE_LOCAL_MODE and cloud everywhere else.
@@ -3365,9 +3453,7 @@ export class SessionService {
       );
     }
     const reuseExistingGroupRuntimeSelection =
-      !input.environmentId &&
-      !!existingGroup?.id &&
-      existingGroupHasRuntimeSelection;
+      !input.environmentId && !!existingGroup?.id && existingGroupHasRuntimeSelection;
     const deferRuntimeSelection =
       (input.deferRuntimeSelection === true && resolvedKind !== "app") ||
       (resolvedKind !== "app" &&
@@ -3498,9 +3584,7 @@ export class SessionService {
         select: { id: true },
       });
       if (conflictingGroup) {
-        throw new ValidationError(
-          "This worktree is already imported by another session group",
-        );
+        throw new ValidationError("This worktree is already imported by another session group");
       }
     }
     let runtimeLabel: string | undefined;
@@ -3681,6 +3765,7 @@ export class SessionService {
       });
       resolvedRepoId = managedRepo.id;
       resolvedRepo = managedRepo;
+      resolvedBranch ??= managedRepo.defaultBranch;
       createdManagedRepoId = managedRepo.id;
     }
 
@@ -3723,175 +3808,178 @@ export class SessionService {
     const hasInitialUserContent = !!input.prompt || !!input.imageKeys?.length;
 
     let startEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
-    const session = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const sessionGroup = existingGroup
-        ? await (async () => {
-            const nextGroupData: Prisma.SessionGroupUncheckedUpdateInput = {};
-            if (resolvedChannelId !== undefined && existingGroup.channelId !== resolvedChannelId) {
-              nextGroupData.channelId = resolvedChannelId;
-            }
-            if (existingGroup.repoId == null && resolvedRepoId !== undefined) {
-              nextGroupData.repoId = resolvedRepoId;
-            }
-            if (existingGroup.branch == null && resolvedBranch !== undefined) {
-              nextGroupData.branch = resolvedBranch;
-            }
-            if (Object.keys(nextGroupData).length === 0) {
-              return existingGroup;
-            }
-            return tx.sessionGroup.update({
-              where: { id: existingGroup.id },
-              data: nextGroupData,
+    const session = await prisma
+      .$transaction(async (tx: Prisma.TransactionClient) => {
+        const sessionGroup = existingGroup
+          ? await (async () => {
+              const nextGroupData: Prisma.SessionGroupUncheckedUpdateInput = {};
+              if (
+                resolvedChannelId !== undefined &&
+                existingGroup.channelId !== resolvedChannelId
+              ) {
+                nextGroupData.channelId = resolvedChannelId;
+              }
+              if (existingGroup.repoId == null && resolvedRepoId !== undefined) {
+                nextGroupData.repoId = resolvedRepoId;
+              }
+              if (existingGroup.branch == null && resolvedBranch !== undefined) {
+                nextGroupData.branch = resolvedBranch;
+              }
+              if (Object.keys(nextGroupData).length === 0) {
+                return existingGroup;
+              }
+              return tx.sessionGroup.update({
+                where: { id: existingGroup.id },
+                data: nextGroupData,
+                select: SESSION_GROUP_SUMMARY_SELECT,
+              });
+            })()
+          : await tx.sessionGroup.create({
+              data: {
+                name,
+                kind: resolvedKind,
+                organizationId: input.organizationId,
+                ownerUserId: input.createdById,
+                visibility: newGroupVisibility,
+                forkedFromSessionGroupId: input.forkedFromSessionGroupId ?? undefined,
+                channelId: resolvedChannelId,
+                repoId: resolvedRepoId ?? undefined,
+                branch: resolvedBranch ?? undefined,
+                connection: initialConnection,
+                // Adopting an existing worktree: record the path and flag the group
+                // so re-provisioning re-adopts it and teardown never removes it.
+                ...(adoptWorktreePath ? { workdir: adoptWorktreePath, worktreeAdopted: true } : {}),
+              },
               select: SESSION_GROUP_SUMMARY_SELECT,
             });
-          })()
-        : await tx.sessionGroup.create({
-            data: {
-              name,
-              kind: resolvedKind,
-              organizationId: input.organizationId,
-              ownerUserId: input.createdById,
-              visibility: newGroupVisibility,
-              forkedFromSessionGroupId: input.forkedFromSessionGroupId ?? undefined,
-              channelId: resolvedChannelId,
-              repoId: resolvedRepoId ?? undefined,
-              branch: resolvedBranch ?? undefined,
-              connection: initialConnection,
-              // Adopting an existing worktree: record the path and flag the group
-              // so re-provisioning re-adopts it and teardown never removes it.
-              ...(adoptWorktreePath
-                ? { workdir: adoptWorktreePath, worktreeAdopted: true }
-                : {}),
-            },
-            select: SESSION_GROUP_SUMMARY_SELECT,
-          });
 
-      const projectIds = input.projectId != null ? [input.projectId] : sourceProjectIds;
+        const projectIds = input.projectId != null ? [input.projectId] : sourceProjectIds;
 
-      const session = await tx.session.create({
-        data: {
-          name,
-          agentStatus: initialAgentStatus,
-          sessionStatus: initialSessionStatus,
-          tool,
-          model: model ?? undefined,
-          reasoningEffort: reasoningEffort ?? undefined,
-          hosting,
-          organizationId: input.organizationId,
-          createdById: input.createdById,
-          repoId: resolvedRepoId ?? undefined,
-          branch: resolvedBranch ?? undefined,
-          workdir: sessionGroup.workdir ?? undefined,
-          channelId: resolvedChannelId,
-          sessionGroupId: sessionGroup.id,
-          connection: sessionGroup.connection ?? initialConnection,
-          pendingRun: queueInitialRun
-            ? pendingRunValue([
-                {
-                  type: "run",
-                  prompt: input.prompt ?? null,
-                  interactionMode: input.interactionMode ?? null,
-                  clientSource: normalizeClientSource(input.clientSource),
-                  checkpointContext: null,
-                  ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
-                },
-              ])
-            : undefined,
-          lastUserMessageAt: hasInitialUserContent ? new Date() : undefined,
-          lastMessageAt: hasInitialUserContent ? new Date() : undefined,
-          worktreeDeleted: sessionGroup.worktreeDeleted,
-          readOnlyWorkspace,
-          ...(projectIds.length > 0 && {
-            projects: {
-              create: projectIds.map((projectId: string) => ({ projectId })),
-            },
-          }),
-        },
-        include: SESSION_INCLUDE,
-      });
-
-      if (sourceTicketLinks.length > 0) {
-        await tx.ticketLink.createMany({
-          data: sourceTicketLinks.map((ticketLink: { ticketId: string }) => ({
-            ticketId: ticketLink.ticketId,
-            entityType: "session",
-            entityId: session.id,
-          })),
-          skipDuplicates: true,
+        const session = await tx.session.create({
+          data: {
+            name,
+            agentStatus: initialAgentStatus,
+            sessionStatus: initialSessionStatus,
+            tool,
+            model: model ?? undefined,
+            reasoningEffort: reasoningEffort ?? undefined,
+            hosting,
+            organizationId: input.organizationId,
+            createdById: input.createdById,
+            repoId: resolvedRepoId ?? undefined,
+            branch: resolvedBranch ?? undefined,
+            workdir: sessionGroup.workdir ?? undefined,
+            channelId: resolvedChannelId,
+            sessionGroupId: sessionGroup.id,
+            connection: sessionGroup.connection ?? initialConnection,
+            pendingRun: queueInitialRun
+              ? pendingRunValue([
+                  {
+                    type: "run",
+                    prompt: input.prompt ?? null,
+                    interactionMode: input.interactionMode ?? null,
+                    clientSource: normalizeClientSource(input.clientSource),
+                    checkpointContext: null,
+                    ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
+                  },
+                ])
+              : undefined,
+            lastUserMessageAt: hasInitialUserContent ? new Date() : undefined,
+            lastMessageAt: hasInitialUserContent ? new Date() : undefined,
+            worktreeDeleted: sessionGroup.worktreeDeleted,
+            readOnlyWorkspace,
+            ...(projectIds.length > 0 && {
+              projects: {
+                create: projectIds.map((projectId: string) => ({ projectId })),
+              },
+            }),
+          },
+          include: SESSION_INCLUDE,
         });
-      }
 
-      const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
-        { agentStatus: initialAgentStatus, sessionStatus: initialSessionStatus },
-      ]);
+        if (sourceTicketLinks.length > 0) {
+          await tx.ticketLink.createMany({
+            data: sourceTicketLinks.map((ticketLink: { ticketId: string }) => ({
+              ticketId: ticketLink.ticketId,
+              entityType: "session",
+              entityId: session.id,
+            })),
+            skipDuplicates: true,
+          });
+        }
 
-      const startEventId = input.startEventId ?? randomUUID();
-      const startEventPayload = {
-        session: serializeSession(session),
-        sessionGroup: sessionGroupSnapshot,
-        prompt: input.prompt ?? null,
-        clientSource: normalizeClientSource(input.clientSource),
-        sourceSessionId: input.sourceSessionId ?? null,
-        restoreCheckpointId: restoreCheckpoint?.id ?? null,
-        restoreCheckpointSha: restoreCheckpoint?.commitSha ?? null,
-        ...(input.imageKeys?.length
-          ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
-          : {}),
-      } as Prisma.InputJsonValue;
-      const startEventMetadata = initialCheckpointContextId
-        ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
-        : undefined;
-      const startEventOverride = input.buildStartEvent?.({
-        session,
-        sessionGroup,
-        sessionGroupSnapshot,
-        startEventId,
-        defaultPayload: startEventPayload,
-        defaultMetadata: startEventMetadata,
-      });
+        const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
+          { agentStatus: initialAgentStatus, sessionStatus: initialSessionStatus },
+        ]);
 
-      startEventToPublish = await eventService.create(
-        {
-          id: startEventId,
-          organizationId: input.organizationId,
-          scopeType: "session",
-          scopeId: session.id,
-          eventType: "session_started",
-          payload: startEventOverride?.payload ?? startEventPayload,
-          metadata: startEventOverride?.metadata ?? startEventMetadata,
-          actorType: startEventOverride?.actorType ?? "user",
-          actorId: startEventOverride?.actorId ?? input.createdById,
-          timestamp: startEventOverride?.timestamp,
-          deferPublish: true,
-        },
-        tx,
-      );
-
-      if (input.afterCreate) {
-        await input.afterCreate({
-          tx,
+        const startEventId = input.startEventId ?? randomUUID();
+        const startEventPayload = {
+          session: serializeSession(session),
+          sessionGroup: sessionGroupSnapshot,
+          prompt: input.prompt ?? null,
+          clientSource: normalizeClientSource(input.clientSource),
+          sourceSessionId: input.sourceSessionId ?? null,
+          restoreCheckpointId: restoreCheckpoint?.id ?? null,
+          restoreCheckpointSha: restoreCheckpoint?.commitSha ?? null,
+          ...(input.imageKeys?.length
+            ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
+            : {}),
+        } as Prisma.InputJsonValue;
+        const startEventMetadata = initialCheckpointContextId
+          ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
+          : undefined;
+        const startEventOverride = input.buildStartEvent?.({
           session,
           sessionGroup,
+          sessionGroupSnapshot,
           startEventId,
-          startEventPayload: startEventOverride?.payload ?? startEventPayload,
+          defaultPayload: startEventPayload,
+          defaultMetadata: startEventMetadata,
         });
-      }
 
-      return session;
-    }).catch(async (error: unknown) => {
-      // Don't leak the managed repo minted above if the session row never persists.
-      if (createdManagedRepoId) {
-        await managedGitService
-          .deleteManagedRepo({
+        startEventToPublish = await eventService.create(
+          {
+            id: startEventId,
             organizationId: input.organizationId,
-            repoId: createdManagedRepoId,
-            actorType: input.actorType ?? "user",
-            actorId: input.createdById,
-          })
-          .catch(() => {});
-      }
-      throw error;
-    });
+            scopeType: "session",
+            scopeId: session.id,
+            eventType: "session_started",
+            payload: startEventOverride?.payload ?? startEventPayload,
+            metadata: startEventOverride?.metadata ?? startEventMetadata,
+            actorType: startEventOverride?.actorType ?? "user",
+            actorId: startEventOverride?.actorId ?? input.createdById,
+            timestamp: startEventOverride?.timestamp,
+            deferPublish: true,
+          },
+          tx,
+        );
+
+        if (input.afterCreate) {
+          await input.afterCreate({
+            tx,
+            session,
+            sessionGroup,
+            startEventId,
+            startEventPayload: startEventOverride?.payload ?? startEventPayload,
+          });
+        }
+
+        return session;
+      })
+      .catch(async (error: unknown) => {
+        // Don't leak the managed repo minted above if the session row never persists.
+        if (createdManagedRepoId) {
+          await managedGitService
+            .deleteManagedRepo({
+              organizationId: input.organizationId,
+              repoId: createdManagedRepoId,
+              actorType: input.actorType ?? "user",
+              actorId: input.createdById,
+            })
+            .catch(() => {});
+        }
+        throw error;
+      });
 
     // Publish the start event only after the transaction commits so subscribers
     // don't query for the session before its row is visible (e.g. long-running forks).
@@ -4790,6 +4878,17 @@ export class SessionService {
       await this.delete(session.id, actorType, actorId, eventPayloadExtras);
     }
 
+    for (const key of [group.pdfExportKey, group.pdfExportPendingKey]) {
+      if (key) {
+        void storage.deleteObject(key).catch((error: unknown) => {
+          console.warn("[session] failed to delete PDF object with session group", {
+            key,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
+    }
+
     // If no sessions existed, the group won't have been cascade-deleted, so delete it directly
     if (sessions.length === 0) {
       await prisma.sessionGroup.delete({ where: { id: groupId } });
@@ -4926,6 +5025,7 @@ export class SessionService {
             ownerUserId: true,
             connection: true,
             workdir: true,
+            sessions: { select: { id: true, agentStatus: true } },
           },
         },
         channel: { select: { baseBranch: true } },
@@ -4978,10 +5078,13 @@ export class SessionService {
       hasRuntimeBinding(
         this.parseConnection(prev.sessionGroup.connection),
         prev.sessionGroup.workdir,
+      ) &&
+      prev.sessionGroup.sessions.some(
+        (session) => session.id !== prev.id && session.agentStatus !== "not_started",
       )
     ) {
       throw new ValidationError(
-        "This session group already has a bridge. Use Move to switch the entire session group.",
+        "This session group already has started sessions on a bridge. Use Move to switch the entire session group.",
       );
     }
     let requestedEnvironment: Awaited<
@@ -7001,6 +7104,18 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+    if (session.sessionGroupId) {
+      void managedGitService.retryPendingDesignCommitPreviews(session.sessionGroupId).catch(
+        (error: unknown) => {
+          console.error("[session] design preview retry after runtime reconnect failed", error);
+        },
+      );
+      void managedGitService.retryPdfCommitExport(session.sessionGroupId).catch(
+        (error: unknown) => {
+          console.error("[session] PDF export retry after runtime reconnect failed", error);
+        },
+      );
+    }
   }
 
   /**
@@ -7058,10 +7173,16 @@ export class SessionService {
         );
       }
 
-      // Only emit connection_restored for sessions that were disconnected
-      // and are not already done — done sessions don't need event churn
+      // Emit connection_restored for sessions that were disconnected or whose
+      // provision wait timed out before this (now-connected) runtime's bridge
+      // arrived — but not for sessions already done, which don't need event
+      // churn. Healing `timed_out` here is what lets a slow-booting runtime
+      // reclaim its session after the 300s startup window elapsed.
       const conn = this.parseConnection(session.connection);
-      if (conn.state === "disconnected" && session.agentStatus !== "done") {
+      if (
+        (conn.state === "disconnected" || conn.state === "timed_out") &&
+        session.agentStatus !== "done"
+      ) {
         await this.markConnectionRestored(session.id, runtimeId);
       }
     }
@@ -7292,12 +7413,19 @@ export class SessionService {
     // for seconds per commit). Mark it pending, emit the checkpoint now, and run
     // the capture off-queue — a follow-up git_checkpoint event (merged by id on
     // the client) carries the thumbnail once it's ready.
-    const shouldCaptureAppCheckpoint =
-      didPersistCheckpoint && session.sessionGroup?.kind === "app";
+    const shouldCaptureAppCheckpoint = didPersistCheckpoint && session.sessionGroup?.kind === "app";
+    const shouldPublishDesignPreview =
+      didPersistCheckpoint && session.sessionGroup?.kind === "design";
     if (shouldCaptureAppCheckpoint && persisted) {
       persisted = await prisma.gitCheckpoint.update({
         where: { id: persisted.id },
         data: { captureStatus: "pending" },
+      });
+    }
+    if (shouldPublishDesignPreview && persisted) {
+      persisted = await prisma.gitCheckpoint.update({
+        where: { id: persisted.id },
+        data: { previewStatus: "pending" },
       });
     }
 
@@ -7343,6 +7471,16 @@ export class SessionService {
         sessionId,
         organizationId: session.organizationId,
         sessionGroupId: session.sessionGroupId,
+        userId: session.sessionGroup.ownerUserId,
+      });
+    }
+    if (shouldPublishDesignPreview && persisted && session.sessionGroup) {
+      this.publishDesignCheckpointPreviewAsync({
+        checkpointId: persisted.id,
+        sessionId,
+        organizationId: session.organizationId,
+        sessionGroupId: session.sessionGroupId,
+        commitSha: persisted.commitSha,
         userId: session.sessionGroup.ownerUserId,
       });
     }
@@ -7397,6 +7535,45 @@ export class SessionService {
         // A missing row (checkpoint rewritten away) or capture failure is
         // non-fatal — the checkpoint simply keeps its pending/last status.
         console.error("[app-checkpoint] async capture failed", error);
+      }
+    })();
+  }
+
+  private publishDesignCheckpointPreviewAsync(input: {
+    checkpointId: string;
+    sessionId: string;
+    organizationId: string;
+    sessionGroupId: string;
+    commitSha: string;
+    userId: string;
+  }): void {
+    void (async () => {
+      try {
+        const preview = await designCheckpointPreviewService.publish(input);
+        const updated = await prisma.gitCheckpoint.update({
+          where: { id: input.checkpointId },
+          data: {
+            previewStatus: preview.previewStatus,
+            previewKey: preview.previewKey ?? null,
+            previewUrl: preview.previewUrl ?? null,
+            previewContentType: preview.previewContentType ?? null,
+            previewCapturedAt: preview.previewCapturedAt ?? null,
+          },
+        });
+        await eventService.create({
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: input.sessionId,
+          eventType: "session_output",
+          payload: {
+            type: "git_checkpoint",
+            checkpoint: serializeGitCheckpoint(updated),
+          } as Prisma.InputJsonValue,
+          actorType: "system",
+          actorId: "system",
+        });
+      } catch (error) {
+        console.error("[design-checkpoint] async preview publish failed", error);
       }
     })();
   }
@@ -7538,28 +7715,72 @@ export class SessionService {
 
     if (session.repo) {
       const startMeta = await getSessionStartMetadata(sessionId);
+      const restoredConn: SessionConnectionData = {
+        ...conn,
+        state: "connected",
+        runtimeInstanceId: runtime.id,
+        runtimeLabel: runtime.label,
+        lastSeen: new Date().toISOString(),
+        lastError: undefined,
+        retryCount: 0,
+        autoRetryable: true,
+      };
+      const isGeneratedProject = isGeneratedProjectKind(session.sessionGroup?.kind);
+
+      // Managed-git credentials are bound to a connected runtime. A retry used
+      // to send a regular `prepare` command with the unauthenticated remote,
+      // so app/design workspaces got a 403 after their container restarted.
+      // Record the replacement runtime before minting its credential, then use
+      // the generated-project preparation path that refreshes origin.
+      if (isGeneratedProject) {
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: { connection: connJson(restoredConn) },
+        });
+        await this.syncGroupWorkspaceState(session.sessionGroupId, {
+          connection: connJson(restoredConn),
+        });
+      }
+      const retryPreparation = isGeneratedProject
+        ? {
+            type: "prepare_app" as const,
+            sessionId,
+            sessionGroupId: session.sessionGroupId ?? undefined,
+            sessionGroupKind: session.sessionGroup?.kind,
+            slug: session.sessionGroup?.slug ?? undefined,
+            checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
+            ...(await this.createGeneratedProjectGitCredential({
+              organizationId: session.organizationId,
+              sessionId,
+              runtimeInstanceId: runtime.id,
+              repo: session.repo,
+              actorType,
+              actorId,
+            })),
+          }
+        : {
+            type: "prepare" as const,
+            sessionId,
+            sessionGroupId: session.sessionGroupId ?? undefined,
+            slug: session.sessionGroup?.slug ?? undefined,
+            preserveBranchName: shouldPreserveWorkspaceBranchName({
+              slug: session.sessionGroup?.slug,
+              branch: session.branch,
+              channelBaseBranch: session.channel?.baseBranch,
+            }),
+            repoId: session.repo.id,
+            repoName: session.repo.name,
+            repoRemoteUrl: session.repo.remoteUrl,
+            defaultBranch: session.repo.defaultBranch,
+            branch: session.branch ?? undefined,
+            checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
+            readOnly: session.readOnlyWorkspace,
+          };
       // Re-run workspace preparation — pin delivery to the runtime we just
       // resolved (the home bridge) so no other bridge can intercept.
       const prepResult = sessionRouter.send(
         sessionId,
-        {
-          type: "prepare",
-          sessionId,
-          sessionGroupId: session.sessionGroupId ?? undefined,
-          slug: session.sessionGroup?.slug ?? undefined,
-          preserveBranchName: shouldPreserveWorkspaceBranchName({
-            slug: session.sessionGroup?.slug,
-            branch: session.branch,
-            channelBaseBranch: session.channel?.baseBranch,
-          }),
-          repoId: session.repo.id,
-          repoName: session.repo.name,
-          repoRemoteUrl: session.repo.remoteUrl,
-          defaultBranch: session.repo.defaultBranch,
-          branch: session.branch ?? undefined,
-          checkpointSha: startMeta.restoreCheckpointSha ?? undefined,
-          readOnly: session.readOnlyWorkspace,
-        },
+        retryPreparation,
         { expectedHomeRuntimeId: runtime.id, organizationId: session.organizationId },
       );
 
@@ -7577,17 +7798,6 @@ export class SessionService {
       }
 
       // Restore the connection while leaving the session in its prior idle state.
-      const restoredConn: SessionConnectionData = {
-        ...conn,
-        state: "connected",
-        runtimeInstanceId: runtime.id,
-        runtimeLabel: runtime.label,
-        lastSeen: new Date().toISOString(),
-        lastError: undefined,
-        retryCount: 0,
-        autoRetryable: true,
-      };
-
       // Preserve agent/session status unless it was previously marked terminal by a retryable failure.
       const updateData: Prisma.SessionUpdateInput = {
         connection: connJson(restoredConn),
@@ -8918,6 +9128,83 @@ export class SessionService {
     return true;
   }
 
+  async updatePdfFormat(
+    sessionGroupId: string,
+    value: unknown,
+    organizationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const format = validatePdfPageFormat(value);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      { requireWrite: true },
+    );
+    if (runtime.kind !== "pdf") throw new ValidationError("PDF session not found");
+    await sessionRouter.writeFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      "document.format.json",
+      `${JSON.stringify(format, null, 2)}\n`,
+      runtime.workdirHint,
+    );
+    await managedGitService.updatePdfFormat(sessionGroupId, format, {
+      actorType: "user",
+      actorId: userId,
+    });
+    return true;
+  }
+
+  async requestPdfExport(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string | null,
+  ): Promise<boolean> {
+    if (!userId) throw new AuthenticationError();
+    await assertSessionGroupAccess(sessionGroupId, userId, organizationId);
+    await managedGitService.retryPdfCommitExport(sessionGroupId);
+    return true;
+  }
+
+  private async pdfArtifactUrl(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string | null,
+    download: boolean,
+  ) {
+    if (!userId) throw new AuthenticationError();
+    await assertSessionGroupAccess(sessionGroupId, userId, organizationId);
+    const group = await prisma.sessionGroup.findFirst({
+      where: {
+        id: sessionGroupId,
+        organizationId,
+        kind: "pdf",
+      },
+      select: {
+        pdfExportStatus: true,
+        pdfExportKey: true,
+        pdfExportCommitSha: true,
+      },
+    });
+    if (!group) return null;
+    if (group.pdfExportStatus !== "captured" || !group.pdfExportKey) return null;
+    return storage.getGetUrl(
+      group.pdfExportKey,
+      download
+        ? { downloadFilename: `document-${group.pdfExportCommitSha?.slice(0, 8) ?? "latest"}.pdf` }
+        : undefined,
+    );
+  }
+
+  async pdfPreviewUrl(sessionGroupId: string, organizationId: string, userId: string | null) {
+    return this.pdfArtifactUrl(sessionGroupId, organizationId, userId, false);
+  }
+
+  async pdfDownloadUrl(sessionGroupId: string, organizationId: string, userId: string | null) {
+    return this.pdfArtifactUrl(sessionGroupId, organizationId, userId, true);
+  }
+
   async commitFileChanges(
     sessionGroupId: string,
     message: string | undefined,
@@ -9335,10 +9622,10 @@ export class SessionService {
         });
         const bindingChanged = Boolean(
           currentGroup &&
-            hasRuntimeBindingChanged(
-              this.parseConnection(currentGroup.connection),
-              this.parseConnection(patch.connection),
-            ),
+          hasRuntimeBindingChanged(
+            this.parseConnection(currentGroup.connection),
+            this.parseConnection(patch.connection),
+          ),
         );
         shouldRebindSessions ||= bindingChanged;
         shouldDestroyGroupTerminals ||= bindingChanged;
@@ -9997,9 +10284,17 @@ export class SessionService {
       // race-safely inside the conditional update below.
       if (isRuntimeComputeGone(this.parseConnection(cloudSession.connection))) continue;
 
+      // Never reap a runtime that is still coming up. Reviving an idle group
+      // provisions fresh compute without a new message, so the group keeps
+      // matching this idle query while its runtime boots — without this guard
+      // the sweep kills it mid image-pull and the group can never be revived.
+      // Re-checked race-safely inside the conditional update below.
+      if (isRuntimeStartingWithinGrace(this.parseConnection(cloudSession.connection), now)) continue;
+
       const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(
         group,
         cloudSession,
+        now,
       );
       if (!cleanedRuntime) continue;
 
@@ -10012,12 +10307,16 @@ export class SessionService {
   private async deprovisionIdleCloudSessionGroupRuntime(
     group: IdleCloudSessionGroupCandidate,
     cloudSession: IdleCloudSessionGroupCandidate["sessions"][number],
+    now: number,
   ): Promise<boolean> {
     const disconnectFlagged = await this.updateConnectionConditional(cloudSession.id, (conn) => {
       // The runtime's compute is already gone. Re-stopping it would just
       // re-emit stopping/stopped events on every idle sweep without ever
       // settling, since an idle group is re-selected each tick.
       if (isRuntimeComputeGone(conn)) return null;
+      // A runtime that began starting up between selection and this update must
+      // not be torn down mid-boot; leave it for a later sweep once it settles.
+      if (isRuntimeStartingWithinGrace(conn, now)) return null;
       return {
         ...conn,
         disconnectOnDeprovision: true,
@@ -10040,6 +10339,25 @@ export class SessionService {
     if (!session) return false;
 
     const runtimeSession = await this.withGroupRuntimeState(session);
+
+    // Final race guard: a restart can provision a fresh runtime between our flag
+    // above and this teardown. Flagging is version-checked, but the flag lands
+    // before the restart's start_requested, so it doesn't conflict — and killing
+    // the runtime now would reap what the user just started. Re-read immediately
+    // before destroying; if the session re-entered a startup state, bail out and
+    // clear the now-stale flag so a later sweep (or the restart itself) settles it.
+    const latest = await prisma.session.findUnique({
+      where: { id: cloudSession.id },
+      select: { connection: true },
+    });
+    if (latest && isRuntimeStartingWithinGrace(this.parseConnection(latest.connection), now)) {
+      await this.updateConnectionConditional(cloudSession.id, (conn) => {
+        if (conn.disconnectOnDeprovision !== true) return null;
+        return { ...conn, disconnectOnDeprovision: false, disconnectReason: undefined };
+      });
+      return false;
+    }
+
     terminalRelay.destroyAllForSessionGroup(group.id);
     try {
       await sessionRouter.destroyRuntime(

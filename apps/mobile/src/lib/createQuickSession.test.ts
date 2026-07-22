@@ -229,14 +229,13 @@ describe("createApplication", () => {
     fetchSessionGroupDetailMock.mockResolvedValue({ ok: true, error: null });
 
     const { createApplication } = await import("./createQuickSession");
-    const created = await createApplication("  Build a launch tracker  ");
+    const created = await createApplication();
 
     expect(created).toBe(true);
     expect(mutationMock).toHaveBeenCalledWith(START_SESSION_MUTATION, {
       input: {
         kind: "app",
         hosting: "cloud",
-        prompt: "Build a launch tracker",
       },
     });
     expect(setOverlaySessionIdMock).toHaveBeenCalledWith("session_app");
@@ -244,18 +243,40 @@ describe("createApplication", () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
-  it("keeps the creation sheet open when creation fails", async () => {
+  it("reports application creation failures", async () => {
     mutationMock.mockReturnValue({
       toPromise: async () => ({ error: new Error("cloud unavailable") }),
     });
 
     const { createApplication } = await import("./createQuickSession");
-    const created = await createApplication("Build a launch tracker");
+    const created = await createApplication();
 
     expect(created).toBe(false);
     expect(replaceMock).not.toHaveBeenCalled();
-    expect(alertMock).toHaveBeenCalledWith("Couldn't build application", "cloud unavailable");
+    expect(alertMock).toHaveBeenCalledWith("Couldn't create application", "cloud unavailable");
   });
+
+  it("creates a cloud design session and opens it", async () => {
+    mutationMock.mockReturnValue({
+      toPromise: async () => ({
+        data: { startSession: { id: "session_design", sessionGroupId: "group_design" } },
+      }),
+    });
+    fetchSessionGroupDetailMock.mockResolvedValue({ ok: true, error: null });
+
+    const { createDesign } = await import("./createQuickSession");
+    const created = await createDesign();
+
+    expect(created).toBe(true);
+    expect(mutationMock).toHaveBeenCalledWith(START_SESSION_MUTATION, {
+      input: {
+        kind: "design",
+        hosting: "cloud",
+      },
+    });
+    expect(replaceMock).toHaveBeenCalledWith("/sessions/group_design/session_design");
+  });
+
 });
 
 describe("startPlanImplementationSession", () => {

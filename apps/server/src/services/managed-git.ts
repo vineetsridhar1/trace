@@ -14,6 +14,14 @@ import {
 } from "../lib/git-http.js";
 import { eventService } from "./event.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
+import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
+import { storage } from "../lib/storage/index.js";
+import { sessionRouter } from "../lib/session-router.js";
+import {
+  parsePdfPageFormat,
+  validatePdfPageFormat,
+  type PdfPageFormat,
+} from "../lib/pdf-format.js";
 
 const JWT_SECRET = resolveJwtSecret();
 
@@ -23,6 +31,25 @@ const RUNTIME_GIT_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 // User clone/export tokens are short-lived and auditable — minted on demand for
 // an explicit download/clone action.
 const USER_GIT_TOKEN_TTL_SECONDS = 60 * 60;
+// This exceeds the export request timeout so the reconciler never reclaims a
+// still-running export from another API task.
+const DESIGN_PREVIEW_RETRY_DELAY_MS = 90_000;
+const PDF_EXPORT_RETRY_DELAY_MS = 90_000;
+
+function isPdfStorageKeyForGroup(key: string, organizationId: string, sessionGroupId: string) {
+  return key.startsWith(`pdf-exports/${organizationId}/${sessionGroupId}/`);
+}
+
+async function deletePdfObject(key: string): Promise<void> {
+  try {
+    await storage.deleteObject(key);
+  } catch (error) {
+    console.warn("[managed-git] failed to delete superseded PDF object", {
+      key,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 export type GitCapability = "read" | "write";
 export type GitTokenScope = "runtime" | "user";
@@ -302,6 +329,14 @@ class ManagedGitService {
     const hasWrite = auth.capabilities.includes("write");
     const hasRead = auth.capabilities.includes("read") || hasWrite;
     if (needsWrite ? !hasWrite : !hasRead) {
+      console.warn("[managed-git] authorize denied: missing capability", {
+        service: input.service,
+        needsWrite,
+        scope: auth.scope,
+        subject: auth.subject,
+        capabilities: auth.capabilities,
+        repoId: input.repoId,
+      });
       throw new AuthorizationError("Managed git token lacks the required capability");
     }
     if (auth.scope === "runtime" && !(await this.isLiveRuntimeBinding(auth))) {
@@ -334,7 +369,19 @@ class ManagedGitService {
       return false;
     }
     const connection = session.connection as Record<string, unknown>;
-    return connection.runtimeInstanceId === auth.subject && connection.state === "connected";
+    const live = connection.runtimeInstanceId === auth.subject && connection.state === "connected";
+    if (!live) {
+      // Diagnostic for push 403s: shows exactly which side is stale — the
+      // token's runtime instance vs. the session's current live runtime/state.
+      console.warn("[managed-git] runtime binding mismatch (push will 403)", {
+        sessionId: auth.sessionId,
+        repoId: auth.repoId,
+        tokenSubject: auth.subject,
+        connectionRuntimeInstanceId: connection.runtimeInstanceId,
+        connectionState: connection.state,
+      });
+    }
+    return live;
   }
 
   /**
@@ -365,6 +412,596 @@ class ManagedGitService {
       payload: { repoId: input.repoId, provider: "managed", refs },
       actorType: input.actorType,
       actorId: input.actorId,
+    });
+
+    // A managed push is the durable source of truth for Design previews. This
+    // deliberately does not create or depend on a Trace checkpoint.
+    for (const command of input.commands) {
+      if (!command.ref.startsWith("refs/heads/") || /^0+$/.test(command.newSha)) continue;
+      const branch = command.ref.slice("refs/heads/".length);
+      const artifactInput = {
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        branch,
+        commitSha: command.newSha,
+      };
+      await Promise.all([
+        this.enqueueDesignCommitPreview(artifactInput).catch((error: unknown) => {
+          console.error("[managed-git] failed to enqueue design preview", error);
+        }),
+        this.enqueuePdfCommitExport(artifactInput).catch((error: unknown) => {
+          console.error("[managed-git] failed to enqueue PDF export", error);
+        }),
+      ]);
+    }
+  }
+
+  private async enqueuePdfCommitExport(input: {
+    organizationId: string;
+    repoId: string;
+    branch: string;
+    commitSha: string;
+    reconcileCommittedFormat?: boolean;
+  }): Promise<void> {
+    let committedFormat: PdfPageFormat | null = null;
+    const formatContent =
+      input.reconcileCommittedFormat === false
+        ? null
+        : await gitStorage.readFileAtCommit(
+            input.organizationId,
+            input.repoId,
+            input.commitSha,
+            "document.format.json",
+          );
+    if (formatContent) {
+      try {
+        committedFormat = parsePdfPageFormat(formatContent);
+      } catch (error) {
+        console.warn("[managed-git] ignoring invalid committed PDF format", {
+          repoId: input.repoId,
+          commitSha: input.commitSha,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        OR: [
+          { branch: input.branch },
+          { branch: null, repo: { is: { defaultBranch: input.branch } } },
+        ],
+        kind: "pdf",
+      },
+      select: {
+        id: true,
+        branch: true,
+        pdfPageWidth: true,
+        pdfPageHeight: true,
+        pdfPageUnit: true,
+        pdfFormatVersion: true,
+        pdfExportKey: true,
+        pdfExportPendingKey: true,
+        sessions: {
+          orderBy: { updatedAt: "desc" },
+          select: { id: true, connection: true },
+        },
+      },
+    });
+
+    await Promise.all(
+      groups.map(async (group) => {
+        const formatChanged =
+          committedFormat &&
+          (group.pdfPageWidth !== committedFormat.width ||
+            group.pdfPageHeight !== committedFormat.height ||
+            group.pdfPageUnit !== committedFormat.unit);
+        const formatVersion = group.pdfFormatVersion + (formatChanged ? 1 : 0);
+        const format =
+          committedFormat ??
+          validatePdfPageFormat({
+            width: group.pdfPageWidth,
+            height: group.pdfPageHeight,
+            unit: group.pdfPageUnit,
+          });
+        const exportKey = `pdf-exports/${input.organizationId}/${group.id}/${input.commitSha}-v${formatVersion}-${randomUUID()}.pdf`;
+        const requestId = randomUUID();
+        const publishing = await prisma.sessionGroup.update({
+          where: { id: group.id },
+          data: {
+            ...(group.branch == null ? { branch: input.branch } : {}),
+            ...(formatChanged
+              ? {
+                  pdfPageWidth: format.width,
+                  pdfPageHeight: format.height,
+                  pdfPageUnit: format.unit,
+                  pdfFormatVersion: formatVersion,
+                }
+              : {}),
+            pdfExportStatus: "publishing",
+            pdfExportPendingKey: exportKey,
+            pdfExportCommitSha: input.commitSha,
+            pdfExportFormatVersion: formatVersion,
+            pdfExportRequestId: requestId,
+            pdfExportAttemptedAt: new Date(),
+            pdfExportError: null,
+          },
+          select: {
+            id: true,
+            pdfExportStatus: true,
+            pdfExportCommitSha: true,
+            pdfExportCapturedAt: true,
+            pdfExportError: true,
+            pdfPageWidth: true,
+            pdfPageHeight: true,
+            pdfPageUnit: true,
+            pdfFormatVersion: true,
+          },
+        });
+        await this.emitPdfExportUpdate(input.organizationId, publishing);
+        const uploadTarget = await storage.getUploadTarget(
+          exportKey,
+          "application/pdf",
+          15 * 1024 * 1024,
+        );
+        if (group.pdfExportPendingKey && group.pdfExportPendingKey !== exportKey) {
+          void deletePdfObject(group.pdfExportPendingKey);
+        }
+        const session = group.sessions.find((candidate) => {
+          const connection = candidate.connection;
+          return (
+            connection &&
+            typeof connection === "object" &&
+            !Array.isArray(connection) &&
+            (connection as Record<string, unknown>).state === "connected"
+          );
+        });
+        if (!session) {
+          await this.completePdfExport({
+            organizationId: input.organizationId,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            requestId,
+            storageKey: exportKey,
+            error: "No connected PDF runtime",
+          });
+          return;
+        }
+        const connection = session.connection as Record<string, unknown>;
+        const runtimeInstanceId =
+          typeof connection.runtimeInstanceId === "string"
+            ? connection.runtimeInstanceId
+            : undefined;
+        const delivery = sessionRouter.send(
+          session.id,
+          {
+            type: "pdf_export",
+            requestId,
+            sessionId: session.id,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            format,
+            storageKey: exportKey,
+            uploadTarget,
+          },
+          { expectedHomeRuntimeId: runtimeInstanceId, organizationId: input.organizationId },
+        );
+        if (delivery !== "delivered") {
+          await this.completePdfExport({
+            organizationId: input.organizationId,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            requestId,
+            storageKey: exportKey,
+            error: `PDF runtime unavailable: ${delivery}`,
+          });
+        }
+      }),
+    );
+  }
+
+  async completePdfExport(input: {
+    organizationId: string;
+    sessionGroupId: string;
+    commitSha: string;
+    requestId: string;
+    storageKey: string;
+    error?: string;
+  }): Promise<void> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: {
+        id: input.sessionGroupId,
+        organizationId: input.organizationId,
+        kind: "pdf",
+        pdfExportCommitSha: input.commitSha,
+        pdfExportRequestId: input.requestId,
+      },
+      select: { pdfExportPendingKey: true, pdfExportKey: true },
+    });
+    if (!group) {
+      if (isPdfStorageKeyForGroup(input.storageKey, input.organizationId, input.sessionGroupId)) {
+        void deletePdfObject(input.storageKey);
+      }
+      return;
+    }
+    if (group.pdfExportPendingKey !== input.storageKey) {
+      if (isPdfStorageKeyForGroup(input.storageKey, input.organizationId, input.sessionGroupId)) {
+        void deletePdfObject(input.storageKey);
+      }
+      return;
+    }
+    const completed = await prisma.sessionGroup.updateMany({
+      where: {
+        id: input.sessionGroupId,
+        pdfExportCommitSha: input.commitSha,
+        pdfExportRequestId: input.requestId,
+        pdfExportPendingKey: input.storageKey,
+      },
+      data: input.error
+        ? {
+            pdfExportStatus: "failed",
+            pdfExportPendingKey: null,
+            pdfExportRequestId: null,
+            pdfExportError: input.error.slice(0, 500),
+          }
+        : {
+            pdfExportStatus: "captured",
+            pdfExportKey: group.pdfExportPendingKey,
+            pdfExportPendingKey: null,
+            pdfExportRequestId: null,
+            pdfExportCapturedAt: new Date(),
+            pdfExportError: null,
+          },
+    });
+    if (completed.count === 0) {
+      if (isPdfStorageKeyForGroup(input.storageKey, input.organizationId, input.sessionGroupId)) {
+        void deletePdfObject(input.storageKey);
+      }
+      return;
+    }
+    if (input.error && group.pdfExportPendingKey) {
+      void deletePdfObject(group.pdfExportPendingKey);
+    } else if (
+      !input.error &&
+      group.pdfExportKey &&
+      group.pdfExportKey !== group.pdfExportPendingKey
+    ) {
+      void deletePdfObject(group.pdfExportKey);
+    }
+    const updated = await prisma.sessionGroup.findUniqueOrThrow({
+      where: { id: input.sessionGroupId },
+      select: {
+        id: true,
+        pdfExportStatus: true,
+        pdfExportCommitSha: true,
+        pdfExportCapturedAt: true,
+        pdfExportError: true,
+        pdfPageWidth: true,
+        pdfPageHeight: true,
+        pdfPageUnit: true,
+        pdfFormatVersion: true,
+      },
+    });
+    await this.emitPdfExportUpdate(input.organizationId, updated);
+  }
+
+  async retryPdfCommitExport(
+    sessionGroupId: string,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: {
+        id: true,
+        kind: true,
+        organizationId: true,
+        repoId: true,
+        branch: true,
+        pdfExportStatus: true,
+        pdfExportKey: true,
+        pdfExportCommitSha: true,
+        pdfExportFormatVersion: true,
+        pdfFormatVersion: true,
+        pdfExportAttemptedAt: true,
+        repo: { select: { defaultBranch: true } },
+      },
+    });
+    if (!group || group.kind !== "pdf" || !group.repoId || !group.repo) return;
+
+    const branch = group.branch ?? group.repo.defaultBranch;
+    const refs = await gitStorage.listRefs(group.organizationId, group.repoId);
+    const commitSha = refs.get(`refs/heads/${branch}`);
+    if (!commitSha) return;
+    const exportIsCurrent =
+      group.pdfExportCommitSha === commitSha &&
+      group.pdfExportFormatVersion === group.pdfFormatVersion;
+    if (
+      !options.force &&
+      exportIsCurrent &&
+      group.pdfExportStatus === "captured" &&
+      group.pdfExportKey
+    )
+      return;
+    if (
+      !options.force &&
+      exportIsCurrent &&
+      group.pdfExportStatus === "publishing" &&
+      group.pdfExportAttemptedAt &&
+      group.pdfExportAttemptedAt.getTime() > Date.now() - PDF_EXPORT_RETRY_DELAY_MS
+    )
+      return;
+
+    await this.enqueuePdfCommitExport({
+      organizationId: group.organizationId,
+      repoId: group.repoId,
+      branch,
+      commitSha,
+      reconcileCommittedFormat: false,
+    });
+  }
+
+  async updatePdfFormat(
+    sessionGroupId: string,
+    value: unknown,
+    actor: { actorType: ActorType; actorId: string } = {
+      actorType: "system",
+      actorId: "system",
+    },
+  ): Promise<void> {
+    const format = validatePdfPageFormat(value);
+    const current = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: {
+        id: true,
+        kind: true,
+        organizationId: true,
+        pdfPageWidth: true,
+        pdfPageHeight: true,
+        pdfPageUnit: true,
+      },
+    });
+    if (!current || current.kind !== "pdf") throw new ValidationError("PDF session not found");
+    if (
+      current.pdfPageWidth === format.width &&
+      current.pdfPageHeight === format.height &&
+      current.pdfPageUnit === format.unit
+    )
+      return;
+    const updated = await prisma.sessionGroup.update({
+      where: { id: sessionGroupId },
+      data: {
+        pdfPageWidth: format.width,
+        pdfPageHeight: format.height,
+        pdfPageUnit: format.unit,
+        pdfFormatVersion: { increment: 1 },
+        pdfExportStatus: "pending",
+        pdfExportError: null,
+      },
+      select: {
+        id: true,
+        pdfExportStatus: true,
+        pdfExportCommitSha: true,
+        pdfExportCapturedAt: true,
+        pdfExportError: true,
+        pdfPageWidth: true,
+        pdfPageHeight: true,
+        pdfPageUnit: true,
+        pdfFormatVersion: true,
+      },
+    });
+    await this.emitPdfExportUpdate(current.organizationId, updated, actor);
+    await this.retryPdfCommitExport(sessionGroupId, { force: true }).catch((error: unknown) => {
+      console.error("[managed-git] failed to enqueue PDF export after a format update", error);
+    });
+  }
+
+  async retryPendingPdfExports(sessionGroupId?: string): Promise<void> {
+    const retryBefore = new Date(Date.now() - PDF_EXPORT_RETRY_DELAY_MS);
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        ...(sessionGroupId ? { id: sessionGroupId } : {}),
+        kind: "pdf",
+        OR: [
+          { pdfExportStatus: { in: ["pending", "failed"] } },
+          { pdfExportStatus: "publishing", pdfExportAttemptedAt: { lt: retryBefore } },
+        ],
+      },
+      select: { id: true },
+      take: 50,
+    });
+    await Promise.all(groups.map((group) => this.retryPdfCommitExport(group.id, { force: true })));
+  }
+
+  private async emitPdfExportUpdate(
+    organizationId: string,
+    group: {
+      id: string;
+      pdfExportStatus: string | null;
+      pdfExportCommitSha: string | null;
+      pdfExportCapturedAt: Date | null;
+      pdfExportError: string | null;
+      pdfPageWidth: number;
+      pdfPageHeight: number;
+      pdfPageUnit: string;
+      pdfFormatVersion: number;
+    },
+    actor: { actorType: ActorType; actorId: string } = {
+      actorType: "system",
+      actorId: "system",
+    },
+  ): Promise<void> {
+    await eventService.create({
+      organizationId,
+      scopeType: "system",
+      scopeId: group.id,
+      eventType: "pdf_export_updated",
+      payload: {
+        sessionGroupId: group.id,
+        pdfExportStatus: group.pdfExportStatus,
+        pdfExportCommitSha: group.pdfExportCommitSha,
+        pdfExportCapturedAt: group.pdfExportCapturedAt?.toISOString() ?? null,
+        pdfExportError: group.pdfExportError,
+        pdfPageWidth: group.pdfPageWidth,
+        pdfPageHeight: group.pdfPageHeight,
+        pdfPageUnit: group.pdfPageUnit,
+        pdfFormatVersion: group.pdfFormatVersion,
+      },
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+    });
+  }
+
+  async retryPendingDesignCommitPreviews(sessionGroupId?: string): Promise<void> {
+    const retryBefore = new Date(Date.now() - DESIGN_PREVIEW_RETRY_DELAY_MS);
+    await prisma.sessionGroup.updateMany({
+      where: {
+        ...(sessionGroupId ? { id: sessionGroupId } : {}),
+        kind: "design",
+        designPreviewStatus: "publishing",
+        designPreviewAttemptedAt: { lt: retryBefore },
+      },
+      data: { designPreviewStatus: "pending" },
+    });
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        ...(sessionGroupId ? { id: sessionGroupId } : {}),
+        kind: "design",
+        designPreviewCommitSha: { not: null },
+        designPreviewStatus: { in: ["pending", "failed", "unavailable"] },
+        OR: [{ designPreviewAttemptedAt: null }, { designPreviewAttemptedAt: { lt: retryBefore } }],
+      },
+      select: { id: true, organizationId: true, ownerUserId: true, designPreviewCommitSha: true },
+    });
+    await Promise.all(
+      groups.map((group) =>
+        this.publishDesignCommitPreview({
+          organizationId: group.organizationId,
+          sessionGroupId: group.id,
+          userId: group.ownerUserId,
+          commitSha: group.designPreviewCommitSha!,
+        }),
+      ),
+    );
+  }
+
+  private async enqueueDesignCommitPreview(input: {
+    organizationId: string;
+    repoId: string;
+    branch: string;
+    commitSha: string;
+  }): Promise<void> {
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        OR: [
+          { branch: input.branch },
+          { branch: null, repo: { is: { defaultBranch: input.branch } } },
+        ],
+        kind: "design",
+      },
+      select: { id: true, ownerUserId: true, branch: true },
+    });
+
+    await Promise.all(
+      groups.map(async (group) => {
+        const pending = await prisma.sessionGroup.update({
+          where: { id: group.id },
+          data: {
+            ...(group.branch == null ? { branch: input.branch } : {}),
+            designPreviewStatus: "pending",
+            designPreviewKey: null,
+            designPreviewCommitSha: input.commitSha,
+            designPreviewCapturedAt: null,
+            designPreviewAttemptedAt: null,
+          },
+          select: { id: true, designPreviewStatus: true, designPreviewCommitSha: true },
+        });
+        await this.emitDesignPreviewUpdate(input.organizationId, pending);
+        void this.publishDesignCommitPreview({
+          organizationId: input.organizationId,
+          sessionGroupId: group.id,
+          commitSha: input.commitSha,
+          userId: group.ownerUserId,
+        }).catch((error: unknown) => {
+          console.error("[managed-git] design commit preview publish failed", error);
+        });
+      }),
+    );
+  }
+
+  private async publishDesignCommitPreview(input: {
+    organizationId: string;
+    sessionGroupId: string;
+    userId: string;
+    commitSha: string;
+  }): Promise<void> {
+    const attemptedAt = new Date();
+    const claimed = await prisma.sessionGroup.updateMany({
+      where: {
+        id: input.sessionGroupId,
+        designPreviewCommitSha: input.commitSha,
+        designPreviewStatus: { in: ["pending", "failed", "unavailable"] },
+      },
+      data: { designPreviewStatus: "publishing", designPreviewAttemptedAt: attemptedAt },
+    });
+    if (claimed.count === 0) return;
+
+    let preview: Awaited<ReturnType<typeof designCheckpointPreviewService.publishCommit>>;
+    try {
+      preview = await designCheckpointPreviewService.publishCommit(input);
+    } catch (error) {
+      console.error("[managed-git] design commit preview export failed", error);
+      preview = { previewStatus: "failed", previewCapturedAt: new Date() };
+    }
+    const updated = await prisma.sessionGroup.updateMany({
+      where: {
+        id: input.sessionGroupId,
+        designPreviewCommitSha: input.commitSha,
+        designPreviewStatus: "publishing",
+        designPreviewAttemptedAt: attemptedAt,
+      },
+      data: {
+        designPreviewStatus: preview.previewStatus,
+        designPreviewKey: preview.previewKey ?? null,
+        designPreviewCapturedAt: preview.previewCapturedAt ?? null,
+      },
+    });
+    if (updated.count > 0) {
+      await this.emitDesignPreviewUpdate(input.organizationId, {
+        id: input.sessionGroupId,
+        designPreviewStatus: preview.previewStatus,
+        designPreviewCommitSha: input.commitSha,
+        designPreviewKey: preview.previewKey ?? null,
+      });
+    }
+  }
+
+  private async emitDesignPreviewUpdate(
+    organizationId: string,
+    sessionGroup: {
+      id: string;
+      designPreviewStatus: string | null;
+      designPreviewCommitSha: string | null;
+      designPreviewKey?: string | null;
+    },
+  ): Promise<void> {
+    await eventService.create({
+      organizationId,
+      scopeType: "system",
+      scopeId: sessionGroup.id,
+      eventType: "design_preview_updated",
+      payload: {
+        sessionGroupId: sessionGroup.id,
+        designPreviewStatus: sessionGroup.designPreviewStatus,
+        designPreviewCommitSha: sessionGroup.designPreviewCommitSha,
+        designPreviewUrl: sessionGroup.designPreviewKey
+          ? `/design-previews/groups/${encodeURIComponent(sessionGroup.id)}`
+          : null,
+      },
+      actorType: "system",
+      actorId: "system",
     });
   }
 }

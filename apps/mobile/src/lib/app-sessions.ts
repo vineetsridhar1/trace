@@ -25,8 +25,19 @@ export function appSessionSubtitle({
 }
 
 export function buildAppSessionGroupIds(state: EntityState): string[] {
+  return buildGeneratedProjectSessionGroupIds(state, "app");
+}
+
+export function buildDesignSessionGroupIds(state: EntityState): string[] {
+  return buildGeneratedProjectSessionGroupIds(state, "design");
+}
+
+function buildGeneratedProjectSessionGroupIds(
+  state: EntityState,
+  kind: "app" | "design",
+): string[] {
   return (Object.values(state.sessionGroups) as SessionGroupEntity[])
-    .filter((group) => group.kind === "app" && !group.archivedAt && group.status !== "archived")
+    .filter((group) => group.kind === kind && !group.archivedAt && group.status !== "archived")
     .sort(
       (a, b) =>
         timestamp(b._sortTimestamp ?? b.updatedAt ?? b.createdAt) -
@@ -36,6 +47,20 @@ export function buildAppSessionGroupIds(state: EntityState): string[] {
 }
 
 export function findReadyAppPreviewUrl(
+  sessionGroupId: string,
+  endpoints: SessionEndpoint[],
+  processes: SessionApplicationProcess[],
+): string | null {
+  const endpointId = findReadyAppPreviewEndpointId(sessionGroupId, endpoints, processes);
+  return endpoints.find((endpoint) => endpoint.id === endpointId)?.url ?? null;
+}
+
+/**
+ * Finds the endpoint whose short-lived preview credential should be loaded.
+ * Endpoint URLs are private, so mobile must request a credential before opening
+ * one in a WebView.
+ */
+export function findReadyAppPreviewEndpointId(
   sessionGroupId: string,
   endpoints: SessionEndpoint[],
   processes: SessionApplicationProcess[],
@@ -54,6 +79,6 @@ export function findReadyAppPreviewUrl(
         endpoint.status === "enabled" &&
         Boolean(endpoint.url) &&
         runningProcessKeys.has(`${endpoint.appConfigId}:${endpoint.processConfigId}`),
-    )?.url ?? null
+    )?.id ?? null
   );
 }

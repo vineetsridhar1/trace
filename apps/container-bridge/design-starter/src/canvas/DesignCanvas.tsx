@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { DesignArtboard } from "./DesignArtboard";
-import type { DesignManifest, DesignScreen } from "./manifest";
+import { DesignSectionLabel } from "./DesignSectionLabel";
+import { placeScreens } from "./layout";
+import type { DesignManifest } from "./manifest";
 import { resolveScreenComponent } from "./screen-modules";
 import { useCanvasViewport } from "./useCanvasViewport";
-
-const GAP = 96;
-const SECTION_GAP = 180;
-
-type PlacedScreen = { screen: DesignScreen; x: number; y: number; sectionName: string };
 
 export function DesignCanvas({
   manifest,
@@ -22,25 +19,7 @@ export function DesignCanvas({
   const { viewport, setViewport, onPointerDown, onPointerMove, endPointerDrag, zoomAtCenter } =
     useCanvasViewport(containerRef);
 
-  const placed = useMemo(() => {
-    const byId = new Map(manifest.screens.map((screen) => [screen.id, screen]));
-    let sectionX = 0;
-    const result: PlacedScreen[] = [];
-    for (const section of manifest.sections) {
-      let fallbackX = sectionX;
-      let maxRight = sectionX;
-      for (const id of section.screenIds) {
-        const screen = byId.get(id)!;
-        const x = screen.position ? sectionX + screen.position.x : fallbackX;
-        const y = screen.position?.y ?? 54;
-        result.push({ screen, x, y, sectionName: section.name });
-        fallbackX = x + screen.viewport.width + GAP;
-        maxRight = Math.max(maxRight, x + screen.viewport.width);
-      }
-      sectionX = maxRight + SECTION_GAP;
-    }
-    return result;
-  }, [manifest]);
+  const placed = useMemo(() => placeScreens(manifest), [manifest]);
 
   const fit = useCallback(
     (screenId?: string) => {
@@ -77,6 +56,15 @@ export function DesignCanvas({
   }, [fit]);
 
   const visible = focusedId ? placed.filter((item) => item.screen.id === focusedId) : placed;
+  const sectionLabels = Array.from(
+    visible.reduce((labels, item) => {
+      const existing = labels.get(item.sectionId);
+      if (!existing || item.y < existing.y || (item.y === existing.y && item.x < existing.x)) {
+        labels.set(item.sectionId, item);
+      }
+      return labels;
+    }, new Map<string, (typeof visible)[number]>()),
+  );
 
   return (
     <div
@@ -87,23 +75,33 @@ export function DesignCanvas({
       onPointerUp={endPointerDrag}
       onPointerCancel={endPointerDrag}
     >
-      <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(#71717a_1px,transparent_1px)] [background-size:24px_24px]" />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(#71717a_1px,transparent_1px)] [background-size:24px_24px]"
+        style={{ backgroundPosition: `${viewport.x * 0.25}px ${viewport.y * 0.25}px` }}
+      />
       <div
         className="absolute left-0 top-0 origin-top-left"
         style={{
           transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
         }}
       >
-        {visible.map(({ screen, x, y, sectionName }) => {
+        {sectionLabels.map(([sectionId, item]) => (
+          <div
+            key={sectionId}
+            className="absolute pointer-events-none"
+            style={{ left: item.x, top: item.y - 132 }}
+          >
+            <DesignSectionLabel name={item.sectionName} />
+          </div>
+        ))}
+        {visible.map(({ screen, x, y }) => {
           const component = resolveScreenComponent(screenModules, screen.component);
           return (
             <div key={screen.id} className="absolute" style={{ left: x, top: y }}>
               {component ? (
                 <DesignArtboard
                   screen={screen}
-                  sectionName={sectionName}
                   component={component}
-                  zoom={viewport.zoom}
                   onFocus={() => {
                     setFocusedId(screen.id);
                     requestAnimationFrame(() => fit(screen.id));

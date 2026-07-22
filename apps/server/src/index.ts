@@ -20,6 +20,7 @@ import { localStorageRouter } from "./lib/storage/index.js";
 import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
 import { gitRouter } from "./routes/git.js";
+import { designPreviewRouter } from "./routes/design-preview.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -27,6 +28,7 @@ import { handleBridgeConnection, type BridgeConnectionRequest } from "./lib/brid
 import { sessionRouter } from "./lib/session-router.js";
 import { authenticateProvisionedRuntimeToken } from "./lib/runtime-adapters.js";
 import { sessionService } from "./services/session.js";
+import { codexCredentialService } from "./services/codex-credential.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
 import { connectRedis, disconnectRedis, redis } from "./lib/redis.js";
@@ -46,6 +48,7 @@ import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.
 import { endpointProxyService } from "./services/endpoint-proxy.js";
 import { sessionApplicationService } from "./services/session-applications.js";
 import { seedCloudForAllOrgs } from "./services/cloud-bootstrap.js";
+import { managedGitService } from "./services/managed-git.js";
 import {
   assertPreviewHostIsolated,
   endpointTrafficRetentionHours,
@@ -63,6 +66,7 @@ const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
 const ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
 const ENDPOINT_TRAFFIC_CLEANUP_LOCK_KEY = "trace:jobs:endpoint-traffic-cleanup";
+const DESIGN_PREVIEW_RECONCILE_INTERVAL_MS = 30 * 1000;
 
 function readDurationEnv(name: string, fallbackMs: number): number {
   const raw = process.env[name]?.trim();
@@ -200,8 +204,29 @@ async function main() {
   // Managed git smart-HTTP streams binary pack bodies and reads the request
   // stream directly — register BEFORE express.json() so the body is untouched.
   app.use("/git", gitRouter);
+  app.use(designPreviewRouter);
 
   app.use(express.json());
+  app.post("/runtime/codex-auth", async (req: express.Request, res: express.Response) => {
+    const token = readBearerToken(req);
+    const runtime = token ? authenticateProvisionedRuntimeToken(token) : null;
+    const authJson = (req.body as { authJson?: unknown }).authJson;
+    if (!runtime || runtime.tool !== "codex") return res.status(401).json({ error: "Unauthorized" });
+    if (typeof authJson !== "string" || authJson.length > 64 * 1024) {
+      return res.status(400).json({ error: "Invalid Codex session credential" });
+    }
+    try {
+      JSON.parse(authJson) as unknown;
+      await codexCredentialService.set(
+        runtime.userId,
+        "chatgpt_session",
+        authJson,
+      );
+      return res.status(204).end();
+    } catch {
+      return res.status(400).json({ error: "Invalid Codex session credential" });
+    }
+  });
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (
       SAFE_HTTP_METHODS.has(req.method) ||
@@ -320,6 +345,29 @@ async function main() {
         });
       });
   }, 30_000);
+
+  const reconcileDesignPreviews = () => {
+    void managedGitService.retryPendingDesignCommitPreviews().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[design-preview-reconciler] iteration failed: ${message}`);
+    });
+  };
+  reconcileDesignPreviews();
+  const designPreviewReconciler = setInterval(
+    reconcileDesignPreviews,
+    DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
+  );
+  const reconcilePdfExports = () => {
+    void managedGitService.retryPendingPdfExports().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[pdf-export-reconciler] iteration failed: ${message}`);
+    });
+  };
+  reconcilePdfExports();
+  const pdfExportReconciler = setInterval(
+    reconcilePdfExports,
+    DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
+  );
 
   const cloudIdleCleanupAfterMs = readDurationEnv(
     "TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS",
@@ -501,6 +549,8 @@ async function main() {
               await wsServerCleanup.dispose();
               clearInterval(staleRuntimeMonitor);
               clearInterval(deprovisionReconciler);
+              clearInterval(designPreviewReconciler);
+              clearInterval(pdfExportReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               clearInterval(endpointTrafficCleanup);
               bridgeWss.close();

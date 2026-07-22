@@ -75,6 +75,7 @@ async function tmp(prefix: string): Promise<string> {
 }
 
 function markManagedRepo(repoId: string): void {
+  prismaMock.sessionGroup.findMany.mockResolvedValue([]);
   prismaMock.repo.findFirst.mockImplementation(async (args: { where?: { id?: string } }) => {
     if (args?.where?.id === repoId) {
       return {

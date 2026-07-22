@@ -1,6 +1,6 @@
 import { execFile, spawn } from "child_process";
 import { buildChildProcessEnv } from "@trace/shared/adapters";
-import { existsSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
@@ -9,8 +9,43 @@ let codexLoggedIn = false;
 
 const TOOL_ENV_VARS: Partial<Record<string, string>> = {
   claude_code: "ANTHROPIC_API_KEY",
-  codex: "OPENAI_API_KEY",
 };
+
+const CODEX_HOME = process.env.CODEX_HOME ?? "/home/coder/.codex";
+
+export function installCodexAuthFile(authJson = process.env.CODEX_AUTH_JSON): boolean {
+  if (!authJson) return false;
+  try {
+    JSON.parse(authJson) as unknown;
+  } catch {
+    throw new Error("Codex session credential is not valid JSON.");
+  }
+  mkdirSync(CODEX_HOME, { mode: 0o700, recursive: true });
+  writeFileSync(`${CODEX_HOME}/config.toml`, 'cli_auth_credentials_store = "file"\n', {
+    mode: 0o600,
+  });
+  writeFileSync(`${CODEX_HOME}/auth.json`, authJson, { mode: 0o600 });
+  delete process.env.CODEX_AUTH_JSON;
+  return true;
+}
+
+export async function syncCodexAuthFile(): Promise<void> {
+  const serverUrl = process.env.TRACE_SERVER_PUBLIC_URL?.trim();
+  const runtimeToken = process.env.TRACE_RUNTIME_TOKEN;
+  const authPath = `${CODEX_HOME}/auth.json`;
+  if (!serverUrl || !runtimeToken || !existsSync(authPath)) return;
+
+  const authJson = readFileSync(authPath, "utf8");
+  const response = await fetch(new URL("/runtime/codex-auth", serverUrl), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${runtimeToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ authJson }),
+  });
+  if (!response.ok) throw new Error(`Codex session credential sync failed (${response.status}).`);
+}
 
 function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -34,18 +69,23 @@ function ensureBinaryAvailable(binary: string, tool: string): Promise<void> {
 
 async function loginCodex(): Promise<void> {
   if (codexLoggedIn) return;
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return;
+  const accessToken = process.env.CODEX_ACCESS_TOKEN;
+  const apiKey = process.env.CODEX_API_KEY;
+  const method = process.env.CODEX_AUTH_METHOD;
+  if (method !== "access_token" && method !== "api_key") return;
   if (codexLoginPromise) return codexLoginPromise;
 
   console.log("[container-bridge] logging in to codex...");
   codexLoginPromise = new Promise<void>((resolve, reject) => {
-    const child = spawn("codex", ["login", "--with-api-key"], {
+    const credential = method === "access_token" ? accessToken : apiKey;
+    if (!credential) throw new Error(`Codex ${method} credential is unavailable`);
+    const loginArgument = method === "access_token" ? "--with-access-token" : "--with-api-key";
+    const child = spawn("codex", ["login", loginArgument], {
       env: buildChildProcessEnv(),
       stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdin?.on("error", () => {});
-    child.stdin?.end(apiKey);
+    child.stdin?.end(credential);
 
     const outLines: string[] = [];
     const errLines: string[] = [];
@@ -85,7 +125,16 @@ export async function ensureToolReady(tool: string): Promise<void> {
   }
 
   if (tool === "codex") {
-    await loginCodex();
+    const method = process.env.CODEX_AUTH_METHOD;
+    if (!method) {
+      throw new Error(
+        "Cannot run codex: add a ChatGPT session, Codex access token, or OpenAI API key in Settings → API Tokens.",
+      );
+    }
+    if (method === "chatgpt_session" && !existsSync(`${CODEX_HOME}/auth.json`)) {
+      throw new Error("Codex ChatGPT session credential is unavailable.");
+    }
+    if (method === "access_token" || method === "api_key") await loginCodex();
   } else if (tool === "pi") {
     await ensureBinaryAvailable("pi", "pi");
   } else if (tool === "antigravity") {
@@ -116,6 +165,10 @@ export async function loginAvailableTools(): Promise<void> {
   for (const [tool, envVar] of Object.entries(TOOL_ENV_VARS)) {
     if (!envVar || !process.env[envVar]) continue;
     tasks.push(ensureToolReady(tool));
+  }
+
+  if (process.env.CODEX_AUTH_METHOD) {
+    tasks.push(ensureToolReady("codex"));
   }
 
   await Promise.all(tasks);

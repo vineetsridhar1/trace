@@ -2,8 +2,12 @@ import type { ApiTokenProvider } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { decryptSecret, encryptSecret } from "../lib/encryption.js";
 
-const ALL_PROVIDERS: ApiTokenProvider[] = ["anthropic", "openai", "github", "ssh_key"];
-
+const ALL_PROVIDERS: ApiTokenProvider[] = [
+  "anthropic",
+  "openai",
+  "github",
+  "ssh_key",
+];
 export class ApiTokenService {
   async list(userId: string) {
     const tokens = await prisma.apiToken.findMany({

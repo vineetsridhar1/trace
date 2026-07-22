@@ -75,23 +75,25 @@ export default function SessionStreamScreen() {
     | string
     | null
     | undefined;
-  const isAppGroup = groupKind === "app";
+  const isGeneratedProjectGroup = groupKind === "app" || groupKind === "design";
+  const isDesignGroup = groupKind === "design";
+  const generatedProjectLabel = groupKind === "design" ? "design" : "app";
   const {
     url: appPreviewUrl,
     loading: appPreviewLoading,
     error: appPreviewError,
     refresh: refreshAppPreview,
-  } = useAppPreview(hydratedGroupId, isAppGroup);
+  } = useAppPreview(hydratedGroupId, isGeneratedProjectGroup);
   const resolvedBrowserUrl = useMemo(() => {
     const persistedUrl = browserUrlGroupId === hydratedGroupId ? browserUrl : null;
-    if (isAppGroup) return persistedUrl || appPreviewUrl || "";
+    if (isGeneratedProjectGroup) return persistedUrl || appPreviewUrl || "";
     return resolveBrowserUrl(persistedUrl, prUrl, repo?.remoteUrl);
   }, [
     appPreviewUrl,
     browserUrl,
     browserUrlGroupId,
     hydratedGroupId,
-    isAppGroup,
+    isGeneratedProjectGroup,
     prUrl,
     repo?.remoteUrl,
   ]);
@@ -110,14 +112,14 @@ export default function SessionStreamScreen() {
     [groupId, router, sessionId],
   );
   const openBrowser = useCallback(() => {
-    if (isAppGroup) {
+    if (isGeneratedProjectGroup) {
       pagerRef.current?.setPage(1);
       setAppPage(1);
       return;
     }
     if (activePane === "browser") return;
     router.push(`/sessions/${groupId}/${sessionId}?pane=browser`);
-  }, [activePane, groupId, isAppGroup, router, sessionId]);
+  }, [activePane, groupId, isGeneratedProjectGroup, router, sessionId]);
 
   const handleSelectSession = useCallback(
     (nextId: string) => {
@@ -134,6 +136,7 @@ export default function SessionStreamScreen() {
     },
     [browserUrl, browserUrlGroupId, hydratedGroupId, setBrowserUrl],
   );
+  const ignoreBrowserUrlChange = useCallback(() => undefined, []);
   const [overlayHeight, setOverlayHeight] = useState(0);
   const handleOverlayLayout = useCallback((e: LayoutChangeEvent) => {
     const nextHeight = e.nativeEvent.layout.height;
@@ -144,6 +147,9 @@ export default function SessionStreamScreen() {
     if (!targetGroupId) return;
     void fetchSessionGroupDetail(targetGroupId);
   }, [groupId, hydratedGroupId]);
+  const retryAppPreview = useCallback(() => {
+    void refreshAppPreview();
+  }, [refreshAppPreview]);
 
   const handoffPending =
     overlaySessionId !== null &&
@@ -156,11 +162,12 @@ export default function SessionStreamScreen() {
   const headerPane: SessionPaneMode =
     activePane === "terminal"
       ? "terminal"
-      : isAppGroup
+      : isGeneratedProjectGroup
         ? appPage === 1
           ? "browser"
           : "session"
         : activePane;
+  const showDesignCanvas = isDesignGroup && appPage === 1 && activePane !== "terminal";
   useSessionPorts(sessionId, browserEnabled);
 
   useEffect(() => {
@@ -182,10 +189,11 @@ export default function SessionStreamScreen() {
               activePane={headerPane}
               browserEnabled={browserEnabled}
               onOpenBrowser={openBrowser}
+              minimal={showDesignCanvas}
               onBack={
                 activePane === "terminal"
                   ? () => navigateToPane("session")
-                  : isAppGroup && appPage === 1
+                  : isGeneratedProjectGroup && appPage === 1
                     ? () => {
                         pagerRef.current?.setPage(0);
                         setAppPage(0);
@@ -195,7 +203,7 @@ export default function SessionStreamScreen() {
                       : closeSessionPlayer
               }
             />
-            <ActiveTodoStrip sessionId={sessionId} />
+            {showDesignCanvas ? null : <ActiveTodoStrip sessionId={sessionId} />}
           </View>
         )}
       </View>
@@ -225,11 +233,12 @@ export default function SessionStreamScreen() {
           </View>
         ) : (
           <View key={hydratedGroupId} style={styles.overlayPaddedScene}>
-            {isAppGroup && activePane !== "terminal" ? (
+            {isGeneratedProjectGroup && activePane !== "terminal" ? (
               <PagerView
                 ref={pagerRef}
                 initialPage={pane === "browser" ? 1 : 0}
                 onPageSelected={(event) => setAppPage(event.nativeEvent.position)}
+                scrollEnabled={!isDesignGroup || appPage === 0}
                 overdrag
                 style={styles.pager}
               >
@@ -245,8 +254,11 @@ export default function SessionStreamScreen() {
                   {resolvedBrowserUrl ? (
                     <BrowserPanel
                       url={resolvedBrowserUrl}
-                      onUrlChange={handleBrowserUrlChange}
-                      topInset={overlayHeight}
+                      onUrlChange={ignoreBrowserUrlChange}
+                      onPreviewUnavailable={retryAppPreview}
+                      showToolbar={!isDesignGroup}
+                      hideExportHtml={isDesignGroup}
+                      topInset={isDesignGroup ? 0 : overlayHeight}
                     />
                   ) : appPreviewLoading ? (
                     <View style={styles.center}>
@@ -256,11 +268,15 @@ export default function SessionStreamScreen() {
                     <View style={styles.center}>
                       <EmptyState
                         icon={appPreviewError ? "exclamationmark.triangle" : "globe"}
-                        title={appPreviewError ? "Couldn't load the app" : "App is starting"}
+                        title={
+                          appPreviewError
+                            ? `Couldn't load the ${generatedProjectLabel}`
+                            : `${generatedProjectLabel === "design" ? "Design" : "App"} is starting`
+                        }
                         subtitle={
                           appPreviewError
                             ? appPreviewError
-                            : "The preview will appear when the application is running."
+                            : `The canvas will appear when the ${generatedProjectLabel} is running.`
                         }
                         action={{
                           label: "Retry",

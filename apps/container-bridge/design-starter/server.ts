@@ -8,13 +8,19 @@ const app = express();
 const server = createHttpServer(app);
 const port = Number(process.env.PORT ?? 3000);
 const root = dirname(fileURLToPath(import.meta.url));
-let exportBuild: Promise<string> | null = null;
+const exportBuilds = new Map<string, Promise<string>>();
 
-app.get("/__trace_design_export", async (_request, response) => {
+app.get("/__trace_design_export", async (request, response) => {
   try {
-    exportBuild ??= buildSelfContainedHtml(root).finally(() => {
-      exportBuild = null;
-    });
+    const commitSha = typeof request.query.ref === "string" ? request.query.ref : undefined;
+    const cacheKey = commitSha ?? "workspace";
+    let exportBuild = exportBuilds.get(cacheKey);
+    if (!exportBuild) {
+      exportBuild = buildSelfContainedHtml(root, commitSha).finally(() => {
+        exportBuilds.delete(cacheKey);
+      });
+      exportBuilds.set(cacheKey, exportBuild);
+    }
     const html = await exportBuild;
     response.set({
       "Cache-Control": "no-store",

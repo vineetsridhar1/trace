@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { RotateCw } from "lucide-react";
 import { client } from "@/lib/urql";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,11 @@ import { AppPreviewCanvasLoader } from "./AppPreviewCanvasLoader";
 import { PreviewCredentialRenewal } from "./PreviewCredentialRenewal";
 import { appPreviewReducer, initialAppPreviewState } from "./app-preview-state";
 import { CREATE_PREVIEW_MUTATION } from "./session-applications-operations";
+import { PdfPreviewControls } from "./PdfPreviewControls";
+import { usePdfPreview } from "./usePdfPreview";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
+const MAX_FRAME_RETRY_MS = 30_000;
 
 export function AppPreview({
   endpointId,
@@ -18,16 +21,26 @@ export function AppPreview({
   fill = false,
   desktopViewport = false,
   title = "Live app preview",
+  projectKind,
+  sessionGroupId,
 }: {
   endpointId: string;
   status: string;
   fill?: boolean;
   desktopViewport?: boolean;
   title?: string;
+  projectKind?: "pdf";
+  sessionGroupId?: string;
 }) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const pdf = usePdfPreview({
+    enabled: projectKind === "pdf",
+    frameRef,
+    sessionGroupId,
+  });
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
   const [credentialExpiresAt, setCredentialExpiresAt] = useState<string | null>(null);
-  const { error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
+  const { attempts, error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
 
   const reload = useCallback(() => {
     dispatch({ type: "reload" });
@@ -62,10 +75,10 @@ export function AppPreview({
     if (!url || frameLoaded || error) return;
     const timeout = window.setTimeout(
       () => dispatch({ type: "frame-retry" }),
-      INITIAL_FRAME_RETRY_MS,
+      Math.min(MAX_FRAME_RETRY_MS, INITIAL_FRAME_RETRY_MS * 2 ** attempts),
     );
     return () => window.clearTimeout(timeout);
-  }, [error, frameLoaded, frameRevision, url]);
+  }, [attempts, error, frameLoaded, frameRevision, url]);
 
   if (error) {
     if (desktopViewport) {
@@ -100,6 +113,13 @@ export function AppPreview({
           status={status}
           onLoad={() => dispatch({ type: "frame-loaded" })}
           onReload={reload}
+          iframeRef={frameRef}
+          bare={projectKind === "pdf"}
+          pdfFormat={projectKind === "pdf" ? pdf.format : undefined}
+          pdfContentHeight={projectKind === "pdf" ? pdf.contentHeight : undefined}
+          onPdfFormatChange={projectKind === "pdf" ? pdf.updateFormat : undefined}
+          onPdfDownload={projectKind === "pdf" ? () => void pdf.download() : undefined}
+          pdfDownloadState={projectKind === "pdf" ? pdf.downloadState : undefined}
         />
         <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       </>
@@ -114,6 +134,14 @@ export function AppPreview({
   }
   return (
     <div className={cn("relative", fill && "h-full")}>
+      {projectKind === "pdf" ? (
+        <PdfPreviewControls
+          format={pdf.format}
+          onFormatChange={pdf.updateFormat}
+          onDownload={() => void pdf.download()}
+          downloadState={pdf.downloadState}
+        />
+      ) : null}
       <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
       <Button
         size="icon"
@@ -127,6 +155,7 @@ export function AppPreview({
         <RotateCw className={cn("size-3", refreshing && "animate-spin")} />
       </Button>
       <iframe
+        ref={frameRef}
         key={frameRevision}
         src={url}
         title={title}

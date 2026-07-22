@@ -17,7 +17,7 @@
     "ios": {
       "bundleIdentifier": "org.gettrace",
       "supportsTablet": false,
-      "associatedDomains": ["applinks:gettrace.org"],
+      "associatedDomains": ["applinks:app.gettrace.org"],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -35,17 +35,17 @@
           "data": [
             {
               "scheme": "https",
-              "host": "gettrace.org",
+              "host": "app.gettrace.org",
               "pathPrefix": "/m"
             },
             {
               "scheme": "https",
-              "host": "gettrace.org",
+              "host": "app.gettrace.org",
               "pathPrefix": "/c"
             },
             {
               "scheme": "https",
-              "host": "gettrace.org",
+              "host": "app.gettrace.org",
               "pathPrefix": "/g"
             }
           ],

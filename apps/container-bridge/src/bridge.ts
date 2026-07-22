@@ -55,15 +55,15 @@ import {
   removeWorktree,
   getRepoPath,
 } from "./workspace.js";
-import { ensureToolReady } from "./tool-auth.js";
+import { ensureToolReady, syncCodexAuthFile } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
 import { ManagedProcessManager } from "./managed-process-manager.js";
+import { exportPdfToTarget } from "./pdf-export.js";
 
 const execFileAsync = promisify(execFile);
 const BRIDGE_PROTOCOL_VERSION = 1;
 const AGENT_VERSION = "0.1.0";
 const BRIDGE_USER_AGENT = "Trace-Container-Bridge/0.1";
-
 function hasExecutable(command: string): boolean {
   return resolveExecutable(command) !== null;
 }
@@ -641,6 +641,42 @@ export class ContainerBridge implements IBridgeClient {
         break;
       }
 
+      case "pdf_export": {
+        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
+        if (!workdir) {
+          this.send({
+            type: "pdf_export_result",
+            requestId: cmd.requestId,
+            sessionGroupId: cmd.sessionGroupId,
+            commitSha: cmd.commitSha,
+            storageKey: cmd.storageKey,
+            error: "PDF workspace is unavailable",
+          });
+          break;
+        }
+        void exportPdfToTarget({ ...cmd, workdir })
+          .then(() => {
+            this.send({
+              type: "pdf_export_result",
+              requestId: cmd.requestId,
+              sessionGroupId: cmd.sessionGroupId,
+              commitSha: cmd.commitSha,
+              storageKey: cmd.storageKey,
+            });
+          })
+          .catch((error: unknown) => {
+            this.send({
+              type: "pdf_export_result",
+              requestId: cmd.requestId,
+              sessionGroupId: cmd.sessionGroupId,
+              commitSha: cmd.commitSha,
+              storageKey: cmd.storageKey,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        break;
+      }
+
       case "endpoint_http_request": {
         this.managedProcessManager.proxyHttp({
           requestId: cmd.requestId,
@@ -962,6 +998,18 @@ export class ContainerBridge implements IBridgeClient {
     const runId = this.startRun(sessionId);
     adapter.abort();
 
+    const completeRun = () => {
+      const complete = () => this.send({ type: "session_complete", sessionId });
+      if (resolvedTool !== "codex") {
+        complete();
+        return;
+      }
+      void syncCodexAuthFile().then(complete, (error: unknown) => {
+        console.warn("[container-bridge] failed to persist Codex session credential:", error);
+        complete();
+      });
+    };
+
     const activeAdapter = adapter;
     const recoverMissingToolSession = (message: string) => {
       if (!toolSessionId || hasForwardedOutput || recoveringMissingToolSession) return false;
@@ -1054,7 +1102,7 @@ export class ContainerBridge implements IBridgeClient {
             this.pendingInputToolUseIds.delete(sessionId);
           }
           this.finishRun(sessionId, runId);
-          this.send({ type: "session_complete", sessionId });
+          completeRun();
           activeAdapter.abort();
           cleanupImages();
         }
@@ -1066,7 +1114,7 @@ export class ContainerBridge implements IBridgeClient {
           this.pendingInputToolUseIds.delete(sessionId);
         }
         this.finishRun(sessionId, runId);
-        this.send({ type: "session_complete", sessionId });
+        completeRun();
         cleanupImages();
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import {
@@ -7,8 +7,11 @@ import {
   getModelProviderForModel,
   getModelProviderGroupsForTool,
   getModelsForTool,
+  getReasoningEffortLabel,
+  type ReasoningEffortOption,
 } from "./modelOptions";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { ActionTooltip } from "../ui/ActionTooltip";
 import {
   ToolIcon,
   getToolLabel,
@@ -19,27 +22,36 @@ import {
 import { ToolLayer } from "./picker/ToolLayer";
 import { ProviderLayer } from "./picker/ProviderLayer";
 import { ModelLayer } from "./picker/ModelLayer";
+import { ThinkingLayer } from "./picker/ThinkingLayer";
 
 interface ToolModelPickerProps {
   tool: ToolOptionValue;
   model?: string | null;
+  reasoningEffort?: string | null;
+  reasoningEffortOptions?: readonly ReasoningEffortOption[];
   disabled?: boolean;
   onToolChange: (tool: ToolOptionValue) => Promise<void> | void;
   onModelChange: (model: string) => Promise<void> | void;
+  onReasoningEffortChange?: (effort: string) => Promise<void> | void;
 }
 
 export function ToolModelPicker({
   tool,
   model,
+  reasoningEffort,
+  reasoningEffortOptions = [],
   disabled,
   onToolChange,
   onModelChange,
+  onReasoningEffortChange,
 }: ToolModelPickerProps) {
   const [open, setOpen] = useState(false);
   const [layer, setLayer] = useState<PickerLayer>("tools");
   const [pickerTool, setPickerTool] = useState<ToolOptionValue>(normalizeTool(tool));
   const [pickerProvider, setPickerProvider] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [pendingModel, setPendingModel] = useState<string | null>(null);
+  const compactSelectionRef = useRef(false);
 
   const activeModel =
     pickerTool === tool ? (model ?? getDefaultModel(pickerTool)) : getDefaultModel(pickerTool);
@@ -55,6 +67,7 @@ export function ToolModelPicker({
     if (nextOpen) {
       const nextTool = normalizeTool(tool);
       setLayer("tools");
+      setPendingModel(null);
       setPickerTool(nextTool);
       setPickerProvider(getModelProviderForModel(nextTool, model)?.value ?? null);
     }
@@ -99,6 +112,12 @@ export function ToolModelPicker({
   }
 
   async function handleModelSelect(nextModel: string) {
+    if (compactSelectionRef.current && reasoningEffortOptions.length > 0) {
+      setPendingModel(nextModel);
+      setLayer("thinking");
+      return;
+    }
+
     setPending(true);
     try {
       if (nextModel !== model) {
@@ -110,18 +129,59 @@ export function ToolModelPicker({
     }
   }
 
+  async function handleReasoningEffortSelect(nextEffort: string) {
+    if (
+      (!onReasoningEffortChange || nextEffort === reasoningEffort) &&
+      (!pendingModel || pendingModel === model)
+    ) {
+      return;
+    }
+    setPending(true);
+    try {
+      if (pendingModel && pendingModel !== model) {
+        await onModelChange(pendingModel);
+      }
+      if (onReasoningEffortChange && nextEffort !== reasoningEffort) {
+        await onReasoningEffortChange(nextEffort);
+      }
+      setOpen(false);
+      setPendingModel(null);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const modelLabel = model ? getModelLabel(model) : "Model";
+  const effortLabel = reasoningEffort ? getReasoningEffortLabel(reasoningEffort) : null;
+  const compactLabel = `${getToolLabel(tool)} / ${modelLabel}${effortLabel ? ` · Thinking: ${effortLabel}` : ""}`;
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
+      <ActionTooltip label={compactLabel} className="@lg:hidden">
+        <PopoverTrigger
+          disabled={disabled}
+          aria-label={compactLabel}
+          onClick={() => {
+            compactSelectionRef.current = true;
+          }}
+          className="flex size-7 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <ToolIcon tool={tool} className="size-3.5 shrink-0" />
+        </PopoverTrigger>
+      </ActionTooltip>
       <PopoverTrigger
         disabled={disabled}
-        className="flex h-7 w-auto max-w-[260px] cursor-pointer items-center gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+        onClick={() => {
+          compactSelectionRef.current = false;
+        }}
+        className="hidden h-7 w-auto max-w-[260px] cursor-pointer items-center gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 @lg:flex"
       >
         <ToolIcon tool={tool} className="size-3.5 shrink-0" />
         <span className="truncate">{getToolLabel(tool)}</span>
         {getModelsForTool(tool).length > 0 ? (
           <>
             <span className="text-muted-foreground/60">/</span>
-            <span className="truncate">{model ? getModelLabel(model) : "Model"}</span>
+            <span className="truncate">{modelLabel}</span>
           </>
         ) : null}
         <ChevronDown className="size-3.5 shrink-0" />
@@ -145,7 +205,7 @@ export function ToolModelPicker({
               onBack={() => setLayer("tools")}
               onSelect={handleProviderSelect}
             />
-          ) : (
+          ) : layer === "models" ? (
             <ModelLayer
               key="models"
               pickerTool={pickerTool}
@@ -156,6 +216,18 @@ export function ToolModelPicker({
               hasProviders={providerGroups.length > 0}
               onBack={handleModelBack}
               onSelect={handleModelSelect}
+            />
+          ) : (
+            <ThinkingLayer
+              key="thinking"
+              effort={reasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
+              options={reasoningEffortOptions}
+              pending={pending}
+              onBack={() => {
+                setPendingModel(null);
+                setLayer("models");
+              }}
+              onSelect={handleReasoningEffortSelect}
             />
           )}
         </AnimatePresence>

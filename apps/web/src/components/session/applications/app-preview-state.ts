@@ -15,11 +15,8 @@ export type AppPreviewAction =
   | { type: "request-failed"; error: string }
   | { type: "request-succeeded"; url: string };
 
-// Give up silently remounting the initial frame after this many auto-retries and
-// surface the manual retry UI instead of re-minting the preview URL forever.
-export const MAX_FRAME_RETRIES = 3;
-
-const FRAME_RETRY_ERROR = "The app preview didn't load. Retry to try again.";
+export const MAX_FRAME_RETRIES = 10;
+const FRAME_RETRY_ERROR = "The preview did not recover. Retry to try again.";
 
 export const initialAppPreviewState: AppPreviewState = {
   attempts: 0,
@@ -39,8 +36,9 @@ export function appPreviewReducer(
     case "frame-loaded":
       return { ...state, frameLoaded: true };
     case "frame-retry":
-      // Exhausted the silent-retry budget: stop remounting and surface the
-      // manual retry UI instead of re-minting the preview URL again.
+      // A running dev server can briefly stop responding while the agent edits
+      // files or Vite recompiles. Keep recovering quietly instead of treating
+      // that expected transition as a user-facing preview failure.
       if (state.attempts >= MAX_FRAME_RETRIES) {
         return { ...state, error: FRAME_RETRY_ERROR, refreshing: false };
       }

@@ -97,4 +97,50 @@ describe("createGqlClient", () => {
       wasClean: true,
     } as CloseEvent);
   });
+
+  it("can open the websocket before a subscription is registered", async () => {
+    const socket = createMockWebSocket();
+    const createWebSocket = vi.fn(
+      (_url: string, _protocols?: string[]) => socket as unknown as WebSocket,
+    );
+
+    setPlatform({
+      apiUrl: "http://example.test",
+      clientSource: "mobile",
+      authMode: "bearer",
+      storage: {
+        getItem: () => null,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
+      secureStorage: {
+        getToken: async () => null,
+        setToken: async () => undefined,
+        clearToken: async () => undefined,
+      },
+      fetch: vi.fn<typeof fetch>(),
+      createWebSocket,
+    });
+
+    const client = createGqlClient({
+      httpUrl: "http://example.test/graphql",
+      wsUrl: "ws://example.test/graphql",
+      lazy: false,
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(createWebSocket).toHaveBeenCalledWith("ws://example.test/graphql", [
+      "graphql-transport-ws",
+    ]);
+
+    const dispose = client.dispose().catch(() => undefined);
+    socket.onclose?.({
+      code: 1000,
+      reason: "Normal Closure",
+      wasClean: true,
+    } as CloseEvent);
+    await dispose;
+  });
 });

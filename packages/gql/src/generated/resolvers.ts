@@ -236,6 +236,14 @@ export type ChatMember = {
 
 export type ChatType = "dm" | "group";
 
+export type CodexAuthMethod = "access_token" | "api_key" | "chatgpt_session";
+
+export type CodexCredentialStatus = {
+  __typename?: "CodexCredentialStatus";
+  method: CodexAuthMethod;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type CodingTool =
   | "antigravity"
   | "claude_code"
@@ -397,6 +405,7 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_preview_updated"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -407,6 +416,7 @@ export type EventType =
   | "message_edited"
   | "message_sent"
   | "organization_created"
+  | "pdf_export_updated"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_message_updated"
@@ -472,6 +482,10 @@ export type GitCheckpoint = {
   filesChanged: Scalars["Int"]["output"];
   id: Scalars["ID"]["output"];
   parentShas: Array<Scalars["String"]["output"]>;
+  previewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  previewContentType?: Maybe<Scalars["String"]["output"]>;
+  previewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  previewUrl?: Maybe<Scalars["String"]["output"]>;
   promptEvent?: Maybe<Event>;
   promptEventId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
@@ -625,6 +639,7 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteCodexCredential: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
@@ -661,6 +676,7 @@ export type Mutation = {
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
+  requestPdfSessionExport: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
@@ -676,6 +692,7 @@ export type Mutation = {
   sendMessage: Event;
   sendSessionMessage: Event;
   setApiToken: ApiTokenStatus;
+  setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
@@ -699,6 +716,7 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updatePdfSessionFormat: Scalars["Boolean"]["output"];
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
   updateSessionConfig: Session;
@@ -1005,6 +1023,10 @@ export type MutationRequestBridgeAccessArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationRequestPdfSessionExportArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationRestartSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
@@ -1087,6 +1109,10 @@ export type MutationSendSessionMessageArgs = {
 
 export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
+};
+
+export type MutationSetCodexCredentialArgs = {
+  input: SetCodexCredentialInput;
 };
 
 export type MutationSetLinkedCheckoutAutoSyncArgs = {
@@ -1206,6 +1232,13 @@ export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationUpdatePdfSessionFormatArgs = {
+  height: Scalars["Float"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  unit: Scalars["String"]["input"];
+  width: Scalars["Float"]["input"];
 };
 
 export type MutationUpdateQueuedMessageArgs = {
@@ -1342,12 +1375,17 @@ export type Query = {
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
+  myCodexCredential?: Maybe<CodexCredentialStatus>;
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
+  pdfSessionDownloadUrl?: Maybe<Scalars["String"]["output"]>;
+  /** PDF-kind session groups for the org (the sidebar PDFs section). */
+  pdfSessionGroups: Array<SessionGroup>;
+  pdfSessionPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   project?: Maybe<Project>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
@@ -1502,6 +1540,18 @@ export type QueryOrganizationArgs = {
 export type QueryParticipantsArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type QueryPdfSessionDownloadUrlArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QueryPdfSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryPdfSessionPreviewUrlArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryProjectArgs = {
@@ -1982,6 +2032,10 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  designPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
+  designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
@@ -1989,6 +2043,14 @@ export type SessionGroup = {
   kind: SessionGroupKind;
   name: Scalars["String"]["output"];
   owner: User;
+  pdfExportCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  pdfExportCommitSha?: Maybe<Scalars["String"]["output"]>;
+  pdfExportError?: Maybe<Scalars["String"]["output"]>;
+  pdfExportStatus?: Maybe<Scalars["String"]["output"]>;
+  pdfFormatVersion: Scalars["Int"]["output"];
+  pdfPageHeight: Scalars["Float"]["output"];
+  pdfPageUnit: Scalars["String"]["output"];
+  pdfPageWidth: Scalars["Float"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
@@ -2025,7 +2087,7 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "app" | "coding" | "design";
+export type SessionGroupKind = "app" | "coding" | "design" | "pdf";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2106,6 +2168,11 @@ export type SessionTimelinePage = {
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars["String"]["input"];
+};
+
+export type SetCodexCredentialInput = {
+  credential: Scalars["String"]["input"];
+  method: CodexAuthMethod;
 };
 
 export type SetOrgSecretInput = {
@@ -2444,6 +2511,8 @@ export type ResolversTypes = ResolversObject<{
   Chat: ResolverTypeWrapper<Chat>;
   ChatMember: ResolverTypeWrapper<ChatMember>;
   ChatType: ChatType;
+  CodexAuthMethod: CodexAuthMethod;
+  CodexCredentialStatus: ResolverTypeWrapper<CodexCredentialStatus>;
   CodingTool: CodingTool;
   CollapsedSessionEvents: ResolverTypeWrapper<CollapsedSessionEvents>;
   ConnectionsBridge: ResolverTypeWrapper<ConnectionsBridge>;
@@ -2540,6 +2609,7 @@ export type ResolversTypes = ResolversObject<{
   SessionTimelineMode: SessionTimelineMode;
   SessionTimelinePage: ResolverTypeWrapper<SessionTimelinePage>;
   SetApiTokenInput: SetApiTokenInput;
+  SetCodexCredentialInput: SetCodexCredentialInput;
   SetOrgSecretInput: SetOrgSecretInput;
   SetupScriptRunStatus: SetupScriptRunStatus;
   SetupStatus: SetupStatus;
@@ -2586,6 +2656,7 @@ export type ResolversParentTypes = ResolversObject<{
   ChannelMember: ChannelMember;
   Chat: Chat;
   ChatMember: ChatMember;
+  CodexCredentialStatus: CodexCredentialStatus;
   CollapsedSessionEvents: CollapsedSessionEvents;
   ConnectionsBridge: ConnectionsBridge;
   ConnectionsRepoEntry: ConnectionsRepoEntry;
@@ -2658,6 +2729,7 @@ export type ResolversParentTypes = ResolversObject<{
   SessionTimelineItem: SessionTimelineItem;
   SessionTimelinePage: SessionTimelinePage;
   SetApiTokenInput: SetApiTokenInput;
+  SetCodexCredentialInput: SetCodexCredentialInput;
   SetOrgSecretInput: SetOrgSecretInput;
   SlashCommand: SlashCommand;
   StartSessionInput: StartSessionInput;
@@ -2904,6 +2976,16 @@ export type ChatMemberResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type CodexCredentialStatusResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["CodexCredentialStatus"] =
+    ResolversParentTypes["CodexCredentialStatus"],
+> = ResolversObject<{
+  method?: Resolver<ResolversTypes["CodexAuthMethod"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type CollapsedSessionEventsResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["CollapsedSessionEvents"] =
@@ -3008,6 +3090,14 @@ export type GitCheckpointResolvers<
   filesChanged?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   parentShas?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
+  previewCapturedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  previewContentType?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  previewStatus?: Resolver<
+    Maybe<ResolversTypes["GitCheckpointCaptureStatus"]>,
+    ParentType,
+    ContextType
+  >;
+  previewUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   promptEvent?: Resolver<Maybe<ResolversTypes["Event"]>, ParentType, ContextType>;
   promptEventId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
@@ -3315,6 +3405,7 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationDeleteChatMessageArgs, "messageId">
   >;
+  deleteCodexCredential?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   deleteOrgSecret?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -3525,6 +3616,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationRequestBridgeAccessArgs, "runtimeInstanceId" | "scopeType">
   >;
+  requestPdfSessionExport?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRequestPdfSessionExportArgs, "sessionGroupId">
+  >;
   restartSessionProcess?: Resolver<
     ResolversTypes["SessionApplicationProcess"],
     ParentType,
@@ -3617,6 +3714,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationSetApiTokenArgs, "input">
+  >;
+  setCodexCredential?: Resolver<
+    ResolversTypes["CodexCredentialStatus"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationSetCodexCredentialArgs, "input">
   >;
   setLinkedCheckoutAutoSync?: Resolver<
     ResolversTypes["LinkedCheckoutActionResult"],
@@ -3761,6 +3864,15 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationUpdateOrgMemberRoleArgs, "organizationId" | "role" | "userId">
+  >;
+  updatePdfSessionFormat?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<
+      MutationUpdatePdfSessionFormatArgs,
+      "height" | "sessionGroupId" | "unit" | "width"
+    >
   >;
   updateQueuedMessage?: Resolver<
     ResolversTypes["QueuedMessage"],
@@ -4006,6 +4118,11 @@ export type QueryResolvers<
   >;
   myApiTokens?: Resolver<Array<ResolversTypes["ApiTokenStatus"]>, ParentType, ContextType>;
   myBridgeRuntimes?: Resolver<Array<ResolversTypes["BridgeRuntime"]>, ParentType, ContextType>;
+  myCodexCredential?: Resolver<
+    Maybe<ResolversTypes["CodexCredentialStatus"]>,
+    ParentType,
+    ContextType
+  >;
   myConnections?: Resolver<Array<ResolversTypes["ConnectionsBridge"]>, ParentType, ContextType>;
   myOrganizations?: Resolver<Array<ResolversTypes["OrgMember"]>, ParentType, ContextType>;
   mySessions?: Resolver<
@@ -4031,6 +4148,24 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryParticipantsArgs, "scopeId" | "scopeType">
+  >;
+  pdfSessionDownloadUrl?: Resolver<
+    Maybe<ResolversTypes["String"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryPdfSessionDownloadUrlArgs, "sessionGroupId">
+  >;
+  pdfSessionGroups?: Resolver<
+    Array<ResolversTypes["SessionGroup"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryPdfSessionGroupsArgs, "organizationId">
+  >;
+  pdfSessionPreviewUrl?: Resolver<
+    Maybe<ResolversTypes["String"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryPdfSessionPreviewUrlArgs, "sessionGroupId">
   >;
   project?: Resolver<
     Maybe<ResolversTypes["Project"]>,
@@ -4519,6 +4654,14 @@ export type SessionGroupResolvers<
   channel?: Resolver<Maybe<ResolversTypes["Channel"]>, ParentType, ContextType>;
   connection?: Resolver<Maybe<ResolversTypes["SessionConnection"]>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  designPreviewCapturedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  designPreviewCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  designPreviewStatus?: Resolver<
+    Maybe<ResolversTypes["GitCheckpointCaptureStatus"]>,
+    ParentType,
+    ContextType
+  >;
+  designPreviewUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   forkedFromSessionGroup?: Resolver<Maybe<ResolversTypes["SessionGroup"]>, ParentType, ContextType>;
   forkedFromSessionGroupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;
@@ -4526,6 +4669,14 @@ export type SessionGroupResolvers<
   kind?: Resolver<ResolversTypes["SessionGroupKind"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   owner?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
+  pdfExportCapturedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  pdfExportCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  pdfExportError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  pdfExportStatus?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  pdfFormatVersion?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  pdfPageHeight?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
+  pdfPageUnit?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  pdfPageWidth?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
   prUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   repo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
   sessions?: Resolver<Array<ResolversTypes["Session"]>, ParentType, ContextType>;
@@ -4841,6 +4992,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   ChannelMember?: ChannelMemberResolvers<ContextType>;
   Chat?: ChatResolvers<ContextType>;
   ChatMember?: ChatMemberResolvers<ContextType>;
+  CodexCredentialStatus?: CodexCredentialStatusResolvers<ContextType>;
   CollapsedSessionEvents?: CollapsedSessionEventsResolvers<ContextType>;
   ConnectionsBridge?: ConnectionsBridgeResolvers<ContextType>;
   ConnectionsRepoEntry?: ConnectionsRepoEntryResolvers<ContextType>;

@@ -233,6 +233,14 @@ export type ChatMember = {
 
 export type ChatType = "dm" | "group";
 
+export type CodexAuthMethod = "access_token" | "api_key" | "chatgpt_session";
+
+export type CodexCredentialStatus = {
+  __typename?: "CodexCredentialStatus";
+  method: CodexAuthMethod;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type CodingTool =
   | "antigravity"
   | "claude_code"
@@ -394,6 +402,7 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_preview_updated"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -404,6 +413,7 @@ export type EventType =
   | "message_edited"
   | "message_sent"
   | "organization_created"
+  | "pdf_export_updated"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_message_updated"
@@ -469,6 +479,10 @@ export type GitCheckpoint = {
   filesChanged: Scalars["Int"]["output"];
   id: Scalars["ID"]["output"];
   parentShas: Array<Scalars["String"]["output"]>;
+  previewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  previewContentType?: Maybe<Scalars["String"]["output"]>;
+  previewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  previewUrl?: Maybe<Scalars["String"]["output"]>;
   promptEvent?: Maybe<Event>;
   promptEventId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
@@ -622,6 +636,7 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteCodexCredential: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
@@ -658,6 +673,7 @@ export type Mutation = {
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
+  requestPdfSessionExport: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
@@ -673,6 +689,7 @@ export type Mutation = {
   sendMessage: Event;
   sendSessionMessage: Event;
   setApiToken: ApiTokenStatus;
+  setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
@@ -696,6 +713,7 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updatePdfSessionFormat: Scalars["Boolean"]["output"];
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
   updateSessionConfig: Session;
@@ -1002,6 +1020,10 @@ export type MutationRequestBridgeAccessArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationRequestPdfSessionExportArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationRestartSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
@@ -1084,6 +1106,10 @@ export type MutationSendSessionMessageArgs = {
 
 export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
+};
+
+export type MutationSetCodexCredentialArgs = {
+  input: SetCodexCredentialInput;
 };
 
 export type MutationSetLinkedCheckoutAutoSyncArgs = {
@@ -1203,6 +1229,13 @@ export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationUpdatePdfSessionFormatArgs = {
+  height: Scalars["Float"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  unit: Scalars["String"]["input"];
+  width: Scalars["Float"]["input"];
 };
 
 export type MutationUpdateQueuedMessageArgs = {
@@ -1339,12 +1372,17 @@ export type Query = {
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
+  myCodexCredential?: Maybe<CodexCredentialStatus>;
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
+  pdfSessionDownloadUrl?: Maybe<Scalars["String"]["output"]>;
+  /** PDF-kind session groups for the org (the sidebar PDFs section). */
+  pdfSessionGroups: Array<SessionGroup>;
+  pdfSessionPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   project?: Maybe<Project>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
@@ -1499,6 +1537,18 @@ export type QueryOrganizationArgs = {
 export type QueryParticipantsArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type QueryPdfSessionDownloadUrlArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QueryPdfSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryPdfSessionPreviewUrlArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryProjectArgs = {
@@ -1979,6 +2029,10 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  designPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
+  designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
@@ -1986,6 +2040,14 @@ export type SessionGroup = {
   kind: SessionGroupKind;
   name: Scalars["String"]["output"];
   owner: User;
+  pdfExportCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  pdfExportCommitSha?: Maybe<Scalars["String"]["output"]>;
+  pdfExportError?: Maybe<Scalars["String"]["output"]>;
+  pdfExportStatus?: Maybe<Scalars["String"]["output"]>;
+  pdfFormatVersion: Scalars["Int"]["output"];
+  pdfPageHeight: Scalars["Float"]["output"];
+  pdfPageUnit: Scalars["String"]["output"];
+  pdfPageWidth: Scalars["Float"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
@@ -2022,7 +2084,7 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "app" | "coding" | "design";
+export type SessionGroupKind = "app" | "coding" | "design" | "pdf";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2103,6 +2165,11 @@ export type SessionTimelinePage = {
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars["String"]["input"];
+};
+
+export type SetCodexCredentialInput = {
+  credential: Scalars["String"]["input"];
+  method: CodexAuthMethod;
 };
 
 export type SetOrgSecretInput = {

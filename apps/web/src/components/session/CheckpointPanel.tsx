@@ -206,6 +206,17 @@ export function CheckpointPanel({
                   }
                 />
               ) : null}
+              {checkpoint.previewStatus === "captured" && checkpoint.previewUrl ? (
+                <a
+                  href={checkpoint.previewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                  className="mt-2 inline-flex rounded border border-border/60 px-2 py-1 text-[11px] font-medium text-foreground hover:bg-surface-deep"
+                >
+                  Open saved design
+                </a>
+              ) : null}
               <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <span className="truncate">{sessionName}</span>
                 <span>·</span>

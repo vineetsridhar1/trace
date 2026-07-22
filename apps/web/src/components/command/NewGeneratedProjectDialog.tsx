@@ -1,81 +1,89 @@
-import { useState } from "react";
+import { useCallback, useEffect } from "react";
+import { AppWindow, NotebookText, Palette } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
-import { Button } from "../ui/button";
-import { Textarea } from "../ui/textarea";
-import { createAppSession, createDesignSession } from "../../lib/create-quick-session";
+  createAppSession,
+  createDesignSession,
+  createPdfSession,
+} from "../../lib/create-quick-session";
 import { useCommandPaletteStore } from "../../stores/command-palette";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "../ui/responsive-dialog";
+
+type GeneratedProjectKind = "app" | "design" | "pdf";
+
+const OPTIONS: Array<{
+  kind: GeneratedProjectKind;
+  title: string;
+  description: string;
+  Icon: typeof AppWindow;
+}> = [
+  {
+    kind: "app",
+    title: "App",
+    description: "Build a full-stack product with a live preview.",
+    Icon: AppWindow,
+  },
+  {
+    kind: "design",
+    title: "Design",
+    description: "Explore product screens, flows, and visual directions.",
+    Icon: Palette,
+  },
+  {
+    kind: "pdf",
+    title: "Document",
+    description: "Create a print-ready PDF, report, flyer, or proposal.",
+    Icon: NotebookText,
+  },
+];
 
 export function NewGeneratedProjectDialog() {
   const kind = useCommandPaletteStore((state) => state.newGeneratedProjectKind);
   const close = useCommandPaletteStore((state) => state.closeGeneratedProjectDialog);
-  const [prompt, setPrompt] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const isDesign = kind === "design";
 
-  const dismiss = () => {
-    close();
-    setPrompt("");
-  };
+  const create = useCallback(
+    (nextKind: GeneratedProjectKind) => {
+      close();
+      void (nextKind === "app"
+        ? createAppSession()
+        : nextKind === "design"
+          ? createDesignSession()
+          : createPdfSession());
+    },
+    [close],
+  );
 
-  const submit = async () => {
-    const trimmed = prompt.trim();
-    if (!kind || !trimmed || submitting) return;
-    setSubmitting(true);
-    try {
-      const created = isDesign
-        ? await createDesignSession(trimmed)
-        : await createAppSession(trimmed);
-      if (created) dismiss();
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  useEffect(() => {
+    if (kind && kind !== "choose") create(kind);
+  }, [create, kind]);
 
   return (
-    <Dialog open={kind !== null} onOpenChange={(open) => !open && dismiss()}>
-      <DialogContent className="sm:max-w-[520px]">
-        <DialogHeader>
-          <DialogTitle>{isDesign ? "New Design" : "New App Session"}</DialogTitle>
-          <DialogDescription>
-            {isDesign
-              ? "Describe the screens, states, flow, or visual directions you want Trace to explore."
-              : "Describe the full-stack app you want Trace to build in its own cloud workspace."}
-          </DialogDescription>
-        </DialogHeader>
-        <label htmlFor="new-generated-project-prompt" className="sr-only">
-          {isDesign ? "Design brief" : "App description"}
-        </label>
-        <Textarea
-          id="new-generated-project-prompt"
-          name={isDesign ? "design-brief" : "app-description"}
-          autoComplete="off"
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          onKeyDown={(event) => {
-            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-          placeholder={isDesign ? "Describe the design…" : "Describe your app…"}
-          className="min-h-28"
-        />
-        <DialogFooter>
-          <Button variant="outline" onClick={dismiss} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button onClick={() => void submit()} disabled={!prompt.trim() || submitting}>
-            {submitting ? "Creating…" : isDesign ? "Create Design" : "Build App"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ResponsiveDialog open={kind === "choose"} onOpenChange={(open) => !open && close()}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Create New</ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
+        <div className="flex flex-col gap-2 py-4">
+          {OPTIONS.map(({ kind: optionKind, title, description, Icon }) => (
+            <button
+              key={optionKind}
+              type="button"
+              onClick={() => create(optionKind)}
+              className="flex items-center gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Icon size={20} className="text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">{title}</p>
+                <p className="text-xs text-muted-foreground">{description}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

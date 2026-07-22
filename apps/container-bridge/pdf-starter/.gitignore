@@ -1,0 +1,10 @@
+node_modules
+dist
+.vite
+.env
+.env.*
+!.env.example
+data
+*.log
+
+next-env.d.ts

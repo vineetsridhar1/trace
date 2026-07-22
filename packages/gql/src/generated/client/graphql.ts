@@ -235,6 +235,14 @@ export type ChatMember = {
 
 export type ChatType = "dm" | "group";
 
+export type CodexAuthMethod = "access_token" | "api_key" | "chatgpt_session";
+
+export type CodexCredentialStatus = {
+  __typename?: "CodexCredentialStatus";
+  method: CodexAuthMethod;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type CodingTool =
   | "antigravity"
   | "claude_code"
@@ -396,6 +404,7 @@ export type EventType =
   | "chat_member_added"
   | "chat_member_removed"
   | "chat_renamed"
+  | "design_preview_updated"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -406,6 +415,7 @@ export type EventType =
   | "message_edited"
   | "message_sent"
   | "organization_created"
+  | "pdf_export_updated"
   | "queued_message_added"
   | "queued_message_removed"
   | "queued_message_updated"
@@ -471,6 +481,10 @@ export type GitCheckpoint = {
   filesChanged: Scalars["Int"]["output"];
   id: Scalars["ID"]["output"];
   parentShas: Array<Scalars["String"]["output"]>;
+  previewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  previewContentType?: Maybe<Scalars["String"]["output"]>;
+  previewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  previewUrl?: Maybe<Scalars["String"]["output"]>;
   promptEvent?: Maybe<Event>;
   promptEventId: Scalars["ID"]["output"];
   repo?: Maybe<Repo>;
@@ -624,6 +638,7 @@ export type Mutation = {
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
+  deleteCodexCredential: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
@@ -660,6 +675,7 @@ export type Mutation = {
   reorderChannels: Array<Channel>;
   reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
+  requestPdfSessionExport: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retrySessionConnection: Session;
@@ -675,6 +691,7 @@ export type Mutation = {
   sendMessage: Event;
   sendSessionMessage: Event;
   setApiToken: ApiTokenStatus;
+  setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
   startSession: Session;
@@ -698,6 +715,7 @@ export type Mutation = {
   updateChannel: Channel;
   updateChannelGroup: ChannelGroup;
   updateOrgMemberRole: OrgMember;
+  updatePdfSessionFormat: Scalars["Boolean"]["output"];
   updateQueuedMessage: QueuedMessage;
   updateRepo: Repo;
   updateSessionConfig: Session;
@@ -1004,6 +1022,10 @@ export type MutationRequestBridgeAccessArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationRequestPdfSessionExportArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
 export type MutationRestartSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
@@ -1086,6 +1108,10 @@ export type MutationSendSessionMessageArgs = {
 
 export type MutationSetApiTokenArgs = {
   input: SetApiTokenInput;
+};
+
+export type MutationSetCodexCredentialArgs = {
+  input: SetCodexCredentialInput;
 };
 
 export type MutationSetLinkedCheckoutAutoSyncArgs = {
@@ -1205,6 +1231,13 @@ export type MutationUpdateOrgMemberRoleArgs = {
   organizationId: Scalars["ID"]["input"];
   role: UserRole;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationUpdatePdfSessionFormatArgs = {
+  height: Scalars["Float"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  unit: Scalars["String"]["input"];
+  width: Scalars["Float"]["input"];
 };
 
 export type MutationUpdateQueuedMessageArgs = {
@@ -1341,12 +1374,17 @@ export type Query = {
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
   myBridgeRuntimes: Array<BridgeRuntime>;
+  myCodexCredential?: Maybe<CodexCredentialStatus>;
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
+  pdfSessionDownloadUrl?: Maybe<Scalars["String"]["output"]>;
+  /** PDF-kind session groups for the org (the sidebar PDFs section). */
+  pdfSessionGroups: Array<SessionGroup>;
+  pdfSessionPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   project?: Maybe<Project>;
   projects: Array<Project>;
   repo?: Maybe<Repo>;
@@ -1501,6 +1539,18 @@ export type QueryOrganizationArgs = {
 export type QueryParticipantsArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
+};
+
+export type QueryPdfSessionDownloadUrlArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type QueryPdfSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryPdfSessionPreviewUrlArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryProjectArgs = {
@@ -1981,6 +2031,10 @@ export type SessionGroup = {
   channel?: Maybe<Channel>;
   connection?: Maybe<SessionConnection>;
   createdAt: Scalars["DateTime"]["output"];
+  designPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
+  designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
+  designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
@@ -1988,6 +2042,14 @@ export type SessionGroup = {
   kind: SessionGroupKind;
   name: Scalars["String"]["output"];
   owner: User;
+  pdfExportCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  pdfExportCommitSha?: Maybe<Scalars["String"]["output"]>;
+  pdfExportError?: Maybe<Scalars["String"]["output"]>;
+  pdfExportStatus?: Maybe<Scalars["String"]["output"]>;
+  pdfFormatVersion: Scalars["Int"]["output"];
+  pdfPageHeight: Scalars["Float"]["output"];
+  pdfPageUnit: Scalars["String"]["output"];
+  pdfPageWidth: Scalars["Float"]["output"];
   prUrl?: Maybe<Scalars["String"]["output"]>;
   repo?: Maybe<Repo>;
   sessions: Array<Session>;
@@ -2024,7 +2086,7 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "app" | "coding" | "design";
+export type SessionGroupKind = "app" | "coding" | "design" | "pdf";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2105,6 +2167,11 @@ export type SessionTimelinePage = {
 export type SetApiTokenInput = {
   provider: ApiTokenProvider;
   token: Scalars["String"]["input"];
+};
+
+export type SetCodexCredentialInput = {
+  credential: Scalars["String"]["input"];
+  method: CodexAuthMethod;
 };
 
 export type SetOrgSecretInput = {
@@ -2737,6 +2804,7 @@ export type SessionDetailQuery = {
       prUrl?: string | null;
       workdir?: string | null;
       worktreeDeleted: boolean;
+      designPreviewUrl?: string | null;
       createdAt: string;
       updatedAt: string;
       setupStatus: SetupStatus;
@@ -2754,6 +2822,9 @@ export type SessionDetailQuery = {
         captureStatus?: GitCheckpointCaptureStatus | null;
         captureUrl?: string | null;
         capturedAt?: string | null;
+        previewStatus?: GitCheckpointCaptureStatus | null;
+        previewUrl?: string | null;
+        previewCapturedAt?: string | null;
         createdAt: string;
       }>;
       channel?: { __typename?: "Channel"; id: string } | null;
@@ -2822,6 +2893,9 @@ export type SessionDetailQuery = {
       captureStatus?: GitCheckpointCaptureStatus | null;
       captureUrl?: string | null;
       capturedAt?: string | null;
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+      previewCapturedAt?: string | null;
       createdAt: string;
     }>;
     channel?: { __typename?: "Channel"; id: string } | null;
@@ -2859,6 +2933,15 @@ export type SessionGroupDetailQuery = {
     workdir?: string | null;
     worktreeDeleted: boolean;
     worktreeAdopted: boolean;
+    designPreviewUrl?: string | null;
+    pdfExportStatus?: string | null;
+    pdfExportCommitSha?: string | null;
+    pdfExportCapturedAt?: string | null;
+    pdfExportError?: string | null;
+    pdfPageWidth: number;
+    pdfPageHeight: number;
+    pdfPageUnit: string;
+    pdfFormatVersion: number;
     setupStatus: SetupStatus;
     setupError?: string | null;
     createdAt: string;
@@ -2877,6 +2960,9 @@ export type SessionGroupDetailQuery = {
       captureStatus?: GitCheckpointCaptureStatus | null;
       captureUrl?: string | null;
       capturedAt?: string | null;
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+      previewCapturedAt?: string | null;
       createdAt: string;
     }>;
     repo?: {
@@ -2937,45 +3023,6 @@ export type SessionGroupDetailQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   } | null;
-};
-
-export type AppPreviewStateQueryVariables = Exact<{
-  sessionGroupId: Scalars["ID"]["input"];
-}>;
-
-export type AppPreviewStateQuery = {
-  __typename?: "Query";
-  sessionEndpoints: Array<{
-    __typename?: "SessionEndpoint";
-    id: string;
-    sessionGroupId: string;
-    appConfigId: string;
-    processConfigId: string;
-    portConfigId: string;
-    label: string;
-    targetPort: number;
-    url: string;
-    status: SessionEndpointStatus;
-    accessMode: SessionEndpointAccessMode;
-    trafficCaptureMode: EndpointTrafficCaptureMode;
-    enabledAt?: string | null;
-    disabledAt?: string | null;
-    revokedAt?: string | null;
-  }>;
-  sessionApplicationProcesses: Array<{
-    __typename?: "SessionApplicationProcess";
-    id: string;
-    sessionGroupId: string;
-    appConfigId: string;
-    processConfigId: string;
-    label: string;
-    status: ApplicationProcessStatus;
-    runtimeInstanceId?: string | null;
-    startedAt?: string | null;
-    stoppedAt?: string | null;
-    exitCode?: number | null;
-    lastError?: string | null;
-  }>;
 };
 
 export type SessionEndpointTrafficEndpointsQueryVariables = Exact<{
@@ -3215,7 +3262,80 @@ export type CreateSessionEndpointPreviewMutationVariables = Exact<{
 
 export type CreateSessionEndpointPreviewMutation = {
   __typename?: "Mutation";
-  createSessionEndpointPreview: { __typename?: "SessionEndpointPreview"; url: string };
+  createSessionEndpointPreview: {
+    __typename?: "SessionEndpointPreview";
+    url: string;
+    expiresAt: string;
+  };
+};
+
+export type UpdatePdfFormatMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  width: Scalars["Float"]["input"];
+  height: Scalars["Float"]["input"];
+  unit: Scalars["String"]["input"];
+}>;
+
+export type UpdatePdfFormatMutation = { __typename?: "Mutation"; updatePdfSessionFormat: boolean };
+
+export type RequestPdfExportMutationVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type RequestPdfExportMutation = {
+  __typename?: "Mutation";
+  requestPdfSessionExport: boolean;
+};
+
+export type PdfSessionDownloadUrlQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type PdfSessionDownloadUrlQuery = {
+  __typename?: "Query";
+  pdfSessionDownloadUrl?: string | null;
+};
+
+export type AppPreviewStateQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+  includePdf: Scalars["Boolean"]["input"];
+}>;
+
+export type AppPreviewStateQuery = {
+  __typename?: "Query";
+  pdfSessionPreviewUrl?: string | null;
+  pdfSessionDownloadUrl?: string | null;
+  sessionEndpoints: Array<{
+    __typename?: "SessionEndpoint";
+    id: string;
+    sessionGroupId: string;
+    appConfigId: string;
+    processConfigId: string;
+    portConfigId: string;
+    label: string;
+    targetPort: number;
+    url: string;
+    status: SessionEndpointStatus;
+    accessMode: SessionEndpointAccessMode;
+    trafficCaptureMode: EndpointTrafficCaptureMode;
+    enabledAt?: string | null;
+    disabledAt?: string | null;
+    revokedAt?: string | null;
+  }>;
+  sessionApplicationProcesses: Array<{
+    __typename?: "SessionApplicationProcess";
+    id: string;
+    sessionGroupId: string;
+    appConfigId: string;
+    processConfigId: string;
+    label: string;
+    status: ApplicationProcessStatus;
+    runtimeInstanceId?: string | null;
+    startedAt?: string | null;
+    stoppedAt?: string | null;
+    exitCode?: number | null;
+    lastError?: string | null;
+  }>;
 };
 
 export type SessionGroupFileTreeQueryVariables = Exact<{
@@ -3263,6 +3383,11 @@ export type MyApiTokensQuery = {
     isSet: boolean;
     updatedAt?: string | null;
   }>;
+  myCodexCredential?: {
+    __typename?: "CodexCredentialStatus";
+    method: CodexAuthMethod;
+    updatedAt: string;
+  } | null;
 };
 
 export type SetApiTokenMutationVariables = Exact<{
@@ -3284,6 +3409,26 @@ export type DeleteApiTokenMutationVariables = Exact<{
 }>;
 
 export type DeleteApiTokenMutation = { __typename?: "Mutation"; deleteApiToken: boolean };
+
+export type SetCodexCredentialMutationVariables = Exact<{
+  input: SetCodexCredentialInput;
+}>;
+
+export type SetCodexCredentialMutation = {
+  __typename?: "Mutation";
+  setCodexCredential: {
+    __typename?: "CodexCredentialStatus";
+    method: CodexAuthMethod;
+    updatedAt: string;
+  };
+};
+
+export type DeleteCodexCredentialMutationVariables = Exact<{ [key: string]: never }>;
+
+export type DeleteCodexCredentialMutation = {
+  __typename?: "Mutation";
+  deleteCodexCredential: boolean;
+};
 
 export type AddOrgMemberMutationVariables = Exact<{
   organizationId: Scalars["ID"]["input"];
@@ -3431,20 +3576,13 @@ export type AgentEnvironmentsSettingsQuery = {
     createdAt: string;
     updatedAt: string;
   }>;
-  myConnections: Array<{
-    __typename?: "ConnectionsBridge";
-    bridge: {
-      __typename?: "BridgeRuntime";
-      id: string;
-      instanceId: string;
-      label: string;
-      hostingMode: HostingMode;
-      connected: boolean;
-    };
-    repos: Array<{
-      __typename?: "ConnectionsRepoEntry";
-      repo: { __typename?: "Repo"; id: string; name: string };
-    }>;
+  myBridgeRuntimes: Array<{
+    __typename?: "BridgeRuntime";
+    instanceId: string;
+    label: string;
+    hostingMode: HostingMode;
+    connected: boolean;
+    registeredRepoIds: Array<string>;
   }>;
 };
 
@@ -3685,6 +3823,97 @@ export type DesignSessionGroupsQuery = {
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
     archivedAt?: string | null;
+    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+    sessions: Array<{
+      __typename?: "Session";
+      id: string;
+      sessionGroupId?: string | null;
+      agentStatus: AgentStatus;
+      sessionStatus: SessionStatus;
+      prUrl?: string | null;
+      worktreeDeleted: boolean;
+      lastMessageAt?: string | null;
+      lastUserMessageAt?: string | null;
+      updatedAt: string;
+      createdAt: string;
+    }>;
+  }>;
+};
+
+export type GeneratedProjectsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type GeneratedProjectsQuery = {
+  __typename?: "Query";
+  appSessionGroups: Array<{
+    __typename?: "SessionGroup";
+    id: string;
+    name: string;
+    slug?: string | null;
+    kind: SessionGroupKind;
+    status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
+    archivedAt?: string | null;
+    updatedAt: string;
+    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+    sessions: Array<{
+      __typename?: "Session";
+      id: string;
+      sessionGroupId?: string | null;
+      agentStatus: AgentStatus;
+      sessionStatus: SessionStatus;
+      prUrl?: string | null;
+      worktreeDeleted: boolean;
+      lastMessageAt?: string | null;
+      lastUserMessageAt?: string | null;
+      updatedAt: string;
+      createdAt: string;
+    }>;
+  }>;
+  designSessionGroups: Array<{
+    __typename?: "SessionGroup";
+    id: string;
+    name: string;
+    slug?: string | null;
+    kind: SessionGroupKind;
+    status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
+    archivedAt?: string | null;
+    updatedAt: string;
+    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+    sessions: Array<{
+      __typename?: "Session";
+      id: string;
+      sessionGroupId?: string | null;
+      agentStatus: AgentStatus;
+      sessionStatus: SessionStatus;
+      prUrl?: string | null;
+      worktreeDeleted: boolean;
+      lastMessageAt?: string | null;
+      lastUserMessageAt?: string | null;
+      updatedAt: string;
+      createdAt: string;
+    }>;
+  }>;
+  pdfSessionGroups: Array<{
+    __typename?: "SessionGroup";
+    id: string;
+    name: string;
+    slug?: string | null;
+    kind: SessionGroupKind;
+    status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
+    archivedAt?: string | null;
+    updatedAt: string;
+    pdfExportStatus?: string | null;
+    pdfExportCommitSha?: string | null;
+    pdfExportCapturedAt?: string | null;
+    pdfExportError?: string | null;
+    pdfPageWidth: number;
+    pdfPageHeight: number;
+    pdfPageUnit: string;
+    pdfFormatVersion: number;
     connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
     sessions: Array<{
       __typename?: "Session";
@@ -5658,6 +5887,7 @@ export const SessionDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "workdir" } },
                       { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "gitCheckpoints" },
@@ -5675,6 +5905,9 @@ export const SessionDetailDocument = {
                             { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
                             { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
                             { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                            { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                            { kind: "Field", name: { kind: "Name", value: "previewCapturedAt" } },
                             { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                           ],
                         },
@@ -5875,6 +6108,9 @@ export const SessionDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewCapturedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },
@@ -5975,6 +6211,15 @@ export const SessionGroupDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "workdir" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
                 { kind: "Field", name: { kind: "Name", value: "worktreeAdopted" } },
+                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfExportStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfExportCommitSha" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfExportCapturedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfExportError" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfPageWidth" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfPageHeight" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfPageUnit" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfFormatVersion" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "gitCheckpoints" },
@@ -5992,6 +6237,9 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "captureStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "captureUrl" } },
                       { kind: "Field", name: { kind: "Name", value: "capturedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewCapturedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },
@@ -6125,88 +6373,6 @@ export const SessionGroupDetailDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupDetailQuery, SessionGroupDetailQueryVariables>;
-export const AppPreviewStateDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "AppPreviewState" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sessionEndpoints" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "portConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "label" } },
-                { kind: "Field", name: { kind: "Name", value: "targetPort" } },
-                { kind: "Field", name: { kind: "Name", value: "url" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "accessMode" } },
-                { kind: "Field", name: { kind: "Name", value: "trafficCaptureMode" } },
-                { kind: "Field", name: { kind: "Name", value: "enabledAt" } },
-                { kind: "Field", name: { kind: "Name", value: "disabledAt" } },
-                { kind: "Field", name: { kind: "Name", value: "revokedAt" } },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sessionApplicationProcesses" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
-                { kind: "Field", name: { kind: "Name", value: "label" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
-                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "stoppedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "exitCode" } },
-                { kind: "Field", name: { kind: "Name", value: "lastError" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AppPreviewStateQuery, AppPreviewStateQueryVariables>;
 export const SessionEndpointTrafficEndpointsDocument = {
   kind: "Document",
   definitions: [
@@ -7041,7 +7207,10 @@ export const CreateSessionEndpointPreviewDocument = {
             ],
             selectionSet: {
               kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "url" } }],
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "expiresAt" } },
+              ],
             },
           },
         ],
@@ -7052,6 +7221,291 @@ export const CreateSessionEndpointPreviewDocument = {
   CreateSessionEndpointPreviewMutation,
   CreateSessionEndpointPreviewMutationVariables
 >;
+export const UpdatePdfFormatDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "UpdatePdfFormat" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "width" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Float" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "height" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Float" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "unit" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "updatePdfSessionFormat" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "width" },
+                value: { kind: "Variable", name: { kind: "Name", value: "width" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "height" },
+                value: { kind: "Variable", name: { kind: "Name", value: "height" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "unit" },
+                value: { kind: "Variable", name: { kind: "Name", value: "unit" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<UpdatePdfFormatMutation, UpdatePdfFormatMutationVariables>;
+export const RequestPdfExportDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "RequestPdfExport" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "requestPdfSessionExport" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<RequestPdfExportMutation, RequestPdfExportMutationVariables>;
+export const PdfSessionDownloadUrlDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "PdfSessionDownloadUrl" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "pdfSessionDownloadUrl" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<PdfSessionDownloadUrlQuery, PdfSessionDownloadUrlQueryVariables>;
+export const AppPreviewStateDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "AppPreviewState" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "includePdf" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "Boolean" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionEndpoints" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "portConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "targetPort" } },
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "accessMode" } },
+                { kind: "Field", name: { kind: "Name", value: "trafficCaptureMode" } },
+                { kind: "Field", name: { kind: "Name", value: "enabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "disabledAt" } },
+                { kind: "Field", name: { kind: "Name", value: "revokedAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionApplicationProcesses" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "appConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "processConfigId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "runtimeInstanceId" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "stoppedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "exitCode" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "pdfSessionPreviewUrl" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            directives: [
+              {
+                kind: "Directive",
+                name: { kind: "Name", value: "include" },
+                arguments: [
+                  {
+                    kind: "Argument",
+                    name: { kind: "Name", value: "if" },
+                    value: { kind: "Variable", name: { kind: "Name", value: "includePdf" } },
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "pdfSessionDownloadUrl" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            directives: [
+              {
+                kind: "Directive",
+                name: { kind: "Name", value: "include" },
+                arguments: [
+                  {
+                    kind: "Argument",
+                    name: { kind: "Name", value: "if" },
+                    value: { kind: "Variable", name: { kind: "Name", value: "includePdf" } },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<AppPreviewStateQuery, AppPreviewStateQueryVariables>;
 export const SessionGroupFileTreeDocument = {
   kind: "Document",
   definitions: [
@@ -7223,6 +7677,17 @@ export const MyApiTokensDocument = {
               ],
             },
           },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "myCodexCredential" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "method" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
         ],
       },
     },
@@ -7308,6 +7773,63 @@ export const DeleteApiTokenDocument = {
     },
   ],
 } as unknown as DocumentNode<DeleteApiTokenMutation, DeleteApiTokenMutationVariables>;
+export const SetCodexCredentialDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "SetCodexCredential" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "SetCodexCredentialInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "setCodexCredential" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "method" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SetCodexCredentialMutation, SetCodexCredentialMutationVariables>;
+export const DeleteCodexCredentialDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "DeleteCodexCredential" },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [{ kind: "Field", name: { kind: "Name", value: "deleteCodexCredential" } }],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DeleteCodexCredentialMutation, DeleteCodexCredentialMutationVariables>;
 export const AddOrgMemberDocument = {
   kind: "Document",
   definitions: [
@@ -7801,44 +8323,15 @@ export const AgentEnvironmentsSettingsDocument = {
           },
           {
             kind: "Field",
-            name: { kind: "Name", value: "myConnections" },
+            name: { kind: "Name", value: "myBridgeRuntimes" },
             selectionSet: {
               kind: "SelectionSet",
               selections: [
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "bridge" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "instanceId" } },
-                      { kind: "Field", name: { kind: "Name", value: "label" } },
-                      { kind: "Field", name: { kind: "Name", value: "hostingMode" } },
-                      { kind: "Field", name: { kind: "Name", value: "connected" } },
-                    ],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "repos" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "repo" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "name" } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
+                { kind: "Field", name: { kind: "Name", value: "instanceId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "hostingMode" } },
+                { kind: "Field", name: { kind: "Name", value: "connected" } },
+                { kind: "Field", name: { kind: "Name", value: "registeredRepoIds" } },
               ],
             },
           },
@@ -8717,6 +9210,192 @@ export const DesignSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<DesignSessionGroupsQuery, DesignSessionGroupsQueryVariables>;
+export const GeneratedProjectsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "GeneratedProjects" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "appSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "connection" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessions" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "connection" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessions" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "pdfSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfExportStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfExportCommitSha" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfExportCapturedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfExportError" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfPageWidth" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfPageHeight" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfPageUnit" } },
+                { kind: "Field", name: { kind: "Name", value: "pdfFormatVersion" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "connection" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessions" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<GeneratedProjectsQuery, GeneratedProjectsQueryVariables>;
 export const DeleteChannelGroupDocument = {
   kind: "Document",
   definitions: [

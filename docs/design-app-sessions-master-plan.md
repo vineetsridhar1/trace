@@ -1099,7 +1099,7 @@ work end to end.
 Design:
 
 ```bash
-TRACE_SMOKE_SERVER_URL=https://gettrace.org \
+TRACE_SMOKE_SERVER_URL=https://app.gettrace.org \
 TRACE_SMOKE_AUTH_TOKEN=<session-token> \
 TRACE_SMOKE_ORG_ID=<organization-id> \
 pnpm smoke:design-session
@@ -1114,7 +1114,7 @@ delete/recreate the bridge folder from the managed remote, and promote to coding
 App:
 
 ```bash
-TRACE_SMOKE_SERVER_URL=https://gettrace.org \
+TRACE_SMOKE_SERVER_URL=https://app.gettrace.org \
 TRACE_SMOKE_AUTH_TOKEN=<session-token> \
 TRACE_SMOKE_ORG_ID=<organization-id> \
 pnpm smoke:cloud-app-session

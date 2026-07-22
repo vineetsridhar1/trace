@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,12 +32,45 @@ test("rejects network and local asset references", () => {
   );
 });
 
+test("ignores asset-tag- and url()-shaped strings inside inlined script bodies", () => {
+  // A design's bundled JS can legitimately contain strings like `<img src="%s">`
+  // or `url(https://…)`; inlined into a <script>, these are not real external
+  // assets and must not fail the export.
+  assert.doesNotThrow(() =>
+    validateSelfContainedHtml(
+      '<!doctype html><div id="root"></div><script type="module">const tpl=\'<img src="%s">\';const bg=\'url(https://cdn.example.com/y.png)\';const imp=\'@import "https://example.com/x.css"\';</script>',
+    ),
+  );
+});
+
+test("still rejects a real external asset in markup alongside inlined scripts", () => {
+  assert.throws(
+    () =>
+      validateSelfContainedHtml(
+        '<!doctype html><img src="https://cdn.example.com/a.png"><script type="module">const ok="inline"</script>',
+      ),
+    /external asset/,
+  );
+});
+
 test("builds the design runtime as one self-contained HTML file", async () => {
   const html = await buildSelfContainedHtml(starterRoot);
   assert.match(html, /<script type="module">/);
   assert.match(html, /<style>/);
   assert.doesNotMatch(html, /<script\b[^>]*\bsrc=/i);
   assert.doesNotMatch(html, /<link\b[^>]*\bhref=["'](?!data:)/i);
+  validateSelfContainedHtml(html);
+});
+
+test("builds a saved preview from the requested commit", async () => {
+  const commitSha = execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: starterRoot,
+    encoding: "utf8",
+  }).trim();
+
+  const html = await buildSelfContainedHtml(starterRoot, commitSha);
+
+  assert.match(html, /<script type="module">/);
   validateSelfContainedHtml(html);
 });
 

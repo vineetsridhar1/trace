@@ -5,6 +5,7 @@ import { cn } from "../../lib/utils";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
 import { DeleteGeneratedProjectDialog } from "./DeleteGeneratedProjectDialog";
+import type { GeneratedProjectKind } from "./generated-project-types";
 import { useGeneratedProjectSessionGroupRow } from "./useGeneratedProjectSessionGroupRow";
 
 export function GeneratedProjectSessionItem({
@@ -14,7 +15,7 @@ export function GeneratedProjectSessionItem({
 }: {
   groupId: string;
   isActive: boolean;
-  kind: "app" | "design";
+  kind: GeneratedProjectKind;
 }) {
   const row = useGeneratedProjectSessionGroupRow(groupId);
   const [deleteOpen, setDeleteOpen] = useState(false);

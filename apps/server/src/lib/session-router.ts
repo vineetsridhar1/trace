@@ -28,6 +28,7 @@ import type {
   BridgeSessionGitSyncStatus,
   BridgeListWorkspaceSlugsCommand,
   BridgeRepoWorktree,
+  BridgePdfExportCommand,
 } from "@trace/shared";
 import { prisma } from "./db.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -70,6 +71,7 @@ export type SessionCommand =
   | BridgeFileAtRefCommand
   | BridgeListSkillsCommand
   | BridgeListWorkspaceSlugsCommand
+  | BridgePdfExportCommand
   | { type: "session_git_sync_status"; requestId: string; sessionId: string; workdirHint?: string }
   | BridgeSessionCurrentBranchCommand
   | BridgeTerminalCreateCommand
@@ -130,7 +132,7 @@ export interface SessionAdapterCreateOptions {
   sessionId: string;
   /** Session group ID — used to key worktrees so all sessions in a group share the same workspace. */
   sessionGroupId?: string;
-  sessionGroupKind?: "coding" | "design" | "app";
+  sessionGroupKind?: "coding" | "design" | "app" | "pdf";
   prepareAppGit?: (runtimeInstanceId: string) => Promise<{
     repoId: string;
     repoRemoteUrl: string;
@@ -2100,7 +2102,11 @@ export class SessionRouter {
           await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
         }
 
-        if (options.sessionGroupKind === "app" || options.sessionGroupKind === "design") {
+        if (
+          options.sessionGroupKind === "app" ||
+          options.sessionGroupKind === "design" ||
+          options.sessionGroupKind === "pdf"
+        ) {
           const runtimeInstanceId = startResult.runtimeInstanceId;
           if (!runtimeInstanceId || !options.prepareAppGit) {
             options.onFailed("Generated project managed git credentials are unavailable");

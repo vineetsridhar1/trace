@@ -3,7 +3,6 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "util";
-import { assertValidCommitSha } from "@trace/shared";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 
 const execFileAsync = promisify(execFile);
@@ -12,15 +11,33 @@ const IMAGE_APP_STARTER_DIR = "/opt/trace/app-starter";
 const SOURCE_APP_STARTER_DIR = fileURLToPath(new URL("../app-starter", import.meta.url));
 const IMAGE_DESIGN_STARTER_DIR = "/opt/trace/design-starter";
 const SOURCE_DESIGN_STARTER_DIR = fileURLToPath(new URL("../design-starter", import.meta.url));
+const IMAGE_PDF_STARTER_DIR = "/opt/trace/pdf-starter";
+const SOURCE_PDF_STARTER_DIR = fileURLToPath(new URL("../pdf-starter", import.meta.url));
 
-export type GeneratedProjectKind = "app" | "design";
+export type GeneratedProjectKind = "app" | "design" | "pdf";
+
+async function remoteDefaultBranchExists(repoRemoteUrl: string, defaultBranch: string): Promise<boolean> {
+  const { stdout } = await execFileAsync("git", [
+    "ls-remote",
+    "--heads",
+    repoRemoteUrl,
+    `refs/heads/${defaultBranch}`,
+  ]);
+  return stdout.trim().length > 0;
+}
 
 function starterDir(kind: GeneratedProjectKind): string {
   const configured =
-    kind === "design" ? process.env.TRACE_DESIGN_STARTER_DIR : process.env.TRACE_APP_STARTER_DIR;
+    kind === "design"
+      ? process.env.TRACE_DESIGN_STARTER_DIR
+      : kind === "pdf"
+        ? process.env.TRACE_PDF_STARTER_DIR
+        : process.env.TRACE_APP_STARTER_DIR;
   if (configured) return configured;
-  const imageDir = kind === "design" ? IMAGE_DESIGN_STARTER_DIR : IMAGE_APP_STARTER_DIR;
-  const sourceDir = kind === "design" ? SOURCE_DESIGN_STARTER_DIR : SOURCE_APP_STARTER_DIR;
+  const imageDir =
+    kind === "design" ? IMAGE_DESIGN_STARTER_DIR : kind === "pdf" ? IMAGE_PDF_STARTER_DIR : IMAGE_APP_STARTER_DIR;
+  const sourceDir =
+    kind === "design" ? SOURCE_DESIGN_STARTER_DIR : kind === "pdf" ? SOURCE_PDF_STARTER_DIR : SOURCE_APP_STARTER_DIR;
   if (fs.existsSync(imageDir)) return imageDir;
   if (fs.existsSync(sourceDir)) return sourceDir;
   throw new Error(`Trace ${kind} starter is missing from the runtime`);
@@ -67,24 +84,28 @@ export async function createAppWorkspace({
   const workspaceSlug = slug ?? sessionGroupId ?? generateAnimalSlug(usedSlugs);
   const workdir = `${WORKSPACES_DIR}/${workspaceSlug}`;
 
-  if (!fs.existsSync(workdir) && checkpointSha) {
-    assertValidCommitSha(checkpointSha);
-    await execFileAsync("git", ["clone", "--no-checkout", repoRemoteUrl, workdir]);
-    await execFileAsync("git", ["checkout", "-B", defaultBranch, checkpointSha], { cwd: workdir });
-  } else if (!fs.existsSync(workdir)) {
-    fs.mkdirSync(workdir, { recursive: true });
-    fs.cpSync(starterDir(sessionGroupKind), workdir, {
-      recursive: true,
-      force: false,
-      errorOnExist: false,
-      filter: (source) => !source.includes("/node_modules/") && !source.endsWith("/node_modules"),
-    });
+  if (!fs.existsSync(workdir)) {
+    // Cloud runtimes are disposable. Restore from the managed remote whenever
+    // it has a default branch, including ordinary container expiry retries
+    // that have no checkpoint SHA. A new managed repo has no branch yet, so
+    // seed it from the appropriate starter instead.
+    if (checkpointSha || (await remoteDefaultBranchExists(repoRemoteUrl, defaultBranch))) {
+      await execFileAsync("git", ["clone", "--branch", defaultBranch, repoRemoteUrl, workdir]);
+    } else {
+      fs.mkdirSync(workdir, { recursive: true });
+      fs.cpSync(starterDir(sessionGroupKind), workdir, {
+        recursive: true,
+        force: false,
+        errorOnExist: false,
+        filter: (source) => !source.includes("/node_modules/") && !source.endsWith("/node_modules"),
+      });
+    }
   }
 
   if (!fs.existsSync(`${workdir}/.git`)) {
     await execFileAsync("git", ["init", "-b", defaultBranch], { cwd: workdir });
   }
-  const agentLabel = sessionGroupKind === "design" ? "Design" : "App";
+  const agentLabel = sessionGroupKind === "design" ? "Design" : sessionGroupKind === "pdf" ? "PDF" : "App";
   await execFileAsync("git", ["config", "user.name", `Trace ${agentLabel} Agent`], {
     cwd: workdir,
   });

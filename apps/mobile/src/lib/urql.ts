@@ -1,13 +1,40 @@
 import { createGqlClient, type GqlClient } from "@trace/client-core";
+import { create } from "zustand";
 import { getGraphqlUrls } from "@/lib/connection-target";
 import { useConnectionStore } from "@/stores/connection";
 
+interface GqlClientState {
+  generation: number;
+  incrementGeneration: () => void;
+}
+
+const useGqlClientStore = create<GqlClientState>((set) => ({
+  generation: 0,
+  incrementGeneration: () => set((state) => ({ generation: state.generation + 1 })),
+}));
+
+// A retired client can emit its final `closed` callback after its replacement
+// has connected. Keep callbacks tied to the active client so that teardown
+// cannot make the app look disconnected while the new stream is healthy.
+let activeClientInstance = 0;
+
+/** Re-renders subscription hooks whenever the shared client is replaced. */
+export function useGqlClientGeneration(): number {
+  return useGqlClientStore((state) => state.generation);
+}
+
 function build(): GqlClient {
   const { httpUrl, wsUrl } = getGraphqlUrls();
+  const clientInstance = ++activeClientInstance;
   return createGqlClient({
     httpUrl,
     wsUrl,
+    // The mobile app keeps an ambient org event stream. Establish its native
+    // socket at client creation so React Native does not defer the transport
+    // indefinitely while the first subscription mounts.
+    lazy: false,
     onConnectionChange: (connected: boolean) => {
+      if (clientInstance !== activeClientInstance) return;
       useConnectionStore.getState().setConnected(connected);
     },
   });
@@ -32,6 +59,7 @@ export function getClient(): GqlClient {
 export function recreateClient(): GqlClient {
   const previous = _client;
   _client = build();
+  useGqlClientStore.getState().incrementGeneration();
   if (previous) {
     void previous.dispose().catch((err) => {
       console.warn("[urql] previous client dispose failed", err);

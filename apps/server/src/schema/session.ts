@@ -21,6 +21,10 @@ import {
 } from "../lib/session-group-status.js";
 import { assertScopeAccess, canViewSessionGroup } from "../services/access.js";
 import { storage } from "../lib/storage/index.js";
+import {
+  designCheckpointPreviewUrl,
+  designCommitPreviewUrl,
+} from "../lib/design-checkpoint-preview-url.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -46,6 +50,10 @@ export const sessionQueries = {
   designSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
     assertOrgAccess(ctx, args.organizationId);
     return sessionService.listDesignGroups(args.organizationId, ctx.userId);
+  },
+  pdfSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    assertOrgAccess(ctx, args.organizationId);
+    return sessionService.listPdfGroups(args.organizationId, ctx.userId);
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx), ctx.userId);
@@ -164,6 +172,14 @@ export const sessionQueries = {
   ) => {
     const orgId = requireOrgContext(ctx);
     return sessionService.readFile(args.sessionGroupId, args.filePath, orgId, ctx.userId);
+  },
+  pdfSessionPreviewUrl: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.pdfPreviewUrl(args.sessionGroupId, orgId, ctx.userId);
+  },
+  pdfSessionDownloadUrl: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    const orgId = requireOrgContext(ctx);
+    return sessionService.pdfDownloadUrl(args.sessionGroupId, orgId, ctx.userId);
   },
   sessionGroupFileContentWithSource: (
     _: unknown,
@@ -520,6 +536,30 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
+  updatePdfSessionFormat: (
+    _: unknown,
+    args: { sessionGroupId: string; width: number; height: number; unit: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.updatePdfFormat(
+      args.sessionGroupId,
+      { width: args.width, height: args.height, unit: args.unit },
+      requireOrgContext(ctx),
+      ctx.userId,
+    );
+  },
+  requestPdfSessionExport: (
+    _: unknown,
+    args: { sessionGroupId: string },
+    ctx: Context,
+  ) => {
+    return sessionService.requestPdfExport(
+      args.sessionGroupId,
+      requireOrgContext(ctx),
+      ctx.userId,
+    );
+  },
   commitSessionGroupFileChanges: (
     _: unknown,
     args: { sessionGroupId: string; message?: string | null },
@@ -720,6 +760,8 @@ export const sessionMutations = {
 
 export const sessionTypeResolvers = {
   SessionGroup: {
+    designPreviewUrl: (group: { id: string; designPreviewKey?: string | null }) =>
+      group.designPreviewKey ? designCommitPreviewUrl(group.id) : null,
     status: async (
       group: {
         id: string;
@@ -818,6 +860,14 @@ export const sessionTypeResolvers = {
       checkpoint.captureKey
         ? storage.getGetUrl(checkpoint.captureKey, { downloadFilename: "app-checkpoint.png" })
         : (checkpoint.captureUrl ?? null),
+    previewUrl: (checkpoint: {
+      id: string;
+      previewKey?: string | null;
+      previewUrl?: string | null;
+    }) =>
+      checkpoint.previewKey
+        ? designCheckpointPreviewUrl(checkpoint.id)
+        : (checkpoint.previewUrl ?? null),
     session: async (checkpoint: { sessionId: string }, _args: unknown, ctx: Context) => {
       return ctx.sessionLoader.load(checkpoint.sessionId);
     },

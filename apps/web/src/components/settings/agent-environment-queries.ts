@@ -28,20 +28,12 @@ export const AGENT_ENVIRONMENTS_SETTINGS_QUERY = gql`
       createdAt
       updatedAt
     }
-    myConnections {
-      bridge {
-        id
-        instanceId
-        label
-        hostingMode
-        connected
-      }
-      repos {
-        repo {
-          id
-          name
-        }
-      }
+    myBridgeRuntimes {
+      instanceId
+      label
+      hostingMode
+      connected
+      registeredRepoIds
     }
   }
 `;

@@ -4,14 +4,16 @@ import { cn } from "../../lib/utils";
 import { useSidebar } from "../ui/sidebar";
 import { SessionDetailView } from "./SessionDetailView";
 
-export function GeneratedProjectWorkspace({
+export function ProjectPreviewWorkspace({
   sessionId,
   scrollToEventId,
   onScrollComplete,
   onForkSession,
   canForkSession,
   canvasReady,
+  canvasKey,
   canvas,
+  showCanvasWhileLoading = false,
 }: {
   sessionId: string | null;
   scrollToEventId: string | null;
@@ -19,9 +21,11 @@ export function GeneratedProjectWorkspace({
   onForkSession: (eventId: string) => void;
   canForkSession: boolean;
   canvasReady: boolean;
+  canvasKey: string;
   canvas: ReactNode;
+  showCanvasWhileLoading?: boolean;
 }) {
-  const [canvasRevealed, setCanvasRevealed] = useState(canvasReady);
+  const [canvasRevealed, setCanvasRevealed] = useState(canvasReady || showCanvasWhileLoading);
   const hasCollapsedRef = useRef(false);
   const collapsedByUsRef = useRef(false);
   const reduceMotion = useReducedMotion();
@@ -35,36 +39,40 @@ export function GeneratedProjectWorkspace({
   });
 
   useEffect(() => {
-    if (!canvasReady) return;
+    if (!canvasReady && !showCanvasWhileLoading) return;
     setCanvasRevealed(true);
+    if (!canvasReady) return;
     if (hasCollapsedRef.current) return;
     hasCollapsedRef.current = true;
-    // Only collapse (and later restore) if the sidebar was open — if the user
-    // had already collapsed it themselves, leave it alone.
     const wasOpen = isMobile ? openMobile : open;
     if (!wasOpen) return;
     collapsedByUsRef.current = true;
     if (isMobile) setOpenMobile(false);
     else setOpen(false);
-  }, [canvasReady, isMobile, open, openMobile, setOpen, setOpenMobile]);
+  }, [canvasReady, isMobile, open, openMobile, setOpen, setOpenMobile, showCanvasWhileLoading]);
 
-  // Restore the shared sidebar when leaving the app canvas, but only if we were
-  // the ones who collapsed it.
   useEffect(() => {
     return () => {
       if (!collapsedByUsRef.current) return;
       const {
         isMobile: mobile,
-        setOpen: open_,
-        setOpenMobile: openMobile_,
+        setOpen: setDesktopOpen,
+        setOpenMobile: setMobileOpen,
       } = sidebarApiRef.current;
-      if (mobile) openMobile_(true);
-      else open_(true);
+      if (mobile) setMobileOpen(true);
+      else setDesktopOpen(true);
     };
   }, []);
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden">
+    <div
+      className={cn(
+        "flex h-full min-h-0",
+        isMobile
+          ? "snap-x snap-mandatory overflow-x-auto overscroll-x-contain"
+          : "overflow-hidden",
+      )}
+    >
       <motion.aside
         layout
         transition={
@@ -72,7 +80,11 @@ export function GeneratedProjectWorkspace({
         }
         className={cn(
           "h-full shrink-0 bg-background",
-          canvasRevealed ? "w-[clamp(22rem,33vw,34rem)] border-r border-border" : "w-full",
+          isMobile
+            ? "w-full min-w-full snap-start snap-always"
+            : canvasRevealed
+              ? "w-[clamp(22rem,33vw,34rem)] border-r border-border"
+              : "w-full",
         )}
       >
         {sessionId ? (
@@ -94,14 +106,17 @@ export function GeneratedProjectWorkspace({
       <AnimatePresence initial={false}>
         {canvasRevealed ? (
           <motion.main
-            key="generated-project-canvas"
+            key={canvasKey}
             initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: 48 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 48 }}
             transition={
               reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 30 }
             }
-            className="min-w-0 flex-1 bg-surface-deep"
+            className={cn(
+              "bg-surface-deep",
+              isMobile ? "w-full min-w-full shrink-0 snap-start snap-always" : "min-w-0 flex-1",
+            )}
           >
             {canvas}
           </motion.main>

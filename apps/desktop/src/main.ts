@@ -11,6 +11,9 @@ import {
 import path from "path";
 import crypto from "crypto";
 import { readFileSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { spawn } from "node:child_process";
 import { setTimeout } from "node:timers";
 import { makeUserNotifier, updateElectronApp, UpdateSourceType } from "update-electron-app";
 import {
@@ -371,6 +374,29 @@ ipcMain.handle("get-github-cli-status", async () => {
 
 ipcMain.handle("get-github-auth-token", async () => {
   return getGithubAuthToken();
+});
+
+ipcMain.handle("login-codex-with-chatgpt", async () => {
+  const codexHome = await mkdtemp(path.join(tmpdir(), "trace-codex-login-"));
+  try {
+    await writeFile(
+      path.join(codexHome, "config.toml"),
+      'cli_auth_credentials_store = "file"\n',
+      { mode: 0o600 },
+    );
+    const exitCode = await new Promise<number | null>((resolve, reject) => {
+      const child = spawn("codex", ["login"], {
+        env: { ...process.env, CODEX_HOME: codexHome },
+        stdio: "pipe",
+      });
+      child.once("error", reject);
+      child.once("close", resolve);
+    });
+    if (exitCode !== 0) throw new Error("Codex login was cancelled or failed.");
+    return await readFile(path.join(codexHome, "auth.json"), "utf8");
+  } finally {
+    await rm(codexHome, { force: true, recursive: true });
+  }
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());

@@ -34,6 +34,7 @@ vi.mock("@trace/shared", () => ({
   getDefaultModel: (tool: string) =>
     tool === "claude_code" ? "claude-default" : tool === "codex" ? "codex-default" : "pi-default",
   getDefaultReasoningEffort: (tool: string) => (tool === "codex" ? "medium" : null),
+  getModelProviderGroupsForTool: () => [],
 }));
 
 vi.mock("@/components/design-system", () => ({

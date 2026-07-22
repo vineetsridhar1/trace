@@ -35,4 +35,11 @@ export interface GitStorageAdapter {
    * rejecting individual updates). Returns an empty map for a missing repo.
    */
   listRefs(organizationId: string, repoId: string): Promise<Map<string, string>>;
+  /** Read a UTF-8 file from an exact commit without checking out a worktree. */
+  readFileAtCommit(
+    organizationId: string,
+    repoId: string,
+    commitSha: string,
+    filePath: string,
+  ): Promise<string | null>;
 }

@@ -1,7 +1,7 @@
 import fs from "fs";
 import { execFileSync } from "child_process";
 import { ContainerBridge } from "./bridge.js";
-import { loginAvailableTools } from "./tool-auth.js";
+import { installCodexAuthFile, loginAvailableTools } from "./tool-auth.js";
 import { parseRuntimeSetupCommands, runRuntimeSetupCommands } from "./runtime-setup.js";
 
 /**
@@ -61,6 +61,7 @@ async function main(): Promise<void> {
 
   // Set up SSH key before any git operations
   setupSshKey();
+  installCodexAuthFile();
 
   await runRuntimeSetupCommands(
     parseRuntimeSetupCommands(process.env.TRACE_RUNTIME_SETUP_COMMANDS),

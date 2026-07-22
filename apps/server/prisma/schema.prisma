@@ -47,6 +47,7 @@ enum SessionGroupKind {
   coding
   design
   app
+  pdf
 }
 
 enum TicketStatus {
@@ -138,6 +139,12 @@ enum ApiTokenProvider {
   ssh_key
 }
 
+enum CodexAuthMethod {
+  chatgpt_session
+  access_token
+  api_key
+}
+
 enum PushPlatform {
   ios
   android
@@ -191,6 +198,8 @@ enum EventType {
   session_pr_closed
   session_group_archived
   session_group_renamed
+  design_preview_updated
+  pdf_export_updated
   ticket_assigned
   ticket_unassigned
   ticket_linked
@@ -375,6 +384,7 @@ model User {
   channelMemberships           ChannelMember[]
   participants                 Participant[]
   apiTokens                    ApiToken[]
+  codexCredential              CodexCredential?
   pushTokens                   PushToken[]
   queuedMessages               QueuedMessage[]       @relation("QueuedMessageCreator")
   slackInstalls                SlackInstall[]        @relation("SlackInstallInstaller")
@@ -540,6 +550,24 @@ model SessionGroup {
   setupScriptRuns      SessionSetupScriptRun[]
   applicationProcesses SessionApplicationProcess[]
   endpoints            SessionEndpoint[]
+  designPreviewStatus  String?
+  designPreviewKey     String?
+  designPreviewCommitSha String?
+  designPreviewCapturedAt DateTime?
+  designPreviewAttemptedAt DateTime?
+  pdfExportStatus        String?
+  pdfExportKey           String?
+  pdfExportPendingKey    String?
+  pdfExportCommitSha     String?
+  pdfExportRequestId     String?
+  pdfExportCapturedAt    DateTime?
+  pdfExportAttemptedAt   DateTime?
+  pdfExportError         String?
+  pdfPageWidth           Float     @default(210)
+  pdfPageHeight          Float     @default(297)
+  pdfPageUnit            String    @default("mm")
+  pdfFormatVersion       Int       @default(0)
+  pdfExportFormatVersion Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -550,6 +578,8 @@ model SessionGroup {
   @@index([forkedFromSessionGroupId])
   @@index([channelId, updatedAt])
   @@index([repoId, branch, updatedAt])
+  @@index([kind, designPreviewStatus])
+  @@index([kind, pdfExportStatus])
 }
 
 model Session {
@@ -843,6 +873,17 @@ model ApiToken {
   @@unique([userId, provider])
 }
 
+model CodexCredential {
+  id                  String          @id @default(uuid())
+  userId              String          @unique
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  method              CodexAuthMethod
+  encryptedCredential String
+  iv                  String
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+}
+
 model PushToken {
   id             String        @id @default(uuid())
   userId         String
@@ -900,6 +941,11 @@ model GitCheckpoint {
   captureUrl         String?
   captureContentType String?
   capturedAt         DateTime?
+  previewStatus      String?
+  previewKey         String?
+  previewUrl         String?
+  previewContentType String?
+  previewCapturedAt  DateTime?
   createdAt      DateTime @default(now())
 
   sessionGroup SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)

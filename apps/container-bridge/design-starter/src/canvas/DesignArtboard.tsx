@@ -4,20 +4,13 @@ import { ArtboardErrorBoundary } from "./ArtboardErrorBoundary";
 
 export function DesignArtboard({
   screen,
-  sectionName,
   component: ScreenComponent,
   onFocus,
-  zoom,
 }: {
   screen: DesignScreen;
-  sectionName: string;
   component: ComponentType;
   onFocus: () => void;
-  zoom: number;
 }) {
-  const inverseZoom = 1 / zoom;
-  const labelWidth = screen.viewport.width * zoom;
-
   return (
     <article
       data-screen-id={screen.id}
@@ -27,28 +20,21 @@ export function DesignArtboard({
       <div
         className="absolute left-0"
         style={{
-          bottom: screen.viewport.height + 12 * inverseZoom,
-          transform: `scale(${inverseZoom})`,
-          transformOrigin: "bottom left",
-          width: labelWidth,
+          bottom: screen.viewport.height + 12,
+          width: screen.viewport.width,
         }}
       >
-        <p
-          className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-600"
-        >
-          {sectionName}
-        </p>
         <header className="flex items-end justify-between gap-3 text-zinc-200">
           <div>
-            <h2 className="text-sm font-medium">{screen.name}</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">
+            <h2 className="text-[24px] font-medium leading-8">{screen.name}</h2>
+            <p className="mt-2 text-[18px] leading-[26px] text-zinc-500">
               {[screen.variation, screen.state].filter(Boolean).join(" · ") || "Default"}
             </p>
           </div>
           <button
             type="button"
             onClick={onFocus}
-            className="rounded px-2 py-1 text-xs text-zinc-400 hover:bg-white/10 hover:text-white"
+            className="rounded px-2 py-1 text-sm text-zinc-400 hover:bg-white/10 hover:text-white"
           >
             Focus
           </button>

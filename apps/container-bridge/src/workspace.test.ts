@@ -285,7 +285,25 @@ describe("workspace repo setup", () => {
     );
   });
 
-  it("restores an app workspace from the managed checkpoint commit", async () => {
+  it("creates a PDF workspace from the bundled PDF starter", async () => {
+    mocks.existsSync.mockImplementation((path) => String(path).endsWith("/pdf-starter"));
+
+    await createAppWorkspace({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      repoRemoteUrl: "https://example.test/repo.git",
+      defaultBranch: "main",
+      sessionGroupKind: "pdf",
+    });
+
+    expect(mocks.cpSync).toHaveBeenCalledWith(
+      expect.stringMatching(/pdf-starter$/),
+      expect.any(String),
+      expect.objectContaining({ recursive: true }),
+    );
+  });
+
+  it("recreates an app workspace from the latest managed remote branch", async () => {
     mocks.existsSync.mockReturnValue(false);
     mocks.readdirSync.mockReturnValue([]);
     const checkpointSha = "a".repeat(40);
@@ -302,19 +320,64 @@ describe("workspace repo setup", () => {
       "git",
       [
         "clone",
-        "--no-checkout",
+        "--branch",
+        "main",
         "https://trace:token@example.test/git/org/repo.git",
         "/workspaces/restored-group",
       ],
       expect.any(Function),
     );
-    expect(mocks.execFile).toHaveBeenCalledWith(
+    expect(mocks.execFile).not.toHaveBeenCalledWith(
       "git",
       ["checkout", "-B", "main", checkpointSha],
-      { cwd: "/workspaces/restored-group" },
+      expect.anything(),
       expect.any(Function),
     );
     expect(mocks.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it("recreates an expired app workspace from the remote without a checkpoint", async () => {
+    mocks.existsSync.mockReturnValue(false);
+    mocks.readdirSync.mockReturnValue([]);
+    mocks.execFile.mockImplementation((...args: unknown[]) => {
+      const gitArgs = args[1];
+      const callback = callbackFrom(args);
+      if (Array.isArray(gitArgs) && gitArgs[0] === "ls-remote") {
+        callback(null, `${"a".repeat(40)}\trefs/heads/main\n`, "");
+        return;
+      }
+      callback(null, "", "");
+    });
+
+    await createAppWorkspace({
+      sessionId: "session-1",
+      sessionGroupId: "expired-group",
+      repoRemoteUrl: "https://trace:token@example.test/git/org/repo.git",
+      defaultBranch: "main",
+    });
+
+    expect(mocks.execFile).toHaveBeenCalledWith(
+      "git",
+      [
+        "ls-remote",
+        "--heads",
+        "https://trace:token@example.test/git/org/repo.git",
+        "refs/heads/main",
+      ],
+      expect.any(Function),
+    );
+    expect(mocks.execFile).toHaveBeenCalledWith(
+      "git",
+      [
+        "clone",
+        "--branch",
+        "main",
+        "https://trace:token@example.test/git/org/repo.git",
+        "/workspaces/expired-group",
+      ],
+      expect.any(Function),
+    );
+    expect(mocks.cpSync).not.toHaveBeenCalled();
   });
 
   it("creates the requested branch from the default branch when clone reports it missing", async () => {

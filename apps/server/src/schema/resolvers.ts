@@ -38,6 +38,7 @@ import {
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries, inboxMutations } from "./inbox.js";
 import { apiTokenQueries, apiTokenMutations } from "./api-token.js";
+import { codexCredentialMutations, codexCredentialQueries } from "./codex-credential.js";
 import { orgSecretMutations, orgSecretQueries, orgSecretTypeResolvers } from "./org-secret.js";
 import { pushTokenMutations } from "./push-token.js";
 import { terminalQueries, terminalMutations } from "./terminal.js";
@@ -99,6 +100,7 @@ export const resolvers = {
     ...eventQueries,
     ...inboxQueries,
     ...apiTokenQueries,
+    ...codexCredentialQueries,
     ...terminalQueries,
     ...sessionApplicationQueries,
     ...connectionsQueries,
@@ -118,6 +120,7 @@ export const resolvers = {
     ...ticketMutations,
     ...inboxMutations,
     ...apiTokenMutations,
+    ...codexCredentialMutations,
     ...pushTokenMutations,
     ...terminalMutations,
     ...sessionApplicationMutations,
