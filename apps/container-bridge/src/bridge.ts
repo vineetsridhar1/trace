@@ -61,7 +61,7 @@ import { ManagedProcessManager } from "./managed-process-manager.js";
 import { exportPdfToTarget } from "./pdf-export.js";
 
 const execFileAsync = promisify(execFile);
-const BRIDGE_PROTOCOL_VERSION = 1;
+const BRIDGE_PROTOCOL_VERSION = 2;
 const AGENT_VERSION = "0.1.0";
 const BRIDGE_USER_AGENT = "Trace-Container-Bridge/0.1";
 function hasExecutable(command: string): boolean {
