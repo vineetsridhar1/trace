@@ -7,6 +7,10 @@ apps/server/.env
 apps/web/.env
 !.env.example
 !**/.env.example
+
+# Cloud deployment config (carries raw launcher secrets) — see cloud.config.example.json
+cloud.config.json
+**/cloud.config.json
 *.tsbuildinfo
 .turbo/
 .vite/

@@ -1,0 +1,19 @@
+{
+  "name": "Trace Cloud",
+  "startUrl": "https://launcher.example.com/start",
+  "stopUrl": "https://launcher.example.com/stop",
+  "statusUrl": "https://launcher.example.com/status",
+  "auth": {
+    "type": "bearer",
+    "secret": "<launcher-auth-token>"
+  },
+  "startupTimeoutSeconds": 180,
+  "deprovisionPolicy": "on_session_end",
+  "capabilities": {
+    "supportedTools": ["claude_code"]
+  },
+  "runtimeEnv": [
+    { "name": "EXAMPLE_RUNTIME_VAR", "secret": "<value-injected-into-every-runtime>" }
+  ],
+  "launcherMetadata": {}
+}
