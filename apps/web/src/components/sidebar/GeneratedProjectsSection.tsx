@@ -138,6 +138,14 @@ export function isCreateListKind(kind: SessionGroup["kind"]): kind is GeneratedP
   return kind === "app" || kind === "design" || kind === "design_system" || kind === "pdf";
 }
 
+type SidebarProjectKind = Exclude<GeneratedProjectKind, "design_system">;
+
+export function isSidebarCreateListKind(
+  kind: SessionGroup["kind"],
+): kind is SidebarProjectKind {
+  return kind === "app" || kind === "design" || kind === "pdf";
+}
+
 export function GeneratedProjectsSection({
   activeOrgId,
   activeSessionGroupId,
@@ -181,14 +189,13 @@ export function GeneratedProjectsSection({
   }, [activeOrgId, upsertMany]);
 
   const projectGroupsByKind = useMemo(() => {
-    const byKind: Record<GeneratedProjectKind, SessionGroupEntity[]> = {
+    const byKind: Record<SidebarProjectKind, SessionGroupEntity[]> = {
       app: [],
       design: [],
-      design_system: [],
       pdf: [],
     };
     for (const group of Object.values(groups)) {
-      if (!group.archivedAt && isCreateListKind(group.kind)) {
+      if (!group.archivedAt && isSidebarCreateListKind(group.kind)) {
         byKind[group.kind].push(group);
       }
     }
@@ -241,7 +248,7 @@ export function GeneratedProjectsSection({
             transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
             className="overflow-hidden pl-3"
           >
-            {(Object.keys(projectGroupsByKind) as GeneratedProjectKind[]).map((kind) => (
+            {(Object.keys(projectGroupsByKind) as SidebarProjectKind[]).map((kind) => (
               <GeneratedProjectTypeSection
                 key={kind}
                 activeSessionGroupId={activeSessionGroupId}

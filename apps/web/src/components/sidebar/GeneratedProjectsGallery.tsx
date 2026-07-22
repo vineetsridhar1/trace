@@ -15,7 +15,7 @@ const projectKindDetails = {
 
 export function GeneratedProjectsGallery() {
   const groups = useEntityStore((state) => state.sessionGroups);
-  const projectGroups = Object.values(groups)
+  const visibleGroups = Object.values(groups)
     .filter(
       (group) =>
         !group.archivedAt &&
@@ -25,6 +25,8 @@ export function GeneratedProjectsGallery() {
           group.kind === "pdf"),
     )
     .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+  const projectGroups = visibleGroups.filter((group) => group.kind !== "design_system");
+  const designSystemGroups = visibleGroups.filter((group) => group.kind === "design_system");
   const pdfGroups = projectGroups.filter((group) => group.kind === "pdf");
   const pdfPreviewUrls = usePdfArtifactPreviewUrls(pdfGroups);
 
@@ -38,7 +40,7 @@ export function GeneratedProjectsGallery() {
           <div className="mb-5">
             <h1 className="text-xl font-semibold text-foreground">Your creations</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Apps, designs, design systems, and documents created by your workspace.
+              Apps, designs, and documents created by your workspace.
             </p>
           </div>
           {projectGroups.length === 0 ? (
@@ -56,6 +58,25 @@ export function GeneratedProjectsGallery() {
               ))}
             </div>
           )}
+          <section className="mt-10 border-t border-border pt-8">
+            <div className="mb-5">
+              <h2 className="text-xl font-semibold text-foreground">Design systems</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Shared foundations and components for your workspace.
+              </p>
+            </div>
+            {designSystemGroups.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+                Your design systems will appear here.
+              </p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {designSystemGroups.map((group) => (
+                  <GeneratedProjectGalleryCard key={group.id} group={group} />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       </main>
     </div>
@@ -67,7 +88,7 @@ function GeneratedProjectGalleryCard({
   pdfPreviewUrl,
 }: {
   group: SessionGroupEntity;
-  pdfPreviewUrl: string | undefined;
+  pdfPreviewUrl?: string;
 }) {
   const kind = group.kind as GeneratedProjectKind;
   const { Icon, label } = projectKindDetails[kind];
