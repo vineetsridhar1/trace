@@ -65,7 +65,14 @@ export function ProjectPreviewWorkspace({
   }, []);
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden">
+    <div
+      className={cn(
+        "flex h-full min-h-0",
+        isMobile
+          ? "snap-x snap-mandatory overflow-x-auto overscroll-x-contain"
+          : "overflow-hidden",
+      )}
+    >
       <motion.aside
         layout
         transition={
@@ -73,7 +80,11 @@ export function ProjectPreviewWorkspace({
         }
         className={cn(
           "h-full shrink-0 bg-background",
-          canvasRevealed ? "w-[clamp(22rem,33vw,34rem)] border-r border-border" : "w-full",
+          isMobile
+            ? "w-full min-w-full snap-start snap-always"
+            : canvasRevealed
+              ? "w-[clamp(22rem,33vw,34rem)] border-r border-border"
+              : "w-full",
         )}
       >
         {sessionId ? (
@@ -102,7 +113,10 @@ export function ProjectPreviewWorkspace({
             transition={
               reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 30 }
             }
-            className="min-w-0 flex-1 bg-surface-deep"
+            className={cn(
+              "bg-surface-deep",
+              isMobile ? "w-full min-w-full shrink-0 snap-start snap-always" : "min-w-0 flex-1",
+            )}
           >
             {canvas}
           </motion.main>

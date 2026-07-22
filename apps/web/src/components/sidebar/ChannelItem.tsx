@@ -118,7 +118,12 @@ export const ChannelItem = memo(function ChannelItem({
                     />
                   </span>
                 )}
-                <span className={hasDoneBadge ? "truncate font-semibold" : "truncate"}>
+                <span
+                  className={cn(
+                    "truncate",
+                    hasDoneBadge && "font-semibold",
+                  )}
+                >
                   {name}
                 </span>
               </SidebarMenuButton>

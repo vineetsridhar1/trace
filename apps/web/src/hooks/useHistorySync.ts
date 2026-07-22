@@ -25,6 +25,17 @@ function parseNavFromPath(path: string): {
       searchQuery: "",
     };
   }
+  if (path.startsWith("/create")) {
+    return {
+      channelId: null,
+      sessionGroupId: null,
+      sessionId: null,
+      chatId: null,
+      page: "create",
+      channelSubPage: null,
+      searchQuery: "",
+    };
+  }
   if (path.startsWith("/search")) {
     return {
       channelId: null,
@@ -186,7 +197,7 @@ export function useHistorySync() {
     );
     const { channelId, sessionGroupId, sessionId, chatId, page } = initialRedirect ?? parsedNav;
     const isTopLevelPage =
-      page === "settings" || page === "inbox" || page === "tickets" || page === "search";
+      page === "create" || page === "settings" || page === "inbox" || page === "tickets" || page === "search";
     const initialChat =
       isTopLevelPage || channelId ? null : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =

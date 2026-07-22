@@ -93,7 +93,7 @@ export function ChannelGroupSection({
   const sortableIds = groupSortableIds(channelIds);
 
   return (
-    <div ref={setSortableRef} style={style} className="rounded-md transition-colors">
+    <div ref={setSortableRef} style={style} className="ml-3 rounded-md transition-colors">
       <div
         className={cn(
           "flex items-center justify-between rounded-md pr-1 transition-colors hover:bg-white/10 group/group-header",
@@ -112,7 +112,6 @@ export function ChannelGroupSection({
             className={cn("shrink-0 transition-transform duration-200", !collapsed && "rotate-90")}
           />
           <span className="truncate">{name}</span>
-          <span className="ml-1 text-[10px] text-foreground">{channelIds.length}</span>
         </button>
         <div
           className="flex items-center gap-0.5 opacity-0 group-hover/group-header:opacity-100 transition-opacity"
