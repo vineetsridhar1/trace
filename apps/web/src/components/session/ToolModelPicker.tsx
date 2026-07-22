@@ -157,7 +157,7 @@ export function ToolModelPicker({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <ActionTooltip label={compactLabel} className="lg:hidden">
+      <ActionTooltip label={compactLabel} className="@lg:hidden">
         <PopoverTrigger
           disabled={disabled}
           aria-label={compactLabel}
@@ -174,7 +174,7 @@ export function ToolModelPicker({
         onClick={() => {
           compactSelectionRef.current = false;
         }}
-        className="hidden h-7 w-auto max-w-[260px] cursor-pointer items-center gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 lg:flex"
+        className="hidden h-7 w-auto max-w-[260px] cursor-pointer items-center gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 @lg:flex"
       >
         <ToolIcon tool={tool} className="size-3.5 shrink-0" />
         <span className="truncate">{getToolLabel(tool)}</span>

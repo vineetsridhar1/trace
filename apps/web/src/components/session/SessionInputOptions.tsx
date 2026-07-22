@@ -407,7 +407,7 @@ export function SessionInputOptions({
   const ModeIcon = modeConfig.icon;
 
   return (
-    <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
+    <div className="@container flex items-center gap-1 overflow-hidden whitespace-nowrap">
       <button
         type="button"
         onClick={() => onModeChange(mode)}
@@ -442,7 +442,7 @@ export function SessionInputOptions({
         onReasoningEffortChange={handleReasoningEffortChange}
       />
       {reasoningEffortOptions.length > 0 && (
-        <div className="hidden lg:block">
+        <div className="hidden @lg:block">
           <EffortCycleButton
             key={currentTool}
             effort={currentReasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
