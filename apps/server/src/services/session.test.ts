@@ -6475,6 +6475,26 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
 
+    it("rejects changing a design library after it has been pinned", async () => {
+      prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
+        makeSession({
+          sessionGroup: makeSessionGroup({ kind: "design", designSystemVersionId: "version-1" }),
+        }),
+      );
+
+      await expect(
+        service.updateConfig(
+          "session-1",
+          "org-1",
+          { designSystemVersionId: null },
+          "user",
+          "user-1",
+        ),
+      ).rejects.toThrow("A pinned design library cannot be changed");
+
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
+    });
+
     it("rejects switching a no-remote repo session to cloud", async () => {
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import { toast } from "sonner";
@@ -174,9 +174,8 @@ export function SessionInputOptions({
     "designSystemVersionId",
   ) as string | null | undefined;
   const activeOrgId = useAuthStore((state) => state.activeOrgId);
-  const designSystems = useEntityStore(
-    useShallow((state) => Object.values(state.designSystems)),
-  );
+  const designSystemsById = useEntityStore((state) => state.designSystems);
+  const designSystems = useMemo(() => Object.values(designSystemsById), [designSystemsById]);
   const upsertMany = useEntityStore((state) => state.upsertMany);
   const openGeneratedProjectDialog = useCommandPaletteStore(
     (state) => state.openGeneratedProjectDialog,

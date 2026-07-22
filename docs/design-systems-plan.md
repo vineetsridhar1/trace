@@ -142,8 +142,8 @@ permissions, authoring sessions, events, and runtime delivery.
 
 ### New Design
 
-Selecting **New Design** opens a configuration step instead of immediately starting a
-session:
+Selecting **New Design** creates an unstarted Design session. Before the first prompt,
+the composer exposes a library selector alongside the normal model/runtime controls:
 
 ```text
 Create Design
@@ -163,8 +163,9 @@ active organization. A system remains selectable at its current active version w
 newer draft commit artifacts exist. Each option shows the active version and
 source-repository name when one exists. The last selected system may be suggested, but
 the persisted organization default is a later feature.
-After creation, the user enters the brief through the existing Design chat exactly as
-they do today; adding a separate prompt field to this dialog is not required.
+The selector starts at Trace Default. Selecting a published library pins its immutable
+version to the session and removes the selector; it cannot be changed after pinning or
+after the first prompt. The user then enters the brief through the existing Design chat.
 
 Choosing **Create new design system...** opens the creation flow without creating an
 empty Design first.
@@ -175,9 +176,10 @@ The first release asks for:
 
 - name;
 - source repository;
-- source branch, defaulting to the repository default branch;
-- optional source subdirectory for monorepos;
 - authoring environment when the normal session flow cannot select one automatically.
+
+The repository's configured default branch is used and the repository root is assumed;
+branch and source-path selection are intentionally deferred.
 
 Submitting creates a draft design-system entity and a `design_system` session backed by
 a hidden managed repo. Trace provisions the design-system starter, attaches a read-only

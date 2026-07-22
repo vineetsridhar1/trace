@@ -5185,6 +5185,12 @@ export class SessionService {
           "Design library can only be changed before a design session starts",
         );
       }
+      if (
+        prev.sessionGroup.designSystemVersionId !== null &&
+        config.designSystemVersionId !== prev.sessionGroup.designSystemVersionId
+      ) {
+        throw new ValidationError("A pinned design library cannot be changed");
+      }
       if (config.designSystemVersionId === null) {
         selectedDesignSystemVersionId = null;
       } else {

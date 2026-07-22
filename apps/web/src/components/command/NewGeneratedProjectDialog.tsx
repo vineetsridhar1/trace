@@ -46,12 +46,6 @@ const CREATE_SYSTEM = gql`
     createDesignSystem(input: $input) {
       id
       authoringSessionGroupId
-      authoringSessionGroup {
-        id
-        sessions {
-          id
-        }
-      }
     }
   }
 `;
@@ -86,6 +80,8 @@ export function NewGeneratedProjectDialog() {
   const close = useCommandPaletteStore((state) => state.closeGeneratedProjectDialog);
   const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const upsertMany = useEntityStore((state) => state.upsertMany);
+  const sessionGroups = useEntityStore((state) => state.sessionGroups);
+  const sessions = useEntityStore((state) => state.sessions);
   const [view, setView] = useState<View>(() =>
     kind === "design-system" ? "create-system" : kind === "design" ? "design" : "choose",
   );
@@ -103,6 +99,7 @@ export function NewGeneratedProjectDialog() {
   const [name, setName] = useState("");
   const [repoId, setRepoId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [pendingAuthoringGroupId, setPendingAuthoringGroupId] = useState<string | null>(null);
 
   const createImmediate = useCallback(
     (nextKind: "app" | "pdf") => {
@@ -153,6 +150,18 @@ export function NewGeneratedProjectDialog() {
     };
   }, [activeOrgId, environmentId, repoId, upsertMany, view]);
 
+  useEffect(() => {
+    if (!pendingAuthoringGroupId) return;
+    const group = sessionGroups[pendingAuthoringGroupId];
+    if (!group) return;
+    const session = Object.values(sessions).find(
+      (candidate) => candidate.sessionGroupId === pendingAuthoringGroupId,
+    );
+    close();
+    setPendingAuthoringGroupId(null);
+    navigateToSessionGroup(null, pendingAuthoringGroupId, session?.id ?? null);
+  }, [close, pendingAuthoringGroupId, sessionGroups, sessions]);
+
   const choose = (nextKind: GeneratedProjectKind) =>
     nextKind === "design" ? setView("design") : createImmediate(nextKind);
   const submitDesign = async () => {
@@ -181,12 +190,8 @@ export function NewGeneratedProjectDialog() {
         toast.error("Could not create design system", { description: result.error.message });
         return;
       }
-      const system = result.data?.createDesignSystem;
-      const sessionId = system?.authoringSessionGroup?.sessions?.[0]?.id ?? null;
-      if (system?.authoringSessionGroupId) {
-        close();
-        navigateToSessionGroup(null, system.authoringSessionGroupId, sessionId);
-      }
+      const groupId = result.data?.createDesignSystem?.authoringSessionGroupId;
+      if (groupId) setPendingAuthoringGroupId(groupId);
     } finally {
       setSubmitting(false);
     }

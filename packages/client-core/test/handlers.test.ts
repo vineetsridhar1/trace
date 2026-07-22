@@ -138,6 +138,33 @@ beforeEach(() => {
 });
 
 describe("handleOrgEvent", () => {
+  it("hydrates a design system authoring group from its creation event", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "design_system_created",
+        scopeType: "system",
+        scopeId: "system-1",
+        payload: {
+          designSystem: { id: "system-1", name: "Acme UI" },
+          sessionGroup: {
+            id: "group-1",
+            kind: "design_system",
+            sessions: [{ id: "session-1", sessionGroupId: "group-1", agentStatus: "not_started" }],
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toMatchObject({
+      id: "group-1",
+      kind: "design_system",
+    });
+    expect(useEntityStore.getState().sessions["session-1"]).toMatchObject({
+      id: "session-1",
+      sessionGroupId: "group-1",
+    });
+  });
+
   it("does not expose managed repos through the generic repo table", () => {
     const event = makeEvent({
       eventType: "repo_created",

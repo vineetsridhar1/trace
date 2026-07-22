@@ -189,6 +189,23 @@ export function handleOrgEvent(event: Event): void {
     if (version && typeof version.id === "string") {
       batch.upsert("designSystemVersions", version.id, version as unknown as DesignSystemVersion);
     }
+    const sessionGroup = asJsonObject(payload.sessionGroup);
+    if (sessionGroup && typeof sessionGroup.id === "string") {
+      batch.upsert("sessionGroups", sessionGroup.id, sessionGroup as unknown as SessionGroupEntity);
+      const sessions = sessionGroup.sessions;
+      if (Array.isArray(sessions)) {
+        for (const item of sessions) {
+          const session = asJsonObject(item);
+          if (session && typeof session.id === "string") {
+            batch.upsert("sessions", session.id, session as unknown as SessionEntity);
+          }
+        }
+      }
+    }
+    const session = asJsonObject(payload.session);
+    if (session && typeof session.id === "string") {
+      batch.upsert("sessions", session.id, session as unknown as SessionEntity);
+    }
   }
 
   // App process logs are high-volume and already live in their own capped entity

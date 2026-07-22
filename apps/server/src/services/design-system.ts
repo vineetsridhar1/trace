@@ -462,7 +462,7 @@ export class DesignSystemService {
             scopeType: "system",
             scopeId: id,
             eventType: "design_system_created",
-            payload: eventJson({ designSystem }),
+            payload: eventJson({ designSystem, session, sessionGroup }),
             actorType: input.actorType,
             actorId: input.actorId,
             deferPublish: true,
