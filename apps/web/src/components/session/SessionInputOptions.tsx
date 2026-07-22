@@ -546,11 +546,11 @@ export function SessionInputOptions({
         onModelChange={handleModelChange}
         onReasoningEffortChange={handleReasoningEffortChange}
       />
-      {isDesignSession && isNotStarted ? (
+      {isDesignSession ? (
         <DesignSystemCombobox
           systems={designSystems}
           value={selectedDesignSystemVersionId ?? TRACE_DEFAULT_DESIGN_SYSTEM}
-          disabled={isOptimistic}
+          disabled={isOptimistic || !isNotStarted}
           onValueChange={(value) => void handleDesignSystemChange(value)}
         />
       ) : null}
