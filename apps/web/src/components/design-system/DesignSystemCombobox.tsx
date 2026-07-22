@@ -35,6 +35,15 @@ export function designSystemAvailabilityLabel(system: DesignSystem): string {
   return "Waiting for first commit";
 }
 
+export function designSystemValidationErrors(system: DesignSystem): string[] {
+  const summary = system.latestCommitArtifact?.validationSummary;
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) return [];
+  const errors = (summary as Record<string, unknown>).errors;
+  return Array.isArray(errors)
+    ? errors.filter((error): error is string => typeof error === "string")
+    : [];
+}
+
 function optionLabel(system: DesignSystem): string {
   return `${system.name} · v${system.activeVersion?.version ?? "–"}`;
 }
@@ -116,11 +125,22 @@ export function DesignSystemCombobox({
               {unavailable.map((system) => (
                 <div
                   key={system.id}
-                  className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1 text-sm text-muted-foreground/50"
+                  className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground/50"
                 >
-                  <Palette className="size-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">
-                    {system.name} · {designSystemAvailabilityLabel(system)}
+                  <Palette className="mt-0.5 size-4 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">
+                      {system.name} · {designSystemAvailabilityLabel(system)}
+                    </span>
+                    {designSystemValidationErrors(system).map((error) => (
+                      <span
+                        key={error}
+                        className="mt-0.5 block truncate text-[11px] text-destructive/80"
+                        title={error}
+                      >
+                        {error}
+                      </span>
+                    ))}
                   </span>
                 </div>
               ))}

@@ -45,12 +45,23 @@ const DESIGN_SYSTEMS_QUERY = gql`
       name
       status
       archivedAt
-      latestCommitArtifact { id status packageValid }
+      latestCommitArtifact {
+        id
+        status
+        packageValid
+        validationSummary
+      }
       commitArtifactStatus
       publishStatus
       activeVersionId
-      activeVersion { id version }
-      sourceRepo { id name }
+      activeVersion {
+        id
+        version
+      }
+      sourceRepo {
+        id
+        name
+      }
     }
   }
 `;
@@ -157,10 +168,7 @@ export function SessionInputOptions({
     | SessionConnection
     | null
     | undefined;
-  const workdir = useEntityField("sessions", sessionId, "workdir") as
-    | string
-    | null
-    | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
@@ -180,16 +188,14 @@ export function SessionInputOptions({
   const openGeneratedProjectDialog = useCommandPaletteStore(
     (state) => state.openGeneratedProjectDialog,
   );
-  const groupConnection = useEntityField(
-    "sessionGroups",
-    sessionGroupId ?? "",
-    "connection",
-  ) as SessionConnection | null | undefined;
-  const groupWorkdir = useEntityField(
-    "sessionGroups",
-    sessionGroupId ?? "",
-    "workdir",
-  ) as string | null | undefined;
+  const groupConnection = useEntityField("sessionGroups", sessionGroupId ?? "", "connection") as
+    | SessionConnection
+    | null
+    | undefined;
+  const groupWorkdir = useEntityField("sessionGroups", sessionGroupId ?? "", "workdir") as
+    | string
+    | null
+    | undefined;
 
   const repo = useEntityField("sessions", sessionId, "repo") as
     | { id: string; remoteUrl?: string | null }

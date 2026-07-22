@@ -3023,7 +3023,13 @@ export type DesignCreationOptionsQueryVariables = Exact<{
 
 export type DesignCreationOptionsQuery = {
   __typename?: "Query";
-  repos: Array<{ __typename?: "Repo"; id: string; name: string; provider: RepoProvider }>;
+  repos: Array<{
+    __typename?: "Repo";
+    id: string;
+    name: string;
+    remoteUrl?: string | null;
+    provider: RepoProvider;
+  }>;
   agentEnvironments: Array<{
     __typename?: "AgentEnvironment";
     id: string;
@@ -3448,6 +3454,7 @@ export type DesignComposerOptionsQuery = {
       id: string;
       status: DesignSystemCommitArtifactStatus;
       packageValid?: boolean | null;
+      validationSummary?: JsonValue | null;
     } | null;
     activeVersion?: { __typename?: "DesignSystemVersion"; id: string; version: number } | null;
     sourceRepo?: { __typename?: "Repo"; id: string; name: string } | null;
@@ -4266,6 +4273,31 @@ export type DesignSessionGroupsQuery = {
       updatedAt: string;
       createdAt: string;
     }>;
+  }>;
+};
+
+export type ArchiveDesignSystemFromGalleryMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type ArchiveDesignSystemFromGalleryMutation = {
+  __typename?: "Mutation";
+  archiveDesignSystem: { __typename?: "DesignSystem"; id: string; archivedAt?: string | null };
+};
+
+export type GalleryDesignSystemsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type GalleryDesignSystemsQuery = {
+  __typename?: "Query";
+  designSystems: Array<{
+    __typename?: "DesignSystem";
+    id: string;
+    authoringSessionGroupId: string;
+    archivedAt?: string | null;
+    name: string;
+    status: DesignSystemStatus;
   }>;
 };
 
@@ -5880,6 +5912,7 @@ export const DesignCreationOptionsDocument = {
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
                 { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "provider" } },
               ],
             },
@@ -7077,6 +7110,7 @@ export const DesignComposerOptionsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "status" } },
                       { kind: "Field", name: { kind: "Name", value: "packageValid" } },
+                      { kind: "Field", name: { kind: "Name", value: "validationSummary" } },
                     ],
                   },
                 },
@@ -9950,6 +9984,98 @@ export const DesignSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<DesignSessionGroupsQuery, DesignSessionGroupsQueryVariables>;
+export const ArchiveDesignSystemFromGalleryDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ArchiveDesignSystemFromGallery" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "archiveDesignSystem" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  ArchiveDesignSystemFromGalleryMutation,
+  ArchiveDesignSystemFromGalleryMutationVariables
+>;
+export const GalleryDesignSystemsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "GalleryDesignSystems" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designSystems" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "authoringSessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<GalleryDesignSystemsQuery, GalleryDesignSystemsQueryVariables>;
 export const GeneratedProjectsDocument = {
   kind: "Document",
   definitions: [

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DesignSystem } from "@trace/gql";
 import {
   designSystemAvailabilityLabel,
+  designSystemValidationErrors,
   selectableDesignSystems,
   unavailableDesignSystems,
 } from "./DesignSystemCombobox";
@@ -65,12 +66,28 @@ describe("design-system selection", () => {
       latestCommitArtifact: {
         status: "saved",
         packageValid: false,
-      } as DesignSystem["latestCommitArtifact"],
+      } as unknown as DesignSystem["latestCommitArtifact"],
     });
     const archived = system({ id: "archived", archivedAt: "2026-01-02" });
 
     expect(unavailableDesignSystems([waiting, invalid, archived])).toEqual([waiting, invalid]);
     expect(designSystemAvailabilityLabel(waiting)).toBe("Waiting for first commit");
     expect(designSystemAvailabilityLabel(invalid)).toBe("Needs repair");
+  });
+
+  it("exposes package validation errors for an unavailable system", () => {
+    const invalid = system({
+      latestCommitArtifact: {
+        status: "saved",
+        packageValid: false,
+        validationSummary: {
+          valid: false,
+          errors: ["unresolved token alias in --font-sans: --font-geist-sans"],
+        },
+      } as DesignSystem["latestCommitArtifact"],
+    });
+    expect(designSystemValidationErrors(invalid)).toEqual([
+      "unresolved token alias in --font-sans: --font-geist-sans",
+    ]);
   });
 });
