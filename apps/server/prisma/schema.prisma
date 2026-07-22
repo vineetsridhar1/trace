@@ -675,6 +675,7 @@ model DesignSystemCommitArtifact {
   packageValid      Boolean?
   packageDigest     String?
   validationSummary Json?
+  repairAttempts    Int                              @default(0)
   error             String?
   createdById       String?
   createdBy         User?                            @relation("DesignSystemArtifactCreator", fields: [createdById], references: [id])

@@ -28,7 +28,7 @@ import { sessionService } from "./session.js";
 
 const ARTIFACT_BATCH_SIZE = 100;
 const DESIGN_SYSTEM_REPAIR_SOURCE = "internal:design-system-repair";
-const MAX_CONSECUTIVE_REPAIR_ATTEMPTS = 3;
+const MAX_REPAIR_ATTEMPTS = 3;
 
 export function shouldAdvanceLatestArtifact(
   currentSequence: number | null,
@@ -132,24 +132,26 @@ async function putImmutableObject(
 
 export class DesignSystemService {
   private async requestArtifactRepair(input: {
+    artifactId: string;
     designSystemId: string;
     organizationId: string;
     sessionGroupId: string;
     commitSha: string;
     errors: string[];
   }): Promise<void> {
-    const recentArtifacts = await prisma.designSystemCommitArtifact.findMany({
-      where: { designSystemId: input.designSystemId },
-      orderBy: { sequence: "desc" },
-      take: MAX_CONSECUTIVE_REPAIR_ATTEMPTS,
-      select: { packageValid: true },
+    const claimed = await prisma.designSystemCommitArtifact.updateMany({
+      where: {
+        id: input.artifactId,
+        repairAttempts: { lt: MAX_REPAIR_ATTEMPTS },
+      },
+      data: { repairAttempts: { increment: 1 } },
     });
-    if (
-      recentArtifacts.length >= MAX_CONSECUTIVE_REPAIR_ATTEMPTS &&
-      recentArtifacts.every((artifact) => artifact.packageValid === false)
-    ) {
+    if (claimed.count === 0) {
       console.warn("[design-system] repair attempt limit reached", {
         designSystemId: input.designSystemId,
+        artifactId: input.artifactId,
+        commitSha: input.commitSha,
+        errors: input.errors,
       });
       return;
     }
@@ -172,9 +174,22 @@ export class DesignSystemService {
       !session.workdir ||
       !session.toolSessionId
     ) {
+      console.warn("[design-system] repair skipped: authoring session unavailable", {
+        designSystemId: input.designSystemId,
+        sessionId: session?.id ?? null,
+        hasWorkdir: Boolean(session?.workdir),
+        hasToolSession: Boolean(session?.toolSessionId),
+        worktreeDeleted: session?.worktreeDeleted ?? null,
+      });
       return;
     }
-    if (!sessionRouter.getRuntimeForSession(session.id)) return;
+    if (!sessionRouter.getRuntimeForSession(session.id)) {
+      console.warn("[design-system] repair skipped: authoring runtime unavailable", {
+        designSystemId: input.designSystemId,
+        sessionId: session.id,
+      });
+      return;
+    }
 
     await sessionService.sendMessage({
       sessionId: session.id,
@@ -189,6 +204,12 @@ export class DesignSystemService {
       actorType: "system",
       actorId: "system",
       clientSource: DESIGN_SYSTEM_REPAIR_SOURCE,
+    });
+    console.info("[design-system] repair prompt delivered", {
+      designSystemId: input.designSystemId,
+      sessionId: session.id,
+      commitSha: input.commitSha,
+      errorCount: input.errors.length,
     });
   }
 
@@ -844,6 +865,7 @@ export class DesignSystemService {
       if (!validation.valid) {
         setImmediate(() => {
           void this.requestArtifactRepair({
+            artifactId: artifact.id,
             designSystemId: artifact.designSystemId,
             organizationId: artifact.designSystem.organizationId,
             sessionGroupId: group.id,
