@@ -9,6 +9,7 @@ import {
   Link2,
   Lock,
   Mail,
+  Plus,
   Unlock,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -141,11 +142,12 @@ export const ChannelOwnedSessions = memo(function ChannelOwnedSessions({
               <button
                 type="button"
                 className={cn(
-                  "flex h-7 w-full cursor-pointer items-center rounded-md px-1.5 text-left text-xs text-foreground/45 transition-colors hover:bg-white/10 hover:text-foreground/70",
+                  "flex h-7 w-full cursor-pointer items-center gap-2 rounded-md px-1.5 text-left text-xs text-foreground/45 transition-colors hover:bg-white/10 hover:text-foreground/70",
                   sidebarNestedFullWidthRowClass,
-                )}
+              )}
                 onClick={() => createQuickSession(channelId)}
               >
+                <Plus size={14} className="shrink-0" />
                 <span className="truncate">Create a session</span>
               </button>
             ) : (
