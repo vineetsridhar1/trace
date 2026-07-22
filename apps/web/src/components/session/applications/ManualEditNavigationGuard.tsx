@@ -96,11 +96,16 @@ export function ManualEditNavigationGuard() {
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
         </DialogHeader>
         <DialogFooter>
+          <Button
+            variant="destructive"
+            onClick={discardAndLeave}
+            disabled={saving}
+            className="sm:mr-auto"
+          >
+            Discard
+          </Button>
           <Button variant="outline" onClick={cancelNavigation} disabled={saving}>
             Keep editing
-          </Button>
-          <Button variant="destructive" onClick={discardAndLeave} disabled={saving}>
-            Discard
           </Button>
           <Button onClick={saveThenLeave} disabled={saving || draftCount === 0}>
             {saveAndLeave || saving ? "Saving…" : "Save"}
