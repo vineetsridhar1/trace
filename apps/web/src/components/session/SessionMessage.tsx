@@ -271,7 +271,6 @@ export const SessionMessage = memo(function SessionMessage({
         : null;
 
     case "message_sent":
-      if (payload?.clientSource === "internal:design-system-repair") return null;
       return (
         <UserBubble
           text={str(payload?.text)}

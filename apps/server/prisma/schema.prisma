@@ -650,6 +650,7 @@ model DesignSystem {
   publishedCommitSha      String?
   publishAttemptedAt      DateTime?
   publishError            String?
+  repairAttempts          Int                               @default(0)
   commitArtifacts         DesignSystemCommitArtifact[]      @relation("DesignSystemArtifacts")
   versions                DesignSystemVersion[]             @relation("DesignSystemVersions")
   createdAt               DateTime                          @default(now())
@@ -675,7 +676,7 @@ model DesignSystemCommitArtifact {
   packageValid      Boolean?
   packageDigest     String?
   validationSummary Json?
-  repairAttempts    Int                              @default(0)
+  repairRequestedAt DateTime?
   error             String?
   createdById       String?
   createdBy         User?                            @relation("DesignSystemArtifactCreator", fields: [createdById], references: [id])

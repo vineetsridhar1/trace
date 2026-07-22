@@ -8,7 +8,6 @@ import {
 import { prisma } from "../lib/db.js";
 import { ValidationError } from "../lib/errors.js";
 import { gitStorage } from "../lib/git-storage/index.js";
-import { sessionRouter } from "../lib/session-router.js";
 import { storage } from "../lib/storage/index.js";
 import {
   createDeterministicTarGz,
@@ -131,7 +130,7 @@ async function putImmutableObject(
 }
 
 export class DesignSystemService {
-  private async requestArtifactRepair(input: {
+  async requestArtifactRepair(input: {
     artifactId: string;
     designSystemId: string;
     organizationId: string;
@@ -139,14 +138,16 @@ export class DesignSystemService {
     commitSha: string;
     errors: string[];
   }): Promise<void> {
-    const claimed = await prisma.designSystemCommitArtifact.updateMany({
-      where: {
-        id: input.artifactId,
-        repairAttempts: { lt: MAX_REPAIR_ATTEMPTS },
-      },
-      data: { repairAttempts: { increment: 1 } },
+    const repairState = await prisma.designSystem.findUnique({
+      where: { id: input.designSystemId },
+      select: { repairAttempts: true },
     });
-    if (claimed.count === 0) {
+    const artifact = await prisma.designSystemCommitArtifact.findUnique({
+      where: { id: input.artifactId },
+      select: { repairRequestedAt: true },
+    });
+    if (!repairState || artifact?.repairRequestedAt) return;
+    if (repairState.repairAttempts >= MAX_REPAIR_ATTEMPTS) {
       console.warn("[design-system] repair attempt limit reached", {
         designSystemId: input.designSystemId,
         artifactId: input.artifactId,
@@ -156,60 +157,80 @@ export class DesignSystemService {
       return;
     }
 
-    const session = await prisma.session.findFirst({
-      where: { sessionGroupId: input.sessionGroupId },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        organizationId: true,
-        workdir: true,
-        toolSessionId: true,
-        worktreeDeleted: true,
-      },
-    });
-    if (
-      !session ||
-      session.organizationId !== input.organizationId ||
-      session.worktreeDeleted ||
-      !session.workdir ||
-      !session.toolSessionId
-    ) {
-      console.warn("[design-system] repair skipped: authoring session unavailable", {
-        designSystemId: input.designSystemId,
-        sessionId: session?.id ?? null,
-        hasWorkdir: Boolean(session?.workdir),
-        hasToolSession: Boolean(session?.toolSessionId),
-        worktreeDeleted: session?.worktreeDeleted ?? null,
+    const claimed = await prisma.$transaction(async (tx) => {
+      const incremented = await tx.designSystem.updateMany({
+        where: { id: input.designSystemId, repairAttempts: { lt: MAX_REPAIR_ATTEMPTS } },
+        data: { repairAttempts: { increment: 1 } },
       });
-      return;
-    }
-    if (!sessionRouter.getRuntimeForSession(session.id)) {
-      console.warn("[design-system] repair skipped: authoring runtime unavailable", {
+      if (incremented.count === 0) return false;
+      const marked = await tx.designSystemCommitArtifact.updateMany({
+        where: { id: input.artifactId, repairRequestedAt: null },
+        data: { repairRequestedAt: new Date() },
+      });
+      if (marked.count === 1) return true;
+      await tx.designSystem.updateMany({
+        where: { id: input.designSystemId, repairAttempts: { gt: 0 } },
+        data: { repairAttempts: { decrement: 1 } },
+      });
+      return false;
+    });
+    if (!claimed) {
+      console.warn("[design-system] repair attempt was already claimed", {
         designSystemId: input.designSystemId,
-        sessionId: session.id,
+        artifactId: input.artifactId,
       });
       return;
     }
 
-    await sessionService.sendMessage({
-      sessionId: session.id,
-      text: [
-        "The latest design-system commit failed the server package validator.",
-        `Commit: ${input.commitSha}`,
-        "Repair the package in the managed workbench, then run the design-system checks, commit the fix, and push it.",
-        "Do not wait for user input; this is an automatic repair pass.",
-        "Validation errors:",
-        ...input.errors.slice(0, 20).map((error) => `- ${error.slice(0, 500)}`),
-      ].join("\n"),
-      actorType: "system",
-      actorId: "system",
-      clientSource: DESIGN_SYSTEM_REPAIR_SOURCE,
-    });
-    console.info("[design-system] repair prompt delivered", {
+    let queueResult: Awaited<ReturnType<typeof sessionService.queueInternalMessage>>;
+    try {
+      queueResult = await sessionService.queueInternalMessage({
+        sessionGroupId: input.sessionGroupId,
+        organizationId: input.organizationId,
+        clientSource: DESIGN_SYSTEM_REPAIR_SOURCE,
+        text: [
+          "The latest design-system commit failed the server package validator.",
+          `Commit: ${input.commitSha}`,
+          "Repair the package in the managed workbench, then run the design-system checks, commit the fix, and push it.",
+          "Do not wait for user input; this is an automatic repair pass.",
+          "Validation errors:",
+          ...input.errors.slice(0, 20).map((error) => `- ${error.slice(0, 500)}`),
+        ].join("\n"),
+      });
+    } catch (error) {
+      await this.releaseArtifactRepairClaim(input.artifactId, input.designSystemId);
+      throw error;
+    }
+    if (queueResult !== "queued") {
+      await this.releaseArtifactRepairClaim(input.artifactId, input.designSystemId);
+      console.warn(`[design-system] repair skipped: ${queueResult.replaceAll("_", " ")}`, {
+        designSystemId: input.designSystemId,
+        artifactId: input.artifactId,
+      });
+      return;
+    }
+    console.info("[design-system] repair prompt queued", {
       designSystemId: input.designSystemId,
-      sessionId: session.id,
+      artifactId: input.artifactId,
       commitSha: input.commitSha,
       errorCount: input.errors.length,
+    });
+  }
+
+  private async releaseArtifactRepairClaim(
+    artifactId: string,
+    designSystemId: string,
+  ): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      const released = await tx.designSystemCommitArtifact.updateMany({
+        where: { id: artifactId, repairRequestedAt: { not: null } },
+        data: { repairRequestedAt: null },
+      });
+      if (released.count === 0) return;
+      await tx.designSystem.updateMany({
+        where: { id: designSystemId, repairAttempts: { gt: 0 } },
+        data: { repairAttempts: { decrement: 1 } },
+      });
     });
   }
 
@@ -305,8 +326,9 @@ export class DesignSystemService {
         validationSummary: eventJson(validation),
       },
     });
-    const designSystem = await prisma.designSystem.findUniqueOrThrow({
+    const designSystem = await prisma.designSystem.update({
       where: { id: artifact.designSystemId },
+      data: { repairAttempts: 0 },
       include: DESIGN_SYSTEM_INCLUDE,
     });
     await eventService.create({
@@ -518,46 +540,71 @@ export class DesignSystemService {
     const slug = existing?.archivedAt ? `${baseSlug}-${randomUUID().slice(0, 8)}` : baseSlug;
     const id = randomUUID();
     let createdEvent: Awaited<ReturnType<typeof eventService.create>> | null = null;
-    const session = await sessionService.start({
-      organizationId: input.organizationId,
-      createdById: input.actorId,
-      actorType: input.actorType,
-      kind: "design_system",
-      hosting: "cloud",
-      environmentId: input.environmentId ?? undefined,
-      name,
-      visibility: "public",
-      prompt: `Create the initial design system from the read-only source checkout. Source branch: ${branch}${normalizedSourcePath ? `; source path: ${normalizedSourcePath}` : ""}.`,
-      afterCreate: async ({ tx, session, sessionGroup }) => {
-        const designSystem = await tx.designSystem.create({
-          data: {
-            id,
-            organizationId: input.organizationId,
-            name,
-            slug,
-            sourceRepoId: repo.id,
-            sourceBranch: branch,
-            sourcePath: normalizedSourcePath,
-            authoringSessionGroupId: sessionGroup.id,
-            createdById: input.actorId,
-          },
-          include: DESIGN_SYSTEM_INCLUDE,
-        });
-        createdEvent = await eventService.create(
-          {
-            organizationId: input.organizationId,
-            scopeType: "system",
-            scopeId: id,
-            eventType: "design_system_created",
-            payload: eventJson({ designSystem, session, sessionGroup }),
-            actorType: input.actorType,
-            actorId: input.actorId,
-            deferPublish: true,
-          },
-          tx,
-        );
-      },
-    });
+    let session: Awaited<ReturnType<typeof sessionService.start>>;
+    try {
+      session = await sessionService.start({
+        organizationId: input.organizationId,
+        createdById: input.actorId,
+        actorType: input.actorType,
+        kind: "design_system",
+        hosting: "cloud",
+        environmentId: input.environmentId ?? undefined,
+        name,
+        visibility: "public",
+        prompt: `Create the initial design system from the read-only source checkout. Source branch: ${branch}${normalizedSourcePath ? `; source path: ${normalizedSourcePath}` : ""}.`,
+        afterCreate: async ({ tx, session: createdSession, sessionGroup }) => {
+          const designSystem = await tx.designSystem.create({
+            data: {
+              id,
+              organizationId: input.organizationId,
+              name,
+              slug,
+              sourceRepoId: repo.id,
+              sourceBranch: branch,
+              sourcePath: normalizedSourcePath,
+              authoringSessionGroupId: sessionGroup.id,
+              createdById: input.actorId,
+            },
+            include: DESIGN_SYSTEM_INCLUDE,
+          });
+          createdEvent = await eventService.create(
+            {
+              organizationId: input.organizationId,
+              scopeType: "system",
+              scopeId: id,
+              eventType: "design_system_created",
+              payload: eventJson({
+                designSystem,
+                session: createdSession,
+                sessionGroup,
+              }),
+              actorType: input.actorType,
+              actorId: input.actorId,
+              deferPublish: true,
+            },
+            tx,
+          );
+        },
+      });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+        throw error;
+      }
+      const winner = await prisma.designSystem.findUnique({
+        where: { organizationId_slug: { organizationId: input.organizationId, slug: baseSlug } },
+        include: DESIGN_SYSTEM_INCLUDE,
+      });
+      if (
+        winner &&
+        !winner.archivedAt &&
+        winner.sourceRepoId === repo.id &&
+        winner.sourceBranch === branch &&
+        winner.sourcePath === normalizedSourcePath
+      ) {
+        return winner;
+      }
+      throw new ValidationError(`A design system named "${name}" already exists`);
+    }
     if (createdEvent) eventService.publishCreated(createdEvent);
     const designSystem = await prisma.designSystem.findUniqueOrThrow({
       where: { id },
@@ -588,24 +635,25 @@ export class DesignSystemService {
       where: { id: input.id, organizationId: input.organizationId },
     });
     const archivedAt = new Date();
-    const updated = await prisma.$transaction(async (tx) => {
+    const { designSystem: updated, sessionGroup } = await prisma.$transaction(async (tx) => {
       const archived = await tx.designSystem.update({
         where: { id: designSystem.id },
         data: { status: "archived", archivedAt },
         include: DESIGN_SYSTEM_INCLUDE,
       });
-      await tx.sessionGroup.update({
+      const sessionGroup = await tx.sessionGroup.update({
         where: { id: designSystem.authoringSessionGroupId },
         data: { archivedAt },
+        include: { sessions: true },
       });
-      return archived;
+      return { designSystem: archived, sessionGroup };
     });
     await eventService.create({
       organizationId: input.organizationId,
       scopeType: "system",
       scopeId: updated.id,
       eventType: "design_system_archived",
-      payload: eventJson({ designSystem: updated }),
+      payload: eventJson({ designSystem: updated, sessionGroup }),
       actorType: input.actorType,
       actorId: input.actorId,
     });
@@ -801,7 +849,11 @@ export class DesignSystemService {
           data: {
             ...(pointerIsNewer ? { latestCommitArtifactId: artifact.id } : {}),
             ...(current.latestPushedCommitSha === artifact.commitSha
-              ? { commitArtifactStatus: "saved", commitArtifactError: null }
+              ? {
+                  commitArtifactStatus: "saved",
+                  commitArtifactError: null,
+                  ...(validation.valid ? { repairAttempts: 0 } : {}),
+                }
               : {}),
           },
           include: DESIGN_SYSTEM_INCLUDE,

@@ -4,6 +4,7 @@ import { handleOrgEvent, handleSessionEvent } from "../src/events/handlers.js";
 import { useEntityStore } from "../src/stores/entity.js";
 import { useAuthStore } from "../src/stores/auth.js";
 import { setOrgEventUIBindings, type OrgEventUIBindings } from "../src/events/ui-bindings.js";
+import type { SessionGroupEntity } from "../src/stores/entity.js";
 
 function resetStores() {
   useEntityStore.setState({
@@ -163,6 +164,28 @@ describe("handleOrgEvent", () => {
       id: "session-1",
       sessionGroupId: "group-1",
     });
+  });
+
+  it("archives a design-system authoring group from the service event", () => {
+    useEntityStore
+      .getState()
+      .upsertMany("sessionGroups", [
+        { id: "group-1", kind: "design_system", archivedAt: null } as SessionGroupEntity,
+      ]);
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "design_system_archived",
+        scopeType: "system",
+        scopeId: "system-1",
+        payload: {
+          designSystem: { id: "system-1", status: "archived" },
+          sessionGroup: { id: "group-1", kind: "design_system", archivedAt: "2026-01-02" },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]?.archivedAt).toBe("2026-01-02");
   });
 
   it("does not expose managed repos through the generic repo table", () => {

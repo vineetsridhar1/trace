@@ -163,9 +163,11 @@ active organization. A system remains selectable at its current active version w
 newer draft commit artifacts exist. Each option shows the active version and
 source-repository name when one exists. The last selected system may be suggested, but
 the persisted organization default is a later feature.
-The selector starts at Trace Default. Selecting a published library pins its immutable
-version to the session and removes the selector; it cannot be changed after pinning or
-after the first prompt. The user then enters the brief through the existing Design chat.
+The selector starts at Trace Default. Selecting a published library updates the unstarted
+session's configuration and may be changed again until the first prompt is sent. When that
+prompt starts the Design, the selected immutable version becomes pinned. The selector stays
+visible as a disabled library indicator for the remainder of the session. The user enters
+the brief through the existing Design chat.
 
 Choosing **Create new design system...** opens the creation flow without creating an
 empty Design first.
@@ -456,6 +458,7 @@ publishStatus              DesignSystemPublishStatus
 publishedCommitSha         String?
 publishAttemptedAt         DateTime?
 publishError               String?
+repairAttempts             Int
 createdAt                  DateTime
 updatedAt                  DateTime
 archivedAt                 DateTime?
@@ -487,6 +490,7 @@ status                DesignSystemCommitArtifactStatus
 packageValid          Boolean?
 packageDigest         String?
 validationSummary     Json?
+repairRequestedAt     DateTime?
 error                  String?
 createdById           String?
 createdAt             DateTime
@@ -947,8 +951,14 @@ boundary or not rendered in Trace v1; it must never execute on the main app orig
   `needs_input` behavior; the canvas remains visible.
 - If a commit-artifact upload fails, retain the managed Git commit, mark the artifact
   failed, and retry it from the bare repo. No authoring container is required.
-- If package validation fails, still store the workbench artifact and expose the concise
-  validation error so the user can ask the agent for a repair.
+- If package validation fails, still store the workbench artifact and durably queue an
+  internal repair command for the existing authoring tool session. If its agent is active,
+  deliver the command after that run completes. The command includes bounded validator
+  details but creates no conversational event and never provisions an expired runtime.
+- Bound automatic repair to three queued attempts across successive invalid commits for a
+  design system. Mark each triggering artifact once, consume no attempt when a command
+  cannot be queued, and reset the cycle after a valid commit. Users see only the clean
+  library state; raw validation diagnostics remain internal to the repair agent and logs.
 - If version upload succeeds but promotion fails, delete the unreferenced version object
   best-effort while retaining the commit artifact.
 - If promotion is retried with the same commit or digest, return the existing version.
@@ -1191,6 +1201,8 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 
 - The selector lists systems with an active published version and Trace Default,
   including a system with newer unpublished commits.
+- The selected library remains editable until the first prompt and remains visible but
+  disabled after the Design starts.
 - Creating an App or PDF remains unchanged.
 - Creating a Design sends the selected version id.
 - Create-new navigates to the authoring canvas; every managed push persists and valid latest
@@ -1198,6 +1210,8 @@ degrade honestly to recipes/reference, and token values have one canonical sourc
 - Chat changes visibly update boards; server events report artifact and publication failures.
 - Events update the latest commit artifact, active version, upload errors, and publication
   errors.
+- Invalid commits queue no user-visible message, wait behind an active agent run, do not
+  reprovision disconnected runtimes, and stop after three cross-commit repair attempts.
 - Archived or never-published systems cannot be newly selected for a Design.
 
 ### End-to-end test

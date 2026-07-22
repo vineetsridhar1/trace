@@ -15,35 +15,6 @@ export function selectableDesignSystems(systems: DesignSystem[]): DesignSystem[]
   return systems.filter(isSelectableDesignSystem);
 }
 
-export function unavailableDesignSystems(systems: DesignSystem[]): DesignSystem[] {
-  return systems.filter((system) => !system.archivedAt && !isSelectableDesignSystem(system));
-}
-
-export function designSystemAvailabilityLabel(system: DesignSystem): string {
-  if (system.publishStatus === "publishing") return "Publishing…";
-  if (system.commitArtifactStatus === "pending" || system.commitArtifactStatus === "saving") {
-    return "Saving first version…";
-  }
-  if (system.commitArtifactStatus === "failed") return "Cloud save failed";
-  if (
-    system.latestCommitArtifact?.status === "saved" &&
-    !system.latestCommitArtifact.packageValid
-  ) {
-    return "Needs repair";
-  }
-  if (system.publishStatus === "failed") return "Version failed";
-  return "Waiting for first commit";
-}
-
-export function designSystemValidationErrors(system: DesignSystem): string[] {
-  const summary = system.latestCommitArtifact?.validationSummary;
-  if (!summary || typeof summary !== "object" || Array.isArray(summary)) return [];
-  const errors = (summary as Record<string, unknown>).errors;
-  return Array.isArray(errors)
-    ? errors.filter((error): error is string => typeof error === "string")
-    : [];
-}
-
 function optionLabel(system: DesignSystem): string {
   return `${system.name} · v${system.activeVersion?.version ?? "–"}`;
 }

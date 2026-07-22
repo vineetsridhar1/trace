@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -46,6 +46,33 @@ describe("design-system source checkout", () => {
       expect(await readFile(path.join(restored.sourceWorkdir, "tokens.css"), "utf8")).toBe(
         ":root{}",
       );
+    } finally {
+      await exec("chmod", ["-R", "u+w", root]).catch(() => undefined);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects repository symlinks before exposing the source checkout", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "trace-source-symlink-"));
+    const repo = path.join(root, "fixture");
+    const sources = path.join(root, "sources");
+    try {
+      await mkdir(repo);
+      await exec("git", ["init", "-b", "main"], { cwd: repo });
+      await exec("git", ["config", "user.email", "fixture@trace.local"], { cwd: repo });
+      await exec("git", ["config", "user.name", "Fixture"], { cwd: repo });
+      await writeFile(path.join(root, "outside.txt"), "secret");
+      await symlink(path.join(root, "outside.txt"), path.join(repo, "escape.txt"));
+      await exec("git", ["add", "."], { cwd: repo });
+      await exec("git", ["commit", "-m", "symlink fixture"], { cwd: repo });
+
+      await expect(
+        prepareReadOnlySourceCheckout(
+          "group-1",
+          { repoId: "repo-1", remoteUrl: repo, branch: "main" },
+          sources,
+        ),
+      ).rejects.toThrow("contains a symbolic link");
     } finally {
       await exec("chmod", ["-R", "u+w", root]).catch(() => undefined);
       await rm(root, { recursive: true, force: true });

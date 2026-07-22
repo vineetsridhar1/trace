@@ -373,6 +373,8 @@ type PendingSessionCommandQueue = {
   commands: PendingSessionCommand[];
 };
 
+export type InternalMessageQueueResult = "queued" | "session_unavailable" | "runtime_unavailable";
+
 type LinkedCheckoutRuntimeGroup = {
   id: string;
   repoId: string | null;
@@ -1208,7 +1210,6 @@ function conversationLineSourcesFromEvent(evt: ConversationContextEvent): Conver
   }
 
   if (evt.eventType === "message_sent") {
-    if (payload.clientSource === "internal:design-system-repair") return [];
     return typeof payload.text === "string" ? [{ role: "User", text: payload.text }] : [];
   }
 
@@ -5236,12 +5237,6 @@ export class SessionService {
           "Design library can only be changed before a design session starts",
         );
       }
-      if (
-        prev.sessionGroup.designSystemVersionId !== null &&
-        config.designSystemVersionId !== prev.sessionGroup.designSystemVersionId
-      ) {
-        throw new ValidationError("A pinned design library cannot be changed");
-      }
       if (config.designSystemVersionId === null) {
         selectedDesignSystemVersionId = null;
       } else {
@@ -5396,13 +5391,25 @@ export class SessionService {
       }
     }
 
-    // Pinning a design library changes both the shared session group and the
-    // session's config event. Keep those writes atomic so a failed session
-    // update cannot leave the group pointing at a library the session never
-    // successfully configured.
+    // Selecting a design library changes both the shared session group and the
+    // session's config event. Lock the session row so this cannot race the
+    // first message changing agentStatus and pinning the chosen version.
     const designSystemGroupId = designSystemVersionChanged ? prev.sessionGroupId : null;
     const session = designSystemGroupId
       ? await prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT "id" FROM "Session" WHERE "id" = ${prev.id} FOR UPDATE`;
+          const lockedSession = await tx.session.findUniqueOrThrow({
+            where: { id: prev.id },
+            select: { agentStatus: true, sessionGroup: { select: { kind: true } } },
+          });
+          if (
+            lockedSession.agentStatus !== "not_started" ||
+            lockedSession.sessionGroup?.kind !== "design"
+          ) {
+            throw new ValidationError(
+              "Design library can only be changed before a design session starts",
+            );
+          }
           await tx.sessionGroup.update({
             where: { id: designSystemGroupId },
             data: { designSystemVersionId: selectedDesignSystemVersionId },
@@ -6421,6 +6428,67 @@ export class SessionService {
     });
 
     return event;
+  }
+
+  /**
+   * Queue a non-conversational command for an existing tool session.
+   * This never provisions a runtime and never creates a message event. Active
+   * sessions drain the command after their current run; idle sessions receive
+   * it immediately through the same durable pending-command path.
+   */
+  async queueInternalMessage(input: {
+    sessionGroupId: string;
+    organizationId: string;
+    text: string;
+    clientSource: string;
+  }): Promise<InternalMessageQueueResult> {
+    const session = await prisma.session.findFirst({
+      where: { sessionGroupId: input.sessionGroupId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        organizationId: true,
+        agentStatus: true,
+        workdir: true,
+        toolSessionId: true,
+        worktreeDeleted: true,
+        pendingRun: true,
+      },
+    });
+    if (
+      !session ||
+      session.organizationId !== input.organizationId ||
+      session.worktreeDeleted ||
+      !session.workdir ||
+      !session.toolSessionId ||
+      session.agentStatus === "failed" ||
+      session.agentStatus === "stopped"
+    ) {
+      return "session_unavailable";
+    }
+    if (!sessionRouter.getRuntimeForSession(session.id)) return "runtime_unavailable";
+
+    await this.storePendingCommand(
+      session.id,
+      {
+        type: "send",
+        prompt: input.text,
+        interactionMode: null,
+        clientSource: input.clientSource,
+        checkpointContext: null,
+      },
+      undefined,
+      session.pendingRun,
+    );
+
+    if (session.agentStatus !== "active") {
+      const queued = await prisma.session.findUnique({
+        where: { id: session.id },
+        select: { pendingRun: true },
+      });
+      await this.deliverPendingCommand(session.id, queued?.pendingRun);
+    }
+    return "queued";
   }
 
   async queueMessage({

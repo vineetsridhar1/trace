@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 
 const { mocks, database } = vi.hoisted(() => {
   const mocks = {
@@ -10,6 +11,7 @@ const { mocks, database } = vi.hoisted(() => {
     systemFindUnique: vi.fn(),
     systemFindUniqueOrThrow: vi.fn(),
     systemUpdate: vi.fn(),
+    systemUpdateMany: vi.fn(),
     artifactFindFirst: vi.fn(),
     artifactFindMany: vi.fn(),
     artifactFindUnique: vi.fn(),
@@ -24,10 +26,12 @@ const { mocks, database } = vi.hoisted(() => {
     eventCreate: vi.fn(),
     publishCreated: vi.fn(),
     sessionStart: vi.fn(),
+    queueInternalMessage: vi.fn(),
     storageGet: vi.fn(),
     storagePut: vi.fn(),
     storageDelete: vi.fn(),
     sessionGroupUpdateMany: vi.fn(),
+    sessionGroupUpdate: vi.fn(),
   };
   const database = {
     $queryRaw: mocks.queryRaw,
@@ -38,6 +42,7 @@ const { mocks, database } = vi.hoisted(() => {
       findUnique: mocks.systemFindUnique,
       findUniqueOrThrow: mocks.systemFindUniqueOrThrow,
       update: mocks.systemUpdate,
+      updateMany: mocks.systemUpdateMany,
     },
     designSystemCommitArtifact: {
       findFirst: mocks.artifactFindFirst,
@@ -48,7 +53,10 @@ const { mocks, database } = vi.hoisted(() => {
       updateMany: mocks.artifactUpdateMany,
       create: mocks.artifactCreate,
     },
-    sessionGroup: { updateMany: mocks.sessionGroupUpdateMany },
+    sessionGroup: {
+      update: mocks.sessionGroupUpdate,
+      updateMany: mocks.sessionGroupUpdateMany,
+    },
     designSystemVersion: { findUnique: mocks.versionFindUnique, create: mocks.versionCreate },
   };
   return { mocks, database };
@@ -75,7 +83,12 @@ vi.mock("./actor-auth.js", () => ({
   assertActorOrgAccess: vi.fn().mockResolvedValue(undefined),
   assertActorOrgAdmin: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("./session.js", () => ({ sessionService: { start: mocks.sessionStart } }));
+vi.mock("./session.js", () => ({
+  sessionService: {
+    start: mocks.sessionStart,
+    queueInternalMessage: mocks.queueInternalMessage,
+  },
+}));
 
 import {
   DesignSystemService,
@@ -113,8 +126,108 @@ describe("DesignSystemService", () => {
     mocks.systemFindUnique.mockResolvedValue(null);
     mocks.artifactFindMany.mockResolvedValue([]);
     mocks.artifactUpdateMany.mockResolvedValue({ count: 0 });
+    mocks.systemUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.sessionGroupUpdate.mockResolvedValue({ id: "group-1", sessions: [] });
     mocks.systemFindMany.mockResolvedValue([]);
     mocks.sessionGroupUpdateMany.mockResolvedValue({ count: 0 });
+    mocks.queueInternalMessage.mockResolvedValue("queued");
+  });
+
+  it("counts repair prompts across successive invalid commits and stops at the limit", async () => {
+    mocks.artifactFindUnique.mockResolvedValue({ repairRequestedAt: null });
+    mocks.artifactUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.systemFindUnique
+      .mockResolvedValueOnce({ repairAttempts: 0 })
+      .mockResolvedValueOnce({ repairAttempts: 1 })
+      .mockResolvedValueOnce({ repairAttempts: 2 })
+      .mockResolvedValueOnce({ repairAttempts: 3 });
+    mocks.systemUpdateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 });
+    const service = new DesignSystemService();
+
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      await service.requestArtifactRepair({
+        artifactId: `artifact-${attempt}`,
+        designSystemId: "system-1",
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        commitSha: `commit-${attempt}`,
+        errors: ["invalid token"],
+      });
+    }
+
+    expect(mocks.queueInternalMessage).toHaveBeenCalledTimes(3);
+    expect(mocks.systemUpdateMany).toHaveBeenCalledTimes(3);
+    expect(mocks.queueInternalMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionGroupId: "group-1",
+        clientSource: "internal:design-system-repair",
+        text: expect.stringContaining("invalid token"),
+      }),
+    );
+  });
+
+  it("does not consume a repair attempt when no existing runtime can queue it", async () => {
+    mocks.systemFindUnique.mockResolvedValue({ repairAttempts: 0 });
+    mocks.artifactFindUnique.mockResolvedValue({ repairRequestedAt: null });
+    mocks.artifactUpdateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 1 });
+    mocks.queueInternalMessage.mockResolvedValue("runtime_unavailable");
+
+    await new DesignSystemService().requestArtifactRepair({
+      artifactId: "artifact-1",
+      designSystemId: "system-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      commitSha: "commit-1",
+      errors: ["invalid token"],
+    });
+
+    expect(mocks.artifactUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: "artifact-1", repairRequestedAt: { not: null } },
+      data: { repairRequestedAt: null },
+    });
+    expect(mocks.systemUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: "system-1", repairAttempts: { gt: 0 } },
+      data: { repairAttempts: { decrement: 1 } },
+    });
+  });
+
+  it("does not queue after a concurrent worker claims the final repair slot", async () => {
+    mocks.systemFindUnique.mockResolvedValue({ repairAttempts: 2 });
+    mocks.artifactFindUnique.mockResolvedValue({ repairRequestedAt: null });
+    mocks.systemUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    await new DesignSystemService().requestArtifactRepair({
+      artifactId: "artifact-4",
+      designSystemId: "system-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      commitSha: "commit-4",
+      errors: ["invalid token"],
+    });
+
+    expect(mocks.queueInternalMessage).not.toHaveBeenCalled();
+    expect(mocks.artifactUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not request repair twice for the same artifact", async () => {
+    mocks.systemFindUnique.mockResolvedValue({ repairAttempts: 1 });
+    mocks.artifactFindUnique.mockResolvedValue({ repairRequestedAt: new Date() });
+
+    await new DesignSystemService().requestArtifactRepair({
+      artifactId: "artifact-1",
+      designSystemId: "system-1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      commitSha: "commit-1",
+      errors: ["invalid token"],
+    });
+
+    expect(mocks.queueInternalMessage).not.toHaveBeenCalled();
   });
 
   it("never lets an out-of-order worker regress the latest artifact pointer", () => {
@@ -258,9 +371,7 @@ describe("DesignSystemService", () => {
         ["design-system/source/evidence.json", Buffer.from("{}")],
       ]),
     );
-    mocks.artifactFindMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ id: "artifact-1" }]);
+    mocks.artifactFindMany.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: "artifact-1" }]);
     mocks.artifactFindUniqueOrThrow.mockResolvedValue({
       id: "artifact-1",
       designSystemId: "system-1",
@@ -277,7 +388,7 @@ describe("DesignSystemService", () => {
       commitSha: "commit-1",
       packageValid: true,
     });
-    mocks.systemFindUniqueOrThrow.mockResolvedValue(
+    mocks.systemUpdate.mockResolvedValue(
       system({ latestCommitArtifactId: "newer-artifact", latestPushedCommitSha: "commit-2" }),
     );
 
@@ -285,6 +396,9 @@ describe("DesignSystemService", () => {
 
     expect(mocks.artifactUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ packageValid: true }) }),
+    );
+    expect(mocks.systemUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { repairAttempts: 0 } }),
     );
     expect(mocks.eventCreate).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: "design_system_commit_artifact_updated" }),
@@ -392,6 +506,66 @@ describe("DesignSystemService", () => {
     expect(mocks.sessionStart).not.toHaveBeenCalled();
     expect(mocks.systemCreate).not.toHaveBeenCalled();
     expect(mocks.eventCreate).not.toHaveBeenCalled();
+  });
+
+  it("resumes the concurrent winner when slug creation loses a uniqueness race", async () => {
+    const winner = system({
+      name: "Acme UI",
+      slug: "acme-ui",
+      sourceRepoId: "source-repo-1",
+      sourceBranch: "main",
+      sourcePath: "packages/ui",
+      archivedAt: null,
+    });
+    (database as typeof database & { repo: { findFirstOrThrow: ReturnType<typeof vi.fn> } }).repo =
+      {
+        findFirstOrThrow: vi.fn().mockResolvedValue({ id: "source-repo-1", defaultBranch: "main" }),
+      };
+    mocks.systemFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(winner);
+    mocks.sessionStart.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("unique", {
+        code: "P2002",
+        clientVersion: "test",
+      }),
+    );
+
+    await expect(
+      new DesignSystemService().create({
+        organizationId: "org-1",
+        actorType: "user",
+        actorId: "user-1",
+        name: "Acme UI",
+        repoId: "source-repo-1",
+        sourcePath: "packages/ui",
+      }),
+    ).resolves.toBe(winner);
+  });
+
+  it("archives the authoring group through the same service event", async () => {
+    mocks.systemFindFirstOrThrow.mockResolvedValue(system({ authoringSessionGroupId: "group-1" }));
+    mocks.systemUpdate.mockResolvedValue(system({ status: "archived", archivedAt: new Date() }));
+    mocks.sessionGroupUpdate.mockResolvedValue({
+      id: "group-1",
+      archivedAt: new Date(),
+      sessions: [{ id: "session-1" }],
+    });
+
+    await new DesignSystemService().archive({
+      id: "system-1",
+      organizationId: "org-1",
+      actorType: "user",
+      actorId: "user-1",
+    });
+
+    expect(mocks.eventCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_system_archived",
+        payload: expect.objectContaining({
+          designSystem: expect.objectContaining({ status: "archived" }),
+          sessionGroup: expect.objectContaining({ id: "group-1" }),
+        }),
+      }),
+    );
   });
 
   it("rejects a same-name request for a different source without leaking Prisma errors", async () => {

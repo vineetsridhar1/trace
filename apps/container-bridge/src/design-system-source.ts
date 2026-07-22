@@ -4,6 +4,30 @@ import path from "node:path";
 import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const SOURCES_ROOT = process.env.TRACE_SOURCES_DIR ?? "/sources";
+
+async function chmodTreeWithoutFollowingSymlinks(root: string, writable: boolean): Promise<void> {
+  const entries = await fs.readdir(root, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) await chmodTreeWithoutFollowingSymlinks(entryPath, writable);
+    const current = await fs.stat(entryPath);
+    const mode = writable ? current.mode | 0o200 : current.mode & ~0o222;
+    await fs.chmod(entryPath, mode);
+  }
+  const current = await fs.stat(root);
+  await fs.chmod(root, writable ? current.mode | 0o200 : current.mode & ~0o222);
+}
+
+async function rejectWorkingTreeSymlinks(root: string): Promise<void> {
+  const entries = await fs.readdir(root, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === ".git") continue;
+    const entryPath = path.join(root, entry.name);
+    if (entry.isSymbolicLink()) throw new Error("Source checkout contains a symbolic link");
+    if (entry.isDirectory()) await rejectWorkingTreeSymlinks(entryPath);
+  }
+}
 export type SourceRepositoryDescriptor = {
   repoId: string;
   remoteUrl: string;
@@ -38,7 +62,7 @@ export async function prepareReadOnlySourceCheckout(
       { maxBuffer: 2 * 1024 * 1024 },
     );
   } else {
-    await execFileAsync("chmod", ["-R", "u+w", root]);
+    await chmodTreeWithoutFollowingSymlinks(root, true);
     await execFileAsync("git", ["remote", "set-url", "origin", descriptor.remoteUrl], {
       cwd: root,
     });
@@ -61,11 +85,16 @@ export async function prepareReadOnlySourceCheckout(
   const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: root });
   if (descriptor.commitSha && stdout.trim() !== descriptor.commitSha)
     throw new Error("Source checkout did not resolve the pinned commit");
+  await rejectWorkingTreeSymlinks(root);
+  const realRoot = await fs.realpath(root);
   const sourceWorkdir = descriptor.sourcePath ? path.resolve(root, descriptor.sourcePath) : root;
   if (sourceWorkdir !== root && !sourceWorkdir.startsWith(root + path.sep))
     throw new Error("Source subdirectory escaped checkout");
   if (!(await fs.stat(sourceWorkdir)).isDirectory())
     throw new Error("Source subdirectory does not exist");
-  await execFileAsync("chmod", ["-R", "a-w", root]);
+  const realSourceWorkdir = await fs.realpath(sourceWorkdir);
+  if (realSourceWorkdir !== realRoot && !realSourceWorkdir.startsWith(realRoot + path.sep))
+    throw new Error("Source subdirectory escaped checkout");
+  await chmodTreeWithoutFollowingSymlinks(root, false);
   return { sourceWorkdir, commitSha: stdout.trim() };
 }
