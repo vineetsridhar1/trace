@@ -1672,6 +1672,7 @@ type Mutation {
     reasoningEffort: String
     hosting: HostingMode
     runtimeInstanceId: ID
+    designSystemVersionId: ID
   ): Session!
   updateSessionDefaults(input: UpdateSessionDefaultsInput!): User!
   sendSessionMessage(

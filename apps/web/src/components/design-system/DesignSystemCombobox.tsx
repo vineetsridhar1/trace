@@ -48,14 +48,25 @@ export function DesignSystemCombobox({
   onValueChange: (value: string) => void;
 }) {
   const unavailable = unavailableDesignSystems(systems);
+  const selectable = selectableDesignSystems(systems);
+  const selectedSystem = selectable.find((system) => system.activeVersionId === value);
   return (
     <Select value={value} onValueChange={(next) => next && onValueChange(next)}>
-      <SelectTrigger className="w-full" aria-label="Design system">
-        <SelectValue />
+      <SelectTrigger
+        className="h-7 w-auto max-w-52 cursor-pointer gap-1.5 border-none bg-transparent px-2 text-[11px] text-muted-foreground hover:text-foreground focus:ring-0"
+        aria-label="Design library"
+      >
+        <SelectValue>
+          {value === TRACE_DEFAULT_DESIGN_SYSTEM
+            ? "Trace Default"
+            : selectedSystem
+              ? `${selectedSystem.name} · v${selectedSystem.activeVersion?.version ?? "–"}`
+              : "Design library"}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={TRACE_DEFAULT_DESIGN_SYSTEM}>Trace Default</SelectItem>
-        {selectableDesignSystems(systems).map((system) => (
+        {selectable.map((system) => (
           <SelectItem key={system.id} value={system.activeVersionId!}>
             {system.name} · v{system.activeVersion?.version ?? "–"}
             {system.sourceRepo?.name ? ` · ${system.sourceRepo.name}` : ""}

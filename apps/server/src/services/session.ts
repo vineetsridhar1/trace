@@ -5121,6 +5121,7 @@ export class SessionService {
       reasoningEffort?: string;
       hosting?: string;
       runtimeInstanceId?: string;
+      designSystemVersionId?: string | null;
     },
     actorType: ActorType,
     actorId: string,
@@ -5140,6 +5141,7 @@ export class SessionService {
           select: {
             kind: true,
             slug: true,
+            designSystemVersionId: true,
             visibility: true,
             ownerUserId: true,
             connection: true,
@@ -5174,6 +5176,30 @@ export class SessionService {
         : toolChanged
           ? (getDefaultReasoningEffort(nextTool) ?? null)
           : undefined;
+
+    const designSystemVersionChanged = config.designSystemVersionId !== undefined;
+    let selectedDesignSystemVersionId: string | null | undefined;
+    if (designSystemVersionChanged) {
+      if (prev.agentStatus !== "not_started" || prev.sessionGroup?.kind !== "design") {
+        throw new ValidationError(
+          "Design library can only be changed before a design session starts",
+        );
+      }
+      if (config.designSystemVersionId === null) {
+        selectedDesignSystemVersionId = null;
+      } else {
+        const version = await prisma.designSystemVersion.findFirst({
+          where: {
+            id: config.designSystemVersionId,
+            designSystem: { organizationId, status: "ready", archivedAt: null },
+            designSystemCommitArtifact: { status: "saved", packageValid: true },
+          },
+          select: { id: true },
+        });
+        if (!version) throw new ValidationError("Selected design library is not available");
+        selectedDesignSystemVersionId = version.id;
+      }
+    }
 
     const data: Record<string, unknown> = {};
     if (config.tool != null) data.tool = config.tool;
@@ -5313,6 +5339,13 @@ export class SessionService {
       }
     }
 
+    if (designSystemVersionChanged && prev.sessionGroupId) {
+      await prisma.sessionGroup.update({
+        where: { id: prev.sessionGroupId },
+        data: { designSystemVersionId: selectedDesignSystemVersionId },
+      });
+    }
+
     const session = await prisma.session.update({
       where: { id: prev.id },
       data,
@@ -5347,6 +5380,9 @@ export class SessionService {
           nextReasoningEffort !== undefined ? nextReasoningEffort : session.reasoningEffort,
         toolChanged,
         ...(runtimeChanged && { hosting: session.hosting, connection: session.connection }),
+        ...(designSystemVersionChanged && session.sessionGroupId
+          ? { sessionGroup: await this.loadSessionGroupSnapshot(session.sessionGroupId) }
+          : {}),
       },
       actorType,
       actorId,

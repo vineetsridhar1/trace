@@ -464,6 +464,7 @@ export const sessionMutations = {
       reasoningEffort?: string | null;
       hosting?: string | null;
       runtimeInstanceId?: string | null;
+      designSystemVersionId?: string | null;
     },
     ctx: Context,
   ) => {
@@ -476,6 +477,7 @@ export const sessionMutations = {
         reasoningEffort: args.reasoningEffort ?? undefined,
         hosting: args.hosting ?? undefined,
         runtimeInstanceId: args.runtimeInstanceId ?? undefined,
+        designSystemVersionId: args.designSystemVersionId,
       },
       ctx.actorType,
       ctx.userId,

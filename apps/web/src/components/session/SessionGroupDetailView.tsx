@@ -77,6 +77,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       forkedFromSessionGroupId
       status
       visibility
+      designSystemVersionId
       owner {
         id
         name

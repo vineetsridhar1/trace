@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppWindow, ArrowLeft, NotebookText, Palette } from "lucide-react";
 import { gql } from "@urql/core";
-import type { AgentEnvironment, DesignSystem, Repo } from "@trace/gql";
+import type { AgentEnvironment, Repo } from "@trace/gql";
 import { useAuthStore, useEntityStore } from "@trace/client-core";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
@@ -13,11 +13,6 @@ import {
 import { client } from "../../lib/urql";
 import { useCommandPaletteStore } from "../../stores/command-palette";
 import { navigateToSessionGroup } from "../../stores/ui";
-import {
-  CREATE_DESIGN_SYSTEM,
-  DesignSystemCombobox,
-  TRACE_DEFAULT_DESIGN_SYSTEM,
-} from "../design-system/DesignSystemCombobox";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import {
@@ -32,29 +27,6 @@ type GeneratedProjectKind = "app" | "design" | "pdf";
 type View = "choose" | "design" | "create-system";
 const DESIGN_SYSTEMS_QUERY = gql`
   query DesignCreationOptions($organizationId: ID!) {
-    designSystems(organizationId: $organizationId) {
-      id
-      name
-      status
-      archivedAt
-      latestCommitArtifact {
-        id
-        status
-        packageValid
-      }
-      commitArtifactStatus
-      publishStatus
-      publishError
-      activeVersionId
-      activeVersion {
-        id
-        version
-      }
-      sourceRepo {
-        id
-        name
-      }
-    }
     repos(organizationId: $organizationId) {
       id
       name
@@ -114,8 +86,9 @@ export function NewGeneratedProjectDialog() {
   const close = useCommandPaletteStore((state) => state.closeGeneratedProjectDialog);
   const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const upsertMany = useEntityStore((state) => state.upsertMany);
-  const [view, setView] = useState<View>(kind === "design" ? "design" : "choose");
-  const systems = useEntityStore(useShallow((state) => Object.values(state.designSystems)));
+  const [view, setView] = useState<View>(() =>
+    kind === "design-system" ? "create-system" : kind === "design" ? "design" : "choose",
+  );
   const repos = useEntityStore(
     useShallow((state) => Object.values(state.repos).filter((repo) => repo.provider !== "managed")),
   );
@@ -127,7 +100,6 @@ export function NewGeneratedProjectDialog() {
     ),
   );
   const [environmentId, setEnvironmentId] = useState("");
-  const [selection, setSelection] = useState(TRACE_DEFAULT_DESIGN_SYSTEM);
   const [name, setName] = useState("");
   const [repoId, setRepoId] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -143,6 +115,7 @@ export function NewGeneratedProjectDialog() {
   useEffect(() => {
     if (kind === "app" || kind === "pdf") createImmediate(kind);
     if (kind === "design") setView("design");
+    if (kind === "design-system") setView("create-system");
   }, [createImmediate, kind]);
 
   useEffect(() => {
@@ -157,7 +130,6 @@ export function NewGeneratedProjectDialog() {
       .toPromise()
       .then((result) => {
         if (!active || result.error) return;
-        const nextSystems = (result.data?.designSystems ?? []) as DesignSystem[];
         const nextRepos = (result.data?.repos ?? []).filter(
           (repo: Repo) => repo.provider !== "managed",
         ) as Repo[];
@@ -165,7 +137,6 @@ export function NewGeneratedProjectDialog() {
           (environment: AgentEnvironment) =>
             environment.enabled && environment.adapterType === "provisioned",
         ) as AgentEnvironment[];
-        upsertMany("designSystems", nextSystems);
         upsertMany("repos", nextRepos);
         upsertMany("agentEnvironments", nextEnvironments);
         if (!repoId && nextRepos[0]) setRepoId(nextRepos[0].id);
@@ -183,16 +154,10 @@ export function NewGeneratedProjectDialog() {
 
   const choose = (nextKind: GeneratedProjectKind) =>
     nextKind === "design" ? setView("design") : createImmediate(nextKind);
-  const changeSelection = (value: string) => {
-    setSelection(value);
-    if (value === CREATE_DESIGN_SYSTEM) setView("create-system");
-  };
   const submitDesign = async () => {
     setSubmitting(true);
     try {
-      const ok = await createDesignSession(
-        selection === TRACE_DEFAULT_DESIGN_SYSTEM ? undefined : selection,
-      );
+      const ok = await createDesignSession();
       if (ok) close();
     } finally {
       setSubmitting(false);
@@ -258,14 +223,9 @@ export function NewGeneratedProjectDialog() {
         )}
         {view === "design" && (
           <div className="space-y-4 py-4">
-            <label className="grid gap-2 text-sm">
-              Design system
-              <DesignSystemCombobox
-                systems={systems}
-                value={selection}
-                onValueChange={changeSelection}
-              />
-            </label>
+            <p className="text-sm text-muted-foreground">
+              Choose a design library from the composer after the session opens.
+            </p>
             <div className="flex justify-between">
               <Button
                 variant="ghost"
@@ -334,7 +294,6 @@ export function NewGeneratedProjectDialog() {
               <Button
                 variant="ghost"
                 onClick={() => {
-                  setSelection(TRACE_DEFAULT_DESIGN_SYSTEM);
                   setView("design");
                 }}
               >

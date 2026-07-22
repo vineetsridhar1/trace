@@ -1380,6 +1380,7 @@ export type MutationUpdateRepoArgs = {
 };
 
 export type MutationUpdateSessionConfigArgs = {
+  designSystemVersionId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
