@@ -22,7 +22,7 @@ export function GeneratedProjectTypeSection({
   const openGeneratedProjectDialog = useCommandPaletteStore(
     (state) => state.openGeneratedProjectDialog,
   );
-  const { label, emptyLabel, className } = projectTypePresentation[kind];
+  const { label, emptyLabel } = projectTypePresentation[kind];
   const sectionId = `generated-projects-${kind}`;
   const visibleGroups = useMemo(
     () =>
@@ -48,7 +48,6 @@ export function GeneratedProjectTypeSection({
             className={cn("shrink-0 transition-transform duration-200", open && "rotate-90")}
           />
           <span>{label}</span>
-          <span className="ml-1 text-[10px] text-foreground">{visibleGroups.length}</span>
         </button>
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/generated-project-type:opacity-100 group-focus-within/generated-project-type:opacity-100">
           <button
@@ -95,9 +94,9 @@ export function GeneratedProjectTypeSection({
                 <button
                   type="button"
                   onClick={() => openGeneratedProjectDialog(kind)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 pl-3 text-left text-sm text-muted-foreground hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex h-7 w-full items-center gap-2 rounded-md px-2 pl-3 text-left text-xs text-muted-foreground hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <Plus size={16} className={className} />
+                  <Plus size={14} />
                   <span>{emptyLabel}</span>
                 </button>
               ) : (
