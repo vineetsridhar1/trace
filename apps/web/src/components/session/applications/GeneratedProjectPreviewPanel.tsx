@@ -6,6 +6,7 @@ import { SavedDesignPreview } from "./SavedDesignPreview";
 import { SavedPdfPreview } from "./SavedPdfPreview";
 import { savedDesignPreviewUrl } from "./saved-design-preview";
 import { useProjectPreviewData } from "./useProjectPreviewData";
+import { isLivePreviewRuntimeAvailable } from "./app-preview-readiness";
 
 export function GeneratedProjectPreviewPanel({
   sessionGroupId,
@@ -20,13 +21,18 @@ export function GeneratedProjectPreviewPanel({
   const checkpoints = useEntityStore(
     (s) => s.sessionGroups[sessionGroupId]?.gitCheckpoints as GitCheckpoint[] | undefined,
   );
+  const runtimeState = useEntityStore((s) => {
+    const connection = s.sessionGroups[sessionGroupId]?.connection;
+    if (!connection || typeof connection !== "object" || Array.isArray(connection)) return null;
+    return "state" in connection ? connection.state : null;
+  });
   const previewUrl = savedDesignPreviewUrl(groupPreviewUrl, checkpoints);
   const { endpoint, error, refresh, savedPdfDownloadUrl, savedPdfUrl } = useProjectPreviewData(
     sessionGroupId,
     projectKind,
   );
 
-  if (endpoint)
+  if (endpoint && isLivePreviewRuntimeAvailable(runtimeState))
     return (
       <AppPreview
         key={endpoint.id}

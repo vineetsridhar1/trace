@@ -639,6 +639,7 @@ export const UPDATE_SESSION_CONFIG_MUTATION = gql`
     $reasoningEffort: String
     $hosting: HostingMode
     $runtimeInstanceId: ID
+    $designSystemVersionId: ID
   ) {
     updateSessionConfig(
       sessionId: $sessionId
@@ -647,6 +648,7 @@ export const UPDATE_SESSION_CONFIG_MUTATION = gql`
       reasoningEffort: $reasoningEffort
       hosting: $hosting
       runtimeInstanceId: $runtimeInstanceId
+      designSystemVersionId: $designSystemVersionId
     ) {
       id
       tool

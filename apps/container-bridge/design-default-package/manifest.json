@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "trace-design-system/v1",
+  "id": "trace-default",
+  "name": "Trace Default",
+  "description": "A neutral, accessible product-interface foundation.",
+  "platforms": ["web"],
+  "files": {
+    "guidance": "DESIGN.md",
+    "tokens": "tokens.css",
+    "components": "components.manifest.json",
+    "evidence": "source/evidence.json"
+  },
+  "componentsDirectory": "components",
+  "assetsDirectory": "assets",
+  "previewDirectory": "preview"
+}

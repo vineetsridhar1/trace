@@ -1,10 +1,11 @@
 import { Stack, useRouter } from "expo-router";
 import { useAuthStore, type AuthState } from "@trace/client-core";
 import { TopBarPill } from "@/components/navigation/TopBarPill";
-import { createDesign } from "@/lib/createQuickSession";
+import { chooseDesignSystemAndCreate } from "@/lib/createDesignWithSystem";
 
 export default function DesignsLayout() {
   const user = useAuthStore((s: AuthState) => s.user);
+  const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const router = useRouter();
 
   return (
@@ -27,7 +28,7 @@ export default function DesignsLayout() {
                   id: "new-design",
                   accessibilityLabel: "Create a new design",
                   symbol: "plus",
-                  onPress: () => void createDesign(),
+                  onPress: () => void chooseDesignSystemAndCreate(activeOrgId),
                 },
               ]}
               avatar={

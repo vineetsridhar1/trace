@@ -261,7 +261,10 @@ describe("workspace repo setup", () => {
   });
 
   it("creates a design workspace from the bundled design starter", async () => {
-    mocks.existsSync.mockImplementation((path) => String(path).endsWith("/design-starter"));
+    mocks.existsSync.mockImplementation((path) => {
+      const value = String(path);
+      return value.endsWith("/design-starter") || value.endsWith("/design-default-package");
+    });
     mocks.readdirSync.mockReturnValue([]);
 
     await createAppWorkspace({

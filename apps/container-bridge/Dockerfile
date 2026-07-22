@@ -18,7 +18,7 @@ RUN npm install -g pnpm@10.7.0 @anthropic-ai/claude-code @openai/codex @earendil
 WORKDIR /app
 
 # Install runtime dependencies directly (avoids workspace: protocol issue)
-RUN npm init -y && npm install ws node-pty && \
+RUN npm init -y && npm install ws node-pty tar-stream && \
     (chmod +x node_modules/node-pty/prebuilds/linux-*/spawn-helper 2>/dev/null || true)
 
 # Copy pre-built shared package as a node_modules dependency
@@ -37,7 +37,10 @@ RUN chmod +x /usr/local/bin/trace-entrypoint
 # floating-version fallback.
 COPY apps/container-bridge/app-starter/ /opt/trace/app-starter/
 COPY apps/container-bridge/design-starter/ /opt/trace/design-starter/
+COPY apps/container-bridge/design-system-starter/ /opt/trace/design-system-starter/
+COPY apps/container-bridge/design-default-package/ /opt/trace/design-default-package/
 COPY apps/container-bridge/pdf-starter/ /opt/trace/pdf-starter/
+COPY .claude/skills/author-design-system/ /opt/trace/skills/author-design-system/
 
 # Create non-root user — Claude Code refuses --dangerously-skip-permissions as root.
 # Scope sudo to exactly the Postgres bootstrap commands the entrypoint runs. App
@@ -45,8 +48,8 @@ COPY apps/container-bridge/pdf-starter/ /opt/trace/pdf-starter/
 # RCE in a previewed (agent-written) app trivially container-root and able to read
 # every stripped secret via /proc/1/environ. Only these commands are permitted.
 RUN useradd -m -s /bin/bash coder && \
-    mkdir -p /workspace /repos /workspaces /home/coder/.npm-global && \
-    chown -R coder:coder /workspace /repos /workspaces /app /home/coder/.npm-global /opt/trace && \
+    mkdir -p /workspace /repos /workspaces /sources /home/coder/.npm-global && \
+    chown -R coder:coder /workspace /repos /workspaces /sources /app /home/coder/.npm-global /opt/trace && \
     printf '%s\n' \
       'coder ALL=(root) NOPASSWD: /usr/sbin/service postgresql start' \
       'coder ALL=(postgres) NOPASSWD: /usr/bin/psql, /usr/bin/createuser' \
@@ -55,6 +58,9 @@ RUN useradd -m -s /bin/bash coder && \
 ENV NPM_CONFIG_PREFIX=/home/coder/.npm-global
 ENV PATH=/home/coder/.npm-global/bin:$PATH
 USER coder
+RUN mkdir -p /home/coder/.claude/skills /home/coder/.codex/skills && \
+    cp -R /opt/trace/skills/author-design-system /home/coder/.claude/skills/author-design-system && \
+    cp -R /opt/trace/skills/author-design-system /home/coder/.codex/skills/author-design-system
 RUN mkdir -p /home/coder/.ssh && chmod 700 /home/coder/.ssh
 
 # Pre-warm the pnpm content-addressed store from the starter lockfile so the
@@ -64,6 +70,9 @@ RUN cd /opt/trace/app-starter && \
     pnpm install --ignore-workspace --frozen-lockfile && \
     rm -rf node_modules && \
     cd /opt/trace/design-starter && \
+    pnpm install --ignore-workspace --frozen-lockfile && \
+    rm -rf node_modules && \
+    cd /opt/trace/design-system-starter && \
     pnpm install --ignore-workspace --frozen-lockfile && \
     rm -rf node_modules && \
     cd /opt/trace/pdf-starter && \

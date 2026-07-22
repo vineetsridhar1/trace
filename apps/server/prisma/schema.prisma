@@ -46,8 +46,29 @@ enum SessionGroupVisibility {
 enum SessionGroupKind {
   coding
   design
+  design_system
   app
   pdf
+}
+
+enum DesignSystemStatus {
+  draft
+  ready
+  archived
+}
+
+enum DesignSystemCommitArtifactStatus {
+  pending
+  saving
+  saved
+  failed
+}
+
+enum DesignSystemPublishStatus {
+  idle
+  publishing
+  published
+  failed
 }
 
 enum TicketStatus {
@@ -246,6 +267,13 @@ enum EventType {
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  design_system_created
+  design_system_commit_artifact_created
+  design_system_commit_artifact_updated
+  design_system_version_created
+  design_system_updated
+  design_system_publish_updated
+  design_system_archived
 }
 
 enum SessionApplicationProcessStatus {
@@ -307,6 +335,7 @@ model Organization {
   orgSecrets                  OrgSecret[]
   slackInstalls               SlackInstall[]
   slackChannelBindings        SlackChannelBinding[]
+  designSystems               DesignSystem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -369,28 +398,31 @@ model User {
   enableClaudeInChrome          Boolean     @default(false)
 
   orgMemberships               OrgMember[]
-  mobilePairingTokens          MobilePairingToken[]  @relation("MobilePairingTokenOwner")
-  mobileDevices                MobileDevice[]        @relation("MobileDeviceOwner")
-  ownedBridgeRuntimes          BridgeRuntime[]       @relation("BridgeRuntimeOwner")
-  bridgeAccessGrants           BridgeAccessGrant[]   @relation("BridgeAccessGrantGrantee")
-  grantedBridgeAccessGrants    BridgeAccessGrant[]   @relation("BridgeAccessGrantGrantedBy")
-  requestedBridgeAccess        BridgeAccessRequest[] @relation("BridgeAccessRequestRequester")
-  ownedBridgeAccessRequests    BridgeAccessRequest[] @relation("BridgeAccessRequestOwner")
-  resolvedBridgeAccessRequests BridgeAccessRequest[] @relation("BridgeAccessRequestResolver")
-  createdSessions              Session[]             @relation("SessionCreator")
-  ownedSessionGroups           SessionGroup[]        @relation("SessionGroupOwner")
-  createdTickets               Ticket[]              @relation("TicketCreator")
-  ticketAssignments            TicketAssignee[]      @relation("TicketAssignees")
-  createdChats                 Chat[]                @relation("ChatCreator")
-  ownedChannels                Channel[]             @relation("ChannelOwner")
+  mobilePairingTokens          MobilePairingToken[]         @relation("MobilePairingTokenOwner")
+  mobileDevices                MobileDevice[]               @relation("MobileDeviceOwner")
+  ownedBridgeRuntimes          BridgeRuntime[]              @relation("BridgeRuntimeOwner")
+  bridgeAccessGrants           BridgeAccessGrant[]          @relation("BridgeAccessGrantGrantee")
+  grantedBridgeAccessGrants    BridgeAccessGrant[]          @relation("BridgeAccessGrantGrantedBy")
+  requestedBridgeAccess        BridgeAccessRequest[]        @relation("BridgeAccessRequestRequester")
+  ownedBridgeAccessRequests    BridgeAccessRequest[]        @relation("BridgeAccessRequestOwner")
+  resolvedBridgeAccessRequests BridgeAccessRequest[]        @relation("BridgeAccessRequestResolver")
+  createdSessions              Session[]                    @relation("SessionCreator")
+  ownedSessionGroups           SessionGroup[]               @relation("SessionGroupOwner")
+  createdTickets               Ticket[]                     @relation("TicketCreator")
+  ticketAssignments            TicketAssignee[]             @relation("TicketAssignees")
+  createdChats                 Chat[]                       @relation("ChatCreator")
+  ownedChannels                Channel[]                    @relation("ChannelOwner")
   chatMemberships              ChatMember[]
   channelMemberships           ChannelMember[]
   participants                 Participant[]
   apiTokens                    ApiToken[]
   codexCredential              CodexCredential?
+  createdDesignSystems         DesignSystem[]               @relation("DesignSystemCreator")
+  createdDesignSystemArtifacts DesignSystemCommitArtifact[] @relation("DesignSystemArtifactCreator")
+  createdDesignSystemVersions  DesignSystemVersion[]        @relation("DesignSystemVersionCreator")
   pushTokens                   PushToken[]
-  queuedMessages               QueuedMessage[]       @relation("QueuedMessageCreator")
-  slackInstalls                SlackInstall[]        @relation("SlackInstallInstaller")
+  queuedMessages               QueuedMessage[]              @relation("QueuedMessageCreator")
+  slackInstalls                SlackInstall[]               @relation("SlackInstallInstaller")
   slackAccounts                SlackAccount[]
   slackChannelBindings         SlackChannelBinding[]
 
@@ -416,6 +448,7 @@ model Repo {
   sessionSetupScriptRuns      SessionSetupScriptRun[]
   sessionApplicationProcesses SessionApplicationProcess[]
   sessionEndpoints            SessionEndpoint[]
+  sourcedDesignSystems        DesignSystem[]              @relation("DesignSystemSourceRepo")
 
   webhookId     String?
   webhookSecret String?
@@ -530,6 +563,9 @@ model SessionGroup {
   channel                  Channel?               @relation(fields: [channelId], references: [id])
   repoId                   String?
   repo                     Repo?                  @relation(fields: [repoId], references: [id])
+  designSystemVersionId    String?
+  designSystemVersion      DesignSystemVersion?   @relation("PinnedDesignSystemVersion", fields: [designSystemVersionId], references: [id], onDelete: Restrict)
+  authoredDesignSystem     DesignSystem?          @relation("DesignSystemAuthoringGroup")
   slug                     String?
   branch                   String?
   workdir                  String?
@@ -546,31 +582,31 @@ model SessionGroup {
   setupStatus              String                 @default("idle")
   setupError               String?
 
-  sessions             Session[]
-  gitCheckpoints       GitCheckpoint[]
-  bridgeAccessGrants   BridgeAccessGrant[]
-  bridgeAccessRequests BridgeAccessRequest[]
-  setupScriptRuns      SessionSetupScriptRun[]
-  applicationProcesses SessionApplicationProcess[]
-  endpoints            SessionEndpoint[]
-  designPreviewStatus  String?
-  designPreviewKey     String?
-  designPreviewCommitSha String?
-  designPreviewCapturedAt DateTime?
+  sessions                 Session[]
+  gitCheckpoints           GitCheckpoint[]
+  bridgeAccessGrants       BridgeAccessGrant[]
+  bridgeAccessRequests     BridgeAccessRequest[]
+  setupScriptRuns          SessionSetupScriptRun[]
+  applicationProcesses     SessionApplicationProcess[]
+  endpoints                SessionEndpoint[]
+  designPreviewStatus      String?
+  designPreviewKey         String?
+  designPreviewCommitSha   String?
+  designPreviewCapturedAt  DateTime?
   designPreviewAttemptedAt DateTime?
-  pdfExportStatus        String?
-  pdfExportKey           String?
-  pdfExportPendingKey    String?
-  pdfExportCommitSha     String?
-  pdfExportRequestId     String?
-  pdfExportCapturedAt    DateTime?
-  pdfExportAttemptedAt   DateTime?
-  pdfExportError         String?
-  pdfPageWidth           Float     @default(210)
-  pdfPageHeight          Float     @default(297)
-  pdfPageUnit            String    @default("mm")
-  pdfFormatVersion       Int       @default(0)
-  pdfExportFormatVersion Int?
+  pdfExportStatus          String?
+  pdfExportKey             String?
+  pdfExportPendingKey      String?
+  pdfExportCommitSha       String?
+  pdfExportRequestId       String?
+  pdfExportCapturedAt      DateTime?
+  pdfExportAttemptedAt     DateTime?
+  pdfExportError           String?
+  pdfPageWidth             Float                       @default(210)
+  pdfPageHeight            Float                       @default(297)
+  pdfPageUnit              String                      @default("mm")
+  pdfFormatVersion         Int                         @default(0)
+  pdfExportFormatVersion   Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -583,6 +619,102 @@ model SessionGroup {
   @@index([repoId, branch, updatedAt])
   @@index([kind, designPreviewStatus])
   @@index([kind, pdfExportStatus])
+  @@index([designSystemVersionId])
+}
+
+model DesignSystem {
+  id                      String                            @id @default(uuid())
+  organizationId          String
+  organization            Organization                      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                    String
+  slug                    String
+  description             String?
+  status                  DesignSystemStatus                @default(draft)
+  sourceRepoId            String?
+  sourceRepo              Repo?                             @relation("DesignSystemSourceRepo", fields: [sourceRepoId], references: [id], onDelete: SetNull)
+  sourceBranch            String?
+  sourcePath              String?
+  sourceCommitSha         String?
+  activeVersionId         String?                           @unique
+  activeVersion           DesignSystemVersion?              @relation("ActiveDesignSystemVersion", fields: [activeVersionId], references: [id], onDelete: Restrict)
+  latestCommitArtifactId  String?                           @unique
+  latestCommitArtifact    DesignSystemCommitArtifact?       @relation("LatestDesignSystemArtifact", fields: [latestCommitArtifactId], references: [id], onDelete: Restrict)
+  latestPushedCommitSha   String?
+  authoringSessionGroupId String                            @unique
+  authoringSessionGroup   SessionGroup                      @relation("DesignSystemAuthoringGroup", fields: [authoringSessionGroupId], references: [id], onDelete: Restrict)
+  createdById             String
+  createdBy               User                              @relation("DesignSystemCreator", fields: [createdById], references: [id])
+  commitArtifactStatus    DesignSystemCommitArtifactStatus?
+  commitArtifactError     String?
+  publishStatus           DesignSystemPublishStatus         @default(idle)
+  publishedCommitSha      String?
+  publishAttemptedAt      DateTime?
+  publishError            String?
+  repairAttempts          Int                               @default(0)
+  commitArtifacts         DesignSystemCommitArtifact[]      @relation("DesignSystemArtifacts")
+  versions                DesignSystemVersion[]             @relation("DesignSystemVersions")
+  createdAt               DateTime                          @default(now())
+  updatedAt               DateTime                          @updatedAt
+  archivedAt              DateTime?
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, status, updatedAt])
+  @@index([sourceRepoId])
+}
+
+model DesignSystemCommitArtifact {
+  id                String                           @id @default(uuid())
+  designSystemId    String
+  designSystem      DesignSystem                     @relation("DesignSystemArtifacts", fields: [designSystemId], references: [id], onDelete: Cascade)
+  latestForSystem   DesignSystem?                    @relation("LatestDesignSystemArtifact")
+  sequence          Int
+  storageKey        String
+  contentDigest     String?
+  byteSize          Int?
+  commitSha         String
+  status            DesignSystemCommitArtifactStatus @default(pending)
+  packageValid      Boolean?
+  packageDigest     String?
+  validationSummary Json?
+  repairRequestedAt DateTime?
+  error             String?
+  createdById       String?
+  createdBy         User?                            @relation("DesignSystemArtifactCreator", fields: [createdById], references: [id])
+  version           DesignSystemVersion?
+  createdAt         DateTime                         @default(now())
+  savedAt           DateTime?
+
+  @@unique([designSystemId, sequence])
+  @@unique([designSystemId, commitSha])
+  @@index([designSystemId, createdAt])
+}
+
+model DesignSystemVersion {
+  id                           String                     @id @default(uuid())
+  designSystemId               String
+  designSystem                 DesignSystem               @relation("DesignSystemVersions", fields: [designSystemId], references: [id], onDelete: Restrict)
+  activeForSystem              DesignSystem?              @relation("ActiveDesignSystemVersion")
+  pinnedSessionGroups          SessionGroup[]             @relation("PinnedDesignSystemVersion")
+  version                      Int
+  storageKey                   String
+  contentDigest                String
+  byteSize                     Int
+  sourceCommitSha              String?
+  authoringSessionGroupId      String
+  designSystemCommitArtifactId String                     @unique
+  designSystemCommitArtifact   DesignSystemCommitArtifact @relation(fields: [designSystemCommitArtifactId], references: [id], onDelete: Restrict)
+  workbenchCommitSha           String
+  manifest                     Json
+  validationSummary            Json
+  createdById                  String
+  createdBy                    User                       @relation("DesignSystemVersionCreator", fields: [createdById], references: [id])
+  createdAt                    DateTime                   @default(now())
+
+  @@unique([designSystemId, version])
+  @@unique([designSystemId, contentDigest])
+  @@index([designSystemId, createdAt])
+  @@index([authoringSessionGroupId])
+  @@index([designSystemCommitArtifactId])
 }
 
 model Session {
@@ -927,18 +1059,18 @@ model Event {
 }
 
 model GitCheckpoint {
-  id             String   @id @default(uuid())
-  sessionId      String
-  sessionGroupId String
-  repoId         String
-  promptEventId  String
-  commitSha      String
-  parentShas     String[]
-  treeSha        String
-  subject        String
-  author         String
-  committedAt    DateTime
-  filesChanged   Int
+  id                 String    @id @default(uuid())
+  sessionId          String
+  sessionGroupId     String
+  repoId             String
+  promptEventId      String
+  commitSha          String
+  parentShas         String[]
+  treeSha            String
+  subject            String
+  author             String
+  committedAt        DateTime
+  filesChanged       Int
   captureStatus      String?
   captureKey         String?
   captureUrl         String?
@@ -949,7 +1081,7 @@ model GitCheckpoint {
   previewUrl         String?
   previewContentType String?
   previewCapturedAt  DateTime?
-  createdAt      DateTime @default(now())
+  createdAt          DateTime  @default(now())
 
   sessionGroup SessionGroup @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
   repo         Repo         @relation(fields: [repoId], references: [id], onDelete: Cascade)

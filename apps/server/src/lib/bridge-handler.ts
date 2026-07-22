@@ -28,7 +28,6 @@ const DISCONNECT_GRACE_MS = 10_000;
 /** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
 const PING_INTERVAL_MS = 20_000;
 const BRIDGE_PROTOCOL_VERSION = 2;
-const LEGACY_BRIDGE_PROTOCOL_VERSION = 1;
 const CODING_TOOLS = new Set<CodingTool>(CODING_TOOL_IDS as CodingTool[]);
 
 type LocalBridgeAuth = {
@@ -76,7 +75,7 @@ function parseSupportedTools(value: unknown): CodingTool[] | null {
 }
 
 function isCompatibleProtocolVersion(value: unknown): boolean {
-  return value === LEGACY_BRIDGE_PROTOCOL_VERSION || value === BRIDGE_PROTOCOL_VERSION;
+  return value === 1 || value === BRIDGE_PROTOCOL_VERSION;
 }
 
 function jsonRecord(value: unknown): Record<string, unknown> | null {
@@ -281,6 +280,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               ownerUserId: bridgeRuntime.ownerUserId,
               bridgeRuntimeId: bridgeRuntime.id,
               supportedTools,
+              protocolVersion: typeof msg.protocolVersion === "number" ? msg.protocolVersion : 1,
               registeredRepoIds,
             });
 
@@ -350,6 +350,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               organizationId: bridgeAuth.organizationId,
               ownerUserId: bridgeAuth.userId,
               supportedTools,
+              protocolVersion: msg.protocolVersion as number | undefined,
               registeredRepoIds,
             });
             if (bridgeAuth.sessionId) {
@@ -987,6 +988,8 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             msg.branch as string | undefined,
             msg.slug as string | undefined,
             msg.warning as BridgeWorkspaceWarning | undefined,
+            msg.sourceWorkdir as string | undefined,
+            msg.sourceCommitSha as string | undefined,
           );
         });
       } else if (msg.type === "workspace_failed" && msg.sessionId) {

@@ -67,13 +67,26 @@ export interface BridgePrepareAppCommand {
   type: "prepare_app";
   sessionId: string;
   sessionGroupId?: string;
-  sessionGroupKind: "app" | "design" | "pdf";
+  sessionGroupKind: "app" | "design" | "design_system" | "pdf";
   /** Pre-assigned slug for the generated app workspace. If absent, the bridge generates one. */
   slug?: string;
   repoId: string;
   repoRemoteUrl: string;
   defaultBranch: string;
   checkpointSha?: string;
+  designSystemPackage?: {
+    versionId: string;
+    downloadUrl: string;
+    contentDigest: string;
+    byteSize: number;
+  };
+  sourceRepository?: {
+    repoId: string;
+    remoteUrl: string;
+    branch: string;
+    sourcePath?: string;
+    commitSha?: string;
+  };
 }
 
 export interface BridgeUpgradeWorkspaceCommand {
@@ -511,6 +524,8 @@ export interface BridgeWorkspaceReady {
   warning?: BridgeWorkspaceWarning;
   /** Animal slug used for this worktree (reported back so the server can store it). */
   slug?: string;
+  sourceWorkdir?: string;
+  sourceCommitSha?: string;
 }
 
 export interface BridgeWorkspaceWarning {

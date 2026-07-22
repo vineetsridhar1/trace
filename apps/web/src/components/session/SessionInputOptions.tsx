@@ -1,9 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import { toast } from "sonner";
-import type { SessionConnection, SessionRuntimeInstance } from "@trace/gql";
-import { hasSelectedSessionGroupRuntime, useEntityField } from "@trace/client-core";
+import { gql } from "@urql/core";
+import type { DesignSystem, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
+import {
+  hasSelectedSessionGroupRuntime,
+  useAuthStore,
+  useEntityField,
+  useEntityStore,
+} from "@trace/client-core";
+import { useShallow } from "zustand/react/shallow";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
 import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
@@ -24,6 +31,40 @@ import { useCloudAgentEnvironmentAvailable } from "../../hooks/useCloudAgentEnvi
 import { isAccessibleLocalRuntime } from "../../lib/bridge-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
 import { isGeneratedProjectKind } from "./sessionEmptyState";
+import {
+  CREATE_DESIGN_SYSTEM,
+  DesignSystemCombobox,
+  TRACE_DEFAULT_DESIGN_SYSTEM,
+} from "../design-system/DesignSystemCombobox";
+import { useCommandPaletteStore } from "../../stores/command-palette";
+
+const DESIGN_SYSTEMS_QUERY = gql`
+  query DesignComposerOptions($organizationId: ID!) {
+    designSystems(organizationId: $organizationId) {
+      id
+      name
+      status
+      archivedAt
+      latestCommitArtifact {
+        id
+        status
+        packageValid
+        validationSummary
+      }
+      commitArtifactStatus
+      publishStatus
+      activeVersionId
+      activeVersion {
+        id
+        version
+      }
+      sourceRepo {
+        id
+        name
+      }
+    }
+  }
+`;
 
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 const CLOUD_RUNTIME_ID = "__cloud__";
@@ -127,10 +168,7 @@ export function SessionInputOptions({
     | SessionConnection
     | null
     | undefined;
-  const workdir = useEntityField("sessions", sessionId, "workdir") as
-    | string
-    | null
-    | undefined;
+  const workdir = useEntityField("sessions", sessionId, "workdir") as string | null | undefined;
   const sessionGroupId = useEntityField("sessions", sessionId, "sessionGroupId") as
     | string
     | undefined;
@@ -138,16 +176,26 @@ export function SessionInputOptions({
     | string
     | null
     | undefined;
-  const groupConnection = useEntityField(
+  const selectedDesignSystemVersionId = useEntityField(
     "sessionGroups",
     sessionGroupId ?? "",
-    "connection",
-  ) as SessionConnection | null | undefined;
-  const groupWorkdir = useEntityField(
-    "sessionGroups",
-    sessionGroupId ?? "",
-    "workdir",
+    "designSystemVersionId",
   ) as string | null | undefined;
+  const activeOrgId = useAuthStore((state) => state.activeOrgId);
+  const designSystemsById = useEntityStore((state) => state.designSystems);
+  const designSystems = useMemo(() => Object.values(designSystemsById), [designSystemsById]);
+  const upsertMany = useEntityStore((state) => state.upsertMany);
+  const openGeneratedProjectDialog = useCommandPaletteStore(
+    (state) => state.openGeneratedProjectDialog,
+  );
+  const groupConnection = useEntityField("sessionGroups", sessionGroupId ?? "", "connection") as
+    | SessionConnection
+    | null
+    | undefined;
+  const groupWorkdir = useEntityField("sessionGroups", sessionGroupId ?? "", "workdir") as
+    | string
+    | null
+    | undefined;
 
   const repo = useEntityField("sessions", sessionId, "repo") as
     | { id: string; remoteUrl?: string | null }
@@ -161,6 +209,7 @@ export function SessionInputOptions({
   const reasoningEffortOptions = getReasoningEffortsForTool(currentTool);
   const currentReasoningEffort = reasoningEffort ?? getDefaultReasoningEffort(currentTool);
   const isNotStarted = agentStatus === "not_started";
+  const isDesignSession = sessionGroupKind === "design";
   const runtimeLocked = isGeneratedProjectKind(sessionGroupKind);
   const groupHasSelectedRuntime = hasSelectedSessionGroupRuntime(
     groupConnection === undefined ? connection : groupConnection,
@@ -183,6 +232,62 @@ export function SessionInputOptions({
   // a new, unbound group. Sibling sessions inherit the group's bridge.
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const connectedLocalRuntimes = runtimes.filter(isAccessibleLocalRuntime);
+
+  const handleDesignSystemChange = useCallback(
+    async (value: string) => {
+      if (!isDesignSession || !isNotStarted || isOptimistic) return;
+      if (value === CREATE_DESIGN_SYSTEM) {
+        openGeneratedProjectDialog("design-system");
+        return;
+      }
+      const designSystemVersionId = value === TRACE_DEFAULT_DESIGN_SYSTEM ? null : value;
+      const rollback = applyOptimisticPatch("sessionGroups", sessionGroupId ?? "", {
+        designSystemVersionId,
+      });
+      try {
+        const result = await client
+          .mutation(UPDATE_SESSION_CONFIG_MUTATION, {
+            sessionId,
+            designSystemVersionId,
+          })
+          .toPromise();
+        if (result.error) throw result.error;
+      } catch (error) {
+        rollback();
+        toast.error("Failed to update design library", {
+          description: error instanceof Error ? error.message : undefined,
+        });
+      }
+    },
+    [
+      isDesignSession,
+      isNotStarted,
+      isOptimistic,
+      openGeneratedProjectDialog,
+      sessionGroupId,
+      sessionId,
+    ],
+  );
+
+  useEffect(() => {
+    if (!activeOrgId || !isDesignSession || !isNotStarted) return;
+    let active = true;
+    void client
+      .query(
+        DESIGN_SYSTEMS_QUERY,
+        { organizationId: activeOrgId },
+        { requestPolicy: "network-only" },
+      )
+      .toPromise()
+      .then((result) => {
+        if (!active || result.error) return;
+        upsertMany("designSystems", (result.data?.designSystems ?? []) as DesignSystem[]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeOrgId, isDesignSession, isNotStarted, upsertMany]);
+
   const fetchAvailableRuntimes = useCallback(() => {
     if (!canChangeRuntime || isOptimistic) return Promise.resolve();
     return client
@@ -441,6 +546,14 @@ export function SessionInputOptions({
         onModelChange={handleModelChange}
         onReasoningEffortChange={handleReasoningEffortChange}
       />
+      {isDesignSession ? (
+        <DesignSystemCombobox
+          systems={designSystems}
+          value={selectedDesignSystemVersionId ?? TRACE_DEFAULT_DESIGN_SYSTEM}
+          disabled={isOptimistic || !isNotStarted}
+          onValueChange={(value) => void handleDesignSystemChange(value)}
+        />
+      ) : null}
       {reasoningEffortOptions.length > 0 && (
         <div className="hidden @lg:block">
           <EffortCycleButton

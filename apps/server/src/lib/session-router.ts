@@ -88,6 +88,7 @@ export type DeliveryResult =
   | "no_runtime"
   | "runtime_disconnected"
   | "session_unbound"
+  | "unsupported_runtime"
   | "delivery_failed";
 
 export interface RuntimeInstance {
@@ -100,6 +101,7 @@ export interface RuntimeInstance {
   ownerUserId?: string;
   bridgeRuntimeId?: string;
   supportedTools: string[];
+  protocolVersion?: number;
   /** Repo IDs this runtime has locally registered. Cloud runtimes use empty (supports all). */
   registeredRepoIds: string[];
   lastHeartbeat: number;
@@ -136,12 +138,30 @@ export interface SessionAdapterCreateOptions {
   sessionId: string;
   /** Session group ID — used to key worktrees so all sessions in a group share the same workspace. */
   sessionGroupId?: string;
-  sessionGroupKind?: "coding" | "design" | "app" | "pdf";
+  sessionGroupKind?: "coding" | "design" | "design_system" | "app" | "pdf";
   prepareAppGit?: (runtimeInstanceId: string) => Promise<{
     repoId: string;
     repoRemoteUrl: string;
     defaultBranch: string;
   }>;
+  prepareDesignSystemPackage?: () => Promise<
+    | {
+        versionId: string;
+        downloadUrl: string;
+        contentDigest: string;
+        byteSize: number;
+      }
+    | undefined
+  >;
+  prepareSourceRepository?: () => Promise<
+    | {
+        repoId: string;
+        remoteUrl: string;
+        branch: string;
+        sourcePath?: string;
+      }
+    | undefined
+  >;
   /** Animal slug for the worktree. If set, reuses the existing slug. */
   slug?: string;
   /** Preserve the persisted branch name instead of generating trace/{slug}. */
@@ -430,6 +450,7 @@ export class SessionRouter {
     ownerUserId?: string;
     bridgeRuntimeId?: string;
     supportedTools: string[];
+    protocolVersion?: number;
     registeredRepoIds?: string[];
   }) {
     const runtimeKey = runtime.key ?? runtime.id;
@@ -743,6 +764,13 @@ export class SessionRouter {
       // dispatch, so we now fail and let the caller resolve a proper home
       // runtime via the authorized-runtime-selection path.
       return "no_runtime";
+    }
+    if (
+      command.type === "prepare_app" &&
+      (command.designSystemPackage || command.sourceRepository) &&
+      (runtime.protocolVersion ?? 1) < 2
+    ) {
+      return "unsupported_runtime";
     }
 
     try {
@@ -2113,6 +2141,7 @@ export class SessionRouter {
         if (
           options.sessionGroupKind === "app" ||
           options.sessionGroupKind === "design" ||
+          options.sessionGroupKind === "design_system" ||
           options.sessionGroupKind === "pdf"
         ) {
           const runtimeInstanceId = startResult.runtimeInstanceId;
@@ -2121,6 +2150,8 @@ export class SessionRouter {
             return;
           }
           const appGit = await options.prepareAppGit(runtimeInstanceId);
+          const designSystemPackage = await options.prepareDesignSystemPackage?.();
+          const sourceRepository = await options.prepareSourceRepository?.();
           const result = this.send(
             options.sessionId,
             {
@@ -2131,6 +2162,8 @@ export class SessionRouter {
               slug: options.slug,
               checkpointSha: options.checkpointSha,
               ...appGit,
+              ...(designSystemPackage ? { designSystemPackage } : {}),
+              ...(sourceRepository ? { sourceRepository } : {}),
             },
             { expectedHomeRuntimeId: startResult.runtimeInstanceId },
           );

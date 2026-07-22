@@ -68,6 +68,7 @@ import {
   visibleSessionWhere,
 } from "./access.js";
 import { apiTokenService } from "./api-token.js";
+import { assertActorOrgAccess } from "./actor-auth.js";
 import {
   GitHubApiError,
   githubRepoService,
@@ -371,6 +372,8 @@ type PendingSessionCommandQueue = {
   type: "queue";
   commands: PendingSessionCommand[];
 };
+
+export type InternalMessageQueueResult = "queued" | "session_unavailable" | "runtime_unavailable";
 
 type LinkedCheckoutRuntimeGroup = {
   id: string;
@@ -685,6 +688,8 @@ const SESSION_GROUP_SUMMARY_SELECT = {
   channel: true,
   repoId: true,
   repo: true,
+  designSystemVersionId: true,
+  designSystemVersion: { include: { designSystem: true } },
   branch: true,
   workdir: true,
   connection: true,
@@ -710,6 +715,7 @@ const SESSION_GROUP_INCLUDE = {
   ownerUser: true,
   channel: true,
   repo: true,
+  designSystemVersion: { include: { designSystem: true } },
   sessions: {
     orderBy: [
       { updatedAt: "desc" },
@@ -788,6 +794,12 @@ const LOCAL_FILE_ACCESS_DENIED_ERROR =
 function numberFromBigInt(value: bigint | number | null | undefined): number {
   if (typeof value === "bigint") return Number(value);
   return typeof value === "number" ? value : 0;
+}
+
+function eventJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(
+    JSON.stringify(value, (_key, nested) => (typeof nested === "bigint" ? Number(nested) : nested)),
+  ) as Prisma.InputJsonValue;
 }
 
 function serializeSession(session: {
@@ -1019,7 +1031,11 @@ This is a Trace app session in its own isolated cloud runtime. When present, rea
 </system-instruction>`;
 
 const DESIGN_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace Design session, not an App or Coding session. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; when the user asks to build or create a product, design its screens, flows, variants, and states instead of implementing a production application. Before editing, read and follow AGENTS.md or CLAUDE.md plus docs/ai-guidance.md, resolve design.brief.json, and read the relevant docs/playbooks guidance. Follow the workspace guide's design loop: understand the brief, ground supplied references in observable evidence, map the experience, commit to executable tokens, compose a representative screen and then the coherent screen set, and critique it before delivery. Work visibly and incrementally: render a rough but valid representative screen early, then add and refine screens in coherent runnable batches so the user can watch the canvas evolve through Vite HMR. Keep the manifest and canvas valid between edits; do not assemble the whole design offscreen and reveal it only at the end. Build and refine the artifact through design.brief.json, design.canvas.json, trace.tokens.json, and focused components under src/design, with one component per logical screen and stable screen ids. Prefer the token-driven primitives already under src/design/primitives. Give meaningful layout, control, and text elements stable, unique data-trace-id attributes plus repo-relative data-trace-source attributes pointing to their owning TSX files, and preserve them so manual visual and static-text edits can round-trip into source. Local component state is allowed for prototype interactions, but do not build APIs, databases, authentication, persistence, real integrations, or production business logic. Do not replace src/App.tsx, the stable canvas or review runtime, server.ts, scripts, or the Vite/export configuration, and do not add routing that bypasses the canvas. Use local or embeddable assets only so Export HTML remains self-contained and works offline. The managed Vite server already runs on port 3000 and hot-reloads changes; do not start another server. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect every generated review screenshot, repair failures, and rerun the checks. Ask only blocking product questions through Trace's normal question mechanism; otherwise make explicit, reasonable assumptions and proceed. Before every response that changes the design, commit and push the changes to the configured managed origin. A successful push saves the durable Design preview.
+This is a Trace Design session, not an App or Coding session. Before editing, read design-system/manifest.json, design-system/DESIGN.md, design-system/tokens.css, design-system/components.manifest.json, and then relevant local components, assets, or evidence. The selected package outranks starter defaults; describe any intentional user-requested override. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; design screens, flows, variants, and states instead of implementing a production application. Read the workspace guidance and design brief, work visibly through Vite HMR, keep the manifest and canvas valid, and use the token-driven primitives and portable-component import seam. Do not build APIs, persistence, or real integrations. Do not replace the stable canvas/review runtime or Vite/export configuration. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect and repair every screenshot. Before every response that changes the design, commit and push the managed origin.
+</system-instruction>`;
+
+const DESIGN_SYSTEM_SESSION_INSTRUCTION = `\n\n<system-instruction>
+This is a Trace design-system authoring session. The managed workbench is the writable source of truth; the separate source checkout is read-only and must never be changed. Use the built-in author-design-system workflow. Inventory source-backed tokens, typography, assets, components, variants, states, and compositions, then edit only design-system/, design-system.canvas.json, and src/workbench/. Keep manifest, evidence, boards, HTML specimens, and PNG specimens synchronized. Do not call publication APIs. Before each completed response run pnpm design-system:check, pnpm design-system:review, and pnpm test, inspect every generated specimen, then commit and push the managed branch. Every push is cloud-saved independently; the server automatically publishes a valid latest commit as an immutable version.
 </system-instruction>`;
 
 const PDF_SESSION_INSTRUCTION = `\n\n<system-instruction>
@@ -1028,9 +1044,16 @@ This is a Trace PDF session. Build a print-ready document in the provided Vite/R
 
 function generatedProjectInstruction(
   kind: SessionGroupKind | string | null | undefined,
+  selected?: { version: number; contentDigest: string; designSystem: { name: string } } | null,
 ): string | undefined {
   if (kind === "app") return APP_SESSION_INSTRUCTION;
-  if (kind === "design") return DESIGN_SESSION_INSTRUCTION;
+  if (kind === "design") {
+    const reference = selected
+      ? `\nSelected design system: ${selected.designSystem.name} v${selected.version} (${selected.contentDigest}). The package is already local; follow the required manifest/guidance/tokens/components read order and load other files only on demand.\n`
+      : "\nSelected design system: Trace Default. The package is already local and uses the same read contract.\n";
+    return DESIGN_SESSION_INSTRUCTION + reference;
+  }
+  if (kind === "design_system") return DESIGN_SYSTEM_SESSION_INSTRUCTION;
   if (kind === "pdf") return PDF_SESSION_INSTRUCTION;
   return undefined;
 }
@@ -1385,7 +1408,6 @@ export class SessionService {
       }
     }
   }
-
   private async createGeneratedProjectGitCredential(input: {
     organizationId: string;
     sessionId: string;
@@ -1414,6 +1436,65 @@ export class SessionService {
       repoId: input.repo.id,
       repoRemoteUrl: authenticatedUrl.toString(),
       defaultBranch: input.repo.defaultBranch,
+    };
+  }
+
+  private async createDesignSystemPackageDescriptor(sessionGroupId: string) {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      include: { designSystemVersion: true },
+    });
+    const version = group?.designSystemVersion;
+    if (!version) return undefined;
+    return {
+      versionId: version.id,
+      downloadUrl: await storage.getGetUrl(version.storageKey),
+      contentDigest: version.contentDigest,
+      byteSize: version.byteSize,
+    };
+  }
+
+  private async createDesignSystemSourceDescriptor(
+    sessionGroupId: string,
+    organizationId: string,
+    createdById: string,
+    forceLatest = false,
+  ) {
+    const designSystem = await prisma.designSystem.findUnique({
+      where: { authoringSessionGroupId: sessionGroupId },
+      include: { sourceRepo: true },
+    });
+    const repo = designSystem?.sourceRepo;
+    if (!designSystem || !repo?.remoteUrl)
+      throw new ValidationError("Design-system source repository is unavailable");
+    let remoteUrl = repo.remoteUrl;
+    const parsed = parseGitHubRepo(remoteUrl);
+    if (parsed) {
+      const tokens = await apiTokenService.getDecryptedTokens(createdById);
+      const token =
+        tokens.github ??
+        (await orgSecretService.getDecryptedValueByName(
+          organizationId,
+          ORG_GITHUB_TOKEN_SECRET_NAME,
+        ));
+      // Public GitHub repositories can be cloned anonymously. When a user or
+      // organization token is available, authenticate the checkout so private
+      // repositories and rate limits continue to work as before.
+      if (token) {
+        const authenticated = new URL(remoteUrl);
+        authenticated.username = "x-access-token";
+        authenticated.password = token;
+        remoteUrl = authenticated.toString();
+      }
+    }
+    return {
+      repoId: repo.id,
+      remoteUrl,
+      branch: designSystem.sourceBranch || repo.defaultBranch,
+      ...(designSystem.sourcePath ? { sourcePath: designSystem.sourcePath } : {}),
+      ...(!forceLatest && designSystem.sourceCommitSha
+        ? { commitSha: designSystem.sourceCommitSha }
+        : {}),
     };
   }
 
@@ -1502,6 +1583,19 @@ export class SessionService {
                   actorType: params.actorType ?? "user",
                   actorId: params.createdById,
                 })
+            : undefined,
+        prepareDesignSystemPackage:
+          params.sessionGroupKind === "design" && params.sessionGroupId
+            ? () => this.createDesignSystemPackageDescriptor(params.sessionGroupId!)
+            : undefined,
+        prepareSourceRepository:
+          params.sessionGroupKind === "design_system" && params.sessionGroupId
+            ? () =>
+                this.createDesignSystemSourceDescriptor(
+                  params.sessionGroupId!,
+                  params.organizationId,
+                  params.createdById,
+                )
             : undefined,
         slug: slug ?? undefined,
         preserveBranchName,
@@ -1694,8 +1788,7 @@ export class SessionService {
         // id, and every re-provision (a different id) was fenced out here — the
         // session could never recover.
         const canClaimStaleConnection =
-          isNewRuntimeRequest &&
-          (!conn.runtimeInstanceId || isRuntimeTerminalState(conn.state));
+          isNewRuntimeRequest && (!conn.runtimeInstanceId || isRuntimeTerminalState(conn.state));
         if (conn.runtimeInstanceId !== update.runtimeInstanceId && !canClaimStaleConnection) {
           return null;
         }
@@ -2708,7 +2801,7 @@ export class SessionService {
   }
 
   async listDesignGroups(organizationId: string, userId: string) {
-    return this.listGeneratedProjectGroups("design", organizationId, userId);
+    return this.listGeneratedProjectGroups(["design", "design_system"], organizationId, userId);
   }
 
   async listPdfGroups(organizationId: string, userId: string) {
@@ -2716,14 +2809,14 @@ export class SessionService {
   }
 
   private async listGeneratedProjectGroups(
-    kind: "app" | "design" | "pdf",
+    kind: "app" | "design" | "pdf" | readonly ["design", "design_system"],
     organizationId: string,
     userId: string,
   ) {
     const groups = await prisma.sessionGroup.findMany({
       where: {
         organizationId,
-        kind,
+        kind: typeof kind === "string" ? kind : { in: [...kind] },
         archivedAt: null,
         AND: [visibleSessionGroupWhere(userId)],
       },
@@ -3318,11 +3411,44 @@ export class SessionService {
     }
     const seedGroup = input.restoreCheckpointId ? restoreGroup : resolvedGroup;
     const resolvedKind = input.kind ?? seedGroup?.kind ?? "coding";
+    if (input.designSystemVersionId && resolvedKind !== "design") {
+      throw new ValidationError("Design-system versions may only be selected for Design sessions");
+    }
+    const selectedDesignSystemVersion = input.designSystemVersionId
+      ? await prisma.designSystemVersion.findFirst({
+          where: {
+            id: input.designSystemVersionId,
+            designSystem: {
+              organizationId: input.organizationId,
+              status: "ready",
+              archivedAt: null,
+            },
+          },
+          include: { designSystem: true },
+        })
+      : null;
+    if (input.designSystemVersionId && !selectedDesignSystemVersion) {
+      throw new ValidationError("Selected design-system version is unavailable");
+    }
+    if (
+      existingGroup &&
+      input.designSystemVersionId &&
+      existingGroup.designSystemVersionId !== input.designSystemVersionId
+    ) {
+      throw new ValidationError("An existing Design remains pinned to its original design system");
+    }
     if (existingGroup && input.kind && input.kind !== existingGroup.kind) {
       throw new ValidationError("Session kind cannot change within an existing session group");
     }
     if (isGeneratedProjectKind(resolvedKind)) {
-      const label = resolvedKind === "design" ? "Design" : resolvedKind === "pdf" ? "PDF" : "App";
+      const label =
+        resolvedKind === "design_system"
+          ? "Design System"
+          : resolvedKind === "design"
+            ? "Design"
+            : resolvedKind === "pdf"
+              ? "PDF"
+              : "App";
       if (input.sourceSessionId && !input.restoreCheckpointId) {
         throw new ValidationError(`${label} sessions cannot start from a source session`);
       }
@@ -3844,7 +3970,8 @@ export class SessionService {
     // Sessions stay idle until a command is actually delivered to the coding tool.
     const initialAgentStatus: AgentStatus = "not_started";
     const initialSessionStatus: SessionStatus = "in_progress";
-    const initialCheckpointContextId = resolvedRepoId && input.prompt ? randomUUID() : null;
+    const initialCheckpointContextId =
+      resolvedKind !== "design_system" && resolvedRepoId && input.prompt ? randomUUID() : null;
     const hasInitialUserContent = !!input.prompt || !!input.imageKeys?.length;
 
     let startEventToPublish: Awaited<ReturnType<typeof eventService.create>> | undefined;
@@ -3884,6 +4011,7 @@ export class SessionService {
                 forkedFromSessionGroupId: input.forkedFromSessionGroupId ?? undefined,
                 channelId: resolvedChannelId,
                 repoId: resolvedRepoId ?? undefined,
+                designSystemVersionId: selectedDesignSystemVersion?.id,
                 branch: resolvedBranch ?? undefined,
                 connection: initialConnection,
                 // Adopting an existing worktree: record the path and flag the group
@@ -4642,7 +4770,10 @@ export class SessionService {
       type: "run" as const,
       sessionId: id,
       prompt: resolvedPrompt ?? undefined,
-      appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
+      appendSystemPrompt: generatedProjectInstruction(
+        session.sessionGroup?.kind,
+        session.sessionGroup?.designSystemVersion,
+      ),
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
@@ -5042,6 +5173,7 @@ export class SessionService {
       reasoningEffort?: string;
       hosting?: string;
       runtimeInstanceId?: string;
+      designSystemVersionId?: string | null;
     },
     actorType: ActorType,
     actorId: string,
@@ -5061,6 +5193,7 @@ export class SessionService {
           select: {
             kind: true,
             slug: true,
+            designSystemVersionId: true,
             visibility: true,
             ownerUserId: true,
             connection: true,
@@ -5095,6 +5228,30 @@ export class SessionService {
         : toolChanged
           ? (getDefaultReasoningEffort(nextTool) ?? null)
           : undefined;
+
+    const designSystemVersionChanged = config.designSystemVersionId !== undefined;
+    let selectedDesignSystemVersionId: string | null | undefined;
+    if (designSystemVersionChanged) {
+      if (prev.agentStatus !== "not_started" || prev.sessionGroup?.kind !== "design") {
+        throw new ValidationError(
+          "Design library can only be changed before a design session starts",
+        );
+      }
+      if (config.designSystemVersionId === null) {
+        selectedDesignSystemVersionId = null;
+      } else {
+        const version = await prisma.designSystemVersion.findFirst({
+          where: {
+            id: config.designSystemVersionId,
+            designSystem: { organizationId, status: "ready", archivedAt: null },
+            designSystemCommitArtifact: { status: "saved", packageValid: true },
+          },
+          select: { id: true },
+        });
+        if (!version) throw new ValidationError("Selected design library is not available");
+        selectedDesignSystemVersionId = version.id;
+      }
+    }
 
     const data: Record<string, unknown> = {};
     if (config.tool != null) data.tool = config.tool;
@@ -5234,11 +5391,40 @@ export class SessionService {
       }
     }
 
-    const session = await prisma.session.update({
-      where: { id: prev.id },
-      data,
-      include: SESSION_INCLUDE,
-    });
+    // Selecting a design library changes both the shared session group and the
+    // session's config event. Lock the session row so this cannot race the
+    // first message changing agentStatus and pinning the chosen version.
+    const designSystemGroupId = designSystemVersionChanged ? prev.sessionGroupId : null;
+    const session = designSystemGroupId
+      ? await prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT "id" FROM "Session" WHERE "id" = ${prev.id} FOR UPDATE`;
+          const lockedSession = await tx.session.findUniqueOrThrow({
+            where: { id: prev.id },
+            select: { agentStatus: true, sessionGroup: { select: { kind: true } } },
+          });
+          if (
+            lockedSession.agentStatus !== "not_started" ||
+            lockedSession.sessionGroup?.kind !== "design"
+          ) {
+            throw new ValidationError(
+              "Design library can only be changed before a design session starts",
+            );
+          }
+          await tx.sessionGroup.update({
+            where: { id: designSystemGroupId },
+            data: { designSystemVersionId: selectedDesignSystemVersionId },
+          });
+          return tx.session.update({
+            where: { id: prev.id },
+            data,
+            include: SESSION_INCLUDE,
+          });
+        })
+      : await prisma.session.update({
+          where: { id: prev.id },
+          data,
+          include: SESSION_INCLUDE,
+        });
 
     // Sync group connection if runtime changed
     if (runtimeChanged && session.sessionGroupId) {
@@ -5268,6 +5454,9 @@ export class SessionService {
           nextReasoningEffort !== undefined ? nextReasoningEffort : session.reasoningEffort,
         toolChanged,
         ...(runtimeChanged && { hosting: session.hosting, connection: session.connection }),
+        ...(designSystemVersionChanged && session.sessionGroupId
+          ? { sessionGroup: await this.loadSessionGroupSnapshot(session.sessionGroupId) }
+          : {}),
       },
       actorType,
       actorId,
@@ -5823,7 +6012,19 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { kind: true, slug: true } },
+        sessionGroup: {
+          select: {
+            kind: true,
+            slug: true,
+            designSystemVersion: {
+              select: {
+                version: true,
+                contentDigest: true,
+                designSystem: { select: { name: true } },
+              },
+            },
+          },
+        },
         channel: { select: { baseBranch: true } },
         connection: true,
         pendingRun: true,
@@ -6064,7 +6265,7 @@ export class SessionService {
     });
 
     const checkpointContext =
-      session.repoId && session.sessionGroupId
+      session.sessionGroup?.kind !== "design_system" && session.repoId && session.sessionGroupId
         ? createCheckpointContext({
             checkpointContextId: randomUUID(),
             sessionId,
@@ -6091,7 +6292,10 @@ export class SessionService {
       type: "send" as const,
       sessionId,
       prompt,
-      appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
+      appendSystemPrompt: generatedProjectInstruction(
+        session.sessionGroup?.kind,
+        session.sessionGroup?.designSystemVersion,
+      ),
       tool: activeTool,
       model: activeModel ?? undefined,
       reasoningEffort: activeReasoningEffort ?? undefined,
@@ -6224,6 +6428,67 @@ export class SessionService {
     });
 
     return event;
+  }
+
+  /**
+   * Queue a non-conversational command for an existing tool session.
+   * This never provisions a runtime and never creates a message event. Active
+   * sessions drain the command after their current run; idle sessions receive
+   * it immediately through the same durable pending-command path.
+   */
+  async queueInternalMessage(input: {
+    sessionGroupId: string;
+    organizationId: string;
+    text: string;
+    clientSource: string;
+  }): Promise<InternalMessageQueueResult> {
+    const session = await prisma.session.findFirst({
+      where: { sessionGroupId: input.sessionGroupId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        organizationId: true,
+        agentStatus: true,
+        workdir: true,
+        toolSessionId: true,
+        worktreeDeleted: true,
+        pendingRun: true,
+      },
+    });
+    if (
+      !session ||
+      session.organizationId !== input.organizationId ||
+      session.worktreeDeleted ||
+      !session.workdir ||
+      !session.toolSessionId ||
+      session.agentStatus === "failed" ||
+      session.agentStatus === "stopped"
+    ) {
+      return "session_unavailable";
+    }
+    if (!sessionRouter.getRuntimeForSession(session.id)) return "runtime_unavailable";
+
+    await this.storePendingCommand(
+      session.id,
+      {
+        type: "send",
+        prompt: input.text,
+        interactionMode: null,
+        clientSource: input.clientSource,
+        checkpointContext: null,
+      },
+      undefined,
+      session.pendingRun,
+    );
+
+    if (session.agentStatus !== "active") {
+      const queued = await prisma.session.findUnique({
+        where: { id: session.id },
+        select: { pendingRun: true },
+      });
+      await this.deliverPendingCommand(session.id, queued?.pendingRun);
+    }
+    return "queued";
   }
 
   async queueMessage({
@@ -6690,12 +6955,105 @@ export class SessionService {
     return true;
   }
 
+  async refreshDesignSystemSource(input: {
+    designSystemId: string;
+    organizationId: string;
+    actorType: ActorType;
+    actorId: string;
+  }) {
+    await prisma.$transaction((tx) =>
+      assertActorOrgAccess(tx, input.organizationId, input.actorType, input.actorId),
+    );
+    const designSystem = await prisma.designSystem.findFirstOrThrow({
+      where: {
+        id: input.designSystemId,
+        organizationId: input.organizationId,
+        status: { not: "archived" },
+      },
+      include: {
+        sourceRepo: true,
+        activeVersion: true,
+        latestCommitArtifact: true,
+        authoringSessionGroup: {
+          include: { repo: true, sessions: { orderBy: { createdAt: "desc" } } },
+        },
+      },
+    });
+    const group = designSystem.authoringSessionGroup;
+    const session =
+      group.sessions.find(
+        (item) => item.agentStatus !== "stopped" && item.agentStatus !== "failed",
+      ) ?? group.sessions[0];
+    if (!session || !group.repo)
+      throw new ValidationError("The authoring workbench is unavailable");
+    const runtimeInstanceId = this.parseConnection(session.connection).runtimeInstanceId;
+    if (!runtimeInstanceId) throw new ValidationError("The authoring runtime is not connected");
+    const appGit = await this.createGeneratedProjectGitCredential({
+      organizationId: input.organizationId,
+      sessionId: session.id,
+      runtimeInstanceId,
+      repo: group.repo,
+      actorType: input.actorType,
+      actorId: input.actorId,
+    });
+    const sourceRepository = await this.createDesignSystemSourceDescriptor(
+      group.id,
+      input.organizationId,
+      designSystem.createdById,
+      true,
+    );
+    const delivery = sessionRouter.send(
+      session.id,
+      {
+        type: "prepare_app",
+        sessionId: session.id,
+        sessionGroupId: group.id,
+        sessionGroupKind: "design_system",
+        slug: group.slug ?? undefined,
+        ...appGit,
+        sourceRepository,
+      },
+      { expectedHomeRuntimeId: runtimeInstanceId, organizationId: input.organizationId },
+    );
+    if (delivery !== "delivered") {
+      throw new ValidationError(
+        delivery === "unsupported_runtime"
+          ? "The authoring runtime must be updated before refreshing source"
+          : "The authoring runtime is unavailable",
+      );
+    }
+    const updated = await prisma.designSystem.update({
+      where: { id: designSystem.id },
+      data: { sourceCommitSha: null },
+      include: {
+        sourceRepo: true,
+        activeVersion: true,
+        latestCommitArtifact: true,
+        authoringSessionGroup: {
+          include: { repo: true, sessions: { orderBy: { createdAt: "desc" } } },
+        },
+      },
+    });
+    await eventService.create({
+      organizationId: input.organizationId,
+      scopeType: "system",
+      scopeId: updated.id,
+      eventType: "design_system_updated",
+      payload: eventJson({ designSystem: updated }),
+      actorType: input.actorType,
+      actorId: input.actorId,
+    });
+    return updated;
+  }
+
   async workspaceReady(
     sessionId: string,
     workdir: string,
     branch?: string,
     slug?: string,
     warning?: BridgeWorkspaceWarning,
+    sourceWorkdir?: string,
+    sourceCommitSha?: string,
   ) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
     const [session, pendingRun] = await prisma.$transaction(
@@ -6771,10 +7129,39 @@ export class SessionService {
         agentStatus: session.agentStatus,
         sessionStatus: session.sessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
+        ...(sourceWorkdir ? { sourceWorkdir } : {}),
+        ...(sourceCommitSha ? { sourceCommitSha } : {}),
       },
       actorType: "system",
       actorId: "system",
     });
+    if (
+      sourceCommitSha &&
+      session.sessionGroup?.kind === "design_system" &&
+      session.sessionGroupId
+    ) {
+      const designSystem = await prisma.designSystem.update({
+        where: { authoringSessionGroupId: session.sessionGroupId },
+        data: { sourceCommitSha },
+        include: {
+          sourceRepo: true,
+          activeVersion: true,
+          latestCommitArtifact: true,
+          authoringSessionGroup: {
+            include: { repo: true, sessions: { orderBy: { createdAt: "desc" } } },
+          },
+        },
+      });
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "system",
+        scopeId: designSystem.id,
+        eventType: "design_system_updated",
+        payload: eventJson({ designSystem }),
+        actorType: "system",
+        actorId: "system",
+      });
+    }
 
     if (warning) {
       await eventService.create({
@@ -6850,10 +7237,32 @@ export class SessionService {
     // Deliver the queued prompt after preview startup has been dispatched. The
     // process and agent then run concurrently, with the warmed dependency cache
     // making the starter visible early enough to watch incremental edits.
-    if (pendingRun) {
-      const replayResult = await this.deliverPendingCommand(sessionId, pendingRun);
+    let replayPendingRun: Prisma.InputJsonValue | undefined = pendingRun
+      ? (pendingRun as Prisma.InputJsonValue)
+      : undefined;
+    if (!replayPendingRun && session.agentStatus === "not_started") {
+      const startMeta = await getSessionStartMetadata(sessionId);
+      if (startMeta.prompt) {
+        replayPendingRun = pendingRunValue([
+          {
+            type: "run",
+            prompt: startMeta.prompt,
+            interactionMode: null,
+            clientSource: null,
+            checkpointContext: null,
+          },
+        ]) as Prisma.InputJsonValue;
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: { pendingRun: replayPendingRun },
+        });
+      }
+    }
+
+    if (replayPendingRun) {
+      const replayResult = await this.deliverPendingCommand(sessionId, replayPendingRun);
       if (replayResult && replayResult !== "delivered") {
-        const commands = this.parsePendingCommands(pendingRun);
+        const commands = this.parsePendingCommands(replayPendingRun);
         await prisma.session.update({
           where: { id: sessionId },
           data: { pendingRun: pendingRunValue(commands) },
@@ -7140,16 +7549,16 @@ export class SessionService {
       actorId: "system",
     });
     if (session.sessionGroupId) {
-      void managedGitService.retryPendingDesignCommitPreviews(session.sessionGroupId).catch(
-        (error: unknown) => {
+      void managedGitService
+        .retryPendingDesignCommitPreviews(session.sessionGroupId)
+        .catch((error: unknown) => {
           console.error("[session] design preview retry after runtime reconnect failed", error);
-        },
-      );
-      void managedGitService.retryPdfCommitExport(session.sessionGroupId).catch(
-        (error: unknown) => {
+        });
+      void managedGitService
+        .retryPdfCommitExport(session.sessionGroupId)
+        .catch((error: unknown) => {
           console.error("[session] PDF export retry after runtime reconnect failed", error);
-        },
-      );
+        });
     }
   }
 
@@ -7255,7 +7664,18 @@ export class SessionService {
         toolSessionId: true,
         repoId: true,
         sessionGroupId: true,
-        sessionGroup: { select: { kind: true } },
+        sessionGroup: {
+          select: {
+            kind: true,
+            designSystemVersion: {
+              select: {
+                version: true,
+                contentDigest: true,
+                designSystem: { select: { name: true } },
+              },
+            },
+          },
+        },
         connection: true,
       },
     });
@@ -7282,7 +7702,7 @@ export class SessionService {
     });
     const checkpointContext =
       options.checkpointContext ??
-      (session.repoId && session.sessionGroupId
+      (session.sessionGroup?.kind !== "design_system" && session.repoId && session.sessionGroupId
         ? createCheckpointContext({
             checkpointContextId: randomUUID(),
             promptEventId: promptEvent?.id ?? null,
@@ -7304,7 +7724,10 @@ export class SessionService {
         type: "send",
         sessionId,
         prompt,
-        appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
+        appendSystemPrompt: generatedProjectInstruction(
+          session.sessionGroup?.kind,
+          session.sessionGroup?.designSystemVersion,
+        ),
         tool: session.tool,
         model: session.model ?? undefined,
         reasoningEffort: session.reasoningEffort ?? undefined,
@@ -7373,6 +7796,7 @@ export class SessionService {
       },
     });
     if (!session?.sessionGroupId || !session.repoId) return;
+    if (session.sessionGroup?.kind === "design_system") return;
 
     const existing = await prisma.gitCheckpoint.findUnique({
       where: {
@@ -7776,6 +8200,18 @@ export class SessionService {
           connection: connJson(restoredConn),
         });
       }
+      const designSystemPackage =
+        session.sessionGroup?.kind === "design" && session.sessionGroupId
+          ? await this.createDesignSystemPackageDescriptor(session.sessionGroupId)
+          : undefined;
+      const sourceRepository =
+        session.sessionGroup?.kind === "design_system" && session.sessionGroupId
+          ? await this.createDesignSystemSourceDescriptor(
+              session.sessionGroupId,
+              session.organizationId,
+              session.createdById,
+            )
+          : undefined;
       const retryPreparation = isGeneratedProject
         ? {
             type: "prepare_app" as const,
@@ -7792,6 +8228,8 @@ export class SessionService {
               actorType,
               actorId,
             })),
+            ...(designSystemPackage ? { designSystemPackage } : {}),
+            ...(sourceRepository ? { sourceRepository } : {}),
           }
         : {
             type: "prepare" as const,
@@ -7813,11 +8251,10 @@ export class SessionService {
           };
       // Re-run workspace preparation — pin delivery to the runtime we just
       // resolved (the home bridge) so no other bridge can intercept.
-      const prepResult = sessionRouter.send(
-        sessionId,
-        retryPreparation,
-        { expectedHomeRuntimeId: runtime.id, organizationId: session.organizationId },
-      );
+      const prepResult = sessionRouter.send(sessionId, retryPreparation, {
+        expectedHomeRuntimeId: runtime.id,
+        organizationId: session.organizationId,
+      });
 
       if (prepResult !== "delivered") {
         await this.persistConnectionFailure(
@@ -9240,520 +9677,6 @@ export class SessionService {
     return this.pdfArtifactUrl(sessionGroupId, organizationId, userId, true);
   }
 
-  async saveManualElementEdit(
-    input: {
-      sessionGroupId: string;
-      filePath: string;
-      elementId: string;
-      text?: string | null;
-      expectedTextSourceHash?: string | null;
-      styles?: DesignElementStylesInput | null;
-      expectedStyleSourceHash?: string | null;
-    },
-    organizationId: string,
-    actorType: ActorType,
-    actorId: string,
-  ): Promise<{
-    sessionGroupId: string;
-    filePath: string;
-    elementId: string;
-    text: string | null;
-    textSourceHash: string | null;
-    styles: ManualDesignElementStyles | null;
-    styleSourceHash: string | null;
-    commitSha: string;
-  }> {
-    const [result] = await this.saveManualElementEdits(
-      input.sessionGroupId,
-      [input],
-      organizationId,
-      actorType,
-      actorId,
-    );
-    return result!;
-  }
-
-  async saveManualElementEdits(
-    sessionGroupId: string,
-    inputs: Array<{
-      filePath: string;
-      elementId: string;
-      text?: string | null;
-      expectedTextSourceHash?: string | null;
-      styles?: DesignElementStylesInput | null;
-      expectedStyleSourceHash?: string | null;
-    }>,
-    organizationId: string,
-    actorType: ActorType,
-    actorId: string,
-  ): Promise<
-    Array<{
-      sessionGroupId: string;
-      filePath: string;
-      elementId: string;
-      text: string | null;
-      textSourceHash: string | null;
-      styles: ManualDesignElementStyles | null;
-      styleSourceHash: string | null;
-      commitSha: string;
-    }>
-  > {
-    return this.withManualElementSaveLock(sessionGroupId, async () => {
-      if (inputs.length === 0) throw new ValidationError("Choose changes before saving");
-      const kind = await this.assertManualElementEditAccess(
-        sessionGroupId,
-        organizationId,
-        actorId,
-      );
-      const edits = inputs.map((input) => {
-        const filePath = validateManualSourcePath(input.filePath, kind);
-        const elementId = validateDesignElementId(input.elementId);
-        const savesText = input.text !== null && input.text !== undefined;
-        const savesStyles = input.styles !== null && input.styles !== undefined;
-        if (!savesText && !savesStyles) {
-          throw new ValidationError("Choose content or appearance changes before saving");
-        }
-        if (savesText && !input.expectedTextSourceHash) {
-          throw new ValidationError("The text source hash is required");
-        }
-        if (savesStyles && !input.expectedStyleSourceHash) {
-          throw new ValidationError("The style source hash is required");
-        }
-        return { ...input, filePath, elementId, savesText, savesStyles };
-      });
-      const duplicate = new Set<string>();
-      for (const edit of edits) {
-        const key = `${edit.filePath}:${edit.elementId}`;
-        if (duplicate.has(key))
-          throw new ValidationError("An element can only be saved once per batch");
-        duplicate.add(key);
-      }
-
-      const runtime = await this.resolveAccessibleSessionGroupRuntime(
-        sessionGroupId,
-        organizationId,
-        actorId,
-        { requireWrite: true },
-      );
-      const textPaths = [
-        ...new Set(edits.filter((edit) => edit.savesText).map((edit) => edit.filePath)),
-      ];
-      const textSources = new Map(
-        await Promise.all(
-          textPaths.map(
-            async (path) =>
-              [
-                path,
-                await sessionRouter.readFile(
-                  runtime.runtimeId,
-                  runtime.sessionId,
-                  path,
-                  runtime.workdirHint,
-                ),
-              ] as const,
-          ),
-        ),
-      );
-      const needsStyles = edits.some((edit) => edit.savesStyles);
-      const styleFile = needsStyles
-        ? await this.readDesignManualStyleFile(
-            runtime.runtimeId,
-            runtime.sessionId,
-            runtime.workdirHint,
-            kind,
-          )
-        : null;
-
-      for (const edit of edits) {
-        if (
-          edit.savesText &&
-          designSourceHash(textSources.get(edit.filePath) ?? "") !== edit.expectedTextSourceHash
-        ) {
-          throw new ValidationError("The source changed. Select the element again before saving");
-        }
-        if (
-          edit.savesStyles &&
-          styleFile &&
-          designSourceHash(styleFile.source) !== edit.expectedStyleSourceHash
-        ) {
-          throw new ValidationError(
-            "The manual styles changed. Select the element again before saving",
-          );
-        }
-      }
-
-      const nextTextSources = new Map(textSources);
-      let nextStyleSource = styleFile?.source ?? null;
-      const results = edits.map((edit) => {
-        let text: string | null = null;
-        let styles: ManualDesignElementStyles | null = null;
-        if (edit.savesText) {
-          const source = nextTextSources.get(edit.filePath);
-          if (!source) throw new ValidationError("The source file is unavailable");
-          const result = updateStaticDesignElementText(
-            source,
-            edit.filePath,
-            edit.elementId,
-            edit.text!,
-          );
-          nextTextSources.set(edit.filePath, result.source);
-          text = result.text;
-        }
-        if (edit.savesStyles) {
-          if (nextStyleSource === null)
-            throw new ValidationError("The manual styles file is unavailable");
-          const result = updateManualDesignElementStyles(
-            nextStyleSource,
-            edit.elementId,
-            edit.styles!,
-          );
-          nextStyleSource = result.source;
-          styles = result.styles;
-        }
-        return { edit, text, styles };
-      });
-      const writes = [
-        ...textPaths.flatMap((path) => {
-          const before = textSources.get(path)!;
-          const after = nextTextSources.get(path)!;
-          return before === after ? [] : [{ path, before, after }];
-        }),
-        ...(styleFile && nextStyleSource !== styleFile.source
-          ? [{ path: styleFile.path, before: styleFile.source, after: nextStyleSource! }]
-          : []),
-      ];
-      if (writes.length === 0)
-        throw new ValidationError("The selected edits do not change any files");
-
-      const written: typeof writes = [];
-      let commitSha: string;
-      try {
-        for (const write of writes) {
-          await sessionRouter.writeFile(
-            runtime.runtimeId,
-            runtime.sessionId,
-            write.path,
-            write.after,
-            runtime.workdirHint,
-            write.before,
-          );
-          written.push(write);
-        }
-        commitSha = await sessionRouter.commitFileChanges(
-          runtime.runtimeId,
-          runtime.sessionId,
-          edits.length === 1
-            ? `Save manual ${kind} element edit`
-            : `Save ${edits.length} manual ${kind} element edits`,
-          runtime.workdirHint,
-          writes.map((write) => write.path),
-        );
-      } catch (error) {
-        await Promise.all(
-          written
-            .reverse()
-            .map((write) =>
-              sessionRouter.writeFile(
-                runtime.runtimeId,
-                runtime.sessionId,
-                write.path,
-                write.before,
-                runtime.workdirHint,
-                write.after,
-              ),
-            ),
-        ).catch(() => {});
-        throw error;
-      }
-
-      const output = results.map(({ edit, text, styles }) => ({
-        sessionGroupId,
-        filePath: edit.filePath,
-        elementId: edit.elementId,
-        text,
-        textSourceHash: edit.savesText
-          ? designSourceHash(nextTextSources.get(edit.filePath)!)
-          : null,
-        styles,
-        styleSourceHash:
-          edit.savesStyles && nextStyleSource ? designSourceHash(nextStyleSource) : null,
-        commitSha,
-      }));
-      await eventService.createMany(
-        output.map((result) => ({
-          organizationId,
-          scopeType: "system",
-          scopeId: sessionGroupId,
-          eventType: "manual_element_saved",
-          payload: result,
-          actorType,
-          actorId,
-        })),
-      );
-      return output;
-    });
-  }
-
-  async readDesignElementTextSource(
-    sessionGroupId: string,
-    filePath: string,
-    elementId: string,
-    organizationId: string,
-    userId: string,
-  ): Promise<DesignElementTextSource & { sessionGroupId: string }> {
-    const kind = await this.assertManualElementEditAccess(sessionGroupId, organizationId, userId);
-    const normalizedPath = validateManualSourcePath(filePath, kind);
-    const normalizedElementId = validateDesignElementId(elementId);
-    const runtime = await this.resolveAccessibleSessionGroupRuntime(
-      sessionGroupId,
-      organizationId,
-      userId,
-      { requireWrite: true },
-    );
-    const source = await sessionRouter.readFile(
-      runtime.runtimeId,
-      runtime.sessionId,
-      normalizedPath,
-      runtime.workdirHint,
-    );
-    return {
-      sessionGroupId,
-      ...readStaticDesignElementText(source, normalizedPath, normalizedElementId),
-    };
-  }
-
-  async updateDesignElementText(
-    input: {
-      sessionGroupId: string;
-      filePath: string;
-      elementId: string;
-      text: string;
-      expectedSourceHash: string;
-    },
-    organizationId: string,
-    actorType: ActorType,
-    actorId: string,
-  ): Promise<{
-    sessionGroupId: string;
-    filePath: string;
-    elementId: string;
-    previousText: string;
-    text: string;
-    sourceHash: string;
-  }> {
-    const kind = await this.assertManualElementEditAccess(
-      input.sessionGroupId,
-      organizationId,
-      actorId,
-    );
-    const filePath = validateManualSourcePath(input.filePath, kind);
-    const elementId = validateDesignElementId(input.elementId);
-    const runtime = await this.resolveAccessibleSessionGroupRuntime(
-      input.sessionGroupId,
-      organizationId,
-      actorId,
-      { requireWrite: true },
-    );
-    const source = await sessionRouter.readFile(
-      runtime.runtimeId,
-      runtime.sessionId,
-      filePath,
-      runtime.workdirHint,
-    );
-    if (designSourceHash(source) !== input.expectedSourceHash) {
-      throw new ValidationError(
-        "The design source changed. Select the element again before saving",
-      );
-    }
-
-    const result = updateStaticDesignElementText(source, filePath, elementId, input.text);
-    if (result.source !== source) {
-      await sessionRouter.writeFile(
-        runtime.runtimeId,
-        runtime.sessionId,
-        filePath,
-        result.source,
-        runtime.workdirHint,
-      );
-      await eventService.create({
-        organizationId,
-        scopeType: "system",
-        scopeId: input.sessionGroupId,
-        eventType: "design_element_text_updated",
-        payload: {
-          sessionGroupId: input.sessionGroupId,
-          filePath,
-          elementId,
-          previousText: result.previousText,
-          text: result.text,
-          sourceHash: result.sourceHash,
-        },
-        actorType,
-        actorId,
-      });
-    }
-
-    return {
-      sessionGroupId: input.sessionGroupId,
-      filePath,
-      elementId,
-      previousText: result.previousText,
-      text: result.text,
-      sourceHash: result.sourceHash,
-    };
-  }
-
-  async readDesignElementStyleSource(
-    sessionGroupId: string,
-    elementId: string,
-    organizationId: string,
-    userId: string,
-  ): Promise<{
-    sessionGroupId: string;
-    elementId: string;
-    sourceHash: string;
-    styles: ManualDesignElementStyles;
-  }> {
-    const kind = await this.assertManualElementEditAccess(sessionGroupId, organizationId, userId);
-    const normalizedElementId = validateDesignElementId(elementId);
-    const runtime = await this.resolveAccessibleSessionGroupRuntime(
-      sessionGroupId,
-      organizationId,
-      userId,
-      { requireWrite: true },
-    );
-    const styleFile = await this.readDesignManualStyleFile(
-      runtime.runtimeId,
-      runtime.sessionId,
-      runtime.workdirHint,
-      kind,
-    );
-    return {
-      sessionGroupId,
-      elementId: normalizedElementId,
-      ...readManualDesignElementStyles(styleFile.source, normalizedElementId),
-    };
-  }
-
-  async updateDesignElementStyles(
-    input: {
-      sessionGroupId: string;
-      elementId: string;
-      styles: DesignElementStylesInput;
-      expectedSourceHash: string;
-    },
-    organizationId: string,
-    actorType: ActorType,
-    actorId: string,
-  ): Promise<{
-    sessionGroupId: string;
-    elementId: string;
-    sourceHash: string;
-    styles: ManualDesignElementStyles;
-  }> {
-    const kind = await this.assertManualElementEditAccess(
-      input.sessionGroupId,
-      organizationId,
-      actorId,
-    );
-    const elementId = validateDesignElementId(input.elementId);
-    const runtime = await this.resolveAccessibleSessionGroupRuntime(
-      input.sessionGroupId,
-      organizationId,
-      actorId,
-      { requireWrite: true },
-    );
-    const styleFile = await this.readDesignManualStyleFile(
-      runtime.runtimeId,
-      runtime.sessionId,
-      runtime.workdirHint,
-      kind,
-    );
-    const source = styleFile.source;
-    if (designSourceHash(source) !== input.expectedSourceHash) {
-      throw new ValidationError(
-        "The manual design styles changed. Select the element again before saving",
-      );
-    }
-
-    const result = updateManualDesignElementStyles(source, elementId, input.styles);
-    if (result.source !== source) {
-      await sessionRouter.writeFile(
-        runtime.runtimeId,
-        runtime.sessionId,
-        styleFile.path,
-        result.source,
-        runtime.workdirHint,
-      );
-      await eventService.create({
-        organizationId,
-        scopeType: "system",
-        scopeId: input.sessionGroupId,
-        eventType: "design_element_styles_updated",
-        payload: {
-          sessionGroupId: input.sessionGroupId,
-          elementId,
-          styles: result.styles,
-          sourceHash: result.sourceHash,
-        },
-        actorType,
-        actorId,
-      });
-    }
-
-    return {
-      sessionGroupId: input.sessionGroupId,
-      elementId,
-      styles: result.styles,
-      sourceHash: result.sourceHash,
-    };
-  }
-
-  private async readDesignManualStyleFile(
-    runtimeId: string,
-    sessionId: string,
-    workdirHint?: string,
-    kind: ManualEditableProjectKind = "design",
-  ): Promise<{ path: string; source: string }> {
-    const path = manualStylePath(kind);
-    try {
-      return {
-        path,
-        source: await sessionRouter.readFile(runtimeId, sessionId, path, workdirHint),
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (!/ENOENT|no such file|not found/iu.test(message)) throw error;
-
-      const files = await sessionRouter.listFiles(runtimeId, sessionId, workdirHint);
-      const fallbackPath = ["src/index.css", "src/App.css"].find((path) => files.includes(path));
-      if (!fallbackPath) throw error;
-      return {
-        path: fallbackPath,
-        source: await sessionRouter.readFile(runtimeId, sessionId, fallbackPath, workdirHint),
-      };
-    }
-  }
-
-  private async assertManualElementEditAccess(
-    sessionGroupId: string,
-    organizationId: string,
-    userId: string,
-  ): Promise<ManualEditableProjectKind> {
-    const group = await prisma.sessionGroup.findFirst({
-      where: { id: sessionGroupId, organizationId },
-      select: { id: true, kind: true, visibility: true, ownerUserId: true },
-    });
-    if (!group) throw new ValidationError("Generated project session not found");
-    if (group.kind !== "design" && group.kind !== "pdf") {
-      throw new ValidationError("Manual editing is only available in design and document sessions");
-    }
-    if (!canViewSessionGroup(group, userId)) {
-      throw new AuthorizationError("Not authorized for this generated project session");
-    }
-    return group.kind;
-  }
-
   async commitFileChanges(
     sessionGroupId: string,
     message: string | undefined,
@@ -10514,7 +10437,18 @@ export class SessionService {
         repoId: true,
         connection: true,
         sessionGroupId: true,
-        sessionGroup: { select: { kind: true } },
+        sessionGroup: {
+          select: {
+            kind: true,
+            designSystemVersion: {
+              select: {
+                version: true,
+                contentDigest: true,
+                designSystem: { select: { name: true } },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -10557,7 +10491,10 @@ export class SessionService {
       type: pending.type,
       sessionId,
       prompt: prompt ?? undefined,
-      appendSystemPrompt: generatedProjectInstruction(session.sessionGroup?.kind),
+      appendSystemPrompt: generatedProjectInstruction(
+        session.sessionGroup?.kind,
+        session.sessionGroup?.designSystemVersion,
+      ),
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
@@ -10694,16 +10631,19 @@ export class SessionService {
 
     const homeOffline = deliveryResult === "runtime_disconnected" && !!conn.runtimeInstanceId;
     const unsupportedHomeTool = deliveryResult === "no_runtime" && !!conn.runtimeInstanceId;
+    const unsupportedRuntime = deliveryResult === "unsupported_runtime";
     const bridgeLabel = conn.runtimeLabel ?? "The selected bridge";
     const lastError = homeOffline
       ? conn.runtimeLabel
         ? `${conn.runtimeLabel} is offline — use Move to continue on another bridge`
         : "The original bridge is offline — use Move to continue on another bridge"
-      : unsupportedHomeTool
-        ? session?.tool === "pi"
-          ? `${bridgeLabel} does not have Pi installed. Install it with \`${PI_INSTALL_COMMAND}\`, then restart the bridge. Docs: ${PI_INSTALL_DOCS_URL}`
-          : `${bridgeLabel} does not support ${session?.tool ?? "this coding tool"}`
-        : `${operation}: ${deliveryResult}`;
+      : unsupportedRuntime
+        ? `${bridgeLabel} must be updated before it can prepare design-system packages`
+        : unsupportedHomeTool
+          ? session?.tool === "pi"
+            ? `${bridgeLabel} does not have Pi installed. Install it with \`${PI_INSTALL_COMMAND}\`, then restart the bridge. Docs: ${PI_INSTALL_DOCS_URL}`
+            : `${bridgeLabel} does not support ${session?.tool ?? "this coding tool"}`
+          : `${operation}: ${deliveryResult}`;
     const updated: SessionConnectionData = {
       ...conn,
       state: "disconnected",
@@ -10713,7 +10653,8 @@ export class SessionService {
       canRetry: true,
       canMove: true,
       // Don't spin the auto-retry loop for a non-transient failure.
-      autoRetryable: session?.hosting !== "cloud" && !homeOffline && !unsupportedHomeTool,
+      autoRetryable:
+        session?.hosting !== "cloud" && !homeOffline && !unsupportedHomeTool && !unsupportedRuntime,
     };
 
     await prisma.session.update({
@@ -10838,7 +10779,8 @@ export class SessionService {
       // matching this idle query while its runtime boots — without this guard
       // the sweep kills it mid image-pull and the group can never be revived.
       // Re-checked race-safely inside the conditional update below.
-      if (isRuntimeStartingWithinGrace(this.parseConnection(cloudSession.connection), now)) continue;
+      if (isRuntimeStartingWithinGrace(this.parseConnection(cloudSession.connection), now))
+        continue;
 
       const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(
         group,
@@ -11404,6 +11346,519 @@ export class SessionService {
       actorType: "system",
       actorId,
     });
+  }
+  async saveManualElementEdit(
+    input: {
+      sessionGroupId: string;
+      filePath: string;
+      elementId: string;
+      text?: string | null;
+      expectedTextSourceHash?: string | null;
+      styles?: DesignElementStylesInput | null;
+      expectedStyleSourceHash?: string | null;
+    },
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<{
+    sessionGroupId: string;
+    filePath: string;
+    elementId: string;
+    text: string | null;
+    textSourceHash: string | null;
+    styles: ManualDesignElementStyles | null;
+    styleSourceHash: string | null;
+    commitSha: string;
+  }> {
+    const [result] = await this.saveManualElementEdits(
+      input.sessionGroupId,
+      [input],
+      organizationId,
+      actorType,
+      actorId,
+    );
+    return result!;
+  }
+
+  async saveManualElementEdits(
+    sessionGroupId: string,
+    inputs: Array<{
+      filePath: string;
+      elementId: string;
+      text?: string | null;
+      expectedTextSourceHash?: string | null;
+      styles?: DesignElementStylesInput | null;
+      expectedStyleSourceHash?: string | null;
+    }>,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<
+    Array<{
+      sessionGroupId: string;
+      filePath: string;
+      elementId: string;
+      text: string | null;
+      textSourceHash: string | null;
+      styles: ManualDesignElementStyles | null;
+      styleSourceHash: string | null;
+      commitSha: string;
+    }>
+  > {
+    return this.withManualElementSaveLock(sessionGroupId, async () => {
+      if (inputs.length === 0) throw new ValidationError("Choose changes before saving");
+      const kind = await this.assertManualElementEditAccess(
+        sessionGroupId,
+        organizationId,
+        actorId,
+      );
+      const edits = inputs.map((input) => {
+        const filePath = validateManualSourcePath(input.filePath, kind);
+        const elementId = validateDesignElementId(input.elementId);
+        const savesText = input.text !== null && input.text !== undefined;
+        const savesStyles = input.styles !== null && input.styles !== undefined;
+        if (!savesText && !savesStyles) {
+          throw new ValidationError("Choose content or appearance changes before saving");
+        }
+        if (savesText && !input.expectedTextSourceHash) {
+          throw new ValidationError("The text source hash is required");
+        }
+        if (savesStyles && !input.expectedStyleSourceHash) {
+          throw new ValidationError("The style source hash is required");
+        }
+        return { ...input, filePath, elementId, savesText, savesStyles };
+      });
+      const duplicate = new Set<string>();
+      for (const edit of edits) {
+        const key = `${edit.filePath}:${edit.elementId}`;
+        if (duplicate.has(key))
+          throw new ValidationError("An element can only be saved once per batch");
+        duplicate.add(key);
+      }
+
+      const runtime = await this.resolveAccessibleSessionGroupRuntime(
+        sessionGroupId,
+        organizationId,
+        actorId,
+        { requireWrite: true },
+      );
+      const textPaths = [
+        ...new Set(edits.filter((edit) => edit.savesText).map((edit) => edit.filePath)),
+      ];
+      const textSources = new Map(
+        await Promise.all(
+          textPaths.map(
+            async (path) =>
+              [
+                path,
+                await sessionRouter.readFile(
+                  runtime.runtimeId,
+                  runtime.sessionId,
+                  path,
+                  runtime.workdirHint,
+                ),
+              ] as const,
+          ),
+        ),
+      );
+      const needsStyles = edits.some((edit) => edit.savesStyles);
+      const styleFile = needsStyles
+        ? await this.readDesignManualStyleFile(
+            runtime.runtimeId,
+            runtime.sessionId,
+            runtime.workdirHint,
+            kind,
+          )
+        : null;
+
+      for (const edit of edits) {
+        if (
+          edit.savesText &&
+          designSourceHash(textSources.get(edit.filePath) ?? "") !== edit.expectedTextSourceHash
+        ) {
+          throw new ValidationError("The source changed. Select the element again before saving");
+        }
+        if (
+          edit.savesStyles &&
+          styleFile &&
+          designSourceHash(styleFile.source) !== edit.expectedStyleSourceHash
+        ) {
+          throw new ValidationError(
+            "The manual styles changed. Select the element again before saving",
+          );
+        }
+      }
+
+      const nextTextSources = new Map(textSources);
+      let nextStyleSource = styleFile?.source ?? null;
+      const results = edits.map((edit) => {
+        let text: string | null = null;
+        let styles: ManualDesignElementStyles | null = null;
+        if (edit.savesText) {
+          const source = nextTextSources.get(edit.filePath);
+          if (!source) throw new ValidationError("The source file is unavailable");
+          const result = updateStaticDesignElementText(
+            source,
+            edit.filePath,
+            edit.elementId,
+            edit.text!,
+          );
+          nextTextSources.set(edit.filePath, result.source);
+          text = result.text;
+        }
+        if (edit.savesStyles) {
+          if (nextStyleSource === null)
+            throw new ValidationError("The manual styles file is unavailable");
+          const result = updateManualDesignElementStyles(
+            nextStyleSource,
+            edit.elementId,
+            edit.styles!,
+          );
+          nextStyleSource = result.source;
+          styles = result.styles;
+        }
+        return { edit, text, styles };
+      });
+      const writes = [
+        ...textPaths.flatMap((path) => {
+          const before = textSources.get(path)!;
+          const after = nextTextSources.get(path)!;
+          return before === after ? [] : [{ path, before, after }];
+        }),
+        ...(styleFile && nextStyleSource !== styleFile.source
+          ? [{ path: styleFile.path, before: styleFile.source, after: nextStyleSource! }]
+          : []),
+      ];
+      if (writes.length === 0)
+        throw new ValidationError("The selected edits do not change any files");
+
+      const written: typeof writes = [];
+      let commitSha: string;
+      try {
+        for (const write of writes) {
+          await sessionRouter.writeFile(
+            runtime.runtimeId,
+            runtime.sessionId,
+            write.path,
+            write.after,
+            runtime.workdirHint,
+            write.before,
+          );
+          written.push(write);
+        }
+        commitSha = await sessionRouter.commitFileChanges(
+          runtime.runtimeId,
+          runtime.sessionId,
+          edits.length === 1
+            ? `Save manual ${kind} element edit`
+            : `Save ${edits.length} manual ${kind} element edits`,
+          runtime.workdirHint,
+          writes.map((write) => write.path),
+        );
+      } catch (error) {
+        await Promise.all(
+          written
+            .reverse()
+            .map((write) =>
+              sessionRouter.writeFile(
+                runtime.runtimeId,
+                runtime.sessionId,
+                write.path,
+                write.before,
+                runtime.workdirHint,
+                write.after,
+              ),
+            ),
+        ).catch(() => {});
+        throw error;
+      }
+
+      const output = results.map(({ edit, text, styles }) => ({
+        sessionGroupId,
+        filePath: edit.filePath,
+        elementId: edit.elementId,
+        text,
+        textSourceHash: edit.savesText
+          ? designSourceHash(nextTextSources.get(edit.filePath)!)
+          : null,
+        styles,
+        styleSourceHash:
+          edit.savesStyles && nextStyleSource ? designSourceHash(nextStyleSource) : null,
+        commitSha,
+      }));
+      await eventService.createMany(
+        output.map((result) => ({
+          organizationId,
+          scopeType: "system",
+          scopeId: sessionGroupId,
+          eventType: "manual_element_saved",
+          payload: result,
+          actorType,
+          actorId,
+        })),
+      );
+      return output;
+    });
+  }
+
+  async readDesignElementTextSource(
+    sessionGroupId: string,
+    filePath: string,
+    elementId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<DesignElementTextSource & { sessionGroupId: string }> {
+    const kind = await this.assertManualElementEditAccess(sessionGroupId, organizationId, userId);
+    const normalizedPath = validateManualSourcePath(filePath, kind);
+    const normalizedElementId = validateDesignElementId(elementId);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      { requireWrite: true },
+    );
+    const source = await sessionRouter.readFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      normalizedPath,
+      runtime.workdirHint,
+    );
+    return {
+      sessionGroupId,
+      ...readStaticDesignElementText(source, normalizedPath, normalizedElementId),
+    };
+  }
+
+  async updateDesignElementText(
+    input: {
+      sessionGroupId: string;
+      filePath: string;
+      elementId: string;
+      text: string;
+      expectedSourceHash: string;
+    },
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<{
+    sessionGroupId: string;
+    filePath: string;
+    elementId: string;
+    previousText: string;
+    text: string;
+    sourceHash: string;
+  }> {
+    const kind = await this.assertManualElementEditAccess(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+    );
+    const filePath = validateManualSourcePath(input.filePath, kind);
+    const elementId = validateDesignElementId(input.elementId);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+      { requireWrite: true },
+    );
+    const source = await sessionRouter.readFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      filePath,
+      runtime.workdirHint,
+    );
+    if (designSourceHash(source) !== input.expectedSourceHash) {
+      throw new ValidationError(
+        "The design source changed. Select the element again before saving",
+      );
+    }
+
+    const result = updateStaticDesignElementText(source, filePath, elementId, input.text);
+    if (result.source !== source) {
+      await sessionRouter.writeFile(
+        runtime.runtimeId,
+        runtime.sessionId,
+        filePath,
+        result.source,
+        runtime.workdirHint,
+      );
+      await eventService.create({
+        organizationId,
+        scopeType: "system",
+        scopeId: input.sessionGroupId,
+        eventType: "design_element_text_updated",
+        payload: {
+          sessionGroupId: input.sessionGroupId,
+          filePath,
+          elementId,
+          previousText: result.previousText,
+          text: result.text,
+          sourceHash: result.sourceHash,
+        },
+        actorType,
+        actorId,
+      });
+    }
+
+    return {
+      sessionGroupId: input.sessionGroupId,
+      filePath,
+      elementId,
+      previousText: result.previousText,
+      text: result.text,
+      sourceHash: result.sourceHash,
+    };
+  }
+
+  async readDesignElementStyleSource(
+    sessionGroupId: string,
+    elementId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<{
+    sessionGroupId: string;
+    elementId: string;
+    sourceHash: string;
+    styles: ManualDesignElementStyles;
+  }> {
+    const kind = await this.assertManualElementEditAccess(sessionGroupId, organizationId, userId);
+    const normalizedElementId = validateDesignElementId(elementId);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      sessionGroupId,
+      organizationId,
+      userId,
+      { requireWrite: true },
+    );
+    const styleFile = await this.readDesignManualStyleFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      runtime.workdirHint,
+      kind,
+    );
+    return {
+      sessionGroupId,
+      elementId: normalizedElementId,
+      ...readManualDesignElementStyles(styleFile.source, normalizedElementId),
+    };
+  }
+
+  async updateDesignElementStyles(
+    input: {
+      sessionGroupId: string;
+      elementId: string;
+      styles: DesignElementStylesInput;
+      expectedSourceHash: string;
+    },
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<{
+    sessionGroupId: string;
+    elementId: string;
+    sourceHash: string;
+    styles: ManualDesignElementStyles;
+  }> {
+    const kind = await this.assertManualElementEditAccess(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+    );
+    const elementId = validateDesignElementId(input.elementId);
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+      { requireWrite: true },
+    );
+    const styleFile = await this.readDesignManualStyleFile(
+      runtime.runtimeId,
+      runtime.sessionId,
+      runtime.workdirHint,
+      kind,
+    );
+    const source = styleFile.source;
+    if (designSourceHash(source) !== input.expectedSourceHash) {
+      throw new ValidationError(
+        "The manual design styles changed. Select the element again before saving",
+      );
+    }
+
+    const result = updateManualDesignElementStyles(source, elementId, input.styles);
+    if (result.source !== source) {
+      await sessionRouter.writeFile(
+        runtime.runtimeId,
+        runtime.sessionId,
+        styleFile.path,
+        result.source,
+        runtime.workdirHint,
+      );
+      await eventService.create({
+        organizationId,
+        scopeType: "system",
+        scopeId: input.sessionGroupId,
+        eventType: "design_element_styles_updated",
+        payload: {
+          sessionGroupId: input.sessionGroupId,
+          elementId,
+          styles: result.styles,
+          sourceHash: result.sourceHash,
+        },
+        actorType,
+        actorId,
+      });
+    }
+
+    return {
+      sessionGroupId: input.sessionGroupId,
+      elementId,
+      styles: result.styles,
+      sourceHash: result.sourceHash,
+    };
+  }
+
+  private async readDesignManualStyleFile(
+    runtimeId: string,
+    sessionId: string,
+    workdirHint?: string,
+    kind: ManualEditableProjectKind = "design",
+  ): Promise<{ path: string; source: string }> {
+    const path = manualStylePath(kind);
+    try {
+      return {
+        path,
+        source: await sessionRouter.readFile(runtimeId, sessionId, path, workdirHint),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!/ENOENT|no such file|not found/iu.test(message)) throw error;
+
+      const files = await sessionRouter.listFiles(runtimeId, sessionId, workdirHint);
+      const fallbackPath = ["src/index.css", "src/App.css"].find((path) => files.includes(path));
+      if (!fallbackPath) throw error;
+      return {
+        path: fallbackPath,
+        source: await sessionRouter.readFile(runtimeId, sessionId, fallbackPath, workdirHint),
+      };
+    }
+  }
+
+  private async assertManualElementEditAccess(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<ManualEditableProjectKind> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: { id: true, kind: true, visibility: true, ownerUserId: true },
+    });
+    if (!group) throw new ValidationError("Generated project session not found");
+    if (group.kind !== "design" && group.kind !== "pdf") {
+      throw new ValidationError("Manual editing is only available in design and document sessions");
+    }
+    if (!canViewSessionGroup(group, userId)) {
+      throw new AuthorizationError("Not authorized for this generated project session");
+    }
+    return group.kind;
   }
 }
 

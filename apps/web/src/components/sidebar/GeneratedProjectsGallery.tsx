@@ -1,26 +1,51 @@
-import { FileText, LayoutTemplate, Rocket, type LucideIcon } from "lucide-react";
-import { useEntityStore, type SessionGroupEntity } from "@trace/client-core";
-import { cn } from "../../lib/utils";
-import { navigateToSessionGroup } from "../../stores/ui";
-import { savedDesignPreviewUrl } from "../session/applications/saved-design-preview";
-import type { GeneratedProjectKind } from "./generated-project-types";
+import { useAuthStore, useEntityStore } from "@trace/client-core";
+import { useEffect } from "react";
+import { gql } from "@urql/core";
+import { client } from "../../lib/urql";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
+import { GeneratedProjectGalleryCard } from "./GeneratedProjectGalleryCard";
 import { usePdfArtifactPreviewUrls } from "./usePdfArtifactPreviewUrls";
-
-const projectKindDetails = {
-  app: { label: "App", Icon: Rocket },
-  design: { label: "Design", Icon: LayoutTemplate },
-  pdf: { label: "Document", Icon: FileText },
-} as const;
+const DESIGN_SYSTEMS_QUERY = gql`
+  query GalleryDesignSystems($organizationId: ID!) {
+    designSystems(organizationId: $organizationId) {
+      id
+      authoringSessionGroupId
+      archivedAt
+      name
+      status
+    }
+  }
+`;
 
 export function GeneratedProjectsGallery() {
+  const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const groups = useEntityStore((state) => state.sessionGroups);
-  const projectGroups = Object.values(groups)
+  const upsertMany = useEntityStore((state) => state.upsertMany);
+  useEffect(() => {
+    if (!activeOrgId) return;
+    void client
+      .query(
+        DESIGN_SYSTEMS_QUERY,
+        { organizationId: activeOrgId },
+        { requestPolicy: "network-only" },
+      )
+      .toPromise()
+      .then((result) => {
+        if (!result.error) upsertMany("designSystems", result.data?.designSystems ?? []);
+      });
+  }, [activeOrgId, upsertMany]);
+  const visibleGroups = Object.values(groups)
     .filter(
       (group) =>
         !group.archivedAt &&
-        (group.kind === "app" || group.kind === "design" || group.kind === "pdf"),
+        (group.kind === "app" ||
+          group.kind === "design" ||
+          group.kind === "design_system" ||
+          group.kind === "pdf"),
     )
     .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+  const projectGroups = visibleGroups.filter((group) => group.kind !== "design_system");
+  const designSystemGroups = visibleGroups.filter((group) => group.kind === "design_system");
   const pdfGroups = projectGroups.filter((group) => group.kind === "pdf");
   const pdfPreviewUrls = usePdfArtifactPreviewUrls(pdfGroups);
 
@@ -52,85 +77,35 @@ export function GeneratedProjectsGallery() {
               ))}
             </div>
           )}
+          <Accordion className="mt-10 border-t border-border">
+            <AccordionItem value="design-systems" className="border-b-0">
+              <AccordionTrigger className="py-5 hover:no-underline">
+                <span className="flex flex-col gap-1">
+                  <span className="font-semibold text-foreground">Design systems</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {designSystemGroups.length === 1
+                      ? "1 shared system"
+                      : `${designSystemGroups.length} shared systems`}
+                  </span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                {designSystemGroups.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+                    Your design systems will appear here.
+                  </p>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {designSystemGroups.map((group) => (
+                      <GeneratedProjectGalleryCard key={group.id} group={group} />
+                    ))}
+                  </div>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </div>
       </main>
-    </div>
-  );
-}
-
-function GeneratedProjectGalleryCard({
-  group,
-  pdfPreviewUrl,
-}: {
-  group: SessionGroupEntity;
-  pdfPreviewUrl: string | undefined;
-}) {
-  const kind = group.kind as GeneratedProjectKind;
-  const { Icon, label } = projectKindDetails[kind];
-  const designPreview = savedDesignPreviewUrl(
-    group.designPreviewUrl as string | null | undefined,
-    group.gitCheckpoints,
-  );
-
-  return (
-    <button
-      type="button"
-      onClick={() => navigateToSessionGroup(null, group.id)}
-      className="group overflow-hidden rounded-lg border border-border bg-surface-elevated text-left transition-colors hover:border-border hover:bg-surface-hover focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <div className="aspect-[16/10] overflow-hidden bg-surface-deep">
-        {kind === "design" && designPreview ? (
-          <iframe
-            src={designPreview}
-            title={`${group.name} preview`}
-            className="pointer-events-none size-full border-0 bg-background"
-            sandbox="allow-forms allow-modals allow-popups allow-scripts"
-          />
-        ) : kind === "pdf" ? (
-          <PdfArtifactPreview title={group.name} previewUrl={pdfPreviewUrl} />
-        ) : (
-          <ArtifactPlaceholder Icon={Icon} label={label} />
-        )}
-      </div>
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        <Icon className="size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-          {group.name}
-        </span>
-        <span className="text-xs text-muted-foreground">{label}</span>
-      </div>
-    </button>
-  );
-}
-
-function PdfArtifactPreview({ title, previewUrl }: { title: string; previewUrl: string | undefined }) {
-  if (!previewUrl) return <ArtifactPlaceholder Icon={FileText} label="Document" />;
-
-  return (
-    <iframe
-      src={`${previewUrl}#toolbar=0&navpanes=0&view=FitH`}
-      title={`${title} preview`}
-      className="pointer-events-none size-full border-0 bg-background"
-    />
-  );
-}
-
-function ArtifactPlaceholder({
-  Icon,
-  label,
-}: {
-  Icon: LucideIcon;
-  label: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex size-full flex-col items-center justify-center gap-2 text-muted-foreground",
-        "bg-[radial-gradient(rgba(148,163,184,0.18)_1px,transparent_1px)] [background-size:16px_16px]",
-      )}
-    >
-      <Icon className="size-7" />
-      <span className="text-xs">{label}</span>
     </div>
   );
 }

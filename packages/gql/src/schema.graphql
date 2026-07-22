@@ -24,8 +24,29 @@ enum SessionGroupVisibility {
 enum SessionGroupKind {
   coding
   design
+  design_system
   app
   pdf
+}
+
+enum DesignSystemStatus {
+  draft
+  ready
+  archived
+}
+
+enum DesignSystemCommitArtifactStatus {
+  pending
+  saving
+  saved
+  failed
+}
+
+enum DesignSystemPublishStatus {
+  idle
+  publishing
+  published
+  failed
 }
 
 enum SessionGroupStatus {
@@ -345,6 +366,13 @@ enum EventType {
   session_endpoint_rotated
   session_endpoint_access_updated
   session_endpoint_traffic_capture_updated
+  design_system_created
+  design_system_commit_artifact_created
+  design_system_commit_artifact_updated
+  design_system_version_created
+  design_system_updated
+  design_system_publish_updated
+  design_system_archived
 }
 
 # --- Core Types ---
@@ -512,6 +540,8 @@ type SessionGroup {
   owner: User!
   channel: Channel
   repo: Repo
+  designSystemVersionId: ID
+  designSystemVersion: DesignSystemVersion
   branch: String
   gitCheckpoints: [GitCheckpoint!]!
   designPreviewStatus: GitCheckpointCaptureStatus
@@ -540,6 +570,86 @@ type SessionGroup {
   setupError: String
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type DesignSystem {
+  id: ID!
+  organizationId: ID!
+  name: String!
+  slug: String!
+  description: String
+  status: DesignSystemStatus!
+  sourceRepoId: ID
+  sourceRepo: Repo
+  sourceBranch: String
+  sourcePath: String
+  sourceCommitSha: String
+  activeVersionId: ID
+  activeVersion: DesignSystemVersion
+  latestCommitArtifactId: ID
+  latestCommitArtifact: DesignSystemCommitArtifact
+  latestPushedCommitSha: String
+  authoringSessionGroupId: ID!
+  authoringSessionGroup: SessionGroup!
+  createdById: ID!
+  commitArtifactStatus: DesignSystemCommitArtifactStatus
+  commitArtifactError: String
+  publishStatus: DesignSystemPublishStatus!
+  publishedCommitSha: String
+  publishAttemptedAt: DateTime
+  publishError: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  archivedAt: DateTime
+}
+
+type DesignSystemCommitArtifact {
+  id: ID!
+  designSystemId: ID!
+  designSystem: DesignSystem!
+  sequence: Int!
+  storageKey: String!
+  contentDigest: String
+  byteSize: Int
+  commitSha: String!
+  status: DesignSystemCommitArtifactStatus!
+  packageValid: Boolean
+  packageDigest: String
+  validationSummary: JSON
+  error: String
+  createdById: ID
+  createdAt: DateTime!
+  savedAt: DateTime
+}
+
+type DesignSystemVersion {
+  id: ID!
+  designSystemId: ID!
+  designSystem: DesignSystem!
+  version: Int!
+  storageKey: String!
+  contentDigest: String!
+  byteSize: Int!
+  sourceCommitSha: String
+  authoringSessionGroupId: ID!
+  designSystemCommitArtifactId: ID!
+  designSystemCommitArtifact: DesignSystemCommitArtifact!
+  workbenchCommitSha: String!
+  manifest: JSON!
+  validationSummary: JSON!
+  createdById: ID!
+  createdAt: DateTime!
+}
+
+type DesignSystemCommitArtifactEdge {
+  cursor: String!
+  node: DesignSystemCommitArtifact!
+}
+
+type DesignSystemCommitArtifactConnection {
+  edges: [DesignSystemCommitArtifactEdge!]!
+  hasNextPage: Boolean!
+  endCursor: String
 }
 
 """
@@ -1302,6 +1412,7 @@ input StartSessionInput {
   runtimeInstanceId: ID
   deferRuntimeSelection: Boolean
   repoId: ID
+  designSystemVersionId: ID
   branch: String
   ticketId: ID
   channelId: ID
@@ -1315,6 +1426,14 @@ input StartSessionInput {
   Absolute path to an existing local worktree to adopt instead of creating one. Local hosting only.
   """
   worktreePath: String
+}
+
+input CreateDesignSystemInput {
+  name: String!
+  repoId: ID!
+  branch: String
+  sourcePath: String
+  environmentId: ID
 }
 
 input UpdateSessionDefaultsInput {
@@ -1488,6 +1607,14 @@ type Query {
   agentEnvironments(orgId: ID!): [AgentEnvironment!]!
   orgSecrets(orgId: ID!): [OrgSecret!]!
   repos(organizationId: ID!): [Repo!]!
+  designSystems(organizationId: ID!, includeArchived: Boolean): [DesignSystem!]!
+  designSystem(id: ID!): DesignSystem
+  designSystemCommitArtifacts(
+    designSystemId: ID!
+    first: Int
+    after: String
+  ): DesignSystemCommitArtifactConnection!
+  designSystemVersions(designSystemId: ID!): [DesignSystemVersion!]!
   repo(id: ID!): Repo
   projects(organizationId: ID!, repoId: ID): [Project!]!
   project(id: ID!): Project
@@ -1700,6 +1827,11 @@ type Mutation {
   reorderChannels(input: ReorderChannelsInput!): [Channel!]!
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
+  createDesignSystem(input: CreateDesignSystemInput!): DesignSystem!
+  saveDesignSystem(id: ID!): DesignSystemVersion!
+  retryDesignSystemCommitArtifact(designSystemId: ID!): DesignSystem!
+  refreshDesignSystemSource(id: ID!): DesignSystem!
+  archiveDesignSystem(id: ID!): DesignSystem!
   """
   Adopt an existing local worktree into a not-yet-started session's group (local hosting only).
   """
@@ -1720,6 +1852,7 @@ type Mutation {
     reasoningEffort: String
     hosting: HostingMode
     runtimeInstanceId: ID
+    designSystemVersionId: ID
   ): Session!
   updateSessionDefaults(input: UpdateSessionDefaultsInput!): User!
   sendSessionMessage(

@@ -310,6 +310,14 @@ export type CreateChatInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateDesignSystemInput = {
+  branch?: InputMaybe<Scalars["String"]["input"]>;
+  environmentId?: InputMaybe<Scalars["ID"]["input"]>;
+  name: Scalars["String"]["input"];
+  repoId: Scalars["ID"]["input"];
+  sourcePath?: InputMaybe<Scalars["String"]["input"]>;
+};
+
 export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
@@ -501,6 +509,97 @@ export type DesignElementTextSource = {
   text: Scalars["String"]["output"];
 };
 
+export type DesignSystem = {
+  __typename?: "DesignSystem";
+  activeVersion?: Maybe<DesignSystemVersion>;
+  activeVersionId?: Maybe<Scalars["ID"]["output"]>;
+  archivedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  authoringSessionGroup: SessionGroup;
+  authoringSessionGroupId: Scalars["ID"]["output"];
+  commitArtifactError?: Maybe<Scalars["String"]["output"]>;
+  commitArtifactStatus?: Maybe<DesignSystemCommitArtifactStatus>;
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  latestCommitArtifact?: Maybe<DesignSystemCommitArtifact>;
+  latestCommitArtifactId?: Maybe<Scalars["ID"]["output"]>;
+  latestPushedCommitSha?: Maybe<Scalars["String"]["output"]>;
+  name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  publishAttemptedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  publishError?: Maybe<Scalars["String"]["output"]>;
+  publishStatus: DesignSystemPublishStatus;
+  publishedCommitSha?: Maybe<Scalars["String"]["output"]>;
+  slug: Scalars["String"]["output"];
+  sourceBranch?: Maybe<Scalars["String"]["output"]>;
+  sourceCommitSha?: Maybe<Scalars["String"]["output"]>;
+  sourcePath?: Maybe<Scalars["String"]["output"]>;
+  sourceRepo?: Maybe<Repo>;
+  sourceRepoId?: Maybe<Scalars["ID"]["output"]>;
+  status: DesignSystemStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type DesignSystemCommitArtifact = {
+  __typename?: "DesignSystemCommitArtifact";
+  byteSize?: Maybe<Scalars["Int"]["output"]>;
+  commitSha: Scalars["String"]["output"];
+  contentDigest?: Maybe<Scalars["String"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  createdById?: Maybe<Scalars["ID"]["output"]>;
+  designSystem: DesignSystem;
+  designSystemId: Scalars["ID"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  packageDigest?: Maybe<Scalars["String"]["output"]>;
+  packageValid?: Maybe<Scalars["Boolean"]["output"]>;
+  savedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  sequence: Scalars["Int"]["output"];
+  status: DesignSystemCommitArtifactStatus;
+  storageKey: Scalars["String"]["output"];
+  validationSummary?: Maybe<Scalars["JSON"]["output"]>;
+};
+
+export type DesignSystemCommitArtifactConnection = {
+  __typename?: "DesignSystemCommitArtifactConnection";
+  edges: Array<DesignSystemCommitArtifactEdge>;
+  endCursor?: Maybe<Scalars["String"]["output"]>;
+  hasNextPage: Scalars["Boolean"]["output"];
+};
+
+export type DesignSystemCommitArtifactEdge = {
+  __typename?: "DesignSystemCommitArtifactEdge";
+  cursor: Scalars["String"]["output"];
+  node: DesignSystemCommitArtifact;
+};
+
+export type DesignSystemCommitArtifactStatus = "failed" | "pending" | "saved" | "saving";
+
+export type DesignSystemPublishStatus = "failed" | "idle" | "published" | "publishing";
+
+export type DesignSystemStatus = "archived" | "draft" | "ready";
+
+export type DesignSystemVersion = {
+  __typename?: "DesignSystemVersion";
+  authoringSessionGroupId: Scalars["ID"]["output"];
+  byteSize: Scalars["Int"]["output"];
+  contentDigest: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  designSystem: DesignSystem;
+  designSystemCommitArtifact: DesignSystemCommitArtifact;
+  designSystemCommitArtifactId: Scalars["ID"]["output"];
+  designSystemId: Scalars["ID"]["output"];
+  id: Scalars["ID"]["output"];
+  manifest: Scalars["JSON"]["output"];
+  sourceCommitSha?: Maybe<Scalars["String"]["output"]>;
+  storageKey: Scalars["String"]["output"];
+  validationSummary: Scalars["JSON"]["output"];
+  version: Scalars["Int"]["output"];
+  workbenchCommitSha: Scalars["String"]["output"];
+};
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -564,6 +663,13 @@ export type EventType =
   | "design_element_styles_updated"
   | "design_element_text_updated"
   | "design_preview_updated"
+  | "design_system_archived"
+  | "design_system_commit_artifact_created"
+  | "design_system_commit_artifact_updated"
+  | "design_system_created"
+  | "design_system_publish_updated"
+  | "design_system_updated"
+  | "design_system_version_created"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -795,6 +901,7 @@ export type Mutation = {
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
+  archiveDesignSystem: DesignSystem;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
@@ -807,6 +914,7 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createDesignSystem: DesignSystem;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -846,6 +954,7 @@ export type Mutation = {
   muteScope: Participant;
   publishAppSession: SessionEndpoint;
   queueSessionMessage: QueuedMessage;
+  refreshDesignSystemSource: DesignSystem;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars["Boolean"]["output"];
@@ -859,6 +968,7 @@ export type Mutation = {
   requestPdfSessionExport: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
+  retryDesignSystemCommitArtifact: DesignSystem;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   revertSessionGroupFileChange: Scalars["Boolean"]["output"];
@@ -866,6 +976,7 @@ export type Mutation = {
   rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
+  saveDesignSystem: DesignSystemVersion;
   saveManualElementEdit: ManualElementEditResult;
   saveManualElementEdits: Array<ManualElementEditResult>;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
@@ -932,6 +1043,10 @@ export type MutationApproveBridgeAccessRequestArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationArchiveDesignSystemArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationArchiveSessionGroupArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -987,6 +1102,10 @@ export type MutationCreateChannelTerminalArgs = {
 
 export type MutationCreateChatArgs = {
   input: CreateChatInput;
+};
+
+export type MutationCreateDesignSystemArgs = {
+  input: CreateDesignSystemInput;
 };
 
 export type MutationCreateOrganizationArgs = {
@@ -1158,6 +1277,10 @@ export type MutationQueueSessionMessageArgs = {
   text: Scalars["String"]["input"];
 };
 
+export type MutationRefreshDesignSystemSourceArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationRegisterPushTokenArgs = {
   platform: PushPlatform;
   token: Scalars["String"]["input"];
@@ -1223,6 +1346,10 @@ export type MutationRestoreLinkedCheckoutArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationRetryDesignSystemCommitArtifactArgs = {
+  designSystemId: Scalars["ID"]["input"];
+};
+
 export type MutationRetrySessionConnectionArgs = {
   sessionId: Scalars["ID"]["input"];
 };
@@ -1253,6 +1380,10 @@ export type MutationRunSessionArgs = {
 export type MutationRunSessionGroupSetupScriptArgs = {
   scriptId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSaveDesignSystemArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationSaveManualElementEditArgs = {
@@ -1461,6 +1592,7 @@ export type MutationUpdateRepoArgs = {
 };
 
 export type MutationUpdateSessionConfigArgs = {
+  designSystemVersionId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
@@ -1579,6 +1711,10 @@ export type Query = {
   designElementTextSource: DesignElementTextSource;
   /** Design-kind session groups for the org (the sidebar Designs section). */
   designSessionGroups: Array<SessionGroup>;
+  designSystem?: Maybe<DesignSystem>;
+  designSystemCommitArtifacts: DesignSystemCommitArtifactConnection;
+  designSystemVersions: Array<DesignSystemVersion>;
+  designSystems: Array<DesignSystem>;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
@@ -1705,6 +1841,25 @@ export type QueryDesignElementTextSourceArgs = {
 };
 
 export type QueryDesignSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryDesignSystemArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type QueryDesignSystemCommitArtifactsArgs = {
+  after?: InputMaybe<Scalars["String"]["input"]>;
+  designSystemId: Scalars["ID"]["input"];
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignSystemVersionsArgs = {
+  designSystemId: Scalars["ID"]["input"];
+};
+
+export type QueryDesignSystemsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -2258,6 +2413,8 @@ export type SessionGroup = {
   designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
   designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
   designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
+  designSystemVersion?: Maybe<DesignSystemVersion>;
+  designSystemVersionId?: Maybe<Scalars["ID"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
@@ -2309,7 +2466,7 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "app" | "coding" | "design" | "pdf";
+export type SessionGroupKind = "app" | "coding" | "design" | "design_system" | "pdf";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2423,6 +2580,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  designSystemVersionId?: InputMaybe<Scalars["ID"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
@@ -2743,6 +2901,7 @@ export type ResolversTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
+  CreateDesignSystemInput: CreateDesignSystemInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
@@ -2755,6 +2914,14 @@ export type ResolversTypes = ResolversObject<{
   DesignElementStylesInput: DesignElementStylesInput;
   DesignElementTextEditResult: ResolverTypeWrapper<DesignElementTextEditResult>;
   DesignElementTextSource: ResolverTypeWrapper<DesignElementTextSource>;
+  DesignSystem: ResolverTypeWrapper<DesignSystem>;
+  DesignSystemCommitArtifact: ResolverTypeWrapper<DesignSystemCommitArtifact>;
+  DesignSystemCommitArtifactConnection: ResolverTypeWrapper<DesignSystemCommitArtifactConnection>;
+  DesignSystemCommitArtifactEdge: ResolverTypeWrapper<DesignSystemCommitArtifactEdge>;
+  DesignSystemCommitArtifactStatus: DesignSystemCommitArtifactStatus;
+  DesignSystemPublishStatus: DesignSystemPublishStatus;
+  DesignSystemStatus: DesignSystemStatus;
+  DesignSystemVersion: ResolverTypeWrapper<DesignSystemVersion>;
   EndpointTrafficCaptureMode: EndpointTrafficCaptureMode;
   EndpointTrafficEntry: ResolverTypeWrapper<EndpointTrafficEntry>;
   EntityType: EntityType;
@@ -2894,6 +3061,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateChannelGroupInput: CreateChannelGroupInput;
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
+  CreateDesignSystemInput: CreateDesignSystemInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
@@ -2905,6 +3073,11 @@ export type ResolversParentTypes = ResolversObject<{
   DesignElementStylesInput: DesignElementStylesInput;
   DesignElementTextEditResult: DesignElementTextEditResult;
   DesignElementTextSource: DesignElementTextSource;
+  DesignSystem: DesignSystem;
+  DesignSystemCommitArtifact: DesignSystemCommitArtifact;
+  DesignSystemCommitArtifactConnection: DesignSystemCommitArtifactConnection;
+  DesignSystemCommitArtifactEdge: DesignSystemCommitArtifactEdge;
+  DesignSystemVersion: DesignSystemVersion;
   EndpointTrafficEntry: EndpointTrafficEntry;
   Event: Event;
   Float: Scalars["Float"]["output"];
@@ -3383,6 +3556,126 @@ export type DesignElementTextSourceResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type DesignSystemResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignSystem"] = ResolversParentTypes["DesignSystem"],
+> = ResolversObject<{
+  activeVersion?: Resolver<Maybe<ResolversTypes["DesignSystemVersion"]>, ParentType, ContextType>;
+  activeVersionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  archivedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  authoringSessionGroup?: Resolver<ResolversTypes["SessionGroup"], ParentType, ContextType>;
+  authoringSessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  commitArtifactError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  commitArtifactStatus?: Resolver<
+    Maybe<ResolversTypes["DesignSystemCommitArtifactStatus"]>,
+    ParentType,
+    ContextType
+  >;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdById?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  description?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  latestCommitArtifact?: Resolver<
+    Maybe<ResolversTypes["DesignSystemCommitArtifact"]>,
+    ParentType,
+    ContextType
+  >;
+  latestCommitArtifactId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  latestPushedCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  publishAttemptedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  publishError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  publishStatus?: Resolver<ResolversTypes["DesignSystemPublishStatus"], ParentType, ContextType>;
+  publishedCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  slug?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  sourceBranch?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  sourceCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  sourcePath?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  sourceRepo?: Resolver<Maybe<ResolversTypes["Repo"]>, ParentType, ContextType>;
+  sourceRepoId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["DesignSystemStatus"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type DesignSystemCommitArtifactResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignSystemCommitArtifact"] =
+    ResolversParentTypes["DesignSystemCommitArtifact"],
+> = ResolversObject<{
+  byteSize?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  commitSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  contentDigest?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdById?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  designSystem?: Resolver<ResolversTypes["DesignSystem"], ParentType, ContextType>;
+  designSystemId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  error?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  packageDigest?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  packageValid?: Resolver<Maybe<ResolversTypes["Boolean"]>, ParentType, ContextType>;
+  savedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  sequence?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["DesignSystemCommitArtifactStatus"], ParentType, ContextType>;
+  storageKey?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  validationSummary?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type DesignSystemCommitArtifactConnectionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignSystemCommitArtifactConnection"] =
+    ResolversParentTypes["DesignSystemCommitArtifactConnection"],
+> = ResolversObject<{
+  edges?: Resolver<
+    Array<ResolversTypes["DesignSystemCommitArtifactEdge"]>,
+    ParentType,
+    ContextType
+  >;
+  endCursor?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  hasNextPage?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type DesignSystemCommitArtifactEdgeResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignSystemCommitArtifactEdge"] =
+    ResolversParentTypes["DesignSystemCommitArtifactEdge"],
+> = ResolversObject<{
+  cursor?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  node?: Resolver<ResolversTypes["DesignSystemCommitArtifact"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type DesignSystemVersionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["DesignSystemVersion"] =
+    ResolversParentTypes["DesignSystemVersion"],
+> = ResolversObject<{
+  authoringSessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  byteSize?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  contentDigest?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdById?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  designSystem?: Resolver<ResolversTypes["DesignSystem"], ParentType, ContextType>;
+  designSystemCommitArtifact?: Resolver<
+    ResolversTypes["DesignSystemCommitArtifact"],
+    ParentType,
+    ContextType
+  >;
+  designSystemCommitArtifactId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  designSystemId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  manifest?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  sourceCommitSha?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  storageKey?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  validationSummary?: Resolver<ResolversTypes["JSON"], ParentType, ContextType>;
+  version?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  workbenchCommitSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type EndpointTrafficEntryResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["EndpointTrafficEntry"] =
@@ -3628,6 +3921,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationApproveBridgeAccessRequestArgs, "requestId">
   >;
+  archiveDesignSystem?: Resolver<
+    ResolversTypes["DesignSystem"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationArchiveDesignSystemArgs, "id">
+  >;
   archiveSessionGroup?: Resolver<
     Maybe<ResolversTypes["SessionGroup"]>,
     ParentType,
@@ -3702,6 +4001,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationCreateChatArgs, "input">
+  >;
+  createDesignSystem?: Resolver<
+    ResolversTypes["DesignSystem"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateDesignSystemArgs, "input">
   >;
   createOrganization?: Resolver<
     ResolversTypes["OrgMember"],
@@ -3926,6 +4231,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationQueueSessionMessageArgs, "sessionId" | "text">
   >;
+  refreshDesignSystemSource?: Resolver<
+    ResolversTypes["DesignSystem"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRefreshDesignSystemSourceArgs, "id">
+  >;
   registerPushToken?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -4007,6 +4318,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationRestoreLinkedCheckoutArgs, "repoId" | "sessionGroupId">
   >;
+  retryDesignSystemCommitArtifact?: Resolver<
+    ResolversTypes["DesignSystem"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRetryDesignSystemCommitArtifactArgs, "designSystemId">
+  >;
   retrySessionConnection?: Resolver<
     ResolversTypes["Session"],
     ParentType,
@@ -4048,6 +4365,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationRunSessionGroupSetupScriptArgs, "scriptId" | "sessionGroupId">
+  >;
+  saveDesignSystem?: Resolver<
+    ResolversTypes["DesignSystemVersion"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationSaveDesignSystemArgs, "id">
   >;
   saveManualElementEdit?: Resolver<
     ResolversTypes["ManualElementEditResult"],
@@ -4497,6 +4820,30 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryDesignSessionGroupsArgs, "organizationId">
+  >;
+  designSystem?: Resolver<
+    Maybe<ResolversTypes["DesignSystem"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryDesignSystemArgs, "id">
+  >;
+  designSystemCommitArtifacts?: Resolver<
+    ResolversTypes["DesignSystemCommitArtifactConnection"],
+    ParentType,
+    ContextType,
+    RequireFields<QueryDesignSystemCommitArtifactsArgs, "designSystemId">
+  >;
+  designSystemVersions?: Resolver<
+    Array<ResolversTypes["DesignSystemVersion"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryDesignSystemVersionsArgs, "designSystemId">
+  >;
+  designSystems?: Resolver<
+    Array<ResolversTypes["DesignSystem"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryDesignSystemsArgs, "organizationId">
   >;
   endpointTraffic?: Resolver<
     Array<ResolversTypes["EndpointTrafficEntry"]>,
@@ -5074,6 +5421,12 @@ export type SessionGroupResolvers<
     ContextType
   >;
   designPreviewUrl?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  designSystemVersion?: Resolver<
+    Maybe<ResolversTypes["DesignSystemVersion"]>,
+    ParentType,
+    ContextType
+  >;
+  designSystemVersionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   forkedFromSessionGroup?: Resolver<Maybe<ResolversTypes["SessionGroup"]>, ParentType, ContextType>;
   forkedFromSessionGroupId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
   gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;
@@ -5414,6 +5767,11 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   DesignElementStyles?: DesignElementStylesResolvers<ContextType>;
   DesignElementTextEditResult?: DesignElementTextEditResultResolvers<ContextType>;
   DesignElementTextSource?: DesignElementTextSourceResolvers<ContextType>;
+  DesignSystem?: DesignSystemResolvers<ContextType>;
+  DesignSystemCommitArtifact?: DesignSystemCommitArtifactResolvers<ContextType>;
+  DesignSystemCommitArtifactConnection?: DesignSystemCommitArtifactConnectionResolvers<ContextType>;
+  DesignSystemCommitArtifactEdge?: DesignSystemCommitArtifactEdgeResolvers<ContextType>;
+  DesignSystemVersion?: DesignSystemVersionResolvers<ContextType>;
   EndpointTrafficEntry?: EndpointTrafficEntryResolvers<ContextType>;
   Event?: EventResolvers<ContextType>;
   GitCheckpoint?: GitCheckpointResolvers<ContextType>;

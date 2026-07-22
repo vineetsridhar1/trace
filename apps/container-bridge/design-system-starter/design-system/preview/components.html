@@ -1,0 +1,141 @@
+<!doctype html>
+<html><head>
+
+
+
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Design System Canvas</title><style type="text/css">:root {
+  --background: #09090b;
+  --surface: #18181b;
+  --foreground: #fafafa;
+  --muted-foreground: #a1a1aa;
+  --border: #3f3f46;
+  --accent: #fafafa;
+  --accent-foreground: #09090b;
+  --destructive: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --text-base: 1rem;
+  --space-1: 0.25rem;
+  --radius: 0.5rem;
+  --shadow: 0 16px 48px #0004;
+  --focus-ring: 0 0 0 2px #60a5fa;
+  --motion-duration: 180ms;
+}
+</style><style type="text/css">* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+main {
+  padding: 40px;
+  display: grid;
+  gap: 24px;
+}
+header {
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+header p {
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+}
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+section {
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.swatches,
+.component-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+.swatches article {
+  display: grid;
+  gap: 8px;
+  color: var(--muted-foreground);
+}
+.swatches i {
+  height: 72px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.scale {
+  display: flex;
+  gap: 24px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+.asset {
+  font-size: 48px;
+  padding: 24px;
+  border: 1px dashed var(--border);
+}
+.asset small {
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+button,
+input {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin: 6px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+button:focus,
+input:focus {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+button:disabled {
+  opacity: 0.45;
+}
+.composition {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  min-height: 220px;
+  border: 1px solid var(--border);
+}
+.composition nav,
+.composition-content {
+  padding: 20px;
+}
+.composition nav {
+  background: var(--background);
+}
+label {
+  display: grid;
+  max-width: 320px;
+  color: var(--muted-foreground);
+}
+input {
+  margin-left: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+.board-error {
+  display: grid;
+  gap: 8px;
+  background: var(--destructive);
+  color: var(--destructive-foreground);
+}
+</style></head><body><div id="root"><main><header><p>DESIGN SYSTEM</p><h1>Draft Design System</h1><span>Source-backed foundations and components.</span></header><section data-board="components"><h2>Components</h2><div class="component-grid"><article><h3>Component inventory</h3><button>Default</button><button disabled="">Disabled</button><p>Hover · focus · loading · empty · error</p></article></div></section></main></div>
+</body></html>

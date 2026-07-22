@@ -12,6 +12,7 @@ import {
   APPLICATIONS_STATE_QUERY,
   DEFAULT_APP_CONFIG,
   PROCESS_LOGS_QUERY,
+  usesDefaultApplicationConfig,
 } from "./session-applications-operations";
 
 function hasContent(
@@ -37,7 +38,7 @@ export function useSessionApplicationsData(sessionGroupId: string) {
   const resolvedConfig = groupRepo?.applicationConfig ?? repoConfig;
   const config = hasContent(resolvedConfig)
     ? resolvedConfig
-    : groupKind === "app" || groupKind === "design" || groupKind === "pdf"
+    : usesDefaultApplicationConfig(groupKind)
       ? DEFAULT_APP_CONFIG
       : resolvedConfig;
   const upsert = useEntityStore((state) => state.upsert);

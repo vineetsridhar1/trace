@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "boards": [
+    { "id": "foundations", "title": "Foundations" },
+    { "id": "assets", "title": "Assets" },
+    { "id": "components", "title": "Components" },
+    { "id": "compositions", "title": "Compositions" }
+  ]
+}

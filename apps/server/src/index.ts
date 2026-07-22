@@ -49,6 +49,7 @@ import { endpointProxyService } from "./services/endpoint-proxy.js";
 import { sessionApplicationService } from "./services/session-applications.js";
 import { seedCloudForAllOrgs } from "./services/cloud-bootstrap.js";
 import { managedGitService } from "./services/managed-git.js";
+import { designSystemService } from "./services/design-system.js";
 import {
   assertPreviewHostIsolated,
   endpointTrafficRetentionHours,
@@ -67,6 +68,7 @@ const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-grou
 const ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
 const ENDPOINT_TRAFFIC_CLEANUP_LOCK_KEY = "trace:jobs:endpoint-traffic-cleanup";
 const DESIGN_PREVIEW_RECONCILE_INTERVAL_MS = 30 * 1000;
+const DESIGN_SYSTEM_ARTIFACT_RECONCILE_INTERVAL_MS = 30 * 1000;
 
 function readDurationEnv(name: string, fallbackMs: number): number {
   const raw = process.env[name]?.trim();
@@ -368,6 +370,20 @@ async function main() {
     reconcilePdfExports,
     DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
   );
+  const reconcileDesignSystemArtifacts = () => {
+    void designSystemService.reconcileCommitArtifacts().catch((error: unknown) => {
+      console.warn(
+        "[design-system-reconciler] iteration failed",
+        error instanceof Error ? error.message : String(error),
+      );
+    });
+  };
+  reconcileDesignSystemArtifacts();
+  const designSystemArtifactReconciler = setInterval(
+    reconcileDesignSystemArtifacts,
+    DESIGN_SYSTEM_ARTIFACT_RECONCILE_INTERVAL_MS,
+  );
+  designSystemArtifactReconciler.unref();
 
   const cloudIdleCleanupAfterMs = readDurationEnv(
     "TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS",
@@ -397,7 +413,9 @@ async function main() {
             key: CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY,
             ttlMs: cloudIdleCleanupLockTtlMs,
             run: () =>
-              sessionService.cleanupIdleCloudSessionGroups({ idleAfterMs: cloudIdleCleanupAfterMs }),
+              sessionService.cleanupIdleCloudSessionGroups({
+                idleAfterMs: cloudIdleCleanupAfterMs,
+              }),
           })
             .then((result) => {
               if (!result) {

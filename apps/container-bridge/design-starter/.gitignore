@@ -9,3 +9,4 @@ data
 *.log
 
 next-env.d.ts
+design-system/

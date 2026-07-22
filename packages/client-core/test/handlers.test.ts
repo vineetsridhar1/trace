@@ -4,6 +4,7 @@ import { handleOrgEvent, handleSessionEvent } from "../src/events/handlers.js";
 import { useEntityStore } from "../src/stores/entity.js";
 import { useAuthStore } from "../src/stores/auth.js";
 import { setOrgEventUIBindings, type OrgEventUIBindings } from "../src/events/ui-bindings.js";
+import type { SessionGroupEntity } from "../src/stores/entity.js";
 
 function resetStores() {
   useEntityStore.setState({
@@ -23,6 +24,9 @@ function resetStores() {
     sessionApplicationProcesses: {},
     sessionApplicationLogs: {},
     sessionEndpoints: {},
+    designSystems: {},
+    designSystemCommitArtifacts: {},
+    designSystemVersions: {},
     eventsByScope: {},
     _eventIdsByScope: {},
     _sessionIdsByGroup: {},
@@ -135,6 +139,55 @@ beforeEach(() => {
 });
 
 describe("handleOrgEvent", () => {
+  it("hydrates a design system authoring group from its creation event", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "design_system_created",
+        scopeType: "system",
+        scopeId: "system-1",
+        payload: {
+          designSystem: { id: "system-1", name: "Acme UI" },
+          sessionGroup: {
+            id: "group-1",
+            kind: "design_system",
+            sessions: [{ id: "session-1", sessionGroupId: "group-1", agentStatus: "not_started" }],
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toMatchObject({
+      id: "group-1",
+      kind: "design_system",
+    });
+    expect(useEntityStore.getState().sessions["session-1"]).toMatchObject({
+      id: "session-1",
+      sessionGroupId: "group-1",
+    });
+  });
+
+  it("archives a design-system authoring group from the service event", () => {
+    useEntityStore
+      .getState()
+      .upsertMany("sessionGroups", [
+        { id: "group-1", kind: "design_system", archivedAt: null } as SessionGroupEntity,
+      ]);
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "design_system_archived",
+        scopeType: "system",
+        scopeId: "system-1",
+        payload: {
+          designSystem: { id: "system-1", status: "archived" },
+          sessionGroup: { id: "group-1", kind: "design_system", archivedAt: "2026-01-02" },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]?.archivedAt).toBe("2026-01-02");
+  });
+
   it("does not expose managed repos through the generic repo table", () => {
     const event = makeEvent({
       eventType: "repo_created",
@@ -971,6 +1024,38 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState().sessionSetupScriptRuns["run-1"]).toMatchObject({
       scriptConfigId: "install",
       status: "running",
+    });
+  });
+
+  it("upserts complete design-system lifecycle entities without a refetch", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "design_system_version_created",
+        scopeId: "system-1",
+        payload: {
+          designSystem: {
+            id: "system-1",
+            name: "Acme",
+            status: "ready",
+            activeVersionId: "version-1",
+          },
+          designSystemCommitArtifact: {
+            id: "artifact-1",
+            designSystemId: "system-1",
+            status: "saved",
+          },
+          designSystemVersion: { id: "version-1", designSystemId: "system-1", version: 1 },
+        },
+      }),
+    );
+    expect(useEntityStore.getState().designSystems["system-1"]).toMatchObject({
+      activeVersionId: "version-1",
+    });
+    expect(useEntityStore.getState().designSystemCommitArtifacts["artifact-1"]).toMatchObject({
+      status: "saved",
+    });
+    expect(useEntityStore.getState().designSystemVersions["version-1"]).toMatchObject({
+      version: 1,
     });
   });
 });

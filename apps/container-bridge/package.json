@@ -8,15 +8,18 @@
     "build": "tsc -b",
     "dev": "tsc -b --watch",
     "start": "node dist/index.js",
+    "design-default:generate": "node scripts/generate-default-design-system-previews.mjs",
     "lint": "tsc -b",
     "test": "vitest run"
   },
   "dependencies": {
     "@trace/shared": "workspace:*",
     "node-pty": "^1.1.0",
+    "tar-stream": "^3.2.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/tar-stream": "^3.1.4",
     "@types/ws": "^8.5.13",
     "typescript": "^5.7.0",
     "vitest": "^3.2.4"

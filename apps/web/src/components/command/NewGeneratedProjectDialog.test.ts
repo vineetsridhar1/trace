@@ -9,12 +9,14 @@ const state = vi.hoisted(() => ({
 
 vi.mock("react", () => ({
   useEffect: (effect: () => void) => effect(),
-  useCallback: <T,>(callback: T) => callback,
+  useCallback: <T>(callback: T) => callback,
+  useState: <T>(initial: T) => [initial, vi.fn()],
 }));
 
 vi.mock("../../lib/create-quick-session", () => ({
   createAppSession: state.createApp,
   createDesignSession: state.createDesign,
+  createPdfSession: vi.fn(),
 }));
 
 vi.mock("../../stores/command-palette", () => ({
@@ -30,24 +32,44 @@ vi.mock("../../stores/command-palette", () => ({
     }),
 }));
 
+vi.mock("@trace/client-core", () => ({
+  useAuthStore: (selector: (state: { activeOrgId: string | null }) => unknown) =>
+    selector({ activeOrgId: null }),
+  useEntityStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ repos: {}, agentEnvironments: {}, sessionGroups: {}, sessions: {} }),
+}));
+
+vi.mock("zustand/react/shallow", () => ({
+  useShallow: <T>(selector: T) => selector,
+}));
+
 describe("NewGeneratedProjectDialog", () => {
   beforeEach(() => {
+    state.kind = null;
     state.close.mockReset();
     state.createApp.mockReset();
     state.createDesign.mockReset();
   });
 
-  it.each([
-    ["app", "createApp"],
-    ["design", "createDesign"],
-  ] as const)("dispatches exactly one blank %s session creation", async (kind, creator) => {
-    state.kind = kind;
+  it("dispatches exactly one blank app session creation", async () => {
+    state.kind = "app";
     const { NewGeneratedProjectDialog } = await import("./NewGeneratedProjectDialog");
 
     NewGeneratedProjectDialog();
 
     expect(state.close).toHaveBeenCalledTimes(1);
-    expect(state[creator]).toHaveBeenCalledTimes(1);
-    expect(state[creator === "createApp" ? "createDesign" : "createApp"]).not.toHaveBeenCalled();
+    expect(state.createApp).toHaveBeenCalledTimes(1);
+    expect(state.createDesign).not.toHaveBeenCalled();
+  });
+
+  it("dispatches exactly one blank design session creation", async () => {
+    state.kind = "design";
+    const { NewGeneratedProjectDialog } = await import("./NewGeneratedProjectDialog");
+
+    NewGeneratedProjectDialog();
+
+    expect(state.close).toHaveBeenCalledTimes(1);
+    expect(state.createDesign).toHaveBeenCalledTimes(1);
+    expect(state.createApp).not.toHaveBeenCalled();
   });
 });

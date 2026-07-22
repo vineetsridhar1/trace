@@ -77,6 +77,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       forkedFromSessionGroupId
       status
       visibility
+      designSystemVersionId
       owner {
         id
         name
@@ -448,7 +449,9 @@ export function SessionGroupDetailView({
   const projectWorkspaceKind = getProjectWorkspaceKind(groupKind);
   const isAppGroup = projectWorkspaceKind === "app";
   const isGeneratedProjectGroup =
-    projectWorkspaceKind === "design" || projectWorkspaceKind === "pdf";
+    projectWorkspaceKind === "design" ||
+    projectWorkspaceKind === "design_system" ||
+    projectWorkspaceKind === "pdf";
   const selectedConnection = selectedSession?.connection as
     | Record<string, unknown>
     | null
@@ -460,7 +463,8 @@ export function SessionGroupDetailView({
   );
   const generatedProjectCanvasReady =
     liveGeneratedProjectCanvasReady ||
-    (groupKind === "design" && hasSavedDesignPreview(groupDesignPreviewUrl, groupGitCheckpoints));
+    ((groupKind === "design" || groupKind === "design_system") &&
+      hasSavedDesignPreview(groupDesignPreviewUrl, groupGitCheckpoints));
   const appCanvasReady = isAppCanvasReady(
     selectedSession?.agentStatus,
     selectedConnection?.state,
@@ -951,7 +955,6 @@ export function SessionGroupDetailView({
                   selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
                 }
               />
-
               {!isAppGroup && !isGeneratedProjectGroup ? (
                 <GroupTabStrip
                   sessionTabs={sessionTabs}

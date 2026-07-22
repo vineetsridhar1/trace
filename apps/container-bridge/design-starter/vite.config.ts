@@ -5,7 +5,10 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "@design-system": fileURLToPath(new URL("./design-system/components", import.meta.url)),
+    },
   },
   server: {
     allowedHosts: true,

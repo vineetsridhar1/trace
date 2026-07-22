@@ -17,6 +17,9 @@ import type {
   SessionEndpoint,
   SessionSetupScriptRun,
   SessionStatus,
+  DesignSystem,
+  DesignSystemCommitArtifact,
+  DesignSystemVersion,
 } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
@@ -159,6 +162,51 @@ export function handleOrgEvent(event: Event): void {
   const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
 
   const scopeKey = `${event.scopeType}:${event.scopeId}`;
+
+  const designSystemEvents = new Set<EventType>([
+    "design_system_created",
+    "design_system_commit_artifact_created",
+    "design_system_commit_artifact_updated",
+    "design_system_version_created",
+    "design_system_updated",
+    "design_system_publish_updated",
+    "design_system_archived",
+  ]);
+  if (designSystemEvents.has(event.eventType)) {
+    const designSystem = asJsonObject(payload.designSystem);
+    if (designSystem && typeof designSystem.id === "string") {
+      batch.upsert("designSystems", designSystem.id, designSystem as unknown as DesignSystem);
+    }
+    const artifact = asJsonObject(payload.designSystemCommitArtifact);
+    if (artifact && typeof artifact.id === "string") {
+      batch.upsert(
+        "designSystemCommitArtifacts",
+        artifact.id,
+        artifact as unknown as DesignSystemCommitArtifact,
+      );
+    }
+    const version = asJsonObject(payload.designSystemVersion);
+    if (version && typeof version.id === "string") {
+      batch.upsert("designSystemVersions", version.id, version as unknown as DesignSystemVersion);
+    }
+    const sessionGroup = asJsonObject(payload.sessionGroup);
+    if (sessionGroup && typeof sessionGroup.id === "string") {
+      batch.upsert("sessionGroups", sessionGroup.id, sessionGroup as unknown as SessionGroupEntity);
+      const sessions = sessionGroup.sessions;
+      if (Array.isArray(sessions)) {
+        for (const item of sessions) {
+          const session = asJsonObject(item);
+          if (session && typeof session.id === "string") {
+            batch.upsert("sessions", session.id, session as unknown as SessionEntity);
+          }
+        }
+      }
+    }
+    const session = asJsonObject(payload.session);
+    if (session && typeof session.id === "string") {
+      batch.upsert("sessions", session.id, session as unknown as SessionEntity);
+    }
+  }
 
   // App process logs are high-volume and already live in their own capped entity
   // table. Storing them in the scoped-event log too would defeat that cap, so

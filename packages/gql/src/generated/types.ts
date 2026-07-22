@@ -307,6 +307,14 @@ export type CreateChatInput = {
   name?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateDesignSystemInput = {
+  branch?: InputMaybe<Scalars["String"]["input"]>;
+  environmentId?: InputMaybe<Scalars["ID"]["input"]>;
+  name: Scalars["String"]["input"];
+  repoId: Scalars["ID"]["input"];
+  sourcePath?: InputMaybe<Scalars["String"]["input"]>;
+};
+
 export type CreateOrganizationInput = {
   name: Scalars["String"]["input"];
 };
@@ -498,6 +506,97 @@ export type DesignElementTextSource = {
   text: Scalars["String"]["output"];
 };
 
+export type DesignSystem = {
+  __typename?: "DesignSystem";
+  activeVersion?: Maybe<DesignSystemVersion>;
+  activeVersionId?: Maybe<Scalars["ID"]["output"]>;
+  archivedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  authoringSessionGroup: SessionGroup;
+  authoringSessionGroupId: Scalars["ID"]["output"];
+  commitArtifactError?: Maybe<Scalars["String"]["output"]>;
+  commitArtifactStatus?: Maybe<DesignSystemCommitArtifactStatus>;
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  description?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  latestCommitArtifact?: Maybe<DesignSystemCommitArtifact>;
+  latestCommitArtifactId?: Maybe<Scalars["ID"]["output"]>;
+  latestPushedCommitSha?: Maybe<Scalars["String"]["output"]>;
+  name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  publishAttemptedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  publishError?: Maybe<Scalars["String"]["output"]>;
+  publishStatus: DesignSystemPublishStatus;
+  publishedCommitSha?: Maybe<Scalars["String"]["output"]>;
+  slug: Scalars["String"]["output"];
+  sourceBranch?: Maybe<Scalars["String"]["output"]>;
+  sourceCommitSha?: Maybe<Scalars["String"]["output"]>;
+  sourcePath?: Maybe<Scalars["String"]["output"]>;
+  sourceRepo?: Maybe<Repo>;
+  sourceRepoId?: Maybe<Scalars["ID"]["output"]>;
+  status: DesignSystemStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type DesignSystemCommitArtifact = {
+  __typename?: "DesignSystemCommitArtifact";
+  byteSize?: Maybe<Scalars["Int"]["output"]>;
+  commitSha: Scalars["String"]["output"];
+  contentDigest?: Maybe<Scalars["String"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  createdById?: Maybe<Scalars["ID"]["output"]>;
+  designSystem: DesignSystem;
+  designSystemId: Scalars["ID"]["output"];
+  error?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  packageDigest?: Maybe<Scalars["String"]["output"]>;
+  packageValid?: Maybe<Scalars["Boolean"]["output"]>;
+  savedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  sequence: Scalars["Int"]["output"];
+  status: DesignSystemCommitArtifactStatus;
+  storageKey: Scalars["String"]["output"];
+  validationSummary?: Maybe<Scalars["JSON"]["output"]>;
+};
+
+export type DesignSystemCommitArtifactConnection = {
+  __typename?: "DesignSystemCommitArtifactConnection";
+  edges: Array<DesignSystemCommitArtifactEdge>;
+  endCursor?: Maybe<Scalars["String"]["output"]>;
+  hasNextPage: Scalars["Boolean"]["output"];
+};
+
+export type DesignSystemCommitArtifactEdge = {
+  __typename?: "DesignSystemCommitArtifactEdge";
+  cursor: Scalars["String"]["output"];
+  node: DesignSystemCommitArtifact;
+};
+
+export type DesignSystemCommitArtifactStatus = "failed" | "pending" | "saved" | "saving";
+
+export type DesignSystemPublishStatus = "failed" | "idle" | "published" | "publishing";
+
+export type DesignSystemStatus = "archived" | "draft" | "ready";
+
+export type DesignSystemVersion = {
+  __typename?: "DesignSystemVersion";
+  authoringSessionGroupId: Scalars["ID"]["output"];
+  byteSize: Scalars["Int"]["output"];
+  contentDigest: Scalars["String"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdById: Scalars["ID"]["output"];
+  designSystem: DesignSystem;
+  designSystemCommitArtifact: DesignSystemCommitArtifact;
+  designSystemCommitArtifactId: Scalars["ID"]["output"];
+  designSystemId: Scalars["ID"]["output"];
+  id: Scalars["ID"]["output"];
+  manifest: Scalars["JSON"]["output"];
+  sourceCommitSha?: Maybe<Scalars["String"]["output"]>;
+  storageKey: Scalars["String"]["output"];
+  validationSummary: Scalars["JSON"]["output"];
+  version: Scalars["Int"]["output"];
+  workbenchCommitSha: Scalars["String"]["output"];
+};
+
 export type EndpointTrafficCaptureMode = "full" | "headers" | "metadata";
 
 export type EndpointTrafficEntry = {
@@ -561,6 +660,13 @@ export type EventType =
   | "design_element_styles_updated"
   | "design_element_text_updated"
   | "design_preview_updated"
+  | "design_system_archived"
+  | "design_system_commit_artifact_created"
+  | "design_system_commit_artifact_updated"
+  | "design_system_created"
+  | "design_system_publish_updated"
+  | "design_system_updated"
+  | "design_system_version_created"
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
@@ -792,6 +898,7 @@ export type Mutation = {
   addChatMember: Chat;
   addOrgMember: OrgMember;
   approveBridgeAccessRequest: BridgeAccessGrant;
+  archiveDesignSystem: DesignSystem;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
@@ -804,6 +911,7 @@ export type Mutation = {
   createChannelGroup: ChannelGroup;
   createChannelTerminal: Terminal;
   createChat: Chat;
+  createDesignSystem: DesignSystem;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -843,6 +951,7 @@ export type Mutation = {
   muteScope: Participant;
   publishAppSession: SessionEndpoint;
   queueSessionMessage: QueuedMessage;
+  refreshDesignSystemSource: DesignSystem;
   registerPushToken: Scalars["Boolean"]["output"];
   registerRepoWebhook: Repo;
   removeOrgMember: Scalars["Boolean"]["output"];
@@ -856,6 +965,7 @@ export type Mutation = {
   requestPdfSessionExport: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
+  retryDesignSystemCommitArtifact: DesignSystem;
   retrySessionConnection: Session;
   retrySessionGroupSetup: SessionGroup;
   revertSessionGroupFileChange: Scalars["Boolean"]["output"];
@@ -863,6 +973,7 @@ export type Mutation = {
   rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
+  saveDesignSystem: DesignSystemVersion;
   saveManualElementEdit: ManualElementEditResult;
   saveManualElementEdits: Array<ManualElementEditResult>;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
@@ -929,6 +1040,10 @@ export type MutationApproveBridgeAccessRequestArgs = {
   sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
+export type MutationArchiveDesignSystemArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationArchiveSessionGroupArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -984,6 +1099,10 @@ export type MutationCreateChannelTerminalArgs = {
 
 export type MutationCreateChatArgs = {
   input: CreateChatInput;
+};
+
+export type MutationCreateDesignSystemArgs = {
+  input: CreateDesignSystemInput;
 };
 
 export type MutationCreateOrganizationArgs = {
@@ -1155,6 +1274,10 @@ export type MutationQueueSessionMessageArgs = {
   text: Scalars["String"]["input"];
 };
 
+export type MutationRefreshDesignSystemSourceArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationRegisterPushTokenArgs = {
   platform: PushPlatform;
   token: Scalars["String"]["input"];
@@ -1220,6 +1343,10 @@ export type MutationRestoreLinkedCheckoutArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationRetryDesignSystemCommitArtifactArgs = {
+  designSystemId: Scalars["ID"]["input"];
+};
+
 export type MutationRetrySessionConnectionArgs = {
   sessionId: Scalars["ID"]["input"];
 };
@@ -1250,6 +1377,10 @@ export type MutationRunSessionArgs = {
 export type MutationRunSessionGroupSetupScriptArgs = {
   scriptId: Scalars["ID"]["input"];
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSaveDesignSystemArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationSaveManualElementEditArgs = {
@@ -1458,6 +1589,7 @@ export type MutationUpdateRepoArgs = {
 };
 
 export type MutationUpdateSessionConfigArgs = {
+  designSystemVersionId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   model?: InputMaybe<Scalars["String"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
@@ -1576,6 +1708,10 @@ export type Query = {
   designElementTextSource: DesignElementTextSource;
   /** Design-kind session groups for the org (the sidebar Designs section). */
   designSessionGroups: Array<SessionGroup>;
+  designSystem?: Maybe<DesignSystem>;
+  designSystemCommitArtifacts: DesignSystemCommitArtifactConnection;
+  designSystemVersions: Array<DesignSystemVersion>;
+  designSystems: Array<DesignSystem>;
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
@@ -1702,6 +1838,25 @@ export type QueryDesignElementTextSourceArgs = {
 };
 
 export type QueryDesignSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryDesignSystemArgs = {
+  id: Scalars["ID"]["input"];
+};
+
+export type QueryDesignSystemCommitArtifactsArgs = {
+  after?: InputMaybe<Scalars["String"]["input"]>;
+  designSystemId: Scalars["ID"]["input"];
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type QueryDesignSystemVersionsArgs = {
+  designSystemId: Scalars["ID"]["input"];
+};
+
+export type QueryDesignSystemsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -2255,6 +2410,8 @@ export type SessionGroup = {
   designPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
   designPreviewStatus?: Maybe<GitCheckpointCaptureStatus>;
   designPreviewUrl?: Maybe<Scalars["String"]["output"]>;
+  designSystemVersion?: Maybe<DesignSystemVersion>;
+  designSystemVersionId?: Maybe<Scalars["ID"]["output"]>;
   forkedFromSessionGroup?: Maybe<SessionGroup>;
   forkedFromSessionGroupId?: Maybe<Scalars["ID"]["output"]>;
   gitCheckpoints: Array<GitCheckpoint>;
@@ -2306,7 +2463,7 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "app" | "coding" | "design" | "pdf";
+export type SessionGroupKind = "app" | "coding" | "design" | "design_system" | "pdf";
 
 export type SessionGroupStatus =
   | "archived"
@@ -2420,6 +2577,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  designSystemVersionId?: InputMaybe<Scalars["ID"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;

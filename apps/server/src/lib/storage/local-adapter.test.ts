@@ -41,4 +41,17 @@ describe("LocalStorageAdapter object lifecycle", () => {
     await adapter.deleteObject("pdf/test.pdf");
     await expect(readFile(adapter.resolvePath("pdf/test.pdf"), "utf8")).rejects.toThrow();
   });
+
+  it("can enforce immutable server-owned object keys", async () => {
+    const adapter = new LocalStorageAdapter();
+    const key = `design-systems/test-${Date.now()}/package.tar.gz`;
+    await adapter.putObject(key, Buffer.from("version-one"), "application/gzip", {
+      ifAbsent: true,
+    });
+    await expect(
+      adapter.putObject(key, Buffer.from("version-two"), "application/gzip", { ifAbsent: true }),
+    ).rejects.toMatchObject({ code: "EEXIST" });
+    await expect(adapter.getObject(key)).resolves.toEqual(Buffer.from("version-one"));
+    await adapter.deleteObject(key);
+  });
 });
