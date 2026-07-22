@@ -585,16 +585,8 @@ export const sessionMutations = {
       ctx.userId,
     );
   },
-  requestPdfSessionExport: (
-    _: unknown,
-    args: { sessionGroupId: string },
-    ctx: Context,
-  ) => {
-    return sessionService.requestPdfExport(
-      args.sessionGroupId,
-      requireOrgContext(ctx),
-      ctx.userId,
-    );
+  requestPdfSessionExport: (_: unknown, args: { sessionGroupId: string }, ctx: Context) => {
+    return sessionService.requestPdfExport(args.sessionGroupId, requireOrgContext(ctx), ctx.userId);
   },
   updateDesignElementText: async (
     _: unknown,
@@ -660,6 +652,34 @@ export const sessionMutations = {
     try {
       return await sessionService.saveManualElementEdit(
         { sessionGroupId: args.sessionGroupId, ...args.input },
+        requireOrgContext(ctx),
+        ctx.actorType,
+        ctx.userId,
+      );
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
+  },
+  saveManualElementEdits: async (
+    _: unknown,
+    args: {
+      sessionGroupId: string;
+      inputs: Array<{
+        filePath: string;
+        elementId: string;
+        text?: string | null;
+        expectedTextSourceHash?: string | null;
+        styles?: DesignElementStylesInput | null;
+        expectedStyleSourceHash?: string | null;
+      }>;
+    },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    try {
+      return await sessionService.saveManualElementEdits(
+        args.sessionGroupId,
+        args.inputs,
         requireOrgContext(ctx),
         ctx.actorType,
         ctx.userId,

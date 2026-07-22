@@ -38,9 +38,9 @@ const DESIGN_ELEMENT_TEXT_SOURCE_QUERY = gql`
   }
 `;
 
-const SAVE_MANUAL_ELEMENT_EDIT_MUTATION = gql`
-  mutation SaveManualElementEdit($sessionGroupId: ID!, $input: ManualElementEditInput!) {
-    saveManualElementEdit(sessionGroupId: $sessionGroupId, input: $input) {
+const SAVE_MANUAL_ELEMENT_EDITS_MUTATION = gql`
+  mutation SaveManualElementEdits($sessionGroupId: ID!, $inputs: [ManualElementEditInput!]!) {
+    saveManualElementEdits(sessionGroupId: $sessionGroupId, inputs: $inputs) {
       commitSha
     }
   }
@@ -109,8 +109,18 @@ export function registerDesignEditorFrame(
   };
 }
 
+export function reapplyDesignEditorDrafts(sessionGroupId: string): void {
+  const state = useDesignEditorStore.getState();
+  if (state.activeSessionGroupId !== sessionGroupId) return;
+  for (const target of Object.values(state.drafts)) previewTarget(sessionGroupId, target);
+}
+
 function post(sessionGroupId: string, message: FrameMessage): void {
   frameSenders.get(sessionGroupId)?.(message);
+}
+
+function targetKey(target: Pick<DesignEditorTarget, "filePath" | "elementId">): string {
+  return `${target.filePath}\u0000${target.elementId}`;
 }
 
 function restoreTarget(sessionGroupId: string, target: DesignEditorTarget | null): void {
@@ -133,6 +143,29 @@ function restoreTarget(sessionGroupId: string, target: DesignEditorTarget | null
       type: "trace:design:preview-styles",
       elementId: target.elementId,
       styles: changedStyles,
+    });
+  }
+}
+
+function previewTarget(sessionGroupId: string, target: DesignEditorTarget): void {
+  if (target.editableText && target.draftText !== target.originalText) {
+    post(sessionGroupId, {
+      type: "trace:design:preview-text",
+      elementId: target.elementId,
+      text: target.draftText,
+    });
+  }
+  const styles: Partial<DesignEditorStyles> = {};
+  for (const key of DESIGN_EDITOR_STYLE_KEYS) {
+    if (target.draftStyles[key] !== target.originalStyles[key]) {
+      Object.assign(styles, { [key]: target.draftStyles[key] });
+    }
+  }
+  if (Object.keys(styles).length > 0) {
+    post(sessionGroupId, {
+      type: "trace:design:preview-styles",
+      elementId: target.elementId,
+      styles,
     });
   }
 }
@@ -228,6 +261,19 @@ type ManualElementSavedPayload = {
   styleSourceHash: string | null;
 };
 
+function targetForSavedEvent(target: DesignEditorTarget, event: ManualElementSavedPayload) {
+  return {
+    ...target,
+    originalText: event.text ?? target.originalText,
+    draftText: event.text ?? target.draftText,
+    textSourceHash: event.textSourceHash ?? target.textSourceHash,
+    originalStyles: event.styles ? target.draftStyles : target.originalStyles,
+    draftStyles: event.styles ? target.draftStyles : target.draftStyles,
+    manualStyles: event.styles ? manualStyles(event.styles) : target.manualStyles,
+    styleSourceHash: event.styleSourceHash ?? target.styleSourceHash,
+  };
+}
+
 export function reconcileManualElementSaved(payload: unknown): void {
   if (!payload || typeof payload !== "object") return;
   const value = payload as Record<string, unknown>;
@@ -251,35 +297,32 @@ export function reconcileManualElementSaved(payload: unknown): void {
     styleSourceHash: typeof value.styleSourceHash === "string" ? value.styleSourceHash : null,
   };
   const state = useDesignEditorStore.getState();
-  const target = state.target;
-  if (
-    state.activeSessionGroupId !== event.sessionGroupId ||
-    !target ||
-    target.filePath !== event.filePath ||
-    target.elementId !== event.elementId
-  ) {
-    return;
-  }
+  if (state.activeSessionGroupId !== event.sessionGroupId) return;
+  const key = targetKey(event);
+  const savedDraft = state.drafts[key];
+  const pendingSaveKeys = state.pendingSaveKeys.filter((pendingKey) => pendingKey !== key);
+  const target =
+    state.target && targetKey(state.target) === key
+      ? targetForSavedEvent(state.target, event)
+      : state.target;
+  const drafts = { ...state.drafts };
+  if (savedDraft) delete drafts[key];
+  if (!savedDraft && !state.pendingSaveKeys.includes(key)) return;
   useDesignEditorStore.setState({
-    saving: false,
+    saving: pendingSaveKeys.length > 0,
     error: null,
-    target: {
-      ...target,
-      originalText: event.text ?? target.originalText,
-      draftText: event.text ?? target.draftText,
-      textSourceHash: event.textSourceHash ?? target.textSourceHash,
-      originalStyles: event.styles ? target.draftStyles : target.originalStyles,
-      draftStyles: event.styles ? target.draftStyles : target.draftStyles,
-      manualStyles: event.styles ? manualStyles(event.styles) : target.manualStyles,
-      styleSourceHash: event.styleSourceHash ?? target.styleSourceHash,
-    },
+    target,
+    drafts,
+    pendingSaveKeys,
   });
-  toast.success("Element saved and committed");
+  if (pendingSaveKeys.length === 0) toast.success("Edits saved and committed");
 }
 
 type DesignEditorState = {
   activeSessionGroupId: string | null;
   target: DesignEditorTarget | null;
+  drafts: Record<string, DesignEditorTarget>;
+  pendingSaveKeys: string[];
   loading: boolean;
   saving: boolean;
   error: string | null;
@@ -299,6 +342,8 @@ type DesignEditorState = {
 export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
   activeSessionGroupId: null,
   target: null,
+  drafts: {},
+  pendingSaveKeys: [],
   loading: false,
   saving: false,
   error: null,
@@ -306,10 +351,17 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
   start: (sessionGroupId) => {
     const state = get();
     if (state.activeSessionGroupId && state.activeSessionGroupId !== sessionGroupId) {
-      restoreTarget(state.activeSessionGroupId, state.target);
+      for (const target of Object.values(state.drafts))
+        restoreTarget(state.activeSessionGroupId, target);
       post(state.activeSessionGroupId, { type: "trace:design:edit-mode", enabled: false });
     }
-    set({ activeSessionGroupId: sessionGroupId, target: null, error: null });
+    set({
+      activeSessionGroupId: sessionGroupId,
+      target: null,
+      drafts: {},
+      pendingSaveKeys: [],
+      error: null,
+    });
     post(sessionGroupId, { type: "trace:design:edit-mode", enabled: true });
   },
 
@@ -317,9 +369,17 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     const state = get();
     if (state.activeSessionGroupId !== sessionGroupId) return;
     selectionRequest += 1;
-    restoreTarget(sessionGroupId, state.target);
+    for (const target of Object.values(state.drafts)) restoreTarget(sessionGroupId, target);
     post(sessionGroupId, { type: "trace:design:edit-mode", enabled: false });
-    set({ activeSessionGroupId: null, target: null, loading: false, saving: false, error: null });
+    set({
+      activeSessionGroupId: null,
+      target: null,
+      drafts: {},
+      pendingSaveKeys: [],
+      loading: false,
+      saving: false,
+      error: null,
+    });
   },
 
   selectElement: async (sessionGroupId, selection) => {
@@ -334,7 +394,11 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
       }
       return;
     }
-    restoreTarget(sessionGroupId, state.target);
+    const existingDraft = state.drafts[targetKey(selection)];
+    if (existingDraft) {
+      set({ target: existingDraft, loading: false, error: null });
+      return;
+    }
     const requestId = selectionRequest + 1;
     selectionRequest = requestId;
     set({ target: null, loading: true, error: null });
@@ -400,7 +464,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     if (state.saving || !state.target || !state.activeSessionGroupId || !state.target.editableText)
       return;
     const target = { ...state.target, draftText: value };
-    set({ target, error: null });
+    set({ target, drafts: { ...state.drafts, [targetKey(target)]: target }, error: null });
     post(state.activeSessionGroupId, {
       type: "trace:design:preview-text",
       elementId: target.elementId,
@@ -415,7 +479,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
       ...state.target,
       draftStyles: { ...state.target.draftStyles, [key]: value },
     };
-    set({ target, error: null });
+    set({ target, drafts: { ...state.drafts, [targetKey(target)]: target }, error: null });
     post(state.activeSessionGroupId, {
       type: "trace:design:preview-styles",
       elementId: target.elementId,
@@ -427,12 +491,15 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     const state = get();
     if (state.saving || !state.target || !state.activeSessionGroupId) return;
     restoreTarget(state.activeSessionGroupId, state.target);
+    const drafts = { ...state.drafts };
+    delete drafts[targetKey(state.target)];
     set({
       target: {
         ...state.target,
         draftText: state.target.originalText,
         draftStyles: state.target.originalStyles,
       },
+      drafts,
       error: null,
     });
   },
@@ -441,37 +508,36 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     const state = get();
     if (state.saving || !state.activeSessionGroupId) return;
     selectionRequest += 1;
-    restoreTarget(state.activeSessionGroupId, state.target);
     post(state.activeSessionGroupId, { type: "trace:design:clear-selection" });
     set({ target: null, loading: false, error: null });
   },
 
   save: async () => {
     const state = get();
-    const target = state.target;
     const sessionGroupId = state.activeSessionGroupId;
-    if (!target || !sessionGroupId || state.saving) return;
-    const saveText = designEditorTextDirty(target);
-    const saveStyles = designEditorStylesDirty(target);
-    if (!saveText && !saveStyles) return;
-    set({ saving: true, error: null });
+    const targets = Object.values(state.drafts).filter(
+      (target) => designEditorTextDirty(target) || designEditorStylesDirty(target),
+    );
+    if (!sessionGroupId || state.saving || targets.length === 0) return;
+    const pendingSaveKeys = targets.map(targetKey);
+    set({ saving: true, pendingSaveKeys, error: null });
     try {
       const result = await client
-        .mutation(SAVE_MANUAL_ELEMENT_EDIT_MUTATION, {
+        .mutation(SAVE_MANUAL_ELEMENT_EDITS_MUTATION, {
           sessionGroupId,
-          input: {
+          inputs: targets.map((target) => ({
             filePath: target.filePath,
             elementId: target.elementId,
-            ...(saveText
+            ...(designEditorTextDirty(target)
               ? { text: target.draftText, expectedTextSourceHash: target.textSourceHash }
               : {}),
-            ...(saveStyles
+            ...(designEditorStylesDirty(target)
               ? {
                   styles: stylesForSave(target),
                   expectedStyleSourceHash: target.styleSourceHash,
                 }
               : {}),
-          },
+          })),
         })
         .toPromise();
       if (result.error) throw new Error(result.error.message);
@@ -479,6 +545,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
       if (get().activeSessionGroupId !== sessionGroupId) return;
       set({
         saving: false,
+        pendingSaveKeys: [],
         error: cause instanceof Error ? cause.message : "Failed to save this design element.",
       });
     }

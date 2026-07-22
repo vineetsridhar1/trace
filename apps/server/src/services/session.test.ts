@@ -3849,6 +3849,71 @@ describe("SessionService", () => {
       );
     });
 
+    it("commits multiple staged manual edits together", async () => {
+      const filePath = "src/design/screens/WelcomeScreen.tsx";
+      const textSource = `<><h1 data-trace-id="hero-title">Processing</h1><p data-trace-id="hero-copy">Details</p></>`;
+      const styleSource = "/* Trace writes user-authored visual overrides here. */\n";
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          kind: "design",
+          visibility: "public",
+          ownerUserId: "user-1",
+        })
+        .mockResolvedValueOnce({
+          id: "group-1",
+          workdir: "/tmp/trace",
+          worktreeDeleted: false,
+          connection: { runtimeInstanceId: "runtime-1" },
+          visibility: "public",
+          ownerUserId: "user-1",
+        });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        { id: "session-1", workdir: "/tmp/trace", connection: { runtimeInstanceId: "runtime-1" } },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+      sessionRouterMock.readFile
+        .mockResolvedValueOnce(textSource)
+        .mockResolvedValueOnce(styleSource);
+      sessionRouterMock.commitFileChanges.mockResolvedValueOnce("commit-123");
+
+      await expect(
+        service.saveManualElementEdits(
+          "group-1",
+          [
+            {
+              filePath,
+              elementId: "hero-title",
+              text: "Under review",
+              expectedTextSourceHash: designSourceHash(textSource),
+            },
+            {
+              filePath,
+              elementId: "hero-copy",
+              styles: { color: "#112233" },
+              expectedStyleSourceHash: designSourceHash(styleSource),
+            },
+          ],
+          "org-1",
+          "user",
+          "user-1",
+        ),
+      ).resolves.toHaveLength(2);
+      expect(sessionRouterMock.commitFileChanges).toHaveBeenCalledTimes(1);
+      expect(sessionRouterMock.commitFileChanges).toHaveBeenCalledWith(
+        "org-1:runtime-1",
+        "session-1",
+        "Save 2 manual design element edits",
+        "/tmp/trace",
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledTimes(2);
+    });
+
     it("uses the existing global stylesheet for legacy designs without manual.css", async () => {
       const source = "@tailwind base;\n";
       prismaMock.sessionGroup.findFirst

@@ -13,6 +13,7 @@ import { DesignEditorStyleControls } from "./DesignEditorStyleControls";
 export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: string }) {
   const {
     target,
+    draftCount,
     loading,
     saving,
     error,
@@ -25,6 +26,7 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
   } = useDesignEditorStore(
     useShallow((state) => ({
       target: state.target,
+      draftCount: Object.keys(state.drafts).length,
       loading: state.loading,
       saving: state.saving,
       error: state.error,
@@ -47,7 +49,9 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
             {title}
           </h2>
           <p className="mt-0.5 text-[10px] text-muted-foreground">
-            {dirty ? "Unsaved changes · previewing live" : "Changes preview live"}
+            {draftCount > 0
+              ? `${draftCount} unsaved ${draftCount === 1 ? "element" : "elements"} · previewing live`
+              : "Changes preview live"}
           </p>
         </div>
         <Button
@@ -140,11 +144,16 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
           Reset
         </Button>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" disabled={!target || saving} onClick={cancelSelection}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!target || saving}
+            onClick={cancelSelection}
+          >
             Deselect
           </Button>
-          <Button size="sm" disabled={!target || !dirty || saving} onClick={() => void save()}>
-            {saving ? "Saving…" : "Save"}
+          <Button size="sm" disabled={draftCount === 0 || saving} onClick={() => void save()}>
+            {saving ? "Saving…" : draftCount > 1 ? `Save ${draftCount} edits` : "Save edit"}
           </Button>
         </div>
       </footer>

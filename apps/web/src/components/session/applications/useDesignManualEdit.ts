@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   registerDesignEditorFrame,
+  reapplyDesignEditorDrafts,
   useDesignEditorStore,
   type DesignEditorSelectionMessage,
   type DesignEditorStyles,
@@ -106,6 +107,7 @@ export function useDesignManualEdit({
         setFrameReady(true);
         establishHandshake();
         postToFrame({ type: "trace:design:edit-mode", enabled });
+        reapplyDesignEditorDrafts(sessionGroupId);
         const target = useDesignEditorStore.getState().target;
         if (enabled && target) {
           postToFrame({ type: "trace:design:select-element", elementId: target.elementId });

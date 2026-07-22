@@ -768,6 +768,7 @@ export type Mutation = {
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
   saveManualElementEdit: ManualElementEditResult;
+  saveManualElementEdits: Array<ManualElementEditResult>;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -1157,6 +1158,11 @@ export type MutationRunSessionGroupSetupScriptArgs = {
 
 export type MutationSaveManualElementEditArgs = {
   input: ManualElementEditInput;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSaveManualElementEditsArgs = {
+  inputs: Array<ManualElementEditInput>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -2600,7 +2606,6 @@ export type SessionGroupsQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -2666,7 +2671,6 @@ export type FilteredSessionGroupsQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -2897,7 +2901,6 @@ export type SessionDetailQuery = {
     outputTokens: number;
     cacheReadTokens: number;
     cacheCreationTokens: number;
-    costUsd: number;
     sessionGroupId?: string | null;
     createdAt: string;
     updatedAt: string;
@@ -3122,7 +3125,6 @@ export type SessionGroupDetailQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -3972,8 +3974,17 @@ export type GeneratedProjectsQuery = {
     kind: SessionGroupKind;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
+    designPreviewUrl?: string | null;
     archivedAt?: string | null;
     updatedAt: string;
+    owner: { __typename?: "User"; id: string };
+    gitCheckpoints: Array<{
+      __typename?: "GitCheckpoint";
+      id: string;
+      committedAt: string;
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+    }>;
     connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
     sessions: Array<{
       __typename?: "Session";
@@ -3997,8 +4008,17 @@ export type GeneratedProjectsQuery = {
     kind: SessionGroupKind;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
+    designPreviewUrl?: string | null;
     archivedAt?: string | null;
     updatedAt: string;
+    owner: { __typename?: "User"; id: string };
+    gitCheckpoints: Array<{
+      __typename?: "GitCheckpoint";
+      id: string;
+      committedAt: string;
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+    }>;
     connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
     sessions: Array<{
       __typename?: "Session";
@@ -4022,6 +4042,7 @@ export type GeneratedProjectsQuery = {
     kind: SessionGroupKind;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
+    designPreviewUrl?: string | null;
     archivedAt?: string | null;
     updatedAt: string;
     pdfExportStatus?: string | null;
@@ -4032,6 +4053,14 @@ export type GeneratedProjectsQuery = {
     pdfPageHeight: number;
     pdfPageUnit: string;
     pdfFormatVersion: number;
+    owner: { __typename?: "User"; id: string };
+    gitCheckpoints: Array<{
+      __typename?: "GitCheckpoint";
+      id: string;
+      committedAt: string;
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+    }>;
     connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
     sessions: Array<{
       __typename?: "Session";
@@ -4608,7 +4637,6 @@ export type SidebarSessionGroupsQuery = {
       outputTokens: number;
       cacheReadTokens: number;
       cacheCreationTokens: number;
-      costUsd: number;
       createdAt: string;
       updatedAt: string;
       connection?: {
@@ -4668,14 +4696,14 @@ export type DesignElementEditorTextSourceQuery = {
   };
 };
 
-export type SaveManualElementEditMutationVariables = Exact<{
+export type SaveManualElementEditsMutationVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
-  input: ManualElementEditInput;
+  inputs: Array<ManualElementEditInput> | ManualElementEditInput;
 }>;
 
-export type SaveManualElementEditMutation = {
+export type SaveManualElementEditsMutation = {
   __typename?: "Mutation";
-  saveManualElementEdit: { __typename?: "ManualElementEditResult"; commitSha: string };
+  saveManualElementEdits: Array<{ __typename?: "ManualElementEditResult"; commitSha: string }>;
 };
 
 export type OnboardingReposQueryVariables = Exact<{
@@ -4969,7 +4997,6 @@ export const SessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -5142,7 +5169,6 @@ export const FilteredSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -6011,7 +6037,6 @@ export const SessionDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                 { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                 { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "connection" },
@@ -6477,7 +6502,6 @@ export const SessionGroupDetailDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -9416,6 +9440,28 @@ export const GeneratedProjectsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "gitCheckpoints" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                 {
@@ -9467,6 +9513,28 @@ export const GeneratedProjectsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "gitCheckpoints" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                 {
@@ -9518,6 +9586,28 @@ export const GeneratedProjectsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "kind" } },
                 { kind: "Field", name: { kind: "Name", value: "status" } },
                 { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "gitCheckpoints" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                    ],
+                  },
+                },
                 { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                 { kind: "Field", name: { kind: "Name", value: "pdfExportStatus" } },
@@ -11285,7 +11375,6 @@ export const SidebarSessionGroupsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "outputTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheReadTokens" } },
                       { kind: "Field", name: { kind: "Name", value: "cacheCreationTokens" } },
-                      { kind: "Field", name: { kind: "Name", value: "costUsd" } },
                       {
                         kind: "Field",
                         name: { kind: "Name", value: "connection" },
@@ -11494,13 +11583,13 @@ export const DesignElementEditorTextSourceDocument = {
   DesignElementEditorTextSourceQuery,
   DesignElementEditorTextSourceQueryVariables
 >;
-export const SaveManualElementEditDocument = {
+export const SaveManualElementEditsDocument = {
   kind: "Document",
   definitions: [
     {
       kind: "OperationDefinition",
       operation: "mutation",
-      name: { kind: "Name", value: "SaveManualElementEdit" },
+      name: { kind: "Name", value: "SaveManualElementEdits" },
       variableDefinitions: [
         {
           kind: "VariableDefinition",
@@ -11512,10 +11601,19 @@ export const SaveManualElementEditDocument = {
         },
         {
           kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          variable: { kind: "Variable", name: { kind: "Name", value: "inputs" } },
           type: {
             kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ManualElementEditInput" } },
+            type: {
+              kind: "ListType",
+              type: {
+                kind: "NonNullType",
+                type: {
+                  kind: "NamedType",
+                  name: { kind: "Name", value: "ManualElementEditInput" },
+                },
+              },
+            },
           },
         },
       ],
@@ -11524,7 +11622,7 @@ export const SaveManualElementEditDocument = {
         selections: [
           {
             kind: "Field",
-            name: { kind: "Name", value: "saveManualElementEdit" },
+            name: { kind: "Name", value: "saveManualElementEdits" },
             arguments: [
               {
                 kind: "Argument",
@@ -11533,8 +11631,8 @@ export const SaveManualElementEditDocument = {
               },
               {
                 kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+                name: { kind: "Name", value: "inputs" },
+                value: { kind: "Variable", name: { kind: "Name", value: "inputs" } },
               },
             ],
             selectionSet: {
@@ -11546,7 +11644,10 @@ export const SaveManualElementEditDocument = {
       },
     },
   ],
-} as unknown as DocumentNode<SaveManualElementEditMutation, SaveManualElementEditMutationVariables>;
+} as unknown as DocumentNode<
+  SaveManualElementEditsMutation,
+  SaveManualElementEditsMutationVariables
+>;
 export const OnboardingReposDocument = {
   kind: "Document",
   definitions: [

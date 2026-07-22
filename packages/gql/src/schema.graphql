@@ -1661,6 +1661,10 @@ type Mutation {
     sessionGroupId: ID!
     input: ManualElementEditInput!
   ): ManualElementEditResult!
+  saveManualElementEdits(
+    sessionGroupId: ID!
+    inputs: [ManualElementEditInput!]!
+  ): [ManualElementEditResult!]!
   commitSessionGroupFileChanges(sessionGroupId: ID!, message: String): String!
   revertSessionGroupFileChange(sessionGroupId: ID!, filePath: String!): Boolean!
   requestBridgeAccess(

@@ -45,6 +45,8 @@ afterEach(() => {
   useDesignEditorStore.setState({
     activeSessionGroupId: null,
     target: null,
+    drafts: {},
+    pendingSaveKeys: [],
     loading: false,
     saving: false,
     error: null,
@@ -52,7 +54,7 @@ afterEach(() => {
 });
 
 describe("design editor store", () => {
-  it("posts live changes and restores only touched properties when deselected", () => {
+  it("keeps live changes staged when the element is deselected", () => {
     const send = vi.fn();
     const disconnect = registerDesignEditorFrame("group-1", send);
     useDesignEditorStore.setState({ activeSessionGroupId: "group-1", target: TARGET });
@@ -75,17 +77,13 @@ describe("design editor store", () => {
 
     useDesignEditorStore.getState().cancelSelection();
 
-    expect(send).toHaveBeenNthCalledWith(3, {
-      type: "trace:design:preview-text",
-      elementId: "hero-title",
-      text: "Original",
+    expect(send).toHaveBeenNthCalledWith(3, { type: "trace:design:clear-selection" });
+    expect(useDesignEditorStore.getState().drafts).toMatchObject({
+      [`${TARGET.filePath}\u0000${TARGET.elementId}`]: {
+        draftText: "Updated",
+        draftStyles: { color: "#445566" },
+      },
     });
-    expect(send).toHaveBeenNthCalledWith(4, {
-      type: "trace:design:preview-styles",
-      elementId: "hero-title",
-      styles: { color: "#111111" },
-    });
-    expect(send).toHaveBeenNthCalledWith(5, { type: "trace:design:clear-selection" });
     disconnect();
   });
 
@@ -128,6 +126,14 @@ describe("design editor store", () => {
     useDesignEditorStore.setState({
       activeSessionGroupId: "group-1",
       saving: true,
+      drafts: {
+        [`${TARGET.filePath}\u0000${TARGET.elementId}`]: {
+          ...TARGET,
+          draftText: "Updated",
+          draftStyles: { ...TARGET.draftStyles, color: "#445566" },
+        },
+      },
+      pendingSaveKeys: [`${TARGET.filePath}\u0000${TARGET.elementId}`],
       error: "A previous save failed",
       target: {
         ...TARGET,

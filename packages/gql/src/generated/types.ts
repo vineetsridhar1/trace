@@ -766,6 +766,7 @@ export type Mutation = {
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
   saveManualElementEdit: ManualElementEditResult;
+  saveManualElementEdits: Array<ManualElementEditResult>;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -1155,6 +1156,11 @@ export type MutationRunSessionGroupSetupScriptArgs = {
 
 export type MutationSaveManualElementEditArgs = {
   input: ManualElementEditInput;
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSaveManualElementEditsArgs = {
+  inputs: Array<ManualElementEditInput>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
