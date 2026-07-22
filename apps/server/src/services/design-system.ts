@@ -441,7 +441,7 @@ export class DesignSystemService {
       name,
       visibility: "public",
       prompt: `Create the initial design system from the read-only source checkout. Source branch: ${branch}${normalizedSourcePath ? `; source path: ${normalizedSourcePath}` : ""}.`,
-      afterCreate: async ({ tx, sessionGroup }) => {
+      afterCreate: async ({ tx, session, sessionGroup }) => {
         const designSystem = await tx.designSystem.create({
           data: {
             id,
