@@ -361,7 +361,8 @@ export class EndpointProxyService {
       res.writeHead(410).end("Endpoint revoked");
       return;
     }
-    if (requestUrl(req).pathname === "/__trace_preview_auth") {
+    const url = requestUrl(req);
+    if (url.pathname === "/__trace_preview_auth") {
       await this.handlePreviewAuth(req, res, endpoint);
       return;
     }
@@ -467,6 +468,8 @@ export class EndpointProxyService {
         )
         .catch(() => {});
     }, endpointProxyRequestTimeoutMs());
+    const injectAuthoringOverlay =
+      endpoint.accessMode === "private" || url.searchParams.has("__trace_authoring");
     const pending: PendingHttp = {
       endpointId: endpoint.id,
       trafficEntryId,
@@ -474,7 +477,7 @@ export class EndpointProxyService {
       startedAt,
       response: res,
       timer,
-      injectAuthoringOverlay: endpoint.accessMode === "private",
+      injectAuthoringOverlay,
     };
     this.pendingHttp.set(requestId, pending);
     const delivery = sessionRouter.sendToRuntime(
@@ -488,7 +491,7 @@ export class EndpointProxyService {
         method: req.method ?? "GET",
         path: `${path}${query ? `?${query}` : ""}`,
         headers: forwardableRequestHeaders(req.headers, {
-          authoringOverlay: endpoint.accessMode === "private",
+          authoringOverlay: injectAuthoringOverlay,
         }),
         bodyBase64: requestBody.byteLength ? requestBody.toString("base64") : undefined,
       },
