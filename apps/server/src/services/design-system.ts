@@ -500,10 +500,18 @@ export class DesignSystemService {
     const designSystem = await prisma.designSystem.findFirstOrThrow({
       where: { id: input.id, organizationId: input.organizationId },
     });
-    const updated = await prisma.designSystem.update({
-      where: { id: designSystem.id },
-      data: { status: "archived", archivedAt: new Date() },
-      include: DESIGN_SYSTEM_INCLUDE,
+    const archivedAt = new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      const archived = await tx.designSystem.update({
+        where: { id: designSystem.id },
+        data: { status: "archived", archivedAt },
+        include: DESIGN_SYSTEM_INCLUDE,
+      });
+      await tx.sessionGroup.update({
+        where: { id: designSystem.authoringSessionGroupId },
+        data: { archivedAt },
+      });
+      return archived;
     });
     await eventService.create({
       organizationId: input.organizationId,
@@ -668,9 +676,7 @@ export class DesignSystemService {
       if (packageArchive.byteLength > 25 * 1024 * 1024)
         throw new Error("Compressed design-system package exceeds 25 MiB");
       await putImmutableObject(artifact.storageKey, archive);
-      const preview = validation.valid
-        ? createDesignSystemStaticPreview(workbench.files)
-        : null;
+      const preview = validation.valid ? createDesignSystemStaticPreview(workbench.files) : null;
       const previewKey = preview
         ? designSystemStaticPreviewStorageKey(
             artifact.designSystem.organizationId,
