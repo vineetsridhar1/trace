@@ -12,6 +12,7 @@ const DESIGN_PREVIEW_CSP = [
   "style-src 'unsafe-inline'",
   "img-src data: blob:",
   "font-src data: blob:",
+  "frame-src 'self'",
   "connect-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",

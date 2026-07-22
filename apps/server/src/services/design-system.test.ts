@@ -11,7 +11,9 @@ const { mocks, database } = vi.hoisted(() => {
     systemFindUniqueOrThrow: vi.fn(),
     systemUpdate: vi.fn(),
     artifactFindFirst: vi.fn(),
+    artifactFindMany: vi.fn(),
     artifactFindUnique: vi.fn(),
+    artifactUpdateMany: vi.fn(),
     artifactCreate: vi.fn(),
     versionFindUnique: vi.fn(),
     versionCreate: vi.fn(),
@@ -23,6 +25,7 @@ const { mocks, database } = vi.hoisted(() => {
     storageGet: vi.fn(),
     storagePut: vi.fn(),
     storageDelete: vi.fn(),
+    sessionGroupUpdateMany: vi.fn(),
   };
   const database = {
     $queryRaw: mocks.queryRaw,
@@ -36,9 +39,12 @@ const { mocks, database } = vi.hoisted(() => {
     },
     designSystemCommitArtifact: {
       findFirst: mocks.artifactFindFirst,
+      findMany: mocks.artifactFindMany,
       findUnique: mocks.artifactFindUnique,
+      updateMany: mocks.artifactUpdateMany,
       create: mocks.artifactCreate,
     },
+    sessionGroup: { updateMany: mocks.sessionGroupUpdateMany },
     designSystemVersion: { findUnique: mocks.versionFindUnique, create: mocks.versionCreate },
   };
   return { mocks, database };
@@ -68,6 +74,7 @@ vi.mock("./actor-auth.js", () => ({
 vi.mock("./session.js", () => ({ sessionService: { start: mocks.sessionStart } }));
 
 import { DesignSystemService, shouldAdvanceLatestArtifact } from "./design-system.js";
+import { createDeterministicTarGz } from "../lib/design-system-archive.js";
 
 function system(overrides: Record<string, unknown> = {}) {
   return {
@@ -96,6 +103,10 @@ describe("DesignSystemService", () => {
     mocks.queryRaw.mockResolvedValue([]);
     mocks.eventCreate.mockResolvedValue({ id: "event-1" });
     mocks.systemFindUnique.mockResolvedValue(null);
+    mocks.artifactFindMany.mockResolvedValue([]);
+    mocks.artifactUpdateMany.mockResolvedValue({ count: 0 });
+    mocks.systemFindMany.mockResolvedValue([]);
+    mocks.sessionGroupUpdateMany.mockResolvedValue({ count: 0 });
   });
 
   it("never lets an out-of-order worker regress the latest artifact pointer", () => {
@@ -103,6 +114,61 @@ describe("DesignSystemService", () => {
     expect(shouldAdvanceLatestArtifact(1, 2)).toBe(true);
     expect(shouldAdvanceLatestArtifact(3, 2)).toBe(false);
     expect(shouldAdvanceLatestArtifact(3, 3)).toBe(false);
+  });
+
+  it("backfills an S3 static canvas for an existing saved artifact", async () => {
+    const archive = await createDeterministicTarGz(
+      new Map([
+        ["design-system/manifest.json", Buffer.from('{"name":"Acme UI"}')],
+        [
+          "design-system/preview/foundations.html",
+          Buffer.from("<!doctype html><h1>Foundations</h1>"),
+        ],
+        [
+          "design-system/preview/components.html",
+          Buffer.from("<!doctype html><h1>Components</h1>"),
+        ],
+      ]),
+    );
+    mocks.systemFindMany.mockResolvedValue([
+      {
+        id: "system-1",
+        organizationId: "org-1",
+        authoringSessionGroupId: "group-1",
+        latestCommitArtifact: {
+          id: "artifact-1",
+          commitSha: "commit-1",
+          storageKey: "workbench.tar.gz",
+        },
+      },
+    ]);
+    mocks.storageGet.mockResolvedValue(archive);
+    mocks.sessionGroupUpdateMany.mockResolvedValue({ count: 1 });
+
+    await expect(new DesignSystemService().reconcileCommitArtifacts()).resolves.toBe(1);
+
+    expect(mocks.storagePut).toHaveBeenCalledWith(
+      "design-system-previews/org-1/system-1/commit-1.html",
+      expect.any(Buffer),
+      "text/html; charset=utf-8",
+      { ifAbsent: true },
+    );
+    expect(mocks.sessionGroupUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          designPreviewKey: "design-system-previews/org-1/system-1/commit-1.html",
+          designPreviewStatus: "captured",
+        }),
+      }),
+    );
+    expect(mocks.eventCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_preview_updated",
+        payload: expect.objectContaining({
+          designPreviewUrl: "/design-previews/groups/group-1",
+        }),
+      }),
+    );
   });
 
   it("creates the draft and full event inside the session transaction, then publishes after commit", async () => {

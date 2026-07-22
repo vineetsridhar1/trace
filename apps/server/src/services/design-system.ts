@@ -17,6 +17,10 @@ import {
   sha256,
   validateWorkbenchPackage,
 } from "../lib/design-system-archive.js";
+import {
+  createDesignSystemStaticPreview,
+  designSystemStaticPreviewStorageKey,
+} from "../lib/design-system-static-preview.js";
 import { assertActorOrgAccess, assertActorOrgAdmin } from "./actor-auth.js";
 import { eventService } from "./event.js";
 import { sessionService } from "./session.js";
@@ -94,9 +98,13 @@ function packageArchiveFiles(workbenchFiles: ReadonlyMap<string, Buffer>): Map<s
   return files;
 }
 
-async function putImmutableObject(key: string, body: Buffer): Promise<void> {
+async function putImmutableObject(
+  key: string,
+  body: Buffer,
+  contentType = "application/gzip",
+): Promise<void> {
   try {
-    await storage.putObject(key, body, "application/gzip", { ifAbsent: true });
+    await storage.putObject(key, body, contentType, { ifAbsent: true });
   } catch (uploadError) {
     const existing = await storage.getObject(key).catch(() => null);
     if (!existing) throw uploadError;
@@ -126,7 +134,100 @@ export class DesignSystemService {
         });
       });
     }
-    return pending.length;
+    const missingPreviews = await prisma.designSystem.findMany({
+      where: {
+        latestCommitArtifact: { status: "saved", packageValid: true },
+        authoringSessionGroup: { designPreviewKey: null },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        authoringSessionGroupId: true,
+        latestCommitArtifact: {
+          select: { id: true, commitSha: true, storageKey: true },
+        },
+      },
+      take: 100,
+    });
+    for (const system of missingPreviews) {
+      const artifact = system.latestCommitArtifact;
+      if (!artifact) continue;
+      await this.persistSavedArtifactPreview({
+        organizationId: system.organizationId,
+        designSystemId: system.id,
+        sessionGroupId: system.authoringSessionGroupId,
+        artifactId: artifact.id,
+        commitSha: artifact.commitSha,
+        artifactStorageKey: artifact.storageKey,
+      }).catch((error: unknown) => {
+        console.warn("[design-system] static preview reconciliation failed", {
+          designSystemId: system.id,
+          artifactId: artifact.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+    return pending.length + missingPreviews.length;
+  }
+
+  private async persistSavedArtifactPreview(input: {
+    organizationId: string;
+    designSystemId: string;
+    sessionGroupId: string;
+    artifactId: string;
+    commitSha: string;
+    artifactStorageKey: string;
+  }): Promise<void> {
+    const stored = await storage.getObject(input.artifactStorageKey);
+    const workbench = await parseDesignSystemTarGz(stored);
+    const preview = createDesignSystemStaticPreview(workbench.files);
+    const previewKey = designSystemStaticPreviewStorageKey(
+      input.organizationId,
+      input.designSystemId,
+      input.commitSha,
+    );
+    await putImmutableObject(previewKey, preview, "text/html; charset=utf-8");
+    const updated = await prisma.sessionGroup.updateMany({
+      where: {
+        id: input.sessionGroupId,
+        designPreviewKey: null,
+        authoredDesignSystem: { latestCommitArtifactId: input.artifactId },
+      },
+      data: {
+        designPreviewStatus: "captured",
+        designPreviewKey: previewKey,
+        designPreviewCommitSha: input.commitSha,
+        designPreviewCapturedAt: new Date(),
+      },
+    });
+    if (updated.count > 0) {
+      await this.emitStaticPreviewUpdate(
+        input.organizationId,
+        input.sessionGroupId,
+        input.commitSha,
+      );
+    }
+  }
+
+  private async emitStaticPreviewUpdate(
+    organizationId: string,
+    sessionGroupId: string,
+    commitSha: string,
+  ): Promise<void> {
+    await eventService.create({
+      organizationId,
+      scopeType: "system",
+      scopeId: sessionGroupId,
+      eventType: "design_preview_updated",
+      payload: {
+        sessionGroupId,
+        designPreviewStatus: "captured",
+        designPreviewCommitSha: commitSha,
+        designPreviewUrl: `/design-previews/groups/${encodeURIComponent(sessionGroupId)}`,
+      },
+      actorType: "system",
+      actorId: "system",
+    });
   }
 
   async list(input: {
@@ -479,6 +580,19 @@ export class DesignSystemService {
       if (packageArchive.byteLength > 25 * 1024 * 1024)
         throw new Error("Compressed design-system package exceeds 25 MiB");
       await putImmutableObject(artifact.storageKey, archive);
+      const preview = validation.valid
+        ? createDesignSystemStaticPreview(workbench.files)
+        : null;
+      const previewKey = preview
+        ? designSystemStaticPreviewStorageKey(
+            artifact.designSystem.organizationId,
+            artifact.designSystemId,
+            artifact.commitSha,
+          )
+        : null;
+      if (preview && previewKey) {
+        await putImmutableObject(previewKey, preview, "text/html; charset=utf-8");
+      }
       const saved = await prisma.$transaction(async (tx) => {
         const row = await tx.designSystemCommitArtifact.update({
           where: { id: artifact.id },
@@ -501,18 +615,29 @@ export class DesignSystemService {
           current.latestCommitArtifact?.sequence ?? null,
           artifact.sequence,
         );
-        return tx.designSystem
-          .update({
-            where: { id: current.id },
+        const designSystem = await tx.designSystem.update({
+          where: { id: current.id },
+          data: {
+            ...(pointerIsNewer ? { latestCommitArtifactId: artifact.id } : {}),
+            ...(current.latestPushedCommitSha === artifact.commitSha
+              ? { commitArtifactStatus: "saved", commitArtifactError: null }
+              : {}),
+          },
+          include: DESIGN_SYSTEM_INCLUDE,
+        });
+        const previewPublished = pointerIsNewer && previewKey !== null;
+        if (previewPublished) {
+          await tx.sessionGroup.update({
+            where: { id: group.id },
             data: {
-              ...(pointerIsNewer ? { latestCommitArtifactId: artifact.id } : {}),
-              ...(current.latestPushedCommitSha === artifact.commitSha
-                ? { commitArtifactStatus: "saved", commitArtifactError: null }
-                : {}),
+              designPreviewStatus: "captured",
+              designPreviewKey: previewKey,
+              designPreviewCommitSha: artifact.commitSha,
+              designPreviewCapturedAt: new Date(),
             },
-            include: DESIGN_SYSTEM_INCLUDE,
-          })
-          .then((designSystem) => ({ row, designSystem }));
+          });
+        }
+        return { row, designSystem, previewPublished };
       });
       await eventService.create({
         organizationId: artifact.designSystem.organizationId,
@@ -526,6 +651,13 @@ export class DesignSystemService {
         actorType: "system",
         actorId: "system",
       });
+      if (saved.previewPublished) {
+        await this.emitStaticPreviewUpdate(
+          artifact.designSystem.organizationId,
+          group.id,
+          artifact.commitSha,
+        );
+      }
       console.info("[design-system] commit artifact saved", {
         organizationId: artifact.designSystem.organizationId,
         designSystemId: artifact.designSystemId,

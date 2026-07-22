@@ -462,7 +462,8 @@ export function SessionGroupDetailView({
   );
   const generatedProjectCanvasReady =
     liveGeneratedProjectCanvasReady ||
-    (groupKind === "design" && hasSavedDesignPreview(groupDesignPreviewUrl, groupGitCheckpoints));
+    ((groupKind === "design" || groupKind === "design_system") &&
+      hasSavedDesignPreview(groupDesignPreviewUrl, groupGitCheckpoints));
   const appCanvasReady = isAppCanvasReady(
     selectedSession?.agentStatus,
     selectedConnection?.state,
