@@ -7,8 +7,8 @@ import {
   Trash2,
   type LucideIcon,
 } from "lucide-react";
-import { useEntityStore, type SessionGroupEntity } from "@trace/client-core";
-import { useState } from "react";
+import { useAuthStore, useEntityStore, type SessionGroupEntity } from "@trace/client-core";
+import { useEffect, useState } from "react";
 import { gql } from "@urql/core";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
@@ -33,6 +33,17 @@ const ARCHIVE_DESIGN_SYSTEM = gql`
     }
   }
 `;
+const DESIGN_SYSTEMS_QUERY = gql`
+  query GalleryDesignSystems($organizationId: ID!) {
+    designSystems(organizationId: $organizationId) {
+      id
+      authoringSessionGroupId
+      archivedAt
+      name
+      status
+    }
+  }
+`;
 
 const projectKindDetails = {
   app: { label: "App", Icon: Rocket },
@@ -42,7 +53,22 @@ const projectKindDetails = {
 } as const;
 
 export function GeneratedProjectsGallery() {
+  const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const groups = useEntityStore((state) => state.sessionGroups);
+  const upsertMany = useEntityStore((state) => state.upsertMany);
+  useEffect(() => {
+    if (!activeOrgId) return;
+    void client
+      .query(
+        DESIGN_SYSTEMS_QUERY,
+        { organizationId: activeOrgId },
+        { requestPolicy: "network-only" },
+      )
+      .toPromise()
+      .then((result) => {
+        if (!result.error) upsertMany("designSystems", result.data?.designSystems ?? []);
+      });
+  }, [activeOrgId, upsertMany]);
   const visibleGroups = Object.values(groups)
     .filter(
       (group) =>
