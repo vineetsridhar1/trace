@@ -72,6 +72,15 @@ export function useDesignManualEdit({
     [frameOrigin],
   );
 
+  const establishHandshake = useCallback(() => {
+    postToFrame({ type: "trace:design:handshake" });
+  }, [postToFrame]);
+
+  const enableEditMode = useCallback(() => {
+    establishHandshake();
+    postToFrame({ type: "trace:design:edit-mode", enabled: true });
+  }, [establishHandshake, postToFrame]);
+
   useEffect(() => {
     if (!sessionGroupId) return;
     return registerDesignEditorFrame(sessionGroupId, postToFrame);
@@ -95,6 +104,7 @@ export function useDesignManualEdit({
       }
       if (message.event === "ready") {
         setFrameReady(true);
+        establishHandshake();
         postToFrame({ type: "trace:design:edit-mode", enabled });
         const target = useDesignEditorStore.getState().target;
         if (enabled && target) {
@@ -126,12 +136,19 @@ export function useDesignManualEdit({
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [enabled, frameOrigin, postToFrame, selectElement, sessionGroupId]);
+  }, [enabled, establishHandshake, frameOrigin, postToFrame, selectElement, sessionGroupId]);
 
   useEffect(() => {
     if (!sessionGroupId) return;
-    postToFrame({ type: "trace:design:edit-mode", enabled });
-  }, [enabled, postToFrame, sessionGroupId]);
+    if (enabled) enableEditMode();
+    else postToFrame({ type: "trace:design:edit-mode", enabled: false });
+  }, [enabled, enableEditMode, postToFrame, sessionGroupId]);
+
+  useEffect(() => {
+    if (!enabled || frameReady) return;
+    const retry = window.setInterval(enableEditMode, 500);
+    return () => window.clearInterval(retry);
+  }, [enabled, enableEditMode, frameReady]);
 
   useEffect(() => {
     return () => {
@@ -150,8 +167,9 @@ export function useDesignManualEdit({
   }, [enabled, sessionGroupId, start, stop]);
 
   const onFrameLoad = useCallback(() => {
+    establishHandshake();
     postToFrame({ type: "trace:design:edit-mode", enabled });
-  }, [enabled, postToFrame]);
+  }, [enabled, establishHandshake, postToFrame]);
 
   return { frameRef, frameReady, enabled, toggle, onFrameLoad };
 }

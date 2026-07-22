@@ -27,8 +27,10 @@ import {
   webSocketProtocols,
 } from "./endpoint-utils.js";
 
-// The Trace app is the only legitimate embedder of a private preview iframe, so
-// the injected overlay posts there rather than to any parent ("*").
+// The configured Trace origin is a useful initial target for the injected
+// overlay. Preview-auth redirects can make `document.referrer` unreliable,
+// though, so the overlay replaces it with the origin of its explicit parent
+// handshake before accepting editor commands.
 const TRACE_APP_ORIGIN = (() => {
   try {
     return process.env.TRACE_WEB_URL ? new URL(process.env.TRACE_WEB_URL).origin : "*";
@@ -140,7 +142,7 @@ var hoverEl=null;
 var screenSources={};
 var annotationFrame=null;
 var discoverySelector='main,nav,section,article,aside,header,footer,div,h1,h2,h3,h4,h5,h6,p,a,button,img,ul,ol,li,table,thead,tbody,tfoot,tr,td,th,blockquote,figure,figcaption,label,pre,code,strong,em,small,span,input,textarea';
-function post(event,payload){if(TRACE_ORIGIN!=="*"&&window.parent&&window.parent!==window)window.parent.postMessage({type:"trace:app:overlay",event:event,...payload},TRACE_ORIGIN)}
+function post(event,payload,targetOrigin){if(window.parent&&window.parent!==window)window.parent.postMessage({type:"trace:app:overlay",event:event,...payload},targetOrigin||TRACE_ORIGIN||"*")}
 function closestSourceTarget(value){return value&&value.closest&&value.closest("[data-trace-source]")}
 function closestEditTarget(value){return value&&value.closest&&value.closest("[data-trace-id][data-trace-source]")}
 function stableHash(value){
@@ -266,7 +268,9 @@ document.addEventListener("click",function(e){
   post("element-selected",{sourceLocation:el.getAttribute("data-trace-source"),text:(el.textContent||"").trim().slice(0,500)});
 },true);
 window.addEventListener("message",function(e){
-  if(e.source!==window.parent||TRACE_ORIGIN==="*"||e.origin!==TRACE_ORIGIN||!e.data)return;
+  if(e.source!==window.parent||!e.data)return;
+  if(e.data.type==="trace:design:handshake"){TRACE_ORIGIN=e.origin;post("ready",{},e.origin);return}
+  if(TRACE_ORIGIN==="*"||e.origin!==TRACE_ORIGIN)return;
   if(e.data.type==="trace:design:edit-mode"){setEditMode(e.data.enabled);post("edit-mode-ready",{});return}
   if(e.data.type==="trace:design:select-element"&&typeof e.data.elementId==="string"){
     selectedId=e.data.elementId;restoreSelection();return;

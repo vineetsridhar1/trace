@@ -14,6 +14,8 @@ describe("endpoint authoring overlay", () => {
     expect(html).toContain("data-trace-auto-target");
     expect(html).toContain("data-trace-id','auto-");
     expect(html).toContain("if(document.referrer)TRACE_ORIGIN=new URL(document.referrer).origin");
+    expect(html).toContain('e.data.type==="trace:design:handshake"');
+    expect(html).toContain('post("ready",{},e.origin)');
     expect(html).toContain('post("edit-mode-ready",{})');
     expect(result.headers).not.toHaveProperty("content-length");
   });
