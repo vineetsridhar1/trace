@@ -50,6 +50,7 @@ export function ToolModelPicker({
   const [pickerTool, setPickerTool] = useState<ToolOptionValue>(normalizeTool(tool));
   const [pickerProvider, setPickerProvider] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [pendingModel, setPendingModel] = useState<string | null>(null);
   const compactSelectionRef = useRef(false);
 
   const activeModel =
@@ -66,6 +67,7 @@ export function ToolModelPicker({
     if (nextOpen) {
       const nextTool = normalizeTool(tool);
       setLayer("tools");
+      setPendingModel(null);
       setPickerTool(nextTool);
       setPickerProvider(getModelProviderForModel(nextTool, model)?.value ?? null);
     }
@@ -96,11 +98,7 @@ export function ToolModelPicker({
     } else if (getModelsForTool(nextTool).length > 0) {
       setLayer("models");
     } else {
-      if (compactSelectionRef.current && reasoningEffortOptions.length > 0) {
-        setLayer("thinking");
-      } else {
-        setOpen(false);
-      }
+      setOpen(false);
     }
   }
 
@@ -114,6 +112,12 @@ export function ToolModelPicker({
   }
 
   async function handleModelSelect(nextModel: string) {
+    if (compactSelectionRef.current && reasoningEffortOptions.length > 0) {
+      setPendingModel(nextModel);
+      setLayer("thinking");
+      return;
+    }
+
     setPending(true);
     try {
       if (nextModel !== model) {
@@ -126,11 +130,22 @@ export function ToolModelPicker({
   }
 
   async function handleReasoningEffortSelect(nextEffort: string) {
-    if (!onReasoningEffortChange || nextEffort === reasoningEffort) return;
+    if (
+      (!onReasoningEffortChange || nextEffort === reasoningEffort) &&
+      (!pendingModel || pendingModel === model)
+    ) {
+      return;
+    }
     setPending(true);
     try {
-      await onReasoningEffortChange(nextEffort);
+      if (pendingModel && pendingModel !== model) {
+        await onModelChange(pendingModel);
+      }
+      if (onReasoningEffortChange && nextEffort !== reasoningEffort) {
+        await onReasoningEffortChange(nextEffort);
+      }
       setOpen(false);
+      setPendingModel(null);
     } finally {
       setPending(false);
     }
@@ -208,7 +223,10 @@ export function ToolModelPicker({
               effort={reasoningEffort ?? reasoningEffortOptions[0]?.value ?? ""}
               options={reasoningEffortOptions}
               pending={pending}
-              onBack={() => setLayer("models")}
+              onBack={() => {
+                setPendingModel(null);
+                setLayer("models");
+              }}
               onSelect={handleReasoningEffortSelect}
             />
           )}
