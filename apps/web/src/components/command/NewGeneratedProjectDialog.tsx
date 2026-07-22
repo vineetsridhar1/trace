@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AppWindow, ArrowLeft, NotebookText, Palette } from "lucide-react";
+import { AppWindow, NotebookText, Palette } from "lucide-react";
 import { gql } from "@urql/core";
 import type { AgentEnvironment, Repo } from "@trace/gql";
 import { useAuthStore, useEntityStore } from "@trace/client-core";
@@ -24,7 +24,6 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 
 type GeneratedProjectKind = "app" | "design" | "pdf";
-type View = "choose" | "create-system";
 const DESIGN_SYSTEMS_QUERY = gql`
   query DesignCreationOptions($organizationId: ID!) {
     repos(organizationId: $organizationId) {
@@ -93,9 +92,6 @@ export function NewGeneratedProjectDialog() {
   const upsertMany = useEntityStore((state) => state.upsertMany);
   const sessionGroups = useEntityStore((state) => state.sessionGroups);
   const sessions = useEntityStore((state) => state.sessions);
-  const [view, setView] = useState<View>(() =>
-    kind === "design-system" ? "create-system" : "choose",
-  );
   const repos = useEntityStore(
     useShallow((state) => Object.values(state.repos).filter((repo) => repo.provider !== "managed")),
   );
@@ -126,12 +122,10 @@ export function NewGeneratedProjectDialog() {
 
   useEffect(() => {
     if (kind === "app" || kind === "design" || kind === "pdf") createImmediate(kind);
-    if (kind === "design-system") setView("create-system");
-    if (kind === "choose" || kind === null) setView("choose");
   }, [createImmediate, kind]);
 
   useEffect(() => {
-    if (!activeOrgId || view !== "create-system") return;
+    if (!activeOrgId || kind !== "design-system") return;
     let active = true;
     void client
       .query(
@@ -162,7 +156,7 @@ export function NewGeneratedProjectDialog() {
     return () => {
       active = false;
     };
-  }, [activeOrgId, environmentId, repoId, upsertMany, view]);
+  }, [activeOrgId, environmentId, kind, repoId, upsertMany]);
 
   useEffect(() => {
     if (!pendingAuthoringGroupId) return;
@@ -202,17 +196,12 @@ export function NewGeneratedProjectDialog() {
   };
 
   return (
-    <ResponsiveDialog
-      open={kind === "choose" || kind === "design-system"}
-      onOpenChange={(open) => !open && close()}
-    >
-      <ResponsiveDialogContent>
-        <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>
-            {view === "choose" ? "Create New" : "Create Design System"}
-          </ResponsiveDialogTitle>
-        </ResponsiveDialogHeader>
-        {view === "choose" && (
+    <>
+      <ResponsiveDialog open={kind === "choose"} onOpenChange={(open) => !open && close()}>
+        <ResponsiveDialogContent>
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Create New</ResponsiveDialogTitle>
+          </ResponsiveDialogHeader>
           <div className="flex flex-col gap-2 py-4">
             {OPTIONS.map(({ kind: optionKind, title, description, Icon }) => (
               <button
@@ -229,8 +218,13 @@ export function NewGeneratedProjectDialog() {
               </button>
             ))}
           </div>
-        )}
-        {view === "create-system" && (
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
+      <ResponsiveDialog open={kind === "design-system"} onOpenChange={(open) => !open && close()}>
+        <ResponsiveDialogContent>
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Create Design System</ResponsiveDialogTitle>
+          </ResponsiveDialogHeader>
           <div className="space-y-3 py-4">
             <label className="grid gap-1 text-sm">
               Name
@@ -281,15 +275,7 @@ export function NewGeneratedProjectDialog() {
                 Configure an enabled cloud authoring environment first.
               </p>
             ) : null}
-            <div className="flex justify-between">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setView("choose");
-                }}
-              >
-                <ArrowLeft /> Back
-              </Button>
+            <div className="flex justify-end">
               <Button
                 disabled={submitting || !name.trim() || !repoId || !environmentId}
                 onClick={() => void submitSystem()}
@@ -298,8 +284,8 @@ export function NewGeneratedProjectDialog() {
               </Button>
             </div>
           </div>
-        )}
-      </ResponsiveDialogContent>
-    </ResponsiveDialog>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
+    </>
   );
 }
