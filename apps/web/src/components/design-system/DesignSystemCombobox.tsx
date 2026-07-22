@@ -19,20 +19,16 @@ export function unavailableDesignSystems(systems: DesignSystem[]): DesignSystem[
   return systems.filter((system) => !system.archivedAt && !isSelectableDesignSystem(system));
 }
 
-function hasInvalidLatestArtifact(system: DesignSystem): boolean {
-  return (
-    system.latestCommitArtifact?.status === "saved" &&
-    system.latestCommitArtifact.packageValid === false
-  );
-}
-
 export function designSystemAvailabilityLabel(system: DesignSystem): string {
   if (system.publishStatus === "publishing") return "Publishing…";
   if (system.commitArtifactStatus === "pending" || system.commitArtifactStatus === "saving") {
     return "Saving first version…";
   }
   if (system.commitArtifactStatus === "failed") return "Cloud save failed";
-  if (hasInvalidLatestArtifact(system)) {
+  if (
+    system.latestCommitArtifact?.status === "saved" &&
+    !system.latestCommitArtifact.packageValid
+  ) {
     return "Needs repair";
   }
   if (system.publishStatus === "failed") return "Version failed";
@@ -49,8 +45,7 @@ export function designSystemValidationErrors(system: DesignSystem): string[] {
 }
 
 function optionLabel(system: DesignSystem): string {
-  const version = `${system.name} · v${system.activeVersion?.version ?? "–"}`;
-  return hasInvalidLatestArtifact(system) ? `${version} · Needs repair` : version;
+  return `${system.name} · v${system.activeVersion?.version ?? "–"}`;
 }
 
 export function DesignSystemCombobox({
@@ -67,22 +62,7 @@ export function DesignSystemCombobox({
   const [open, setOpen] = useState(false);
   const selectable = selectableDesignSystems(systems);
   const selectedSystem = selectable.find((system) => system.activeVersionId === value);
-  const selectedStatus = selectedSystem
-    ? hasInvalidLatestArtifact(selectedSystem)
-      ? "Needs repair"
-      : selectedSystem.commitArtifactStatus === "failed"
-        ? "Cloud save failed"
-        : null
-    : null;
-  const label =
-    value === TRACE_DEFAULT_DESIGN_SYSTEM
-      ? "Trace Default"
-      : selectedSystem
-        ? `${selectedSystem.name}${selectedStatus ? ` · ${selectedStatus}` : ""}`
-        : undefined;
-  const validationMessage = selectedSystem
-    ? designSystemValidationErrors(selectedSystem).join("\n")
-    : undefined;
+  const label = value === TRACE_DEFAULT_DESIGN_SYSTEM ? "Trace Default" : selectedSystem?.name;
 
   function select(nextValue: string) {
     setOpen(false);
@@ -94,7 +74,6 @@ export function DesignSystemCombobox({
       <PopoverTrigger
         disabled={disabled}
         aria-label="Design library"
-        title={validationMessage || undefined}
         className="flex h-7 w-auto max-w-[260px] cursor-pointer items-center gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <Palette className="size-3.5 shrink-0" />
