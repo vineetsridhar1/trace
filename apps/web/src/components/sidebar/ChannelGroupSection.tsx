@@ -93,7 +93,7 @@ export function ChannelGroupSection({
   const sortableIds = groupSortableIds(channelIds);
 
   return (
-    <div ref={setSortableRef} style={style} className="rounded-md transition-colors">
+    <div ref={setSortableRef} style={style} className="ml-3 rounded-md transition-colors">
       <div
         className={cn(
           "flex items-center justify-between rounded-md pr-1 transition-colors hover:bg-white/10 group/group-header",
