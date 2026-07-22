@@ -28,18 +28,18 @@ export function SavedPreviewSkeleton({
           {[0, 1].map((page) => (
             <div
               key={page}
-              className="aspect-[8.5/11] w-full shrink-0 rounded-sm bg-white p-[9%] shadow-2xl"
+              className="aspect-[8.5/11] w-full shrink-0 rounded-md border border-border bg-background/85 p-[9%] shadow-2xl"
             >
-              <Skeleton className="h-3 w-20 bg-slate-200" />
-              <Skeleton className="mt-8 h-6 w-3/4 bg-slate-200" />
-              <Skeleton className="mt-3 h-3 w-full bg-slate-200" />
-              <Skeleton className="mt-2 h-3 w-5/6 bg-slate-200" />
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="mt-8 h-6 w-3/4" />
+              <Skeleton className="mt-3 h-3 w-full" />
+              <Skeleton className="mt-2 h-3 w-5/6" />
               <div className="mt-8 grid grid-cols-2 gap-3">
-                <Skeleton className="h-24 bg-slate-200" />
-                <Skeleton className="h-24 bg-slate-200" />
+                <Skeleton className="h-24" />
+                <Skeleton className="h-24" />
               </div>
-              <Skeleton className="mt-8 h-3 w-full bg-slate-200" />
-              <Skeleton className="mt-2 h-3 w-4/5 bg-slate-200" />
+              <Skeleton className="mt-8 h-3 w-full" />
+              <Skeleton className="mt-2 h-3 w-4/5" />
             </div>
           ))}
         </div>
@@ -69,7 +69,7 @@ export function SavedPreviewSkeleton({
           </div>
         </div>
       )}
-      <div className="absolute inset-0 flex items-center justify-center bg-background/45 backdrop-blur-[2px]">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-background/95 px-5 py-4 text-center shadow-lg">
           <TraceLoader size={18} showLabel={false} />
           <p className="text-sm font-medium text-foreground">
