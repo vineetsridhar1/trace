@@ -1,4 +1,5 @@
 import { gql } from "@urql/core";
+import type { DesignElementStylesInput } from "@trace/gql";
 import { create } from "zustand";
 import { toast } from "sonner";
 import { client } from "../lib/urql";
@@ -96,89 +97,7 @@ const SAVE_MANUAL_ELEMENT_EDITS_MUTATION = gql`
 `;
 
 export type DesignEditorStyles = {
-  color: string;
-  backgroundColor: string;
-  fontFamily: string;
-  fontSize: number;
-  fontWeight: number;
-  fontStyle: "normal" | "italic";
-  textDecoration: "none" | "underline" | "line-through";
-  textAlign: "left" | "center" | "right" | "justify";
-  lineHeight: number;
-  letterSpacing: number;
-  textTransform: "none" | "uppercase" | "lowercase" | "capitalize";
-  width: string;
-  height: string;
-  minWidth: string;
-  maxWidth: string;
-  minHeight: string;
-  maxHeight: string;
-  flexGrow: number;
-  alignSelf: "auto" | "flex-start" | "center" | "flex-end" | "stretch" | "baseline";
-  position: "static" | "relative" | "absolute" | "fixed" | "sticky";
-  top: string;
-  right: string;
-  bottom: string;
-  left: string;
-  zIndex: string;
-  display:
-    | "block"
-    | "inline"
-    | "inline-block"
-    | "flex"
-    | "inline-flex"
-    | "grid"
-    | "inline-grid"
-    | "none";
-  flexDirection: "row" | "row-reverse" | "column" | "column-reverse";
-  justifyContent:
-    | "normal"
-    | "flex-start"
-    | "center"
-    | "flex-end"
-    | "space-between"
-    | "space-around"
-    | "space-evenly";
-  alignItems: "normal" | "flex-start" | "center" | "flex-end" | "stretch" | "baseline";
-  gap: number;
-  borderRadius: number;
-  paddingX: number;
-  paddingY: number;
-  paddingTop: number;
-  paddingRight: number;
-  paddingBottom: number;
-  paddingLeft: number;
-  marginTop: number;
-  marginRight: number;
-  marginBottom: number;
-  marginLeft: number;
-  opacity: number;
-  overflow: "visible" | "hidden" | "clip" | "scroll" | "auto";
-  objectFit: "fill" | "contain" | "cover" | "none" | "scale-down";
-  borderColor: string;
-  borderWidth: number;
-  borderStyle: "none" | "solid" | "dashed" | "dotted" | "double";
-  cursor:
-    | "auto"
-    | "default"
-    | "pointer"
-    | "grab"
-    | "grabbing"
-    | "text"
-    | "move"
-    | "not-allowed"
-    | "crosshair"
-    | "zoom-in"
-    | "zoom-out";
-  pointerEvents: "auto" | "none";
-  whiteSpace: "normal" | "nowrap" | "pre" | "pre-wrap" | "pre-line" | "break-spaces";
-  textOverflow: "clip" | "ellipsis";
-  boxSizing: "content-box" | "border-box";
-  aspectRatio: string;
-  boxShadow: string;
-  textShadow: string;
-  transform: string;
-  filter: string;
+  [Key in keyof DesignElementStylesInput]-?: NonNullable<DesignElementStylesInput[Key]>;
 };
 
 const DESIGN_EDITOR_STYLE_KEYS = [
@@ -641,6 +560,23 @@ export function reconcileManualElementSaved(payload: unknown): void {
   const drafts = { ...state.drafts };
   if (savedDraft) delete drafts[key];
   if (!savedDraft && !state.pendingSaveKeys.includes(key)) return;
+  if (pendingSaveKeys.length === 0 && state.finishRequested) {
+    selectionRequest += 1;
+    post(event.sessionGroupId, { type: "trace:design:edit-mode", enabled: false });
+    useDesignEditorStore.setState({
+      activeSessionGroupId: null,
+      target: null,
+      domTree: [],
+      drafts: {},
+      pendingSaveKeys: [],
+      finishRequested: false,
+      loading: false,
+      saving: false,
+      error: null,
+    });
+    toast.success("Edits saved and committed");
+    return;
+  }
   useDesignEditorStore.setState({
     saving: pendingSaveKeys.length > 0,
     error: null,
@@ -657,6 +593,7 @@ type DesignEditorState = {
   domTree: DesignEditorDomNode[];
   drafts: Record<string, DesignEditorTarget>;
   pendingSaveKeys: string[];
+  finishRequested: boolean;
   loading: boolean;
   saving: boolean;
   error: string | null;
@@ -673,7 +610,7 @@ type DesignEditorState = {
   activateElement: (elementId: string) => void;
   hoverElement: (elementId: string | null) => void;
   setDomTree: (sessionGroupId: string, tree: DesignEditorDomNode[]) => void;
-  save: () => Promise<boolean>;
+  save: () => Promise<void>;
   finish: (sessionGroupId: string) => Promise<void>;
 };
 
@@ -683,6 +620,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
   domTree: [],
   drafts: {},
   pendingSaveKeys: [],
+  finishRequested: false,
   loading: false,
   saving: false,
   error: null,
@@ -700,6 +638,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
       domTree: [],
       drafts: {},
       pendingSaveKeys: [],
+      finishRequested: false,
       error: null,
     });
     post(sessionGroupId, { type: "trace:design:edit-mode", enabled: true });
@@ -717,6 +656,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
       domTree: [],
       drafts: {},
       pendingSaveKeys: [],
+      finishRequested: false,
       loading: false,
       saving: false,
       error: null,
@@ -876,8 +816,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     const targets = Object.values(state.drafts).filter(
       (target) => designEditorTextDirty(target) || designEditorStylesDirty(target),
     );
-    if (!sessionGroupId || state.saving) return false;
-    if (targets.length === 0) return true;
+    if (!sessionGroupId || state.saving || targets.length === 0) return;
     const pendingSaveKeys = targets.map(targetKey);
     set({ saving: true, pendingSaveKeys, error: null });
     try {
@@ -900,23 +839,28 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
         })
         .toPromise();
       if (result.error) throw new Error(result.error.message);
-      return true;
     } catch (cause) {
-      if (get().activeSessionGroupId !== sessionGroupId) return false;
+      if (get().activeSessionGroupId !== sessionGroupId) return;
       set({
         saving: false,
         pendingSaveKeys: [],
+        finishRequested: false,
         error: cause instanceof Error ? cause.message : "Failed to save this design element.",
       });
-      return false;
     }
   },
 
   finish: async (sessionGroupId) => {
     const state = get();
     if (state.activeSessionGroupId !== sessionGroupId || state.saving) return;
-    const saved = await state.save();
-    if (!saved || get().activeSessionGroupId !== sessionGroupId) return;
+    const targets = Object.values(state.drafts).filter(
+      (target) => designEditorTextDirty(target) || designEditorStylesDirty(target),
+    );
+    if (targets.length > 0) {
+      set({ finishRequested: true });
+      await get().save();
+      return;
+    }
     selectionRequest += 1;
     post(sessionGroupId, { type: "trace:design:edit-mode", enabled: false });
     set({
@@ -925,6 +869,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
       domTree: [],
       drafts: {},
       pendingSaveKeys: [],
+      finishRequested: false,
       loading: false,
       saving: false,
       error: null,

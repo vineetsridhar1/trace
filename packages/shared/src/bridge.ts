@@ -161,6 +161,11 @@ export interface BridgeWriteFileCommand {
   workdirHint?: string;
 }
 
+export interface BridgeGuardedWriteFileCommand extends Omit<BridgeWriteFileCommand, "type"> {
+  type: "write_file_guarded";
+  expectedContent: string;
+}
+
 export interface BridgeCommitFileChangesCommand {
   type: "commit_file_changes";
   requestId: string;
@@ -168,6 +173,14 @@ export interface BridgeCommitFileChangesCommand {
   message?: string | null;
   /** Fallback workdir from DB, used when bridge has no entry in sessionWorkdirs */
   workdirHint?: string;
+}
+
+export interface BridgeCommitScopedFileChangesCommand extends Omit<
+  BridgeCommitFileChangesCommand,
+  "type"
+> {
+  type: "commit_scoped_file_changes";
+  paths: string[];
 }
 
 export interface BridgeWorktreeChangesCommand {
@@ -418,7 +431,9 @@ export type BridgeCommand =
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeWriteFileCommand
+  | BridgeGuardedWriteFileCommand
   | BridgeCommitFileChangesCommand
+  | BridgeCommitScopedFileChangesCommand
   | BridgeWorktreeChangesCommand
   | BridgeRevertWorktreeFileCommand
   | BridgeBranchDiffCommand
@@ -1205,7 +1220,7 @@ export function handleReadFile(
  * Handle a `write_file` bridge command. Writes only existing text files inside the workdir.
  */
 export function handleWriteFile(
-  cmd: BridgeWriteFileCommand,
+  cmd: BridgeWriteFileCommand | BridgeGuardedWriteFileCommand,
   sessionWorkdirs: Map<string, string>,
   send: (msg: BridgeMessage) => void,
   deps: { fs: BridgeFsLike; path: BridgePathLike },
@@ -1251,6 +1266,23 @@ export function handleWriteFile(
         return;
       }
 
+      if (cmd.type === "write_file_guarded") {
+        const current = await new Promise<string>((resolve, reject) => {
+          deps.fs.readFile(realPath, (error, data) => {
+            if (error) reject(error);
+            else resolve(data.toString("utf8"));
+          });
+        });
+        if (current !== cmd.expectedContent) {
+          send({
+            type: "file_write_result",
+            requestId,
+            error: "File changed before the edit could be saved",
+          });
+          return;
+        }
+      }
+
       await deps.fs.promises.writeFile(realPath, content);
       send({ type: "file_write_result", requestId });
     } catch (err) {
@@ -1267,7 +1299,7 @@ export function handleWriteFile(
  * Handle a `commit_file_changes` bridge command. Commits current worktree changes in the session.
  */
 export async function handleCommitFileChanges(
-  cmd: BridgeCommitFileChangesCommand,
+  cmd: BridgeCommitFileChangesCommand | BridgeCommitScopedFileChangesCommand,
   sessionWorkdirs: Map<string, string>,
   send: (msg: BridgeMessage) => void,
   deps: { fs: BridgeFsLike; path: BridgePathLike; gitExec: GitExecFn },
@@ -1285,7 +1317,9 @@ export async function handleCommitFileChanges(
 
   try {
     const realWorkdir = await deps.fs.promises.realpath(deps.path.resolve(workdir));
-    const status = await deps.gitExec(["status", "--porcelain=v1", "-z"], realWorkdir);
+    const paths = cmd.type === "commit_scoped_file_changes" ? cmd.paths.filter(Boolean) : undefined;
+    const pathArgs = paths?.length ? ["--", ...paths] : [];
+    const status = await deps.gitExec(["status", "--porcelain=v1", "-z", ...pathArgs], realWorkdir);
     const changes = parseWorktreeStatus(status);
     if (changes.length === 0) {
       send({ type: "file_commit_result", requestId, error: "No changes to commit" });
@@ -1293,8 +1327,12 @@ export async function handleCommitFileChanges(
     }
 
     const commitMessage = message?.trim() || "Update files from Trace";
-    await deps.gitExec(["add", "-A"], realWorkdir);
-    await deps.gitExec(["commit", "-m", commitMessage], realWorkdir);
+    if (paths?.length) {
+      await deps.gitExec(["commit", "-m", commitMessage, "--only", "--", ...paths], realWorkdir);
+    } else {
+      await deps.gitExec(["add", "-A"], realWorkdir);
+      await deps.gitExec(["commit", "-m", commitMessage], realWorkdir);
+    }
     const commitSha = (await deps.gitExec(["rev-parse", "HEAD"], realWorkdir)).trim();
     send({ type: "file_commit_result", requestId, commitSha });
   } catch (err) {

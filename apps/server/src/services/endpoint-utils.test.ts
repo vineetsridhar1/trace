@@ -9,6 +9,7 @@ import {
   isAttachmentResponse,
   generateEndpointKey,
   isAllowedPreviewRequestOrigin,
+  traceAppOriginFromUrl,
   sanitizeHeaders,
   webSocketProtocols,
 } from "./endpoint-utils.js";
@@ -100,6 +101,10 @@ describe("endpoint utils", () => {
     // A different endpoint or an attacker origin is rejected.
     expect(isAllowedPreviewRequestOrigin("http://other.preview.localhost", "abc123")).toBe(false);
     expect(isAllowedPreviewRequestOrigin("https://evil.test", "abc123")).toBe(false);
+    expect(traceAppOriginFromUrl("https://app.trace.test/sessions/1")).toBe(
+      "https://app.trace.test",
+    );
+    expect(traceAppOriginFromUrl("https://evil.test/embed")).toBeNull();
   });
 
   it("generates DNS-safe random keys", () => {

@@ -76,11 +76,27 @@ function traceAppOrigins(): Set<string> {
   const origins = new Set<string>();
   const add = (raw: string | undefined) => {
     const trimmed = raw?.trim();
-    if (trimmed) origins.add(trimmed);
+    if (!trimmed) return;
+    try {
+      origins.add(new URL(trimmed).origin);
+    } catch {
+      // Invalid configured origins are ignored by the request allowlist.
+    }
   };
   add(process.env.TRACE_WEB_URL);
   for (const value of (process.env.CORS_ALLOWED_ORIGINS ?? "").split(",")) add(value);
   return origins;
+}
+
+export function traceAppOriginFromUrl(value: string | string[] | undefined): string | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) return null;
+  try {
+    const origin = new URL(raw).origin;
+    return traceAppOrigins().has(origin) ? origin : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

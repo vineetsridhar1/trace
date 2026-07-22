@@ -12,7 +12,7 @@ import { DesignEditorStyleControls } from "./DesignEditorStyleControls";
 import { DesignEditorDomTree } from "./DesignEditorDomTree";
 import { DesignEditorPropertySection } from "./DesignEditorPropertySection";
 
-export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: string }) {
+export function DesignManualEditPanel() {
   const {
     target,
     domTree,
@@ -20,13 +20,11 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
     loading,
     saving,
     error,
-    stop,
     changeText,
     changeStyle,
     resetChanges,
     activateElement,
     hoverElement,
-    finish,
   } = useDesignEditorStore(
     useShallow((state) => ({
       target: state.target,
@@ -35,13 +33,11 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
       loading: state.loading,
       saving: state.saving,
       error: state.error,
-      stop: state.stop,
       changeText: state.changeText,
       changeStyle: state.changeStyle,
       resetChanges: state.resetChanges,
       activateElement: state.activateElement,
       hoverElement: state.hoverElement,
-      finish: state.finish,
     })),
   );
   const dirty = designEditorTextDirty(target) || designEditorStylesDirty(target);
@@ -93,12 +89,6 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
             <RotateCcw className="size-3.5" />
           </Button>
         ) : null}
-        <Button size="sm" variant="ghost" disabled={saving} onClick={() => stop(sessionGroupId)}>
-          Discard
-        </Button>
-        <Button size="sm" disabled={saving} onClick={() => void finish(sessionGroupId)}>
-          {saving ? "Saving…" : "Done"}
-        </Button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">

@@ -11,7 +11,9 @@ import type {
   BridgeListFilesCommand,
   BridgeReadFileCommand,
   BridgeWriteFileCommand,
+  BridgeGuardedWriteFileCommand,
   BridgeCommitFileChangesCommand,
+  BridgeCommitScopedFileChangesCommand,
   BridgeWorktreeChangesCommand,
   BridgeRevertWorktreeFileCommand,
   BridgeLinkedCheckoutChangedFile,
@@ -64,7 +66,9 @@ export type SessionCommand =
   | BridgeListFilesCommand
   | BridgeReadFileCommand
   | BridgeWriteFileCommand
+  | BridgeGuardedWriteFileCommand
   | BridgeCommitFileChangesCommand
+  | BridgeCommitScopedFileChangesCommand
   | BridgeWorktreeChangesCommand
   | BridgeRevertWorktreeFileCommand
   | BridgeBranchDiffCommand
@@ -1200,16 +1204,18 @@ export class SessionRouter {
     relativePath: string,
     content: string,
     workdirHint?: string,
+    expectedContent?: string,
     timeoutMs = 15_000,
   ): Promise<void> {
     const requestId = randomUUID();
     const result = this.sendToRuntime(runtimeId, {
-      type: "write_file",
+      type: expectedContent === undefined ? "write_file" : "write_file_guarded",
       requestId,
       sessionId,
       relativePath,
       content,
       workdirHint,
+      ...(expectedContent === undefined ? {} : { expectedContent }),
     });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
@@ -1256,15 +1262,17 @@ export class SessionRouter {
     sessionId: string,
     message?: string | null,
     workdirHint?: string,
+    paths?: string[],
     timeoutMs = 60_000,
   ): Promise<string> {
     const requestId = randomUUID();
     const result = this.sendToRuntime(runtimeId, {
-      type: "commit_file_changes",
+      type: paths?.length ? "commit_scoped_file_changes" : "commit_file_changes",
       requestId,
       sessionId,
       message,
       workdirHint,
+      ...(paths?.length ? { paths } : {}),
     });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));

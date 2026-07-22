@@ -45,7 +45,13 @@ export function AppPreviewCanvas({
   onPdfFormatChange?: (format: PdfPageFormat) => void;
   onPdfDownload?: () => void;
   pdfDownloadState?: PdfDownloadState;
-  manualEdit?: { enabled: boolean; frameReady: boolean; toggle: () => void };
+  manualEdit?: {
+    enabled: boolean;
+    frameReady: boolean;
+    saving: boolean;
+    primaryAction: () => void;
+    discard: () => void;
+  };
 }) {
   const frameMargin = bare ? 0 : PREVIEW_FRAME_MARGIN;
   const pixelsPerUnit = pdfFormat?.unit === "in" ? 96 : 96 / 25.4;
@@ -66,18 +72,41 @@ export function AppPreviewCanvas({
   return (
     <div className="relative flex h-full flex-col bg-surface-deep">
       {manualEdit ? (
-        <Button
-          size="sm"
-          variant={manualEdit.enabled ? "default" : "outline"}
-          onClick={manualEdit.toggle}
-          title={manualEdit.enabled ? "Exit manual editing" : "Edit manually"}
-          aria-label={manualEdit.enabled ? "Exit manual editing" : "Edit manually"}
-          aria-pressed={manualEdit.enabled}
-          className={cn("absolute top-1.5 z-30 h-7 gap-1.5 px-2.5", bare ? "right-28" : "right-3")}
-        >
-          <Pencil className="size-3" />
-          {manualEdit.enabled ? (manualEdit.frameReady ? "Done" : "Connecting…") : "Edit"}
-        </Button>
+        <>
+          <Button
+            size="sm"
+            variant={manualEdit.enabled ? "default" : "outline"}
+            onClick={manualEdit.primaryAction}
+            disabled={manualEdit.saving}
+            title={manualEdit.enabled ? "Save edits" : "Edit manually"}
+            aria-label={manualEdit.enabled ? "Save edits" : "Edit manually"}
+            aria-pressed={manualEdit.enabled}
+            className={cn(
+              "absolute top-1.5 z-30 h-7 gap-1.5 px-2.5",
+              bare ? "right-28" : "right-3",
+            )}
+          >
+            <Pencil className="size-3" />
+            {manualEdit.enabled
+              ? manualEdit.saving
+                ? "Saving…"
+                : manualEdit.frameReady
+                  ? "Done"
+                  : "Connecting…"
+              : "Edit"}
+          </Button>
+          {manualEdit.enabled ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={manualEdit.discard}
+              disabled={manualEdit.saving}
+              className={cn("absolute top-1.5 z-30 h-7 px-2.5", bare ? "right-48" : "right-20")}
+            >
+              Discard
+            </Button>
+          ) : null}
+        </>
       ) : null}
       {bare && pdfFormat && onPdfFormatChange && onPdfDownload ? (
         <PdfPreviewControls

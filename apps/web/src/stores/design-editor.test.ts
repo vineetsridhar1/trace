@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const mutationMock = vi.hoisted(() => vi.fn());
+vi.mock("../lib/urql", () => ({
+  client: { mutation: mutationMock, query: vi.fn() },
+}));
 import {
   designEditorStylesDirty,
   designEditorTextDirty,
@@ -85,12 +90,15 @@ const TARGET: DesignEditorTarget = {
 };
 
 afterEach(() => {
+  vi.restoreAllMocks();
+  mutationMock.mockReset();
   useDesignEditorStore.setState({
     activeSessionGroupId: null,
     target: null,
     domTree: [],
     drafts: {},
     pendingSaveKeys: [],
+    finishRequested: false,
     loading: false,
     saving: false,
     error: null,
@@ -193,6 +201,51 @@ describe("design editor store", () => {
       target: null,
       drafts: {},
     });
+    disconnect();
+  });
+
+  it("keeps edit mode open until the saved event confirms Done", async () => {
+    const send = vi.fn();
+    const disconnect = registerDesignEditorFrame("group-1", send);
+    const changed = { ...TARGET, draftText: "Updated" };
+    const key = `${TARGET.filePath}\u0000${TARGET.elementId}`;
+    useDesignEditorStore.setState({
+      activeSessionGroupId: "group-1",
+      target: changed,
+      drafts: { [key]: changed },
+    });
+    mutationMock.mockReturnValue({
+      toPromise: async () => ({ data: { saveManualElementEdits: [{ commitSha: "commit-1" }] } }),
+    });
+
+    await useDesignEditorStore.getState().finish("group-1");
+
+    expect(useDesignEditorStore.getState()).toMatchObject({
+      activeSessionGroupId: "group-1",
+      saving: true,
+      finishRequested: true,
+      pendingSaveKeys: [key],
+    });
+    expect(send).not.toHaveBeenCalledWith({ type: "trace:design:edit-mode", enabled: false });
+
+    reconcileManualElementSaved({
+      sessionGroupId: "group-1",
+      filePath: TARGET.filePath,
+      elementId: TARGET.elementId,
+      text: "Updated",
+      textSourceHash: "updated-hash",
+      styles: null,
+      styleSourceHash: null,
+      commitSha: "commit-1",
+    });
+
+    expect(useDesignEditorStore.getState()).toMatchObject({
+      activeSessionGroupId: null,
+      saving: false,
+      finishRequested: false,
+      drafts: {},
+    });
+    expect(send).toHaveBeenCalledWith({ type: "trace:design:edit-mode", enabled: false });
     disconnect();
   });
 

@@ -24,20 +24,9 @@ import {
   sanitizeHeaders,
   shouldCaptureBodies,
   shouldCaptureHeaders,
+  traceAppOriginFromUrl,
   webSocketProtocols,
 } from "./endpoint-utils.js";
-
-// The configured Trace origin is a useful initial target for the injected
-// overlay. Preview-auth redirects can make `document.referrer` unreliable,
-// though, so the overlay replaces it with the origin of its explicit parent
-// handshake before accepting editor commands.
-const TRACE_APP_ORIGIN = (() => {
-  try {
-    return process.env.TRACE_WEB_URL ? new URL(process.env.TRACE_WEB_URL).origin : "*";
-  } catch {
-    return "*";
-  }
-})();
 
 type PendingHttp = {
   endpointId: string;
@@ -46,7 +35,7 @@ type PendingHttp = {
   startedAt: number;
   response: ServerResponse;
   timer: ReturnType<typeof setTimeout>;
-  injectAuthoringOverlay: boolean;
+  authoringParentOrigin: string | null;
 };
 
 type PendingWs = {
@@ -120,6 +109,7 @@ function safeRedirectPath(value: string | null): string {
 export function injectAuthoringOverlay(
   headers: Record<string, string | string[]>,
   body: Buffer,
+  parentOrigin: string,
 ): { headers: Record<string, string | string[]>; body: Buffer } {
   const contentType = headers["content-type"] ?? headers["Content-Type"];
   const encoding = headers["content-encoding"] ?? headers["Content-Encoding"];
@@ -134,8 +124,7 @@ export function injectAuthoringOverlay(
   const html = body.toString("utf8");
   if (html.includes("data-trace-app-overlay")) return { headers, body };
   const script = `<script data-trace-app-overlay>(function(){
-var TRACE_ORIGIN=${JSON.stringify(TRACE_APP_ORIGIN)};
-try{if(document.referrer)TRACE_ORIGIN=new URL(document.referrer).origin}catch(e){}
+  var TRACE_ORIGIN=${JSON.stringify(parentOrigin)};
 var editEnabled=false;
 var selectedId=null;
 var hoverEl=null;
@@ -359,8 +348,8 @@ document.addEventListener("click",function(e){
 },true);
 window.addEventListener("message",function(e){
   if(e.source!==window.parent||!e.data)return;
-  if(e.data.type==="trace:design:handshake"){TRACE_ORIGIN=e.origin;post("ready",{},e.origin);return}
-  if(TRACE_ORIGIN==="*"||e.origin!==TRACE_ORIGIN)return;
+  if(e.origin!==TRACE_ORIGIN)return;
+  if(e.data.type==="trace:design:handshake"){post("ready",{},TRACE_ORIGIN);return}
   if(e.data.type==="trace:design:edit-mode"){setEditMode(e.data.enabled);post("edit-mode-ready",{});return}
   if(e.data.type==="trace:design:select-element"&&typeof e.data.elementId==="string"){
     selectedId=e.data.elementId;restoreSelection();return;
@@ -498,6 +487,18 @@ export class EndpointProxyService {
         return;
       }
     }
+    const requestsAuthoring = url.searchParams.has("__trace_authoring");
+    const authoringParentOrigin = requestsAuthoring
+      ? traceAppOriginFromUrl(req.headers.referer)
+      : null;
+    if (
+      requestsAuthoring &&
+      (!authoringParentOrigin ||
+        (endpoint.accessMode !== "private" && !(await authorizePrivateAccess(req, endpoint))))
+    ) {
+      res.writeHead(403).end("Authoring preview forbidden");
+      return;
+    }
     if (endpoint.expiresAt && endpoint.expiresAt <= new Date()) {
       res.writeHead(410).end("Endpoint expired");
       return;
@@ -583,8 +584,6 @@ export class EndpointProxyService {
         )
         .catch(() => {});
     }, endpointProxyRequestTimeoutMs());
-    const injectAuthoringOverlay =
-      endpoint.accessMode === "private" || url.searchParams.has("__trace_authoring");
     const pending: PendingHttp = {
       endpointId: endpoint.id,
       trafficEntryId,
@@ -592,7 +591,7 @@ export class EndpointProxyService {
       startedAt,
       response: res,
       timer,
-      injectAuthoringOverlay,
+      authoringParentOrigin,
     };
     this.pendingHttp.set(requestId, pending);
     const delivery = sessionRouter.sendToRuntime(
@@ -606,7 +605,7 @@ export class EndpointProxyService {
         method: req.method ?? "GET",
         path: `${path}${query ? `?${query}` : ""}`,
         headers: forwardableRequestHeaders(req.headers, {
-          authoringOverlay: injectAuthoringOverlay,
+          authoringOverlay: authoringParentOrigin !== null,
         }),
         bodyBase64: requestBody.byteLength ? requestBody.toString("base64") : undefined,
       },
@@ -659,8 +658,8 @@ export class EndpointProxyService {
       return;
     }
     let headers = forwardableResponseHeaders(response.headers);
-    if (pending.injectAuthoringOverlay) {
-      const injected = injectAuthoringOverlay(headers, body);
+    if (pending.authoringParentOrigin) {
+      const injected = injectAuthoringOverlay(headers, body, pending.authoringParentOrigin);
       headers = injected.headers;
       body = injected.body;
     }

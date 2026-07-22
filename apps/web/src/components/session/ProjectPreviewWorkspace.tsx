@@ -75,9 +75,7 @@ export function ProjectPreviewWorkspace({
     <div
       className={cn(
         "flex h-full min-h-0",
-        isMobile
-          ? "snap-x snap-mandatory overflow-x-auto overscroll-x-contain"
-          : "overflow-hidden",
+        isMobile ? "snap-x snap-mandatory overflow-x-auto overscroll-x-contain" : "overflow-hidden",
       )}
     >
       <motion.aside
@@ -95,7 +93,7 @@ export function ProjectPreviewWorkspace({
         )}
       >
         {manualEditing && manualSessionGroupId ? (
-          <DesignManualEditPanel sessionGroupId={manualSessionGroupId} />
+          <DesignManualEditPanel />
         ) : sessionId ? (
           <SessionDetailView
             key={sessionId}

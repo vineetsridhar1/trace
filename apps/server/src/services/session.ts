@@ -1364,6 +1364,28 @@ export function isFullyUnloadedSession(
 }
 
 export class SessionService {
+  private manualElementSaveQueues = new Map<string, Promise<void>>();
+
+  private async withManualElementSaveLock<Result>(
+    sessionGroupId: string,
+    operation: () => Promise<Result>,
+  ): Promise<Result> {
+    const previous = this.manualElementSaveQueues.get(sessionGroupId) ?? Promise.resolve();
+    const run = previous.catch(() => {}).then(operation);
+    const marker = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.manualElementSaveQueues.set(sessionGroupId, marker);
+    try {
+      return await run;
+    } finally {
+      if (this.manualElementSaveQueues.get(sessionGroupId) === marker) {
+        this.manualElementSaveQueues.delete(sessionGroupId);
+      }
+    }
+  }
+
   private async createGeneratedProjectGitCredential(input: {
     organizationId: string;
     sessionId: string;
@@ -9241,138 +9263,14 @@ export class SessionService {
     styleSourceHash: string | null;
     commitSha: string;
   }> {
-    const kind = await this.assertManualElementEditAccess(
+    const [result] = await this.saveManualElementEdits(
       input.sessionGroupId,
+      [input],
       organizationId,
-      actorId,
-    );
-    const filePath = validateManualSourcePath(input.filePath, kind);
-    const elementId = validateDesignElementId(input.elementId);
-    const savesText = input.text !== null && input.text !== undefined;
-    const savesStyles = input.styles !== null && input.styles !== undefined;
-    if (!savesText && !savesStyles) {
-      throw new ValidationError("Choose content or appearance changes before saving");
-    }
-    if (savesText && !input.expectedTextSourceHash) {
-      throw new ValidationError("The text source hash is required");
-    }
-    if (savesStyles && !input.expectedStyleSourceHash) {
-      throw new ValidationError("The style source hash is required");
-    }
-
-    const runtime = await this.resolveAccessibleSessionGroupRuntime(
-      input.sessionGroupId,
-      organizationId,
-      actorId,
-      { requireWrite: true },
-    );
-    const [textSource, styleFile] = await Promise.all([
-      savesText
-        ? sessionRouter.readFile(
-            runtime.runtimeId,
-            runtime.sessionId,
-            filePath,
-            runtime.workdirHint,
-          )
-        : null,
-      savesStyles
-        ? this.readDesignManualStyleFile(
-            runtime.runtimeId,
-            runtime.sessionId,
-            runtime.workdirHint,
-            kind,
-          )
-        : null,
-    ]);
-
-    if (textSource && designSourceHash(textSource) !== input.expectedTextSourceHash) {
-      throw new ValidationError("The source changed. Select the element again before saving");
-    }
-    if (styleFile && designSourceHash(styleFile.source) !== input.expectedStyleSourceHash) {
-      throw new ValidationError(
-        "The manual styles changed. Select the element again before saving",
-      );
-    }
-
-    const textResult = textSource
-      ? updateStaticDesignElementText(textSource, filePath, elementId, input.text!)
-      : null;
-    const styleResult = styleFile
-      ? updateManualDesignElementStyles(styleFile.source, elementId, input.styles!)
-      : null;
-    const writes = [
-      ...(textResult && textResult.source !== textSource
-        ? [{ path: filePath, before: textSource!, after: textResult.source }]
-        : []),
-      ...(styleResult && styleResult.source !== styleFile?.source
-        ? [{ path: styleFile!.path, before: styleFile!.source, after: styleResult.source }]
-        : []),
-    ];
-
-    const written: typeof writes = [];
-    let commitSha: string;
-    try {
-      for (const write of writes) {
-        await sessionRouter.writeFile(
-          runtime.runtimeId,
-          runtime.sessionId,
-          write.path,
-          write.after,
-          runtime.workdirHint,
-        );
-        written.push(write);
-      }
-      commitSha = await sessionRouter.commitFileChanges(
-        runtime.runtimeId,
-        runtime.sessionId,
-        `Save manual ${kind} element edit`,
-        runtime.workdirHint,
-      );
-    } catch (error) {
-      await Promise.all(
-        written
-          .reverse()
-          .map((write) =>
-            sessionRouter.writeFile(
-              runtime.runtimeId,
-              runtime.sessionId,
-              write.path,
-              write.before,
-              runtime.workdirHint,
-            ),
-          ),
-      ).catch(() => {});
-      throw error;
-    }
-
-    await eventService.create({
-      organizationId,
-      scopeType: "system",
-      scopeId: input.sessionGroupId,
-      eventType: "manual_element_saved",
-      payload: {
-        sessionGroupId: input.sessionGroupId,
-        filePath,
-        elementId,
-        text: textResult?.text ?? null,
-        textSourceHash: textResult?.sourceHash ?? null,
-        styles: styleResult?.styles ?? null,
-        styleSourceHash: styleResult?.sourceHash ?? null,
-        commitSha,
-      },
       actorType,
       actorId,
-    });
-    return {
-      sessionGroupId: input.sessionGroupId,
-      filePath,
-      elementId,
-      text: textResult?.text ?? null,
-      textSourceHash: textResult?.sourceHash ?? null,
-      styles: styleResult?.styles ?? null,
-      styleSourceHash: styleResult?.sourceHash ?? null,
-      commitSha,
-    };
+    );
+    return result!;
   }
 
   async saveManualElementEdits(
@@ -9400,177 +9298,189 @@ export class SessionService {
       commitSha: string;
     }>
   > {
-    if (inputs.length === 0) throw new ValidationError("Choose changes before saving");
-    const kind = await this.assertManualElementEditAccess(sessionGroupId, organizationId, actorId);
-    const edits = inputs.map((input) => {
-      const filePath = validateManualSourcePath(input.filePath, kind);
-      const elementId = validateDesignElementId(input.elementId);
-      const savesText = input.text !== null && input.text !== undefined;
-      const savesStyles = input.styles !== null && input.styles !== undefined;
-      if (!savesText && !savesStyles) {
-        throw new ValidationError("Choose content or appearance changes before saving");
+    return this.withManualElementSaveLock(sessionGroupId, async () => {
+      if (inputs.length === 0) throw new ValidationError("Choose changes before saving");
+      const kind = await this.assertManualElementEditAccess(
+        sessionGroupId,
+        organizationId,
+        actorId,
+      );
+      const edits = inputs.map((input) => {
+        const filePath = validateManualSourcePath(input.filePath, kind);
+        const elementId = validateDesignElementId(input.elementId);
+        const savesText = input.text !== null && input.text !== undefined;
+        const savesStyles = input.styles !== null && input.styles !== undefined;
+        if (!savesText && !savesStyles) {
+          throw new ValidationError("Choose content or appearance changes before saving");
+        }
+        if (savesText && !input.expectedTextSourceHash) {
+          throw new ValidationError("The text source hash is required");
+        }
+        if (savesStyles && !input.expectedStyleSourceHash) {
+          throw new ValidationError("The style source hash is required");
+        }
+        return { ...input, filePath, elementId, savesText, savesStyles };
+      });
+      const duplicate = new Set<string>();
+      for (const edit of edits) {
+        const key = `${edit.filePath}:${edit.elementId}`;
+        if (duplicate.has(key))
+          throw new ValidationError("An element can only be saved once per batch");
+        duplicate.add(key);
       }
-      if (savesText && !input.expectedTextSourceHash) {
-        throw new ValidationError("The text source hash is required");
-      }
-      if (savesStyles && !input.expectedStyleSourceHash) {
-        throw new ValidationError("The style source hash is required");
-      }
-      return { ...input, filePath, elementId, savesText, savesStyles };
-    });
-    const duplicate = new Set<string>();
-    for (const edit of edits) {
-      const key = `${edit.filePath}:${edit.elementId}`;
-      if (duplicate.has(key))
-        throw new ValidationError("An element can only be saved once per batch");
-      duplicate.add(key);
-    }
 
-    const runtime = await this.resolveAccessibleSessionGroupRuntime(
-      sessionGroupId,
-      organizationId,
-      actorId,
-      { requireWrite: true },
-    );
-    const textPaths = [
-      ...new Set(edits.filter((edit) => edit.savesText).map((edit) => edit.filePath)),
-    ];
-    const textSources = new Map(
-      await Promise.all(
-        textPaths.map(
-          async (path) =>
-            [
-              path,
-              await sessionRouter.readFile(
+      const runtime = await this.resolveAccessibleSessionGroupRuntime(
+        sessionGroupId,
+        organizationId,
+        actorId,
+        { requireWrite: true },
+      );
+      const textPaths = [
+        ...new Set(edits.filter((edit) => edit.savesText).map((edit) => edit.filePath)),
+      ];
+      const textSources = new Map(
+        await Promise.all(
+          textPaths.map(
+            async (path) =>
+              [
+                path,
+                await sessionRouter.readFile(
+                  runtime.runtimeId,
+                  runtime.sessionId,
+                  path,
+                  runtime.workdirHint,
+                ),
+              ] as const,
+          ),
+        ),
+      );
+      const needsStyles = edits.some((edit) => edit.savesStyles);
+      const styleFile = needsStyles
+        ? await this.readDesignManualStyleFile(
+            runtime.runtimeId,
+            runtime.sessionId,
+            runtime.workdirHint,
+            kind,
+          )
+        : null;
+
+      for (const edit of edits) {
+        if (
+          edit.savesText &&
+          designSourceHash(textSources.get(edit.filePath) ?? "") !== edit.expectedTextSourceHash
+        ) {
+          throw new ValidationError("The source changed. Select the element again before saving");
+        }
+        if (
+          edit.savesStyles &&
+          styleFile &&
+          designSourceHash(styleFile.source) !== edit.expectedStyleSourceHash
+        ) {
+          throw new ValidationError(
+            "The manual styles changed. Select the element again before saving",
+          );
+        }
+      }
+
+      const nextTextSources = new Map(textSources);
+      let nextStyleSource = styleFile?.source ?? null;
+      const results = edits.map((edit) => {
+        let text: string | null = null;
+        let styles: ManualDesignElementStyles | null = null;
+        if (edit.savesText) {
+          const source = nextTextSources.get(edit.filePath);
+          if (!source) throw new ValidationError("The source file is unavailable");
+          const result = updateStaticDesignElementText(
+            source,
+            edit.filePath,
+            edit.elementId,
+            edit.text!,
+          );
+          nextTextSources.set(edit.filePath, result.source);
+          text = result.text;
+        }
+        if (edit.savesStyles) {
+          if (nextStyleSource === null)
+            throw new ValidationError("The manual styles file is unavailable");
+          const result = updateManualDesignElementStyles(
+            nextStyleSource,
+            edit.elementId,
+            edit.styles!,
+          );
+          nextStyleSource = result.source;
+          styles = result.styles;
+        }
+        return { edit, text, styles };
+      });
+      const writes = [
+        ...textPaths.flatMap((path) => {
+          const before = textSources.get(path)!;
+          const after = nextTextSources.get(path)!;
+          return before === after ? [] : [{ path, before, after }];
+        }),
+        ...(styleFile && nextStyleSource !== styleFile.source
+          ? [{ path: styleFile.path, before: styleFile.source, after: nextStyleSource! }]
+          : []),
+      ];
+      if (writes.length === 0)
+        throw new ValidationError("The selected edits do not change any files");
+
+      const written: typeof writes = [];
+      let commitSha: string;
+      try {
+        for (const write of writes) {
+          await sessionRouter.writeFile(
+            runtime.runtimeId,
+            runtime.sessionId,
+            write.path,
+            write.after,
+            runtime.workdirHint,
+            write.before,
+          );
+          written.push(write);
+        }
+        commitSha = await sessionRouter.commitFileChanges(
+          runtime.runtimeId,
+          runtime.sessionId,
+          edits.length === 1
+            ? `Save manual ${kind} element edit`
+            : `Save ${edits.length} manual ${kind} element edits`,
+          runtime.workdirHint,
+          writes.map((write) => write.path),
+        );
+      } catch (error) {
+        await Promise.all(
+          written
+            .reverse()
+            .map((write) =>
+              sessionRouter.writeFile(
                 runtime.runtimeId,
                 runtime.sessionId,
-                path,
+                write.path,
+                write.before,
                 runtime.workdirHint,
+                write.after,
               ),
-            ] as const,
-        ),
-      ),
-    );
-    const needsStyles = edits.some((edit) => edit.savesStyles);
-    const styleFile = needsStyles
-      ? await this.readDesignManualStyleFile(
-          runtime.runtimeId,
-          runtime.sessionId,
-          runtime.workdirHint,
-          kind,
-        )
-      : null;
-
-    for (const edit of edits) {
-      if (
-        edit.savesText &&
-        designSourceHash(textSources.get(edit.filePath) ?? "") !== edit.expectedTextSourceHash
-      ) {
-        throw new ValidationError("The source changed. Select the element again before saving");
-      }
-      if (
-        edit.savesStyles &&
-        styleFile &&
-        designSourceHash(styleFile.source) !== edit.expectedStyleSourceHash
-      ) {
-        throw new ValidationError(
-          "The manual styles changed. Select the element again before saving",
-        );
-      }
-    }
-
-    const nextTextSources = new Map(textSources);
-    let nextStyleSource = styleFile?.source ?? null;
-    const results = edits.map((edit) => {
-      let text: string | null = null;
-      let styles: ManualDesignElementStyles | null = null;
-      if (edit.savesText) {
-        const source = nextTextSources.get(edit.filePath);
-        if (!source) throw new ValidationError("The source file is unavailable");
-        const result = updateStaticDesignElementText(
-          source,
-          edit.filePath,
-          edit.elementId,
-          edit.text!,
-        );
-        nextTextSources.set(edit.filePath, result.source);
-        text = result.text;
-      }
-      if (edit.savesStyles) {
-        if (nextStyleSource === null)
-          throw new ValidationError("The manual styles file is unavailable");
-        const result = updateManualDesignElementStyles(
-          nextStyleSource,
-          edit.elementId,
-          edit.styles!,
-        );
-        nextStyleSource = result.source;
-        styles = result.styles;
-      }
-      return { edit, text, styles };
-    });
-    const writes = [
-      ...textPaths.flatMap((path) => {
-        const before = textSources.get(path)!;
-        const after = nextTextSources.get(path)!;
-        return before === after ? [] : [{ path, before, after }];
-      }),
-      ...(styleFile && nextStyleSource !== styleFile.source
-        ? [{ path: styleFile.path, before: styleFile.source, after: nextStyleSource! }]
-        : []),
-    ];
-    const written: typeof writes = [];
-    let commitSha: string;
-    try {
-      for (const write of writes) {
-        await sessionRouter.writeFile(
-          runtime.runtimeId,
-          runtime.sessionId,
-          write.path,
-          write.after,
-          runtime.workdirHint,
-        );
-        written.push(write);
-      }
-      commitSha = await sessionRouter.commitFileChanges(
-        runtime.runtimeId,
-        runtime.sessionId,
-        edits.length === 1
-          ? `Save manual ${kind} element edit`
-          : `Save ${edits.length} manual ${kind} element edits`,
-        runtime.workdirHint,
-      );
-    } catch (error) {
-      await Promise.all(
-        written
-          .reverse()
-          .map((write) =>
-            sessionRouter.writeFile(
-              runtime.runtimeId,
-              runtime.sessionId,
-              write.path,
-              write.before,
-              runtime.workdirHint,
             ),
-          ),
-      ).catch(() => {});
-      throw error;
-    }
+        ).catch(() => {});
+        throw error;
+      }
 
-    const output = results.map(({ edit, text, styles }) => ({
-      sessionGroupId,
-      filePath: edit.filePath,
-      elementId: edit.elementId,
-      text,
-      textSourceHash: edit.savesText ? designSourceHash(nextTextSources.get(edit.filePath)!) : null,
-      styles,
-      styleSourceHash:
-        edit.savesStyles && nextStyleSource ? designSourceHash(nextStyleSource) : null,
-      commitSha,
-    }));
-    await Promise.all(
-      output.map((result) =>
-        eventService.create({
+      const output = results.map(({ edit, text, styles }) => ({
+        sessionGroupId,
+        filePath: edit.filePath,
+        elementId: edit.elementId,
+        text,
+        textSourceHash: edit.savesText
+          ? designSourceHash(nextTextSources.get(edit.filePath)!)
+          : null,
+        styles,
+        styleSourceHash:
+          edit.savesStyles && nextStyleSource ? designSourceHash(nextStyleSource) : null,
+        commitSha,
+      }));
+      await eventService.createMany(
+        output.map((result) => ({
           organizationId,
           scopeType: "system",
           scopeId: sessionGroupId,
@@ -9578,10 +9488,10 @@ export class SessionService {
           payload: result,
           actorType,
           actorId,
-        }),
-      ),
-    );
-    return output;
+        })),
+      );
+      return output;
+    });
   }
 
   async readDesignElementTextSource(

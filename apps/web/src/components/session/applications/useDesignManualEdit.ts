@@ -71,6 +71,8 @@ export function useDesignManualEdit({
   const activeSessionGroupId = useDesignEditorStore((state) => state.activeSessionGroupId);
   const start = useDesignEditorStore((state) => state.start);
   const stop = useDesignEditorStore((state) => state.stop);
+  const finish = useDesignEditorStore((state) => state.finish);
+  const saving = useDesignEditorStore((state) => state.saving);
   const selectElement = useDesignEditorStore((state) => state.selectElement);
   const setDomTree = useDesignEditorStore((state) => state.setDomTree);
   const enabled = activeSessionGroupId === sessionGroupId;
@@ -193,18 +195,21 @@ export function useDesignManualEdit({
     };
   }, [sessionGroupId]);
 
-  const toggle = useCallback(() => {
-    if (enabled) stop(sessionGroupId);
-    else {
+  const primaryAction = useCallback(() => {
+    if (enabled) {
+      void finish(sessionGroupId);
+    } else {
       setFrameReady(false);
       start(sessionGroupId);
     }
-  }, [enabled, sessionGroupId, start, stop]);
+  }, [enabled, finish, sessionGroupId, start]);
+
+  const discard = useCallback(() => stop(sessionGroupId), [sessionGroupId, stop]);
 
   const onFrameLoad = useCallback(() => {
     establishHandshake();
     postToFrame({ type: "trace:design:edit-mode", enabled });
   }, [enabled, establishHandshake, postToFrame]);
 
-  return { frameRef, frameReady, enabled, toggle, onFrameLoad };
+  return { frameRef, frameReady, enabled, saving, primaryAction, discard, onFrameLoad };
 }
