@@ -6,7 +6,68 @@ import {
   reconcileManualElementSaved,
   useDesignEditorStore,
   type DesignEditorTarget,
+  type DesignEditorStyles,
 } from "./design-editor";
+
+const BASE_STYLES: DesignEditorStyles = {
+  color: "#111111",
+  backgroundColor: "transparent",
+  fontFamily: "system-ui",
+  fontSize: 32,
+  fontWeight: 600,
+  fontStyle: "normal",
+  textDecoration: "none",
+  textAlign: "left",
+  lineHeight: 40,
+  letterSpacing: 0,
+  textTransform: "none",
+  width: "320px",
+  height: "40px",
+  minWidth: "auto",
+  maxWidth: "none",
+  minHeight: "auto",
+  maxHeight: "none",
+  flexGrow: 0,
+  alignSelf: "auto",
+  position: "static",
+  top: "auto",
+  right: "auto",
+  bottom: "auto",
+  left: "auto",
+  zIndex: "auto",
+  display: "block",
+  flexDirection: "row",
+  justifyContent: "normal",
+  alignItems: "normal",
+  gap: 0,
+  borderRadius: 0,
+  paddingX: 0,
+  paddingY: 0,
+  paddingTop: 0,
+  paddingRight: 0,
+  paddingBottom: 0,
+  paddingLeft: 0,
+  marginTop: 0,
+  marginRight: 0,
+  marginBottom: 0,
+  marginLeft: 0,
+  opacity: 1,
+  overflow: "visible",
+  objectFit: "fill",
+  borderColor: "transparent",
+  borderWidth: 0,
+  borderStyle: "none",
+  cursor: "auto",
+  pointerEvents: "auto",
+  whiteSpace: "normal",
+  textOverflow: "clip",
+  boxSizing: "border-box",
+  aspectRatio: "auto",
+  boxShadow: "none",
+  textShadow: "none",
+  transform: "none",
+  filter: "none",
+};
 
 const TARGET: DesignEditorTarget = {
   filePath: "src/design/Hero.tsx",
@@ -17,26 +78,8 @@ const TARGET: DesignEditorTarget = {
   originalText: "Original",
   draftText: "Original",
   textSourceHash: "text-hash",
-  originalStyles: {
-    color: "#111111",
-    backgroundColor: "transparent",
-    fontSize: 32,
-    fontWeight: 600,
-    textAlign: "left",
-    borderRadius: 0,
-    paddingX: 0,
-    paddingY: 0,
-  },
-  draftStyles: {
-    color: "#111111",
-    backgroundColor: "transparent",
-    fontSize: 32,
-    fontWeight: 600,
-    textAlign: "left",
-    borderRadius: 0,
-    paddingX: 0,
-    paddingY: 0,
-  },
+  originalStyles: BASE_STYLES,
+  draftStyles: BASE_STYLES,
   manualStyles: {},
   styleSourceHash: "style-hash",
 };
@@ -45,6 +88,7 @@ afterEach(() => {
   useDesignEditorStore.setState({
     activeSessionGroupId: null,
     target: null,
+    domTree: [],
     drafts: {},
     pendingSaveKeys: [],
     loading: false,
@@ -91,6 +135,29 @@ describe("design editor store", () => {
     expect(designEditorTextDirty({ ...TARGET, textSourceHash: null, draftText: "Updated" })).toBe(
       false,
     );
+  });
+
+  it("removes an element from the staged batch when its values are reverted", () => {
+    useDesignEditorStore.setState({ activeSessionGroupId: "group-1", target: TARGET });
+
+    useDesignEditorStore.getState().changeStyle("opacity", 0.5);
+    useDesignEditorStore.getState().changeStyle("opacity", 1);
+
+    expect(useDesignEditorStore.getState().drafts).toEqual({});
+  });
+
+  it("activates an ancestor from the DOM tree", () => {
+    const send = vi.fn();
+    const disconnect = registerDesignEditorFrame("group-1", send);
+    useDesignEditorStore.setState({ activeSessionGroupId: "group-1", target: TARGET });
+
+    useDesignEditorStore.getState().activateElement("hero-card");
+
+    expect(send).toHaveBeenCalledWith({
+      type: "trace:design:activate-element",
+      elementId: "hero-card",
+    });
+    disconnect();
   });
 
   it("resets a draft in place and restores the live preview", () => {

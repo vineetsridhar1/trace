@@ -10,12 +10,61 @@ const DESIGN_ELEMENT_STYLE_SOURCE_QUERY = gql`
       styles {
         color
         backgroundColor
+        fontFamily
         fontSize
         fontWeight
+        fontStyle
+        textDecoration
         textAlign
+        lineHeight
+        letterSpacing
+        textTransform
+        width
+        height
+        minWidth
+        maxWidth
+        minHeight
+        maxHeight
+        flexGrow
+        alignSelf
+        position
+        top
+        right
+        bottom
+        left
+        zIndex
+        display
+        flexDirection
+        justifyContent
+        alignItems
+        gap
         borderRadius
         paddingX
         paddingY
+        paddingTop
+        paddingRight
+        paddingBottom
+        paddingLeft
+        marginTop
+        marginRight
+        marginBottom
+        marginLeft
+        opacity
+        overflow
+        objectFit
+        borderColor
+        borderWidth
+        borderStyle
+        cursor
+        pointerEvents
+        whiteSpace
+        textOverflow
+        boxSizing
+        aspectRatio
+        boxShadow
+        textShadow
+        transform
+        filter
       }
     }
   }
@@ -49,23 +98,147 @@ const SAVE_MANUAL_ELEMENT_EDITS_MUTATION = gql`
 export type DesignEditorStyles = {
   color: string;
   backgroundColor: string;
+  fontFamily: string;
   fontSize: number;
   fontWeight: number;
-  textAlign: "left" | "center" | "right";
+  fontStyle: "normal" | "italic";
+  textDecoration: "none" | "underline" | "line-through";
+  textAlign: "left" | "center" | "right" | "justify";
+  lineHeight: number;
+  letterSpacing: number;
+  textTransform: "none" | "uppercase" | "lowercase" | "capitalize";
+  width: string;
+  height: string;
+  minWidth: string;
+  maxWidth: string;
+  minHeight: string;
+  maxHeight: string;
+  flexGrow: number;
+  alignSelf: "auto" | "flex-start" | "center" | "flex-end" | "stretch" | "baseline";
+  position: "static" | "relative" | "absolute" | "fixed" | "sticky";
+  top: string;
+  right: string;
+  bottom: string;
+  left: string;
+  zIndex: string;
+  display:
+    | "block"
+    | "inline"
+    | "inline-block"
+    | "flex"
+    | "inline-flex"
+    | "grid"
+    | "inline-grid"
+    | "none";
+  flexDirection: "row" | "row-reverse" | "column" | "column-reverse";
+  justifyContent:
+    | "normal"
+    | "flex-start"
+    | "center"
+    | "flex-end"
+    | "space-between"
+    | "space-around"
+    | "space-evenly";
+  alignItems: "normal" | "flex-start" | "center" | "flex-end" | "stretch" | "baseline";
+  gap: number;
   borderRadius: number;
   paddingX: number;
   paddingY: number;
+  paddingTop: number;
+  paddingRight: number;
+  paddingBottom: number;
+  paddingLeft: number;
+  marginTop: number;
+  marginRight: number;
+  marginBottom: number;
+  marginLeft: number;
+  opacity: number;
+  overflow: "visible" | "hidden" | "clip" | "scroll" | "auto";
+  objectFit: "fill" | "contain" | "cover" | "none" | "scale-down";
+  borderColor: string;
+  borderWidth: number;
+  borderStyle: "none" | "solid" | "dashed" | "dotted" | "double";
+  cursor:
+    | "auto"
+    | "default"
+    | "pointer"
+    | "grab"
+    | "grabbing"
+    | "text"
+    | "move"
+    | "not-allowed"
+    | "crosshair"
+    | "zoom-in"
+    | "zoom-out";
+  pointerEvents: "auto" | "none";
+  whiteSpace: "normal" | "nowrap" | "pre" | "pre-wrap" | "pre-line" | "break-spaces";
+  textOverflow: "clip" | "ellipsis";
+  boxSizing: "content-box" | "border-box";
+  aspectRatio: string;
+  boxShadow: string;
+  textShadow: string;
+  transform: string;
+  filter: string;
 };
 
 const DESIGN_EDITOR_STYLE_KEYS = [
   "color",
   "backgroundColor",
+  "fontFamily",
   "fontSize",
   "fontWeight",
+  "fontStyle",
+  "textDecoration",
   "textAlign",
+  "lineHeight",
+  "letterSpacing",
+  "textTransform",
+  "width",
+  "height",
+  "minWidth",
+  "maxWidth",
+  "minHeight",
+  "maxHeight",
+  "flexGrow",
+  "alignSelf",
+  "position",
+  "top",
+  "right",
+  "bottom",
+  "left",
+  "zIndex",
+  "display",
+  "flexDirection",
+  "justifyContent",
+  "alignItems",
+  "gap",
   "borderRadius",
   "paddingX",
   "paddingY",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+  "marginTop",
+  "marginRight",
+  "marginBottom",
+  "marginLeft",
+  "opacity",
+  "overflow",
+  "objectFit",
+  "borderColor",
+  "borderWidth",
+  "borderStyle",
+  "cursor",
+  "pointerEvents",
+  "whiteSpace",
+  "textOverflow",
+  "boxSizing",
+  "aspectRatio",
+  "boxShadow",
+  "textShadow",
+  "transform",
+  "filter",
 ] as const satisfies ReadonlyArray<keyof DesignEditorStyles>;
 
 type ManualStyles = Partial<DesignEditorStyles>;
@@ -78,6 +251,13 @@ export type DesignEditorSelectionMessage = {
   autoTarget: boolean;
   editableText: boolean;
   styles: Partial<Record<keyof DesignEditorStyles, string | number>>;
+};
+
+export type DesignEditorDomNode = {
+  elementId: string | null;
+  elementName: string;
+  label: string;
+  children: DesignEditorDomNode[];
 };
 
 export type DesignEditorTarget = {
@@ -174,14 +354,146 @@ function normalizeStyles(styles: DesignEditorSelectionMessage["styles"]): Design
   return {
     color: normalizeColor(styles.color, "#111111"),
     backgroundColor: normalizeColor(styles.backgroundColor, "transparent", true),
+    fontFamily: normalizeString(styles.fontFamily, "system-ui"),
     fontSize: clampNumber(styles.fontSize, 8, 96, 16),
     fontWeight: normalizeFontWeight(styles.fontWeight),
-    textAlign:
-      styles.textAlign === "center" || styles.textAlign === "right" ? styles.textAlign : "left",
-    borderRadius: clampNumber(styles.borderRadius, 0, 64, 0),
-    paddingX: clampNumber(styles.paddingX, 0, 64, 0),
-    paddingY: clampNumber(styles.paddingY, 0, 64, 0),
+    fontStyle: normalizeEnum(styles.fontStyle, ["normal", "italic"], "normal"),
+    textDecoration: normalizeEnum(
+      styles.textDecoration,
+      ["none", "underline", "line-through"],
+      "none",
+    ),
+    textAlign: normalizeEnum(styles.textAlign, ["left", "center", "right", "justify"], "left"),
+    lineHeight: clampNumber(styles.lineHeight, 8, 240, 20),
+    letterSpacing: clampNumber(styles.letterSpacing, -32, 64, 0),
+    textTransform: normalizeEnum(
+      styles.textTransform,
+      ["none", "uppercase", "lowercase", "capitalize"],
+      "none",
+    ),
+    width: normalizeString(styles.width, "auto"),
+    height: normalizeString(styles.height, "auto"),
+    minWidth: normalizeString(styles.minWidth, "auto"),
+    maxWidth: normalizeString(styles.maxWidth, "none"),
+    minHeight: normalizeString(styles.minHeight, "auto"),
+    maxHeight: normalizeString(styles.maxHeight, "none"),
+    flexGrow: clampDecimal(styles.flexGrow, 0, 100, 0),
+    alignSelf: normalizeEnum(
+      styles.alignSelf,
+      ["auto", "flex-start", "center", "flex-end", "stretch", "baseline"],
+      "auto",
+    ),
+    position: normalizeEnum(
+      styles.position,
+      ["static", "relative", "absolute", "fixed", "sticky"],
+      "static",
+    ),
+    top: normalizeString(styles.top, "auto"),
+    right: normalizeString(styles.right, "auto"),
+    bottom: normalizeString(styles.bottom, "auto"),
+    left: normalizeString(styles.left, "auto"),
+    zIndex: normalizeString(styles.zIndex, "auto"),
+    display: normalizeEnum(
+      styles.display,
+      ["block", "inline", "inline-block", "flex", "inline-flex", "grid", "inline-grid", "none"],
+      "block",
+    ),
+    flexDirection: normalizeEnum(
+      styles.flexDirection,
+      ["row", "row-reverse", "column", "column-reverse"],
+      "row",
+    ),
+    justifyContent: normalizeEnum(
+      styles.justifyContent,
+      [
+        "normal",
+        "flex-start",
+        "center",
+        "flex-end",
+        "space-between",
+        "space-around",
+        "space-evenly",
+      ],
+      "normal",
+    ),
+    alignItems: normalizeEnum(
+      styles.alignItems,
+      ["normal", "flex-start", "center", "flex-end", "stretch", "baseline"],
+      "normal",
+    ),
+    gap: clampNumber(styles.gap, 0, 256, 0),
+    borderRadius: clampNumber(styles.borderRadius, 0, 512, 0),
+    paddingX: clampNumber(styles.paddingX, 0, 512, 0),
+    paddingY: clampNumber(styles.paddingY, 0, 512, 0),
+    paddingTop: clampNumber(styles.paddingTop, 0, 512, 0),
+    paddingRight: clampNumber(styles.paddingRight, 0, 512, 0),
+    paddingBottom: clampNumber(styles.paddingBottom, 0, 512, 0),
+    paddingLeft: clampNumber(styles.paddingLeft, 0, 512, 0),
+    marginTop: clampNumber(styles.marginTop, -512, 512, 0),
+    marginRight: clampNumber(styles.marginRight, -512, 512, 0),
+    marginBottom: clampNumber(styles.marginBottom, -512, 512, 0),
+    marginLeft: clampNumber(styles.marginLeft, -512, 512, 0),
+    opacity: clampDecimal(styles.opacity, 0, 1, 1),
+    overflow: normalizeEnum(
+      styles.overflow,
+      ["visible", "hidden", "clip", "scroll", "auto"],
+      "visible",
+    ),
+    objectFit: normalizeEnum(
+      styles.objectFit,
+      ["fill", "contain", "cover", "none", "scale-down"],
+      "fill",
+    ),
+    borderColor: normalizeColor(styles.borderColor, "#000000", true),
+    borderWidth: clampNumber(styles.borderWidth, 0, 32, 0),
+    borderStyle: normalizeEnum(
+      styles.borderStyle,
+      ["none", "solid", "dashed", "dotted", "double"],
+      "none",
+    ),
+    cursor: normalizeEnum(
+      styles.cursor,
+      [
+        "auto",
+        "default",
+        "pointer",
+        "grab",
+        "grabbing",
+        "text",
+        "move",
+        "not-allowed",
+        "crosshair",
+        "zoom-in",
+        "zoom-out",
+      ],
+      "auto",
+    ),
+    pointerEvents: normalizeEnum(styles.pointerEvents, ["auto", "none"], "auto"),
+    whiteSpace: normalizeEnum(
+      styles.whiteSpace,
+      ["normal", "nowrap", "pre", "pre-wrap", "pre-line", "break-spaces"],
+      "normal",
+    ),
+    textOverflow: normalizeEnum(styles.textOverflow, ["clip", "ellipsis"], "clip"),
+    boxSizing: normalizeEnum(styles.boxSizing, ["content-box", "border-box"], "content-box"),
+    aspectRatio: normalizeString(styles.aspectRatio, "auto"),
+    boxShadow: normalizeString(styles.boxShadow, "none"),
+    textShadow: normalizeString(styles.textShadow, "none"),
+    transform: normalizeString(styles.transform, "none"),
+    filter: normalizeString(styles.filter, "none"),
   };
+}
+
+function normalizeString(value: string | number | undefined, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function normalizeEnum<const Value extends string>(
+  value: string | number | undefined,
+  values: readonly Value[],
+  fallback: Value,
+): Value {
+  return typeof value === "string" && values.includes(value as Value) ? (value as Value) : fallback;
 }
 
 function normalizeColor(
@@ -210,9 +522,19 @@ function clampNumber(
   return Number.isFinite(numeric) ? Math.min(max, Math.max(min, Math.round(numeric))) : fallback;
 }
 
+function clampDecimal(
+  value: string | number | undefined,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? Math.min(max, Math.max(min, numeric)) : fallback;
+}
+
 function normalizeFontWeight(value: string | number | undefined): number {
   const numeric = clampNumber(value, 100, 900, 400);
-  return [400, 500, 600, 700].reduce((closest, candidate) =>
+  return [100, 200, 300, 400, 500, 600, 700, 800, 900].reduce((closest, candidate) =>
     Math.abs(candidate - numeric) < Math.abs(closest - numeric) ? candidate : closest,
   );
 }
@@ -239,6 +561,17 @@ export function designEditorStylesDirty(target: DesignEditorTarget | null): bool
   return DESIGN_EDITOR_STYLE_KEYS.some(
     (key) => target.draftStyles[key] !== target.originalStyles[key],
   );
+}
+
+function draftsWithTarget(
+  drafts: Record<string, DesignEditorTarget>,
+  target: DesignEditorTarget,
+): Record<string, DesignEditorTarget> {
+  const next = { ...drafts };
+  const key = targetKey(target);
+  if (designEditorTextDirty(target) || designEditorStylesDirty(target)) next[key] = target;
+  else delete next[key];
+  return next;
 }
 
 function stylesForSave(target: DesignEditorTarget): ManualStyles {
@@ -321,6 +654,7 @@ export function reconcileManualElementSaved(payload: unknown): void {
 type DesignEditorState = {
   activeSessionGroupId: string | null;
   target: DesignEditorTarget | null;
+  domTree: DesignEditorDomNode[];
   drafts: Record<string, DesignEditorTarget>;
   pendingSaveKeys: string[];
   loading: boolean;
@@ -336,12 +670,15 @@ type DesignEditorState = {
   ) => void;
   resetChanges: () => void;
   cancelSelection: () => void;
+  activateElement: (elementId: string) => void;
+  setDomTree: (sessionGroupId: string, tree: DesignEditorDomNode[]) => void;
   save: () => Promise<void>;
 };
 
 export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
   activeSessionGroupId: null,
   target: null,
+  domTree: [],
   drafts: {},
   pendingSaveKeys: [],
   loading: false,
@@ -358,6 +695,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     set({
       activeSessionGroupId: sessionGroupId,
       target: null,
+      domTree: [],
       drafts: {},
       pendingSaveKeys: [],
       error: null,
@@ -374,6 +712,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     set({
       activeSessionGroupId: null,
       target: null,
+      domTree: [],
       drafts: {},
       pendingSaveKeys: [],
       loading: false,
@@ -464,7 +803,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     if (state.saving || !state.target || !state.activeSessionGroupId || !state.target.editableText)
       return;
     const target = { ...state.target, draftText: value };
-    set({ target, drafts: { ...state.drafts, [targetKey(target)]: target }, error: null });
+    set({ target, drafts: draftsWithTarget(state.drafts, target), error: null });
     post(state.activeSessionGroupId, {
       type: "trace:design:preview-text",
       elementId: target.elementId,
@@ -479,7 +818,7 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
       ...state.target,
       draftStyles: { ...state.target.draftStyles, [key]: value },
     };
-    set({ target, drafts: { ...state.drafts, [targetKey(target)]: target }, error: null });
+    set({ target, drafts: draftsWithTarget(state.drafts, target), error: null });
     post(state.activeSessionGroupId, {
       type: "trace:design:preview-styles",
       elementId: target.elementId,
@@ -510,6 +849,17 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     selectionRequest += 1;
     post(state.activeSessionGroupId, { type: "trace:design:clear-selection" });
     set({ target: null, loading: false, error: null });
+  },
+
+  activateElement: (elementId) => {
+    const state = get();
+    if (state.saving || !state.activeSessionGroupId) return;
+    post(state.activeSessionGroupId, { type: "trace:design:activate-element", elementId });
+  },
+
+  setDomTree: (sessionGroupId, tree) => {
+    if (get().activeSessionGroupId !== sessionGroupId) return;
+    set({ domTree: tree });
   },
 
   save: async () => {

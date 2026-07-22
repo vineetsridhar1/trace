@@ -1,4 +1,4 @@
-import { MousePointer2, RotateCcw, X } from "lucide-react";
+import { MousePointer2, RotateCcw } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "../../ui/button";
 import { Textarea } from "../../ui/textarea";
@@ -9,10 +9,13 @@ import {
   useDesignEditorStore,
 } from "../../../stores/design-editor";
 import { DesignEditorStyleControls } from "./DesignEditorStyleControls";
+import { DesignEditorDomTree } from "./DesignEditorDomTree";
+import { DesignEditorPropertySection } from "./DesignEditorPropertySection";
 
 export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: string }) {
   const {
     target,
+    domTree,
     draftCount,
     loading,
     saving,
@@ -22,10 +25,12 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
     changeStyle,
     resetChanges,
     cancelSelection,
+    activateElement,
     save,
   } = useDesignEditorStore(
     useShallow((state) => ({
       target: state.target,
+      domTree: state.domTree,
       draftCount: Object.keys(state.drafts).length,
       loading: state.loading,
       saving: state.saving,
@@ -35,34 +40,64 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
       changeStyle: state.changeStyle,
       resetChanges: state.resetChanges,
       cancelSelection: state.cancelSelection,
+      activateElement: state.activateElement,
       save: state.save,
     })),
   );
   const dirty = designEditorTextDirty(target) || designEditorStylesDirty(target);
-  const title = target ? readableTargetName(target.elementId, target.draftText) : "Element editor";
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-medium" title={title}>
-            {title}
-          </h2>
-          <p className="mt-0.5 text-[10px] text-muted-foreground">
-            {draftCount > 0
-              ? `${draftCount} unsaved ${draftCount === 1 ? "element" : "elements"} · previewing live`
-              : "Changes preview live"}
-          </p>
+      <header className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold">Edit</h2>
+          {draftCount > 0 ? (
+            <p className="text-[10px] text-muted-foreground">
+              {draftCount} unsaved {draftCount === 1 ? "element" : "elements"}
+            </p>
+          ) : null}
         </div>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Exit design editing"
-          onClick={() => stop(sessionGroupId)}
-        >
-          <X className="size-4" />
+        <Button size="sm" variant="ghost" disabled={saving} onClick={() => stop(sessionGroupId)}>
+          Discard
+        </Button>
+        <Button size="sm" disabled={draftCount === 0 || saving} onClick={() => void save()}>
+          {saving ? "Saving…" : draftCount > 1 ? `Save ${draftCount}` : "Save"}
         </Button>
       </header>
+
+      {domTree.length > 0 ? (
+        <DesignEditorDomTree
+          nodes={domTree}
+          selectedElementId={target?.elementId ?? null}
+          onSelect={activateElement}
+        />
+      ) : null}
+
+      {target ? (
+        <>
+          <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-2">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-foreground text-background">
+              <MousePointer2 className="size-4" />
+            </span>
+            <span className="mx-1 h-5 w-px bg-border" />
+            <span className="min-w-0 flex-1 truncate px-1 font-mono text-[10px] text-muted-foreground">
+              &lt;{target.elementName}&gt; · {target.elementId}
+            </span>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Reset selected element"
+              disabled={!dirty || saving}
+              onClick={resetChanges}
+            >
+              <RotateCcw className="size-3.5" />
+            </Button>
+            <Button size="sm" variant="ghost" disabled={saving} onClick={cancelSelection}>
+              Done
+            </Button>
+          </div>
+        </>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {loading ? (
@@ -71,29 +106,9 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
           </div>
         ) : target ? (
           <div>
-            <div className="min-w-0 border-b border-border px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="rounded-md border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                  &lt;{target.elementName.toLowerCase()}&gt;
-                </span>
-                <span className="truncate font-mono text-[10px] text-muted-foreground">
-                  {target.elementId}
-                </span>
-              </div>
-              <p
-                className="mt-1.5 truncate text-[10px] text-muted-foreground/80"
-                title={target.filePath}
-              >
-                {target.filePath}
-              </p>
-            </div>
-
-            <section className="space-y-2.5 border-b border-border px-4 py-3">
-              <h3 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Content
-              </h3>
+            <DesignEditorPropertySection title="Content">
               <label className="block space-y-1.5 text-[11px]">
-                <span className="text-muted-foreground">Text</span>
+                <span className="text-muted-foreground">Content</span>
                 <Textarea
                   value={target.draftText}
                   maxLength={2_000}
@@ -110,18 +125,25 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
                     : "Nested or dynamic content can’t be replaced as plain text, but its appearance can still be edited."}
                 </p>
               ) : null}
-            </section>
+              <p
+                className="truncate font-mono text-[9px] text-muted-foreground/60"
+                title={target.filePath}
+              >
+                {target.filePath}
+              </p>
+            </DesignEditorPropertySection>
 
             <DesignEditorStyleControls styles={target.draftStyles} onChange={changeStyle} />
           </div>
         ) : (
-          <div className="flex h-full min-h-56 flex-col items-center justify-center px-8 text-center">
-            <div className="mb-3 flex size-9 items-center justify-center rounded-full bg-muted">
-              <MousePointer2 className="size-4 text-muted-foreground" />
+          <div className="flex h-full min-h-72 flex-col items-center justify-center px-8 text-center">
+            <div className="mb-4 flex size-10 items-center justify-center rounded-xl border border-border bg-muted/35 shadow-xs">
+              <MousePointer2 className="size-4 text-foreground" />
             </div>
-            <p className="text-sm font-medium">Select an element</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Click any highlighted element in the design to edit its content and appearance.
+            <p className="text-sm font-medium">Click any element on the canvas to edit it.</p>
+            <p className="mt-2 max-w-56 text-xs leading-5 text-muted-foreground">
+              Move between elements freely. Your changes stay previewed until you save or discard
+              them.
             </p>
           </div>
         )}
@@ -132,45 +154,6 @@ export function DesignManualEditPanel({ sessionGroupId }: { sessionGroupId: stri
           {error}
         </p>
       ) : null}
-
-      <footer className="flex min-h-13 shrink-0 items-center justify-between gap-2 border-t border-border px-3 py-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={!target || !dirty || saving}
-          onClick={resetChanges}
-        >
-          <RotateCcw className="size-3.5" />
-          Reset
-        </Button>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!target || saving}
-            onClick={cancelSelection}
-          >
-            Deselect
-          </Button>
-          <Button size="sm" disabled={draftCount === 0 || saving} onClick={() => void save()}>
-            {saving ? "Saving…" : draftCount > 1 ? `Save ${draftCount} edits` : "Save edit"}
-          </Button>
-        </div>
-      </footer>
     </div>
   );
-}
-
-function readableTargetName(elementId: string, text: string): string {
-  const readableText = text.replace(/\s+/gu, " ").trim();
-  if (readableText) {
-    return readableText.length > 42 ? `${readableText.slice(0, 39).trim()}…` : readableText;
-  }
-  const readableId = elementId
-    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
-    .replace(/[_-]+/gu, " ")
-    .trim();
-  return readableId
-    ? `${readableId.charAt(0).toUpperCase()}${readableId.slice(1)}`
-    : "Selected element";
 }

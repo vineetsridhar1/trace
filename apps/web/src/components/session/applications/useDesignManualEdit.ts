@@ -3,6 +3,7 @@ import {
   registerDesignEditorFrame,
   reapplyDesignEditorDrafts,
   useDesignEditorStore,
+  type DesignEditorDomNode,
   type DesignEditorSelectionMessage,
   type DesignEditorStyles,
 } from "../../../stores/design-editor";
@@ -16,6 +17,7 @@ type OverlayMessage = {
   text?: string;
   autoTarget?: boolean;
   editableText?: boolean;
+  domTree?: DesignEditorDomNode[];
   styles?: Partial<Record<keyof DesignEditorStyles, string | number>>;
 };
 
@@ -32,11 +34,29 @@ function overlayMessage(value: unknown): OverlayMessage | null {
     text: typeof record.text === "string" ? record.text : undefined,
     autoTarget: typeof record.autoTarget === "boolean" ? record.autoTarget : undefined,
     editableText: typeof record.editableText === "boolean" ? record.editableText : undefined,
+    domTree: normalizeDomTree(record.domTree),
     styles:
       record.styles && typeof record.styles === "object"
         ? (record.styles as OverlayMessage["styles"])
         : undefined,
   };
+}
+
+function normalizeDomTree(value: unknown, depth = 0): DesignEditorDomNode[] {
+  if (!Array.isArray(value) || depth > 9) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const node = item as Record<string, unknown>;
+    if (typeof node.elementName !== "string" || typeof node.label !== "string") return [];
+    return [
+      {
+        elementId: typeof node.elementId === "string" ? node.elementId : null,
+        elementName: node.elementName,
+        label: node.label,
+        children: normalizeDomTree(node.children, depth + 1),
+      },
+    ];
+  });
 }
 
 export function useDesignManualEdit({
@@ -52,6 +72,7 @@ export function useDesignManualEdit({
   const start = useDesignEditorStore((state) => state.start);
   const stop = useDesignEditorStore((state) => state.stop);
   const selectElement = useDesignEditorStore((state) => state.selectElement);
+  const setDomTree = useDesignEditorStore((state) => state.setDomTree);
   const enabled = activeSessionGroupId === sessionGroupId;
 
   useEffect(() => setFrameReady(false), [url]);
@@ -99,6 +120,10 @@ export function useDesignManualEdit({
       }
       const message = overlayMessage(event.data);
       if (!message) return;
+      if (message.event === "dom-tree") {
+        setDomTree(sessionGroupId, message.domTree ?? []);
+        return;
+      }
       if (message.event === "edit-mode-ready") {
         setFrameReady(true);
         return;
@@ -138,7 +163,15 @@ export function useDesignManualEdit({
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [enabled, establishHandshake, frameOrigin, postToFrame, selectElement, sessionGroupId]);
+  }, [
+    enabled,
+    establishHandshake,
+    frameOrigin,
+    postToFrame,
+    selectElement,
+    sessionGroupId,
+    setDomTree,
+  ]);
 
   useEffect(() => {
     if (!sessionGroupId) return;

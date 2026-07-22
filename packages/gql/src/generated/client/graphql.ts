@@ -362,25 +362,123 @@ export type DesignElementStyleSource = {
 
 export type DesignElementStyles = {
   __typename?: "DesignElementStyles";
+  alignItems?: Maybe<Scalars["String"]["output"]>;
+  alignSelf?: Maybe<Scalars["String"]["output"]>;
+  aspectRatio?: Maybe<Scalars["String"]["output"]>;
   backgroundColor?: Maybe<Scalars["String"]["output"]>;
+  borderColor?: Maybe<Scalars["String"]["output"]>;
   borderRadius?: Maybe<Scalars["Int"]["output"]>;
+  borderStyle?: Maybe<Scalars["String"]["output"]>;
+  borderWidth?: Maybe<Scalars["Int"]["output"]>;
+  bottom?: Maybe<Scalars["String"]["output"]>;
+  boxShadow?: Maybe<Scalars["String"]["output"]>;
+  boxSizing?: Maybe<Scalars["String"]["output"]>;
   color?: Maybe<Scalars["String"]["output"]>;
+  cursor?: Maybe<Scalars["String"]["output"]>;
+  display?: Maybe<Scalars["String"]["output"]>;
+  filter?: Maybe<Scalars["String"]["output"]>;
+  flexDirection?: Maybe<Scalars["String"]["output"]>;
+  flexGrow?: Maybe<Scalars["Float"]["output"]>;
+  fontFamily?: Maybe<Scalars["String"]["output"]>;
   fontSize?: Maybe<Scalars["Int"]["output"]>;
+  fontStyle?: Maybe<Scalars["String"]["output"]>;
   fontWeight?: Maybe<Scalars["Int"]["output"]>;
+  gap?: Maybe<Scalars["Int"]["output"]>;
+  height?: Maybe<Scalars["String"]["output"]>;
+  justifyContent?: Maybe<Scalars["String"]["output"]>;
+  left?: Maybe<Scalars["String"]["output"]>;
+  letterSpacing?: Maybe<Scalars["Int"]["output"]>;
+  lineHeight?: Maybe<Scalars["Int"]["output"]>;
+  marginBottom?: Maybe<Scalars["Int"]["output"]>;
+  marginLeft?: Maybe<Scalars["Int"]["output"]>;
+  marginRight?: Maybe<Scalars["Int"]["output"]>;
+  marginTop?: Maybe<Scalars["Int"]["output"]>;
+  maxHeight?: Maybe<Scalars["String"]["output"]>;
+  maxWidth?: Maybe<Scalars["String"]["output"]>;
+  minHeight?: Maybe<Scalars["String"]["output"]>;
+  minWidth?: Maybe<Scalars["String"]["output"]>;
+  objectFit?: Maybe<Scalars["String"]["output"]>;
+  opacity?: Maybe<Scalars["Float"]["output"]>;
+  overflow?: Maybe<Scalars["String"]["output"]>;
+  paddingBottom?: Maybe<Scalars["Int"]["output"]>;
+  paddingLeft?: Maybe<Scalars["Int"]["output"]>;
+  paddingRight?: Maybe<Scalars["Int"]["output"]>;
+  paddingTop?: Maybe<Scalars["Int"]["output"]>;
   paddingX?: Maybe<Scalars["Int"]["output"]>;
   paddingY?: Maybe<Scalars["Int"]["output"]>;
+  pointerEvents?: Maybe<Scalars["String"]["output"]>;
+  position?: Maybe<Scalars["String"]["output"]>;
+  right?: Maybe<Scalars["String"]["output"]>;
   textAlign?: Maybe<Scalars["String"]["output"]>;
+  textDecoration?: Maybe<Scalars["String"]["output"]>;
+  textOverflow?: Maybe<Scalars["String"]["output"]>;
+  textShadow?: Maybe<Scalars["String"]["output"]>;
+  textTransform?: Maybe<Scalars["String"]["output"]>;
+  top?: Maybe<Scalars["String"]["output"]>;
+  transform?: Maybe<Scalars["String"]["output"]>;
+  whiteSpace?: Maybe<Scalars["String"]["output"]>;
+  width?: Maybe<Scalars["String"]["output"]>;
+  zIndex?: Maybe<Scalars["String"]["output"]>;
 };
 
 export type DesignElementStylesInput = {
+  alignItems?: InputMaybe<Scalars["String"]["input"]>;
+  alignSelf?: InputMaybe<Scalars["String"]["input"]>;
+  aspectRatio?: InputMaybe<Scalars["String"]["input"]>;
   backgroundColor?: InputMaybe<Scalars["String"]["input"]>;
+  borderColor?: InputMaybe<Scalars["String"]["input"]>;
   borderRadius?: InputMaybe<Scalars["Int"]["input"]>;
+  borderStyle?: InputMaybe<Scalars["String"]["input"]>;
+  borderWidth?: InputMaybe<Scalars["Int"]["input"]>;
+  bottom?: InputMaybe<Scalars["String"]["input"]>;
+  boxShadow?: InputMaybe<Scalars["String"]["input"]>;
+  boxSizing?: InputMaybe<Scalars["String"]["input"]>;
   color?: InputMaybe<Scalars["String"]["input"]>;
+  cursor?: InputMaybe<Scalars["String"]["input"]>;
+  display?: InputMaybe<Scalars["String"]["input"]>;
+  filter?: InputMaybe<Scalars["String"]["input"]>;
+  flexDirection?: InputMaybe<Scalars["String"]["input"]>;
+  flexGrow?: InputMaybe<Scalars["Float"]["input"]>;
+  fontFamily?: InputMaybe<Scalars["String"]["input"]>;
   fontSize?: InputMaybe<Scalars["Int"]["input"]>;
+  fontStyle?: InputMaybe<Scalars["String"]["input"]>;
   fontWeight?: InputMaybe<Scalars["Int"]["input"]>;
+  gap?: InputMaybe<Scalars["Int"]["input"]>;
+  height?: InputMaybe<Scalars["String"]["input"]>;
+  justifyContent?: InputMaybe<Scalars["String"]["input"]>;
+  left?: InputMaybe<Scalars["String"]["input"]>;
+  letterSpacing?: InputMaybe<Scalars["Int"]["input"]>;
+  lineHeight?: InputMaybe<Scalars["Int"]["input"]>;
+  marginBottom?: InputMaybe<Scalars["Int"]["input"]>;
+  marginLeft?: InputMaybe<Scalars["Int"]["input"]>;
+  marginRight?: InputMaybe<Scalars["Int"]["input"]>;
+  marginTop?: InputMaybe<Scalars["Int"]["input"]>;
+  maxHeight?: InputMaybe<Scalars["String"]["input"]>;
+  maxWidth?: InputMaybe<Scalars["String"]["input"]>;
+  minHeight?: InputMaybe<Scalars["String"]["input"]>;
+  minWidth?: InputMaybe<Scalars["String"]["input"]>;
+  objectFit?: InputMaybe<Scalars["String"]["input"]>;
+  opacity?: InputMaybe<Scalars["Float"]["input"]>;
+  overflow?: InputMaybe<Scalars["String"]["input"]>;
+  paddingBottom?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingLeft?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingRight?: InputMaybe<Scalars["Int"]["input"]>;
+  paddingTop?: InputMaybe<Scalars["Int"]["input"]>;
   paddingX?: InputMaybe<Scalars["Int"]["input"]>;
   paddingY?: InputMaybe<Scalars["Int"]["input"]>;
+  pointerEvents?: InputMaybe<Scalars["String"]["input"]>;
+  position?: InputMaybe<Scalars["String"]["input"]>;
+  right?: InputMaybe<Scalars["String"]["input"]>;
   textAlign?: InputMaybe<Scalars["String"]["input"]>;
+  textDecoration?: InputMaybe<Scalars["String"]["input"]>;
+  textOverflow?: InputMaybe<Scalars["String"]["input"]>;
+  textShadow?: InputMaybe<Scalars["String"]["input"]>;
+  textTransform?: InputMaybe<Scalars["String"]["input"]>;
+  top?: InputMaybe<Scalars["String"]["input"]>;
+  transform?: InputMaybe<Scalars["String"]["input"]>;
+  whiteSpace?: InputMaybe<Scalars["String"]["input"]>;
+  width?: InputMaybe<Scalars["String"]["input"]>;
+  zIndex?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type DesignElementTextEditResult = {
@@ -4671,12 +4769,61 @@ export type DesignElementEditorStyleSourceQuery = {
       __typename?: "DesignElementStyles";
       color?: string | null;
       backgroundColor?: string | null;
+      fontFamily?: string | null;
       fontSize?: number | null;
       fontWeight?: number | null;
+      fontStyle?: string | null;
+      textDecoration?: string | null;
       textAlign?: string | null;
+      lineHeight?: number | null;
+      letterSpacing?: number | null;
+      textTransform?: string | null;
+      width?: string | null;
+      height?: string | null;
+      minWidth?: string | null;
+      maxWidth?: string | null;
+      minHeight?: string | null;
+      maxHeight?: string | null;
+      flexGrow?: number | null;
+      alignSelf?: string | null;
+      position?: string | null;
+      top?: string | null;
+      right?: string | null;
+      bottom?: string | null;
+      left?: string | null;
+      zIndex?: string | null;
+      display?: string | null;
+      flexDirection?: string | null;
+      justifyContent?: string | null;
+      alignItems?: string | null;
+      gap?: number | null;
       borderRadius?: number | null;
       paddingX?: number | null;
       paddingY?: number | null;
+      paddingTop?: number | null;
+      paddingRight?: number | null;
+      paddingBottom?: number | null;
+      paddingLeft?: number | null;
+      marginTop?: number | null;
+      marginRight?: number | null;
+      marginBottom?: number | null;
+      marginLeft?: number | null;
+      opacity?: number | null;
+      overflow?: string | null;
+      objectFit?: string | null;
+      borderColor?: string | null;
+      borderWidth?: number | null;
+      borderStyle?: string | null;
+      cursor?: string | null;
+      pointerEvents?: string | null;
+      whiteSpace?: string | null;
+      textOverflow?: string | null;
+      boxSizing?: string | null;
+      aspectRatio?: string | null;
+      boxShadow?: string | null;
+      textShadow?: string | null;
+      transform?: string | null;
+      filter?: string | null;
     };
   };
 };
@@ -11491,12 +11638,61 @@ export const DesignElementEditorStyleSourceDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "color" } },
                       { kind: "Field", name: { kind: "Name", value: "backgroundColor" } },
+                      { kind: "Field", name: { kind: "Name", value: "fontFamily" } },
                       { kind: "Field", name: { kind: "Name", value: "fontSize" } },
                       { kind: "Field", name: { kind: "Name", value: "fontWeight" } },
+                      { kind: "Field", name: { kind: "Name", value: "fontStyle" } },
+                      { kind: "Field", name: { kind: "Name", value: "textDecoration" } },
                       { kind: "Field", name: { kind: "Name", value: "textAlign" } },
+                      { kind: "Field", name: { kind: "Name", value: "lineHeight" } },
+                      { kind: "Field", name: { kind: "Name", value: "letterSpacing" } },
+                      { kind: "Field", name: { kind: "Name", value: "textTransform" } },
+                      { kind: "Field", name: { kind: "Name", value: "width" } },
+                      { kind: "Field", name: { kind: "Name", value: "height" } },
+                      { kind: "Field", name: { kind: "Name", value: "minWidth" } },
+                      { kind: "Field", name: { kind: "Name", value: "maxWidth" } },
+                      { kind: "Field", name: { kind: "Name", value: "minHeight" } },
+                      { kind: "Field", name: { kind: "Name", value: "maxHeight" } },
+                      { kind: "Field", name: { kind: "Name", value: "flexGrow" } },
+                      { kind: "Field", name: { kind: "Name", value: "alignSelf" } },
+                      { kind: "Field", name: { kind: "Name", value: "position" } },
+                      { kind: "Field", name: { kind: "Name", value: "top" } },
+                      { kind: "Field", name: { kind: "Name", value: "right" } },
+                      { kind: "Field", name: { kind: "Name", value: "bottom" } },
+                      { kind: "Field", name: { kind: "Name", value: "left" } },
+                      { kind: "Field", name: { kind: "Name", value: "zIndex" } },
+                      { kind: "Field", name: { kind: "Name", value: "display" } },
+                      { kind: "Field", name: { kind: "Name", value: "flexDirection" } },
+                      { kind: "Field", name: { kind: "Name", value: "justifyContent" } },
+                      { kind: "Field", name: { kind: "Name", value: "alignItems" } },
+                      { kind: "Field", name: { kind: "Name", value: "gap" } },
                       { kind: "Field", name: { kind: "Name", value: "borderRadius" } },
                       { kind: "Field", name: { kind: "Name", value: "paddingX" } },
                       { kind: "Field", name: { kind: "Name", value: "paddingY" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingTop" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingRight" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingBottom" } },
+                      { kind: "Field", name: { kind: "Name", value: "paddingLeft" } },
+                      { kind: "Field", name: { kind: "Name", value: "marginTop" } },
+                      { kind: "Field", name: { kind: "Name", value: "marginRight" } },
+                      { kind: "Field", name: { kind: "Name", value: "marginBottom" } },
+                      { kind: "Field", name: { kind: "Name", value: "marginLeft" } },
+                      { kind: "Field", name: { kind: "Name", value: "opacity" } },
+                      { kind: "Field", name: { kind: "Name", value: "overflow" } },
+                      { kind: "Field", name: { kind: "Name", value: "objectFit" } },
+                      { kind: "Field", name: { kind: "Name", value: "borderColor" } },
+                      { kind: "Field", name: { kind: "Name", value: "borderWidth" } },
+                      { kind: "Field", name: { kind: "Name", value: "borderStyle" } },
+                      { kind: "Field", name: { kind: "Name", value: "cursor" } },
+                      { kind: "Field", name: { kind: "Name", value: "pointerEvents" } },
+                      { kind: "Field", name: { kind: "Name", value: "whiteSpace" } },
+                      { kind: "Field", name: { kind: "Name", value: "textOverflow" } },
+                      { kind: "Field", name: { kind: "Name", value: "boxSizing" } },
+                      { kind: "Field", name: { kind: "Name", value: "aspectRatio" } },
+                      { kind: "Field", name: { kind: "Name", value: "boxShadow" } },
+                      { kind: "Field", name: { kind: "Name", value: "textShadow" } },
+                      { kind: "Field", name: { kind: "Name", value: "transform" } },
+                      { kind: "Field", name: { kind: "Name", value: "filter" } },
                     ],
                   },
                 },

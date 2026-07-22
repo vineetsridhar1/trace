@@ -5,12 +5,14 @@ export function DesignEditorNumberField({
   value,
   min,
   max,
+  unit = "px",
   onChange,
 }: {
   label: string;
   value: number;
   min: number;
   max: number;
+  unit?: string;
   onChange: (value: number) => void;
 }) {
   const changeBy = (amount: number) => onChange(Math.min(max, Math.max(min, value + amount)));
@@ -39,7 +41,7 @@ export function DesignEditorNumberField({
             if (Number.isFinite(next)) onChange(Math.min(max, Math.max(min, Math.round(next))));
           }}
         />
-        <span className="pr-0.5 text-[10px] text-muted-foreground">px</span>
+        {unit ? <span className="pr-0.5 text-[10px] text-muted-foreground">{unit}</span> : null}
         <button
           type="button"
           aria-label={`Increase ${label.toLowerCase()}`}

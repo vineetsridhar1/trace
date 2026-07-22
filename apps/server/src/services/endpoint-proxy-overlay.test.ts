@@ -11,7 +11,7 @@ describe("endpoint authoring overlay", () => {
   it("discovers selectable design targets from the canvas manifest", () => {
     const result = injectAuthoringOverlay(
       { "content-type": "text/html; charset=utf-8", "content-length": "42" },
-      Buffer.from("<!doctype html><html><head></head><body><div id=\"root\"></div></body></html>"),
+      Buffer.from('<!doctype html><html><head></head><body><div id="root"></div></body></html>'),
     );
     const html = result.body.toString("utf8");
 
@@ -23,6 +23,10 @@ describe("endpoint authoring overlay", () => {
     expect(html).toContain('e.data.type==="trace:design:handshake"');
     expect(html).toContain('post("ready",{},e.origin)');
     expect(html).toContain('post("edit-mode-ready",{})');
+    expect(html).toContain("post('dom-tree',{domTree:tree})");
+    expect(injectedScript(html)).toContain("replace(/\\s+/g");
+    expect(html).toContain('e.data.type==="trace:design:activate-element"');
+    expect(html).toContain("boxShadow:style.boxShadow");
     expect(result.headers).not.toHaveProperty("content-length");
     expect(result.headers).toMatchObject({ "cache-control": "no-store" });
     expect(() => new Function(injectedScript(html))).not.toThrow();

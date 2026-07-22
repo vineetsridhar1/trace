@@ -11,6 +11,11 @@ describe("design manual element styles", () => {
       fontSize: 32,
       fontWeight: 600,
       textAlign: "center",
+      display: "flex",
+      gap: 16,
+      marginTop: -8,
+      opacity: 0.75,
+      boxShadow: "0 8px 24px rgb(0 0 0 / 0.2)",
       paddingX: 12,
       paddingY: 8,
     });
@@ -22,6 +27,11 @@ describe("design manual element styles", () => {
       fontSize: 32,
       fontWeight: 600,
       textAlign: "center",
+      display: "flex",
+      gap: 16,
+      marginTop: -8,
+      opacity: 0.75,
+      boxShadow: "0 8px 24px rgb(0 0 0 / 0.2)",
       paddingX: 12,
       paddingY: 8,
     });
@@ -49,8 +59,11 @@ describe("design manual element styles", () => {
     expect(() => updateManualDesignElementStyles("", "hero", { fontSize: 200 })).toThrow(
       "between 8 and 96",
     );
-    expect(() => updateManualDesignElementStyles("", "hero", { textAlign: "justify" })).toThrow(
-      "left, center, or right",
+    expect(() => updateManualDesignElementStyles("", "hero", { textAlign: "start" })).toThrow(
+      "unsupported value",
     );
+    expect(() =>
+      updateManualDesignElementStyles("", "hero", { transform: "rotate(2deg); color: red" }),
+    ).toThrow("unsupported CSS");
   });
 });

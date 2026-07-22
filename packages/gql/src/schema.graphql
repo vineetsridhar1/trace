@@ -531,7 +531,9 @@ type SessionGroup {
   connection: SessionConnection
   prUrl: String
   worktreeDeleted: Boolean!
-  """True when the workspace is a user-owned worktree imported into Trace."""
+  """
+  True when the workspace is a user-owned worktree imported into Trace.
+  """
   worktreeAdopted: Boolean!
   archivedAt: DateTime
   setupStatus: SetupStatus!
@@ -540,13 +542,17 @@ type SessionGroup {
   updatedAt: DateTime!
 }
 
-"""An existing git worktree of a repo on a local runtime, offered for import."""
+"""
+An existing git worktree of a repo on a local runtime, offered for import.
+"""
 type RepoWorktree {
   path: String!
   branch: String
   head: String
   isMain: Boolean!
-  """True when the worktree is already managed by Trace (not a candidate for import)."""
+  """
+  True when the worktree is already managed by Trace (not a candidate for import).
+  """
   isTraceManaged: Boolean!
 }
 
@@ -1078,23 +1084,121 @@ type DesignElementTextEditResult {
 type DesignElementStyles {
   color: String
   backgroundColor: String
+  fontFamily: String
   fontSize: Int
   fontWeight: Int
+  fontStyle: String
+  textDecoration: String
   textAlign: String
+  lineHeight: Int
+  letterSpacing: Int
+  textTransform: String
+  width: String
+  height: String
+  minWidth: String
+  maxWidth: String
+  minHeight: String
+  maxHeight: String
+  flexGrow: Float
+  alignSelf: String
+  position: String
+  top: String
+  right: String
+  bottom: String
+  left: String
+  zIndex: String
+  display: String
+  flexDirection: String
+  justifyContent: String
+  alignItems: String
+  gap: Int
   borderRadius: Int
   paddingX: Int
   paddingY: Int
+  paddingTop: Int
+  paddingRight: Int
+  paddingBottom: Int
+  paddingLeft: Int
+  marginTop: Int
+  marginRight: Int
+  marginBottom: Int
+  marginLeft: Int
+  opacity: Float
+  overflow: String
+  objectFit: String
+  borderColor: String
+  borderWidth: Int
+  borderStyle: String
+  cursor: String
+  pointerEvents: String
+  whiteSpace: String
+  textOverflow: String
+  boxSizing: String
+  aspectRatio: String
+  boxShadow: String
+  textShadow: String
+  transform: String
+  filter: String
 }
 
 input DesignElementStylesInput {
   color: String
   backgroundColor: String
+  fontFamily: String
   fontSize: Int
   fontWeight: Int
+  fontStyle: String
+  textDecoration: String
   textAlign: String
+  lineHeight: Int
+  letterSpacing: Int
+  textTransform: String
+  width: String
+  height: String
+  minWidth: String
+  maxWidth: String
+  minHeight: String
+  maxHeight: String
+  flexGrow: Float
+  alignSelf: String
+  position: String
+  top: String
+  right: String
+  bottom: String
+  left: String
+  zIndex: String
+  display: String
+  flexDirection: String
+  justifyContent: String
+  alignItems: String
+  gap: Int
   borderRadius: Int
   paddingX: Int
   paddingY: Int
+  paddingTop: Int
+  paddingRight: Int
+  paddingBottom: Int
+  paddingLeft: Int
+  marginTop: Int
+  marginRight: Int
+  marginBottom: Int
+  marginLeft: Int
+  opacity: Float
+  overflow: String
+  objectFit: String
+  borderColor: String
+  borderWidth: Int
+  borderStyle: String
+  cursor: String
+  pointerEvents: String
+  whiteSpace: String
+  textOverflow: String
+  boxSizing: String
+  aspectRatio: String
+  boxShadow: String
+  textShadow: String
+  transform: String
+  filter: String
 }
 
 type DesignElementStyleSource {
@@ -1207,7 +1311,9 @@ input StartSessionInput {
   projectId: ID
   prompt: String
   interactionMode: String
-  """Absolute path to an existing local worktree to adopt instead of creating one. Local hosting only."""
+  """
+  Absolute path to an existing local worktree to adopt instead of creating one. Local hosting only.
+  """
   worktreePath: String
 }
 
@@ -1452,7 +1558,9 @@ type Query {
   myConnections: [ConnectionsBridge!]!
   bridgeRuntimeAccess(runtimeInstanceId: ID!, sessionGroupId: ID): BridgeRuntimeAccess!
   repoBranches(repoId: ID!, runtimeInstanceId: ID, sessionGroupId: ID): [String!]!
-  """Existing on-disk worktrees of a repo on a local runtime, available to import."""
+  """
+  Existing on-disk worktrees of a repo on a local runtime, available to import.
+  """
   repoWorktrees(repoId: ID!, runtimeInstanceId: ID): [RepoWorktree!]!
   sessionGroupFiles(sessionGroupId: ID!): [String!]!
   sessionGroupFileTree(sessionGroupId: ID!): SessionGroupFileTree!
@@ -1592,7 +1700,9 @@ type Mutation {
   reorderChannels(input: ReorderChannelsInput!): [Channel!]!
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
-  """Adopt an existing local worktree into a not-yet-started session's group (local hosting only)."""
+  """
+  Adopt an existing local worktree into a not-yet-started session's group (local hosting only).
+  """
   importWorktree(sessionId: ID!, worktreePath: String!, branch: String): SessionGroup!
   forkSession(eventId: ID!): Session!
   runSession(id: ID!, prompt: String, interactionMode: String): Session!
