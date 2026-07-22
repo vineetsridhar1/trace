@@ -172,6 +172,7 @@ import {
 } from "@trace/shared";
 import { SessionService, isFullyUnloadedSession } from "./session.js";
 import type { StartSessionServiceInput } from "./session.js";
+import { designSourceHash } from "./design-manual-edit.js";
 
 type MockedDeep<T> = {
   [K in keyof T]: T[K] extends (...args: infer A) => infer R
@@ -3752,6 +3753,99 @@ describe("SessionService", () => {
             styles: { color: "#112233", fontSize: 32, textAlign: "center" },
           }),
         }),
+      );
+    });
+
+    it("commits a combined manual element edit before publishing its reconciliation event", async () => {
+      const filePath = "src/design/screens/WelcomeScreen.tsx";
+      const textSource = `<h1 data-trace-id="hero-title" data-trace-source="${filePath}">Processing</h1>`;
+      const styleSource = "/* Trace writes user-authored visual overrides here. */\n";
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({
+          id: "group-1",
+          kind: "design",
+          visibility: "public",
+          ownerUserId: "user-1",
+        })
+        .mockResolvedValueOnce({
+          id: "group-1",
+          workdir: "/tmp/trace",
+          worktreeDeleted: false,
+          connection: { runtimeInstanceId: "runtime-1" },
+          visibility: "public",
+          ownerUserId: "user-1",
+        });
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-1",
+          workdir: "/tmp/trace",
+          connection: { runtimeInstanceId: "runtime-1" },
+        },
+      ]);
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        id: "runtime-1",
+        key: "org-1:runtime-1",
+        label: "Runtime",
+        hostingMode: "local",
+      });
+      sessionRouterMock.readFile
+        .mockResolvedValueOnce(textSource)
+        .mockResolvedValueOnce(styleSource);
+      sessionRouterMock.commitFileChanges.mockResolvedValueOnce("commit-123");
+
+      await expect(
+        service.saveManualElementEdit(
+          {
+            sessionGroupId: "group-1",
+            filePath,
+            elementId: "hero-title",
+            text: "Under review",
+            expectedTextSourceHash: designSourceHash(textSource),
+            styles: { color: "#112233" },
+            expectedStyleSourceHash: designSourceHash(styleSource),
+          },
+          "org-1",
+          "user",
+          "user-1",
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          filePath,
+          elementId: "hero-title",
+          text: "Under review",
+          commitSha: "commit-123",
+        }),
+      );
+      expect(sessionRouterMock.writeFile).toHaveBeenNthCalledWith(
+        1,
+        "org-1:runtime-1",
+        "session-1",
+        filePath,
+        expect.stringContaining("Under review"),
+        "/tmp/trace",
+      );
+      expect(sessionRouterMock.writeFile).toHaveBeenNthCalledWith(
+        2,
+        "org-1:runtime-1",
+        "session-1",
+        "src/design/manual.css",
+        expect.stringContaining('[data-trace-id="hero-title"]'),
+        "/tmp/trace",
+      );
+      expect(sessionRouterMock.commitFileChanges).toHaveBeenCalledWith(
+        "org-1:runtime-1",
+        "session-1",
+        "Save manual design element edit",
+        "/tmp/trace",
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "manual_element_saved",
+          payload: expect.objectContaining({ commitSha: "commit-123", elementId: "hero-title" }),
+        }),
+      );
+      expect(sessionRouterMock.commitFileChanges.mock.invocationCallOrder[0]!).toBeLessThan(
+        eventServiceMock.create.mock.invocationCallOrder[0]!,
       );
     });
 

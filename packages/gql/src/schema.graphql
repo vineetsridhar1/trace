@@ -305,6 +305,7 @@ enum EventType {
   pdf_export_updated
   design_element_text_updated
   design_element_styles_updated
+  manual_element_saved
   chat_created
   chat_member_added
   chat_member_removed
@@ -1110,6 +1111,26 @@ type DesignElementStyleEditResult {
   styles: DesignElementStyles!
 }
 
+input ManualElementEditInput {
+  filePath: String!
+  elementId: String!
+  text: String
+  expectedTextSourceHash: String
+  styles: DesignElementStylesInput
+  expectedStyleSourceHash: String
+}
+
+type ManualElementEditResult {
+  sessionGroupId: ID!
+  filePath: String!
+  elementId: String!
+  text: String
+  textSourceHash: String
+  styles: DesignElementStyles
+  styleSourceHash: String
+  commitSha: String!
+}
+
 type Notification {
   id: ID!
   type: String!
@@ -1636,6 +1657,10 @@ type Mutation {
     styles: DesignElementStylesInput!
     expectedSourceHash: String!
   ): DesignElementStyleEditResult!
+  saveManualElementEdit(
+    sessionGroupId: ID!
+    input: ManualElementEditInput!
+  ): ManualElementEditResult!
   commitSessionGroupFileChanges(sessionGroupId: ID!, message: String): String!
   revertSessionGroupFileChange(sessionGroupId: ID!, filePath: String!): Boolean!
   requestBridgeAccess(

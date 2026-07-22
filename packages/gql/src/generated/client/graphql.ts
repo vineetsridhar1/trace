@@ -2,7 +2,7 @@
 import { JsonValue } from "../../json";
 import { TypedDocumentNode as DocumentNode } from "@graphql-typed-document-node/core";
 export type Maybe<T> = T | null;
-export type InputMaybe<T> = Maybe<T>;
+export type InputMaybe<T> = T | null | undefined;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
 export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
 export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
@@ -469,6 +469,7 @@ export type EventType =
   | "inbox_item_created"
   | "inbox_item_resolved"
   | "managed_git_token_minted"
+  | "manual_element_saved"
   | "member_joined"
   | "member_left"
   | "message_deleted"
@@ -627,6 +628,27 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
+export type ManualElementEditInput = {
+  elementId: Scalars["String"]["input"];
+  expectedStyleSourceHash?: InputMaybe<Scalars["String"]["input"]>;
+  expectedTextSourceHash?: InputMaybe<Scalars["String"]["input"]>;
+  filePath: Scalars["String"]["input"];
+  styles?: InputMaybe<DesignElementStylesInput>;
+  text?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type ManualElementEditResult = {
+  __typename?: "ManualElementEditResult";
+  commitSha: Scalars["String"]["output"];
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  styleSourceHash?: Maybe<Scalars["String"]["output"]>;
+  styles?: Maybe<DesignElementStyles>;
+  text?: Maybe<Scalars["String"]["output"]>;
+  textSourceHash?: Maybe<Scalars["String"]["output"]>;
+};
+
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -745,6 +767,7 @@ export type Mutation = {
   rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
+  saveManualElementEdit: ManualElementEditResult;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -1129,6 +1152,11 @@ export type MutationRunSessionArgs = {
 
 export type MutationRunSessionGroupSetupScriptArgs = {
   scriptId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSaveManualElementEditArgs = {
+  input: ManualElementEditInput;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -4640,47 +4668,14 @@ export type DesignElementEditorTextSourceQuery = {
   };
 };
 
-export type UpdateDesignElementTextMutationVariables = Exact<{
+export type SaveManualElementEditMutationVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
-  filePath: Scalars["String"]["input"];
-  elementId: Scalars["String"]["input"];
-  text: Scalars["String"]["input"];
-  expectedSourceHash: Scalars["String"]["input"];
+  input: ManualElementEditInput;
 }>;
 
-export type UpdateDesignElementTextMutation = {
+export type SaveManualElementEditMutation = {
   __typename?: "Mutation";
-  updateDesignElementText: {
-    __typename?: "DesignElementTextEditResult";
-    text: string;
-    sourceHash: string;
-  };
-};
-
-export type UpdateDesignElementStylesMutationVariables = Exact<{
-  sessionGroupId: Scalars["ID"]["input"];
-  elementId: Scalars["String"]["input"];
-  styles: DesignElementStylesInput;
-  expectedSourceHash: Scalars["String"]["input"];
-}>;
-
-export type UpdateDesignElementStylesMutation = {
-  __typename?: "Mutation";
-  updateDesignElementStyles: {
-    __typename?: "DesignElementStyleEditResult";
-    sourceHash: string;
-    styles: {
-      __typename?: "DesignElementStyles";
-      color?: string | null;
-      backgroundColor?: string | null;
-      fontSize?: number | null;
-      fontWeight?: number | null;
-      textAlign?: string | null;
-      borderRadius?: number | null;
-      paddingX?: number | null;
-      paddingY?: number | null;
-    };
-  };
+  saveManualElementEdit: { __typename?: "ManualElementEditResult"; commitSha: string };
 };
 
 export type OnboardingReposQueryVariables = Exact<{
@@ -11499,13 +11494,13 @@ export const DesignElementEditorTextSourceDocument = {
   DesignElementEditorTextSourceQuery,
   DesignElementEditorTextSourceQueryVariables
 >;
-export const UpdateDesignElementTextDocument = {
+export const SaveManualElementEditDocument = {
   kind: "Document",
   definitions: [
     {
       kind: "OperationDefinition",
       operation: "mutation",
-      name: { kind: "Name", value: "UpdateDesignElementText" },
+      name: { kind: "Name", value: "SaveManualElementEdit" },
       variableDefinitions: [
         {
           kind: "VariableDefinition",
@@ -11517,34 +11512,10 @@ export const UpdateDesignElementTextDocument = {
         },
         {
           kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
           type: {
             kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "text" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+            type: { kind: "NamedType", name: { kind: "Name", value: "ManualElementEditInput" } },
           },
         },
       ],
@@ -11553,7 +11524,7 @@ export const UpdateDesignElementTextDocument = {
         selections: [
           {
             kind: "Field",
-            name: { kind: "Name", value: "updateDesignElementText" },
+            name: { kind: "Name", value: "saveManualElementEdit" },
             arguments: [
               {
                 kind: "Argument",
@@ -11562,142 +11533,20 @@ export const UpdateDesignElementTextDocument = {
               },
               {
                 kind: "Argument",
-                name: { kind: "Name", value: "filePath" },
-                value: { kind: "Variable", name: { kind: "Name", value: "filePath" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "elementId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "text" },
-                value: { kind: "Variable", name: { kind: "Name", value: "text" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "expectedSourceHash" },
-                value: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
               },
             ],
             selectionSet: {
               kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "text" } },
-                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
-              ],
+              selections: [{ kind: "Field", name: { kind: "Name", value: "commitSha" } }],
             },
           },
         ],
       },
     },
   ],
-} as unknown as DocumentNode<
-  UpdateDesignElementTextMutation,
-  UpdateDesignElementTextMutationVariables
->;
-export const UpdateDesignElementStylesDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "UpdateDesignElementStyles" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "styles" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "DesignElementStylesInput" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "updateDesignElementStyles" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "elementId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "elementId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "styles" },
-                value: { kind: "Variable", name: { kind: "Name", value: "styles" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "expectedSourceHash" },
-                value: { kind: "Variable", name: { kind: "Name", value: "expectedSourceHash" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "sourceHash" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "styles" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "color" } },
-                      { kind: "Field", name: { kind: "Name", value: "backgroundColor" } },
-                      { kind: "Field", name: { kind: "Name", value: "fontSize" } },
-                      { kind: "Field", name: { kind: "Name", value: "fontWeight" } },
-                      { kind: "Field", name: { kind: "Name", value: "textAlign" } },
-                      { kind: "Field", name: { kind: "Name", value: "borderRadius" } },
-                      { kind: "Field", name: { kind: "Name", value: "paddingX" } },
-                      { kind: "Field", name: { kind: "Name", value: "paddingY" } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  UpdateDesignElementStylesMutation,
-  UpdateDesignElementStylesMutationVariables
->;
+} as unknown as DocumentNode<SaveManualElementEditMutation, SaveManualElementEditMutationVariables>;
 export const OnboardingReposDocument = {
   kind: "Document",
   definitions: [

@@ -86,11 +86,12 @@ import {
   readStaticDesignElementText,
   updateStaticDesignElementText,
   validateDesignElementId,
-  validateDesignSourcePath,
+  validateManualSourcePath,
   type DesignElementTextSource,
+  type ManualEditableProjectKind,
 } from "./design-manual-edit.js";
 import {
-  DESIGN_MANUAL_STYLE_PATH,
+  manualStylePath,
   readManualDesignElementStyles,
   updateManualDesignElementStyles,
   type ManualDesignElementStyles,
@@ -9217,6 +9218,163 @@ export class SessionService {
     return this.pdfArtifactUrl(sessionGroupId, organizationId, userId, true);
   }
 
+  async saveManualElementEdit(
+    input: {
+      sessionGroupId: string;
+      filePath: string;
+      elementId: string;
+      text?: string | null;
+      expectedTextSourceHash?: string | null;
+      styles?: DesignElementStylesInput | null;
+      expectedStyleSourceHash?: string | null;
+    },
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<{
+    sessionGroupId: string;
+    filePath: string;
+    elementId: string;
+    text: string | null;
+    textSourceHash: string | null;
+    styles: ManualDesignElementStyles | null;
+    styleSourceHash: string | null;
+    commitSha: string;
+  }> {
+    const kind = await this.assertManualElementEditAccess(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+    );
+    const filePath = validateManualSourcePath(input.filePath, kind);
+    const elementId = validateDesignElementId(input.elementId);
+    const savesText = input.text !== null && input.text !== undefined;
+    const savesStyles = input.styles !== null && input.styles !== undefined;
+    if (!savesText && !savesStyles) {
+      throw new ValidationError("Choose content or appearance changes before saving");
+    }
+    if (savesText && !input.expectedTextSourceHash) {
+      throw new ValidationError("The text source hash is required");
+    }
+    if (savesStyles && !input.expectedStyleSourceHash) {
+      throw new ValidationError("The style source hash is required");
+    }
+
+    const runtime = await this.resolveAccessibleSessionGroupRuntime(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+      { requireWrite: true },
+    );
+    const [textSource, styleFile] = await Promise.all([
+      savesText
+        ? sessionRouter.readFile(
+            runtime.runtimeId,
+            runtime.sessionId,
+            filePath,
+            runtime.workdirHint,
+          )
+        : null,
+      savesStyles
+        ? this.readDesignManualStyleFile(
+            runtime.runtimeId,
+            runtime.sessionId,
+            runtime.workdirHint,
+            kind,
+          )
+        : null,
+    ]);
+
+    if (textSource && designSourceHash(textSource) !== input.expectedTextSourceHash) {
+      throw new ValidationError("The source changed. Select the element again before saving");
+    }
+    if (styleFile && designSourceHash(styleFile.source) !== input.expectedStyleSourceHash) {
+      throw new ValidationError(
+        "The manual styles changed. Select the element again before saving",
+      );
+    }
+
+    const textResult = textSource
+      ? updateStaticDesignElementText(textSource, filePath, elementId, input.text!)
+      : null;
+    const styleResult = styleFile
+      ? updateManualDesignElementStyles(styleFile.source, elementId, input.styles!)
+      : null;
+    const writes = [
+      ...(textResult && textResult.source !== textSource
+        ? [{ path: filePath, before: textSource!, after: textResult.source }]
+        : []),
+      ...(styleResult && styleResult.source !== styleFile?.source
+        ? [{ path: styleFile!.path, before: styleFile!.source, after: styleResult.source }]
+        : []),
+    ];
+
+    const written: typeof writes = [];
+    let commitSha: string;
+    try {
+      for (const write of writes) {
+        await sessionRouter.writeFile(
+          runtime.runtimeId,
+          runtime.sessionId,
+          write.path,
+          write.after,
+          runtime.workdirHint,
+        );
+        written.push(write);
+      }
+      commitSha = await sessionRouter.commitFileChanges(
+        runtime.runtimeId,
+        runtime.sessionId,
+        `Save manual ${kind} element edit`,
+        runtime.workdirHint,
+      );
+    } catch (error) {
+      await Promise.all(
+        written
+          .reverse()
+          .map((write) =>
+            sessionRouter.writeFile(
+              runtime.runtimeId,
+              runtime.sessionId,
+              write.path,
+              write.before,
+              runtime.workdirHint,
+            ),
+          ),
+      ).catch(() => {});
+      throw error;
+    }
+
+    await eventService.create({
+      organizationId,
+      scopeType: "system",
+      scopeId: input.sessionGroupId,
+      eventType: "manual_element_saved",
+      payload: {
+        sessionGroupId: input.sessionGroupId,
+        filePath,
+        elementId,
+        text: textResult?.text ?? null,
+        textSourceHash: textResult?.sourceHash ?? null,
+        styles: styleResult?.styles ?? null,
+        styleSourceHash: styleResult?.sourceHash ?? null,
+        commitSha,
+      },
+      actorType,
+      actorId,
+    });
+    return {
+      sessionGroupId: input.sessionGroupId,
+      filePath,
+      elementId,
+      text: textResult?.text ?? null,
+      textSourceHash: textResult?.sourceHash ?? null,
+      styles: styleResult?.styles ?? null,
+      styleSourceHash: styleResult?.sourceHash ?? null,
+      commitSha,
+    };
+  }
+
   async readDesignElementTextSource(
     sessionGroupId: string,
     filePath: string,
@@ -9224,9 +9382,9 @@ export class SessionService {
     organizationId: string,
     userId: string,
   ): Promise<DesignElementTextSource & { sessionGroupId: string }> {
-    const normalizedPath = validateDesignSourcePath(filePath);
+    const kind = await this.assertManualElementEditAccess(sessionGroupId, organizationId, userId);
+    const normalizedPath = validateManualSourcePath(filePath, kind);
     const normalizedElementId = validateDesignElementId(elementId);
-    await this.assertDesignManualEditAccess(sessionGroupId, organizationId, userId);
     const runtime = await this.resolveAccessibleSessionGroupRuntime(
       sessionGroupId,
       organizationId,
@@ -9264,9 +9422,13 @@ export class SessionService {
     text: string;
     sourceHash: string;
   }> {
-    const filePath = validateDesignSourcePath(input.filePath);
+    const kind = await this.assertManualElementEditAccess(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+    );
+    const filePath = validateManualSourcePath(input.filePath, kind);
     const elementId = validateDesignElementId(input.elementId);
-    await this.assertDesignManualEditAccess(input.sessionGroupId, organizationId, actorId);
     const runtime = await this.resolveAccessibleSessionGroupRuntime(
       input.sessionGroupId,
       organizationId,
@@ -9333,8 +9495,8 @@ export class SessionService {
     sourceHash: string;
     styles: ManualDesignElementStyles;
   }> {
+    const kind = await this.assertManualElementEditAccess(sessionGroupId, organizationId, userId);
     const normalizedElementId = validateDesignElementId(elementId);
-    await this.assertDesignManualEditAccess(sessionGroupId, organizationId, userId);
     const runtime = await this.resolveAccessibleSessionGroupRuntime(
       sessionGroupId,
       organizationId,
@@ -9345,6 +9507,7 @@ export class SessionService {
       runtime.runtimeId,
       runtime.sessionId,
       runtime.workdirHint,
+      kind,
     );
     return {
       sessionGroupId,
@@ -9369,8 +9532,12 @@ export class SessionService {
     sourceHash: string;
     styles: ManualDesignElementStyles;
   }> {
+    const kind = await this.assertManualElementEditAccess(
+      input.sessionGroupId,
+      organizationId,
+      actorId,
+    );
     const elementId = validateDesignElementId(input.elementId);
-    await this.assertDesignManualEditAccess(input.sessionGroupId, organizationId, actorId);
     const runtime = await this.resolveAccessibleSessionGroupRuntime(
       input.sessionGroupId,
       organizationId,
@@ -9381,6 +9548,7 @@ export class SessionService {
       runtime.runtimeId,
       runtime.sessionId,
       runtime.workdirHint,
+      kind,
     );
     const source = styleFile.source;
     if (designSourceHash(source) !== input.expectedSourceHash) {
@@ -9426,16 +9594,13 @@ export class SessionService {
     runtimeId: string,
     sessionId: string,
     workdirHint?: string,
+    kind: ManualEditableProjectKind = "design",
   ): Promise<{ path: string; source: string }> {
+    const path = manualStylePath(kind);
     try {
       return {
-        path: DESIGN_MANUAL_STYLE_PATH,
-        source: await sessionRouter.readFile(
-          runtimeId,
-          sessionId,
-          DESIGN_MANUAL_STYLE_PATH,
-          workdirHint,
-        ),
+        path,
+        source: await sessionRouter.readFile(runtimeId, sessionId, path, workdirHint),
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
@@ -9451,22 +9616,23 @@ export class SessionService {
     }
   }
 
-  private async assertDesignManualEditAccess(
+  private async assertManualElementEditAccess(
     sessionGroupId: string,
     organizationId: string,
     userId: string,
-  ): Promise<void> {
+  ): Promise<ManualEditableProjectKind> {
     const group = await prisma.sessionGroup.findFirst({
       where: { id: sessionGroupId, organizationId },
       select: { id: true, kind: true, visibility: true, ownerUserId: true },
     });
-    if (!group) throw new ValidationError("Design session not found");
-    if (group.kind !== "design") {
-      throw new ValidationError("Manual design editing is only available in design sessions");
+    if (!group) throw new ValidationError("Generated project session not found");
+    if (group.kind !== "design" && group.kind !== "pdf") {
+      throw new ValidationError("Manual editing is only available in design and document sessions");
     }
     if (!canViewSessionGroup(group, userId)) {
-      throw new AuthorizationError("Not authorized for this design session");
+      throw new AuthorizationError("Not authorized for this generated project session");
     }
+    return group.kind;
   }
 
   async commitFileChanges(

@@ -16,7 +16,7 @@ export function ProjectPreviewWorkspace({
   canvasKey,
   canvas,
   showCanvasWhileLoading = false,
-  designSessionGroupId,
+  manualSessionGroupId,
 }: {
   sessionId: string | null;
   scrollToEventId: string | null;
@@ -27,15 +27,15 @@ export function ProjectPreviewWorkspace({
   canvasKey: string;
   canvas: ReactNode;
   showCanvasWhileLoading?: boolean;
-  designSessionGroupId?: string;
+  manualSessionGroupId?: string;
 }) {
   const [canvasRevealed, setCanvasRevealed] = useState(canvasReady || showCanvasWhileLoading);
   const hasCollapsedRef = useRef(false);
   const collapsedByUsRef = useRef(false);
   const reduceMotion = useReducedMotion();
   const { isMobile, open, openMobile, setOpen, setOpenMobile } = useSidebar();
-  const designEditing = useDesignEditorStore(
-    (state) => !!designSessionGroupId && state.activeSessionGroupId === designSessionGroupId,
+  const manualEditing = useDesignEditorStore(
+    (state) => !!manualSessionGroupId && state.activeSessionGroupId === manualSessionGroupId,
   );
 
   // Keep the sidebar API fresh for the unmount cleanup below without re-running
@@ -94,8 +94,8 @@ export function ProjectPreviewWorkspace({
               : "w-full",
         )}
       >
-        {designEditing && designSessionGroupId ? (
-          <DesignManualEditPanel sessionGroupId={designSessionGroupId} />
+        {manualEditing && manualSessionGroupId ? (
+          <DesignManualEditPanel sessionGroupId={manualSessionGroupId} />
         ) : sessionId ? (
           <SessionDetailView
             key={sessionId}

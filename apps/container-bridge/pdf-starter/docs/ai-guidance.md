@@ -7,6 +7,10 @@
 - Use semantic HTML, local styles, and explicit page-break rules.
 - Keep the print CSS. Trace owns the size picker and Download PDF button outside the document. Use `document.format.json` for the durable AI-authored default; do not add authoring or download controls inside the artifact.
 - Edit document content in `src/App.tsx`. Do not modify `src/main.tsx` or `src/TracePdfRuntime.tsx`; Trace owns those files so preview sizing and printing remain reliable.
+- Give meaningful layout and text elements stable, unique `data-trace-id` attributes and set
+  `data-trace-source="src/App.tsx"`. Preserve these attributes so manual content and visual edits
+  can round-trip into the document source. Static text is content-editable; dynamic or nested markup
+  remains appearance-only.
 - Do not stop, restart, or replace the managed dev server. It is already running on port 3000; edit files and let Vite's HMR or automatic config restart update the preview.
 - Do not add server routes, databases, authentication, network calls, or package dependencies unless the document itself truly needs them.
 

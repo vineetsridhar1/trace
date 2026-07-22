@@ -1,8 +1,17 @@
 import type { DesignElementStylesInput } from "@trace/gql";
 import { ValidationError } from "../lib/errors.js";
-import { designSourceHash, validateDesignElementId } from "./design-manual-edit.js";
+import {
+  designSourceHash,
+  validateDesignElementId,
+  type ManualEditableProjectKind,
+} from "./design-manual-edit.js";
 
 export const DESIGN_MANUAL_STYLE_PATH = "src/design/manual.css";
+export const PDF_MANUAL_STYLE_PATH = "src/manual.css";
+
+export function manualStylePath(kind: ManualEditableProjectKind): string {
+  return kind === "design" ? DESIGN_MANUAL_STYLE_PATH : PDF_MANUAL_STYLE_PATH;
+}
 
 export type ManualDesignElementStyles = {
   [Key in keyof DesignElementStylesInput]?: NonNullable<DesignElementStylesInput[Key]>;

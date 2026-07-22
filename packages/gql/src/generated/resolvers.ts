@@ -470,6 +470,7 @@ export type EventType =
   | "inbox_item_created"
   | "inbox_item_resolved"
   | "managed_git_token_minted"
+  | "manual_element_saved"
   | "member_joined"
   | "member_left"
   | "message_deleted"
@@ -628,6 +629,27 @@ export type LinkedCheckoutStatus = {
 
 export type LinkedCheckoutSyncConflictStrategy = "COMMIT" | "DISCARD" | "REBASE" | "STASH";
 
+export type ManualElementEditInput = {
+  elementId: Scalars["String"]["input"];
+  expectedStyleSourceHash?: InputMaybe<Scalars["String"]["input"]>;
+  expectedTextSourceHash?: InputMaybe<Scalars["String"]["input"]>;
+  filePath: Scalars["String"]["input"];
+  styles?: InputMaybe<DesignElementStylesInput>;
+  text?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type ManualElementEditResult = {
+  __typename?: "ManualElementEditResult";
+  commitSha: Scalars["String"]["output"];
+  elementId: Scalars["String"]["output"];
+  filePath: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  styleSourceHash?: Maybe<Scalars["String"]["output"]>;
+  styles?: Maybe<DesignElementStyles>;
+  text?: Maybe<Scalars["String"]["output"]>;
+  textSourceHash?: Maybe<Scalars["String"]["output"]>;
+};
+
 export type Message = {
   __typename?: "Message";
   actor: Actor;
@@ -746,6 +768,7 @@ export type Mutation = {
   rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
+  saveManualElementEdit: ManualElementEditResult;
   saveSessionGroupFile: Scalars["Boolean"]["output"];
   sendChannelMessage: Message;
   sendChatMessage: Message;
@@ -1130,6 +1153,11 @@ export type MutationRunSessionArgs = {
 
 export type MutationRunSessionGroupSetupScriptArgs = {
   scriptId: Scalars["ID"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationSaveManualElementEditArgs = {
+  input: ManualElementEditInput;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -2643,6 +2671,8 @@ export type ResolversTypes = ResolversObject<{
   LinkedCheckoutErrorCode: LinkedCheckoutErrorCode;
   LinkedCheckoutStatus: ResolverTypeWrapper<LinkedCheckoutStatus>;
   LinkedCheckoutSyncConflictStrategy: LinkedCheckoutSyncConflictStrategy;
+  ManualElementEditInput: ManualElementEditInput;
+  ManualElementEditResult: ResolverTypeWrapper<ManualElementEditResult>;
   Message: ResolverTypeWrapper<Message>;
   MessageSearchHit: ResolverTypeWrapper<MessageSearchHit>;
   MoveChannelInput: MoveChannelInput;
@@ -2782,6 +2812,8 @@ export type ResolversParentTypes = ResolversObject<{
   LinkedCheckoutActionResult: LinkedCheckoutActionResult;
   LinkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   LinkedCheckoutStatus: LinkedCheckoutStatus;
+  ManualElementEditInput: ManualElementEditInput;
+  ManualElementEditResult: ManualElementEditResult;
   Message: Message;
   MessageSearchHit: MessageSearchHit;
   MoveChannelInput: MoveChannelInput;
@@ -3361,6 +3393,22 @@ export type LinkedCheckoutStatusResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type ManualElementEditResultResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ManualElementEditResult"] =
+    ResolversParentTypes["ManualElementEditResult"],
+> = ResolversObject<{
+  commitSha?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  elementId?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  filePath?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  styleSourceHash?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  styles?: Resolver<Maybe<ResolversTypes["DesignElementStyles"]>, ParentType, ContextType>;
+  text?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  textSourceHash?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type MessageResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Message"] = ResolversParentTypes["Message"],
@@ -3847,6 +3895,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationRunSessionGroupSetupScriptArgs, "scriptId" | "sessionGroupId">
+  >;
+  saveManualElementEdit?: Resolver<
+    ResolversTypes["ManualElementEditResult"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationSaveManualElementEditArgs, "input" | "sessionGroupId">
   >;
   saveSessionGroupFile?: Resolver<
     ResolversTypes["Boolean"],
@@ -5209,6 +5263,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   LinkedCheckoutActionResult?: LinkedCheckoutActionResultResolvers<ContextType>;
   LinkedCheckoutChangedFile?: LinkedCheckoutChangedFileResolvers<ContextType>;
   LinkedCheckoutStatus?: LinkedCheckoutStatusResolvers<ContextType>;
+  ManualElementEditResult?: ManualElementEditResultResolvers<ContextType>;
   Message?: MessageResolvers<ContextType>;
   MessageSearchHit?: MessageSearchHitResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;

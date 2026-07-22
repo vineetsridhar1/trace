@@ -5,6 +5,7 @@ import {
   updateStaticDesignElementText,
   validateDesignElementId,
   validateDesignSourcePath,
+  validateManualSourcePath,
 } from "./design-manual-edit.js";
 
 const FILE_PATH = "src/design/screens/WelcomeScreen.tsx";
@@ -93,5 +94,10 @@ describe("design manual text editing", () => {
     );
     expect(cleared.source).toContain('{""}');
     expect(readStaticDesignElementText(cleared.source, FILE_PATH, "status").text).toBe("");
+  });
+
+  it("uses the document entry point as the editable PDF source", () => {
+    expect(validateManualSourcePath("src/App.tsx", "pdf")).toBe("src/App.tsx");
+    expect(() => validateManualSourcePath(FILE_PATH, "pdf")).toThrow("src/App.tsx");
   });
 });

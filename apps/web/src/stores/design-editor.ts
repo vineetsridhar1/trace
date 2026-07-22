@@ -38,51 +38,10 @@ const DESIGN_ELEMENT_TEXT_SOURCE_QUERY = gql`
   }
 `;
 
-const UPDATE_DESIGN_ELEMENT_TEXT_MUTATION = gql`
-  mutation UpdateDesignElementText(
-    $sessionGroupId: ID!
-    $filePath: String!
-    $elementId: String!
-    $text: String!
-    $expectedSourceHash: String!
-  ) {
-    updateDesignElementText(
-      sessionGroupId: $sessionGroupId
-      filePath: $filePath
-      elementId: $elementId
-      text: $text
-      expectedSourceHash: $expectedSourceHash
-    ) {
-      text
-      sourceHash
-    }
-  }
-`;
-
-const UPDATE_DESIGN_ELEMENT_STYLES_MUTATION = gql`
-  mutation UpdateDesignElementStyles(
-    $sessionGroupId: ID!
-    $elementId: String!
-    $styles: DesignElementStylesInput!
-    $expectedSourceHash: String!
-  ) {
-    updateDesignElementStyles(
-      sessionGroupId: $sessionGroupId
-      elementId: $elementId
-      styles: $styles
-      expectedSourceHash: $expectedSourceHash
-    ) {
-      sourceHash
-      styles {
-        color
-        backgroundColor
-        fontSize
-        fontWeight
-        textAlign
-        borderRadius
-        paddingX
-        paddingY
-      }
+const SAVE_MANUAL_ELEMENT_EDIT_MUTATION = gql`
+  mutation SaveManualElementEdit($sessionGroupId: ID!, $input: ManualElementEditInput!) {
+    saveManualElementEdit(sessionGroupId: $sessionGroupId, input: $input) {
+      commitSha
     }
   }
 `;
@@ -257,6 +216,65 @@ function stylesForSave(target: DesignEditorTarget): ManualStyles {
     }
   }
   return next;
+}
+
+type ManualElementSavedPayload = {
+  sessionGroupId: string;
+  filePath: string;
+  elementId: string;
+  text: string | null;
+  textSourceHash: string | null;
+  styles: Record<string, unknown> | null;
+  styleSourceHash: string | null;
+};
+
+export function reconcileManualElementSaved(payload: unknown): void {
+  if (!payload || typeof payload !== "object") return;
+  const value = payload as Record<string, unknown>;
+  if (
+    typeof value.sessionGroupId !== "string" ||
+    typeof value.filePath !== "string" ||
+    typeof value.elementId !== "string"
+  ) {
+    return;
+  }
+  const event: ManualElementSavedPayload = {
+    sessionGroupId: value.sessionGroupId,
+    filePath: value.filePath,
+    elementId: value.elementId,
+    text: typeof value.text === "string" ? value.text : null,
+    textSourceHash: typeof value.textSourceHash === "string" ? value.textSourceHash : null,
+    styles:
+      value.styles && typeof value.styles === "object"
+        ? (value.styles as Record<string, unknown>)
+        : null,
+    styleSourceHash: typeof value.styleSourceHash === "string" ? value.styleSourceHash : null,
+  };
+  const state = useDesignEditorStore.getState();
+  const target = state.target;
+  if (
+    state.activeSessionGroupId !== event.sessionGroupId ||
+    !target ||
+    target.filePath !== event.filePath ||
+    target.elementId !== event.elementId
+  ) {
+    return;
+  }
+  useDesignEditorStore.setState({
+    saving: false,
+    error: null,
+    target: {
+      ...target,
+      originalText: event.text ?? target.originalText,
+      draftText: event.text ?? target.draftText,
+      textSourceHash: event.textSourceHash ?? target.textSourceHash,
+      originalStyles: event.styles ? target.draftStyles : target.originalStyles,
+      draftStyles: event.styles ? target.draftStyles : target.draftStyles,
+      manualStyles: event.styles ? manualStyles(event.styles) : target.manualStyles,
+      styleSourceHash: event.styleSourceHash ?? target.styleSourceHash,
+    },
+  });
+  toast.success("Element saved and committed");
 }
 
 type DesignEditorState = {
@@ -438,52 +456,25 @@ export const useDesignEditorStore = create<DesignEditorState>((set, get) => ({
     if (!saveText && !saveStyles) return;
     set({ saving: true, error: null });
     try {
-      const [textResult, styleResult] = await Promise.all([
-        saveText
-          ? client
-              .mutation(UPDATE_DESIGN_ELEMENT_TEXT_MUTATION, {
-                sessionGroupId,
-                filePath: target.filePath,
-                elementId: target.elementId,
-                text: target.draftText,
-                expectedSourceHash: target.textSourceHash,
-              })
-              .toPromise()
-          : null,
-        saveStyles
-          ? client
-              .mutation(UPDATE_DESIGN_ELEMENT_STYLES_MUTATION, {
-                sessionGroupId,
-                elementId: target.elementId,
-                styles: stylesForSave(target),
-                expectedSourceHash: target.styleSourceHash,
-              })
-              .toPromise()
-          : null,
-      ]);
-      if (textResult?.error) throw new Error(textResult.error.message);
-      if (styleResult?.error) throw new Error(styleResult.error.message);
-      const updatedText = textResult?.data?.updateDesignElementText;
-      const updatedStyles = styleResult?.data?.updateDesignElementStyles;
-      if (
-        get().activeSessionGroupId !== sessionGroupId ||
-        get().target?.elementId !== target.elementId
-      ) {
-        return;
-      }
-      set({
-        target: {
-          ...target,
-          originalText: updatedText?.text ?? target.draftText,
-          draftText: updatedText?.text ?? target.draftText,
-          textSourceHash: updatedText?.sourceHash ?? target.textSourceHash,
-          originalStyles: target.draftStyles,
-          manualStyles: updatedStyles ? manualStyles(updatedStyles.styles) : target.manualStyles,
-          styleSourceHash: updatedStyles?.sourceHash ?? target.styleSourceHash,
-        },
-        saving: false,
-      });
-      toast.success("Design element saved to source");
+      const result = await client
+        .mutation(SAVE_MANUAL_ELEMENT_EDIT_MUTATION, {
+          sessionGroupId,
+          input: {
+            filePath: target.filePath,
+            elementId: target.elementId,
+            ...(saveText
+              ? { text: target.draftText, expectedTextSourceHash: target.textSourceHash }
+              : {}),
+            ...(saveStyles
+              ? {
+                  styles: stylesForSave(target),
+                  expectedStyleSourceHash: target.styleSourceHash,
+                }
+              : {}),
+          },
+        })
+        .toPromise();
+      if (result.error) throw new Error(result.error.message);
     } catch (cause) {
       if (get().activeSessionGroupId !== sessionGroupId) return;
       set({

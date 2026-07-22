@@ -1,5 +1,7 @@
 import { cn } from "../../../lib/utils";
 import type { RefObject } from "react";
+import { Pencil } from "lucide-react";
+import { Button } from "../../ui/button";
 import type { PdfDownloadState, PdfPageFormat } from "./PdfPreviewControls";
 import { PdfPreviewControls } from "./PdfPreviewControls";
 import { AppPreviewFrameControls } from "./AppPreviewFrameControls";
@@ -25,6 +27,7 @@ export function AppPreviewCanvas({
   onPdfFormatChange,
   onPdfDownload,
   pdfDownloadState,
+  manualEdit,
 }: {
   url: string | null;
   title: string;
@@ -42,6 +45,7 @@ export function AppPreviewCanvas({
   onPdfFormatChange?: (format: PdfPageFormat) => void;
   onPdfDownload?: () => void;
   pdfDownloadState?: PdfDownloadState;
+  manualEdit?: { enabled: boolean; frameReady: boolean; toggle: () => void };
 }) {
   const frameMargin = bare ? 0 : PREVIEW_FRAME_MARGIN;
   const pixelsPerUnit = pdfFormat?.unit === "in" ? 96 : 96 / 25.4;
@@ -61,6 +65,20 @@ export function AppPreviewCanvas({
 
   return (
     <div className="relative flex h-full flex-col bg-surface-deep">
+      {manualEdit ? (
+        <Button
+          size="sm"
+          variant={manualEdit.enabled ? "default" : "outline"}
+          onClick={manualEdit.toggle}
+          title={manualEdit.enabled ? "Exit manual editing" : "Edit manually"}
+          aria-label={manualEdit.enabled ? "Exit manual editing" : "Edit manually"}
+          aria-pressed={manualEdit.enabled}
+          className={cn("absolute top-1.5 z-30 h-7 gap-1.5 px-2.5", bare ? "right-28" : "right-3")}
+        >
+          <Pencil className="size-3" />
+          {manualEdit.enabled ? (manualEdit.frameReady ? "Done" : "Connecting…") : "Edit"}
+        </Button>
+      ) : null}
       {bare && pdfFormat && onPdfFormatChange && onPdfDownload ? (
         <PdfPreviewControls
           format={pdfFormat}
@@ -89,7 +107,11 @@ export function AppPreviewCanvas({
         ref={viewport.canvasRef}
         className={cn(
           "relative min-h-0 flex-1 overflow-hidden",
-          bare ? "cursor-grab touch-none bg-[#111113] active:cursor-grabbing" : "bg-surface-deep",
+          bare
+            ? manualEdit?.enabled
+              ? "cursor-default bg-[#111113]"
+              : "cursor-grab touch-none bg-[#111113] active:cursor-grabbing"
+            : "bg-surface-deep",
         )}
         onPointerDown={bare ? viewport.handleCanvasPointerDown : undefined}
         onPointerMove={bare ? viewport.handleCanvasPointerMove : undefined}
@@ -149,7 +171,7 @@ export function AppPreviewCanvas({
                       "block origin-top-left border-0 bg-background",
                       !loaded && "opacity-0",
                       viewport.resizing && "pointer-events-none",
-                      bare && "pointer-events-none",
+                      bare && !manualEdit?.enabled && "pointer-events-none",
                     )}
                     style={{
                       width: viewport.viewportSize.width,

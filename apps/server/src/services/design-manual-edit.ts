@@ -3,6 +3,7 @@ import ts from "typescript";
 import { ValidationError } from "../lib/errors.js";
 
 const DESIGN_SOURCE_PATH_PATTERN = /^src\/design\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.tsx$/;
+const PDF_SOURCE_PATH = "src/App.tsx";
 const DESIGN_ELEMENT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 export type DesignElementTextSource = {
@@ -12,6 +13,8 @@ export type DesignElementTextSource = {
   sourceHash: string;
 };
 
+export type ManualEditableProjectKind = "design" | "pdf";
+
 type TextTarget = {
   text: string;
   start: number;
@@ -20,11 +23,23 @@ type TextTarget = {
 };
 
 export function validateDesignSourcePath(filePath: string): string {
+  return validateManualSourcePath(filePath, "design");
+}
+
+export function validateManualSourcePath(
+  filePath: string,
+  kind: ManualEditableProjectKind,
+): string {
   const normalized = filePath.trim();
-  if (!DESIGN_SOURCE_PATH_PATTERN.test(normalized)) {
-    throw new ValidationError("Manual design edits must target a TSX file under src/design");
+  if (kind === "design" && DESIGN_SOURCE_PATH_PATTERN.test(normalized)) {
+    return normalized;
   }
-  return normalized;
+  if (kind === "pdf" && normalized === PDF_SOURCE_PATH) return normalized;
+  throw new ValidationError(
+    kind === "design"
+      ? "Manual design edits must target a TSX file under src/design"
+      : "Manual document edits must target src/App.tsx",
+  );
 }
 
 export function validateDesignElementId(elementId: string): string {

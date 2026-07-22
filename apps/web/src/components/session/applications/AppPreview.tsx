@@ -25,7 +25,7 @@ export function AppPreview({
   title = "Live app preview",
   projectKind,
   sessionGroupId,
-  designSessionGroupId,
+  manualSessionGroupId,
 }: {
   endpointId: string;
   status: string;
@@ -34,20 +34,21 @@ export function AppPreview({
   title?: string;
   projectKind?: "design" | "pdf";
   sessionGroupId?: string;
-  designSessionGroupId?: string;
+  manualSessionGroupId?: string;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const pdf = usePdfPreview({
-    enabled: projectKind === "pdf",
-    frameRef,
-    sessionGroupId,
-  });
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
   const [credentialExpiresAt, setCredentialExpiresAt] = useState<string | null>(null);
   const { attempts, error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
   const manualEdit = useDesignManualEdit({
-    sessionGroupId: designSessionGroupId ?? "",
+    sessionGroupId: manualSessionGroupId ?? "",
     url,
+  });
+  const activeFrameRef = manualSessionGroupId ? manualEdit.frameRef : frameRef;
+  const pdf = usePdfPreview({
+    enabled: projectKind === "pdf",
+    frameRef: activeFrameRef,
+    sessionGroupId,
   });
 
   const reload = useCallback(() => {
@@ -119,11 +120,23 @@ export function AppPreview({
           loaded={frameLoaded}
           refreshing={refreshing}
           status={status}
-          onLoad={() => dispatch({ type: "frame-loaded" })}
+          onLoad={() => {
+            dispatch({ type: "frame-loaded" });
+            manualEdit.onFrameLoad();
+          }}
           onReload={reload}
-          iframeRef={frameRef}
+          iframeRef={activeFrameRef}
           bare={projectKind === "pdf"}
           loadingKind={projectKind}
+          manualEdit={
+            manualSessionGroupId
+              ? {
+                  enabled: manualEdit.enabled,
+                  frameReady: manualEdit.frameReady,
+                  toggle: manualEdit.toggle,
+                }
+              : undefined
+          }
           pdfFormat={projectKind === "pdf" ? pdf.format : undefined}
           pdfContentHeight={projectKind === "pdf" ? pdf.contentHeight : undefined}
           onPdfFormatChange={projectKind === "pdf" ? pdf.updateFormat : undefined}
@@ -157,13 +170,13 @@ export function AppPreview({
         />
       ) : null}
       <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
-      {designSessionGroupId ? (
+      {manualSessionGroupId ? (
         <Button
           size="sm"
           variant={manualEdit.enabled ? "default" : "outline"}
           onClick={manualEdit.toggle}
-          title={manualEdit.enabled ? "Exit manual editing" : "Edit design manually"}
-          aria-label={manualEdit.enabled ? "Exit manual editing" : "Edit design manually"}
+          title={manualEdit.enabled ? "Exit manual editing" : "Edit manually"}
+          aria-label={manualEdit.enabled ? "Exit manual editing" : "Edit manually"}
           aria-pressed={manualEdit.enabled}
           className="absolute right-11 top-2 z-20 h-7 gap-1.5 px-2.5 opacity-90 hover:opacity-100"
         >
@@ -183,7 +196,7 @@ export function AppPreview({
         <RotateCw className={cn("size-3", refreshing && "animate-spin")} />
       </Button>
       <iframe
-        ref={designSessionGroupId ? manualEdit.frameRef : frameRef}
+        ref={activeFrameRef}
         key={frameRevision}
         src={url}
         title={title}
