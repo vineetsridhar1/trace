@@ -530,6 +530,24 @@ function isRuntimeComputeGone(conn: SessionConnectionData): boolean {
 }
 
 /**
+ * True when a runtime's deprovision is already owned by the stuck-deprovision
+ * reconciler — it is mid-stop (`stopping`), a prior stop failed
+ * (`deprovision_failed`), or it was abandoned after exhausting retries.
+ *
+ * The idle sweep must not re-issue stops on these. The reconciler retries with a
+ * bounded `MAX_RECONCILE_ATTEMPTS` and then gives up (marking the runtime
+ * abandoned), after which nothing touches it. A sweep that re-stops every tick
+ * instead loops forever on a launcher that keeps hard-failing (e.g. a dead
+ * endpoint returning HTTP 502), resetting progress before the reconciler's cap
+ * can trigger.
+ */
+function isReconcilerOwnedDeprovision(conn: SessionConnectionData): boolean {
+  return (
+    conn.state === "stopping" || conn.state === "deprovision_failed" || conn.abandonedAt != null
+  );
+}
+
+/**
  * Grace window during which a starting-up runtime is shielded from the idle
  * sweep. Comfortably above the default 180s startup timeout so a healthy
  * cold-boot (image pull + connect) is always protected.
@@ -10782,6 +10800,12 @@ export class SessionService {
       if (isRuntimeStartingWithinGrace(this.parseConnection(cloudSession.connection), now))
         continue;
 
+      // Leave stuck/failed/abandoned deprovisions to the reconciler, which
+      // retries with a bounded cap and then gives up. Re-stopping them here
+      // loops forever on a launcher that keeps hard-failing. Re-checked
+      // race-safely inside the conditional update below.
+      if (isReconcilerOwnedDeprovision(this.parseConnection(cloudSession.connection))) continue;
+
       const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(
         group,
         cloudSession,
@@ -10808,6 +10832,8 @@ export class SessionService {
       // A runtime that began starting up between selection and this update must
       // not be torn down mid-boot; leave it for a later sweep once it settles.
       if (isRuntimeStartingWithinGrace(conn, now)) return null;
+      // A deprovision the reconciler already owns must not be re-issued here.
+      if (isReconcilerOwnedDeprovision(conn)) return null;
       return {
         ...conn,
         disconnectOnDeprovision: true,
