@@ -19,13 +19,31 @@ async function chmodTreeWithoutFollowingSymlinks(root: string, writable: boolean
   await fs.chmod(root, writable ? current.mode | 0o200 : current.mode & ~0o222);
 }
 
-async function rejectWorkingTreeSymlinks(root: string): Promise<void> {
-  const entries = await fs.readdir(root, { withFileTypes: true });
+// Audit the exposed source subtree for symlinks that resolve outside the
+// checkout. Such links could leak container/host files (secrets, other
+// sessions' sources) into the design system, so they are rejected; symlinks
+// that stay within the checked-out repo are safe and allowed. Symlinked
+// directories are not descended into — their real target is already covered by
+// normal recursion, and following them risks loops or escapes.
+async function rejectEscapingSymlinks(scanRoot: string, realCheckoutRoot: string): Promise<void> {
+  const entries = await fs.readdir(scanRoot, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name === ".git") continue;
-    const entryPath = path.join(root, entry.name);
-    if (entry.isSymbolicLink()) throw new Error("Source checkout contains a symbolic link");
-    if (entry.isDirectory()) await rejectWorkingTreeSymlinks(entryPath);
+    const entryPath = path.join(scanRoot, entry.name);
+    if (entry.isSymbolicLink()) {
+      let target: string;
+      try {
+        target = await fs.realpath(entryPath);
+      } catch {
+        // Dangling/unresolvable link — we cannot prove it stays inside the
+        // checkout, so treat it as an escape.
+        throw new Error("Source checkout contains a symbolic link that escapes the repository");
+      }
+      if (target !== realCheckoutRoot && !target.startsWith(realCheckoutRoot + path.sep))
+        throw new Error("Source checkout contains a symbolic link that escapes the repository");
+      continue;
+    }
+    if (entry.isDirectory()) await rejectEscapingSymlinks(entryPath, realCheckoutRoot);
   }
 }
 export type SourceRepositoryDescriptor = {
@@ -85,7 +103,6 @@ export async function prepareReadOnlySourceCheckout(
   const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], { cwd: root });
   if (descriptor.commitSha && stdout.trim() !== descriptor.commitSha)
     throw new Error("Source checkout did not resolve the pinned commit");
-  await rejectWorkingTreeSymlinks(root);
   const realRoot = await fs.realpath(root);
   const sourceWorkdir = descriptor.sourcePath ? path.resolve(root, descriptor.sourcePath) : root;
   if (sourceWorkdir !== root && !sourceWorkdir.startsWith(root + path.sep))
@@ -95,6 +112,10 @@ export async function prepareReadOnlySourceCheckout(
   const realSourceWorkdir = await fs.realpath(sourceWorkdir);
   if (realSourceWorkdir !== realRoot && !realSourceWorkdir.startsWith(realRoot + path.sep))
     throw new Error("Source subdirectory escaped checkout");
+  // Only the sourcePath subtree is exposed to the agent, so limit the symlink
+  // audit to it — symlinks elsewhere in the repo (e.g. .claude/.agents config)
+  // are never read and must not fail an unrelated design system.
+  await rejectEscapingSymlinks(realSourceWorkdir, realRoot);
   await chmodTreeWithoutFollowingSymlinks(root, false);
   return { sourceWorkdir, commitSha: stdout.trim() };
 }
