@@ -44,7 +44,11 @@ import { isGeneratedProjectCanvasReady } from "./generated-project-readiness";
 import { getProjectWorkspaceKind } from "./project-workspace-kind";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
-import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
+import {
+  CLOUD_REPO_REMOTE_REQUIRED,
+  repoRemoteKnownMissing,
+  resolveSupportedHostingForRepo,
+} from "../../lib/repo-capabilities";
 import { useRegisterCommands } from "../../hooks/useRegisterCommands";
 import type { RegisteredCommand } from "../../stores/command-registry";
 
@@ -714,6 +718,10 @@ export function SessionGroupDetailView({
     const selectedRepo =
       groupRepo ??
       (selectedSession.repo as { id: string; remoteUrl?: string | null } | null | undefined);
+    if (selectedSession.hosting === "cloud" && repoRemoteKnownMissing(selectedRepo)) {
+      toast.error("Cloud is unavailable for this repo", { description: CLOUD_REPO_REMOTE_REQUIRED });
+      return null;
+    }
     const selectedHosting = resolveSupportedHostingForRepo(selectedSession.hosting, selectedRepo);
     const result = await client
       .mutation(START_SESSION_MUTATION, {

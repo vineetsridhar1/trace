@@ -3,6 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import type { GitCheckpoint } from "@trace/gql";
 import { shortSha } from "@trace/shared";
 import { GitCommitHorizontal, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { START_SESSION_MUTATION } from "@trace/client-core";
 import {
@@ -15,7 +16,11 @@ import { navigateToSession } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { getSessionGroupChannelId } from "@trace/client-core";
 import { RestoreCheckpointDialog, shouldShowRestoreDialog } from "./RestoreCheckpointDialog";
-import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
+import {
+  CLOUD_REPO_REMOTE_REQUIRED,
+  repoRemoteKnownMissing,
+  resolveSupportedHostingForRepo,
+} from "../../lib/repo-capabilities";
 import { TraceLoader } from "../ui/trace-loader";
 
 function formatCheckpointTime(committedAt: string): string {
@@ -103,6 +108,10 @@ export function CheckpointPanel({
       setRestoringId(checkpoint.id);
       try {
         const restoreRepo = restoreSession.repo as { remoteUrl?: string | null } | null | undefined;
+        if (restoreSession.hosting === "cloud" && repoRemoteKnownMissing(restoreRepo)) {
+          toast.error("Cloud is unavailable for this repo", { description: CLOUD_REPO_REMOTE_REQUIRED });
+          return;
+        }
         const result = await client
           .mutation(START_SESSION_MUTATION, {
             input: {
@@ -117,7 +126,7 @@ export function CheckpointPanel({
           .toPromise();
 
         if (result.error) {
-          console.error("[CheckpointPanel] restore failed:", result.error);
+          toast.error("Failed to restore checkpoint", { description: result.error.message });
           return;
         }
 
