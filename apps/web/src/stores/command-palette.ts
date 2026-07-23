@@ -10,9 +10,16 @@ interface CommandPaletteState {
   openForSearch: (initialQuery: string) => void;
   shortcutsOpen: boolean;
   setShortcutsOpen: (open: boolean) => void;
-  newGeneratedProjectKind: "app" | "design" | "pdf" | "choose" | "design-system" | null;
+  newGeneratedProjectKind:
+    | "app"
+    | "design"
+    | "pdf"
+    | "animation"
+    | "choose"
+    | "design-system"
+    | null;
   openGeneratedProjectDialog: (
-    kind: "app" | "design" | "pdf" | "choose" | "design-system",
+    kind: "app" | "design" | "pdf" | "animation" | "choose" | "design-system",
   ) => void;
   closeGeneratedProjectDialog: () => void;
 }

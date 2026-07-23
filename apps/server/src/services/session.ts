@@ -1042,6 +1042,10 @@ const PDF_SESSION_INSTRUCTION = `\n\n<system-instruction>
 This is a Trace PDF session. Build a print-ready document in the provided Vite/React starter, not a full-stack application. Before changing the document, read AGENTS.md and docs/ai-guidance.md, then use the relevant guidance under docs/playbooks/. The editable document lives in src/App.tsx and is rendered live by the managed server on port 3000; do not start another server. Keep the output self-contained: use local CSS and assets, semantic HTML, and explicit print styles with stable page breaks. Do not add a backend, database, Redis, authentication, external integrations, or in-document download controls. Trace renders and stores the PDF after each managed Git push; preserve the print stylesheet while adapting the document. Work visibly in small valid changes, check the print layout at A4 and Letter sizes, and run pnpm test before delivery. Before every response that changes the document, commit and push the changes to the configured managed origin.
 </system-instruction>`;
 
+const ANIMATION_SESSION_INSTRUCTION = `\n\n<system-instruction>
+This is a Trace Animation session, not an App or Coding session. Build one interactive motion piece in the provided Vite/React/Tailwind starter, not a full-stack application or product screen. Before changing it, read AGENTS.md and docs/ai-guidance.md. Keep the artifact in src/Animation.tsx; do not modify src/main.tsx. Use framer-motion for animation and interaction (spring transitions, gestures, AnimatePresence for enter/exit) and build for real pointer/keyboard interaction, not a passive autoplay loop. Keep src/Animation.tsx self-contained (React, framer-motion, Tailwind classes, and small local helpers only) — the user's goal is to copy this one file into their own codebase, so avoid dependencies or file-spanning state that would make that harder. Do not add routing, a backend, a database, or external integrations. The dev server is already running on port 3000 and hot-reloads your file changes; do not start another server. Run pnpm test before delivery. Before every response that changes the animation, commit and push the changes to the configured managed origin.
+</system-instruction>`;
+
 function generatedProjectInstruction(
   kind: SessionGroupKind | string | null | undefined,
   selected?: { version: number; contentDigest: string; designSystem: { name: string } } | null,
@@ -1055,6 +1059,7 @@ function generatedProjectInstruction(
   }
   if (kind === "design_system") return DESIGN_SYSTEM_SESSION_INSTRUCTION;
   if (kind === "pdf") return PDF_SESSION_INSTRUCTION;
+  if (kind === "animation") return ANIMATION_SESSION_INSTRUCTION;
   return undefined;
 }
 
@@ -2808,8 +2813,12 @@ export class SessionService {
     return this.listGeneratedProjectGroups("pdf", organizationId, userId);
   }
 
+  async listAnimationGroups(organizationId: string, userId: string) {
+    return this.listGeneratedProjectGroups("animation", organizationId, userId);
+  }
+
   private async listGeneratedProjectGroups(
-    kind: "app" | "design" | "pdf" | readonly ["design", "design_system"],
+    kind: "app" | "design" | "pdf" | "animation" | readonly ["design", "design_system"],
     organizationId: string,
     userId: string,
   ) {
@@ -7872,7 +7881,9 @@ export class SessionService {
     // for seconds per commit). Mark it pending, emit the checkpoint now, and run
     // the capture off-queue — a follow-up git_checkpoint event (merged by id on
     // the client) carries the thumbnail once it's ready.
-    const shouldCaptureAppCheckpoint = didPersistCheckpoint && session.sessionGroup?.kind === "app";
+    const shouldCaptureAppCheckpoint =
+      didPersistCheckpoint &&
+      (session.sessionGroup?.kind === "app" || session.sessionGroup?.kind === "animation");
     const shouldPublishDesignPreview =
       didPersistCheckpoint && session.sessionGroup?.kind === "design";
     if (shouldCaptureAppCheckpoint && persisted) {

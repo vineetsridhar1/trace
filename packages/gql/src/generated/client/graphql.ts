@@ -1690,6 +1690,8 @@ export type PushPlatform = "android" | "ios";
 export type Query = {
   __typename?: "Query";
   agentEnvironments: Array<AgentEnvironment>;
+  /** Animation-kind session groups for the org (the sidebar Animations section). */
+  animationSessionGroups: Array<SessionGroup>;
   /**
    * App-kind session groups for the org. Apps have no channel, so this is their
    * listing surface (the sidebar Apps section).
@@ -1771,6 +1773,10 @@ export type Query = {
 
 export type QueryAgentEnvironmentsArgs = {
   orgId: Scalars["ID"]["input"];
+};
+
+export type QueryAnimationSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryAppSessionGroupsArgs = {
@@ -2465,7 +2471,7 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "app" | "coding" | "design" | "design_system" | "pdf";
+export type SessionGroupKind = "animation" | "app" | "coding" | "design" | "design_system" | "pdf";
 
 export type SessionGroupStatus =
   | "archived"
@@ -4394,6 +4400,39 @@ export type GeneratedProjectsQuery = {
     pdfPageHeight: number;
     pdfPageUnit: string;
     pdfFormatVersion: number;
+    owner: { __typename?: "User"; id: string };
+    gitCheckpoints: Array<{
+      __typename?: "GitCheckpoint";
+      id: string;
+      committedAt: string;
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+    }>;
+    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+    sessions: Array<{
+      __typename?: "Session";
+      id: string;
+      sessionGroupId?: string | null;
+      agentStatus: AgentStatus;
+      sessionStatus: SessionStatus;
+      prUrl?: string | null;
+      worktreeDeleted: boolean;
+      lastMessageAt?: string | null;
+      lastUserMessageAt?: string | null;
+      updatedAt: string;
+      createdAt: string;
+    }>;
+  }>;
+  animationSessionGroups: Array<{
+    __typename?: "SessionGroup";
+    id: string;
+    name: string;
+    slug?: string | null;
+    kind: SessionGroupKind;
+    status: SessionGroupStatus;
+    visibility: SessionGroupVisibility;
+    archivedAt?: string | null;
+    updatedAt: string;
     owner: { __typename?: "User"; id: string };
     gitCheckpoints: Array<{
       __typename?: "GitCheckpoint";
@@ -10293,6 +10332,78 @@ export const GeneratedProjectsDocument = {
                 { kind: "Field", name: { kind: "Name", value: "pdfPageHeight" } },
                 { kind: "Field", name: { kind: "Name", value: "pdfPageUnit" } },
                 { kind: "Field", name: { kind: "Name", value: "pdfFormatVersion" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "connection" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sessions" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "animationSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "owner" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "gitCheckpoints" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                    ],
+                  },
+                },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "connection" },

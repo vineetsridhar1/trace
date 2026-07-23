@@ -4,7 +4,7 @@ import { START_SESSION_MUTATION, useEntityStore } from "@trace/client-core";
 import { navigateToSession, navigateToSessionGroup } from "../stores/ui";
 
 const pendingQuickSessionChannels = new Set<string>();
-const pendingGeneratedProjectKinds = new Set<"app" | "design" | "pdf">();
+const pendingGeneratedProjectKinds = new Set<"app" | "design" | "pdf" | "animation">();
 
 export function getChannelRepoId(channelId: string): string | undefined {
   const channel = useEntityStore.getState().channels[channelId];
@@ -81,7 +81,7 @@ export async function createAppSession(): Promise<boolean> {
 }
 
 export function buildGeneratedProjectStartInput(
-  kind: "app" | "design" | "pdf",
+  kind: "app" | "design" | "pdf" | "animation",
   designSystemVersionId?: string,
 ) {
   return {
@@ -99,8 +99,12 @@ export async function createPdfSession(): Promise<boolean> {
   return createGeneratedProjectSession("pdf");
 }
 
+export async function createAnimationSession(): Promise<boolean> {
+  return createGeneratedProjectSession("animation");
+}
+
 async function createGeneratedProjectSession(
-  kind: "app" | "design" | "pdf",
+  kind: "app" | "design" | "pdf" | "animation",
   designSystemVersionId?: string,
 ): Promise<boolean> {
   if (pendingGeneratedProjectKinds.has(kind)) return false;

@@ -138,7 +138,7 @@ export interface SessionAdapterCreateOptions {
   sessionId: string;
   /** Session group ID — used to key worktrees so all sessions in a group share the same workspace. */
   sessionGroupId?: string;
-  sessionGroupKind?: "coding" | "design" | "design_system" | "app" | "pdf";
+  sessionGroupKind?: "coding" | "design" | "design_system" | "app" | "pdf" | "animation";
   prepareAppGit?: (runtimeInstanceId: string) => Promise<{
     repoId: string;
     repoRemoteUrl: string;

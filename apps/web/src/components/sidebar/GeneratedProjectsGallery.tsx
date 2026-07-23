@@ -41,7 +41,8 @@ export function GeneratedProjectsGallery() {
         (group.kind === "app" ||
           group.kind === "design" ||
           group.kind === "design_system" ||
-          group.kind === "pdf"),
+          group.kind === "pdf" ||
+          group.kind === "animation"),
     )
     .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
   const projectGroups = visibleGroups.filter((group) => group.kind !== "design_system");

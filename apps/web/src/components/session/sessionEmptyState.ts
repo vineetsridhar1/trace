@@ -92,15 +92,38 @@ const PDF_EMPTY_STATE: SessionEmptyStateContent = {
   ],
 };
 
+const ANIMATION_EMPTY_STATE: SessionEmptyStateContent = {
+  title: "What should we animate?",
+  description: "Describe the motion or interaction you want, or start with an idea below.",
+  placeholder: "Describe the animation or interaction you want…",
+  sendStarterImmediately: false,
+  starterPrompts: [
+    {
+      label: "Animate a button press",
+      prompt:
+        "Build a button with a satisfying spring press animation and a subtle success state on click.",
+    },
+    {
+      label: "Build a draggable card",
+      prompt: "Build a card that can be dragged and flings back into place with spring physics.",
+    },
+    {
+      label: "Create a loading transition",
+      prompt: "Create a loading indicator that morphs into a success checkmark when complete.",
+    },
+  ],
+};
+
 export function getSessionEmptyStateContent(
   kind: string | null | undefined,
 ): SessionEmptyStateContent {
   if (kind === "app") return APP_EMPTY_STATE;
   if (kind === "design") return DESIGN_EMPTY_STATE;
   if (kind === "pdf") return PDF_EMPTY_STATE;
+  if (kind === "animation") return ANIMATION_EMPTY_STATE;
   return CODING_EMPTY_STATE;
 }
 
 export function isGeneratedProjectKind(kind: string | null | undefined): boolean {
-  return kind === "app" || kind === "design" || kind === "pdf";
+  return kind === "app" || kind === "design" || kind === "pdf" || kind === "animation";
 }

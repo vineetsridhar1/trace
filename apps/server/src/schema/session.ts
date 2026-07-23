@@ -56,6 +56,10 @@ export const sessionQueries = {
     assertOrgAccess(ctx, args.organizationId);
     return sessionService.listPdfGroups(args.organizationId, ctx.userId);
   },
+  animationSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    assertOrgAccess(ctx, args.organizationId);
+    return sessionService.listAnimationGroups(args.organizationId, ctx.userId);
+  },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx), ctx.userId);
   },

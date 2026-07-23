@@ -49,6 +49,7 @@ enum SessionGroupKind {
   design_system
   app
   pdf
+  animation
 }
 
 enum DesignSystemStatus {

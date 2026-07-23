@@ -27,6 +27,7 @@ enum SessionGroupKind {
   design_system
   app
   pdf
+  animation
 }
 
 enum DesignSystemStatus {
@@ -1640,6 +1641,10 @@ type Query {
   PDF-kind session groups for the org (the sidebar PDFs section).
   """
   pdfSessionGroups(organizationId: ID!): [SessionGroup!]!
+  """
+  Animation-kind session groups for the org (the sidebar Animations section).
+  """
+  animationSessionGroups(organizationId: ID!): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session

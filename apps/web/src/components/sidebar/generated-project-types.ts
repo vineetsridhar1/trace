@@ -1,4 +1,4 @@
-export type GeneratedProjectKind = "app" | "design" | "design_system" | "pdf";
+export type GeneratedProjectKind = "app" | "design" | "design_system" | "pdf" | "animation";
 
 export const projectTypePresentation = {
   app: { label: "Apps", emptyLabel: "Create an App" },
@@ -13,5 +13,9 @@ export const projectTypePresentation = {
   pdf: {
     label: "Documents",
     emptyLabel: "Create a Document",
+  },
+  animation: {
+    label: "Animations",
+    emptyLabel: "Create an Animation",
   },
 } as const;
