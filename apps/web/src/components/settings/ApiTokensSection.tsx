@@ -217,7 +217,7 @@ export function ApiTokensSection() {
 
       <div className="space-y-3">
         {[
-          ...tokens,
+          ...tokens.filter((token) => token.provider !== "openai"),
           {
             provider: "codex",
             isSet: codexCredential !== null,
