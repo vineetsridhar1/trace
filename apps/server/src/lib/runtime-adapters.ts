@@ -761,11 +761,41 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
     });
     const record = responseRecord(json, "stop");
     const ok = record.ok === undefined ? true : record.ok === true;
-    return {
-      ok,
-      status: stopStatus(record.status),
-      message: optionalString(record.message),
-    };
+    const status = stopStatus(record.status);
+
+    // Some launchers only ever report `stopping` from /stop — their stop is
+    // fire-and-forget and the response never flips to `stopped`, even once the
+    // compute is long gone. Trusting that verbatim wedges the connection in
+    // `stopping` forever: the deprovision reconciler and idle sweep both key off
+    // this status and keep re-issuing stops on a 60s loop. When /stop is
+    // non-terminal, confirm against the authoritative status endpoint; if the
+    // compute is actually gone, settle to `stopped`. A failed or inconclusive
+    // status check falls through to `stopping` so the reconciler retries later.
+    if (status === "stopping" && (await this.isProvisionedComputeGone(input))) {
+      return { ok, status: "stopped", message: optionalString(record.message) };
+    }
+
+    return { ok, status, message: optionalString(record.message) };
+  }
+
+  /**
+   * Read the launcher's authoritative status endpoint to confirm a runtime's
+   * compute is fully torn down. Used to settle a `stopping` /stop result whose
+   * response never reports the terminal state. Any error or non-terminal status
+   * returns false so the caller leaves the runtime in `stopping` for retry.
+   */
+  private async isProvisionedComputeGone(input: RuntimeStopInput): Promise<boolean> {
+    if (!input.organizationId) return false;
+    try {
+      const { status } = await this.getStatus({
+        organizationId: input.organizationId,
+        environment: input.environment,
+        connection: input.connection,
+      });
+      return status === "stopped";
+    } catch {
+      return false;
+    }
   }
 
   async getStatus(input: RuntimeStatusInput): Promise<RuntimeStatusResult> {
