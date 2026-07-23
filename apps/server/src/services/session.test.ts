@@ -12921,4 +12921,43 @@ describe("SessionService", () => {
       expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
     });
   });
+
+  describe("design system source descriptor", () => {
+    type SourceDescriptorService = {
+      createDesignSystemSourceDescriptor: (
+        sessionGroupId: string,
+        organizationId: string,
+        createdById: string,
+      ) => Promise<{ repoId: string; remoteUrl: string; branch: string }>;
+    };
+
+    it("normalizes an scp-style SSH source remote into an authenticated HTTPS clone URL", async () => {
+      // Regression: a source repo stored as git@github.com:owner/repo.git is not
+      // a valid WHATWG URL, so `new URL(remoteUrl)` threw "Invalid URL" and the
+      // design_system runtime failed to start ("failed to load").
+      parseGitHubRepoMock.mockReturnValue({ owner: "trace", repo: "trace" });
+      apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "gh-token" });
+      prismaMock.designSystem.findUnique.mockResolvedValue({
+        id: "system-1",
+        sourceBranch: "main",
+        sourcePath: null,
+        sourceCommitSha: null,
+        sourceRepo: {
+          id: "source-repo-1",
+          remoteUrl: "git@github.com:trace/trace.git",
+          defaultBranch: "main",
+        },
+      } as unknown as Awaited<ReturnType<typeof prismaMock.designSystem.findUnique>>);
+
+      const descriptor = await (
+        service as unknown as SourceDescriptorService
+      ).createDesignSystemSourceDescriptor("group-1", "org-1", "user-1");
+
+      expect(descriptor.remoteUrl).toBe(
+        "https://x-access-token:gh-token@github.com/trace/trace.git",
+      );
+      expect(descriptor.repoId).toBe("source-repo-1");
+      expect(descriptor.branch).toBe("main");
+    });
+  });
 });

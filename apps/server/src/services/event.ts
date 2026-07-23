@@ -7,6 +7,16 @@ import { redis } from "../lib/redis.js";
 import { isLocalMode } from "../lib/mode.js";
 import { pushNotificationService } from "./pushNotificationService.js";
 
+// Approximate cap on the per-org Redis event stream. The durable copy of every
+// event lives in Postgres (see `query`); this stream is only a fan-out tail, so
+// it must stay bounded — an unbounded stream exhausts the cache node's memory
+// and makes every XADD fail with "OOM command not allowed when used memory >
+// 'maxmemory'". Override with TRACE_EVENT_STREAM_MAXLEN.
+const EVENT_STREAM_MAXLEN = (() => {
+  const raw = Number(process.env.TRACE_EVENT_STREAM_MAXLEN);
+  return Number.isInteger(raw) && raw > 0 ? raw : 10_000;
+})();
+
 export interface CreateEventInput {
   id?: string;
   organizationId: string;
@@ -277,9 +287,11 @@ export class EventService {
   private appendToStream(organizationId: string, event: { id: string } & Record<string, unknown>) {
     if (isLocalMode()) return;
     const streamKey = `stream:org:${organizationId}:events`;
-    redis.xadd(streamKey, "*", "event", JSON.stringify(event)).catch((err: Error) => {
-      console.error(`[event-service] XADD to ${streamKey} failed:`, err.message);
-    });
+    redis
+      .xadd(streamKey, "MAXLEN", "~", EVENT_STREAM_MAXLEN, "*", "event", JSON.stringify(event))
+      .catch((err: Error) => {
+        console.error(`[event-service] XADD to ${streamKey} failed:`, err.message);
+      });
   }
 
   async query(organizationId: string, opts: EventQueryOpts) {
