@@ -80,6 +80,7 @@ import {
   type TrackedSessionWorkspace,
 } from "./pr-tracking.js";
 
+const BRIDGE_USER_AGENT = "Trace-Desktop-Bridge/0.1";
 const HEARTBEAT_INTERVAL_MS = 10_000;
 const HOOK_QUEUE_FLUSH_INTERVAL_MS = 2_000;
 const LINKED_CHECKOUT_AUTO_SYNC_INTERVAL_MS = 15_000;
@@ -464,7 +465,9 @@ export class BridgeClient implements IBridgeClient {
 
     const bridgeUrl = new URL(`${this.serverUrl}/bridge`);
     bridgeUrl.searchParams.set("bridgeAuthToken", bridgeAuthToken);
-    this.ws = new WebSocket(bridgeUrl.toString());
+    this.ws = new WebSocket(bridgeUrl.toString(), {
+      headers: { "User-Agent": BRIDGE_USER_AGENT },
+    });
 
     this.ws.on("open", () => {
       console.log("[bridge] connected to server");
