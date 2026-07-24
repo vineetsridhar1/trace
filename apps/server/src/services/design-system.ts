@@ -17,6 +17,11 @@ import {
   sha256,
   validateWorkbenchPackage,
 } from "../lib/design-system-archive.js";
+import {
+  createDesignSystemStaticPreview,
+  designSystemStaticPreviewStorageKey,
+} from "../lib/design-system-static-preview.js";
+import { designCommitPreviewUrl } from "../lib/design-checkpoint-preview-url.js";
 import { assertActorOrgAccess, assertActorOrgAdmin } from "./actor-auth.js";
 import { eventService } from "./event.js";
 import { sessionService } from "./session.js";
@@ -267,7 +272,117 @@ export class DesignSystemService {
         });
       }
     }
-    return pending.length + revalidated;
+    // The bridge export pipeline can only publish a preview while a runtime is
+    // connected, so a design system whose container died before (or during) its
+    // export is left with no preview at all and no way to recover — the export
+    // reconciler just keeps failing with "No connected design-system runtime".
+    // The saved workbench archive is durable, so rebuild a static preview from
+    // it here. Guarded on a missing key, this only ever fills a hole: a later
+    // bridge export overwrites it with the richer live-built workbench.
+    const missingPreviews = await prisma.designSystem.findMany({
+      where: {
+        latestCommitArtifact: { status: "saved", packageValid: true },
+        authoringSessionGroup: {
+          designPreviewKey: null,
+          // Leave an in-flight export alone rather than racing it.
+          OR: [{ designPreviewStatus: null }, { designPreviewStatus: { not: "publishing" } }],
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        authoringSessionGroupId: true,
+        latestCommitArtifact: { select: { id: true, commitSha: true, storageKey: true } },
+      },
+      take: 100,
+    });
+    for (const system of missingPreviews) {
+      const artifact = system.latestCommitArtifact;
+      if (!artifact) continue;
+      await this.persistSavedArtifactPreview({
+        organizationId: system.organizationId,
+        designSystemId: system.id,
+        sessionGroupId: system.authoringSessionGroupId,
+        artifactId: artifact.id,
+        commitSha: artifact.commitSha,
+        artifactStorageKey: artifact.storageKey,
+      }).catch((error: unknown) => {
+        console.warn("[design-system] static preview reconciliation failed", {
+          designSystemId: system.id,
+          artifactId: artifact.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+    return pending.length + revalidated + missingPreviews.length;
+  }
+
+  /**
+   * Rebuild a design system's preview from its saved workbench archive. Only
+   * claims groups that still have no preview, so it can never clobber one the
+   * bridge published.
+   */
+  private async persistSavedArtifactPreview(input: {
+    organizationId: string;
+    designSystemId: string;
+    sessionGroupId: string;
+    artifactId: string;
+    commitSha: string;
+    artifactStorageKey: string;
+  }): Promise<void> {
+    const stored = await storage.getObject(input.artifactStorageKey);
+    const workbench = await parseDesignSystemTarGz(stored);
+    const preview = createDesignSystemStaticPreview(workbench.files);
+    const previewKey = designSystemStaticPreviewStorageKey(
+      input.organizationId,
+      input.designSystemId,
+      input.commitSha,
+    );
+    await putImmutableObject(previewKey, preview, "text/html; charset=utf-8");
+    const updated = await prisma.sessionGroup.updateMany({
+      where: {
+        id: input.sessionGroupId,
+        designPreviewKey: null,
+        authoredDesignSystem: { latestCommitArtifactId: input.artifactId },
+      },
+      data: {
+        designPreviewStatus: "captured",
+        designPreviewKey: previewKey,
+        designPreviewCommitSha: input.commitSha,
+        designPreviewCapturedAt: new Date(),
+        designPreviewError: null,
+      },
+    });
+    if (updated.count > 0) {
+      await this.emitStaticPreviewUpdate(
+        input.organizationId,
+        input.sessionGroupId,
+        input.commitSha,
+      );
+    }
+  }
+
+  private async emitStaticPreviewUpdate(
+    organizationId: string,
+    sessionGroupId: string,
+    commitSha: string,
+  ): Promise<void> {
+    await eventService.create({
+      organizationId,
+      scopeType: "system",
+      scopeId: sessionGroupId,
+      eventType: "design_preview_updated",
+      payload: {
+        sessionGroupId,
+        designPreviewStatus: "captured",
+        designPreviewCommitSha: commitSha,
+        designPreviewUrl: designCommitPreviewUrl(sessionGroupId),
+        designPreviewCapturedAt: new Date().toISOString(),
+        designPreviewError: null,
+      },
+      actorType: "system",
+      actorId: "system",
+    });
   }
 
   private async revalidateSavedArtifact(artifactId: string): Promise<boolean> {

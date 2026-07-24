@@ -129,6 +129,7 @@ vi.mock("./managed-git.js", () => ({
     retryPendingDesignCommitPreviews: vi.fn().mockResolvedValue(undefined),
     retryPdfCommitExport: vi.fn().mockResolvedValue(undefined),
     retryAnimationCommitExport: vi.fn().mockResolvedValue(undefined),
+    retryDesignSystemCommitExport: vi.fn().mockResolvedValue(undefined),
     updatePdfFormat: vi.fn().mockResolvedValue(undefined),
   },
 }));
@@ -12763,6 +12764,64 @@ describe("SessionService", () => {
 
       expect(result.reconciled).toEqual([]);
       expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
+
+    it("stops forwarded processes when a group's runtime binding changes", async () => {
+      // A process row left reading "running" after its runtime goes away makes
+      // preview panels select an endpoint that answers 503 instead of falling
+      // back to a saved preview.
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const markStopped = vi
+        .spyOn(sessionApplicationService, "markSessionGroupRuntimeStopped")
+        .mockResolvedValue(undefined);
+      const now = Date.now();
+      const ancient = new Date(now - 5 * 60_000).toISOString();
+      const conn = provisionedConn({
+        stoppingAt: ancient,
+        deprovisionFailedAt: ancient,
+        reconcileAttempts: 10,
+      });
+      // Second call happens inside syncGroupWorkspaceState when rebinding peers.
+      prismaMock.session.findMany.mockResolvedValue(
+        [] as unknown as Awaited<ReturnType<typeof prismaMock.session.findMany>>,
+      );
+      prismaMock.session.findMany.mockResolvedValueOnce([
+        {
+          id: "session-exhausted",
+          hosting: "cloud",
+          organizationId: "org-1",
+          workdir: null,
+          repoId: null,
+          connection: conn,
+        },
+      ] as unknown as Awaited<ReturnType<typeof prismaMock.session.findMany>>);
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          sessionGroupId: "group-1",
+          agentStatus: "stopped",
+          sessionStatus: "in_progress",
+        } as unknown as Awaited<ReturnType<typeof prismaMock.session.findUnique>>)
+        .mockResolvedValueOnce({
+          connection: conn,
+          sessionGroupId: "group-1",
+        } as unknown as Awaited<ReturnType<typeof prismaMock.session.findUnique>>);
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.$transaction.mockImplementation(async (callback) => callback(prismaMock));
+      // The group is still pinned to the runtime being torn down, so syncing the
+      // cleared connection counts as a binding change.
+      prismaMock.sessionGroup.findFirst.mockResolvedValue({
+        connection: { runtimeInstanceId: "runtime-old" },
+      } as unknown as Awaited<ReturnType<typeof prismaMock.sessionGroup.findFirst>>);
+      prismaMock.sessionGroup.findUnique.mockResolvedValue({
+        organizationId: "org-1",
+      } as unknown as Awaited<ReturnType<typeof prismaMock.sessionGroup.findUnique>>);
+
+      await service.reconcileStuckDeprovisions({ now, stuckAfterMs: 60_000 });
+
+      expect(markStopped).toHaveBeenCalledWith("group-1", "org-1");
+      markStopped.mockRestore();
+      warnSpy.mockRestore();
     });
 
     it("abandons candidates that have exceeded MAX_RECONCILE_ATTEMPTS", async () => {

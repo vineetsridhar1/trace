@@ -30,6 +30,12 @@ export function useProjectPreviewData(
   const pdfExportStatus = useEntityStore(
     (s) => s.sessionGroups[sessionGroupId]?.pdfExportStatus,
   );
+  const activeRuntimeInstanceId = useEntityStore((s) => {
+    const connection = s.sessionGroups[sessionGroupId]?.connection;
+    if (!connection || typeof connection !== "object" || Array.isArray(connection)) return null;
+    const value = (connection as Record<string, unknown>).runtimeInstanceId;
+    return typeof value === "string" ? value : null;
+  });
   const [error, setError] = useState<string | null>(null);
   const [savedPdfUrl, setSavedPdfUrl] = useState<string | null>(null);
   const [savedPdfDownloadUrl, setSavedPdfDownloadUrl] = useState<string | null>(null);
@@ -76,12 +82,13 @@ export function useProjectPreviewData(
 
   const endpoint = useMemo(
     () =>
-      findReadyPreviewEndpoint(
+      findReadyPreviewEndpoint({
         sessionGroupId,
-        Object.values(endpointTable),
-        Object.values(processTable),
-      ),
-    [endpointTable, processTable, sessionGroupId],
+        endpoints: Object.values(endpointTable),
+        processes: Object.values(processTable),
+        activeRuntimeInstanceId,
+      }),
+    [activeRuntimeInstanceId, endpointTable, processTable, sessionGroupId],
   );
 
   return { endpoint, error, refresh, savedPdfDownloadUrl, savedPdfUrl };

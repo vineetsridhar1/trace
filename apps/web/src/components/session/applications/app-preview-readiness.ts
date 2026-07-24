@@ -12,21 +12,46 @@ type PreviewProcess = {
   appConfigId: string;
   processConfigId: string;
   status: string;
+  runtimeInstanceId?: string | null;
 };
 
 export function isLivePreviewRuntimeAvailable(state: unknown): boolean {
   return state === "connected" || state === "degraded";
 }
 
-export function findReadyPreviewEndpoint<T extends PreviewEndpoint>(
-  sessionGroupId: string,
-  endpoints: T[],
-  processes: PreviewProcess[],
-): T | undefined {
+/**
+ * A process row can outlive the container that owned it — a re-provisioned
+ * runtime leaves the old row reading "running" while nothing serves it, so the
+ * endpoint answers 503 and a live preview never comes up. Treat a row as stale
+ * only when both instance ids are known and disagree; either one being unknown
+ * keeps the previous behaviour.
+ */
+function isProcessFromLiveRuntime(
+  process: PreviewProcess,
+  activeRuntimeInstanceId: string | null | undefined,
+): boolean {
+  if (!activeRuntimeInstanceId || !process.runtimeInstanceId) return true;
+  return process.runtimeInstanceId === activeRuntimeInstanceId;
+}
+
+export function findReadyPreviewEndpoint<T extends PreviewEndpoint>({
+  sessionGroupId,
+  endpoints,
+  processes,
+  activeRuntimeInstanceId,
+}: {
+  sessionGroupId: string;
+  endpoints: T[];
+  processes: PreviewProcess[];
+  activeRuntimeInstanceId?: string | null;
+}): T | undefined {
   const runningProcessKeys = new Set(
     processes
       .filter(
-        (process) => process.sessionGroupId === sessionGroupId && process.status === "running",
+        (process) =>
+          process.sessionGroupId === sessionGroupId &&
+          process.status === "running" &&
+          isProcessFromLiveRuntime(process, activeRuntimeInstanceId),
       )
       .map((process) => `${process.appConfigId}:${process.processConfigId}`),
   );
