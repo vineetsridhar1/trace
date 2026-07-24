@@ -48,16 +48,13 @@ import { useTerminalStore } from "../../stores/terminal";
 import { useAttachmentOpen } from "./AttachmentOpenContext";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
-import { getSessionEmptyStateContent } from "./sessionEmptyState";
+import {
+  getSessionEmptyStateContent,
+  kindSupportsDesignImplementation,
+} from "./sessionEmptyState";
 import { DesignPickerDialog } from "./DesignPickerDialog";
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
-
-// Kinds where "implement a design" applies — coding and app sessions build from
-// designs; design/pdf/design-system sessions do not.
-function canImplementDesigns(groupKind: string | null | undefined): boolean {
-  return groupKind !== "design" && groupKind !== "design_system" && groupKind !== "pdf";
-}
 
 export function SessionInput({
   sessionId,
@@ -543,10 +540,10 @@ export function SessionInput({
           >
             <Paperclip size={16} />
           </button>
-          {canImplementDesigns(groupKind) && (
+          {kindSupportsDesignImplementation(groupKind) && (
             <button
               onClick={() => setShowDesignPicker(true)}
-              disabled={!canSend || isSending}
+              disabled={!canSend || isSending || isActive}
               className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
               title="Implement a design"
             >

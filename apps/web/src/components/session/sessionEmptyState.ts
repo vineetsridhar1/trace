@@ -122,3 +122,12 @@ export function getSessionEmptyStateContent(
 export function isGeneratedProjectKind(kind: string | null | undefined): boolean {
   return kind === "app" || kind === "design" || kind === "pdf";
 }
+
+// Whether a session of this kind can implement a design — derived from the
+// empty-state config so the empty-state box and the composer button stay in
+// sync (coding and app sessions; not design/design-system/pdf).
+export function kindSupportsDesignImplementation(kind: string | null | undefined): boolean {
+  return getSessionEmptyStateContent(kind).starterPrompts.some(
+    (starter) => starter.action === "pick-design",
+  );
+}

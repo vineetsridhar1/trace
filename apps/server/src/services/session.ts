@@ -9677,11 +9677,24 @@ export class SessionService {
 
   // Resolve a design session group into its copyable artifact metadata,
   // enforcing view access and that it has committed source to implement.
+  // A design's copyable source: its managed repo and the commit to read from
+  // (the captured preview commit, else the current branch head).
+  private async resolveDesignCommitSha(
+    organizationId: string,
+    repoId: string,
+    branch: string | null,
+    previewCommitSha: string | null,
+  ): Promise<string | null> {
+    if (previewCommitSha) return previewCommitSha;
+    if (branch) return gitStorage.getBranchHead(organizationId, repoId, branch);
+    return null;
+  }
+
   private async resolveDesignArtifact(
     designSessionGroupId: string,
     organizationId: string,
     userId: string,
-  ): Promise<{ id: string; name: string; slug: string }> {
+  ): Promise<{ id: string; name: string; slug: string; repoId: string; commitSha: string }> {
     const design = await prisma.sessionGroup.findFirst({
       where: { id: designSessionGroupId, organizationId, kind: "design" },
       select: {
@@ -9702,60 +9715,77 @@ export class SessionService {
     if (!design.repoId) {
       throw new ValidationError("This design has no saved source to implement yet");
     }
-    let commitSha = design.designPreviewCommitSha;
-    if (!commitSha && design.branch) {
-      commitSha = await gitStorage.getBranchHead(organizationId, design.repoId, design.branch);
-    }
+    const commitSha = await this.resolveDesignCommitSha(
+      organizationId,
+      design.repoId,
+      design.branch,
+      design.designPreviewCommitSha,
+    );
     if (!commitSha) {
       throw new ValidationError("This design has no committed source to implement yet");
     }
-    return { id: design.id, name: design.name, slug: this.designArtifactSlug(design) };
+    return {
+      id: design.id,
+      name: design.name,
+      slug: this.designArtifactSlug(design),
+      repoId: design.repoId,
+      commitSha,
+    };
+  }
+
+  // Re-resolve a design's repo + commit at delivery time (no view check — access
+  // was already enforced when the attachment was created). Null when the design
+  // has no committed source to copy.
+  private async resolveDesignSource(
+    designSessionGroupId: string,
+    organizationId: string,
+  ): Promise<{ repoId: string; commitSha: string } | null> {
+    const design = await prisma.sessionGroup.findFirst({
+      where: { id: designSessionGroupId, organizationId, kind: "design" },
+      select: { repoId: true, branch: true, designPreviewCommitSha: true },
+    });
+    if (!design?.repoId) return null;
+    const commitSha = await this.resolveDesignCommitSha(
+      organizationId,
+      design.repoId,
+      design.branch,
+      design.designPreviewCommitSha,
+    );
+    if (!commitSha) return null;
+    return { repoId: design.repoId, commitSha };
   }
 
   // Read a design's committed tree and write its artifact files into the target
   // workspace under .trace/designs/<slug>/. Returns the number of files written.
   private async copyDesignSourceIntoWorkspace(params: {
-    designSessionGroupId: string;
-    slug: string;
     organizationId: string;
+    repoId: string;
+    commitSha: string;
+    slug: string;
     runtimeId: string;
     sessionId: string;
     workdirHint?: string;
   }): Promise<number> {
-    const design = await prisma.sessionGroup.findFirst({
-      where: {
-        id: params.designSessionGroupId,
-        organizationId: params.organizationId,
-        kind: "design",
-      },
-      select: { repoId: true, branch: true, designPreviewCommitSha: true },
-    });
-    if (!design?.repoId) return 0;
-    let commitSha = design.designPreviewCommitSha;
-    if (!commitSha && design.branch) {
-      commitSha = await gitStorage.getBranchHead(
-        params.organizationId,
-        design.repoId,
-        design.branch,
-      );
-    }
-    if (!commitSha) return 0;
-
     const archive = await gitStorage.archiveTreeAtCommit(
       params.organizationId,
-      design.repoId,
-      commitSha,
+      params.repoId,
+      params.commitSha,
     );
     const { files } = await parseGitTreeArchive(archive);
     const destRoot = `.trace/designs/${params.slug}`;
     let written = 0;
     for (const [path, content] of files) {
       if (!isDesignSourcePath(path)) continue;
+      const text = content.toString("utf-8");
+      // Skip anything that isn't valid UTF-8 — writeFile takes a string, so a
+      // binary asset would be silently corrupted. The design subtree is text
+      // today; this just keeps the copy honest if that ever changes.
+      if (!Buffer.from(text, "utf-8").equals(content)) continue;
       await sessionRouter.writeFile(
         params.runtimeId,
         params.sessionId,
         this.normalizeFilePath(`${destRoot}/${path}`),
-        content.toString("utf-8"),
+        text,
         params.workdirHint,
       );
       written += 1;
@@ -9805,14 +9835,18 @@ export class SessionService {
         userId,
         { requireWrite: true },
       );
-      await this.copyDesignSourceIntoWorkspace({
-        designSessionGroupId,
-        slug: design.slug,
+      const written = await this.copyDesignSourceIntoWorkspace({
         organizationId,
+        repoId: design.repoId,
+        commitSha: design.commitSha,
+        slug: design.slug,
         runtimeId: runtime.runtimeId,
         sessionId: runtime.sessionId,
         workdirHint: runtime.workdirHint,
       });
+      if (written === 0) {
+        throw new ValidationError("This design has no source files to implement yet");
+      }
       return this.sendMessage({ sessionId, text, actorType, actorId: userId, clientSource });
     }
 
@@ -10760,14 +10794,30 @@ export class SessionService {
       if (runtimeId) {
         for (const ref of pending.designAttachments) {
           try {
-            await this.copyDesignSourceIntoWorkspace({
-              designSessionGroupId: ref.designSessionGroupId,
-              slug: ref.slug,
+            const source = await this.resolveDesignSource(
+              ref.designSessionGroupId,
+              session.organizationId,
+            );
+            if (!source) {
+              console.warn(
+                `[attachDesign] Design ${ref.designSessionGroupId} has no committed source for session ${sessionId}`,
+              );
+              continue;
+            }
+            const written = await this.copyDesignSourceIntoWorkspace({
               organizationId: session.organizationId,
+              repoId: source.repoId,
+              commitSha: source.commitSha,
+              slug: ref.slug,
               runtimeId,
               sessionId,
               workdirHint: session.workdir,
             });
+            if (written === 0) {
+              console.warn(
+                `[attachDesign] Design ${ref.designSessionGroupId} produced no source files for session ${sessionId}`,
+              );
+            }
           } catch (error) {
             console.error(
               `[attachDesign] Failed to materialize design ${ref.designSessionGroupId} for session ${sessionId}:`,

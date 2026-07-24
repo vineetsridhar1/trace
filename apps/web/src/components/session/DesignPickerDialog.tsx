@@ -170,6 +170,7 @@ function DesignPickerCard({
           <iframe
             src={previewUrl}
             title={`${group.name} preview`}
+            loading="lazy"
             className="pointer-events-none size-full border-0 bg-background"
             sandbox="allow-forms allow-modals allow-popups allow-scripts"
           />
