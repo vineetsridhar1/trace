@@ -806,4 +806,41 @@ describe("managed git design-system preview exports", () => {
       "design-system-previews/org-1/ds-group-1/old-request.html",
     );
   });
+
+  it("does not dispatch an export when no runtime is connected", async () => {
+    prismaMock.sessionGroup.findMany.mockImplementation((args?: { where?: { kind?: string } }) =>
+      Promise.resolve(
+        args?.where?.kind === "design_system"
+          ? [
+              {
+                id: "ds-group-1",
+                branch: null,
+                designPreviewPendingKey: null,
+                sessions: [
+                  { id: "session-1", connection: { state: "disconnected" } },
+                ],
+              },
+            ]
+          : [],
+      ),
+    );
+    prismaMock.sessionGroup.update.mockResolvedValue({ id: "ds-group-1" });
+    // completeDesignSystemExport runs on the no-runtime path; a null lookup makes
+    // it a no-op cleanup so the enqueue resolves without a dispatched command.
+    prismaMock.sessionGroup.findFirst.mockResolvedValue(null);
+
+    await managedGitService.recordPush({
+      organizationId: ORG,
+      repoId: REPO,
+      commands: [{ ref: "refs/heads/main", oldSha: "a".repeat(40), newSha: "b".repeat(40) }],
+      actorType: "system",
+      actorId: "runtime-1",
+    });
+
+    expect(sessionRouter.send).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ type: "design_system_export" }),
+      expect.anything(),
+    );
+  });
 });

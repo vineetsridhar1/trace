@@ -1483,8 +1483,10 @@ class ManagedGitService {
       where: {
         ...(sessionGroupId ? { id: sessionGroupId } : {}),
         kind: "design_system",
+        // This pipeline only ever writes publishing → captured/failed, so retry
+        // failed exports and publishing exports whose runtime never answered.
         OR: [
-          { designPreviewStatus: { in: ["pending", "failed"] } },
+          { designPreviewStatus: "failed" },
           { designPreviewStatus: "publishing", designPreviewAttemptedAt: { lt: retryBefore } },
         ],
       },
