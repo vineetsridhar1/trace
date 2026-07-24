@@ -3457,7 +3457,9 @@ export class SessionService {
             ? "Design"
             : resolvedKind === "pdf"
               ? "PDF"
-              : "App";
+              : resolvedKind === "animation"
+                ? "Animation"
+                : "App";
       if (input.sourceSessionId && !input.restoreCheckpointId) {
         throw new ValidationError(`${label} sessions cannot start from a source session`);
       }

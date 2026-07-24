@@ -2144,7 +2144,8 @@ export class SessionRouter {
           options.sessionGroupKind === "app" ||
           options.sessionGroupKind === "design" ||
           options.sessionGroupKind === "design_system" ||
-          options.sessionGroupKind === "pdf"
+          options.sessionGroupKind === "pdf" ||
+          options.sessionGroupKind === "animation"
         ) {
           const runtimeInstanceId = startResult.runtimeInstanceId;
           if (!runtimeInstanceId || !options.prepareAppGit) {
