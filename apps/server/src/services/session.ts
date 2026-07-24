@@ -7126,8 +7126,14 @@ export class SessionService {
         const updated = await tx.session.update({
           where: { id: sessionId },
           data: {
-            agentStatus: getIdleAgentStatus(prev.agentStatus),
-            sessionStatus: getIdleSessionStatus(prev.sessionStatus),
+            // A queued command is delivered immediately below (e.g. the first
+            // message, or a design attach whose files are still copying), so
+            // stay "active" — resetting to idle here makes the session look
+            // completed during that gap.
+            agentStatus: pendingCommand ? "active" : getIdleAgentStatus(prev.agentStatus),
+            sessionStatus: pendingCommand
+              ? getRunningSessionStatus(prev.sessionStatus)
+              : getIdleSessionStatus(prev.sessionStatus),
             workdir,
             ...(branch && { branch }),
             pendingRun: Prisma.DbNull,
