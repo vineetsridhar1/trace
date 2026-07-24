@@ -49,6 +49,14 @@ declare global {
     error: string | null;
   };
 
+  type DesktopCodingToolStatus = {
+    tool: string;
+    label: string;
+    status: "installed" | "missing" | "update_available" | "unknown";
+    installedVersion: string | null;
+    latestVersion: string | null;
+  };
+
   type DesktopLinkedCheckoutStatus = {
     repoId: string;
     repoPath: string | null;
@@ -154,6 +162,8 @@ declare global {
     getGithubCliStatus: () => Promise<DesktopGithubCliStatus>;
     getGithubAuthToken: () => Promise<string>;
     loginCodexWithChatgpt: () => Promise<string>;
+    getCodingToolStatuses: () => Promise<DesktopCodingToolStatus[]>;
+    installOrUpdateCodingTool: (toolId: string) => Promise<DesktopCodingToolStatus>;
     setRepoGitHooksEnabled: (
       repoId: string,
       enabled: boolean,
