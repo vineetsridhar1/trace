@@ -655,6 +655,32 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
+  if (event.eventType === "animation_preview_updated") {
+    const sessionGroupId =
+      typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;
+    if (sessionGroupId) {
+      batch.patch("sessionGroups", sessionGroupId, {
+        animationPreviewStatus:
+          typeof payload.animationPreviewStatus === "string"
+            ? payload.animationPreviewStatus
+            : null,
+        animationPreviewUrl:
+          typeof payload.animationPreviewUrl === "string" ? payload.animationPreviewUrl : null,
+        animationPreviewCommitSha:
+          typeof payload.animationPreviewCommitSha === "string"
+            ? payload.animationPreviewCommitSha
+            : null,
+        animationPreviewCapturedAt:
+          typeof payload.animationPreviewCapturedAt === "string"
+            ? payload.animationPreviewCapturedAt
+            : null,
+        animationPreviewError:
+          typeof payload.animationPreviewError === "string" ? payload.animationPreviewError : null,
+        updatedAt: event.timestamp,
+      } as Partial<SessionGroupEntity>);
+    }
+  }
+
   if (event.eventType === "session_group_visibility_updated") {
     const sessionGroupId =
       typeof payload.sessionGroupId === "string" ? payload.sessionGroupId : null;

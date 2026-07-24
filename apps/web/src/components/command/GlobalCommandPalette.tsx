@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   Settings,
+  Sparkles,
   Ticket,
 } from "lucide-react";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
@@ -234,6 +235,17 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       onSelect: () => {
         onClose();
         openGeneratedProjectDialog("pdf");
+      },
+    });
+    list.push({
+      key: "new-animation-session",
+      group: "Actions",
+      label: "New animation",
+      search: "new animation session motion interaction framer create",
+      icon: <Sparkles size={16} />,
+      onSelect: () => {
+        onClose();
+        openGeneratedProjectDialog("animation");
       },
     });
 

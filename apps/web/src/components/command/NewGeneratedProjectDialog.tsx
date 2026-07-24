@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { AppWindow, NotebookText, Palette } from "lucide-react";
+import { AppWindow, NotebookText, Palette, Sparkles } from "lucide-react";
 import { gql } from "@urql/core";
 import type { AgentEnvironment, Repo } from "@trace/gql";
 import { useAuthStore, useEntityStore } from "@trace/client-core";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
 import {
+  createAnimationSession,
   createAppSession,
   createDesignSession,
   createPdfSession,
@@ -22,8 +23,8 @@ import {
   ResponsiveDialogTitle,
 } from "../ui/responsive-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import type { CreatableGeneratedProjectKind } from "../sidebar/generated-project-types";
 
-type GeneratedProjectKind = "app" | "design" | "pdf";
 const DESIGN_SYSTEMS_QUERY = gql`
   query DesignCreationOptions($organizationId: ID!) {
     repos(organizationId: $organizationId) {
@@ -50,7 +51,7 @@ const CREATE_SYSTEM = gql`
   }
 `;
 const OPTIONS: Array<{
-  kind: GeneratedProjectKind;
+  kind: CreatableGeneratedProjectKind;
   title: string;
   description: string;
   Icon: typeof AppWindow;
@@ -72,6 +73,12 @@ const OPTIONS: Array<{
     title: "Document",
     description: "Create a print-ready PDF, report, flyer, or proposal.",
     Icon: NotebookText,
+  },
+  {
+    kind: "animation",
+    title: "Animation",
+    description: "Build an interactive motion piece you can copy into your own app.",
+    Icon: Sparkles,
   },
 ];
 
@@ -110,19 +117,22 @@ export function NewGeneratedProjectDialog() {
   const selectedRepo = repos.find((repo) => repo.id === repoId);
 
   const createImmediate = useCallback(
-    (nextKind: "app" | "design" | "pdf") => {
+    (nextKind: CreatableGeneratedProjectKind) => {
       close();
       void (nextKind === "app"
         ? createAppSession()
         : nextKind === "design"
           ? createDesignSession()
-          : createPdfSession());
+          : nextKind === "pdf"
+            ? createPdfSession()
+            : createAnimationSession());
     },
     [close],
   );
 
   useEffect(() => {
-    if (kind === "app" || kind === "design" || kind === "pdf") createImmediate(kind);
+    if (kind === "app" || kind === "design" || kind === "pdf" || kind === "animation")
+      createImmediate(kind);
   }, [createImmediate, kind]);
 
   useEffect(() => {
@@ -171,7 +181,7 @@ export function NewGeneratedProjectDialog() {
     navigateToSessionGroup(null, pendingAuthoringGroupId, session?.id ?? null);
   }, [close, pendingAuthoringGroupId, sessionGroups, sessions]);
 
-  const choose = (nextKind: GeneratedProjectKind) => createImmediate(nextKind);
+  const choose = (nextKind: CreatableGeneratedProjectKind) => createImmediate(nextKind);
   const submitSystem = async () => {
     if (!name.trim() || !repoId) return;
     setSubmitting(true);

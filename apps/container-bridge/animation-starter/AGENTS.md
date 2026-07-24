@@ -1,0 +1,3 @@
+# Trace Animation session
+
+This repository creates one interactive motion piece. Read `docs/ai-guidance.md` before editing. Keep the artifact in `src/Animation.tsx`; do not modify `src/main.tsx`. Do not stop or replace Trace's managed dev server on port 3000; rely on Vite's HMR. This session has no backend — do not add a server, database, or external integration. Run `pnpm review` to check your work — it drives the live preview headlessly with playwright-core (already installed, alongside a system Chromium) and captures screenshots you can read; do not install your own browser or automation tooling.

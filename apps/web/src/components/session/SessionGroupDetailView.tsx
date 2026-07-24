@@ -30,6 +30,7 @@ import { SidebarPanel } from "./SidebarPanel";
 import type { SidebarTab } from "./SidebarPanel";
 import { SessionApplicationsPanel } from "./applications/SessionApplicationsPanel";
 import { AppSessionPreviewPanel } from "./applications/AppSessionPreviewPanel";
+import { AnimationSessionPreviewPanel } from "./applications/AnimationSessionPreviewPanel";
 import { GeneratedProjectPreviewPanel } from "./applications/GeneratedProjectPreviewPanel";
 import { hasSavedDesignPreview } from "./applications/saved-design-preview";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
@@ -98,6 +99,11 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       pdfPageHeight
       pdfPageUnit
       pdfFormatVersion
+      animationPreviewUrl
+      animationPreviewStatus
+      animationPreviewCommitSha
+      animationPreviewCapturedAt
+      animationPreviewError
       gitCheckpoints {
         id
         sessionId
@@ -448,6 +454,7 @@ export function SessionGroupDetailView({
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
   const projectWorkspaceKind = getProjectWorkspaceKind(groupKind);
   const isAppGroup = projectWorkspaceKind === "app";
+  const isAnimationGroup = projectWorkspaceKind === "animation";
   const isGeneratedProjectGroup =
     projectWorkspaceKind === "design" ||
     projectWorkspaceKind === "design_system" ||
@@ -465,6 +472,9 @@ export function SessionGroupDetailView({
     liveGeneratedProjectCanvasReady ||
     ((groupKind === "design" || groupKind === "design_system") &&
       hasSavedDesignPreview(groupDesignPreviewUrl, groupGitCheckpoints));
+  // Animation sessions share app's live-container readiness semantics (agent
+  // status + connection state, no saved-preview special case), so this same
+  // value is reused for both rather than recomputed.
   const appCanvasReady = isAppCanvasReady(
     selectedSession?.agentStatus,
     selectedConnection?.state,
@@ -948,14 +958,14 @@ export function SessionGroupDetailView({
                 showSidebar={showSidebar}
                 showApplicationsSidebar={showApplicationsSidebar}
                 canShowApplications={showApplicationsSidebarTab}
-                compactAppMode={isAppGroup || isGeneratedProjectGroup}
+                compactAppMode={isAppGroup || isAnimationGroup || isGeneratedProjectGroup}
                 onToggleFullscreen={toggleFullscreen}
                 onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
                 onToggleApplicationsSidebar={
                   selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
                 }
               />
-              {!isAppGroup && !isGeneratedProjectGroup ? (
+              {!isAppGroup && !isAnimationGroup && !isGeneratedProjectGroup ? (
                 <GroupTabStrip
                   sessionTabs={sessionTabs}
                   terminals={terminals}
@@ -1021,6 +1031,41 @@ export function SessionGroupDetailView({
                           onForkSession={handleOpenForkDialog}
                           canForkSession={false}
                           emptyState={<AppSessionPreviewPanel sessionGroupId={sessionGroupId} />}
+                        />
+                      }
+                    />
+                  ) : isAnimationGroup ? (
+                    <ProjectPreviewWorkspace
+                      sessionId={selectedSession?.id ?? null}
+                      scrollToEventId={scrollToEventId}
+                      onScrollComplete={handleScrollComplete}
+                      onForkSession={handleOpenForkDialog}
+                      canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
+                      canvasReady={appCanvasReady}
+                      canvasKey="animation-canvas"
+                      canvas={
+                        <SessionGroupContentArea
+                          sessionGroupId={sessionGroupId}
+                          activeFilePath={activeFilePath}
+                          openFiles={openFiles}
+                          activeTerminalId={activeTerminal?.id ?? null}
+                          activeTrafficEndpointId={
+                            activeWorkflowTab === "traffic" ? trafficEndpointId : null
+                          }
+                          selectedSession={null}
+                          sessionsByRecency={sessionsByRecency}
+                          canStartNewChat={false}
+                          onStartNewChat={handleNewChat}
+                          defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                          getFileBuffer={getFileBuffer}
+                          setFileBuffer={setFileBuffer}
+                          scrollToEventId={null}
+                          onScrollComplete={handleScrollComplete}
+                          onForkSession={handleOpenForkDialog}
+                          canForkSession={false}
+                          emptyState={
+                            <AnimationSessionPreviewPanel sessionGroupId={sessionGroupId} />
+                          }
                         />
                       }
                     />

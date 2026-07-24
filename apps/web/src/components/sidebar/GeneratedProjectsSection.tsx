@@ -129,13 +129,55 @@ const GENERATED_PROJECTS_QUERY = gql`
         createdAt
       }
     }
+    animationSessionGroups(organizationId: $organizationId) {
+      id
+      name
+      slug
+      kind
+      status
+      visibility
+      owner {
+        id
+      }
+      animationPreviewUrl
+      animationPreviewStatus
+      gitCheckpoints {
+        id
+        committedAt
+        previewStatus
+        previewUrl
+      }
+      archivedAt
+      updatedAt
+      connection {
+        state
+      }
+      sessions {
+        id
+        sessionGroupId
+        agentStatus
+        sessionStatus
+        prUrl
+        worktreeDeleted
+        lastMessageAt
+        lastUserMessageAt
+        updatedAt
+        createdAt
+      }
+    }
   }
 `;
 
 type ProjectGroup = SessionGroup & { id: string; sessions?: Array<Session & { id: string }> };
 
 export function isCreateListKind(kind: SessionGroup["kind"]): kind is GeneratedProjectKind {
-  return kind === "app" || kind === "design" || kind === "design_system" || kind === "pdf";
+  return (
+    kind === "app" ||
+    kind === "design" ||
+    kind === "design_system" ||
+    kind === "pdf" ||
+    kind === "animation"
+  );
 }
 
 type SidebarProjectKind = Exclude<GeneratedProjectKind, "design_system">;
@@ -143,7 +185,7 @@ type SidebarProjectKind = Exclude<GeneratedProjectKind, "design_system">;
 export function isSidebarCreateListKind(
   kind: SessionGroup["kind"],
 ): kind is SidebarProjectKind {
-  return kind === "app" || kind === "design" || kind === "pdf";
+  return kind === "app" || kind === "design" || kind === "pdf" || kind === "animation";
 }
 
 export function GeneratedProjectsSection({
@@ -177,6 +219,7 @@ export function GeneratedProjectsSection({
           ...(result.data?.appSessionGroups ?? []),
           ...(result.data?.designSessionGroups ?? []),
           ...(result.data?.pdfSessionGroups ?? []),
+          ...(result.data?.animationSessionGroups ?? []),
         ] as ProjectGroup[];
         if (!projectGroups.length) return;
         upsertMany("sessionGroups", projectGroups as SessionGroupEntity[]);
@@ -193,6 +236,7 @@ export function GeneratedProjectsSection({
       app: [],
       design: [],
       pdf: [],
+      animation: [],
     };
     for (const group of Object.values(groups)) {
       if (!group.archivedAt && isSidebarCreateListKind(group.kind)) {

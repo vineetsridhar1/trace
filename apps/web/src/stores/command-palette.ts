@@ -1,4 +1,7 @@
 import { create } from "zustand";
+import type { CreatableGeneratedProjectKind } from "../components/sidebar/generated-project-types";
+
+type GeneratedProjectDialogKind = CreatableGeneratedProjectKind | "choose" | "design-system";
 
 interface CommandPaletteState {
   paletteOpen: boolean;
@@ -10,10 +13,8 @@ interface CommandPaletteState {
   openForSearch: (initialQuery: string) => void;
   shortcutsOpen: boolean;
   setShortcutsOpen: (open: boolean) => void;
-  newGeneratedProjectKind: "app" | "design" | "pdf" | "choose" | "design-system" | null;
-  openGeneratedProjectDialog: (
-    kind: "app" | "design" | "pdf" | "choose" | "design-system",
-  ) => void;
+  newGeneratedProjectKind: GeneratedProjectDialogKind | null;
+  openGeneratedProjectDialog: (kind: GeneratedProjectDialogKind) => void;
   closeGeneratedProjectDialog: () => void;
 }
 

@@ -23,6 +23,7 @@ import {
   type PdfPageFormat,
 } from "../lib/pdf-format.js";
 import { designSystemService } from "./design-system.js";
+import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
 
 const JWT_SECRET = resolveJwtSecret();
 
@@ -36,6 +37,7 @@ const USER_GIT_TOKEN_TTL_SECONDS = 60 * 60;
 // still-running export from another API task.
 const DESIGN_PREVIEW_RETRY_DELAY_MS = 90_000;
 const PDF_EXPORT_RETRY_DELAY_MS = 90_000;
+const ANIMATION_PREVIEW_RETRY_DELAY_MS = 90_000;
 
 function isPdfStorageKeyForGroup(key: string, organizationId: string, sessionGroupId: string) {
   return key.startsWith(`pdf-exports/${organizationId}/${sessionGroupId}/`);
@@ -46,6 +48,21 @@ async function deletePdfObject(key: string): Promise<void> {
     await storage.deleteObject(key);
   } catch (error) {
     console.warn("[managed-git] failed to delete superseded PDF object", {
+      key,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function isAnimationStorageKeyForGroup(key: string, organizationId: string, sessionGroupId: string) {
+  return key.startsWith(`animation-previews/${organizationId}/${sessionGroupId}/`);
+}
+
+async function deleteAnimationObject(key: string): Promise<void> {
+  try {
+    await storage.deleteObject(key);
+  } catch (error) {
+    console.warn("[managed-git] failed to delete superseded animation preview object", {
       key,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -432,6 +449,9 @@ class ManagedGitService {
         }),
         this.enqueuePdfCommitExport(artifactInput).catch((error: unknown) => {
           console.error("[managed-git] failed to enqueue PDF export", error);
+        }),
+        this.enqueueAnimationCommitExport(artifactInput).catch((error: unknown) => {
+          console.error("[managed-git] failed to enqueue animation preview export", error);
         }),
         designSystemService
           .enqueueCommitArtifactsForManagedPush({
@@ -858,6 +878,310 @@ class ManagedGitService {
         pdfPageHeight: group.pdfPageHeight,
         pdfPageUnit: group.pdfPageUnit,
         pdfFormatVersion: group.pdfFormatVersion,
+      },
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+    });
+  }
+
+  private async enqueueAnimationCommitExport(input: {
+    organizationId: string;
+    repoId: string;
+    branch: string;
+    commitSha: string;
+  }): Promise<void> {
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        OR: [
+          { branch: input.branch },
+          { branch: null, repo: { is: { defaultBranch: input.branch } } },
+        ],
+        kind: "animation",
+      },
+      select: {
+        id: true,
+        branch: true,
+        animationPreviewPendingKey: true,
+        sessions: {
+          orderBy: { updatedAt: "desc" },
+          select: { id: true, connection: true },
+        },
+      },
+    });
+
+    await Promise.all(
+      groups.map(async (group) => {
+        const exportKey = `animation-previews/${input.organizationId}/${group.id}/${input.commitSha}-${randomUUID()}.html`;
+        const requestId = randomUUID();
+        const publishing = await prisma.sessionGroup.update({
+          where: { id: group.id },
+          data: {
+            ...(group.branch == null ? { branch: input.branch } : {}),
+            animationPreviewStatus: "publishing",
+            animationPreviewPendingKey: exportKey,
+            animationPreviewCommitSha: input.commitSha,
+            animationPreviewRequestId: requestId,
+            animationPreviewAttemptedAt: new Date(),
+            animationPreviewError: null,
+          },
+          select: {
+            id: true,
+            animationPreviewStatus: true,
+            animationPreviewKey: true,
+            animationPreviewCommitSha: true,
+            animationPreviewCapturedAt: true,
+            animationPreviewError: true,
+          },
+        });
+        await this.emitAnimationPreviewUpdate(input.organizationId, publishing);
+        const uploadTarget = await storage.getUploadTarget(
+          exportKey,
+          "text/html; charset=utf-8",
+          15 * 1024 * 1024,
+        );
+        if (group.animationPreviewPendingKey && group.animationPreviewPendingKey !== exportKey) {
+          void deleteAnimationObject(group.animationPreviewPendingKey);
+        }
+        const session = group.sessions.find((candidate) => {
+          const connection = candidate.connection;
+          return (
+            connection &&
+            typeof connection === "object" &&
+            !Array.isArray(connection) &&
+            (connection as Record<string, unknown>).state === "connected"
+          );
+        });
+        if (!session) {
+          await this.completeAnimationExport({
+            organizationId: input.organizationId,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            requestId,
+            storageKey: exportKey,
+            error: "No connected animation runtime",
+          });
+          return;
+        }
+        const connection = session.connection as Record<string, unknown>;
+        const runtimeInstanceId =
+          typeof connection.runtimeInstanceId === "string"
+            ? connection.runtimeInstanceId
+            : undefined;
+        const delivery = sessionRouter.send(
+          session.id,
+          {
+            type: "animation_export",
+            requestId,
+            sessionId: session.id,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            storageKey: exportKey,
+            uploadTarget,
+          },
+          { expectedHomeRuntimeId: runtimeInstanceId, organizationId: input.organizationId },
+        );
+        if (delivery !== "delivered") {
+          await this.completeAnimationExport({
+            organizationId: input.organizationId,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            requestId,
+            storageKey: exportKey,
+            error: `Animation runtime unavailable: ${delivery}`,
+          });
+        }
+      }),
+    );
+  }
+
+  async completeAnimationExport(input: {
+    organizationId: string;
+    sessionGroupId: string;
+    commitSha: string;
+    requestId: string;
+    storageKey: string;
+    error?: string;
+  }): Promise<void> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: {
+        id: input.sessionGroupId,
+        organizationId: input.organizationId,
+        kind: "animation",
+        animationPreviewCommitSha: input.commitSha,
+        animationPreviewRequestId: input.requestId,
+      },
+      select: { animationPreviewPendingKey: true, animationPreviewKey: true },
+    });
+    if (!group) {
+      if (
+        isAnimationStorageKeyForGroup(input.storageKey, input.organizationId, input.sessionGroupId)
+      ) {
+        void deleteAnimationObject(input.storageKey);
+      }
+      return;
+    }
+    if (group.animationPreviewPendingKey !== input.storageKey) {
+      if (
+        isAnimationStorageKeyForGroup(input.storageKey, input.organizationId, input.sessionGroupId)
+      ) {
+        void deleteAnimationObject(input.storageKey);
+      }
+      return;
+    }
+    const completed = await prisma.sessionGroup.updateMany({
+      where: {
+        id: input.sessionGroupId,
+        animationPreviewCommitSha: input.commitSha,
+        animationPreviewRequestId: input.requestId,
+        animationPreviewPendingKey: input.storageKey,
+      },
+      data: input.error
+        ? {
+            animationPreviewStatus: "failed",
+            animationPreviewPendingKey: null,
+            animationPreviewRequestId: null,
+            animationPreviewError: input.error.slice(0, 500),
+          }
+        : {
+            animationPreviewStatus: "captured",
+            animationPreviewKey: group.animationPreviewPendingKey,
+            animationPreviewPendingKey: null,
+            animationPreviewRequestId: null,
+            animationPreviewCapturedAt: new Date(),
+            animationPreviewError: null,
+          },
+    });
+    if (completed.count === 0) {
+      if (
+        isAnimationStorageKeyForGroup(input.storageKey, input.organizationId, input.sessionGroupId)
+      ) {
+        void deleteAnimationObject(input.storageKey);
+      }
+      return;
+    }
+    if (input.error && group.animationPreviewPendingKey) {
+      void deleteAnimationObject(group.animationPreviewPendingKey);
+    } else if (
+      !input.error &&
+      group.animationPreviewKey &&
+      group.animationPreviewKey !== group.animationPreviewPendingKey
+    ) {
+      void deleteAnimationObject(group.animationPreviewKey);
+    }
+    const updated = await prisma.sessionGroup.findUniqueOrThrow({
+      where: { id: input.sessionGroupId },
+      select: {
+        id: true,
+        animationPreviewStatus: true,
+        animationPreviewKey: true,
+        animationPreviewCommitSha: true,
+        animationPreviewCapturedAt: true,
+        animationPreviewError: true,
+      },
+    });
+    await this.emitAnimationPreviewUpdate(input.organizationId, updated);
+  }
+
+  async retryAnimationCommitExport(
+    sessionGroupId: string,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: {
+        id: true,
+        kind: true,
+        organizationId: true,
+        repoId: true,
+        branch: true,
+        animationPreviewStatus: true,
+        animationPreviewKey: true,
+        animationPreviewCommitSha: true,
+        animationPreviewAttemptedAt: true,
+        repo: { select: { defaultBranch: true } },
+      },
+    });
+    if (!group || group.kind !== "animation" || !group.repoId || !group.repo) return;
+
+    const branch = group.branch ?? group.repo.defaultBranch;
+    const refs = await gitStorage.listRefs(group.organizationId, group.repoId);
+    const commitSha = refs.get(`refs/heads/${branch}`);
+    if (!commitSha) return;
+    const exportIsCurrent = group.animationPreviewCommitSha === commitSha;
+    if (
+      !options.force &&
+      exportIsCurrent &&
+      group.animationPreviewStatus === "captured" &&
+      group.animationPreviewKey
+    )
+      return;
+    if (
+      !options.force &&
+      exportIsCurrent &&
+      group.animationPreviewStatus === "publishing" &&
+      group.animationPreviewAttemptedAt &&
+      group.animationPreviewAttemptedAt.getTime() > Date.now() - ANIMATION_PREVIEW_RETRY_DELAY_MS
+    )
+      return;
+
+    await this.enqueueAnimationCommitExport({
+      organizationId: group.organizationId,
+      repoId: group.repoId,
+      branch,
+      commitSha,
+    });
+  }
+
+  async retryPendingAnimationExports(sessionGroupId?: string): Promise<void> {
+    const retryBefore = new Date(Date.now() - ANIMATION_PREVIEW_RETRY_DELAY_MS);
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        ...(sessionGroupId ? { id: sessionGroupId } : {}),
+        kind: "animation",
+        OR: [
+          { animationPreviewStatus: { in: ["pending", "failed"] } },
+          { animationPreviewStatus: "publishing", animationPreviewAttemptedAt: { lt: retryBefore } },
+        ],
+      },
+      select: { id: true },
+      take: 50,
+    });
+    await Promise.all(
+      groups.map((group) => this.retryAnimationCommitExport(group.id, { force: true })),
+    );
+  }
+
+  private async emitAnimationPreviewUpdate(
+    organizationId: string,
+    group: {
+      id: string;
+      animationPreviewStatus: string | null;
+      animationPreviewKey: string | null;
+      animationPreviewCommitSha: string | null;
+      animationPreviewCapturedAt: Date | null;
+      animationPreviewError: string | null;
+    },
+    actor: { actorType: ActorType; actorId: string } = {
+      actorType: "system",
+      actorId: "system",
+    },
+  ): Promise<void> {
+    await eventService.create({
+      organizationId,
+      scopeType: "system",
+      scopeId: group.id,
+      eventType: "animation_preview_updated",
+      payload: {
+        sessionGroupId: group.id,
+        animationPreviewStatus: group.animationPreviewStatus,
+        animationPreviewUrl: group.animationPreviewKey
+          ? animationCommitPreviewUrl(group.id)
+          : null,
+        animationPreviewCommitSha: group.animationPreviewCommitSha,
+        animationPreviewCapturedAt: group.animationPreviewCapturedAt?.toISOString() ?? null,
+        animationPreviewError: group.animationPreviewError,
       },
       actorType: actor.actorType,
       actorId: actor.actorId,

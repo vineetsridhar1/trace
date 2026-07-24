@@ -12,6 +12,13 @@ import {
   ResponsiveDialogTitle as DialogTitle,
 } from "../ui/responsive-dialog";
 
+const KIND_LABELS = {
+  app: "App",
+  design: "Design",
+  pdf: "PDF",
+  animation: "Animation",
+} as const;
+
 export function DeleteGeneratedProjectDialog({
   groupId,
   groupName,
@@ -21,12 +28,13 @@ export function DeleteGeneratedProjectDialog({
 }: {
   groupId: string;
   groupName: string;
-  kind: "app" | "design" | "pdf";
+  kind: "app" | "design" | "pdf" | "animation";
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const kindLabel = KIND_LABELS[kind];
 
   const handleOpenChange = (next: boolean) => {
     if (next) setError(null);
@@ -56,7 +64,7 @@ export function DeleteGeneratedProjectDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>Delete {kind === "design" ? "Design" : kind === "pdf" ? "PDF" : "App"}</DialogTitle>
+          <DialogTitle>Delete {kindLabel}</DialogTitle>
           <DialogDescription>
             Are you sure you want to delete <strong>{groupName}</strong>? This permanently deletes
             its sessions and managed git repository and cannot be undone.
@@ -70,7 +78,7 @@ export function DeleteGeneratedProjectDialog({
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
           <Button variant="destructive" disabled={deleting} onClick={handleDelete}>
-            {deleting ? "Deleting…" : `Delete ${kind === "design" ? "Design" : kind === "pdf" ? "PDF" : "App"}`}
+            {deleting ? "Deleting…" : `Delete ${kindLabel}`}
           </Button>
         </DialogFooter>
       </DialogContent>

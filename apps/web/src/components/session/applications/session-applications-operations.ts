@@ -1,5 +1,6 @@
 import { gql } from "@urql/core";
 import type { RepoApplicationConfig } from "@trace/gql";
+import { isGeneratedProjectKind } from "../../sidebar/generated-project-types";
 
 export const APPLICATIONS_STATE_QUERY = gql`
   query SessionApplicationsState($sessionGroupId: ID!) {
@@ -225,12 +226,7 @@ export const DEFAULT_APP_CONFIG: RepoApplicationConfig = {
 };
 
 export function usesDefaultApplicationConfig(groupKind: string | null | undefined): boolean {
-  return (
-    groupKind === "app" ||
-    groupKind === "design" ||
-    groupKind === "design_system" ||
-    groupKind === "pdf"
-  );
+  return isGeneratedProjectKind(groupKind);
 }
 
 export function displayApplicationStatus(status: string): string {

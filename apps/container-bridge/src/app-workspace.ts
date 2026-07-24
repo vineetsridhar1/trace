@@ -21,8 +21,12 @@ const SOURCE_DESIGN_DEFAULT_PACKAGE_DIR = fileURLToPath(
 );
 const IMAGE_PDF_STARTER_DIR = "/opt/trace/pdf-starter";
 const SOURCE_PDF_STARTER_DIR = fileURLToPath(new URL("../pdf-starter", import.meta.url));
+const IMAGE_ANIMATION_STARTER_DIR = "/opt/trace/animation-starter";
+const SOURCE_ANIMATION_STARTER_DIR = fileURLToPath(
+  new URL("../animation-starter", import.meta.url),
+);
 
-export type GeneratedProjectKind = "app" | "design" | "design_system" | "pdf";
+export type GeneratedProjectKind = "app" | "design" | "design_system" | "pdf" | "animation";
 
 async function remoteDefaultBranchExists(
   repoRemoteUrl: string,
@@ -45,7 +49,9 @@ function starterDir(kind: GeneratedProjectKind): string {
         ? process.env.TRACE_DESIGN_STARTER_DIR
         : kind === "pdf"
           ? process.env.TRACE_PDF_STARTER_DIR
-          : process.env.TRACE_APP_STARTER_DIR;
+          : kind === "animation"
+            ? process.env.TRACE_ANIMATION_STARTER_DIR
+            : process.env.TRACE_APP_STARTER_DIR;
   if (configured) return configured;
   const imageDir =
     kind === "design_system"
@@ -54,7 +60,9 @@ function starterDir(kind: GeneratedProjectKind): string {
         ? IMAGE_DESIGN_STARTER_DIR
         : kind === "pdf"
           ? IMAGE_PDF_STARTER_DIR
-          : IMAGE_APP_STARTER_DIR;
+          : kind === "animation"
+            ? IMAGE_ANIMATION_STARTER_DIR
+            : IMAGE_APP_STARTER_DIR;
   const sourceDir =
     kind === "design_system"
       ? SOURCE_DESIGN_SYSTEM_STARTER_DIR
@@ -62,7 +70,9 @@ function starterDir(kind: GeneratedProjectKind): string {
         ? SOURCE_DESIGN_STARTER_DIR
         : kind === "pdf"
           ? SOURCE_PDF_STARTER_DIR
-          : SOURCE_APP_STARTER_DIR;
+          : kind === "animation"
+            ? SOURCE_ANIMATION_STARTER_DIR
+            : SOURCE_APP_STARTER_DIR;
   if (fs.existsSync(imageDir)) return imageDir;
   if (fs.existsSync(sourceDir)) return sourceDir;
   throw new Error(`Trace ${kind} starter is missing from the runtime`);
@@ -146,7 +156,9 @@ export async function createAppWorkspace({
         ? "Design"
         : sessionGroupKind === "pdf"
           ? "PDF"
-          : "App";
+          : sessionGroupKind === "animation"
+            ? "Animation"
+            : "App";
   await execFileAsync("git", ["config", "user.name", `Trace ${agentLabel} Agent`], {
     cwd: workdir,
   });

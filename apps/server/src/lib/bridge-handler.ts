@@ -605,6 +605,28 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
+      if (
+        msg.type === "animation_export_result" &&
+        typeof msg.requestId === "string" &&
+        typeof msg.sessionGroupId === "string" &&
+        typeof msg.commitSha === "string" &&
+        typeof msg.storageKey === "string"
+      ) {
+        void managedGitService
+          .completeAnimationExport({
+            organizationId: bridgeAuth.organizationId,
+            sessionGroupId: msg.sessionGroupId,
+            commitSha: msg.commitSha,
+            requestId: msg.requestId,
+            storageKey: msg.storageKey,
+            error: typeof msg.error === "string" ? msg.error : undefined,
+          })
+          .catch((error: unknown) => {
+            console.error("[bridge] error completing animation preview export:", error);
+          });
+        return;
+      }
+
       if (msg.type === "app_process_exited" && typeof msg.processInstanceId === "string") {
         void sessionApplicationService
           .markProcessExited(

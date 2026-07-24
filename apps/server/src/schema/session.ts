@@ -26,6 +26,7 @@ import {
   designCheckpointPreviewUrl,
   designCommitPreviewUrl,
 } from "../lib/design-checkpoint-preview-url.js";
+import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -55,6 +56,10 @@ export const sessionQueries = {
   pdfSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
     assertOrgAccess(ctx, args.organizationId);
     return sessionService.listPdfGroups(args.organizationId, ctx.userId);
+  },
+  animationSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+    assertOrgAccess(ctx, args.organizationId);
+    return sessionService.listAnimationGroups(args.organizationId, ctx.userId);
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx), ctx.userId);
@@ -892,6 +897,8 @@ export const sessionTypeResolvers = {
   SessionGroup: {
     designPreviewUrl: (group: { id: string; designPreviewKey?: string | null }) =>
       group.designPreviewKey ? designCommitPreviewUrl(group.id) : null,
+    animationPreviewUrl: (group: { id: string; animationPreviewKey?: string | null }) =>
+      group.animationPreviewKey ? animationCommitPreviewUrl(group.id) : null,
     status: async (
       group: {
         id: string;
