@@ -40,7 +40,7 @@ import { useFileActions } from "./useFileActions";
 import { useSessionGroupFiles } from "./useSessionGroupFiles";
 import { useSessionGroupDirectoryTree } from "./useSessionGroupDirectoryTree";
 import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
-import { isAppCanvasReady } from "./app-session-readiness";
+import { isAnimationCanvasReady, isAppCanvasReady } from "./app-session-readiness";
 import { isGeneratedProjectCanvasReady } from "./generated-project-readiness";
 import { getProjectWorkspaceKind } from "./project-workspace-kind";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
@@ -233,6 +233,11 @@ export function SessionGroupDetailView({
     "sessionGroups",
     sessionGroupId,
     "designPreviewUrl",
+  ) as string | null | undefined;
+  const groupAnimationPreviewUrl = useEntityField(
+    "sessionGroups",
+    sessionGroupId,
+    "animationPreviewUrl",
   ) as string | null | undefined;
   const groupWorktreeDeleted = useEntityField(
     "sessionGroups",
@@ -472,14 +477,12 @@ export function SessionGroupDetailView({
     liveGeneratedProjectCanvasReady ||
     ((groupKind === "design" || groupKind === "design_system") &&
       hasSavedDesignPreview(groupDesignPreviewUrl, groupGitCheckpoints));
-  // Animation sessions share app's live-container readiness semantics (agent
-  // status + connection state, no saved-preview special case), so this same
-  // value is reused for both rather than recomputed.
   const appCanvasReady = isAppCanvasReady(
     selectedSession?.agentStatus,
     selectedConnection?.state,
     groupConnection?.state,
   );
+  const animationCanvasReady = isAnimationCanvasReady(appCanvasReady, groupAnimationPreviewUrl);
   const showApplicationsSidebarTab = selectedSession?.hosting === "cloud";
   const activeTerminal = terminals.find((t) => t.id === activeTerminalId) ?? null;
 
@@ -1041,7 +1044,7 @@ export function SessionGroupDetailView({
                       onScrollComplete={handleScrollComplete}
                       onForkSession={handleOpenForkDialog}
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
-                      canvasReady={appCanvasReady}
+                      canvasReady={animationCanvasReady}
                       canvasKey="animation-canvas"
                       canvas={
                         <SessionGroupContentArea
