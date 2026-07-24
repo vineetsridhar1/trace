@@ -524,6 +524,26 @@ export const sessionMutations = {
       throw toGraphQLError(error);
     }
   },
+  attachDesignToSession: async (
+    _: unknown,
+    args: { sessionId: string; designSessionGroupId: string },
+    ctx: Context,
+  ) => {
+    if (!ctx.userId) throw new AuthenticationError();
+    await assertScopeAccess("session", args.sessionId, ctx.userId, requireOrgContext(ctx));
+    try {
+      return await sessionService.attachDesignToSession({
+        sessionId: args.sessionId,
+        designSessionGroupId: args.designSessionGroupId,
+        organizationId: requireOrgContext(ctx),
+        userId: ctx.userId,
+        actorType: ctx.actorType,
+        clientSource: ctx.clientSource,
+      });
+    } catch (error) {
+      throw toGraphQLError(error);
+    }
+  },
   retrySessionConnection: (_: unknown, args: { sessionId: string }, ctx: Context) => {
     return sessionService.retryConnection(
       args.sessionId,

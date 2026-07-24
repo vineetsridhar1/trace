@@ -904,6 +904,13 @@ export type Mutation = {
   archiveDesignSystem: DesignSystem;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
+  /**
+   * Copy the source of a design-kind session group into the target session's
+   * workspace (under .trace/designs/<slug>/) and message the agent to implement
+   * it. Repeatable — used from the empty-state "Implement these designs" box and
+   * mid-session. Returns the message Event that kicks off the agent.
+   */
+  attachDesignToSession: Event;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -1054,6 +1061,11 @@ export type MutationArchiveSessionGroupArgs = {
 export type MutationAssignTicketArgs = {
   ticketId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationAttachDesignToSessionArgs = {
+  designSessionGroupId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationClearEndpointTrafficArgs = {
@@ -3109,6 +3121,39 @@ export type RevertSessionGroupFileChangeMutationVariables = Exact<{
 export type RevertSessionGroupFileChangeMutation = {
   __typename?: "Mutation";
   revertSessionGroupFileChange: boolean;
+};
+
+export type DesignPickerGroupsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type DesignPickerGroupsQuery = {
+  __typename?: "Query";
+  designSessionGroups: Array<{
+    __typename?: "SessionGroup";
+    id: string;
+    name: string;
+    slug?: string | null;
+    kind: SessionGroupKind;
+    archivedAt?: string | null;
+    designPreviewUrl?: string | null;
+    gitCheckpoints: Array<{
+      __typename?: "GitCheckpoint";
+      previewStatus?: GitCheckpointCaptureStatus | null;
+      previewUrl?: string | null;
+      committedAt: string;
+    }>;
+  }>;
+};
+
+export type AttachDesignToSessionMutationVariables = Exact<{
+  sessionId: Scalars["ID"]["input"];
+  designSessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type AttachDesignToSessionMutation = {
+  __typename?: "Mutation";
+  attachDesignToSession: { __typename?: "Event"; id: string };
 };
 
 export type SessionGroupFileAtRefQueryVariables = Exact<{
@@ -6199,6 +6244,118 @@ export const RevertSessionGroupFileChangeDocument = {
   RevertSessionGroupFileChangeMutation,
   RevertSessionGroupFileChangeMutationVariables
 >;
+export const DesignPickerGroupsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "DesignPickerGroups" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "slug" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "gitCheckpoints" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DesignPickerGroupsQuery, DesignPickerGroupsQueryVariables>;
+export const AttachDesignToSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "AttachDesignToSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "designSessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "attachDesignToSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "designSessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "designSessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<AttachDesignToSessionMutation, AttachDesignToSessionMutationVariables>;
 export const SessionGroupFileAtRefDocument = {
   kind: "Document",
   definitions: [

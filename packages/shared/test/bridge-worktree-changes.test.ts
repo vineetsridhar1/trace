@@ -20,6 +20,7 @@ function makeFs(): BridgeFsLike {
       realpath: vi.fn(async (value: string) => value),
       stat: vi.fn(async () => ({ size: 10, isFile: () => true })),
       writeFile: vi.fn(),
+      mkdir: vi.fn(async () => undefined),
     },
   };
 }
@@ -54,6 +55,78 @@ describe("worktree change bridge handlers", () => {
         requestId: "write-1",
         error: "File changed before the edit could be saved",
       },
+    ]);
+  });
+
+  it("creates a new file and its parent directories when the path does not exist", async () => {
+    const sent: BridgeMessage[] = [];
+    const fs = makeFs();
+    // The target file does not exist; its ancestors do (realpath echoes dirs).
+    fs.promises.realpath = vi.fn(async (value: string) => {
+      if (value === "/repo/.trace/designs/raccoon/design.canvas.json") {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
+      return value;
+    });
+    await new Promise<void>((resolve) => {
+      handleWriteFile(
+        {
+          type: "write_file",
+          requestId: "write-2",
+          sessionId: "session-1",
+          relativePath: ".trace/designs/raccoon/design.canvas.json",
+          content: "{}",
+        },
+        new Map([["session-1", "/repo"]]),
+        (message) => {
+          sent.push(message);
+          resolve();
+        },
+        { fs, path },
+      );
+    });
+
+    expect(fs.promises.mkdir).toHaveBeenCalledWith("/repo/.trace/designs/raccoon", {
+      recursive: true,
+    });
+    expect(fs.promises.writeFile).toHaveBeenCalledWith(
+      "/repo/.trace/designs/raccoon/design.canvas.json",
+      "{}",
+    );
+    expect(sent).toEqual([{ type: "file_write_result", requestId: "write-2" }]);
+  });
+
+  it("refuses to create a file outside the workdir via a symlinked ancestor", async () => {
+    const sent: BridgeMessage[] = [];
+    const fs = makeFs();
+    // The file is missing and its nearest existing ancestor resolves outside.
+    fs.promises.realpath = vi.fn(async (value: string) => {
+      if (value === "/repo/.trace/evil.txt") throw new Error("ENOENT");
+      if (value === "/repo/.trace") return "/etc";
+      return value;
+    });
+    await new Promise<void>((resolve) => {
+      handleWriteFile(
+        {
+          type: "write_file",
+          requestId: "write-3",
+          sessionId: "session-1",
+          relativePath: ".trace/evil.txt",
+          content: "x",
+        },
+        new Map([["session-1", "/repo"]]),
+        (message) => {
+          sent.push(message);
+          resolve();
+        },
+        { fs, path },
+      );
+    });
+
+    expect(fs.promises.mkdir).not.toHaveBeenCalled();
+    expect(fs.promises.writeFile).not.toHaveBeenCalled();
+    expect(sent).toEqual([
+      { type: "file_write_result", requestId: "write-3", error: "Path traversal denied" },
     ]);
   });
 

@@ -28,6 +28,8 @@ type Documents = {
   "\n  query SessionGroupBranchDiff($sessionGroupId: ID!) {\n    sessionGroupBranchDiff(sessionGroupId: $sessionGroupId) {\n      path\n      status\n      additions\n      deletions\n    }\n  }\n": typeof types.SessionGroupBranchDiffDocument;
   "\n  query SessionGroupWorktreeChanges($sessionGroupId: ID!) {\n    sessionGroupWorktreeChanges(sessionGroupId: $sessionGroupId) {\n      files {\n        path\n        status\n        additions\n        deletions\n        diff\n        truncated\n        originalContent\n        modifiedContent\n        contentTruncated\n      }\n      totalCount\n      truncated\n    }\n  }\n": typeof types.SessionGroupWorktreeChangesDocument;
   "\n  mutation RevertSessionGroupFileChange($sessionGroupId: ID!, $filePath: String!) {\n    revertSessionGroupFileChange(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n": typeof types.RevertSessionGroupFileChangeDocument;
+  "\n  query DesignPickerGroups($organizationId: ID!) {\n    designSessionGroups(organizationId: $organizationId) {\n      id\n      name\n      slug\n      kind\n      archivedAt\n      designPreviewUrl\n      gitCheckpoints {\n        previewStatus\n        previewUrl\n        committedAt\n      }\n    }\n  }\n": typeof types.DesignPickerGroupsDocument;
+  "\n  mutation AttachDesignToSession($sessionId: ID!, $designSessionGroupId: ID!) {\n    attachDesignToSession(sessionId: $sessionId, designSessionGroupId: $designSessionGroupId) {\n      id\n    }\n  }\n": typeof types.AttachDesignToSessionDocument;
   "\n  query SessionGroupFileAtRef($sessionGroupId: ID!, $filePath: String!, $ref: String!) {\n    sessionGroupFileAtRef(sessionGroupId: $sessionGroupId, filePath: $filePath, ref: $ref)\n  }\n": typeof types.SessionGroupFileAtRefDocument;
   "\n  query SessionGroupFileContentForDiff($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n": typeof types.SessionGroupFileContentForDiffDocument;
   "\n  query SessionGroupFileContent($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContentWithSource(sessionGroupId: $sessionGroupId, filePath: $filePath) {\n      content\n      ref\n      requestedRef\n      usedFallback\n    }\n  }\n": typeof types.SessionGroupFileContentDocument;
@@ -145,6 +147,10 @@ const documents: Documents = {
     types.SessionGroupWorktreeChangesDocument,
   "\n  mutation RevertSessionGroupFileChange($sessionGroupId: ID!, $filePath: String!) {\n    revertSessionGroupFileChange(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n":
     types.RevertSessionGroupFileChangeDocument,
+  "\n  query DesignPickerGroups($organizationId: ID!) {\n    designSessionGroups(organizationId: $organizationId) {\n      id\n      name\n      slug\n      kind\n      archivedAt\n      designPreviewUrl\n      gitCheckpoints {\n        previewStatus\n        previewUrl\n        committedAt\n      }\n    }\n  }\n":
+    types.DesignPickerGroupsDocument,
+  "\n  mutation AttachDesignToSession($sessionId: ID!, $designSessionGroupId: ID!) {\n    attachDesignToSession(sessionId: $sessionId, designSessionGroupId: $designSessionGroupId) {\n      id\n    }\n  }\n":
+    types.AttachDesignToSessionDocument,
   "\n  query SessionGroupFileAtRef($sessionGroupId: ID!, $filePath: String!, $ref: String!) {\n    sessionGroupFileAtRef(sessionGroupId: $sessionGroupId, filePath: $filePath, ref: $ref)\n  }\n":
     types.SessionGroupFileAtRefDocument,
   "\n  query SessionGroupFileContentForDiff($sessionGroupId: ID!, $filePath: String!) {\n    sessionGroupFileContent(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n":
@@ -419,6 +425,18 @@ export function graphql(
 export function graphql(
   source: "\n  mutation RevertSessionGroupFileChange($sessionGroupId: ID!, $filePath: String!) {\n    revertSessionGroupFileChange(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n",
 ): (typeof documents)["\n  mutation RevertSessionGroupFileChange($sessionGroupId: ID!, $filePath: String!) {\n    revertSessionGroupFileChange(sessionGroupId: $sessionGroupId, filePath: $filePath)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query DesignPickerGroups($organizationId: ID!) {\n    designSessionGroups(organizationId: $organizationId) {\n      id\n      name\n      slug\n      kind\n      archivedAt\n      designPreviewUrl\n      gitCheckpoints {\n        previewStatus\n        previewUrl\n        committedAt\n      }\n    }\n  }\n",
+): (typeof documents)["\n  query DesignPickerGroups($organizationId: ID!) {\n    designSessionGroups(organizationId: $organizationId) {\n      id\n      name\n      slug\n      kind\n      archivedAt\n      designPreviewUrl\n      gitCheckpoints {\n        previewStatus\n        previewUrl\n        committedAt\n      }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation AttachDesignToSession($sessionId: ID!, $designSessionGroupId: ID!) {\n    attachDesignToSession(sessionId: $sessionId, designSessionGroupId: $designSessionGroupId) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation AttachDesignToSession($sessionId: ID!, $designSessionGroupId: ID!) {\n    attachDesignToSession(sessionId: $sessionId, designSessionGroupId: $designSessionGroupId) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

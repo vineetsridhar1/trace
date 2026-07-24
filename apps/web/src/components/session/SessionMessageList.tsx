@@ -5,6 +5,7 @@ import type { GitCheckpoint } from "@trace/gql";
 import { useEntityField } from "@trace/client-core";
 import { useComposerStore } from "../../stores/composer";
 import { ImportWorktreeDialog } from "./ImportWorktreeDialog";
+import { DesignPickerDialog } from "./DesignPickerDialog";
 import type { SessionNode, AgentToolResult } from "./groupReadGlob";
 import { SessionNodeRenderer } from "./SessionNodeRenderer";
 import { CollapsedSessionEventsRow } from "./messages/CollapsedSessionEventsRow";
@@ -432,6 +433,7 @@ export function SessionMessageList({
     | null
     | undefined;
   const [showImportWorktree, setShowImportWorktree] = useState(false);
+  const [showDesignPicker, setShowDesignPicker] = useState(false);
   const requestPrefill = useComposerStore((s) => s.requestPrefill);
   const canImportWorktree =
     agentStatus === "not_started" && hosting !== "cloud" && Boolean(sessionRepo?.id);
@@ -479,12 +481,14 @@ export function SessionMessageList({
             </p>
 
             <div className="pointer-events-auto mt-4 flex flex-wrap gap-2">
-              {emptyStateContent.starterPrompts.map(({ label, prompt }) => (
+              {emptyStateContent.starterPrompts.map(({ label, prompt, action }) => (
                 <button
                   key={label}
                   type="button"
                   onClick={() =>
-                    requestPrefill(sessionId, prompt, emptyStateContent.sendStarterImmediately)
+                    action === "pick-design"
+                      ? setShowDesignPicker(true)
+                      : requestPrefill(sessionId, prompt, emptyStateContent.sendStarterImmediately)
                   }
                   className="group flex h-28 w-full max-w-[230px] flex-1 flex-col items-start overflow-hidden rounded-lg border border-border bg-surface-deep p-3 text-left transition-colors hover:border-accent/40 hover:bg-surface-elevated"
                 >
@@ -533,6 +537,11 @@ export function SessionMessageList({
           onClose={() => setShowImportWorktree(false)}
         />
       )}
+      <DesignPickerDialog
+        sessionId={sessionId}
+        open={showDesignPicker}
+        onOpenChange={setShowDesignPicker}
+      />
       {showEmptyState ? emptyState : null}
       {!showEmptyState ? (
         <PromptTimeline

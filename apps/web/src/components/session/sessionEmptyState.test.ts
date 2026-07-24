@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getSessionEmptyStateContent, isGeneratedProjectKind } from "./sessionEmptyState";
+import {
+  getSessionEmptyStateContent,
+  isGeneratedProjectKind,
+  kindSupportsDesignImplementation,
+} from "./sessionEmptyState";
 
 describe("session empty state", () => {
   it("uses an editable App brief instead of immediately sending a suggestion", () => {
@@ -23,5 +27,13 @@ describe("session empty state", () => {
     expect(isGeneratedProjectKind("design")).toBe(true);
     expect(isGeneratedProjectKind("pdf")).toBe(true);
     expect(isGeneratedProjectKind("coding")).toBe(false);
+  });
+
+  it("offers a design-implementation entry point for coding and app kinds only", () => {
+    expect(kindSupportsDesignImplementation("coding")).toBe(true);
+    expect(kindSupportsDesignImplementation(undefined)).toBe(true); // defaults to coding
+    expect(kindSupportsDesignImplementation("app")).toBe(true);
+    expect(kindSupportsDesignImplementation("design")).toBe(false);
+    expect(kindSupportsDesignImplementation("pdf")).toBe(false);
   });
 });

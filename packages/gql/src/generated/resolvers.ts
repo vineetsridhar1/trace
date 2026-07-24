@@ -905,6 +905,13 @@ export type Mutation = {
   archiveDesignSystem: DesignSystem;
   archiveSessionGroup?: Maybe<SessionGroup>;
   assignTicket: Ticket;
+  /**
+   * Copy the source of a design-kind session group into the target session's
+   * workspace (under .trace/designs/<slug>/) and message the agent to implement
+   * it. Repeatable — used from the empty-state "Implement these designs" box and
+   * mid-session. Returns the message Event that kicks off the agent.
+   */
+  attachDesignToSession: Event;
   clearEndpointTraffic: Scalars["Boolean"]["output"];
   clearQueuedMessages: Scalars["Boolean"]["output"];
   commentOnTicket: Event;
@@ -1055,6 +1062,11 @@ export type MutationArchiveSessionGroupArgs = {
 export type MutationAssignTicketArgs = {
   ticketId: Scalars["ID"]["input"];
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationAttachDesignToSessionArgs = {
+  designSessionGroupId: Scalars["ID"]["input"];
+  sessionId: Scalars["ID"]["input"];
 };
 
 export type MutationClearEndpointTrafficArgs = {
@@ -3950,6 +3962,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationAssignTicketArgs, "ticketId" | "userId">
+  >;
+  attachDesignToSession?: Resolver<
+    ResolversTypes["Event"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationAttachDesignToSessionArgs, "designSessionGroupId" | "sessionId">
   >;
   clearEndpointTraffic?: Resolver<
     ResolversTypes["Boolean"],
