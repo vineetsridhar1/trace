@@ -164,5 +164,31 @@ export async function createAppWorkspace({
     { cwd: workdir },
   );
 
+  // A design session's design-system/ package is immutable once chosen, so it
+  // belongs in git. The commit-addressed preview export rebuilds from a git
+  // worktree (committed files only); if design-system is untracked the export
+  // can't resolve /design-system/tokens.css and fails. Seed it into an initial
+  // commit for a fresh workspace so the very first checkpoint's export finds
+  // it. Restores clone from the remote (which already has it), so this only
+  // runs when the repo has no commits yet.
+  if (sessionGroupKind === "design") {
+    const hasCommit = await execFileAsync("git", ["rev-parse", "--verify", "HEAD"], {
+      cwd: workdir,
+    })
+      .then(() => true)
+      .catch(() => false);
+    if (!hasCommit) {
+      await execFileAsync("git", ["add", "-A"], { cwd: workdir });
+      const hasStaged = await execFileAsync("git", ["diff", "--cached", "--quiet"], {
+        cwd: workdir,
+      })
+        .then(() => false)
+        .catch(() => true);
+      if (hasStaged) {
+        await execFileAsync("git", ["commit", "-m", "Seed design workspace"], { cwd: workdir });
+      }
+    }
+  }
+
   return { workdir, slug: workspaceSlug };
 }
