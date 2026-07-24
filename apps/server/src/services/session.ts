@@ -10490,6 +10490,26 @@ export class SessionService {
 
     if (shouldDestroyGroupTerminals) {
       terminalRelay.destroyAllForSessionGroup(sessionGroupId);
+      // Forwarded processes and endpoints belong to the runtime that hosted
+      // them. A rebind leaves their rows reading "running"/"enabled" while
+      // nothing serves them, so preview panels keep selecting an endpoint that
+      // answers 503 instead of falling back to a saved preview. Bookkeeping
+      // must not fail the caller's write, so failures are logged.
+      const group = await prisma.sessionGroup.findUnique({
+        where: { id: sessionGroupId },
+        select: { organizationId: true },
+      });
+      if (group) {
+        await sessionApplicationService
+          .markSessionGroupRuntimeStopped(sessionGroupId, group.organizationId)
+          .catch((error: unknown) => {
+            console.warn(
+              `[session-service] failed to stop application processes for group ${sessionGroupId} after runtime rebind: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          });
+      }
     }
 
     if (shouldRebindSessions) {
