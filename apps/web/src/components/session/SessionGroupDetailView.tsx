@@ -351,7 +351,7 @@ export function SessionGroupDetailView({
   // Fetch full group detail and merge into store
   useEffect(() => {
     client
-      .query(SESSION_GROUP_DETAIL_QUERY, { id: sessionGroupId })
+      .query(SESSION_GROUP_DETAIL_QUERY, { id: sessionGroupId }, { requestPolicy: "network-only" })
       .toPromise()
       .then((result: { data?: Record<string, unknown> }) => {
         if (!result.data?.sessionGroup) return;
@@ -1082,6 +1082,9 @@ export function SessionGroupDetailView({
                       canvasReady={generatedProjectCanvasReady}
                       canvasKey="generated-project-canvas"
                       manualSessionGroupId={sessionGroupId}
+                      showCanvasWhileLoading={
+                        projectWorkspaceKind === "design" || projectWorkspaceKind === "design_system"
+                      }
                       canvas={
                         <SessionGroupContentArea
                           sessionGroupId={sessionGroupId}
