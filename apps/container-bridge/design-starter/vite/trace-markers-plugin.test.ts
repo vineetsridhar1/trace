@@ -32,6 +32,15 @@ test("preserves author ids and only fills the missing source", () => {
   assert.equal(result.code.match(/data-trace-id="mine"/g)?.length, 1);
 });
 
+test("does not stamp elements rendered inside an iteration callback", () => {
+  const code = `const s = <ul>{items.map((i) => <li>Row</li>)}</ul>;`;
+  const result = transform(code, DESIGN_FILE);
+  assert.ok(result);
+  // The <ul> is stamped, but the mapped <li> is left for per-instance discovery ids.
+  assert.match(result.code, /<ul data-trace-id="t-0"/);
+  assert.equal(result.code.match(/data-trace-id="t-/g)?.length, 1);
+});
+
 test("ignores files outside src/design", () => {
   const code = `const s = <main><h1>Hi</h1></main>;`;
   assert.equal(transform(code, "src/canvas/Other.tsx"), null);

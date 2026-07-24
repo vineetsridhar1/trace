@@ -22,6 +22,28 @@ export function traceMarkers(): Plugin {
       (property) => ts.isJsxAttribute(property) && property.name.getText(sourceFile) === name,
     );
 
+  // A structural id identifies one JSX node in source, but an iteration callback
+  // (`items.map((i) => <li/>)`) renders that one node many times. Stamping a shared
+  // id on all of them would make a style edit bleed across every sibling, so we skip
+  // injection and let the runtime discovery pass give each instance a unique id. This
+  // only affects whether we inject — the id numbering is unchanged, so the server can
+  // still recompute matching ids for the elements that do get stamped.
+  const isInsideIteration = (node: ts.Node): boolean => {
+    let current = node.parent as ts.Node | undefined;
+    while (current) {
+      if (ts.isJsxElement(current) || ts.isJsxFragment(current)) return false;
+      if (
+        (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) &&
+        ts.isCallExpression(current.parent) &&
+        current.parent.arguments.includes(current as ts.Expression)
+      ) {
+        return true;
+      }
+      current = current.parent;
+    }
+    return false;
+  };
+
   return {
     name: "trace-markers",
     enforce: "pre",
@@ -46,6 +68,7 @@ export function traceMarkers(): Plugin {
       for (const [node, traceId] of buildDesignTraceIds(sourceFile)) {
         // Fragments (`<>`) render no DOM node and cannot carry attributes.
         if (ts.isJsxFragment(node)) continue;
+        if (isInsideIteration(node)) continue;
         const opening = ts.isJsxElement(node) ? node.openingElement : node;
         const insertions: string[] = [];
         if (!hasAttribute(opening, "data-trace-id", sourceFile)) {

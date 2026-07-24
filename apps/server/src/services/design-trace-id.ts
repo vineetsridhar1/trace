@@ -75,8 +75,3 @@ export function buildDesignTraceIds(sourceFile: ts.SourceFile): Map<JsxContainer
   }
   return ids;
 }
-
-/** True for machine-generated identity anchors (transform ids and discovery ids). */
-export function isMachineTraceId(elementId: string): boolean {
-  return elementId.startsWith(TRACE_AUTO_ID_PREFIX) || elementId.startsWith("auto-");
-}

@@ -53,6 +53,24 @@ describe("design manual text editing", () => {
     expect(readStaticDesignElementText(result.source, FILE_PATH, "status").text).toBe("A < B & C");
   });
 
+  it("resolves elements by their build-time identity anchor when no author id exists", () => {
+    const source = `export default function Screen() {
+  return (
+    <section>
+      <h1>Processing</h1>
+    </section>
+  );
+}
+`;
+
+    // The <h1> carries no hand-authored id; the build transform stamps it "t-0.0",
+    // which the resolver recomputes from source.
+    expect(readStaticDesignElementText(source, FILE_PATH, "t-0.0").text).toBe("Processing");
+
+    const result = updateStaticDesignElementText(source, FILE_PATH, "t-0.0", "Under review");
+    expect(result.source).toBe(source.replace("Processing", "Under review"));
+  });
+
   it("rejects dynamic, nested, missing, and duplicate targets", () => {
     expect(() =>
       readStaticDesignElementText(

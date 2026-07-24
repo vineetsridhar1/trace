@@ -1,6 +1,6 @@
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { buildDesignTraceIds, isMachineTraceId } from "./design-trace-id.js";
+import { buildDesignTraceIds } from "./design-trace-id.js";
 
 // This fixture and its expected ids are mirrored in the design-starter's
 // vite/trace-id.test.ts. Both sides MUST agree — the build transform stamps these
@@ -58,11 +58,5 @@ describe("design trace id", () => {
     const ids = idsByTag(FIXTURE);
     expect(ids.p.startsWith("t-0.1.")).toBe(true);
     expect(ids.li.startsWith("t-0.1.2.")).toBe(true);
-  });
-
-  it("recognizes machine-generated ids", () => {
-    expect(isMachineTraceId("t-0.1")).toBe(true);
-    expect(isMachineTraceId("auto-abc123")).toBe(true);
-    expect(isMachineTraceId("welcome-heading")).toBe(false);
   });
 });
