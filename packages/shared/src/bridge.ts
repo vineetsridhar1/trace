@@ -1076,12 +1076,15 @@ export interface BridgeFsLike {
     realpath: (p: string) => Promise<string>;
     stat: (p: string) => Promise<{ size: number; isFile: () => boolean }>;
     writeFile: (p: string, data: string) => Promise<void>;
+    mkdir: (p: string, opts: { recursive: true }) => Promise<string | undefined>;
   };
 }
 export interface BridgePathLike {
   resolve: (...p: string[]) => string;
   join: (...p: string[]) => string;
   relative: (from: string, to: string) => string;
+  dirname: (p: string) => string;
+  basename: (p: string) => string;
   sep: string;
 }
 /** Callback-based git ls-files runner, injected by bridges to avoid Node child_process type issues. */
@@ -1269,36 +1272,74 @@ export function handleWriteFile(
   void (async () => {
     try {
       const realWorkdir = await deps.fs.promises.realpath(normalizedWorkdir);
-      const realPath = await deps.fs.promises.realpath(fullPath);
-      if (!isPathInsideRoot(realWorkdir, realPath, deps.path)) {
+
+      let realPath: string | null = null;
+      try {
+        realPath = await deps.fs.promises.realpath(fullPath);
+      } catch {
+        realPath = null; // The file does not exist yet.
+      }
+
+      if (realPath !== null) {
+        // Overwrite an existing file.
+        if (!isPathInsideRoot(realWorkdir, realPath, deps.path)) {
+          send({ type: "file_write_result", requestId, error: "Path traversal denied" });
+          return;
+        }
+        const stats = await deps.fs.promises.stat(realPath);
+        if (!stats.isFile()) {
+          send({ type: "file_write_result", requestId, error: "Not a file" });
+          return;
+        }
+        if (cmd.type === "write_file_guarded") {
+          const current = await new Promise<string>((resolve, reject) => {
+            deps.fs.readFile(realPath as string, (error, data) => {
+              if (error) reject(error);
+              else resolve(data.toString("utf8"));
+            });
+          });
+          if (current !== cmd.expectedContent) {
+            send({
+              type: "file_write_result",
+              requestId,
+              error: "File changed before the edit could be saved",
+            });
+            return;
+          }
+        }
+        await deps.fs.promises.writeFile(realPath, content);
+        send({ type: "file_write_result", requestId });
+        return;
+      }
+
+      // The file does not exist. A guarded write expects a prior version to
+      // compare against, so it can never create a new file.
+      if (cmd.type === "write_file_guarded") {
+        send({
+          type: "file_write_result",
+          requestId,
+          error: "File changed before the edit could be saved",
+        });
+        return;
+      }
+
+      // Create the file, plus any missing parent directories. Validate the
+      // nearest existing ancestor first so a symlinked ancestor cannot redirect
+      // the new tree outside the workdir.
+      const parentDir = deps.path.dirname(fullPath);
+      const realAncestor = await realpathNearestExisting(parentDir, deps);
+      if (!isPathInsideRoot(realWorkdir, realAncestor, deps.path)) {
         send({ type: "file_write_result", requestId, error: "Path traversal denied" });
         return;
       }
-
-      const stats = await deps.fs.promises.stat(realPath);
-      if (!stats.isFile()) {
-        send({ type: "file_write_result", requestId, error: "Not a file" });
+      await deps.fs.promises.mkdir(parentDir, { recursive: true });
+      const realParent = await deps.fs.promises.realpath(parentDir);
+      const finalPath = deps.path.join(realParent, deps.path.basename(fullPath));
+      if (!isPathInsideRoot(realWorkdir, finalPath, deps.path)) {
+        send({ type: "file_write_result", requestId, error: "Path traversal denied" });
         return;
       }
-
-      if (cmd.type === "write_file_guarded") {
-        const current = await new Promise<string>((resolve, reject) => {
-          deps.fs.readFile(realPath, (error, data) => {
-            if (error) reject(error);
-            else resolve(data.toString("utf8"));
-          });
-        });
-        if (current !== cmd.expectedContent) {
-          send({
-            type: "file_write_result",
-            requestId,
-            error: "File changed before the edit could be saved",
-          });
-          return;
-        }
-      }
-
-      await deps.fs.promises.writeFile(realPath, content);
+      await deps.fs.promises.writeFile(finalPath, content);
       send({ type: "file_write_result", requestId });
     } catch (err) {
       send({
@@ -1308,6 +1349,23 @@ export function handleWriteFile(
       });
     }
   })();
+}
+
+/** Realpath of the deepest existing ancestor of `target` (for symlink checks). */
+async function realpathNearestExisting(
+  target: string,
+  deps: { fs: BridgeFsLike; path: BridgePathLike },
+): Promise<string> {
+  let current = target;
+  for (;;) {
+    try {
+      return await deps.fs.promises.realpath(current);
+    } catch {
+      const parent = deps.path.dirname(current);
+      if (parent === current) throw new Error("No existing ancestor directory");
+      current = parent;
+    }
+  }
 }
 
 /**
