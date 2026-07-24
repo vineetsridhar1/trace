@@ -84,6 +84,8 @@ export type {
   BridgeTerminalDestroyCommand,
   BridgePdfExportCommand,
   BridgePdfExportResult,
+  BridgeAnimationExportCommand,
+  BridgeAnimationExportResult,
   BridgeListSkillsCommand,
   BridgeLinkedCheckoutStatusCommand,
   BridgeLinkedCheckoutChangedFileCommand,

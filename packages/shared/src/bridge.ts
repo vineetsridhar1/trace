@@ -67,7 +67,7 @@ export interface BridgePrepareAppCommand {
   type: "prepare_app";
   sessionId: string;
   sessionGroupId?: string;
-  sessionGroupKind: "app" | "design" | "design_system" | "pdf";
+  sessionGroupKind: "app" | "design" | "design_system" | "pdf" | "animation";
   /** Pre-assigned slug for the generated app workspace. If absent, the bridge generates one. */
   slug?: string;
   repoId: string;
@@ -392,6 +392,18 @@ export interface BridgePdfExportCommand {
     | { method: "POST"; url: string; fields: Record<string, string> };
 }
 
+export interface BridgeAnimationExportCommand {
+  type: "animation_export";
+  requestId: string;
+  sessionId: string;
+  sessionGroupId: string;
+  commitSha: string;
+  storageKey: string;
+  uploadTarget:
+    | { method: "PUT"; url: string }
+    | { method: "POST"; url: string; fields: Record<string, string> };
+}
+
 export interface BridgeEndpointHttpRequestCommand {
   type: "endpoint_http_request";
   requestId: string;
@@ -470,6 +482,7 @@ export type BridgeCommand =
   | BridgeAppProcessStartCommand
   | BridgeAppProcessStopCommand
   | BridgePdfExportCommand
+  | BridgeAnimationExportCommand
   | BridgeEndpointHttpRequestCommand
   | BridgeEndpointWebSocketOpenCommand
   | BridgeEndpointWebSocketDataCommand
@@ -868,6 +881,15 @@ export interface BridgePdfExportResult {
   error?: string;
 }
 
+export interface BridgeAnimationExportResult {
+  type: "animation_export_result";
+  requestId: string;
+  sessionGroupId: string;
+  commitSha: string;
+  storageKey: string;
+  error?: string;
+}
+
 export interface BridgeEndpointHttpResponse {
   type: "endpoint_http_response";
   requestId: string;
@@ -942,6 +964,7 @@ export type BridgeMessage =
   | BridgeAppProcessExited
   | BridgeAppProcessError
   | BridgePdfExportResult
+  | BridgeAnimationExportResult
   | BridgeEndpointHttpResponse
   | BridgeEndpointHttpError
   | BridgeEndpointWebSocketOpened

@@ -59,6 +59,7 @@ import { ensureToolReady, syncCodexAuthFile } from "./tool-auth.js";
 import { TerminalManager } from "@trace/shared/adapters";
 import { ManagedProcessManager } from "./managed-process-manager.js";
 import { exportPdfToTarget } from "./pdf-export.js";
+import { exportAnimationToTarget } from "./animation-export.js";
 import { materializeDesignSystemPackage } from "./design-system-package.js";
 import { prepareReadOnlySourceCheckout } from "./design-system-source.js";
 
@@ -698,6 +699,42 @@ export class ContainerBridge implements IBridgeClient {
           .catch((error: unknown) => {
             this.send({
               type: "pdf_export_result",
+              requestId: cmd.requestId,
+              sessionGroupId: cmd.sessionGroupId,
+              commitSha: cmd.commitSha,
+              storageKey: cmd.storageKey,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        break;
+      }
+
+      case "animation_export": {
+        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
+        if (!workdir) {
+          this.send({
+            type: "animation_export_result",
+            requestId: cmd.requestId,
+            sessionGroupId: cmd.sessionGroupId,
+            commitSha: cmd.commitSha,
+            storageKey: cmd.storageKey,
+            error: "Animation workspace is unavailable",
+          });
+          break;
+        }
+        void exportAnimationToTarget({ ...cmd, workdir })
+          .then(() => {
+            this.send({
+              type: "animation_export_result",
+              requestId: cmd.requestId,
+              sessionGroupId: cmd.sessionGroupId,
+              commitSha: cmd.commitSha,
+              storageKey: cmd.storageKey,
+            });
+          })
+          .catch((error: unknown) => {
+            this.send({
+              type: "animation_export_result",
               requestId: cmd.requestId,
               sessionGroupId: cmd.sessionGroupId,
               commitSha: cmd.commitSha,

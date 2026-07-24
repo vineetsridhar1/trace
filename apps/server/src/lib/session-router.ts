@@ -31,8 +31,10 @@ import type {
   BridgeListWorkspaceSlugsCommand,
   BridgeRepoWorktree,
   BridgePdfExportCommand,
+  BridgeAnimationExportCommand,
 } from "@trace/shared";
 import { prisma } from "./db.js";
+import { isGeneratedProjectKind } from "./generated-project.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { ProvisionedLauncherError, runtimeAdapterRegistry } from "./runtime-adapters.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
@@ -76,6 +78,7 @@ export type SessionCommand =
   | BridgeListSkillsCommand
   | BridgeListWorkspaceSlugsCommand
   | BridgePdfExportCommand
+  | BridgeAnimationExportCommand
   | { type: "session_git_sync_status"; requestId: string; sessionId: string; workdirHint?: string }
   | BridgeSessionCurrentBranchCommand
   | BridgeTerminalCreateCommand
@@ -138,7 +141,7 @@ export interface SessionAdapterCreateOptions {
   sessionId: string;
   /** Session group ID — used to key worktrees so all sessions in a group share the same workspace. */
   sessionGroupId?: string;
-  sessionGroupKind?: "coding" | "design" | "design_system" | "app" | "pdf";
+  sessionGroupKind?: "coding" | "design" | "design_system" | "app" | "pdf" | "animation";
   prepareAppGit?: (runtimeInstanceId: string) => Promise<{
     repoId: string;
     repoRemoteUrl: string;
@@ -2138,12 +2141,7 @@ export class SessionRouter {
           await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
         }
 
-        if (
-          options.sessionGroupKind === "app" ||
-          options.sessionGroupKind === "design" ||
-          options.sessionGroupKind === "design_system" ||
-          options.sessionGroupKind === "pdf"
-        ) {
+        if (isGeneratedProjectKind(options.sessionGroupKind)) {
           const runtimeInstanceId = startResult.runtimeInstanceId;
           if (!runtimeInstanceId || !options.prepareAppGit) {
             options.onFailed("Generated project managed git credentials are unavailable");

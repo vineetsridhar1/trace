@@ -40,6 +40,7 @@ COPY apps/container-bridge/design-starter/ /opt/trace/design-starter/
 COPY apps/container-bridge/design-system-starter/ /opt/trace/design-system-starter/
 COPY apps/container-bridge/design-default-package/ /opt/trace/design-default-package/
 COPY apps/container-bridge/pdf-starter/ /opt/trace/pdf-starter/
+COPY apps/container-bridge/animation-starter/ /opt/trace/animation-starter/
 COPY .claude/skills/author-design-system/ /opt/trace/skills/author-design-system/
 
 # Create non-root user — Claude Code refuses --dangerously-skip-permissions as root.
@@ -76,6 +77,9 @@ RUN cd /opt/trace/app-starter && \
     pnpm install --ignore-workspace --frozen-lockfile && \
     rm -rf node_modules && \
     cd /opt/trace/pdf-starter && \
+    pnpm install --ignore-workspace --frozen-lockfile && \
+    rm -rf node_modules && \
+    cd /opt/trace/animation-starter && \
     pnpm install --ignore-workspace --frozen-lockfile && \
     rm -rf node_modules
 

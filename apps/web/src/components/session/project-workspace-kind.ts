@@ -1,7 +1,10 @@
-export type ProjectWorkspaceKind = "app" | "design" | "design_system" | "pdf" | null;
+import {
+  isGeneratedProjectKind,
+  type GeneratedProjectKind,
+} from "../sidebar/generated-project-types";
+
+export type ProjectWorkspaceKind = GeneratedProjectKind | null;
 
 export function getProjectWorkspaceKind(kind: unknown): ProjectWorkspaceKind {
-  if (kind === "app" || kind === "design" || kind === "design_system" || kind === "pdf")
-    return kind;
-  return null;
+  return isGeneratedProjectKind(kind) ? kind : null;
 }

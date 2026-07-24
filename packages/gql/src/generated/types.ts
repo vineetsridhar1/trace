@@ -640,6 +640,7 @@ export type EventType =
   | "agent_environment_created"
   | "agent_environment_deleted"
   | "agent_environment_updated"
+  | "animation_preview_updated"
   | "application_config_updated"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
@@ -1700,6 +1701,8 @@ export type PushPlatform = "android" | "ios";
 export type Query = {
   __typename?: "Query";
   agentEnvironments: Array<AgentEnvironment>;
+  /** Animation-kind session groups for the org (the sidebar Animations section). */
+  animationSessionGroups: Array<SessionGroup>;
   /**
    * App-kind session groups for the org. Apps have no channel, so this is their
    * listing surface (the sidebar Apps section).
@@ -1781,6 +1784,10 @@ export type Query = {
 
 export type QueryAgentEnvironmentsArgs = {
   orgId: Scalars["ID"]["input"];
+};
+
+export type QueryAnimationSessionGroupsArgs = {
+  organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryAppSessionGroupsArgs = {
@@ -2413,6 +2420,11 @@ export type SessionFilters = {
 
 export type SessionGroup = {
   __typename?: "SessionGroup";
+  animationPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  animationPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
+  animationPreviewError?: Maybe<Scalars["String"]["output"]>;
+  animationPreviewStatus?: Maybe<Scalars["String"]["output"]>;
+  animationPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   archivedAt?: Maybe<Scalars["DateTime"]["output"]>;
   branch?: Maybe<Scalars["String"]["output"]>;
   channel?: Maybe<Channel>;
@@ -2475,7 +2487,7 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "app" | "coding" | "design" | "design_system" | "pdf";
+export type SessionGroupKind = "animation" | "app" | "coding" | "design" | "design_system" | "pdf";
 
 export type SessionGroupStatus =
   | "archived"

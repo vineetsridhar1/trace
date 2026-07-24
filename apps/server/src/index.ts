@@ -21,6 +21,7 @@ import webhookRouter from "./routes/webhook.js";
 import { slackRouter } from "./routes/slack.js";
 import { gitRouter } from "./routes/git.js";
 import { designPreviewRouter } from "./routes/design-preview.js";
+import { animationPreviewRouter } from "./routes/animation-preview.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -207,6 +208,7 @@ async function main() {
   // stream directly — register BEFORE express.json() so the body is untouched.
   app.use("/git", gitRouter);
   app.use(designPreviewRouter);
+  app.use(animationPreviewRouter);
 
   app.use(express.json());
   app.post("/runtime/codex-auth", async (req: express.Request, res: express.Response) => {
@@ -368,6 +370,17 @@ async function main() {
   reconcilePdfExports();
   const pdfExportReconciler = setInterval(
     reconcilePdfExports,
+    DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
+  );
+  const reconcileAnimationPreviews = () => {
+    void managedGitService.retryPendingAnimationExports().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[animation-preview-reconciler] iteration failed: ${message}`);
+    });
+  };
+  reconcileAnimationPreviews();
+  const animationPreviewReconciler = setInterval(
+    reconcileAnimationPreviews,
     DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
   );
   const reconcileDesignSystemArtifacts = () => {
@@ -569,6 +582,7 @@ async function main() {
               clearInterval(deprovisionReconciler);
               clearInterval(designPreviewReconciler);
               clearInterval(pdfExportReconciler);
+              clearInterval(animationPreviewReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               clearInterval(endpointTrafficCleanup);
               bridgeWss.close();

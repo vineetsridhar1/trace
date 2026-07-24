@@ -7,6 +7,7 @@ import {
   MoreHorizontal,
   Palette,
   Rocket,
+  Sparkles,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -37,6 +38,7 @@ const projectKindDetails = {
   design: { label: "Design", Icon: LayoutTemplate },
   design_system: { label: "Design System", Icon: Palette },
   pdf: { label: "Document", Icon: FileText },
+  animation: { label: "Animation", Icon: Sparkles },
 } as const;
 
 export function GeneratedProjectGalleryCard({
@@ -98,6 +100,13 @@ export function GeneratedProjectGalleryCard({
             />
           ) : kind === "pdf" ? (
             <PdfArtifactPreview title={group.name} previewUrl={pdfPreviewUrl} />
+          ) : kind === "animation" && group.animationPreviewUrl ? (
+            <iframe
+              src={group.animationPreviewUrl}
+              title={`${group.name} preview`}
+              className="pointer-events-none size-full border-0 bg-background"
+              sandbox="allow-scripts"
+            />
           ) : (
             <ArtifactPlaceholder Icon={Icon} label={label} />
           )}
