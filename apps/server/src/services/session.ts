@@ -7634,6 +7634,14 @@ export class SessionService {
         .catch((error: unknown) => {
           console.error("[session] animation preview retry after runtime reconnect failed", error);
         });
+      void managedGitService
+        .retryDesignSystemCommitExport(session.sessionGroupId)
+        .catch((error: unknown) => {
+          console.error(
+            "[session] design-system preview retry after runtime reconnect failed",
+            error,
+          );
+        });
     }
   }
 

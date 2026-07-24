@@ -86,6 +86,8 @@ export type {
   BridgePdfExportResult,
   BridgeAnimationExportCommand,
   BridgeAnimationExportResult,
+  BridgeDesignSystemExportCommand,
+  BridgeDesignSystemExportResult,
   BridgeListSkillsCommand,
   BridgeLinkedCheckoutStatusCommand,
   BridgeLinkedCheckoutChangedFileCommand,

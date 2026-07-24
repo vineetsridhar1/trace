@@ -372,15 +372,19 @@ async function main() {
     reconcilePdfExports,
     DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
   );
-  const reconcileAnimationPreviews = () => {
+  const reconcileRuntimePreviews = () => {
     void managedGitService.retryPendingAnimationExports().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[animation-preview-reconciler] iteration failed: ${message}`);
     });
+    void managedGitService.retryPendingDesignSystemExports().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[design-system-preview-reconciler] iteration failed: ${message}`);
+    });
   };
-  reconcileAnimationPreviews();
-  const animationPreviewReconciler = setInterval(
-    reconcileAnimationPreviews,
+  reconcileRuntimePreviews();
+  const runtimePreviewReconciler = setInterval(
+    reconcileRuntimePreviews,
     DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
   );
   const reconcileDesignSystemArtifacts = () => {
@@ -582,7 +586,7 @@ async function main() {
               clearInterval(deprovisionReconciler);
               clearInterval(designPreviewReconciler);
               clearInterval(pdfExportReconciler);
-              clearInterval(animationPreviewReconciler);
+              clearInterval(runtimePreviewReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               clearInterval(endpointTrafficCleanup);
               bridgeWss.close();

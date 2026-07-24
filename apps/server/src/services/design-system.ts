@@ -17,10 +17,6 @@ import {
   sha256,
   validateWorkbenchPackage,
 } from "../lib/design-system-archive.js";
-import {
-  createDesignSystemStaticPreview,
-  designSystemStaticPreviewStorageKey,
-} from "../lib/design-system-static-preview.js";
 import { assertActorOrgAccess, assertActorOrgAdmin } from "./actor-auth.js";
 import { eventService } from "./event.js";
 import { sessionService } from "./session.js";
@@ -271,40 +267,7 @@ export class DesignSystemService {
         });
       }
     }
-    const missingPreviews = await prisma.designSystem.findMany({
-      where: {
-        latestCommitArtifact: { status: "saved", packageValid: true },
-        authoringSessionGroup: { designPreviewKey: null },
-      },
-      select: {
-        id: true,
-        organizationId: true,
-        authoringSessionGroupId: true,
-        latestCommitArtifact: {
-          select: { id: true, commitSha: true, storageKey: true },
-        },
-      },
-      take: 100,
-    });
-    for (const system of missingPreviews) {
-      const artifact = system.latestCommitArtifact;
-      if (!artifact) continue;
-      await this.persistSavedArtifactPreview({
-        organizationId: system.organizationId,
-        designSystemId: system.id,
-        sessionGroupId: system.authoringSessionGroupId,
-        artifactId: artifact.id,
-        commitSha: artifact.commitSha,
-        artifactStorageKey: artifact.storageKey,
-      }).catch((error: unknown) => {
-        console.warn("[design-system] static preview reconciliation failed", {
-          designSystemId: system.id,
-          artifactId: artifact.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
-    }
-    return pending.length + revalidated + missingPreviews.length;
+    return pending.length + revalidated;
   }
 
   private async revalidateSavedArtifact(artifactId: string): Promise<boolean> {
@@ -363,66 +326,6 @@ export class DesignSystemService {
       });
     }
     return true;
-  }
-
-  private async persistSavedArtifactPreview(input: {
-    organizationId: string;
-    designSystemId: string;
-    sessionGroupId: string;
-    artifactId: string;
-    commitSha: string;
-    artifactStorageKey: string;
-  }): Promise<void> {
-    const stored = await storage.getObject(input.artifactStorageKey);
-    const workbench = await parseDesignSystemTarGz(stored);
-    const preview = createDesignSystemStaticPreview(workbench.files);
-    const previewKey = designSystemStaticPreviewStorageKey(
-      input.organizationId,
-      input.designSystemId,
-      input.commitSha,
-    );
-    await putImmutableObject(previewKey, preview, "text/html; charset=utf-8");
-    const updated = await prisma.sessionGroup.updateMany({
-      where: {
-        id: input.sessionGroupId,
-        designPreviewKey: null,
-        authoredDesignSystem: { latestCommitArtifactId: input.artifactId },
-      },
-      data: {
-        designPreviewStatus: "captured",
-        designPreviewKey: previewKey,
-        designPreviewCommitSha: input.commitSha,
-        designPreviewCapturedAt: new Date(),
-      },
-    });
-    if (updated.count > 0) {
-      await this.emitStaticPreviewUpdate(
-        input.organizationId,
-        input.sessionGroupId,
-        input.commitSha,
-      );
-    }
-  }
-
-  private async emitStaticPreviewUpdate(
-    organizationId: string,
-    sessionGroupId: string,
-    commitSha: string,
-  ): Promise<void> {
-    await eventService.create({
-      organizationId,
-      scopeType: "system",
-      scopeId: sessionGroupId,
-      eventType: "design_preview_updated",
-      payload: {
-        sessionGroupId,
-        designPreviewStatus: "captured",
-        designPreviewCommitSha: commitSha,
-        designPreviewUrl: `/design-previews/groups/${encodeURIComponent(sessionGroupId)}`,
-      },
-      actorType: "system",
-      actorId: "system",
-    });
   }
 
   async list(input: {
@@ -811,17 +714,9 @@ export class DesignSystemService {
       if (packageArchive.byteLength > 25 * 1024 * 1024)
         throw new Error("Compressed design-system package exceeds 25 MiB");
       await putImmutableObject(artifact.storageKey, archive);
-      const preview = validation.valid ? createDesignSystemStaticPreview(workbench.files) : null;
-      const previewKey = preview
-        ? designSystemStaticPreviewStorageKey(
-            artifact.designSystem.organizationId,
-            artifact.designSystemId,
-            artifact.commitSha,
-          )
-        : null;
-      if (preview && previewKey) {
-        await putImmutableObject(previewKey, preview, "text/html; charset=utf-8");
-      }
+      // The saved preview is published separately by the managed-git bridge
+      // export pipeline, which builds the workbench on the live runtime and
+      // uploads it directly to S3 — nothing built is stored in the git tree.
       const saved = await prisma.$transaction(async (tx) => {
         const row = await tx.designSystemCommitArtifact.update({
           where: { id: artifact.id },
@@ -858,19 +753,7 @@ export class DesignSystemService {
           },
           include: DESIGN_SYSTEM_INCLUDE,
         });
-        const previewPublished = pointerIsNewer && previewKey !== null;
-        if (previewPublished) {
-          await tx.sessionGroup.update({
-            where: { id: group.id },
-            data: {
-              designPreviewStatus: "captured",
-              designPreviewKey: previewKey,
-              designPreviewCommitSha: artifact.commitSha,
-              designPreviewCapturedAt: new Date(),
-            },
-          });
-        }
-        return { row, designSystem, previewPublished };
+        return { row, designSystem };
       });
       await eventService.create({
         organizationId: artifact.designSystem.organizationId,
@@ -884,13 +767,6 @@ export class DesignSystemService {
         actorType: "system",
         actorId: "system",
       });
-      if (saved.previewPublished) {
-        await this.emitStaticPreviewUpdate(
-          artifact.designSystem.organizationId,
-          group.id,
-          artifact.commitSha,
-        );
-      }
       if (
         shouldAutoPublishArtifact({
           packageValid: validation.valid,
