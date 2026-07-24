@@ -469,6 +469,14 @@ function manualStyles(value: Record<string, unknown> | null | undefined): Manual
   return result;
 }
 
+/**
+ * Machine-generated identity anchors (build-time `t-…` ids and discovery `auto-…`
+ * ids) are not human-readable, so they should never surface as a label.
+ */
+export function isMachineElementId(elementId: string): boolean {
+  return elementId.startsWith("t-") || elementId.startsWith("auto-");
+}
+
 export function designEditorTextDirty(target: DesignEditorTarget | null): boolean {
   return (
     !!target?.editableText && !!target.textSourceHash && target.draftText !== target.originalText

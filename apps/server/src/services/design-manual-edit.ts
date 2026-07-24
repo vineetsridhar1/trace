@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import ts from "typescript";
 import { ValidationError } from "../lib/errors.js";
+import { TRACE_AUTO_ID_PREFIX, buildDesignTraceIds } from "./design-trace-id.js";
 
 const DESIGN_SOURCE_PATH_PATTERN = /^src\/design\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.tsx$/;
 const PDF_SOURCE_PATH = "src/App.tsx";
@@ -108,6 +109,14 @@ function findTextTarget(source: string, filePath: string, elementId: string): Te
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
+
+  // Elements the author did not tag by hand carry a build-time trace id that is not
+  // written into the source, so fall back to matching by recomputed identity anchor.
+  if (matches.length === 0 && elementId.startsWith(TRACE_AUTO_ID_PREFIX)) {
+    for (const [node, id] of buildDesignTraceIds(sourceFile)) {
+      if (id === elementId && ts.isJsxElement(node)) matches.push(node);
+    }
+  }
 
   if (matches.length === 0) {
     throw new ValidationError(`Design element not found: ${elementId}`);

@@ -215,7 +215,7 @@ function setEditMode(enabled){
 function nodeLabel(el){
   var label=el.getAttribute('aria-label')||el.getAttribute('data-trace-label')||el.id||'';
   var traceId=el.getAttribute('data-trace-id')||'';
-  if(!label&&traceId&&traceId.indexOf('auto-')!==0)label=traceId.replace(/[-_]+/g,' ');
+  if(!label&&traceId&&traceId.indexOf('auto-')!==0&&traceId.indexOf('t-')!==0)label=traceId.replace(/[-_]+/g,' ');
   if(!label&&el.children.length===0&&!traceId.startsWith('auto-'))label=(el.textContent||'').trim().replace(/\\s+/g,' ').slice(0,32);
   if(!label&&el.classList&&el.classList.length)label='.'+el.classList[0];
   return label||el.tagName.toLowerCase();

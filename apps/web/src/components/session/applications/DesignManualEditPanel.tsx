@@ -6,6 +6,7 @@ import { TraceLoader } from "../../ui/trace-loader";
 import {
   designEditorStylesDirty,
   designEditorTextDirty,
+  isMachineElementId,
   useDesignEditorStore,
 } from "../../../stores/design-editor";
 import { DesignEditorStyleControls } from "./DesignEditorStyleControls";
@@ -72,7 +73,8 @@ export function DesignManualEditPanel() {
         <span className="min-w-0 flex-1 truncate px-1 font-mono text-[10px] text-muted-foreground">
           {target ? (
             <>
-              &lt;{target.elementName}&gt; · {target.elementId}
+              &lt;{target.elementName}&gt;
+              {isMachineElementId(target.elementId) ? null : <> · {target.elementId}</>}
             </>
           ) : (
             "Select an element"

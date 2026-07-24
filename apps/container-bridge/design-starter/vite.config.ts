@@ -1,9 +1,10 @@
 import { fileURLToPath, URL } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { traceMarkers } from "./vite/trace-markers-plugin";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [traceMarkers(), react()],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

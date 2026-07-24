@@ -41,10 +41,15 @@ Read `docs/playbooks/README.md`, then use the playbook matching the requested su
 Edit `design.brief.json`, `trace.tokens.json`, `design.canvas.json`, and files under `src/design/`.
 
 - Keep one default-exported React component per logical screen in `src/design/screens/`.
-- Give meaningful layout, control, and text elements a stable, unique `data-trace-id` and a
-  repo-relative `data-trace-source` pointing to their owning TSX file. Preserve these attributes
-  across edits so users can select rendered elements and save manual visual overrides. Static text
-  can also be replaced directly; dynamic expressions and nested markup remain style-only.
+- Every element under `src/design/` is automatically given an identity anchor
+  (`data-trace-id` + `data-trace-source`) at build time, so users can select any rendered element
+  and save manual visual overrides — you do not need to hand-author these attributes. Static text
+  can be replaced directly; dynamic expressions and nested markup remain style-only. You may still
+  add your own stable, unique `data-trace-id` when you want a durable anchor for a specific element,
+  and it will be preserved.
+- Add a short, human-readable `data-trace-label` to meaningful containers (sections, cards, list
+  items) so they read clearly in the editor's element tree. Labels are optional — leaf text
+  elements already show their content — but they make navigation far nicer for non-obvious wrappers.
 - Register every screen in `design.canvas.json` with a stable, unique id and a component path shaped like `./screens/Name.tsx`.
 - Put every screen id in exactly one section. A section is one related user flow and renders as a horizontal row; new sections begin below the previous row. Keep sequential screens in the same section, and create a new section for a distinct flow, feature area, or alternate journey.
 - Use `variation` and `state` labels for related alternatives such as Default, Loading, Empty, and Error.
