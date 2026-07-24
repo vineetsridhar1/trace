@@ -229,7 +229,8 @@ export function usesDefaultApplicationConfig(groupKind: string | null | undefine
     groupKind === "app" ||
     groupKind === "design" ||
     groupKind === "design_system" ||
-    groupKind === "pdf"
+    groupKind === "pdf" ||
+    groupKind === "animation"
   );
 }
 
