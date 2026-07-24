@@ -554,9 +554,18 @@ export interface BridgeSessionOutput {
   data: unknown;
 }
 
+export interface BridgePlanFileUpdated {
+  type: "plan_file_updated";
+  sessionId: string;
+  content: string;
+  contentHash: string;
+  filePath: string;
+}
+
 export interface BridgeSessionComplete {
   type: "session_complete";
   sessionId: string;
+  interactionMode?: string;
 }
 
 export interface BridgeWorkspaceReady {
@@ -967,6 +976,7 @@ export type BridgeMessage =
   | BridgeRuntimeHeartbeat
   | BridgeRegisterSession
   | BridgeSessionOutput
+  | BridgePlanFileUpdated
   | BridgeSessionComplete
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed

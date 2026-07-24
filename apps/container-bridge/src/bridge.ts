@@ -39,6 +39,11 @@ import {
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import {
+  buildPlanFileInstruction,
+  createPlanFileWatcher,
+  type PlanFileWatcher,
+} from "@trace/shared/plan-file";
+import {
   AntigravityAdapter,
   ClaudeCodeAdapter,
   CodexAdapter,
@@ -85,6 +90,7 @@ async function inspectGitCheckpoint(
 }
 
 function isPendingInputOutput(output: ToolOutput): boolean {
+  if (output.type === "plan_file_complete") return true;
   return (
     output.type === "assistant" &&
     output.message.content.some((block) => block.type === "question" || block.type === "plan")
@@ -120,6 +126,7 @@ export class ContainerBridge implements IBridgeClient {
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
+  private planFileWatchers = new Map<string, PlanFileWatcher>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
   private pendingWorktrees = new Map<
     string,
@@ -233,6 +240,8 @@ export class ContainerBridge implements IBridgeClient {
       adapter.abort();
     }
     this.adapters.clear();
+    for (const watcher of this.planFileWatchers.values()) watcher.stop();
+    this.planFileWatchers.clear();
     this.outbox.clear();
     this.ws?.close();
     this.ws = null;
@@ -368,7 +377,11 @@ export class ContainerBridge implements IBridgeClient {
             sessionId: cmd.sessionId,
             data: { type: "error", message: err instanceof Error ? err.message : String(err) },
           });
-          this.send({ type: "session_complete", sessionId: cmd.sessionId });
+          this.send({
+            type: "session_complete",
+            sessionId: cmd.sessionId,
+            interactionMode: cmd.interactionMode,
+          });
         });
         break;
       }
@@ -577,6 +590,8 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "terminate": {
+        this.planFileWatchers.get(cmd.sessionId)?.stop();
+        this.planFileWatchers.delete(cmd.sessionId);
         const adapter = this.adapters.get(cmd.sessionId);
         if (adapter) {
           this.cancelRun(cmd.sessionId);
@@ -600,6 +615,8 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "delete": {
+        this.planFileWatchers.get(cmd.sessionId)?.stop();
+        this.planFileWatchers.delete(cmd.sessionId);
         const adapter = this.adapters.get(cmd.sessionId);
         if (adapter) {
           this.cancelRun(cmd.sessionId);
@@ -1023,6 +1040,38 @@ export class ContainerBridge implements IBridgeClient {
     }
   }
 
+  private startPlanFileWatcher(
+    sessionId: string,
+    interactionMode?: string,
+  ): PlanFileWatcher | null {
+    this.planFileWatchers.get(sessionId)?.stop();
+    this.planFileWatchers.delete(sessionId);
+    if (interactionMode !== "plan") return null;
+
+    const watcher = createPlanFileWatcher({
+      sessionId,
+      onSnapshot: ({ content, contentHash, filePath }) => {
+        this.send({ type: "plan_file_updated", sessionId, content, contentHash, filePath });
+      },
+      onError: (message) => {
+        console.warn(`[container-bridge] plan file error for ${sessionId}:`, message);
+      },
+    });
+    this.planFileWatchers.set(sessionId, watcher);
+    return watcher;
+  }
+
+  private async finishPlanFileWatcher(
+    sessionId: string,
+    watcher: PlanFileWatcher | null,
+  ): Promise<void> {
+    await watcher?.flush();
+    watcher?.stop();
+    if (this.planFileWatchers.get(sessionId) === watcher) {
+      this.planFileWatchers.delete(sessionId);
+    }
+  }
+
   private async runPrompt({
     sessionId,
     prompt,
@@ -1072,6 +1121,7 @@ export class ContainerBridge implements IBridgeClient {
     let hasForwardedOutput = false;
     let endedOnPending = false;
     let recoveringMissingToolSession = false;
+    const planFileWatcher = this.startPlanFileWatcher(sessionId, interactionMode);
 
     // Download attached files to temp files
     let imagePaths: string[] | undefined;
@@ -1098,6 +1148,9 @@ export class ContainerBridge implements IBridgeClient {
       finalPrompt = `${refs}\n\n${finalPrompt}`;
     }
     if (appendSystemPrompt) finalPrompt = `${finalPrompt}\n\n${appendSystemPrompt}`;
+    if (planFileWatcher) {
+      finalPrompt = `${finalPrompt}\n\n${buildPlanFileInstruction(planFileWatcher.filePath)}`;
+    }
 
     // Single owner of temp-image lifetime so we don't leak files when the
     // adapter ends via the pending-input branch (which doesn't always fire
@@ -1114,15 +1167,21 @@ export class ContainerBridge implements IBridgeClient {
     adapter.abort();
 
     const completeRun = () => {
-      const complete = () => this.send({ type: "session_complete", sessionId });
+      const complete = async () => {
+        await this.finishPlanFileWatcher(sessionId, planFileWatcher);
+        this.send({ type: "session_complete", sessionId, interactionMode });
+      };
       if (resolvedTool !== "codex") {
-        complete();
+        void complete();
         return;
       }
-      void syncCodexAuthFile().then(complete, (error: unknown) => {
-        console.warn("[container-bridge] failed to persist Codex session credential:", error);
-        complete();
-      });
+      void syncCodexAuthFile().then(
+        () => complete(),
+        (error: unknown) => {
+          console.warn("[container-bridge] failed to persist Codex session credential:", error);
+          return complete();
+        },
+      );
     };
 
     const activeAdapter = adapter;
@@ -1131,6 +1190,7 @@ export class ContainerBridge implements IBridgeClient {
       if (!isMissingToolSessionError(message)) return false;
 
       recoveringMissingToolSession = true;
+      void this.finishPlanFileWatcher(sessionId, planFileWatcher);
       this.finishRun(sessionId, runId);
       activeAdapter.abort();
       this.adapters.delete(sessionId);
@@ -1179,8 +1239,10 @@ export class ContainerBridge implements IBridgeClient {
           return;
         }
 
-        hasForwardedOutput = true;
-        this.send({ type: "session_output", sessionId, data: output });
+        if (output.type !== "plan_file_complete") {
+          hasForwardedOutput = true;
+          this.send({ type: "session_output", sessionId, data: output });
+        }
 
         // Phase 1: collect tool_use blocks whose command is a git commit/push
         const newPending = extractGitToolUsePending(output);
@@ -1237,6 +1299,7 @@ export class ContainerBridge implements IBridgeClient {
       reasoningEffort,
       enableClaudeInChrome,
       toolSessionId,
+      planFilePath: planFileWatcher?.filePath,
     });
   }
 }

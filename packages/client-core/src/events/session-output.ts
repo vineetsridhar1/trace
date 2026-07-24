@@ -62,6 +62,11 @@ export function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEnti
   if (payload.type === "question_pending" || payload.type === "plan_pending") {
     return { sessionStatus: "needs_input" as SessionStatus };
   }
+  if (payload.type === "plan_file_ready") {
+    return {
+      sessionStatus: (payload.sessionStatus as SessionStatus | undefined) ?? "needs_input",
+    };
+  }
   if (payload.type === "usage_updated") {
     return {
       ...(typeof payload.inputTokens === "number" ? { inputTokens: payload.inputTokens } : {}),
@@ -91,7 +96,11 @@ export function sessionPatchFromOutput(payload: JsonObject): Partial<SessionEnti
 }
 
 export function shouldBumpSortTimestampForOutput(payload: JsonObject): boolean {
-  return payload.type === "question_pending" || payload.type === "plan_pending";
+  return (
+    payload.type === "question_pending" ||
+    payload.type === "plan_pending" ||
+    payload.type === "plan_file_ready"
+  );
 }
 
 export function patchGroupSessionsBranch(

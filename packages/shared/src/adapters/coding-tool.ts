@@ -144,12 +144,23 @@ export interface UsageEvent {
   usage: TokenUsage;
 }
 
+/** Internal adapter signal used when a native planning tool pauses for approval. */
+export interface PlanFileCompleteEvent {
+  type: "plan_file_complete";
+}
+
 export interface ErrorEvent {
   type: "error";
   message: string;
 }
 
-export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | UsageEvent | ErrorEvent;
+export type ToolOutput =
+  | AssistantEvent
+  | UserEvent
+  | ResultEvent
+  | UsageEvent
+  | PlanFileCompleteEvent
+  | ErrorEvent;
 
 export type OutputCallback = (data: ToolOutput) => void;
 
@@ -178,6 +189,8 @@ export interface RunOptions {
   enableClaudeInChrome?: boolean;
   /** Tool-specific session ID for resuming (e.g. Claude Code's --resume flag) */
   toolSessionId?: string;
+  /** Canonical Trace plan artifact path for plan-mode runs. */
+  planFilePath?: string;
 }
 
 /**

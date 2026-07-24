@@ -1,4 +1,7 @@
 import { EventEmitter } from "node:events";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { spawn } from "child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +18,7 @@ class FakeChildProcess extends EventEmitter {
 }
 
 const spawnedChildren: FakeChildProcess[] = [];
+const temporaryDirectories: string[] = [];
 
 vi.mock("child_process", () => ({
   spawn: vi.fn(() => {
@@ -32,6 +36,9 @@ describe("coding tool adapter process exit fallback", () => {
   });
 
   afterEach(() => {
+    for (const directory of temporaryDirectories.splice(0)) {
+      rmSync(directory, { recursive: true, force: true });
+    }
     vi.useRealTimers();
   });
 
@@ -373,6 +380,61 @@ describe("coding tool adapter process exit fallback", () => {
     });
   });
 
+  it("mirrors Claude's native plan file into Trace's canonical artifact", () => {
+    const directory = mkdtempSync(join(tmpdir(), "trace-claude-plan-"));
+    temporaryDirectories.push(directory);
+    const nativePlanDirectory = join(directory, ".claude", "plans");
+    const nativePlanPath = join(nativePlanDirectory, "implementation.md");
+    const tracePlanPath = join(directory, "trace-plans", "plan.mdx");
+    mkdirSync(nativePlanDirectory, { recursive: true });
+    writeFileSync(nativePlanPath, "# Implementation\n\n- Ship the watcher\n", "utf8");
+
+    const adapter = new ClaudeCodeAdapter();
+    const onOutput = vi.fn();
+
+    adapter.run({
+      prompt: "create a plan",
+      cwd: directory,
+      interactionMode: "plan",
+      planFilePath: tracePlanPath,
+      onOutput,
+      onComplete: vi.fn(),
+    });
+
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "write-plan",
+              name: "Write",
+              input: { file_path: nativePlanPath },
+            },
+            {
+              type: "tool_use",
+              id: "exit-plan",
+              name: "ExitPlanMode",
+              input: {},
+            },
+          ],
+        },
+      })}\n`,
+    );
+
+    expect(onOutput).toHaveBeenCalledWith({ type: "plan_file_complete" });
+    expect(onOutput).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "assistant",
+        message: expect.objectContaining({
+          content: expect.arrayContaining([expect.objectContaining({ type: "plan" })]),
+        }),
+      }),
+    );
+    expect(readFileSync(tracePlanPath, "utf8")).toBe("# Implementation\n\n- Ship the watcher\n");
+  });
+
   it("completes a Pi run when the process exits but stdio never closes", () => {
     const adapter = new PiAdapter();
     const onOutput = vi.fn();
@@ -689,7 +751,7 @@ describe("coding tool adapter process exit fallback", () => {
     });
   });
 
-  it("wraps Antigravity output as a plan block in plan mode", () => {
+  it("keeps Antigravity plan-mode output as ordinary text", () => {
     const adapter = new AntigravityAdapter();
     const onOutput = vi.fn();
     const onComplete = vi.fn();
@@ -707,7 +769,7 @@ describe("coding tool adapter process exit fallback", () => {
 
     expect(onOutput).toHaveBeenCalledWith({
       type: "assistant",
-      message: { content: [{ type: "plan", content: "Step 1. Step 2." }] },
+      message: { content: [{ type: "text", text: "Step 1. Step 2." }] },
     });
   });
 

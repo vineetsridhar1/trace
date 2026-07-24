@@ -100,7 +100,6 @@ export class CodexAdapter implements CodingToolAdapter {
   private process: ChildProcess | null = null;
   private cwd: string | null = null;
   private threadId: string | null = null;
-  private interactionMode: "code" | "plan" | "ask" | undefined;
   private lastTextContent: string | null = null;
   private processGeneration = 0;
   private sawErrorEvent = false;
@@ -115,10 +114,8 @@ export class CodexAdapter implements CodingToolAdapter {
     model,
     reasoningEffort,
     toolSessionId,
-    interactionMode,
   }: RunOptions) {
     this.cwd = cwd;
-    this.interactionMode = interactionMode;
     this.lastTextContent = null;
     this.sawErrorEvent = false;
     this.lastErrorMessage = null;
@@ -197,18 +194,6 @@ export class CodexAdapter implements CodingToolAdapter {
       if (!isCurrentProcess()) return;
       finished = true;
       clearExitFallbackTimer();
-      // If in plan mode and exited cleanly with text, wrap as PlanBlock.
-      // Codex doesn't write plan files to disk, so filePath is omitted.
-      if (
-        this.interactionMode === "plan" &&
-        (code === 0 || code === null) &&
-        this.lastTextContent
-      ) {
-        onOutput({
-          type: "assistant",
-          message: { content: [{ type: "plan", content: this.lastTextContent }] },
-        });
-      }
       const exitError = code !== 0 && code !== null;
       const isError = exitError || this.sawErrorEvent;
       if (exitError && stderrChunks.length > 0) {

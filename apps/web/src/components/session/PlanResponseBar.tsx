@@ -163,10 +163,11 @@ export function PlanResponseBar({
           sessionId,
           text: hasComments
             ? buildApproveWithCommentsPrompt({
+                planContent,
                 commentGroups,
                 note: note.trim(),
               })
-            : "Approved. Implement this plan.",
+            : `Approved. Implement this plan:\n\n${planContent}`,
         })
         .toPromise();
       if (hasComments) {
@@ -176,7 +177,15 @@ export function PlanResponseBar({
     } finally {
       setSending(false);
     }
-  }, [commentGroups, feedback, hasComments, onClearPlanComments, sessionId, sending]);
+  }, [
+    commentGroups,
+    feedback,
+    hasComments,
+    onClearPlanComments,
+    planContent,
+    sessionId,
+    sending,
+  ]);
 
   const handleRevise = useCallback(async (textOverride?: string) => {
     const text = (textOverride ?? feedback).trim();

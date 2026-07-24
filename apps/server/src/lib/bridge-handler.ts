@@ -1077,7 +1077,15 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         return;
       }
 
-      if (msg.type === "session_output" && msg.sessionId) {
+      if (msg.type === "plan_file_updated" && msg.sessionId) {
+        enqueueForBoundSession(msg.sessionId, async (sessionId) => {
+          await sessionService.recordPlanFileUpdate(sessionId, {
+            content: typeof msg.content === "string" ? msg.content : "",
+            contentHash: typeof msg.contentHash === "string" ? msg.contentHash : "",
+            filePath: typeof msg.filePath === "string" ? msg.filePath : "",
+          });
+        });
+      } else if (msg.type === "session_output" && msg.sessionId) {
         const data = (msg.data ?? {}) as Record<string, unknown>;
 
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
@@ -1085,7 +1093,10 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         });
       } else if (msg.type === "session_complete" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {
-          await sessionService.complete(sessionId);
+          await sessionService.complete(
+            sessionId,
+            typeof msg.interactionMode === "string" ? msg.interactionMode : undefined,
+          );
         });
       } else if (msg.type === "workspace_ready" && msg.sessionId) {
         enqueueForBoundSession(msg.sessionId, async (sessionId) => {

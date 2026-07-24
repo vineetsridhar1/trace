@@ -16,8 +16,6 @@ interface PendingInputPlanProps {
   keyboardVisible?: boolean;
 }
 
-const APPROVE_TEXT = "Approved. Implement this plan.";
-
 type PlanAction = "new-session" | "same-session";
 
 const PLAN_OPTIONS: Array<{
@@ -81,7 +79,7 @@ export function PendingInputPlan({
       await getClient()
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
-          text: APPROVE_TEXT,
+          text: `Approved. Implement this plan:\n\n${planContent}`,
         })
         .toPromise();
       setFeedback("");
@@ -89,7 +87,7 @@ export function PendingInputPlan({
     } finally {
       setSending(false);
     }
-  }, [sending, sessionId]);
+  }, [planContent, sending, sessionId]);
 
   const handleRevise = useCallback(async () => {
     if (sending || !trimmed) return;

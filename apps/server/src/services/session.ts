@@ -7,7 +7,7 @@ import type {
 import type { AgentStatus, SessionStatus, CodingTool, SessionGroupKind } from "@prisma/client";
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
@@ -22,6 +22,7 @@ import {
   type BridgeWorkspaceWarning,
   type BridgeRepoWorktree,
 } from "@trace/shared";
+import { PLAN_FILE_MAX_BYTES } from "@trace/shared/plan-file";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
 import {
@@ -5717,6 +5718,44 @@ export class SessionService {
     return tool === "claude_code" && (createdBy?.enableClaudeInChrome ?? false);
   }
 
+  async recordPlanFileUpdate(
+    sessionId: string,
+    snapshot: {
+      content: string;
+      contentHash: string;
+      filePath: string;
+    },
+  ) {
+    const content = snapshot.content;
+    const normalizedFilePath = snapshot.filePath.replaceAll("\\", "/");
+    if (!content.trim() || Buffer.byteLength(content, "utf8") > PLAN_FILE_MAX_BYTES) return;
+    if (!normalizedFilePath.endsWith(`/trace-plans/${sessionId}/plan.mdx`)) return;
+    if (/^\s*(?:import|export)\s/m.test(content) || /<(?:script|style|iframe)\b/i.test(content)) {
+      return;
+    }
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { organizationId: true, agentStatus: true },
+    });
+    if (!session || session.agentStatus !== "active") return;
+
+    await eventService.create({
+      organizationId: session.organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "session_output",
+      payload: {
+        type: "plan_file_updated",
+        planContent: content,
+        planFilePath: snapshot.filePath,
+        contentHash: createHash("sha256").update(content).digest("hex"),
+      },
+      actorType: "system",
+      actorId: "system",
+    });
+  }
+
   async recordOutput(sessionId: string, data: Record<string, unknown>) {
     // Extract and strip <trace-title> and <trace-branch> tags from assistant text before persisting
     const extractedTitle = this.extractAndStripTitle(data);
@@ -6009,7 +6048,14 @@ export class SessionService {
     });
   }
 
-  async complete(id: string, options?: { drainPending?: boolean }) {
+  async complete(
+    id: string,
+    interactionModeOrOptions?: string | { drainPending?: boolean },
+  ) {
+    const interactionMode =
+      typeof interactionModeOrOptions === "string" ? interactionModeOrOptions : undefined;
+    const options =
+      typeof interactionModeOrOptions === "object" ? interactionModeOrOptions : undefined;
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({
       where: { id },
@@ -6036,12 +6082,25 @@ export class SessionService {
         ...(lastResume && { timestamp: { gte: lastResume.timestamp } }),
       },
       orderBy: { timestamp: "desc" },
-      take: 10,
+      take: 100,
     });
 
-    const hasPendingPlan = recentEvents.some((evt: { payload: Prisma.JsonValue }) => {
+    const legacyPendingPlan = recentEvents.some((evt: { payload: Prisma.JsonValue }) => {
       return hasPlanBlock(evt.payload as Record<string, unknown>);
     });
+    const latestPlanFileEvent = recentEvents.find((evt: { payload: Prisma.JsonValue }) => {
+      const payload = evt.payload as Record<string, unknown>;
+      return (
+        payload.type === "plan_file_updated" &&
+        typeof payload.planContent === "string" &&
+        payload.planContent.trim().length > 0
+      );
+    });
+    const resumePayload = lastResume?.payload as Record<string, unknown> | undefined;
+    const completedPlanRun =
+      interactionMode === "plan" ||
+      (interactionMode == null && resumePayload?.interactionMode === "plan");
+    const hasPendingPlan = legacyPendingPlan || (completedPlanRun && !!latestPlanFileEvent);
 
     // Safety net for adapters that exit cleanly after emitting a question
     // (Claude Code hangs on stdin so recordOutput handles it first, but other
@@ -6069,6 +6128,47 @@ export class SessionService {
     });
     const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
 
+    const latestPlanPayload = latestPlanFileEvent?.payload as Record<string, unknown> | undefined;
+    if (completedPlanRun && latestPlanPayload && current.sessionStatus !== "needs_input") {
+      const planContent =
+        typeof latestPlanPayload.planContent === "string" ? latestPlanPayload.planContent : "";
+      const planFilePath =
+        typeof latestPlanPayload.planFilePath === "string" ? latestPlanPayload.planFilePath : "";
+      const contentHash =
+        typeof latestPlanPayload.contentHash === "string" ? latestPlanPayload.contentHash : "";
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: id,
+        eventType: "session_output",
+        payload: {
+          type: "plan_file_ready",
+          planContent,
+          planFilePath,
+          contentHash,
+          sessionStatus: newSessionStatus,
+          ...(sessionGroup ? { sessionGroup } : {}),
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+    }
+
+    if (completedPlanRun && !latestPlanFileEvent && !legacyPendingPlan) {
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: id,
+        eventType: "session_output",
+        payload: {
+          type: "error",
+          message: "Plan mode finished without writing a valid Trace plan file.",
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+    }
+
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -6092,7 +6192,7 @@ export class SessionService {
     if (hasPendingInput && current.sessionStatus !== "needs_input") {
       const triggerEvent = recentEvents.find((evt: { payload: Prisma.JsonValue }) => {
         const p = evt.payload as Record<string, unknown>;
-        return hasQuestionBlock(p) || hasPlanBlock(p);
+        return hasQuestionBlock(p) || hasPlanBlock(p) || p.type === "plan_file_updated";
       });
       const triggerPayload = triggerEvent?.payload as Record<string, unknown> | undefined;
 
@@ -10358,6 +10458,7 @@ export class SessionService {
       | undefined;
 
     const isQuestion = hasQuestionBlock(data);
+    const isPlanFile = data.type === "plan_file_updated" || data.type === "plan_file_ready";
 
     const questionBlock = isQuestion
       ? (messageContent?.find((b) => b.type === "question") as
@@ -10368,7 +10469,7 @@ export class SessionService {
     const planBlock = !isQuestion
       ? (messageContent?.find((b) => b.type === "plan") as { content?: string } | undefined)
       : undefined;
-    const planText = planBlock?.content;
+    const planText = isPlanFile ? (data.planContent as string | undefined) : planBlock?.content;
 
     const summary = isQuestion
       ? (questionBlock?.questions?.[0]?.question as string | undefined)

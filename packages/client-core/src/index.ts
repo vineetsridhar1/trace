@@ -93,13 +93,14 @@ export {
   HIDDEN_SESSION_PAYLOAD_TYPES,
   HIDDEN_SESSION_PAYLOAD_TYPE_SET,
 } from "./session/event-filters.js";
-export { buildSessionNodes } from "./session/nodes.js";
+export { buildSessionNodes, getLatestPlanFile } from "./session/nodes.js";
 export { isSessionPreparing, isSessionRuntimeStartingUp } from "./session/preparation.js";
 export type { SessionPreparationFields } from "./session/preparation.js";
 export { formatSessionConnectionError } from "./session/connection-error.js";
 export type {
   AgentToolResult,
   BuildSessionNodesResult,
+  PlanFileState,
   ReadGlobItem,
   SessionNode,
 } from "./session/nodes.js";

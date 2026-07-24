@@ -105,7 +105,7 @@ export function getCommandPrefix(command: string): string {
 const TRACE_INTERNAL_RE = /<trace-internal>[\s\S]*?<\/trace-internal>\s*/g;
 const CONVERSATION_HISTORY_RE = /<conversation-history>[\s\S]*?<\/conversation-history>\s*/g;
 export const PLAN_PREFIX =
-  "Before implementing, first create a detailed plan and present it for review. Use plan mode. Once the plan is approved, proceed with implementation.";
+  "Before implementing, research the task and create a detailed plan for review. Use plan mode and write the plan to the Trace plan file specified by the runtime. Do not begin implementation until the plan is approved.";
 export const ASK_PREFIX =
   "<trace-internal>\nDo NOT modify any files. Only read files and answer questions. Do not use Edit, Write, or NotebookEdit tools. This is read-only/ask mode.\n</trace-internal>\n\n";
 

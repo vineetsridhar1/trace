@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "child_process";
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { mkdirSync, readFileSync, writeFileSync } from "fs";
+import { dirname, resolve } from "path";
 import { createInterface } from "readline";
 import type {
   CodingToolAdapter,
@@ -52,6 +52,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private resultEmitted = false;
   private emittedIncrementalUsage = false;
   private lastPlanFilePath: string | null = null;
+  private tracePlanFilePath: string | null = null;
   private processGeneration = 0;
 
   run({
@@ -64,11 +65,13 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     reasoningEffort,
     enableClaudeInChrome,
     toolSessionId,
+    planFilePath,
   }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
     this.emittedIncrementalUsage = false;
     this.lastPlanFilePath = null;
+    this.tracePlanFilePath = planFilePath ?? null;
 
     // Use provided toolSessionId to restore resume capability after bridge restart
     if (toolSessionId && !this.claudeSessionId) {
@@ -246,7 +249,6 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
 
         // Track plan file writes and detect ExitPlanMode before normalizing
         let hasExitPlanMode = false;
-        let exitPlanModeToolUseId: string | undefined;
         for (const block of content as Record<string, unknown>[]) {
           if (block.type === "tool_use") {
             const name = String(block.name ?? "");
@@ -259,18 +261,14 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
             }
             if (name === "ExitPlanMode") {
               hasExitPlanMode = true;
-              if (typeof block.id === "string") {
-                exitPlanModeToolUseId = block.id;
-              }
             }
           }
         }
 
         const normalized: MessageBlock[] = [];
 
-        // If ExitPlanMode found, emit a PlanBlock instead of the raw tool_use.
-        // Read the plan file from disk to get the full current content —
-        // Edit tool_use only carries the diff, not the complete file.
+        // Claude owns a native .claude/plans file in permission-mode plan.
+        // Mirror its final contents into Trace's canonical watched artifact.
         if (hasExitPlanMode && this.lastPlanFilePath) {
           let planContent = "";
           try {
@@ -279,15 +277,18 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
               : resolve(this.cwd ?? "", this.lastPlanFilePath);
             planContent = readFileSync(abs, "utf-8");
           } catch {
-            // File may not exist if the write failed — emit with empty content
+            // File may not exist if the write failed.
           }
-          normalized.push({
-            type: "plan" as const,
-            content: planContent,
-            filePath: this.lastPlanFilePath,
-            ...(exitPlanModeToolUseId ? { toolUseId: exitPlanModeToolUseId } : {}),
-          });
+          if (planContent && this.tracePlanFilePath) {
+            try {
+              mkdirSync(dirname(this.tracePlanFilePath), { recursive: true });
+              writeFileSync(this.tracePlanFilePath, planContent, "utf8");
+            } catch {
+              // The bridge will surface a missing plan artifact on completion.
+            }
+          }
           this.lastPlanFilePath = null;
+          onOutput({ type: "plan_file_complete" });
         }
 
         for (const block of content as Record<string, unknown>[]) {

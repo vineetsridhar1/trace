@@ -14,6 +14,7 @@ export type {
   Question,
   QuestionBlock,
   PlanBlock,
+  PlanFileCompleteEvent,
 } from "./adapters/coding-tool.js";
 export {
   DESIGN_SYSTEM_LIMITS,
@@ -49,6 +50,7 @@ export type {
   BridgeRuntimeHeartbeat,
   BridgeRegisterSession,
   BridgeSessionOutput,
+  BridgePlanFileUpdated,
   BridgeSessionComplete,
   BridgeWorkspaceReady,
   BridgeWorkspaceWarning,

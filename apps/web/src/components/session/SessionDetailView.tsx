@@ -9,6 +9,7 @@ import {
   useEntityField,
   useScopedEvents,
   eventScopeKey,
+  getLatestPlanFile,
   type SessionEntity,
   type SessionGroupEntity,
 } from "@trace/client-core";
@@ -19,6 +20,7 @@ import { SessionInput } from "./SessionInput";
 import { SessionDropzone } from "./SessionDropzone";
 import { useAddAttachments } from "./useAddAttachments";
 import { PlanResponseBar } from "./PlanResponseBar";
+import { PlanFileReviewPanel } from "./PlanFileReviewPanel";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
@@ -471,8 +473,24 @@ export function SessionDetailView({
       ? connectionState
       : null;
 
-  // Find plan content when server says session needs input
-  const activePlan = useMemo(() => {
+  const latestPlanFile = useMemo(() => getLatestPlanFile(eventIds, events), [eventIds, events]);
+
+  const lastUserEventIndex = useMemo(() => {
+    for (let index = eventIds.length - 1; index >= 0; index--) {
+      const eventType = events[eventIds[index]]?.eventType;
+      if (eventType === "message_sent" || eventType === "session_started") return index;
+    }
+    return -1;
+  }, [eventIds, events]);
+
+  const visiblePlanFile =
+    latestPlanFile &&
+    (sessionStatus === "needs_input" || latestPlanFile.eventIndex > lastUserEventIndex)
+      ? latestPlanFile
+      : null;
+
+  // Keep legacy PlanBlock support while older bridges are still in circulation.
+  const legacyActivePlan = useMemo(() => {
     if (sessionStatus !== "needs_input") return null;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const node = nodes[i];
@@ -480,6 +498,19 @@ export function SessionDetailView({
     }
     return null;
   }, [nodes, sessionStatus]);
+  const activePlan =
+    sessionStatus === "needs_input" && latestPlanFile
+      ? {
+          node: {
+            kind: "plan-review" as const,
+            id: latestPlanFile.id,
+            planContent: latestPlanFile.content,
+            planFilePath: latestPlanFile.filePath,
+            timestamp: latestPlanFile.timestamp,
+          },
+          index: latestPlanFile.eventIndex,
+        }
+      : legacyActivePlan;
 
   const activeQuestion = useMemo(() => {
     if (sessionStatus !== "needs_input") return null;
@@ -606,157 +637,175 @@ export function SessionDetailView({
           />
         )}
 
-        <SessionDropzone
-          className="relative flex flex-1 flex-col overflow-hidden bg-background"
-          onFileDropped={addAttachments}
-          disabled={!composerActive}
-        >
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <div className="relative flex-1 overflow-hidden">
-              {error ? (
-                <div className="flex h-full items-center justify-center">
-                  <p className="text-sm text-destructive">Failed to load events</p>
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <SessionDropzone
+            className={
+              visiblePlanFile
+                ? "relative flex w-2/5 min-w-0 shrink-0 flex-col overflow-hidden border-r border-border bg-background"
+                : "relative flex min-w-0 flex-1 flex-col overflow-hidden bg-background"
+            }
+            onFileDropped={addAttachments}
+            disabled={!composerActive}
+          >
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <div className="relative flex-1 overflow-hidden">
+                {error ? (
+                  <div className="flex h-full items-center justify-center">
+                    <p className="text-sm text-destructive">Failed to load events</p>
+                  </div>
+                ) : (
+                  <SessionMessageList
+                    key={sessionId}
+                    sessionId={sessionId}
+                    nodes={listNodes}
+                    promptIndexItems={promptIndexItems}
+                    gitCheckpoints={gitCheckpoints ?? []}
+                    initialLoading={initialEventsLoading}
+                    hasOlder={hasOlder}
+                    loadingOlder={loadingOlder}
+                    onLoadOlder={fetchOlderEvents}
+                    onLoadAroundEvent={fetchEventsAroundEvent}
+                    completedAgentTools={completedAgentTools}
+                    toolResultByUseId={toolResultByUseId}
+                    scrollToEventId={scrollToEventId}
+                    onScrollComplete={onScrollComplete}
+                    activePlanId={activePlan?.node.id}
+                    planComments={planComments}
+                    onAddPlanComment={handleAddPlanComment}
+                    onRemovePlanComment={handleRemovePlanComment}
+                    onForkSession={onForkSession}
+                    canForkSession={canForkSession}
+                    messageActionsEventIds={messageActionsEventIds}
+                    scrollPaddingBottom={bottomBarHeight}
+                  />
+                )}
+                {initialEventsLoading && (
+                  <div className="absolute inset-0 bg-background pointer-events-none">
+                    <div className="flex flex-col gap-4 p-4">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="flex gap-3">
+                          <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                          <div className="flex-1 space-y-2">
+                            <Skeleton className="h-3.5 w-24" />
+                            <Skeleton className="h-3.5 w-[80%]" />
+                            <Skeleton className="h-3.5 w-[60%]" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {!hideHeader && setupBlocking && (
+                <div className="flex items-center gap-2 border-t border-border bg-surface-deep px-4 py-2">
+                  <TraceLoader size={14} showLabel={false} />
+                  <span className="text-xs text-muted-foreground">Setting up environment...</span>
                 </div>
-              ) : (
-                <SessionMessageList
-                  key={sessionId}
+              )}
+
+              {!hideHeader && !setupBlocking && setupStatus === "failed" && (
+                <div className="flex items-center gap-2 border-t border-border bg-destructive/10 px-4 py-2">
+                  <AlertCircle size={14} className="text-destructive" />
+                  <span className="text-xs text-destructive">
+                    Setup failed{setupError ? `: ${setupError}` : ""}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!sessionGroupId || retryingSetup || !bridgeInteractionAllowed}
+                    className="ml-2 text-xs text-foreground underline"
+                    onClick={() => {
+                      if (!sessionGroupId) return;
+                      setRetryingSetup(true);
+                      client
+                        .mutation(RETRY_SESSION_GROUP_SETUP_MUTATION, { id: sessionGroupId })
+                        .toPromise()
+                        .finally(() => setRetryingSetup(false));
+                    }}
+                  >
+                    {retryingSetup ? "Retrying..." : "Retry"}
+                  </button>
+                </div>
+              )}
+
+              {!hideHeader && (showTerminal || showTerminalPanel) && canAccessTerminal && (
+                <TerminalPanel
                   sessionId={sessionId}
-                  nodes={listNodes}
-                  promptIndexItems={promptIndexItems}
-                  gitCheckpoints={gitCheckpoints ?? []}
-                  initialLoading={initialEventsLoading}
-                  hasOlder={hasOlder}
-                  loadingOlder={loadingOlder}
-                  onLoadOlder={fetchOlderEvents}
-                  onLoadAroundEvent={fetchEventsAroundEvent}
-                  completedAgentTools={completedAgentTools}
-                  toolResultByUseId={toolResultByUseId}
-                  scrollToEventId={scrollToEventId}
-                  onScrollComplete={onScrollComplete}
-                  activePlanId={activePlan?.node.id}
-                  planComments={planComments}
-                  onAddPlanComment={handleAddPlanComment}
-                  onRemovePlanComment={handleRemovePlanComment}
-                  onForkSession={onForkSession}
-                  canForkSession={canForkSession}
-                  messageActionsEventIds={messageActionsEventIds}
-                  scrollPaddingBottom={bottomBarHeight}
+                  onClose={() => {
+                    setShowTerminal(false);
+                    setShowTerminalPanel(false);
+                  }}
                 />
               )}
-              {initialEventsLoading && (
-                <div className="absolute inset-0 bg-background pointer-events-none">
-                  <div className="flex flex-col gap-4 p-4">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="flex gap-3">
-                        <Skeleton className="h-8 w-8 rounded-full shrink-0" />
-                        <div className="flex-1 space-y-2">
-                          <Skeleton className="h-3.5 w-24" />
-                          <Skeleton className="h-3.5 w-[80%]" />
-                          <Skeleton className="h-3.5 w-[60%]" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+            </div>
+
+            <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
+              {runtimeLifecycleState ? (
+                <RuntimeLifecycleNotice
+                  sessionId={sessionId}
+                  connection={connection}
+                  connectionState={runtimeLifecycleState}
+                />
+              ) : !bridgeInteractionAllowed ? (
+                <div className="border-t bg-background p-4">
+                  <BridgeAccessNotice
+                    access={bridgeAccess}
+                    sessionGroupId={sessionGroupId ?? null}
+                    onRequested={refreshBridgeAccess}
+                  />
                 </div>
+              ) : showQuestion ? (
+                <AskUserQuestionBar
+                  node={showQuestion}
+                  onResponse={(text) => {
+                    client
+                      .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+                        sessionId,
+                        text,
+                        interactionMode: activePlan ? "plan" : undefined,
+                      })
+                      .toPromise();
+                  }}
+                  onDismiss={() => {
+                    setDismissedQuestionId(showQuestion.id);
+                  }}
+                />
+              ) : activePlan ? (
+                <PlanResponseBar
+                  sessionId={sessionId}
+                  planContent={activePlan.node.planContent}
+                  planComments={planComments}
+                  onClearPlanComments={handleClearPlanComments}
+                  onDismiss={handleDismissPlan}
+                />
+              ) : (
+                <>
+                  {agentStatus === "active" && latestTodos && (
+                    <StickyTodoList todos={latestTodos} />
+                  )}
+                  <QueuedMessagesList sessionId={sessionId} />
+                  <SessionInput
+                    sessionId={sessionId}
+                    onStop={handleStop}
+                    bridgeAccess={bridgeAccess}
+                    sessionGroupId={sessionGroupId ?? null}
+                    onAccessRequested={refreshBridgeAccess}
+                  />
+                </>
               )}
             </div>
-
-            {!hideHeader && setupBlocking && (
-              <div className="flex items-center gap-2 border-t border-border bg-surface-deep px-4 py-2">
-                <TraceLoader size={14} showLabel={false} />
-                <span className="text-xs text-muted-foreground">Setting up environment...</span>
-              </div>
-            )}
-
-            {!hideHeader && !setupBlocking && setupStatus === "failed" && (
-              <div className="flex items-center gap-2 border-t border-border bg-destructive/10 px-4 py-2">
-                <AlertCircle size={14} className="text-destructive" />
-                <span className="text-xs text-destructive">
-                  Setup failed{setupError ? `: ${setupError}` : ""}
-                </span>
-                <button
-                  type="button"
-                  disabled={!sessionGroupId || retryingSetup || !bridgeInteractionAllowed}
-                  className="ml-2 text-xs text-foreground underline"
-                  onClick={() => {
-                    if (!sessionGroupId) return;
-                    setRetryingSetup(true);
-                    client
-                      .mutation(RETRY_SESSION_GROUP_SETUP_MUTATION, { id: sessionGroupId })
-                      .toPromise()
-                      .finally(() => setRetryingSetup(false));
-                  }}
-                >
-                  {retryingSetup ? "Retrying..." : "Retry"}
-                </button>
-              </div>
-            )}
-
-            {!hideHeader && (showTerminal || showTerminalPanel) && canAccessTerminal && (
-              <TerminalPanel
-                sessionId={sessionId}
-                onClose={() => {
-                  setShowTerminal(false);
-                  setShowTerminalPanel(false);
-                }}
-              />
-            )}
-          </div>
-
-          <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
-          {runtimeLifecycleState ? (
-            <RuntimeLifecycleNotice
-              sessionId={sessionId}
-              connection={connection}
-              connectionState={runtimeLifecycleState}
+          </SessionDropzone>
+          {visiblePlanFile ? (
+            <PlanFileReviewPanel
+              content={visiblePlanFile.content}
+              filePath={visiblePlanFile.filePath}
+              ready={sessionStatus === "needs_input" && visiblePlanFile.ready}
+              comments={activePlan ? planComments : undefined}
+              onAddComment={activePlan ? handleAddPlanComment : undefined}
+              onRemoveComment={activePlan ? handleRemovePlanComment : undefined}
             />
-          ) : !bridgeInteractionAllowed ? (
-            <div className="border-t bg-background p-4">
-              <BridgeAccessNotice
-                access={bridgeAccess}
-                sessionGroupId={sessionGroupId ?? null}
-                onRequested={refreshBridgeAccess}
-              />
-            </div>
-          ) : showQuestion ? (
-            <AskUserQuestionBar
-              node={showQuestion}
-              onResponse={(text) => {
-                client
-                  .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-                    sessionId,
-                    text,
-                    interactionMode: activePlan ? "plan" : undefined,
-                  })
-                  .toPromise();
-              }}
-              onDismiss={() => {
-                setDismissedQuestionId(showQuestion.id);
-              }}
-            />
-          ) : activePlan ? (
-            <PlanResponseBar
-              sessionId={sessionId}
-              planContent={activePlan.node.planContent}
-              planComments={planComments}
-              onClearPlanComments={handleClearPlanComments}
-              onDismiss={handleDismissPlan}
-            />
-          ) : (
-            <>
-              {agentStatus === "active" && latestTodos && <StickyTodoList todos={latestTodos} />}
-              <QueuedMessagesList sessionId={sessionId} />
-              <SessionInput
-                sessionId={sessionId}
-                onStop={handleStop}
-                bridgeAccess={bridgeAccess}
-                sessionGroupId={sessionGroupId ?? null}
-                onAccessRequested={refreshBridgeAccess}
-              />
-            </>
-          )}
-          </div>
-        </SessionDropzone>
+          ) : null}
+        </div>
       </div>
     </EventScopeContext.Provider>
   );
