@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Paperclip, Send, Square } from "lucide-react";
+import { LayoutTemplate, Paperclip, Send, Square } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import {
   isSessionPreparing,
@@ -49,8 +49,15 @@ import { useAttachmentOpen } from "./AttachmentOpenContext";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 import { getSessionEmptyStateContent } from "./sessionEmptyState";
+import { DesignPickerDialog } from "./DesignPickerDialog";
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
+
+// Kinds where "implement a design" applies — coding and app sessions build from
+// designs; design/pdf/design-system sessions do not.
+function canImplementDesigns(groupKind: string | null | undefined): boolean {
+  return groupKind !== "design" && groupKind !== "design_system" && groupKind !== "pdf";
+}
 
 export function SessionInput({
   sessionId,
@@ -107,6 +114,7 @@ export function SessionInput({
   );
   const [mode, setMode] = useState<InteractionMode>("code");
   const [isSending, setIsSending] = useState(false);
+  const [showDesignPicker, setShowDesignPicker] = useState(false);
   const isSendingRef = useRef(false);
   const hasAutoFocusedRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -465,6 +473,11 @@ export function SessionInput({
 
   return (
     <div className="shrink-0 bg-background px-4 pb-8">
+      <DesignPickerDialog
+        sessionId={sessionId}
+        open={showDesignPicker}
+        onOpenChange={setShowDesignPicker}
+      />
       <div className="relative mx-auto w-[90%]">
         {preparing && (
           <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -530,6 +543,16 @@ export function SessionInput({
           >
             <Paperclip size={16} />
           </button>
+          {canImplementDesigns(groupKind) && (
+            <button
+              onClick={() => setShowDesignPicker(true)}
+              disabled={!canSend || isSending}
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              title="Implement a design"
+            >
+              <LayoutTemplate size={16} />
+            </button>
+          )}
           <SessionInputOptions
             sessionId={sessionId}
             mode={mode}

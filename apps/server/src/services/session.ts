@@ -81,6 +81,8 @@ import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
+import { gitStorage } from "../lib/git-storage/index.js";
+import { parseGitTreeArchive } from "../lib/design-system-archive.js";
 import { isGeneratedProjectKind } from "../lib/generated-project.js";
 import {
   designSourceHash,
@@ -348,6 +350,15 @@ function mergeRuntimeBinding(
   };
 }
 
+// A design copied into the session workspace before the agent runs. Carried on
+// the pending command so a deferred (not-yet-provisioned) session materializes
+// the design once its workspace is ready, right before the kickoff prompt.
+type DesignAttachmentRef = {
+  designSessionGroupId: string;
+  slug: string;
+  designName: string;
+};
+
 type PendingSessionCommand =
   | {
       type: "run";
@@ -357,6 +368,7 @@ type PendingSessionCommand =
       checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
+      designAttachments?: DesignAttachmentRef[] | null;
     }
   | {
       type: "send";
@@ -366,6 +378,7 @@ type PendingSessionCommand =
       checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
+      designAttachments?: DesignAttachmentRef[] | null;
     };
 
 type PendingSessionCommandQueue = {
@@ -436,6 +449,38 @@ function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionC
     version: 0,
     ...overrides,
   };
+}
+
+// Which files from a design session's tree make up its portable artifact: the
+// screen/component source, the canvas manifest, the brief, and the tokens.
+export function isDesignSourcePath(path: string): boolean {
+  return (
+    path.startsWith("src/design/") ||
+    path === "design.canvas.json" ||
+    path === "design.brief.json" ||
+    path === "trace.tokens.json"
+  );
+}
+
+export function parseDesignAttachments(raw: unknown): DesignAttachmentRef[] | null {
+  if (!Array.isArray(raw)) return null;
+  const refs: DesignAttachmentRef[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const ref = entry as Record<string, unknown>;
+    if (
+      typeof ref.designSessionGroupId === "string" &&
+      typeof ref.slug === "string" &&
+      typeof ref.designName === "string"
+    ) {
+      refs.push({
+        designSessionGroupId: ref.designSessionGroupId,
+        slug: ref.slug,
+        designName: ref.designName,
+      });
+    }
+  }
+  return refs.length > 0 ? refs : null;
 }
 
 function pendingRunValue(
@@ -5990,6 +6035,7 @@ export class SessionService {
     interactionMode,
     clientMutationId,
     clientSource,
+    designAttachments,
   }: {
     sessionId: string;
     text: string;
@@ -5999,6 +6045,7 @@ export class SessionService {
     interactionMode?: string;
     clientMutationId?: string;
     clientSource?: string | null;
+    designAttachments?: DesignAttachmentRef[];
   }) {
     const session = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
@@ -6123,6 +6170,7 @@ export class SessionService {
           clientSource: normalizeClientSource(clientSource),
           checkpointContext: null,
           ...(imageKeys?.length ? { imageKeys } : {}),
+          ...(designAttachments?.length ? { designAttachments } : {}),
         };
         const markLocalPreparing = session.hosting === "local";
         await this.storePendingCommand(
@@ -9605,6 +9653,181 @@ export class SessionService {
     return true;
   }
 
+  private designArtifactSlug(group: { slug: string | null; name: string; id: string }): string {
+    if (group.slug) return group.slug;
+    const fromName = group.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return fromName || group.id;
+  }
+
+  private buildDesignImplementationPrompt(designName: string, destRoot: string): string {
+    return (
+      `I've added the "${designName}" design to this workspace under \`${destRoot}/\`.\n\n` +
+      `- \`${destRoot}/design.canvas.json\` lists every screen — its name, viewport, and the ` +
+      `component that renders it.\n` +
+      `- \`${destRoot}/design.brief.json\` captures the intent and required states.\n` +
+      `- \`${destRoot}/src/design/\` holds the actual screen and component source; tokens are in ` +
+      `\`${destRoot}/trace.tokens.json\`.\n\n` +
+      `Please implement these designs in this project, matching the layout, states, and styling as ` +
+      `closely as possible. Start by reading the canvas manifest and brief, then build each screen.`
+    );
+  }
+
+  // Resolve a design session group into its copyable artifact metadata,
+  // enforcing view access and that it has committed source to implement.
+  private async resolveDesignArtifact(
+    designSessionGroupId: string,
+    organizationId: string,
+    userId: string,
+  ): Promise<{ id: string; name: string; slug: string }> {
+    const design = await prisma.sessionGroup.findFirst({
+      where: { id: designSessionGroupId, organizationId, kind: "design" },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        repoId: true,
+        branch: true,
+        designPreviewCommitSha: true,
+        visibility: true,
+        ownerUserId: true,
+      },
+    });
+    if (!design) throw new ValidationError("Design not found");
+    if (!canViewSessionGroup(design, userId)) {
+      throw new AuthorizationError("Not authorized for this design");
+    }
+    if (!design.repoId) {
+      throw new ValidationError("This design has no saved source to implement yet");
+    }
+    let commitSha = design.designPreviewCommitSha;
+    if (!commitSha && design.branch) {
+      commitSha = await gitStorage.getBranchHead(organizationId, design.repoId, design.branch);
+    }
+    if (!commitSha) {
+      throw new ValidationError("This design has no committed source to implement yet");
+    }
+    return { id: design.id, name: design.name, slug: this.designArtifactSlug(design) };
+  }
+
+  // Read a design's committed tree and write its artifact files into the target
+  // workspace under .trace/designs/<slug>/. Returns the number of files written.
+  private async copyDesignSourceIntoWorkspace(params: {
+    designSessionGroupId: string;
+    slug: string;
+    organizationId: string;
+    runtimeId: string;
+    sessionId: string;
+    workdirHint?: string;
+  }): Promise<number> {
+    const design = await prisma.sessionGroup.findFirst({
+      where: {
+        id: params.designSessionGroupId,
+        organizationId: params.organizationId,
+        kind: "design",
+      },
+      select: { repoId: true, branch: true, designPreviewCommitSha: true },
+    });
+    if (!design?.repoId) return 0;
+    let commitSha = design.designPreviewCommitSha;
+    if (!commitSha && design.branch) {
+      commitSha = await gitStorage.getBranchHead(
+        params.organizationId,
+        design.repoId,
+        design.branch,
+      );
+    }
+    if (!commitSha) return 0;
+
+    const archive = await gitStorage.archiveTreeAtCommit(
+      params.organizationId,
+      design.repoId,
+      commitSha,
+    );
+    const { files } = await parseGitTreeArchive(archive);
+    const destRoot = `.trace/designs/${params.slug}`;
+    let written = 0;
+    for (const [path, content] of files) {
+      if (!isDesignSourcePath(path)) continue;
+      await sessionRouter.writeFile(
+        params.runtimeId,
+        params.sessionId,
+        this.normalizeFilePath(`${destRoot}/${path}`),
+        content.toString("utf-8"),
+        params.workdirHint,
+      );
+      written += 1;
+    }
+    return written;
+  }
+
+  // Copy a design's source into a session's workspace and message the agent to
+  // implement it. When the workspace is already live the copy happens inline;
+  // otherwise the design rides along on the kickoff message's pending command
+  // and is materialized once the runtime is provisioned (deliverPendingCommand).
+  async attachDesignToSession({
+    sessionId,
+    designSessionGroupId,
+    organizationId,
+    userId,
+    actorType,
+    clientSource,
+  }: {
+    sessionId: string;
+    designSessionGroupId: string;
+    organizationId: string;
+    userId: string;
+    actorType: ActorType;
+    clientSource?: string | null;
+  }) {
+    const session = await prisma.session.findFirst({
+      where: { id: sessionId, organizationId },
+      select: { id: true, sessionGroupId: true, workdir: true, worktreeDeleted: true },
+    });
+    if (!session) throw new ValidationError("Session not found");
+    if (!session.sessionGroupId) {
+      throw new ValidationError("Session is not part of a session group");
+    }
+    if (session.worktreeDeleted) {
+      throw new ValidationError("Cannot attach a design: session worktree has been deleted");
+    }
+
+    const design = await this.resolveDesignArtifact(designSessionGroupId, organizationId, userId);
+    const destRoot = `.trace/designs/${design.slug}`;
+    const text = this.buildDesignImplementationPrompt(design.name, destRoot);
+
+    if (session.workdir) {
+      const runtime = await this.resolveAccessibleSessionGroupRuntime(
+        session.sessionGroupId,
+        organizationId,
+        userId,
+        { requireWrite: true },
+      );
+      await this.copyDesignSourceIntoWorkspace({
+        designSessionGroupId,
+        slug: design.slug,
+        organizationId,
+        runtimeId: runtime.runtimeId,
+        sessionId: runtime.sessionId,
+        workdirHint: runtime.workdirHint,
+      });
+      return this.sendMessage({ sessionId, text, actorType, actorId: userId, clientSource });
+    }
+
+    return this.sendMessage({
+      sessionId,
+      text,
+      actorType,
+      actorId: userId,
+      clientSource,
+      designAttachments: [
+        { designSessionGroupId, slug: design.slug, designName: design.name },
+      ],
+    });
+  }
+
   async updatePdfFormat(
     sessionGroupId: string,
     value: unknown,
@@ -10303,6 +10526,7 @@ export class SessionService {
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
+        designAttachments: parseDesignAttachments(pending.designAttachments),
       };
     }
     if (pending.type === "run" || pending.type == null) {
@@ -10315,6 +10539,7 @@ export class SessionService {
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
+        designAttachments: parseDesignAttachments(pending.designAttachments),
       };
     }
     return null;
@@ -10524,6 +10749,34 @@ export class SessionService {
       checkpointContext?: GitCheckpointContext;
       imageUrls?: string[];
     };
+
+    // Materialize any attached designs into the freshly-provisioned workspace
+    // before the kickoff prompt runs, so the agent sees the files it references.
+    if (pending.designAttachments?.length && session.workdir) {
+      const runtimeId =
+        this.getConnectionRuntimeInstanceId(session.connection) ??
+        sessionRouter.getRuntimeForSession(sessionId)?.id ??
+        null;
+      if (runtimeId) {
+        for (const ref of pending.designAttachments) {
+          try {
+            await this.copyDesignSourceIntoWorkspace({
+              designSessionGroupId: ref.designSessionGroupId,
+              slug: ref.slug,
+              organizationId: session.organizationId,
+              runtimeId,
+              sessionId,
+              workdirHint: session.workdir,
+            });
+          } catch (error) {
+            console.error(
+              `[attachDesign] Failed to materialize design ${ref.designSessionGroupId} for session ${sessionId}:`,
+              error,
+            );
+          }
+        }
+      }
+    }
 
     const conn = this.parseConnection(session.connection);
     const deliveryResult = sessionRouter.send(sessionId, command, {

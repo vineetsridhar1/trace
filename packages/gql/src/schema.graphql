@@ -1863,6 +1863,13 @@ type Mutation {
     interactionMode: String
     clientMutationId: String
   ): Event!
+  """
+  Copy the source of a design-kind session group into the target session's
+  workspace (under .trace/designs/<slug>/) and message the agent to implement
+  it. Repeatable — used from the empty-state "Implement these designs" box and
+  mid-session. Returns the message Event that kicks off the agent.
+  """
+  attachDesignToSession(sessionId: ID!, designSessionGroupId: ID!): Event!
   queueSessionMessage(
     sessionId: ID!
     text: String!

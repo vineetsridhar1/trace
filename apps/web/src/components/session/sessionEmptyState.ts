@@ -1,6 +1,14 @@
+export type SessionStarterAction = "pick-design";
+
 export interface SessionStarterPrompt {
   label: string;
   prompt: string;
+  /**
+   * When set, clicking the box opens an in-app flow instead of prefilling the
+   * composer with `prompt`. "pick-design" opens the design picker to attach a
+   * design for the agent to implement.
+   */
+  action?: SessionStarterAction;
 }
 
 export interface SessionEmptyStateContent {
@@ -17,6 +25,11 @@ const CODING_EMPTY_STATE: SessionEmptyStateContent = {
   placeholder: "What should the agent work on?",
   sendStarterImmediately: true,
   starterPrompts: [
+    {
+      label: "Implement a design",
+      prompt: "",
+      action: "pick-design",
+    },
     {
       label: "Explain this codebase",
       prompt: "Give me a high-level tour of how this codebase is organized.",
@@ -38,6 +51,11 @@ const APP_EMPTY_STATE: SessionEmptyStateContent = {
   placeholder: "Describe the app you want to build…",
   sendStarterImmediately: false,
   starterPrompts: [
+    {
+      label: "Implement a design",
+      prompt: "",
+      action: "pick-design",
+    },
     {
       label: "Create an operations dashboard",
       prompt:
