@@ -34,6 +34,7 @@ import type {
   BridgeAnimationExportCommand,
 } from "@trace/shared";
 import { prisma } from "./db.js";
+import { isGeneratedProjectKind } from "./generated-project.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { ProvisionedLauncherError, runtimeAdapterRegistry } from "./runtime-adapters.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
@@ -2140,13 +2141,7 @@ export class SessionRouter {
           await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
         }
 
-        if (
-          options.sessionGroupKind === "app" ||
-          options.sessionGroupKind === "design" ||
-          options.sessionGroupKind === "design_system" ||
-          options.sessionGroupKind === "pdf" ||
-          options.sessionGroupKind === "animation"
-        ) {
+        if (isGeneratedProjectKind(options.sessionGroupKind)) {
           const runtimeInstanceId = startResult.runtimeInstanceId;
           if (!runtimeInstanceId || !options.prepareAppGit) {
             options.onFailed("Generated project managed git credentials are unavailable");

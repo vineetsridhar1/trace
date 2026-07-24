@@ -1,3 +1,5 @@
+import { isCreatableGeneratedProjectKind } from "../sidebar/generated-project-types";
+
 export interface SessionStarterPrompt {
   label: string;
   prompt: string;
@@ -125,5 +127,5 @@ export function getSessionEmptyStateContent(
 }
 
 export function isGeneratedProjectKind(kind: string | null | undefined): boolean {
-  return kind === "app" || kind === "design" || kind === "pdf" || kind === "animation";
+  return isCreatableGeneratedProjectKind(kind);
 }

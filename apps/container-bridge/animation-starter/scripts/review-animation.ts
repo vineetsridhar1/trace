@@ -61,7 +61,13 @@ try {
   // "networkidle" never fires here: Vite's dev server keeps an HMR WebSocket
   // open indefinitely, so the network is never idle. "load" is sufficient
   // since this is a plain client-rendered SPA with no lazy data fetching.
-  await page.goto(baseUrl, { waitUntil: "load" });
+  try {
+    await page.goto(baseUrl, { waitUntil: "load" });
+  } catch (error) {
+    throw new Error(
+      `Could not reach the dev server at ${baseUrl} — is it still running on port 3000? (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
   await page.waitForTimeout(300);
   await page.screenshot({ path: join(outputDir, "01-initial.png") });
 

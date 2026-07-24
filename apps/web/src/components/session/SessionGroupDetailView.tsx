@@ -472,12 +472,10 @@ export function SessionGroupDetailView({
     liveGeneratedProjectCanvasReady ||
     ((groupKind === "design" || groupKind === "design_system") &&
       hasSavedDesignPreview(groupDesignPreviewUrl, groupGitCheckpoints));
+  // Animation sessions share app's live-container readiness semantics (agent
+  // status + connection state, no saved-preview special case), so this same
+  // value is reused for both rather than recomputed.
   const appCanvasReady = isAppCanvasReady(
-    selectedSession?.agentStatus,
-    selectedConnection?.state,
-    groupConnection?.state,
-  );
-  const animationCanvasReady = isAppCanvasReady(
     selectedSession?.agentStatus,
     selectedConnection?.state,
     groupConnection?.state,
@@ -1043,7 +1041,7 @@ export function SessionGroupDetailView({
                       onScrollComplete={handleScrollComplete}
                       onForkSession={handleOpenForkDialog}
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
-                      canvasReady={animationCanvasReady}
+                      canvasReady={appCanvasReady}
                       canvasKey="animation-canvas"
                       canvas={
                         <SessionGroupContentArea

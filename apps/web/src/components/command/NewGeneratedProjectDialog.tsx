@@ -23,8 +23,8 @@ import {
   ResponsiveDialogTitle,
 } from "../ui/responsive-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import type { CreatableGeneratedProjectKind } from "../sidebar/generated-project-types";
 
-type GeneratedProjectKind = "app" | "design" | "pdf" | "animation";
 const DESIGN_SYSTEMS_QUERY = gql`
   query DesignCreationOptions($organizationId: ID!) {
     repos(organizationId: $organizationId) {
@@ -51,7 +51,7 @@ const CREATE_SYSTEM = gql`
   }
 `;
 const OPTIONS: Array<{
-  kind: GeneratedProjectKind;
+  kind: CreatableGeneratedProjectKind;
   title: string;
   description: string;
   Icon: typeof AppWindow;
@@ -117,7 +117,7 @@ export function NewGeneratedProjectDialog() {
   const selectedRepo = repos.find((repo) => repo.id === repoId);
 
   const createImmediate = useCallback(
-    (nextKind: "app" | "design" | "pdf" | "animation") => {
+    (nextKind: CreatableGeneratedProjectKind) => {
       close();
       void (nextKind === "app"
         ? createAppSession()
@@ -181,7 +181,7 @@ export function NewGeneratedProjectDialog() {
     navigateToSessionGroup(null, pendingAuthoringGroupId, session?.id ?? null);
   }, [close, pendingAuthoringGroupId, sessionGroups, sessions]);
 
-  const choose = (nextKind: GeneratedProjectKind) => createImmediate(nextKind);
+  const choose = (nextKind: CreatableGeneratedProjectKind) => createImmediate(nextKind);
   const submitSystem = async () => {
     if (!name.trim() || !repoId) return;
     setSubmitting(true);

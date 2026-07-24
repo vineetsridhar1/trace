@@ -2,9 +2,10 @@ import { toast } from "sonner";
 import { client } from "./urql";
 import { START_SESSION_MUTATION, useEntityStore } from "@trace/client-core";
 import { navigateToSession, navigateToSessionGroup } from "../stores/ui";
+import type { CreatableGeneratedProjectKind } from "../components/sidebar/generated-project-types";
 
 const pendingQuickSessionChannels = new Set<string>();
-const pendingGeneratedProjectKinds = new Set<"app" | "design" | "pdf" | "animation">();
+const pendingGeneratedProjectKinds = new Set<CreatableGeneratedProjectKind>();
 
 export function getChannelRepoId(channelId: string): string | undefined {
   const channel = useEntityStore.getState().channels[channelId];
@@ -81,7 +82,7 @@ export async function createAppSession(): Promise<boolean> {
 }
 
 export function buildGeneratedProjectStartInput(
-  kind: "app" | "design" | "pdf" | "animation",
+  kind: CreatableGeneratedProjectKind,
   designSystemVersionId?: string,
 ) {
   return {
@@ -104,7 +105,7 @@ export async function createAnimationSession(): Promise<boolean> {
 }
 
 async function createGeneratedProjectSession(
-  kind: "app" | "design" | "pdf" | "animation",
+  kind: CreatableGeneratedProjectKind,
   designSystemVersionId?: string,
 ): Promise<boolean> {
   if (pendingGeneratedProjectKinds.has(kind)) return false;
