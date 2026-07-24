@@ -9773,7 +9773,7 @@ export class SessionService {
     );
     const { files } = await parseGitTreeArchive(archive);
     const destRoot = `.trace/designs/${params.slug}`;
-    let written = 0;
+    const writes: Array<{ path: string; text: string }> = [];
     for (const [path, content] of files) {
       if (!isDesignSourcePath(path)) continue;
       const text = content.toString("utf-8");
@@ -9781,16 +9781,22 @@ export class SessionService {
       // binary asset would be silently corrupted. The design subtree is text
       // today; this just keeps the copy honest if that ever changes.
       if (!Buffer.from(text, "utf-8").equals(content)) continue;
-      await sessionRouter.writeFile(
-        params.runtimeId,
-        params.sessionId,
-        this.normalizeFilePath(`${destRoot}/${path}`),
-        text,
-        params.workdirHint,
-      );
-      written += 1;
+      writes.push({ path, text });
     }
-    return written;
+    // Write in parallel — each file is an independent bridge round-trip, so a
+    // serial loop makes attach latency scale with the file count.
+    await Promise.all(
+      writes.map((write) =>
+        sessionRouter.writeFile(
+          params.runtimeId,
+          params.sessionId,
+          this.normalizeFilePath(`${destRoot}/${write.path}`),
+          write.text,
+          params.workdirHint,
+        ),
+      ),
+    );
+    return writes.length;
   }
 
   // Copy a design's source into a session's workspace and message the agent to
@@ -9814,7 +9820,14 @@ export class SessionService {
   }) {
     const session = await prisma.session.findFirst({
       where: { id: sessionId, organizationId },
-      select: { id: true, sessionGroupId: true, workdir: true, worktreeDeleted: true },
+      select: {
+        id: true,
+        sessionGroupId: true,
+        workdir: true,
+        worktreeDeleted: true,
+        sessionStatus: true,
+        pendingRun: true,
+      },
     });
     if (!session) throw new ValidationError("Session not found");
     if (!session.sessionGroupId) {
@@ -9827,39 +9840,65 @@ export class SessionService {
     const design = await this.resolveDesignArtifact(designSessionGroupId, organizationId, userId);
     const destRoot = `.trace/designs/${design.slug}`;
     const text = this.buildDesignImplementationPrompt(design.name, destRoot);
+    const designAttachments = [
+      { designSessionGroupId, slug: design.slug, designName: design.name },
+    ];
 
-    if (session.workdir) {
-      const runtime = await this.resolveAccessibleSessionGroupRuntime(
-        session.sessionGroupId,
-        organizationId,
-        userId,
-        { requireWrite: true },
-      );
-      const written = await this.copyDesignSourceIntoWorkspace({
-        organizationId,
-        repoId: design.repoId,
-        commitSha: design.commitSha,
-        slug: design.slug,
-        runtimeId: runtime.runtimeId,
-        sessionId: runtime.sessionId,
-        workdirHint: runtime.workdirHint,
+    // Not provisioned yet: the kickoff message provisions the runtime and the
+    // design rides along on the pending command, materialized once ready.
+    if (!session.workdir) {
+      return this.sendMessage({
+        sessionId,
+        text,
+        actorType,
+        actorId: userId,
+        clientSource,
+        designAttachments,
       });
-      if (written === 0) {
-        throw new ValidationError("This design has no source files to implement yet");
-      }
-      return this.sendMessage({ sessionId, text, actorType, actorId: userId, clientSource });
     }
 
-    return this.sendMessage({
+    // Live workspace: show the message and mark the session working immediately,
+    // then copy (in parallel) and deliver via the pending pipeline. The agent
+    // still can't start before the files land, but the UI reflects progress
+    // right away instead of blocking on the copy.
+    const runningStatus = getRunningSessionStatus(session.sessionStatus);
+    const pendingCommand: PendingSessionCommand = {
+      type: "send",
+      prompt: text,
+      interactionMode: null,
+      clientSource: normalizeClientSource(clientSource),
+      checkpointContext: null,
+      designAttachments,
+    };
+    await this.storePendingCommand(
       sessionId,
-      text,
+      pendingCommand,
+      {
+        agentStatus: "active",
+        sessionStatus: runningStatus,
+        lastMessageAt: new Date(),
+        lastUserMessageAt: new Date(),
+      },
+      session.pendingRun,
+    );
+    const event = await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "message_sent",
+      payload: {
+        text,
+        clientSource: normalizeClientSource(clientSource),
+        agentStatus: "active",
+        sessionStatus: runningStatus,
+      },
       actorType,
       actorId: userId,
-      clientSource,
-      designAttachments: [
-        { designSessionGroupId, slug: design.slug, designName: design.name },
-      ],
     });
+    void this.deliverPendingCommand(sessionId, pendingRunValue([pendingCommand])).catch((error) => {
+      console.error(`[attachDesign] delivery failed for session ${sessionId}:`, error);
+    });
+    return event;
   }
 
   async updatePdfFormat(
