@@ -18,8 +18,72 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ── Trace dark theme ── */
+/* ── Trace light theme (default tokens; dark overrides via .dark) ── */
 :root {
+  color-scheme: light;
+
+  --background: #ffffff;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: #3f3f46;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #3b82f6;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #3b82f6;
+  --radius: 0.5rem;
+
+  --chart-1: #3b82f6;
+  --chart-2: #2563eb;
+  --chart-3: #1d4ed8;
+  --chart-4: #60a5fa;
+  --chart-5: #93c5fd;
+
+  --sidebar: rgb(250 250 250 / 0.92);
+  --sidebar-dm: rgb(239 246 255 / 0.85);
+  --sidebar-foreground: #18181b;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f4f4f5;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #3b82f6;
+
+  /* Trace semantic tokens */
+  --th-surface: #ffffff;
+  --th-surface-mid: #fafafa;
+  --th-surface-deep: #f4f4f5;
+  --th-surface-elevated: #ffffff;
+  --th-surface-hover: #e4e4e7;
+  --th-primary: #3f3f46;
+  --th-muted: #71717a;
+  --th-heading: #18181b;
+  --th-faint: #a1a1aa;
+  --th-on-accent: #ffffff;
+  --th-edge: #e4e4e7;
+  --th-edge-hover: #d4d4d8;
+  --th-accent: #3b82f6;
+  --th-accent-light: #60a5fa;
+  --th-accent-tint: #3b82f61a;
+  --th-hover-rgb: 228, 228, 231;
+  --th-code-bg: #f4f4f5;
+  --trace-window-bg: rgb(244 244 245 / 0.86);
+  --trace-css-revision: 20260724;
+}
+
+/* ── Trace dark theme ── */
+.dark {
+  color-scheme: dark;
+
   --background: #171717;
   --foreground: #d4d4d8;
   --card: #262626;
@@ -38,7 +102,6 @@
   --border: #262626;
   --input: #262626;
   --ring: #3b82f6;
-  --radius: 0.5rem;
 
   --chart-1: #3b82f6;
   --chart-2: #60a5fa;
@@ -56,7 +119,6 @@
   --sidebar-border: #262626;
   --sidebar-ring: #3b82f6;
 
-  /* Trace semantic tokens */
   --th-surface: #171717;
   --th-surface-mid: #111111;
   --th-surface-deep: #0a0a0a;
@@ -75,7 +137,6 @@
   --th-hover-rgb: 38, 38, 38;
   --th-code-bg: #0a0a0a;
   --trace-window-bg: rgb(39 39 42 / 0.74);
-  --trace-css-revision: 20260702;
 }
 
 @theme inline {

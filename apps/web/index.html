@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -11,6 +11,21 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Trace</title>
+    <script>
+      (() => {
+        try {
+          const theme = localStorage.getItem("trace:theme");
+          const resolved = theme === "light" ? "light" : "dark";
+          document.documentElement.classList.toggle("dark", resolved === "dark");
+          document.documentElement.style.colorScheme = resolved;
+          const meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", resolved === "dark" ? "#0A0A0B" : "#F4F4F5");
+        } catch {
+          document.documentElement.classList.add("dark");
+          document.documentElement.style.colorScheme = "dark";
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

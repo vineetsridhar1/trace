@@ -7,6 +7,7 @@ import {
   OctagonXIcon,
 } from "lucide-react";
 import { TraceLoader } from "./trace-loader";
+import { useThemeStore } from "../../stores/theme";
 
 const icons = {
   success: <CircleCheckIcon className="size-4" />,
@@ -24,9 +25,11 @@ const toasterStyle = {
 } as CSSProperties;
 
 const Toaster = ({ ...props }: ToasterProps) => {
+  const theme = useThemeStore((s) => s.theme);
+
   return (
     <Sonner
-      theme="dark"
+      theme={theme}
       className="toaster group"
       icons={icons}
       style={toasterStyle}

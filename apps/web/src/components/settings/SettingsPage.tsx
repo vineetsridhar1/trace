@@ -10,6 +10,7 @@ import {
   ServerCog,
   KeyRound,
   Plug,
+  Palette,
 } from "lucide-react";
 import { useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
@@ -24,10 +25,12 @@ import { AgentEnvironmentsSection } from "./AgentEnvironmentsSection";
 import { OrgSecretsSection } from "./OrgSecretsSection";
 import { ConnectionsSection } from "./ConnectionsSection";
 import { IntegrationsSection } from "./IntegrationsSection";
+import { AppearanceSection } from "./AppearanceSection";
 import { isLocalMode } from "../../lib/runtime-mode";
 
 type SettingsTab =
   | "repositories"
+  | "appearance"
   | "session-defaults"
   | "notifications"
   | "api-keys"
@@ -43,6 +46,7 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "repositories", label: "Repositories", icon: GitBranch },
   { id: "connections", label: "Connections", icon: Plug },
   { id: "members", label: "Members", icon: Users },
+  { id: "appearance", label: "Appearance", icon: Palette },
   { id: "session-defaults", label: "Session Defaults", icon: SlidersHorizontal },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "api-keys", label: "API Keys", icon: Key },
@@ -133,6 +137,7 @@ export function SettingsPage() {
             {activeTab === "repositories" && <RepositoriesSection />}
             {activeTab === "connections" && <ConnectionsSection />}
             {activeTab === "members" && <MembersSection />}
+            {activeTab === "appearance" && <AppearanceSection />}
             {activeTab === "session-defaults" && <SessionDefaultsSection />}
             {activeTab === "notifications" && <NotificationsSection />}
             {activeTab === "api-keys" && <ApiTokensSection />}
