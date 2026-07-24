@@ -335,6 +335,20 @@ export type CreateRepoInput = {
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateServiceAccessTokenInput = {
+  expiresAt?: InputMaybe<Scalars["DateTime"]["input"]>;
+  name: Scalars["String"]["input"];
+  organizationId: Scalars["ID"]["input"];
+  scopes: Array<ServiceApiScope>;
+};
+
+export type CreateServiceAccessTokenPayload = {
+  __typename?: "CreateServiceAccessTokenPayload";
+  serviceAccessToken: ServiceAccessToken;
+  /** Raw bearer token. Returned only by createServiceAccessToken. */
+  token: Scalars["String"]["output"];
+};
+
 export type CreateTicketInput = {
   assigneeIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -691,6 +705,8 @@ export type EventType =
   | "queued_messages_reordered"
   | "repo_created"
   | "repo_updated"
+  | "service_access_token_created"
+  | "service_access_token_revoked"
   | "session_application_log_appended"
   | "session_application_process_failed"
   | "session_application_process_started"
@@ -926,6 +942,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createServiceAccessToken: CreateServiceAccessTokenPayload;
   createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
@@ -981,6 +998,7 @@ export type Mutation = {
   retrySessionGroupSetup: SessionGroup;
   revertSessionGroupFileChange: Scalars["Boolean"]["output"];
   revokeBridgeAccessGrant: BridgeAccessGrant;
+  revokeServiceAccessToken: Scalars["Boolean"]["output"];
   rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
@@ -996,6 +1014,7 @@ export type Mutation = {
   setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
+  startServiceSession: ServiceSessionStatus;
   startSession: Session;
   startSessionApplication: Array<SessionApplicationProcess>;
   startSessionProcess: SessionApplicationProcess;
@@ -1131,6 +1150,10 @@ export type MutationCreateProjectArgs = {
 
 export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
+};
+
+export type MutationCreateServiceAccessTokenArgs = {
+  input: CreateServiceAccessTokenInput;
 };
 
 export type MutationCreateSessionEndpointPreviewArgs = {
@@ -1380,6 +1403,10 @@ export type MutationRevokeBridgeAccessGrantArgs = {
   grantId: Scalars["ID"]["input"];
 };
 
+export type MutationRevokeServiceAccessTokenArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationRotateSessionEndpointArgs = {
   endpointId: Scalars["ID"]["input"];
 };
@@ -1462,6 +1489,10 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
 
 export type MutationSetOrgSecretArgs = {
   input: SetOrgSecretInput;
+};
+
+export type MutationStartServiceSessionArgs = {
+  input: StartServiceSessionInput;
 };
 
 export type MutationStartSessionArgs = {
@@ -1758,6 +1789,8 @@ export type Query = {
   searchMessages: Array<MessageSearchHit>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
+  serviceAccessTokens: Array<ServiceAccessToken>;
+  serviceSessionStatus?: Maybe<ServiceSessionStatus>;
   session?: Maybe<Session>;
   sessionApplicationLogs: Array<SessionApplicationLogEntry>;
   sessionApplicationProcesses: Array<SessionApplicationProcess>;
@@ -1990,6 +2023,14 @@ export type QuerySearchSessionsArgs = {
 
 export type QuerySearchUsersArgs = {
   query: Scalars["String"]["input"];
+};
+
+export type QueryServiceAccessTokensArgs = {
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryServiceSessionStatusArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type QuerySessionArgs = {
@@ -2263,6 +2304,33 @@ export type ScopeInput = {
 };
 
 export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
+
+export type ServiceAccessToken = {
+  __typename?: "ServiceAccessToken";
+  createdAt: Scalars["DateTime"]["output"];
+  createdBy?: Maybe<User>;
+  createdById?: Maybe<Scalars["ID"]["output"]>;
+  expiresAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  lastUsedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  revokedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  scopes: Array<ServiceApiScope>;
+  tokenPrefix: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ServiceApiScope = "sessions_start" | "sessions_status_read";
+
+export type ServiceSessionStatus = {
+  __typename?: "ServiceSessionStatus";
+  agentStatus: AgentStatus;
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  sessionStatus: SessionStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
 
 export type Session = {
   __typename?: "Session";
@@ -2600,6 +2668,20 @@ export type SlashCommandCategory = "passthrough" | "special" | "terminal";
 
 export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
 
+export type StartServiceSessionInput = {
+  branch?: InputMaybe<Scalars["String"]["input"]>;
+  channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  idempotencyKey: Scalars["String"]["input"];
+  interactionMode?: InputMaybe<Scalars["String"]["input"]>;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectId?: InputMaybe<Scalars["ID"]["input"]>;
+  prompt: Scalars["String"]["input"];
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+  ticketId?: InputMaybe<Scalars["ID"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
+};
+
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -2929,6 +3011,8 @@ export type ResolversTypes = ResolversObject<{
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
+  CreateServiceAccessTokenInput: CreateServiceAccessTokenInput;
+  CreateServiceAccessTokenPayload: ResolverTypeWrapper<CreateServiceAccessTokenPayload>;
   CreateTicketInput: CreateTicketInput;
   DateTime: ResolverTypeWrapper<Scalars["DateTime"]["output"]>;
   DeliveryResult: DeliveryResult;
@@ -3002,6 +3086,9 @@ export type ResolversTypes = ResolversObject<{
   RepoWorktree: ResolverTypeWrapper<RepoWorktree>;
   ScopeInput: ScopeInput;
   ScopeType: ScopeType;
+  ServiceAccessToken: ResolverTypeWrapper<ServiceAccessToken>;
+  ServiceApiScope: ServiceApiScope;
+  ServiceSessionStatus: ResolverTypeWrapper<ServiceSessionStatus>;
   Session: ResolverTypeWrapper<Session>;
   SessionApplicationLogEntry: ResolverTypeWrapper<SessionApplicationLogEntry>;
   SessionApplicationProcess: ResolverTypeWrapper<SessionApplicationProcess>;
@@ -3037,6 +3124,7 @@ export type ResolversTypes = ResolversObject<{
   SlashCommand: ResolverTypeWrapper<SlashCommand>;
   SlashCommandCategory: SlashCommandCategory;
   SlashCommandSource: SlashCommandSource;
+  StartServiceSessionInput: StartServiceSessionInput;
   StartSessionInput: StartSessionInput;
   String: ResolverTypeWrapper<Scalars["String"]["output"]>;
   Subscription: ResolverTypeWrapper<{}>;
@@ -3089,6 +3177,8 @@ export type ResolversParentTypes = ResolversObject<{
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
+  CreateServiceAccessTokenInput: CreateServiceAccessTokenInput;
+  CreateServiceAccessTokenPayload: CreateServiceAccessTokenPayload;
   CreateTicketInput: CreateTicketInput;
   DateTime: Scalars["DateTime"]["output"];
   DesignElementStyleEditResult: DesignElementStyleEditResult;
@@ -3145,6 +3235,8 @@ export type ResolversParentTypes = ResolversObject<{
   RepoSetupScriptInput: RepoSetupScriptInput;
   RepoWorktree: RepoWorktree;
   ScopeInput: ScopeInput;
+  ServiceAccessToken: ServiceAccessToken;
+  ServiceSessionStatus: ServiceSessionStatus;
   Session: Session;
   SessionApplicationLogEntry: SessionApplicationLogEntry;
   SessionApplicationProcess: SessionApplicationProcess;
@@ -3167,6 +3259,7 @@ export type ResolversParentTypes = ResolversObject<{
   SetCodexCredentialInput: SetCodexCredentialInput;
   SetOrgSecretInput: SetOrgSecretInput;
   SlashCommand: SlashCommand;
+  StartServiceSessionInput: StartServiceSessionInput;
   StartSessionInput: StartSessionInput;
   String: Scalars["String"]["output"];
   Subscription: {};
@@ -3454,6 +3547,16 @@ export type ConnectionsRepoEntryResolvers<
   linkedCheckout?: Resolver<Maybe<ResolversTypes["LinkedCheckoutStatus"]>, ParentType, ContextType>;
   repo?: Resolver<ResolversTypes["Repo"], ParentType, ContextType>;
   runScripts?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type CreateServiceAccessTokenPayloadResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["CreateServiceAccessTokenPayload"] =
+    ResolversParentTypes["CreateServiceAccessTokenPayload"],
+> = ResolversObject<{
+  serviceAccessToken?: Resolver<ResolversTypes["ServiceAccessToken"], ParentType, ContextType>;
+  token?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -4056,6 +4159,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationCreateRepoArgs, "input">
   >;
+  createServiceAccessToken?: Resolver<
+    ResolversTypes["CreateServiceAccessTokenPayload"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateServiceAccessTokenArgs, "input">
+  >;
   createSessionEndpointPreview?: Resolver<
     ResolversTypes["SessionEndpointPreview"],
     ParentType,
@@ -4378,6 +4487,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationRevokeBridgeAccessGrantArgs, "grantId">
   >;
+  revokeServiceAccessToken?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationRevokeServiceAccessTokenArgs, "id">
+  >;
   rotateSessionEndpoint?: Resolver<
     ResolversTypes["SessionEndpoint"],
     ParentType,
@@ -4467,6 +4582,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationSetOrgSecretArgs, "input">
+  >;
+  startServiceSession?: Resolver<
+    ResolversTypes["ServiceSessionStatus"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationStartServiceSessionArgs, "input">
   >;
   startSession?: Resolver<
     ResolversTypes["Session"],
@@ -5016,6 +5137,18 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QuerySearchUsersArgs, "query">
   >;
+  serviceAccessTokens?: Resolver<
+    Array<ResolversTypes["ServiceAccessToken"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryServiceAccessTokensArgs, "organizationId">
+  >;
+  serviceSessionStatus?: Resolver<
+    Maybe<ResolversTypes["ServiceSessionStatus"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryServiceSessionStatusArgs, "id">
+  >;
   session?: Resolver<
     Maybe<ResolversTypes["Session"]>,
     ParentType,
@@ -5284,6 +5417,39 @@ export type RepoWorktreeResolvers<
   isMain?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   isTraceManaged?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   path?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ServiceAccessTokenResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ServiceAccessToken"] =
+    ResolversParentTypes["ServiceAccessToken"],
+> = ResolversObject<{
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdBy?: Resolver<Maybe<ResolversTypes["User"]>, ParentType, ContextType>;
+  createdById?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  expiresAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  lastUsedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  revokedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  scopes?: Resolver<Array<ResolversTypes["ServiceApiScope"]>, ParentType, ContextType>;
+  tokenPrefix?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ServiceSessionStatusResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ServiceSessionStatus"] =
+    ResolversParentTypes["ServiceSessionStatus"],
+> = ResolversObject<{
+  agentStatus?: Resolver<ResolversTypes["AgentStatus"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sessionStatus?: Resolver<ResolversTypes["SessionStatus"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -5802,6 +5968,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   CollapsedSessionEvents?: CollapsedSessionEventsResolvers<ContextType>;
   ConnectionsBridge?: ConnectionsBridgeResolvers<ContextType>;
   ConnectionsRepoEntry?: ConnectionsRepoEntryResolvers<ContextType>;
+  CreateServiceAccessTokenPayload?: CreateServiceAccessTokenPayloadResolvers<ContextType>;
   DateTime?: GraphQLScalarType;
   DesignElementStyleEditResult?: DesignElementStyleEditResultResolvers<ContextType>;
   DesignElementStyleSource?: DesignElementStyleSourceResolvers<ContextType>;
@@ -5842,6 +6009,8 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   RepoProcessDefinition?: RepoProcessDefinitionResolvers<ContextType>;
   RepoSetupScript?: RepoSetupScriptResolvers<ContextType>;
   RepoWorktree?: RepoWorktreeResolvers<ContextType>;
+  ServiceAccessToken?: ServiceAccessTokenResolvers<ContextType>;
+  ServiceSessionStatus?: ServiceSessionStatusResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;
   SessionApplicationLogEntry?: SessionApplicationLogEntryResolvers<ContextType>;
   SessionApplicationProcess?: SessionApplicationProcessResolvers<ContextType>;

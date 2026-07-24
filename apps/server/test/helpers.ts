@@ -111,6 +111,14 @@ export function createPrismaMock() {
       upsert: vi.fn(),
       updateMany: vi.fn(),
     },
+    serviceAccessToken: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      findMany: vi.fn(),
+      updateMany: vi.fn(),
+    },
     event: {
       create: vi.fn(),
       count: vi.fn(),

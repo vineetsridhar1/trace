@@ -9,7 +9,9 @@ import {
   ServerCog,
   KeyRound,
   Plug,
+  ShieldCheck,
 } from "lucide-react";
+import { useAuthStore } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
 import { cn } from "../../lib/utils";
 import { RepositoriesSection } from "./RepositoriesSection";
@@ -21,6 +23,7 @@ import { BridgeAccessSection } from "./BridgeAccessSection";
 import { AgentEnvironmentsSection } from "./AgentEnvironmentsSection";
 import { OrgSecretsSection } from "./OrgSecretsSection";
 import { IntegrationsSection } from "./IntegrationsSection";
+import { ServiceAccessTokensSection } from "./ServiceAccessTokensSection";
 import { isLocalMode } from "../../lib/runtime-mode";
 
 type SettingsTab =
@@ -32,7 +35,8 @@ type SettingsTab =
   | "bridge-access"
   | "agent-environments"
   | "org-secrets"
-  | "integrations";
+  | "integrations"
+  | "service-tokens";
 
 const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "repositories", label: "Repositories", icon: GitBranch },
@@ -43,6 +47,7 @@ const TABS: { id: SettingsTab; label: string; icon: typeof GitBranch }[] = [
   { id: "agent-environments", label: "Agent Environments", icon: ServerCog },
   { id: "org-secrets", label: "Org Secrets", icon: KeyRound },
   { id: "integrations", label: "Integrations", icon: Plug },
+  { id: "service-tokens", label: "Service Tokens", icon: ShieldCheck },
   { id: "channels", label: "Channels", icon: Code },
 ];
 
@@ -56,13 +61,20 @@ export function SettingsPage() {
   const settingsInitialTab = useUIStore((s) => s.settingsInitialTab);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
   const [activeTab, setActiveTab] = useState<SettingsTab>("repositories");
+  const canManageServiceTokens = useAuthStore((state) => {
+    const activeOrgId = state.activeOrgId;
+    return state.orgMemberships.some(
+      (membership) => membership.organizationId === activeOrgId && membership.role === "admin",
+    );
+  });
   const visibleTabs = useMemo(
     () =>
       TABS.filter((tab) => {
         if (tab.id === "api-keys") return !isLocalMode;
+        if (tab.id === "service-tokens") return !isLocalMode && canManageServiceTokens;
         return true;
       }),
-    [],
+    [canManageServiceTokens],
   );
 
   useEffect(() => {
@@ -88,7 +100,8 @@ export function SettingsPage() {
     activeTab === "bridge-access" ||
     activeTab === "agent-environments" ||
     activeTab === "org-secrets" ||
-    activeTab === "integrations"
+    activeTab === "integrations" ||
+    activeTab === "service-tokens"
       ? "mx-auto max-w-5xl"
       : "mx-auto max-w-2xl";
 
@@ -131,6 +144,7 @@ export function SettingsPage() {
             {activeTab === "org-secrets" && <OrgSecretsSection />}
             {activeTab === "integrations" && <IntegrationsSection />}
             {activeTab === "channels" && <ChannelsSection />}
+            {activeTab === "service-tokens" && <ServiceAccessTokensSection />}
           </div>
         </div>
       </div>

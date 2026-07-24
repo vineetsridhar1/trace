@@ -76,6 +76,9 @@ type Documents = {
   "\n  mutation TestAgentEnvironment($id: ID!) {\n    testAgentEnvironment(id: $id) {\n      ok\n      message\n    }\n  }\n": typeof types.TestAgentEnvironmentDocument;
   "\n  mutation SetOrgSecret($input: SetOrgSecretInput!) {\n    setOrgSecret(input: $input) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.SetOrgSecretDocument;
   "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n": typeof types.DeleteOrgSecretDocument;
+  "\n  query ServiceAccessTokens($organizationId: ID!) {\n    serviceAccessTokens(organizationId: $organizationId) {\n      id\n      organizationId\n      createdById\n      name\n      tokenPrefix\n      scopes\n      expiresAt\n      revokedAt\n      lastUsedAt\n      createdAt\n      updatedAt\n      createdBy {\n        id\n        name\n        email\n        avatarUrl\n      }\n    }\n  }\n": typeof types.ServiceAccessTokensDocument;
+  "\n  mutation CreateServiceAccessToken($input: CreateServiceAccessTokenInput!) {\n    createServiceAccessToken(input: $input) {\n      token\n    }\n  }\n": typeof types.CreateServiceAccessTokenDocument;
+  "\n  mutation RevokeServiceAccessToken($id: ID!) {\n    revokeServiceAccessToken(id: $id)\n  }\n": typeof types.RevokeServiceAccessTokenDocument;
   "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateRepoDocument;
   "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateDmDocument;
   "\n  query AppSessionGroups($organizationId: ID!) {\n    appSessionGroups(organizationId: $organizationId) {\n      id\n      name\n      slug\n      kind\n      status\n      visibility\n      connection {\n        state\n      }\n      sessions {\n        id\n        sessionGroupId\n        agentStatus\n        sessionStatus\n        prUrl\n        worktreeDeleted\n        lastMessageAt\n        lastUserMessageAt\n        updatedAt\n        createdAt\n      }\n    }\n  }\n": typeof types.AppSessionGroupsDocument;
@@ -243,6 +246,12 @@ const documents: Documents = {
     types.SetOrgSecretDocument,
   "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n":
     types.DeleteOrgSecretDocument,
+  "\n  query ServiceAccessTokens($organizationId: ID!) {\n    serviceAccessTokens(organizationId: $organizationId) {\n      id\n      organizationId\n      createdById\n      name\n      tokenPrefix\n      scopes\n      expiresAt\n      revokedAt\n      lastUsedAt\n      createdAt\n      updatedAt\n      createdBy {\n        id\n        name\n        email\n        avatarUrl\n      }\n    }\n  }\n":
+    types.ServiceAccessTokensDocument,
+  "\n  mutation CreateServiceAccessToken($input: CreateServiceAccessTokenInput!) {\n    createServiceAccessToken(input: $input) {\n      token\n    }\n  }\n":
+    types.CreateServiceAccessTokenDocument,
+  "\n  mutation RevokeServiceAccessToken($id: ID!) {\n    revokeServiceAccessToken(id: $id)\n  }\n":
+    types.RevokeServiceAccessTokenDocument,
   "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n":
     types.CreateRepoDocument,
   "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n":
@@ -713,6 +722,24 @@ export function graphql(
 export function graphql(
   source: "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n",
 ): (typeof documents)["\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query ServiceAccessTokens($organizationId: ID!) {\n    serviceAccessTokens(organizationId: $organizationId) {\n      id\n      organizationId\n      createdById\n      name\n      tokenPrefix\n      scopes\n      expiresAt\n      revokedAt\n      lastUsedAt\n      createdAt\n      updatedAt\n      createdBy {\n        id\n        name\n        email\n        avatarUrl\n      }\n    }\n  }\n",
+): (typeof documents)["\n  query ServiceAccessTokens($organizationId: ID!) {\n    serviceAccessTokens(organizationId: $organizationId) {\n      id\n      organizationId\n      createdById\n      name\n      tokenPrefix\n      scopes\n      expiresAt\n      revokedAt\n      lastUsedAt\n      createdAt\n      updatedAt\n      createdBy {\n        id\n        name\n        email\n        avatarUrl\n      }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation CreateServiceAccessToken($input: CreateServiceAccessTokenInput!) {\n    createServiceAccessToken(input: $input) {\n      token\n    }\n  }\n",
+): (typeof documents)["\n  mutation CreateServiceAccessToken($input: CreateServiceAccessTokenInput!) {\n    createServiceAccessToken(input: $input) {\n      token\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation RevokeServiceAccessToken($id: ID!) {\n    revokeServiceAccessToken(id: $id)\n  }\n",
+): (typeof documents)["\n  mutation RevokeServiceAccessToken($id: ID!) {\n    revokeServiceAccessToken(id: $id)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

@@ -27,6 +27,7 @@ function resetStores() {
     designSystems: {},
     designSystemCommitArtifacts: {},
     designSystemVersions: {},
+    serviceAccessTokens: {},
     eventsByScope: {},
     _eventIdsByScope: {},
     _sessionIdsByGroup: {},
@@ -139,6 +140,48 @@ beforeEach(() => {
 });
 
 describe("handleOrgEvent", () => {
+  it("upserts service token lifecycle events without exposing the secret", () => {
+    handleOrgEvent(
+      makeEvent({
+        eventType: "service_access_token_created",
+        scopeType: "system",
+        scopeId: "org-1",
+        payload: {
+          serviceAccessToken: {
+            id: "service-token-1",
+            organizationId: "org-1",
+            name: "deployment-daemon",
+            tokenPrefix: "trc_svc_example",
+            scopes: ["sessions_start"],
+            revokedAt: null,
+          },
+        },
+      }),
+    );
+    handleOrgEvent(
+      makeEvent({
+        eventType: "service_access_token_revoked",
+        scopeType: "system",
+        scopeId: "org-1",
+        payload: {
+          serviceAccessToken: {
+            id: "service-token-1",
+            organizationId: "org-1",
+            name: "deployment-daemon",
+            tokenPrefix: "trc_svc_example",
+            scopes: ["sessions_start"],
+            revokedAt: "2026-07-24T12:00:00.000Z",
+          },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().serviceAccessTokens["service-token-1"]).toMatchObject({
+      name: "deployment-daemon",
+      revokedAt: "2026-07-24T12:00:00.000Z",
+    });
+  });
+
   it("hydrates a design system authoring group from its creation event", () => {
     handleOrgEvent(
       makeEvent({

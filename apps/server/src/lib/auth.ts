@@ -1,13 +1,16 @@
 import type { ExpressContextFunctionArgument } from "@as-integrations/express5";
 import type { CookieOptions, Request, Response } from "express";
 import type { IncomingHttpHeaders } from "http";
+import { GraphQLError } from "graphql";
 import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
-import {
-  authenticateMobileSecret,
-  type MobileAuthSubject,
-} from "../services/mobile-auth.js";
+import { authenticateMobileSecret, type MobileAuthSubject } from "../services/mobile-auth.js";
 import { getCanonicalLocalOrganizationId } from "../services/local-bootstrap.js";
+import {
+  isServiceToken,
+  serviceAccessTokenService,
+  type ServiceAccessTokenSubject,
+} from "../services/service-access-token.js";
 import { AuthenticationError } from "./errors.js";
 import { prisma } from "./db.js";
 import { isLocalMode } from "./mode.js";
@@ -50,6 +53,7 @@ type SessionAuthSubject = {
 };
 
 export type AccessTokenAuthSubject = SessionAuthSubject | MobileAuthSubject;
+export type GraphqlAccessTokenAuthSubject = AccessTokenAuthSubject | ServiceAccessTokenSubject;
 
 type RequestAuthSource = {
   headers: IncomingHttpHeaders;
@@ -256,7 +260,20 @@ export async function authenticateAccessToken(
     };
   }
 
+  // Service credentials are opt-in. Non-GraphQL consumers use this function,
+  // so a service token must never fall through and inherit a user's access.
+  if (isServiceToken(token)) return null;
   return authenticateMobileSecret(token);
+}
+
+export async function authenticateGraphqlAccessToken(
+  token: string,
+  source: "authorization" | "cookie",
+): Promise<GraphqlAccessTokenAuthSubject | null> {
+  if (isServiceToken(token)) {
+    return source === "authorization" ? serviceAccessTokenService.authenticate(token) : null;
+  }
+  return authenticateAccessToken(token);
 }
 
 export function createBridgeAuthToken(input: {
@@ -336,23 +353,36 @@ async function getLocalModeOrgMembership(userId: string): Promise<{
 }
 
 export function getRequestToken(req: Pick<Request, "headers" | "cookies">): string | undefined {
-  const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith("Bearer ")) return authHeader.slice(7);
+  const bearerToken = readAuthorizationBearerToken(req.headers.authorization);
+  if (bearerToken) return bearerToken;
   return req.cookies?.trace_token ?? parseCookieToken(req.headers.cookie);
 }
 
-export async function buildContext({
-  req,
-  res,
-}: ExpressContextFunctionArgument): Promise<Context> {
-  let userId: string | undefined;
-  let authSubject: AccessTokenAuthSubject | null = null;
+function readAuthorizationBearerToken(value: string | string[] | undefined): string | undefined {
+  const header = Array.isArray(value) ? value[0] : value;
+  if (!header) return undefined;
+  const match = /^Bearer ([^ ]+)$/i.exec(header);
+  return match?.[1];
+}
 
-  // Accept token from Authorization header or cookie.
-  const token = getRequestToken(req);
+function serviceAuthenticationError(message: string): GraphQLError {
+  return new GraphQLError(message, {
+    extensions: { code: "UNAUTHENTICATED", http: { status: 401 } },
+  });
+}
+
+export async function buildContext({ req, res }: ExpressContextFunctionArgument): Promise<Context> {
+  let userId: string | undefined;
+  let authSubject: GraphqlAccessTokenAuthSubject | null = null;
+
+  const authorizationToken = readAuthorizationBearerToken(req.headers.authorization);
+  const cookieToken = req.cookies?.trace_token ?? parseCookieToken(req.headers.cookie);
+  const token = authorizationToken ?? cookieToken;
+  const tokenSource = authorizationToken ? "authorization" : "cookie";
   if (token) {
-    authSubject = await authenticateAccessToken(token);
+    authSubject = await authenticateGraphqlAccessToken(token, tokenSource);
     if (!authSubject) {
+      if (isServiceToken(token)) throw serviceAuthenticationError("Invalid token");
       throw new AuthenticationError("Invalid token");
     }
     userId = authSubject.userId;
@@ -390,23 +420,39 @@ export async function buildContext({
   let organizationId: string | null = null;
   let role: Context["role"] = null;
 
-  const localModeMembership = await getLocalModeOrgMembership(user.id);
-  if (localModeMembership) {
-    organizationId = localModeMembership.organizationId;
-    role = localModeMembership.role;
-  } else if (requestedOrgId) {
-    const membership = await resolveOrgMembership(user.id, requestedOrgId);
-    if (!membership) {
-      throw new AuthenticationError("Not a member of this organization");
+  if (authSubject?.kind === "service") {
+    if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
+      throw serviceAuthenticationError("Service token is not valid for this organization");
     }
-    organizationId = requestedOrgId;
+    const membership = await resolveOrgMembership(user.id, authSubject.organizationId);
+    if (!membership) throw serviceAuthenticationError("Invalid token");
+    organizationId = authSubject.organizationId;
     role = membership.role as Context["role"];
+  } else if (requestedOrgId) {
+    const localModeMembership = await getLocalModeOrgMembership(user.id);
+    if (localModeMembership) {
+      organizationId = localModeMembership.organizationId;
+      role = localModeMembership.role;
+    } else {
+      const membership = await resolveOrgMembership(user.id, requestedOrgId);
+      if (!membership) {
+        throw new AuthenticationError("Not a member of this organization");
+      }
+      organizationId = requestedOrgId;
+      role = membership.role as Context["role"];
+    }
   } else {
-    // Fall back to first org membership
-    const firstMembership = await getFirstOrgMembership(user.id);
-    if (firstMembership) {
-      organizationId = firstMembership.organizationId;
-      role = firstMembership.role as Context["role"];
+    const localModeMembership = await getLocalModeOrgMembership(user.id);
+    if (localModeMembership) {
+      organizationId = localModeMembership.organizationId;
+      role = localModeMembership.role;
+    } else {
+      // Fall back to first org membership
+      const firstMembership = await getFirstOrgMembership(user.id);
+      if (firstMembership) {
+        organizationId = firstMembership.organizationId;
+        role = firstMembership.role as Context["role"];
+      }
     }
   }
 
@@ -415,7 +461,10 @@ export async function buildContext({
     organizationId,
     clientSource: readClientSource(req.headers),
     role,
-    actorType: "user",
+    authKind: authSubject?.kind ?? "session",
+    serviceAccessTokenId: authSubject?.kind === "service" ? authSubject.serviceAccessTokenId : null,
+    serviceApiScopes: authSubject?.kind === "service" ? authSubject.scopes : [],
+    actorType: authSubject?.kind === "service" ? "agent" : "user",
     userLoader: createUserLoader(),
     sessionLoader: createSessionLoader(),
     sessionGroupLoader: createSessionGroupLoader(),
@@ -487,6 +536,9 @@ export async function buildWsContext(
         ? connectionParams.clientSource.trim()
         : null,
     role,
+    authKind: authSubject.kind,
+    serviceAccessTokenId: null,
+    serviceApiScopes: [],
     actorType: "user",
     userLoader: createUserLoader(),
     sessionLoader: createSessionLoader(),

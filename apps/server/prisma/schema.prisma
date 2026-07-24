@@ -276,6 +276,8 @@ enum EventType {
   design_system_updated
   design_system_publish_updated
   design_system_archived
+  service_access_token_created
+  service_access_token_revoked
 }
 
 enum SessionApplicationProcessStatus {
@@ -338,6 +340,7 @@ model Organization {
   slackInstalls               SlackInstall[]
   slackChannelBindings        SlackChannelBinding[]
   designSystems               DesignSystem[]
+  serviceAccessTokens         ServiceAccessToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -402,6 +405,7 @@ model User {
   orgMemberships               OrgMember[]
   mobilePairingTokens          MobilePairingToken[]         @relation("MobilePairingTokenOwner")
   mobileDevices                MobileDevice[]               @relation("MobileDeviceOwner")
+  createdServiceAccessTokens   ServiceAccessToken[]         @relation("ServiceAccessTokenCreator")
   ownedBridgeRuntimes          BridgeRuntime[]              @relation("BridgeRuntimeOwner")
   bridgeAccessGrants           BridgeAccessGrant[]          @relation("BridgeAccessGrantGrantee")
   grantedBridgeAccessGrants    BridgeAccessGrant[]          @relation("BridgeAccessGrantGrantedBy")
@@ -584,34 +588,34 @@ model SessionGroup {
   setupStatus              String                 @default("idle")
   setupError               String?
 
-  sessions                 Session[]
-  gitCheckpoints           GitCheckpoint[]
-  bridgeAccessGrants       BridgeAccessGrant[]
-  bridgeAccessRequests     BridgeAccessRequest[]
-  setupScriptRuns          SessionSetupScriptRun[]
-  applicationProcesses     SessionApplicationProcess[]
-  endpoints                SessionEndpoint[]
-  designPreviewStatus      String?
-  designPreviewKey         String?
-  designPreviewPendingKey  String?
-  designPreviewCommitSha   String?
-  designPreviewRequestId   String?
-  designPreviewCapturedAt  DateTime?
-  designPreviewAttemptedAt DateTime?
-  designPreviewError       String?
-  pdfExportStatus          String?
-  pdfExportKey             String?
-  pdfExportPendingKey      String?
-  pdfExportCommitSha       String?
-  pdfExportRequestId       String?
-  pdfExportCapturedAt      DateTime?
-  pdfExportAttemptedAt     DateTime?
-  pdfExportError           String?
-  pdfPageWidth             Float                       @default(210)
-  pdfPageHeight            Float                       @default(297)
-  pdfPageUnit              String                      @default("mm")
-  pdfFormatVersion         Int                         @default(0)
-  pdfExportFormatVersion   Int?
+  sessions                    Session[]
+  gitCheckpoints              GitCheckpoint[]
+  bridgeAccessGrants          BridgeAccessGrant[]
+  bridgeAccessRequests        BridgeAccessRequest[]
+  setupScriptRuns             SessionSetupScriptRun[]
+  applicationProcesses        SessionApplicationProcess[]
+  endpoints                   SessionEndpoint[]
+  designPreviewStatus         String?
+  designPreviewKey            String?
+  designPreviewPendingKey     String?
+  designPreviewCommitSha      String?
+  designPreviewRequestId      String?
+  designPreviewCapturedAt     DateTime?
+  designPreviewAttemptedAt    DateTime?
+  designPreviewError          String?
+  pdfExportStatus             String?
+  pdfExportKey                String?
+  pdfExportPendingKey         String?
+  pdfExportCommitSha          String?
+  pdfExportRequestId          String?
+  pdfExportCapturedAt         DateTime?
+  pdfExportAttemptedAt        DateTime?
+  pdfExportError              String?
+  pdfPageWidth                Float                       @default(210)
+  pdfPageHeight               Float                       @default(297)
+  pdfPageUnit                 String                      @default("mm")
+  pdfFormatVersion            Int                         @default(0)
+  pdfExportFormatVersion      Int?
   animationPreviewStatus      String?
   animationPreviewKey         String?
   animationPreviewPendingKey  String?
@@ -732,36 +736,39 @@ model DesignSystemVersion {
 }
 
 model Session {
-  id                String        @id @default(uuid())
-  name              String
-  agentStatus       AgentStatus   @default(not_started)
-  sessionStatus     SessionStatus @default(in_progress)
-  tool              CodingTool
-  model             String?
-  reasoningEffort   String?
-  toolChangedAt     DateTime?
-  lastUserMessageAt DateTime?
-  lastMessageAt     DateTime?
-  hosting           HostingMode
-  organizationId    String
-  organization      Organization  @relation(fields: [organizationId], references: [id])
-  createdById       String
-  createdBy         User          @relation("SessionCreator", fields: [createdById], references: [id])
-  repoId            String?
-  repo              Repo?         @relation(fields: [repoId], references: [id])
-  branch            String?
-  channelId         String?
-  channel           Channel?      @relation(fields: [channelId], references: [id])
-  sessionGroupId    String?
-  sessionGroup      SessionGroup? @relation(fields: [sessionGroupId], references: [id])
-  workdir           String?
-  toolSessionId     String?
-  pendingRun        Json?
-  endpoints         Json?
-  connection        Json?
-  prUrl             String?
-  worktreeDeleted   Boolean       @default(false)
-  readOnlyWorkspace Boolean       @default(false)
+  id                    String              @id @default(uuid())
+  name                  String
+  agentStatus           AgentStatus         @default(not_started)
+  sessionStatus         SessionStatus       @default(in_progress)
+  tool                  CodingTool
+  model                 String?
+  reasoningEffort       String?
+  toolChangedAt         DateTime?
+  lastUserMessageAt     DateTime?
+  lastMessageAt         DateTime?
+  hosting               HostingMode
+  organizationId        String
+  organization          Organization        @relation(fields: [organizationId], references: [id])
+  createdById           String
+  createdBy             User                @relation("SessionCreator", fields: [createdById], references: [id])
+  serviceAccessTokenId  String?
+  serviceAccessToken    ServiceAccessToken? @relation(fields: [serviceAccessTokenId], references: [id], onDelete: SetNull)
+  serviceIdempotencyKey String?
+  repoId                String?
+  repo                  Repo?               @relation(fields: [repoId], references: [id])
+  branch                String?
+  channelId             String?
+  channel               Channel?            @relation(fields: [channelId], references: [id])
+  sessionGroupId        String?
+  sessionGroup          SessionGroup?       @relation(fields: [sessionGroupId], references: [id])
+  workdir               String?
+  toolSessionId         String?
+  pendingRun            Json?
+  endpoints             Json?
+  connection            Json?
+  prUrl                 String?
+  worktreeDeleted       Boolean             @default(false)
+  readOnlyWorkspace     Boolean             @default(false)
 
   inputTokens         BigInt @default(0)
   outputTokens        BigInt @default(0)
@@ -776,9 +783,31 @@ model Session {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([serviceAccessTokenId, serviceIdempotencyKey])
   @@index([sessionGroupId, updatedAt])
   @@index([organizationId, agentStatus])
   @@index([channelId, updatedAt])
+}
+
+model ServiceAccessToken {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String?
+  createdBy      User?        @relation("ServiceAccessTokenCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  name           String
+  tokenHash      String       @unique
+  tokenPrefix    String
+  scopes         String[]
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  lastUsedAt     DateTime?
+  sessions       Session[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, revokedAt, createdAt])
+  @@index([createdById])
 }
 
 model SessionSetupScriptRun {

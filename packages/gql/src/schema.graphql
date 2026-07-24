@@ -269,6 +269,11 @@ enum ApiTokenProvider {
   ssh_key
 }
 
+enum ServiceApiScope {
+  sessions_start
+  sessions_status_read
+}
+
 enum CodexAuthMethod {
   chatgpt_session
   access_token
@@ -375,6 +380,8 @@ enum EventType {
   design_system_updated
   design_system_publish_updated
   design_system_archived
+  service_access_token_created
+  service_access_token_revoked
 }
 
 # --- Core Types ---
@@ -1057,6 +1064,37 @@ type ApiTokenStatus {
   updatedAt: DateTime
 }
 
+type ServiceAccessToken {
+  id: ID!
+  organizationId: ID!
+  createdById: ID
+  name: String!
+  tokenPrefix: String!
+  scopes: [ServiceApiScope!]!
+  createdBy: User
+  expiresAt: DateTime!
+  revokedAt: DateTime
+  lastUsedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type CreateServiceAccessTokenPayload {
+  serviceAccessToken: ServiceAccessToken!
+  """
+  Raw bearer token. Returned only by createServiceAccessToken.
+  """
+  token: String!
+}
+
+type ServiceSessionStatus {
+  id: ID!
+  agentStatus: AgentStatus!
+  sessionStatus: SessionStatus!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
 type CodexCredentialStatus {
   method: CodexAuthMethod!
   updatedAt: DateTime!
@@ -1573,6 +1611,27 @@ input SetApiTokenInput {
   token: String!
 }
 
+input CreateServiceAccessTokenInput {
+  organizationId: ID!
+  name: String!
+  scopes: [ServiceApiScope!]!
+  expiresAt: DateTime
+}
+
+input StartServiceSessionInput {
+  idempotencyKey: String!
+  tool: CodingTool
+  model: String
+  reasoningEffort: String
+  repoId: ID
+  branch: String
+  ticketId: ID
+  channelId: ID
+  projectId: ID
+  prompt: String!
+  interactionMode: String
+}
+
 input SetCodexCredentialInput {
   method: CodexAuthMethod!
   credential: String!
@@ -1611,6 +1670,8 @@ input CreateOrganizationInput {
 type Query {
   organization(id: ID!): Organization
   myOrganizations: [OrgMember!]!
+  serviceAccessTokens(organizationId: ID!): [ServiceAccessToken!]!
+  serviceSessionStatus(id: ID!): ServiceSessionStatus
   agentEnvironments(orgId: ID!): [AgentEnvironment!]!
   orgSecrets(orgId: ID!): [OrgSecret!]!
   repos(organizationId: ID!): [Repo!]!
@@ -1818,6 +1879,9 @@ enum LinkedCheckoutErrorCode {
 # --- Mutations ---
 
 type Mutation {
+  createServiceAccessToken(input: CreateServiceAccessTokenInput!): CreateServiceAccessTokenPayload!
+  revokeServiceAccessToken(id: ID!): Boolean!
+  startServiceSession(input: StartServiceSessionInput!): ServiceSessionStatus!
   createChannel(input: CreateChannelInput!): Channel!
   createAgentEnvironment(input: CreateAgentEnvironmentInput!): AgentEnvironment!
   updateAgentEnvironment(input: UpdateAgentEnvironmentInput!): AgentEnvironment!

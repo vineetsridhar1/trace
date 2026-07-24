@@ -55,6 +55,7 @@ const SETTINGS_TABS: { id: string; label: string }[] = [
   { id: "agent-environments", label: "Agent Environments" },
   { id: "org-secrets", label: "Org Secrets" },
   { id: "integrations", label: "Integrations" },
+  { id: "service-tokens", label: "Service Tokens" },
   { id: "channels", label: "Channels" },
 ];
 
@@ -86,6 +87,12 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   // The body only mounts while open, so this initializer runs fresh each time.
   const [query, setQuery] = useState(() => useCommandPaletteStore.getState().pendingQuery);
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id ?? null);
+  const canManageServiceTokens = useAuthStore((state: AuthState) =>
+    state.orgMemberships.some(
+      (membership) =>
+        membership.organizationId === state.activeOrgId && membership.role === "admin",
+    ),
+  );
 
   const setActivePage = useUIStore((s) => s.setActivePage);
   const openSearch = useUIStore((s) => s.openSearch);
@@ -265,6 +272,7 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
 
     for (const tab of SETTINGS_TABS) {
       if (tab.id === "api-keys" && isLocalMode) continue;
+      if (tab.id === "service-tokens" && (isLocalMode || !canManageServiceTokens)) continue;
       list.push({
         key: `settings-${tab.id}`,
         group: "Settings",
@@ -347,6 +355,7 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     setActiveChannelId,
     setActiveChatId,
     setSettingsInitialTab,
+    canManageServiceTokens,
   ]);
 
   const groups = useMemo(() => {

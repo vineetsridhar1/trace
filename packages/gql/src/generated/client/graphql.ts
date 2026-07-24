@@ -334,6 +334,20 @@ export type CreateRepoInput = {
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateServiceAccessTokenInput = {
+  expiresAt?: InputMaybe<Scalars["DateTime"]["input"]>;
+  name: Scalars["String"]["input"];
+  organizationId: Scalars["ID"]["input"];
+  scopes: Array<ServiceApiScope>;
+};
+
+export type CreateServiceAccessTokenPayload = {
+  __typename?: "CreateServiceAccessTokenPayload";
+  serviceAccessToken: ServiceAccessToken;
+  /** Raw bearer token. Returned only by createServiceAccessToken. */
+  token: Scalars["String"]["output"];
+};
+
 export type CreateTicketInput = {
   assigneeIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -690,6 +704,8 @@ export type EventType =
   | "queued_messages_reordered"
   | "repo_created"
   | "repo_updated"
+  | "service_access_token_created"
+  | "service_access_token_revoked"
   | "session_application_log_appended"
   | "session_application_process_failed"
   | "session_application_process_started"
@@ -925,6 +941,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createServiceAccessToken: CreateServiceAccessTokenPayload;
   createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
@@ -980,6 +997,7 @@ export type Mutation = {
   retrySessionGroupSetup: SessionGroup;
   revertSessionGroupFileChange: Scalars["Boolean"]["output"];
   revokeBridgeAccessGrant: BridgeAccessGrant;
+  revokeServiceAccessToken: Scalars["Boolean"]["output"];
   rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
@@ -995,6 +1013,7 @@ export type Mutation = {
   setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
+  startServiceSession: ServiceSessionStatus;
   startSession: Session;
   startSessionApplication: Array<SessionApplicationProcess>;
   startSessionProcess: SessionApplicationProcess;
@@ -1130,6 +1149,10 @@ export type MutationCreateProjectArgs = {
 
 export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
+};
+
+export type MutationCreateServiceAccessTokenArgs = {
+  input: CreateServiceAccessTokenInput;
 };
 
 export type MutationCreateSessionEndpointPreviewArgs = {
@@ -1379,6 +1402,10 @@ export type MutationRevokeBridgeAccessGrantArgs = {
   grantId: Scalars["ID"]["input"];
 };
 
+export type MutationRevokeServiceAccessTokenArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationRotateSessionEndpointArgs = {
   endpointId: Scalars["ID"]["input"];
 };
@@ -1461,6 +1488,10 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
 
 export type MutationSetOrgSecretArgs = {
   input: SetOrgSecretInput;
+};
+
+export type MutationStartServiceSessionArgs = {
+  input: StartServiceSessionInput;
 };
 
 export type MutationStartSessionArgs = {
@@ -1757,6 +1788,8 @@ export type Query = {
   searchMessages: Array<MessageSearchHit>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
+  serviceAccessTokens: Array<ServiceAccessToken>;
+  serviceSessionStatus?: Maybe<ServiceSessionStatus>;
   session?: Maybe<Session>;
   sessionApplicationLogs: Array<SessionApplicationLogEntry>;
   sessionApplicationProcesses: Array<SessionApplicationProcess>;
@@ -1989,6 +2022,14 @@ export type QuerySearchSessionsArgs = {
 
 export type QuerySearchUsersArgs = {
   query: Scalars["String"]["input"];
+};
+
+export type QueryServiceAccessTokensArgs = {
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryServiceSessionStatusArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type QuerySessionArgs = {
@@ -2262,6 +2303,33 @@ export type ScopeInput = {
 };
 
 export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
+
+export type ServiceAccessToken = {
+  __typename?: "ServiceAccessToken";
+  createdAt: Scalars["DateTime"]["output"];
+  createdBy?: Maybe<User>;
+  createdById?: Maybe<Scalars["ID"]["output"]>;
+  expiresAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  lastUsedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  revokedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  scopes: Array<ServiceApiScope>;
+  tokenPrefix: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ServiceApiScope = "sessions_start" | "sessions_status_read";
+
+export type ServiceSessionStatus = {
+  __typename?: "ServiceSessionStatus";
+  agentStatus: AgentStatus;
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  sessionStatus: SessionStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
 
 export type Session = {
   __typename?: "Session";
@@ -2598,6 +2666,20 @@ export type SlashCommand = {
 export type SlashCommandCategory = "passthrough" | "special" | "terminal";
 
 export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
+
+export type StartServiceSessionInput = {
+  branch?: InputMaybe<Scalars["String"]["input"]>;
+  channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  idempotencyKey: Scalars["String"]["input"];
+  interactionMode?: InputMaybe<Scalars["String"]["input"]>;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectId?: InputMaybe<Scalars["ID"]["input"]>;
+  prompt: Scalars["String"]["input"];
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+  ticketId?: InputMaybe<Scalars["ID"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
+};
 
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
@@ -4184,6 +4266,53 @@ export type DeleteOrgSecretMutationVariables = Exact<{
 }>;
 
 export type DeleteOrgSecretMutation = { __typename?: "Mutation"; deleteOrgSecret: boolean };
+
+export type ServiceAccessTokensQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type ServiceAccessTokensQuery = {
+  __typename?: "Query";
+  serviceAccessTokens: Array<{
+    __typename?: "ServiceAccessToken";
+    id: string;
+    organizationId: string;
+    createdById?: string | null;
+    name: string;
+    tokenPrefix: string;
+    scopes: Array<ServiceApiScope>;
+    expiresAt: string;
+    revokedAt?: string | null;
+    lastUsedAt?: string | null;
+    createdAt: string;
+    updatedAt: string;
+    createdBy?: {
+      __typename?: "User";
+      id: string;
+      name: string;
+      email: string;
+      avatarUrl?: string | null;
+    } | null;
+  }>;
+};
+
+export type CreateServiceAccessTokenMutationVariables = Exact<{
+  input: CreateServiceAccessTokenInput;
+}>;
+
+export type CreateServiceAccessTokenMutation = {
+  __typename?: "Mutation";
+  createServiceAccessToken: { __typename?: "CreateServiceAccessTokenPayload"; token: string };
+};
+
+export type RevokeServiceAccessTokenMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type RevokeServiceAccessTokenMutation = {
+  __typename?: "Mutation";
+  revokeServiceAccessToken: boolean;
+};
 
 export type CreateRepoMutationVariables = Exact<{
   input: CreateRepoInput;
@@ -9666,6 +9795,156 @@ export const DeleteOrgSecretDocument = {
     },
   ],
 } as unknown as DocumentNode<DeleteOrgSecretMutation, DeleteOrgSecretMutationVariables>;
+export const ServiceAccessTokensDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ServiceAccessTokens" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "serviceAccessTokens" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "tokenPrefix" } },
+                { kind: "Field", name: { kind: "Name", value: "scopes" } },
+                { kind: "Field", name: { kind: "Name", value: "expiresAt" } },
+                { kind: "Field", name: { kind: "Name", value: "revokedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastUsedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "createdBy" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "email" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ServiceAccessTokensQuery, ServiceAccessTokensQueryVariables>;
+export const CreateServiceAccessTokenDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateServiceAccessToken" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "CreateServiceAccessTokenInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createServiceAccessToken" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "token" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateServiceAccessTokenMutation,
+  CreateServiceAccessTokenMutationVariables
+>;
+export const RevokeServiceAccessTokenDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "RevokeServiceAccessToken" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "revokeServiceAccessToken" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  RevokeServiceAccessTokenMutation,
+  RevokeServiceAccessTokenMutationVariables
+>;
 export const CreateRepoDocument = {
   kind: "Document",
   definitions: [

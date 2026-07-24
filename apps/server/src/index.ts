@@ -13,6 +13,7 @@ import type { IncomingMessage } from "http";
 import type { Duplex } from "stream";
 import { makeExecutableSchema } from "@graphql-tools/schema";
 import { resolvers } from "./schema/resolvers.js";
+import { assertServiceTokenDocumentAllowed } from "./schema/service-api-policy.js";
 import type { Context } from "./context.js";
 import { authRouter } from "./routes/auth.js";
 import { uploadRouter } from "./routes/upload.js";
@@ -215,17 +216,14 @@ async function main() {
     const token = readBearerToken(req);
     const runtime = token ? authenticateProvisionedRuntimeToken(token) : null;
     const authJson = (req.body as { authJson?: unknown }).authJson;
-    if (!runtime || runtime.tool !== "codex") return res.status(401).json({ error: "Unauthorized" });
+    if (!runtime || runtime.tool !== "codex")
+      return res.status(401).json({ error: "Unauthorized" });
     if (typeof authJson !== "string" || authJson.length > 64 * 1024) {
       return res.status(400).json({ error: "Invalid Codex session credential" });
     }
     try {
       JSON.parse(authJson) as unknown;
-      await codexCredentialService.set(
-        runtime.userId,
-        "chatgpt_session",
-        authJson,
-      );
+      await codexCredentialService.set(runtime.userId, "chatgpt_session", authJson);
       return res.status(204).end();
     } catch {
       return res.status(400).json({ error: "Invalid Codex session credential" });
@@ -577,6 +575,19 @@ async function main() {
     schema,
     plugins: [
       ApolloServerPluginDrainHttpServer({ httpServer }),
+      {
+        async requestDidStart() {
+          return {
+            async didResolveOperation(requestContext) {
+              assertServiceTokenDocumentAllowed(
+                requestContext.document,
+                requestContext.request.operationName,
+                requestContext.contextValue,
+              );
+            },
+          };
+        },
+      },
       {
         async serverWillStart() {
           return {

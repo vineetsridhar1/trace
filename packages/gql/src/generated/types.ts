@@ -332,6 +332,20 @@ export type CreateRepoInput = {
   remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
+export type CreateServiceAccessTokenInput = {
+  expiresAt?: InputMaybe<Scalars["DateTime"]["input"]>;
+  name: Scalars["String"]["input"];
+  organizationId: Scalars["ID"]["input"];
+  scopes: Array<ServiceApiScope>;
+};
+
+export type CreateServiceAccessTokenPayload = {
+  __typename?: "CreateServiceAccessTokenPayload";
+  serviceAccessToken: ServiceAccessToken;
+  /** Raw bearer token. Returned only by createServiceAccessToken. */
+  token: Scalars["String"]["output"];
+};
+
 export type CreateTicketInput = {
   assigneeIds?: InputMaybe<Array<Scalars["ID"]["input"]>>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -688,6 +702,8 @@ export type EventType =
   | "queued_messages_reordered"
   | "repo_created"
   | "repo_updated"
+  | "service_access_token_created"
+  | "service_access_token_revoked"
   | "session_application_log_appended"
   | "session_application_process_failed"
   | "session_application_process_started"
@@ -923,6 +939,7 @@ export type Mutation = {
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
+  createServiceAccessToken: CreateServiceAccessTokenPayload;
   createSessionEndpointPreview: SessionEndpointPreview;
   createTerminal: Terminal;
   createTicket: Ticket;
@@ -978,6 +995,7 @@ export type Mutation = {
   retrySessionGroupSetup: SessionGroup;
   revertSessionGroupFileChange: Scalars["Boolean"]["output"];
   revokeBridgeAccessGrant: BridgeAccessGrant;
+  revokeServiceAccessToken: Scalars["Boolean"]["output"];
   rotateSessionEndpoint: SessionEndpoint;
   runSession: Session;
   runSessionGroupSetupScript: Scalars["Boolean"]["output"];
@@ -993,6 +1011,7 @@ export type Mutation = {
   setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
   setOrgSecret: OrgSecret;
+  startServiceSession: ServiceSessionStatus;
   startSession: Session;
   startSessionApplication: Array<SessionApplicationProcess>;
   startSessionProcess: SessionApplicationProcess;
@@ -1128,6 +1147,10 @@ export type MutationCreateProjectArgs = {
 
 export type MutationCreateRepoArgs = {
   input: CreateRepoInput;
+};
+
+export type MutationCreateServiceAccessTokenArgs = {
+  input: CreateServiceAccessTokenInput;
 };
 
 export type MutationCreateSessionEndpointPreviewArgs = {
@@ -1377,6 +1400,10 @@ export type MutationRevokeBridgeAccessGrantArgs = {
   grantId: Scalars["ID"]["input"];
 };
 
+export type MutationRevokeServiceAccessTokenArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationRotateSessionEndpointArgs = {
   endpointId: Scalars["ID"]["input"];
 };
@@ -1459,6 +1486,10 @@ export type MutationSetLinkedCheckoutAutoSyncArgs = {
 
 export type MutationSetOrgSecretArgs = {
   input: SetOrgSecretInput;
+};
+
+export type MutationStartServiceSessionArgs = {
+  input: StartServiceSessionInput;
 };
 
 export type MutationStartSessionArgs = {
@@ -1755,6 +1786,8 @@ export type Query = {
   searchMessages: Array<MessageSearchHit>;
   searchSessions: SessionSearchResults;
   searchUsers: Array<User>;
+  serviceAccessTokens: Array<ServiceAccessToken>;
+  serviceSessionStatus?: Maybe<ServiceSessionStatus>;
   session?: Maybe<Session>;
   sessionApplicationLogs: Array<SessionApplicationLogEntry>;
   sessionApplicationProcesses: Array<SessionApplicationProcess>;
@@ -1987,6 +2020,14 @@ export type QuerySearchSessionsArgs = {
 
 export type QuerySearchUsersArgs = {
   query: Scalars["String"]["input"];
+};
+
+export type QueryServiceAccessTokensArgs = {
+  organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryServiceSessionStatusArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type QuerySessionArgs = {
@@ -2260,6 +2301,33 @@ export type ScopeInput = {
 };
 
 export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
+
+export type ServiceAccessToken = {
+  __typename?: "ServiceAccessToken";
+  createdAt: Scalars["DateTime"]["output"];
+  createdBy?: Maybe<User>;
+  createdById?: Maybe<Scalars["ID"]["output"]>;
+  expiresAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  lastUsedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  name: Scalars["String"]["output"];
+  organizationId: Scalars["ID"]["output"];
+  revokedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  scopes: Array<ServiceApiScope>;
+  tokenPrefix: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type ServiceApiScope = "sessions_start" | "sessions_status_read";
+
+export type ServiceSessionStatus = {
+  __typename?: "ServiceSessionStatus";
+  agentStatus: AgentStatus;
+  createdAt: Scalars["DateTime"]["output"];
+  id: Scalars["ID"]["output"];
+  sessionStatus: SessionStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
 
 export type Session = {
   __typename?: "Session";
@@ -2596,6 +2664,20 @@ export type SlashCommand = {
 export type SlashCommandCategory = "passthrough" | "special" | "terminal";
 
 export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
+
+export type StartServiceSessionInput = {
+  branch?: InputMaybe<Scalars["String"]["input"]>;
+  channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  idempotencyKey: Scalars["String"]["input"];
+  interactionMode?: InputMaybe<Scalars["String"]["input"]>;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectId?: InputMaybe<Scalars["ID"]["input"]>;
+  prompt: Scalars["String"]["input"];
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+  ticketId?: InputMaybe<Scalars["ID"]["input"]>;
+  tool?: InputMaybe<CodingTool>;
+};
 
 export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;

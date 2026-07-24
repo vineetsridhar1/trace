@@ -23,6 +23,7 @@ import { prisma } from "./db.js";
 import { createSessionTicketsLoader, createUserLoader } from "./dataloader.js";
 import {
   authenticateAccessToken,
+  authenticateGraphqlAccessToken,
   buildContext,
   buildWsContext,
   createBridgeAuthToken,
@@ -147,6 +148,88 @@ describe("auth helpers", () => {
       userId: "user-1",
       pairedOrganizationId: "org-1",
       deviceId: "device-1",
+    });
+  });
+
+  it("keeps service credentials out of generic and cookie authentication", async () => {
+    await expect(authenticateAccessToken("trc_svc_secret")).resolves.toBeNull();
+    await expect(authenticateGraphqlAccessToken("trc_svc_secret", "cookie")).resolves.toBeNull();
+
+    expect(prismaMock.mobileDevice.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.serviceAccessToken.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("builds an organization-pinned agent context for bearer service credentials", async () => {
+    const token = "trc_svc_active";
+    const expiresAt = new Date(Date.now() + 60_000);
+    prismaMock.serviceAccessToken.findUnique.mockResolvedValueOnce({
+      id: "service-token-1",
+      organizationId: "org-1",
+      createdById: "user-1",
+      scopes: ["sessions_start", "sessions_status_read"],
+      expiresAt,
+      revokedAt: null,
+      lastUsedAt: new Date(),
+    });
+    prismaMock.orgMember.findUnique
+      .mockResolvedValueOnce({ userId: "user-1" })
+      .mockResolvedValueOnce({ role: "member" });
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1", email: "user@example.com" });
+
+    const context = await buildContext({
+      req: { headers: { authorization: `Bearer ${token}` }, cookies: {} },
+      res: {},
+    } as unknown as Parameters<typeof buildContext>[0]);
+
+    expect(context).toMatchObject({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "member",
+      actorType: "agent",
+      authKind: "service",
+      serviceAccessTokenId: "service-token-1",
+      serviceApiScopes: ["sessions_start", "sessions_status_read"],
+    });
+    expect(prismaMock.orgMember.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("rejects service credentials from cookies, WebSockets, and organization overrides", async () => {
+    await expect(
+      buildContext({
+        req: { headers: { cookie: "trace_token=trc_svc_secret" }, cookies: {} },
+        res: {},
+      } as unknown as Parameters<typeof buildContext>[0]),
+    ).rejects.toMatchObject({
+      message: "Invalid token",
+      extensions: expect.objectContaining({ code: "UNAUTHENTICATED" }),
+    });
+    await expect(buildWsContext({ token: "trc_svc_secret" })).rejects.toThrow("Invalid token");
+
+    prismaMock.serviceAccessToken.findUnique.mockResolvedValueOnce({
+      id: "service-token-1",
+      organizationId: "org-1",
+      createdById: "user-1",
+      scopes: ["sessions_start"],
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      lastUsedAt: new Date(),
+    });
+    prismaMock.orgMember.findUnique.mockResolvedValueOnce({ userId: "user-1" });
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1", email: "user@example.com" });
+    await expect(
+      buildContext({
+        req: {
+          headers: {
+            authorization: "Bearer trc_svc_active",
+            "x-organization-id": "org-2",
+          },
+          cookies: {},
+        },
+        res: {},
+      } as unknown as Parameters<typeof buildContext>[0]),
+    ).rejects.toMatchObject({
+      message: "Service token is not valid for this organization",
+      extensions: expect.objectContaining({ code: "UNAUTHENTICATED" }),
     });
   });
 

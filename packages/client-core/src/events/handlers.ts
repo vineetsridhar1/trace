@@ -20,6 +20,7 @@ import type {
   DesignSystem,
   DesignSystemCommitArtifact,
   DesignSystemVersion,
+  ServiceAccessToken,
 } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
@@ -390,6 +391,20 @@ export function handleOrgEvent(event: Event): void {
           : null;
     if (environmentId) {
       batch.remove("agentEnvironments", environmentId);
+    }
+  }
+
+  if (
+    event.eventType === "service_access_token_created" ||
+    event.eventType === "service_access_token_revoked"
+  ) {
+    const serviceAccessToken = asJsonObject(payload.serviceAccessToken);
+    if (serviceAccessToken && typeof serviceAccessToken.id === "string") {
+      batch.upsert(
+        "serviceAccessTokens",
+        serviceAccessToken.id,
+        serviceAccessToken as unknown as ServiceAccessToken,
+      );
     }
   }
 

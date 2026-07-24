@@ -1,4 +1,4 @@
-import type { ActorType, UserRole } from "./generated/types";
+import type { ActorType, ServiceApiScope, UserRole } from "./generated/types";
 import type DataLoader from "dataloader";
 
 export interface Context {
@@ -9,6 +9,9 @@ export interface Context {
   clientSource: string | null;
   /** Role in the active organization. Null when organizationId is null. */
   role: UserRole | null;
+  authKind: "session" | "mobile" | "service";
+  serviceAccessTokenId: string | null;
+  serviceApiScopes: ServiceApiScope[];
   actorType: ActorType;
   userLoader: DataLoader<
     string,

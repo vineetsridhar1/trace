@@ -13021,3 +13021,105 @@ describe("SessionService", () => {
     });
   });
 });
+
+describe("service session API", () => {
+  let service: SessionService;
+
+  beforeEach(() => {
+    service = new SessionService();
+  });
+
+  it("requires a nonblank prompt and idempotency key", async () => {
+    await expect(
+      service.startService({
+        idempotencyKey: "request-1",
+        prompt: "   ",
+        organizationId: "org-1",
+        createdById: "user-1",
+        serviceAccessTokenId: "service-token-1",
+      }),
+    ).rejects.toThrow("Prompt is required");
+    await expect(
+      service.startService({
+        idempotencyKey: " ",
+        prompt: "Run the task",
+        organizationId: "org-1",
+        createdById: "user-1",
+        serviceAccessTokenId: "service-token-1",
+      }),
+    ).rejects.toThrow("Idempotency key is required");
+  });
+
+  it("returns the existing status for a repeated idempotency key", async () => {
+    const existing = {
+      id: "session-existing",
+      agentStatus: "active",
+      sessionStatus: "in_progress",
+      createdAt: new Date("2026-07-24T12:00:00Z"),
+      updatedAt: new Date("2026-07-24T12:01:00Z"),
+    };
+    prismaMock.session.findUnique.mockResolvedValueOnce(existing);
+    const start = vi.spyOn(service, "start");
+
+    await expect(
+      service.startService({
+        idempotencyKey: "request-1",
+        prompt: "Run the task",
+        organizationId: "org-1",
+        createdById: "user-1",
+        serviceAccessTokenId: "service-token-1",
+      }),
+    ).resolves.toEqual(existing);
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it("forces cloud hosting and trusted agent attribution", async () => {
+    const createdAt = new Date("2026-07-24T12:00:00Z");
+    prismaMock.session.findUnique.mockResolvedValueOnce(null);
+    const start = vi.spyOn(service, "start").mockResolvedValue({
+      id: "session-1",
+      agentStatus: "not_started",
+      sessionStatus: "in_progress",
+      createdAt,
+      updatedAt: createdAt,
+    } as never);
+
+    const result = await service.startService({
+      idempotencyKey: " request-1 ",
+      tool: "codex",
+      repoId: "repo-1",
+      prompt: " Run the task ",
+      organizationId: "org-1",
+      createdById: "user-1",
+      serviceAccessTokenId: "service-token-1",
+      clientSource: "deployment-daemon",
+    });
+
+    expect(result.id).toBe("session-1");
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hosting: "cloud",
+        actorType: "agent",
+        prompt: "Run the task",
+        serviceIdempotencyKey: "request-1",
+        serviceAccessTokenId: "service-token-1",
+        startEventMetadata: { serviceAccessTokenId: "service-token-1" },
+      }),
+    );
+  });
+
+  it("reads only a same-organization status projection", async () => {
+    prismaMock.session.findFirst.mockResolvedValueOnce(null);
+    await expect(service.getServiceStatus("session-1", "org-1")).resolves.toBeNull();
+    expect(prismaMock.session.findFirst).toHaveBeenCalledWith({
+      where: { id: "session-1", organizationId: "org-1" },
+      select: {
+        id: true,
+        agentStatus: true,
+        sessionStatus: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  });
+});

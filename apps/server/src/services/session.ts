@@ -111,6 +111,9 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   createdById: string;
   actorType?: ActorType;
   clientSource?: string | null;
+  serviceAccessTokenId?: string | null;
+  serviceIdempotencyKey?: string | null;
+  startEventMetadata?: Prisma.InputJsonObject;
   forceNewGroup?: boolean;
   forkedFromSessionGroupId?: string | null;
   checkpointSha?: string | null;
@@ -120,6 +123,24 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   startEventId?: string;
   buildStartEvent?: (input: StartSessionBuildStartEventInput) => StartSessionEventOverride;
   afterCreate?: (input: StartSessionAfterCreateInput) => Promise<void>;
+};
+
+export type StartServiceSessionServiceInput = {
+  idempotencyKey: string;
+  tool?: CodingTool | null;
+  model?: string | null;
+  reasoningEffort?: string | null;
+  repoId?: string | null;
+  branch?: string | null;
+  ticketId?: string | null;
+  channelId?: string | null;
+  projectId?: string | null;
+  prompt: string;
+  interactionMode?: string | null;
+  organizationId: string;
+  createdById: string;
+  serviceAccessTokenId: string;
+  clientSource?: string | null;
 };
 
 type SessionStartMetadata = {
@@ -3348,6 +3369,86 @@ export class SessionService {
     });
   }
 
+  async getServiceStatus(sessionId: string, organizationId: string) {
+    return prisma.session.findFirst({
+      where: { id: sessionId, organizationId },
+      select: {
+        id: true,
+        agentStatus: true,
+        sessionStatus: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async startService(input: StartServiceSessionServiceInput) {
+    const prompt = input.prompt.trim();
+    if (!prompt) throw new ValidationError("Prompt is required");
+    const idempotencyKey = input.idempotencyKey.trim();
+    if (!idempotencyKey) throw new ValidationError("Idempotency key is required");
+    if (idempotencyKey.length > 200) {
+      throw new ValidationError("Idempotency key cannot exceed 200 characters");
+    }
+
+    const uniqueIdempotencyKey = {
+      serviceAccessTokenId: input.serviceAccessTokenId,
+      serviceIdempotencyKey: idempotencyKey,
+    };
+    const statusSelect = {
+      id: true,
+      agentStatus: true,
+      sessionStatus: true,
+      createdAt: true,
+      updatedAt: true,
+    } as const;
+    const existing = await prisma.session.findUnique({
+      where: { serviceAccessTokenId_serviceIdempotencyKey: uniqueIdempotencyKey },
+      select: statusSelect,
+    });
+    if (existing) return existing;
+
+    try {
+      const session = await this.start({
+        tool: input.tool,
+        model: input.model,
+        reasoningEffort: input.reasoningEffort,
+        repoId: input.repoId,
+        branch: input.branch,
+        ticketId: input.ticketId,
+        channelId: input.channelId,
+        projectId: input.projectId,
+        prompt,
+        interactionMode: input.interactionMode,
+        organizationId: input.organizationId,
+        createdById: input.createdById,
+        hosting: "cloud",
+        actorType: "agent",
+        clientSource: input.clientSource,
+        serviceAccessTokenId: input.serviceAccessTokenId,
+        serviceIdempotencyKey: idempotencyKey,
+        startEventMetadata: { serviceAccessTokenId: input.serviceAccessTokenId },
+      });
+      return {
+        id: session.id,
+        agentStatus: session.agentStatus,
+        sessionStatus: session.sessionStatus,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+      };
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+        throw error;
+      }
+      const concurrent = await prisma.session.findUnique({
+        where: { serviceAccessTokenId_serviceIdempotencyKey: uniqueIdempotencyKey },
+        select: statusSelect,
+      });
+      if (!concurrent) throw error;
+      return concurrent;
+    }
+  }
+
   async start(input: StartSessionServiceInput) {
     validateUploadKeysForOrganization(input.imageKeys, input.organizationId);
 
@@ -4095,6 +4196,8 @@ export class SessionService {
             hosting,
             organizationId: input.organizationId,
             createdById: input.createdById,
+            serviceAccessTokenId: input.serviceAccessTokenId ?? undefined,
+            serviceIdempotencyKey: input.serviceIdempotencyKey ?? undefined,
             repoId: resolvedRepoId ?? undefined,
             branch: resolvedBranch ?? undefined,
             workdir: sessionGroup.workdir ?? undefined,
@@ -4154,9 +4257,16 @@ export class SessionService {
             ? { attachmentKeys: input.imageKeys, imageKeys: input.imageKeys }
             : {}),
         } as Prisma.InputJsonValue;
-        const startEventMetadata = initialCheckpointContextId
-          ? ({ checkpointContextId: initialCheckpointContextId } as Prisma.InputJsonValue)
-          : undefined;
+        const startEventMetadataValues: Prisma.InputJsonObject = {
+          ...(initialCheckpointContextId
+            ? { checkpointContextId: initialCheckpointContextId }
+            : {}),
+          ...(input.startEventMetadata ?? {}),
+        };
+        const startEventMetadata =
+          Object.keys(startEventMetadataValues).length > 0
+            ? (startEventMetadataValues as Prisma.InputJsonValue)
+            : undefined;
         const startEventOverride = input.buildStartEvent?.({
           session,
           sessionGroup,
@@ -4175,7 +4285,7 @@ export class SessionService {
             eventType: "session_started",
             payload: startEventOverride?.payload ?? startEventPayload,
             metadata: startEventOverride?.metadata ?? startEventMetadata,
-            actorType: startEventOverride?.actorType ?? "user",
+            actorType: startEventOverride?.actorType ?? input.actorType ?? "user",
             actorId: startEventOverride?.actorId ?? input.createdById,
             timestamp: startEventOverride?.timestamp,
             deferPublish: true,
