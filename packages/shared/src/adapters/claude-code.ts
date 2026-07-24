@@ -1,6 +1,4 @@
 import { spawn, type ChildProcess } from "child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "fs";
-import { dirname, resolve } from "path";
 import { createInterface } from "readline";
 import type {
   CodingToolAdapter,
@@ -48,11 +46,8 @@ function parseClaudeUsage(raw: unknown): TokenUsage | undefined {
 export class ClaudeCodeAdapter implements CodingToolAdapter {
   private process: ChildProcess | null = null;
   private claudeSessionId: string | null = null;
-  private cwd: string | null = null;
   private resultEmitted = false;
   private emittedIncrementalUsage = false;
-  private lastPlanFilePath: string | null = null;
-  private tracePlanFilePath: string | null = null;
   private processGeneration = 0;
 
   run({
@@ -60,18 +55,13 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     cwd,
     onOutput,
     onComplete,
-    interactionMode,
     model,
     reasoningEffort,
     enableClaudeInChrome,
     toolSessionId,
-    planFilePath,
   }: RunOptions) {
-    this.cwd = cwd;
     this.resultEmitted = false;
     this.emittedIncrementalUsage = false;
-    this.lastPlanFilePath = null;
-    this.tracePlanFilePath = planFilePath ?? null;
 
     // Use provided toolSessionId to restore resume capability after bridge restart
     if (toolSessionId && !this.claudeSessionId) {
@@ -95,11 +85,10 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     if (enableClaudeInChrome) {
       args.push("--chrome");
     }
-    if (interactionMode === "plan") {
-      args.push("--permission-mode", "plan");
-    } else {
-      args.push("--dangerously-skip-permissions");
-    }
+    // Trace interaction modes are prompt-driven. Claude's native plan mode
+    // restricts writes to its own designated plan file, which prevents it from
+    // writing Trace's watched sidecar artifact.
+    args.push("--dangerously-skip-permissions");
     if (this.claudeSessionId) {
       args.push("--resume", this.claudeSessionId);
     }
@@ -247,49 +236,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
         const usage = parseClaudeUsage(message?.usage);
         if (usage) this.emittedIncrementalUsage = true;
 
-        // Track plan file writes and detect ExitPlanMode before normalizing
-        let hasExitPlanMode = false;
-        for (const block of content as Record<string, unknown>[]) {
-          if (block.type === "tool_use") {
-            const name = String(block.name ?? "");
-            if ((name === "Write" || name === "Edit") && block.input) {
-              const input = block.input as Record<string, unknown>;
-              const fp = String(input.file_path ?? "");
-              if (fp.includes(".claude/plans/") && fp.endsWith(".md")) {
-                this.lastPlanFilePath = fp;
-              }
-            }
-            if (name === "ExitPlanMode") {
-              hasExitPlanMode = true;
-            }
-          }
-        }
-
         const normalized: MessageBlock[] = [];
-
-        // Claude owns a native .claude/plans file in permission-mode plan.
-        // Mirror its final contents into Trace's canonical watched artifact.
-        if (hasExitPlanMode && this.lastPlanFilePath) {
-          let planContent = "";
-          try {
-            const abs = this.lastPlanFilePath.startsWith("/")
-              ? this.lastPlanFilePath
-              : resolve(this.cwd ?? "", this.lastPlanFilePath);
-            planContent = readFileSync(abs, "utf-8");
-          } catch {
-            // File may not exist if the write failed.
-          }
-          if (planContent && this.tracePlanFilePath) {
-            try {
-              mkdirSync(dirname(this.tracePlanFilePath), { recursive: true });
-              writeFileSync(this.tracePlanFilePath, planContent, "utf8");
-            } catch {
-              // The bridge will surface a missing plan artifact on completion.
-            }
-          }
-          this.lastPlanFilePath = null;
-          onOutput({ type: "plan_file_complete" });
-        }
 
         for (const block of content as Record<string, unknown>[]) {
           if (block.type === "tool_use" && block.name === "AskUserQuestion") {
@@ -300,10 +247,6 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
               questions: questions.map(parseQuestion),
               ...(typeof block.id === "string" ? { toolUseId: block.id } : {}),
             });
-            continue;
-          }
-          // Skip ExitPlanMode tool_use — already emitted as PlanBlock above
-          if (block.type === "tool_use" && block.name === "ExitPlanMode") {
             continue;
           }
           // Narrow known block types from the Claude Code JSON stream

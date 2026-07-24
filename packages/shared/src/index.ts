@@ -14,7 +14,6 @@ export type {
   Question,
   QuestionBlock,
   PlanBlock,
-  PlanFileCompleteEvent,
 } from "./adapters/coding-tool.js";
 export {
   DESIGN_SYSTEM_LIMITS,

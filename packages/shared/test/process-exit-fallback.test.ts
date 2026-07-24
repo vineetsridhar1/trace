@@ -1,7 +1,4 @@
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { spawn } from "child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,7 +15,6 @@ class FakeChildProcess extends EventEmitter {
 }
 
 const spawnedChildren: FakeChildProcess[] = [];
-const temporaryDirectories: string[] = [];
 
 vi.mock("child_process", () => ({
   spawn: vi.fn(() => {
@@ -36,9 +32,6 @@ describe("coding tool adapter process exit fallback", () => {
   });
 
   afterEach(() => {
-    for (const directory of temporaryDirectories.splice(0)) {
-      rmSync(directory, { recursive: true, force: true });
-    }
     vi.useRealTimers();
   });
 
@@ -380,59 +373,20 @@ describe("coding tool adapter process exit fallback", () => {
     });
   });
 
-  it("mirrors Claude's native plan file into Trace's canonical artifact", () => {
-    const directory = mkdtempSync(join(tmpdir(), "trace-claude-plan-"));
-    temporaryDirectories.push(directory);
-    const nativePlanDirectory = join(directory, ".claude", "plans");
-    const nativePlanPath = join(nativePlanDirectory, "implementation.md");
-    const tracePlanPath = join(directory, "trace-plans", "plan.mdx");
-    mkdirSync(nativePlanDirectory, { recursive: true });
-    writeFileSync(nativePlanPath, "# Implementation\n\n- Ship the watcher\n", "utf8");
-
+  it("keeps Trace plan runs out of Claude's native plan permission mode", () => {
     const adapter = new ClaudeCodeAdapter();
-    const onOutput = vi.fn();
 
     adapter.run({
       prompt: "create a plan",
-      cwd: directory,
+      cwd: "/tmp",
       interactionMode: "plan",
-      planFilePath: tracePlanPath,
-      onOutput,
+      onOutput: vi.fn(),
       onComplete: vi.fn(),
     });
 
-    spawnedChildren[0].stdout.write(
-      `${JSON.stringify({
-        type: "assistant",
-        message: {
-          content: [
-            {
-              type: "tool_use",
-              id: "write-plan",
-              name: "Write",
-              input: { file_path: nativePlanPath },
-            },
-            {
-              type: "tool_use",
-              id: "exit-plan",
-              name: "ExitPlanMode",
-              input: {},
-            },
-          ],
-        },
-      })}\n`,
-    );
-
-    expect(onOutput).toHaveBeenCalledWith({ type: "plan_file_complete" });
-    expect(onOutput).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "assistant",
-        message: expect.objectContaining({
-          content: expect.arrayContaining([expect.objectContaining({ type: "plan" })]),
-        }),
-      }),
-    );
-    expect(readFileSync(tracePlanPath, "utf8")).toBe("# Implementation\n\n- Ship the watcher\n");
+    const args = vi.mocked(spawn).mock.calls[0]?.[1];
+    expect(args).toContain("--dangerously-skip-permissions");
+    expect(args).not.toContain("--permission-mode");
   });
 
   it("completes a Pi run when the process exits but stdio never closes", () => {

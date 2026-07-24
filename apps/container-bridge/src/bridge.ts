@@ -90,7 +90,6 @@ async function inspectGitCheckpoint(
 }
 
 function isPendingInputOutput(output: ToolOutput): boolean {
-  if (output.type === "plan_file_complete") return true;
   return (
     output.type === "assistant" &&
     output.message.content.some((block) => block.type === "question" || block.type === "plan")
@@ -1239,10 +1238,8 @@ export class ContainerBridge implements IBridgeClient {
           return;
         }
 
-        if (output.type !== "plan_file_complete") {
-          hasForwardedOutput = true;
-          this.send({ type: "session_output", sessionId, data: output });
-        }
+        hasForwardedOutput = true;
+        this.send({ type: "session_output", sessionId, data: output });
 
         // Phase 1: collect tool_use blocks whose command is a git commit/push
         const newPending = extractGitToolUsePending(output);
@@ -1299,7 +1296,6 @@ export class ContainerBridge implements IBridgeClient {
       reasoningEffort,
       enableClaudeInChrome,
       toolSessionId,
-      planFilePath: planFileWatcher?.filePath,
     });
   }
 }
