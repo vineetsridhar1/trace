@@ -27,7 +27,7 @@ dependencies.
 Requirements:
 
 - Node.js 22 or newer.
-- pnpm 10 or newer.
+- pnpm 11 or newer.
 - Docker, if your machine needs Prisma's local Postgres dev server.
 
 Open `http://localhost:3000` after the command finishes starting the web app.

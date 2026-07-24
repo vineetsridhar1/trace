@@ -4,7 +4,7 @@ Thanks for helping improve Trace.
 
 ## Development Setup
 
-1. Install Node.js 22+ and pnpm 10+.
+1. Install Node.js 22+ and pnpm 11+.
 2. Run `pnpm install`.
 3. Copy `.env.example` to `apps/server/.env` and fill in local values.
 4. Run `pnpm db:migrate`, `pnpm db:generate`, and `pnpm gql:codegen`.

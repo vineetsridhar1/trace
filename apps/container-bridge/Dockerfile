@@ -23,7 +23,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install coding tool CLIs
-RUN npm install -g pnpm@10.7.0 @anthropic-ai/claude-code @openai/codex @earendil-works/pi-coding-agent
+RUN npm install -g pnpm@11.10.0 @anthropic-ai/claude-code @openai/codex @earendil-works/pi-coding-agent
 
 WORKDIR /app
 

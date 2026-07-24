@@ -201,7 +201,7 @@ pnpm dev:local
 The local mode path does not require a GitHub OAuth app. State is stored in the
 OS application-support directory for the current checkout.
 
-> Requirements: Node.js 22+, pnpm 10+.
+> Requirements: Node.js 22+, pnpm 11+.
 
 <br/>
 
