@@ -404,6 +404,18 @@ export interface BridgeAnimationExportCommand {
     | { method: "POST"; url: string; fields: Record<string, string> };
 }
 
+export interface BridgeDesignSystemExportCommand {
+  type: "design_system_export";
+  requestId: string;
+  sessionId: string;
+  sessionGroupId: string;
+  commitSha: string;
+  storageKey: string;
+  uploadTarget:
+    | { method: "PUT"; url: string }
+    | { method: "POST"; url: string; fields: Record<string, string> };
+}
+
 export interface BridgeEndpointHttpRequestCommand {
   type: "endpoint_http_request";
   requestId: string;
@@ -483,6 +495,7 @@ export type BridgeCommand =
   | BridgeAppProcessStopCommand
   | BridgePdfExportCommand
   | BridgeAnimationExportCommand
+  | BridgeDesignSystemExportCommand
   | BridgeEndpointHttpRequestCommand
   | BridgeEndpointWebSocketOpenCommand
   | BridgeEndpointWebSocketDataCommand
@@ -890,6 +903,15 @@ export interface BridgeAnimationExportResult {
   error?: string;
 }
 
+export interface BridgeDesignSystemExportResult {
+  type: "design_system_export_result";
+  requestId: string;
+  sessionGroupId: string;
+  commitSha: string;
+  storageKey: string;
+  error?: string;
+}
+
 export interface BridgeEndpointHttpResponse {
   type: "endpoint_http_response";
   requestId: string;
@@ -965,6 +987,7 @@ export type BridgeMessage =
   | BridgeAppProcessError
   | BridgePdfExportResult
   | BridgeAnimationExportResult
+  | BridgeDesignSystemExportResult
   | BridgeEndpointHttpResponse
   | BridgeEndpointHttpError
   | BridgeEndpointWebSocketOpened

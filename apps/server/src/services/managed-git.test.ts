@@ -687,3 +687,123 @@ describe("managed git animation preview exports", () => {
     );
   });
 });
+
+describe("managed git design-system preview exports", () => {
+  it("sends a design_system export command to the bridge after an accepted branch push", async () => {
+    prismaMock.sessionGroup.findMany.mockImplementation((args?: { where?: { kind?: string } }) =>
+      Promise.resolve(
+        args?.where?.kind === "design_system"
+          ? [
+              {
+                id: "ds-group-1",
+                branch: null,
+                designPreviewPendingKey: null,
+                sessions: [
+                  {
+                    id: "session-1",
+                    connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+                  },
+                ],
+              },
+            ]
+          : [],
+      ),
+    );
+    prismaMock.sessionGroup.update.mockResolvedValue({ id: "ds-group-1" });
+
+    await managedGitService.recordPush({
+      organizationId: ORG,
+      repoId: REPO,
+      commands: [
+        {
+          ref: "refs/heads/main",
+          oldSha: "a".repeat(40),
+          newSha: "b".repeat(40),
+        },
+      ],
+      actorType: "system",
+      actorId: "runtime-1",
+    });
+
+    expect(sessionRouter.send).toHaveBeenCalledWith(
+      "session-1",
+      expect.objectContaining({
+        type: "design_system_export",
+        sessionGroupId: "ds-group-1",
+        commitSha: "b".repeat(40),
+      }),
+      { expectedHomeRuntimeId: "runtime-1", organizationId: ORG },
+    );
+    expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ branch: "main", designPreviewStatus: "publishing" }),
+      }),
+    );
+  });
+
+  it("atomically promotes a completed export and emits a resolved preview URL", async () => {
+    const storageKey = "design-system-previews/org-1/ds-group-1/new.html";
+    const previousKey = "design-system-previews/org-1/ds-group-1/previous.html";
+    prismaMock.sessionGroup.findFirst.mockResolvedValue({
+      designPreviewPendingKey: storageKey,
+      designPreviewKey: previousKey,
+    });
+    prismaMock.sessionGroup.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.sessionGroup.findUniqueOrThrow.mockResolvedValue({
+      id: "ds-group-1",
+      designPreviewStatus: "captured",
+      designPreviewKey: storageKey,
+      designPreviewCommitSha: "f".repeat(40),
+      designPreviewCapturedAt: new Date(),
+      designPreviewError: null,
+    });
+    const { storage } = await import("../lib/storage/index.js");
+
+    await managedGitService.completeDesignSystemExport({
+      organizationId: ORG,
+      sessionGroupId: "ds-group-1",
+      commitSha: "f".repeat(40),
+      requestId: "current-request",
+      storageKey,
+    });
+
+    expect(prismaMock.sessionGroup.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ designPreviewPendingKey: storageKey }),
+        data: expect.objectContaining({
+          designPreviewStatus: "captured",
+          designPreviewKey: storageKey,
+          designPreviewPendingKey: null,
+        }),
+      }),
+    );
+    expect(storage.deleteObject).toHaveBeenCalledWith(previousKey);
+    expect(createEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "design_preview_updated",
+        payload: expect.objectContaining({
+          sessionGroupId: "ds-group-1",
+          designPreviewStatus: "captured",
+          designPreviewUrl: expect.stringContaining("ds-group-1"),
+        }),
+      }),
+    );
+  });
+
+  it("ignores a superseded design-system export result and removes its uploaded object", async () => {
+    prismaMock.sessionGroup.findFirst.mockResolvedValue(null);
+    const { storage } = await import("../lib/storage/index.js");
+
+    await managedGitService.completeDesignSystemExport({
+      organizationId: ORG,
+      sessionGroupId: "ds-group-1",
+      commitSha: "d".repeat(40),
+      requestId: "old-request",
+      storageKey: "design-system-previews/org-1/ds-group-1/old-request.html",
+    });
+
+    expect(storage.deleteObject).toHaveBeenCalledWith(
+      "design-system-previews/org-1/ds-group-1/old-request.html",
+    );
+  });
+});

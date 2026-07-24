@@ -7,10 +7,15 @@ import type { BridgeAnimationExportCommand } from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
 
-type AnimationExportInput = Pick<
-  BridgeAnimationExportCommand,
-  "commitSha" | "requestId" | "uploadTarget"
-> & { workdir: string };
+// Shared by the animation and design-system export commands: both build a Vite
+// project at a committed ref and upload the self-contained HTML to a presigned
+// target. The upload-target shape is identical across both commands.
+type SelfContainedExportInput = {
+  workdir: string;
+  commitSha: string;
+  requestId: string;
+  uploadTarget: BridgeAnimationExportCommand["uploadTarget"];
+};
 
 const SCRIPT_TAG = /<script\b[^>]*src=["']([^"']+)["'][^>]*><\/script>/gi;
 const STYLE_TAG = /<link\b[^>]*href=["']([^"']+\.css)["'][^>]*>/gi;
@@ -75,8 +80,10 @@ async function buildSelfContainedHtml(projectRoot: string): Promise<string> {
   }
 }
 
-export async function exportAnimationToTarget(input: AnimationExportInput): Promise<void> {
-  const exportDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "trace-animation-export-"));
+export async function exportSelfContainedHtmlToTarget(
+  input: SelfContainedExportInput,
+): Promise<void> {
+  const exportDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "trace-export-"));
   const worktree = path.join(exportDir, "repository");
 
   try {
@@ -108,10 +115,10 @@ export async function exportAnimationToTarget(input: AnimationExportInput): Prom
     await execFileAsync("git", ["worktree", "remove", "--force", worktree], {
       cwd: input.workdir,
     }).catch((error: unknown) => {
-      console.warn("[animation-export] failed to unregister temporary worktree", error);
+      console.warn("[self-contained-export] failed to unregister temporary worktree", error);
     });
     await fs.promises.rm(exportDir, { recursive: true, force: true }).catch((error: unknown) => {
-      console.warn("[animation-export] failed to remove temporary export directory", error);
+      console.warn("[self-contained-export] failed to remove temporary export directory", error);
     });
   }
 }
@@ -139,8 +146,8 @@ async function uploadHtml(
   } else {
     const body = new FormData();
     for (const [key, value] of Object.entries(target.fields)) body.append(key, value);
-    body.append("file", new Blob([bytes], { type: "text/html; charset=utf-8" }), "animation.html");
+    body.append("file", new Blob([bytes], { type: "text/html; charset=utf-8" }), "export.html");
     response = await fetch(target.url, { method: "POST", body });
   }
-  if (!response.ok) throw new Error(`Animation export upload failed with status ${response.status}`);
+  if (!response.ok) throw new Error(`Export upload failed with status ${response.status}`);
 }

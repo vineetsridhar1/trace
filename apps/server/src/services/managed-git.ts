@@ -24,6 +24,7 @@ import {
 } from "../lib/pdf-format.js";
 import { designSystemService } from "./design-system.js";
 import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
+import { designCommitPreviewUrl } from "../lib/design-checkpoint-preview-url.js";
 
 const JWT_SECRET = resolveJwtSecret();
 
@@ -63,6 +64,25 @@ async function deleteAnimationObject(key: string): Promise<void> {
     await storage.deleteObject(key);
   } catch (error) {
     console.warn("[managed-git] failed to delete superseded animation preview object", {
+      key,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function isDesignSystemPreviewStorageKeyForGroup(
+  key: string,
+  organizationId: string,
+  sessionGroupId: string,
+) {
+  return key.startsWith(`design-system-previews/${organizationId}/${sessionGroupId}/`);
+}
+
+async function deleteDesignSystemPreviewObject(key: string): Promise<void> {
+  try {
+    await storage.deleteObject(key);
+  } catch (error) {
+    console.warn("[managed-git] failed to delete superseded design-system preview object", {
       key,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -452,6 +472,9 @@ class ManagedGitService {
         }),
         this.enqueueAnimationCommitExport(artifactInput).catch((error: unknown) => {
           console.error("[managed-git] failed to enqueue animation preview export", error);
+        }),
+        this.enqueueDesignSystemCommitPreview(artifactInput).catch((error: unknown) => {
+          console.error("[managed-git] failed to enqueue design-system preview export", error);
         }),
         designSystemService
           .enqueueCommitArtifactsForManagedPush({
@@ -1185,6 +1208,320 @@ class ManagedGitService {
       },
       actorType: actor.actorType,
       actorId: actor.actorId,
+    });
+  }
+
+  // Design-system previews mirror the animation pipeline: the bridge builds the
+  // self-contained workbench at the pushed commit and uploads it directly to a
+  // presigned S3 target, so nothing built is committed to git. They reuse the
+  // design preview columns and the /design-previews/groups/:id serving route.
+  private async enqueueDesignSystemCommitPreview(input: {
+    organizationId: string;
+    repoId: string;
+    branch: string;
+    commitSha: string;
+  }): Promise<void> {
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        organizationId: input.organizationId,
+        repoId: input.repoId,
+        OR: [
+          { branch: input.branch },
+          { branch: null, repo: { is: { defaultBranch: input.branch } } },
+        ],
+        kind: "design_system",
+      },
+      select: {
+        id: true,
+        branch: true,
+        designPreviewPendingKey: true,
+        sessions: {
+          orderBy: { updatedAt: "desc" },
+          select: { id: true, connection: true },
+        },
+      },
+    });
+
+    await Promise.all(
+      groups.map(async (group) => {
+        const exportKey = `design-system-previews/${input.organizationId}/${group.id}/${input.commitSha}-${randomUUID()}.html`;
+        const requestId = randomUUID();
+        const publishing = await prisma.sessionGroup.update({
+          where: { id: group.id },
+          data: {
+            ...(group.branch == null ? { branch: input.branch } : {}),
+            designPreviewStatus: "publishing",
+            designPreviewPendingKey: exportKey,
+            designPreviewCommitSha: input.commitSha,
+            designPreviewRequestId: requestId,
+            designPreviewAttemptedAt: new Date(),
+            designPreviewError: null,
+          },
+          select: {
+            id: true,
+            designPreviewStatus: true,
+            designPreviewKey: true,
+            designPreviewCommitSha: true,
+            designPreviewCapturedAt: true,
+            designPreviewError: true,
+          },
+        });
+        await this.emitDesignSystemPreviewUpdate(input.organizationId, publishing);
+        const uploadTarget = await storage.getUploadTarget(
+          exportKey,
+          "text/html; charset=utf-8",
+          15 * 1024 * 1024,
+        );
+        if (group.designPreviewPendingKey && group.designPreviewPendingKey !== exportKey) {
+          void deleteDesignSystemPreviewObject(group.designPreviewPendingKey);
+        }
+        const session = group.sessions.find((candidate) => {
+          const connection = candidate.connection;
+          return (
+            connection &&
+            typeof connection === "object" &&
+            !Array.isArray(connection) &&
+            (connection as Record<string, unknown>).state === "connected"
+          );
+        });
+        if (!session) {
+          await this.completeDesignSystemExport({
+            organizationId: input.organizationId,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            requestId,
+            storageKey: exportKey,
+            error: "No connected design-system runtime",
+          });
+          return;
+        }
+        const connection = session.connection as Record<string, unknown>;
+        const runtimeInstanceId =
+          typeof connection.runtimeInstanceId === "string"
+            ? connection.runtimeInstanceId
+            : undefined;
+        const delivery = sessionRouter.send(
+          session.id,
+          {
+            type: "design_system_export",
+            requestId,
+            sessionId: session.id,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            storageKey: exportKey,
+            uploadTarget,
+          },
+          { expectedHomeRuntimeId: runtimeInstanceId, organizationId: input.organizationId },
+        );
+        if (delivery !== "delivered") {
+          await this.completeDesignSystemExport({
+            organizationId: input.organizationId,
+            sessionGroupId: group.id,
+            commitSha: input.commitSha,
+            requestId,
+            storageKey: exportKey,
+            error: `Design-system runtime unavailable: ${delivery}`,
+          });
+        }
+      }),
+    );
+  }
+
+  async completeDesignSystemExport(input: {
+    organizationId: string;
+    sessionGroupId: string;
+    commitSha: string;
+    requestId: string;
+    storageKey: string;
+    error?: string;
+  }): Promise<void> {
+    const group = await prisma.sessionGroup.findFirst({
+      where: {
+        id: input.sessionGroupId,
+        organizationId: input.organizationId,
+        kind: "design_system",
+        designPreviewCommitSha: input.commitSha,
+        designPreviewRequestId: input.requestId,
+      },
+      select: { designPreviewPendingKey: true, designPreviewKey: true },
+    });
+    if (!group) {
+      if (
+        isDesignSystemPreviewStorageKeyForGroup(
+          input.storageKey,
+          input.organizationId,
+          input.sessionGroupId,
+        )
+      ) {
+        void deleteDesignSystemPreviewObject(input.storageKey);
+      }
+      return;
+    }
+    if (group.designPreviewPendingKey !== input.storageKey) {
+      if (
+        isDesignSystemPreviewStorageKeyForGroup(
+          input.storageKey,
+          input.organizationId,
+          input.sessionGroupId,
+        )
+      ) {
+        void deleteDesignSystemPreviewObject(input.storageKey);
+      }
+      return;
+    }
+    const completed = await prisma.sessionGroup.updateMany({
+      where: {
+        id: input.sessionGroupId,
+        designPreviewCommitSha: input.commitSha,
+        designPreviewRequestId: input.requestId,
+        designPreviewPendingKey: input.storageKey,
+      },
+      data: input.error
+        ? {
+            designPreviewStatus: "failed",
+            designPreviewPendingKey: null,
+            designPreviewRequestId: null,
+            designPreviewError: input.error.slice(0, 500),
+          }
+        : {
+            designPreviewStatus: "captured",
+            designPreviewKey: group.designPreviewPendingKey,
+            designPreviewPendingKey: null,
+            designPreviewRequestId: null,
+            designPreviewCapturedAt: new Date(),
+            designPreviewError: null,
+          },
+    });
+    if (completed.count === 0) {
+      if (
+        isDesignSystemPreviewStorageKeyForGroup(
+          input.storageKey,
+          input.organizationId,
+          input.sessionGroupId,
+        )
+      ) {
+        void deleteDesignSystemPreviewObject(input.storageKey);
+      }
+      return;
+    }
+    if (input.error && group.designPreviewPendingKey) {
+      void deleteDesignSystemPreviewObject(group.designPreviewPendingKey);
+    } else if (
+      !input.error &&
+      group.designPreviewKey &&
+      group.designPreviewKey !== group.designPreviewPendingKey
+    ) {
+      void deleteDesignSystemPreviewObject(group.designPreviewKey);
+    }
+    const updated = await prisma.sessionGroup.findUniqueOrThrow({
+      where: { id: input.sessionGroupId },
+      select: {
+        id: true,
+        designPreviewStatus: true,
+        designPreviewKey: true,
+        designPreviewCommitSha: true,
+        designPreviewCapturedAt: true,
+        designPreviewError: true,
+      },
+    });
+    await this.emitDesignSystemPreviewUpdate(input.organizationId, updated);
+  }
+
+  async retryDesignSystemCommitExport(
+    sessionGroupId: string,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: {
+        id: true,
+        kind: true,
+        organizationId: true,
+        repoId: true,
+        branch: true,
+        designPreviewStatus: true,
+        designPreviewKey: true,
+        designPreviewCommitSha: true,
+        designPreviewAttemptedAt: true,
+        repo: { select: { defaultBranch: true } },
+      },
+    });
+    if (!group || group.kind !== "design_system" || !group.repoId || !group.repo) return;
+
+    const branch = group.branch ?? group.repo.defaultBranch;
+    const refs = await gitStorage.listRefs(group.organizationId, group.repoId);
+    const commitSha = refs.get(`refs/heads/${branch}`);
+    if (!commitSha) return;
+    const exportIsCurrent = group.designPreviewCommitSha === commitSha;
+    if (
+      !options.force &&
+      exportIsCurrent &&
+      group.designPreviewStatus === "captured" &&
+      group.designPreviewKey
+    )
+      return;
+    if (
+      !options.force &&
+      exportIsCurrent &&
+      group.designPreviewStatus === "publishing" &&
+      group.designPreviewAttemptedAt &&
+      group.designPreviewAttemptedAt.getTime() > Date.now() - DESIGN_PREVIEW_RETRY_DELAY_MS
+    )
+      return;
+
+    await this.enqueueDesignSystemCommitPreview({
+      organizationId: group.organizationId,
+      repoId: group.repoId,
+      branch,
+      commitSha,
+    });
+  }
+
+  async retryPendingDesignSystemExports(sessionGroupId?: string): Promise<void> {
+    const retryBefore = new Date(Date.now() - DESIGN_PREVIEW_RETRY_DELAY_MS);
+    const groups = await prisma.sessionGroup.findMany({
+      where: {
+        ...(sessionGroupId ? { id: sessionGroupId } : {}),
+        kind: "design_system",
+        OR: [
+          { designPreviewStatus: { in: ["pending", "failed"] } },
+          { designPreviewStatus: "publishing", designPreviewAttemptedAt: { lt: retryBefore } },
+        ],
+      },
+      select: { id: true },
+      take: 50,
+    });
+    await Promise.all(
+      groups.map((group) => this.retryDesignSystemCommitExport(group.id, { force: true })),
+    );
+  }
+
+  private async emitDesignSystemPreviewUpdate(
+    organizationId: string,
+    group: {
+      id: string;
+      designPreviewStatus: string | null;
+      designPreviewKey: string | null;
+      designPreviewCommitSha: string | null;
+      designPreviewCapturedAt: Date | null;
+      designPreviewError: string | null;
+    },
+  ): Promise<void> {
+    await eventService.create({
+      organizationId,
+      scopeType: "system",
+      scopeId: group.id,
+      eventType: "design_preview_updated",
+      payload: {
+        sessionGroupId: group.id,
+        designPreviewStatus: group.designPreviewStatus,
+        designPreviewUrl: group.designPreviewKey ? designCommitPreviewUrl(group.id) : null,
+        designPreviewCommitSha: group.designPreviewCommitSha,
+        designPreviewCapturedAt: group.designPreviewCapturedAt?.toISOString() ?? null,
+        designPreviewError: group.designPreviewError,
+      },
+      actorType: "system",
+      actorId: "system",
     });
   }
 

@@ -32,6 +32,7 @@ import type {
   BridgeRepoWorktree,
   BridgePdfExportCommand,
   BridgeAnimationExportCommand,
+  BridgeDesignSystemExportCommand,
 } from "@trace/shared";
 import { prisma } from "./db.js";
 import { isGeneratedProjectKind } from "./generated-project.js";
@@ -79,6 +80,7 @@ export type SessionCommand =
   | BridgeListWorkspaceSlugsCommand
   | BridgePdfExportCommand
   | BridgeAnimationExportCommand
+  | BridgeDesignSystemExportCommand
   | { type: "session_git_sync_status"; requestId: string; sessionId: string; workdirHint?: string }
   | BridgeSessionCurrentBranchCommand
   | BridgeTerminalCreateCommand

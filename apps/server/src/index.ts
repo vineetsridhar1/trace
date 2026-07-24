@@ -377,6 +377,10 @@ async function main() {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[animation-preview-reconciler] iteration failed: ${message}`);
     });
+    void managedGitService.retryPendingDesignSystemExports().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[design-system-preview-reconciler] iteration failed: ${message}`);
+    });
   };
   reconcileAnimationPreviews();
   const animationPreviewReconciler = setInterval(

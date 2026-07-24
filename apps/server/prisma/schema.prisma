@@ -593,9 +593,12 @@ model SessionGroup {
   endpoints                SessionEndpoint[]
   designPreviewStatus      String?
   designPreviewKey         String?
+  designPreviewPendingKey  String?
   designPreviewCommitSha   String?
+  designPreviewRequestId   String?
   designPreviewCapturedAt  DateTime?
   designPreviewAttemptedAt DateTime?
+  designPreviewError       String?
   pdfExportStatus          String?
   pdfExportKey             String?
   pdfExportPendingKey      String?

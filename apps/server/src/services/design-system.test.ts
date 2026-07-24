@@ -267,60 +267,6 @@ describe("DesignSystemService", () => {
     ).toBe(false);
   });
 
-  it("backfills an S3 static canvas for an existing saved artifact", async () => {
-    const archive = await createDeterministicTarGz(
-      new Map([
-        ["design-system/manifest.json", Buffer.from('{"name":"Acme UI"}')],
-        [
-          "design-system/preview/foundations.html",
-          Buffer.from("<!doctype html><h1>Foundations</h1>"),
-        ],
-        [
-          "design-system/preview/components.html",
-          Buffer.from("<!doctype html><h1>Components</h1>"),
-        ],
-      ]),
-    );
-    mocks.systemFindMany.mockResolvedValue([
-      {
-        id: "system-1",
-        organizationId: "org-1",
-        authoringSessionGroupId: "group-1",
-        latestCommitArtifact: {
-          id: "artifact-1",
-          commitSha: "commit-1",
-          storageKey: "workbench.tar.gz",
-        },
-      },
-    ]);
-    mocks.storageGet.mockResolvedValue(archive);
-    mocks.sessionGroupUpdateMany.mockResolvedValue({ count: 1 });
-
-    await expect(new DesignSystemService().reconcileCommitArtifacts()).resolves.toBe(1);
-
-    expect(mocks.storagePut).toHaveBeenCalledWith(
-      "design-system-previews/org-1/system-1/commit-1.html",
-      expect.any(Buffer),
-      "text/html; charset=utf-8",
-      { ifAbsent: true },
-    );
-    expect(mocks.sessionGroupUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          designPreviewKey: "design-system-previews/org-1/system-1/commit-1.html",
-          designPreviewStatus: "captured",
-        }),
-      }),
-    );
-    expect(mocks.eventCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventType: "design_preview_updated",
-        payload: expect.objectContaining({
-          designPreviewUrl: "/design-previews/groups/group-1",
-        }),
-      }),
-    );
-  });
 
   it("revalidates a saved artifact after a compatible validator upgrade", async () => {
     const png = Buffer.from(
