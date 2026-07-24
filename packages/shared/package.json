@@ -59,10 +59,11 @@
     }
   },
   "scripts": {
-    "build": "tsc -b && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
+    "generate:visual-plan-skill": "node scripts/generate-visual-plan-skill.mjs",
+    "build": "pnpm generate:visual-plan-skill && tsc -b && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
     "dev": "pnpm build && (tsc -b --watch & tsc -p tsconfig.cjs.json --watch & wait)",
     "lint": "tsc -b",
-    "test": "vitest run"
+    "test": "pnpm generate:visual-plan-skill && vitest run"
   },
   "peerDependencies": {
     "node-pty": "^1.1.0"

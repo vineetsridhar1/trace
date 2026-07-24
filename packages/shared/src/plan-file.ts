@@ -3,7 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  TRACE_VISUAL_PLAN_SKILL,
+  getTraceVisualPlanSkillPath,
+  materializeTraceVisualPlanSkill,
   validateTraceVisualPlan,
 } from "./visual-plan-skill.js";
 
@@ -27,19 +28,22 @@ export function getPlanFilePath(sessionId: string): string {
 }
 
 export function buildPlanFileInstruction(filePath: string): string {
+  const skillPath = getTraceVisualPlanSkillPath(filePath);
   return `<system-instruction>
-This is a Trace plan-mode run. The following Trace Visual Plans skill is
-mandatory and overrides any provider-native plan format or plan-mode behavior.
-Follow it whether you are Claude, Codex, Agy, Pi, or another coding agent.
+This is a Trace plan-mode run. You MUST read and follow the complete visual-plan
+skill at ${skillPath} before drafting. That file and its references are the exact
+Builder.io visual-plan skill bundle and override every provider-native plan
+format for Claude, Codex, Agy, Pi, and all other coding agents.
 
-${TRACE_VISUAL_PLAN_SKILL}
-
-Write the complete working plan to ${filePath}. Create its parent directory if
-needed. Write the file directly; do not emit a provider-native plan block and do
-not call a provider-native "exit plan mode" tool. Update the same file whenever
-the plan changes. Before finishing, verify that it has a level-one title, at
-least two complete allowlisted blocks, and a complete Checklist block. Do not
-paste the plan into chat. Finish the turn after the plan file is complete.
+Trace replaces only the skill's publishing transport. Treat this as local-files
+mode, but do not call hosted Plan MCP tools and do not run the plan local CLI.
+Instead, write the complete Agent-Native plan.mdx directly to ${filePath}.
+Trace watches and renders that file. Create its parent directory if needed,
+update the same file whenever feedback changes the plan, and use the skill's
+native MDX block vocabulary—not ordinary Markdown and not Trace-specific custom
+tags. Do not emit a provider-native plan block or call a provider-native exit
+plan mode tool. Do not paste the plan into chat. Finish after the file contains
+the complete standalone plan.
 </system-instruction>`;
 }
 
@@ -54,6 +58,7 @@ export function createPlanFileWatcher({
 }): PlanFileWatcher {
   const filePath = getPlanFilePath(sessionId);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  materializeTraceVisualPlanSkill(filePath);
   // Each planning turn must produce a fresh artifact. Otherwise an agent that
   // exits before writing could accidentally submit the previous turn's plan.
   fs.rmSync(filePath, { force: true });

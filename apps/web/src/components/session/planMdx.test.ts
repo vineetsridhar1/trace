@@ -1,41 +1,86 @@
 import { describe, expect, it } from "vitest";
-import { parsePlanDiagram, parsePlanMdx } from "./planMdxParser";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { PlanMdx } from "./PlanMdx";
+import { parsePlanMdx } from "./planMdxParser";
 
-describe("plan MDX parser", () => {
-  it("separates prose and allowlisted visual blocks", () => {
-    const nodes = parsePlanMdx(`# Plan
+describe("Agent-Native plan MDX parser", () => {
+  it("parses upstream rich text and registry blocks", () => {
+    const nodes = parsePlanMdx(`---
+title: "Session recovery"
+version: 2
+---
 
-Overview.
+<RichText id="intro">
 
-<Callout title="Boundary" tone="decision">
-The service owns it.
+## Outcome
+
+Sessions resume from a durable checkpoint.
+
+</RichText>
+
+<Callout id="boundary" tone="decision">
+
+The service owns checkpoint selection.
+
 </Callout>
 
-## Steps
+<Checklist
+  id="verification"
+  items={[
+    { id: "unit", label: "Run unit tests", checked: true },
+    { id: "e2e", label: "Resume a stopped session", checked: false },
+  ]}
+/>`);
 
-<Checklist title="Verification">
-- [ ] Run the test
-</Checklist>`);
-
-    expect(nodes).toHaveLength(4);
-    expect(nodes[1]).toMatchObject({
-      type: "block",
-      name: "Callout",
-      title: "Boundary",
-      tone: "decision",
-      content: "The service owns it.",
+    expect(nodes).toHaveLength(3);
+    expect(nodes[0]).toMatchObject({
+      type: "markdown",
+      content: "## Outcome\n\nSessions resume from a durable checkpoint.",
     });
-    expect(nodes[3]).toMatchObject({
-      type: "block",
-      name: "Checklist",
-      title: "Verification",
+    expect(nodes[1]).toMatchObject({
+      type: "registry-block",
+      id: "boundary",
+      blockType: "callout",
+      data: {
+        tone: "decision",
+        body: "The service owns checkpoint selection.",
+      },
+    });
+    expect(nodes[2]).toMatchObject({
+      type: "registry-block",
+      id: "verification",
+      blockType: "checklist",
+      data: {
+        items: [
+          { id: "unit", label: "Run unit tests", checked: true },
+          { id: "e2e", label: "Resume a stopped session", checked: false },
+        ],
+      },
     });
   });
 
-  it("parses diagram relationships", () => {
-    expect(parsePlanDiagram("Web -> Service: request\nService -> Store: append event")).toEqual([
-      { source: "Web", target: "Service", label: "request" },
-      { source: "Service", target: "Store", label: "append event" },
+  it("keeps unregistered upstream blocks reviewable", () => {
+    expect(
+      parsePlanMdx('<Decision id="choice" title="Choose storage" options={[]} />'),
+    ).toMatchObject([
+      {
+        type: "unknown-block",
+        id: "choice",
+        name: "Decision",
+      },
     ]);
+  });
+
+  it("renders an upstream checklist with the first-party block renderer", () => {
+    const html = renderToStaticMarkup(
+      createElement(PlanMdx, {
+        content:
+          '<Checklist id="checks" items={[{ id: "unit", label: "Run unit tests", checked: true }]} />',
+        steerable: false,
+      }),
+    );
+
+    expect(html).toContain("Run unit tests");
   });
 });

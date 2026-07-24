@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -6,7 +7,11 @@ import {
   createPlanFileWatcher,
   getPlanFilePath,
 } from "../src/plan-file.js";
-import { validateTraceVisualPlan } from "../src/visual-plan-skill.js";
+import {
+  getTraceVisualPlanSkillPath,
+  TRACE_VISUAL_PLAN_SKILL,
+  validateTraceVisualPlan,
+} from "../src/visual-plan-skill.js";
 
 const sessionIds: string[] = [];
 
@@ -15,7 +20,12 @@ afterEach(async () => {
   await Promise.all(
     sessionIds
       .splice(0)
-      .map((sessionId) => fs.promises.rm(getPlanFilePath(sessionId), { force: true })),
+      .map((sessionId) =>
+        fs.promises.rm(path.dirname(getPlanFilePath(sessionId)), {
+          force: true,
+          recursive: true,
+        }),
+      ),
   );
 });
 
@@ -26,7 +36,11 @@ describe("plan file", () => {
     expect(buildPlanFileInstruction(filePath)).toContain(filePath);
     expect(buildPlanFileInstruction(filePath)).toContain("Do not paste the plan into chat");
     expect(buildPlanFileInstruction(filePath)).toContain("Claude, Codex, Agy, Pi");
-    expect(buildPlanFileInstruction(filePath)).toContain("<Diagram title=");
+    expect(buildPlanFileInstruction(filePath)).toContain(getTraceVisualPlanSkillPath(filePath));
+    expect(TRACE_VISUAL_PLAN_SKILL).toContain("# Agent-Native Plans");
+    expect(createHash("sha256").update(TRACE_VISUAL_PLAN_SKILL).digest("hex")).toBe(
+      "25c76d8f1c385c9e5ead466bf4270acef37222cf946dba48b1a21aac8211f77d",
+    );
   });
 
   it("publishes changed non-empty snapshots once per content hash", async () => {
@@ -38,10 +52,9 @@ describe("plan file", () => {
       onSnapshot: (snapshot) => snapshots.push(snapshot.content),
     });
 
-    const first =
-      "# First\n<Callout title=\"Choice\">Use events.</Callout>\n<Checklist title=\"Work\">- [ ] Test it</Checklist>\n";
+    const first = '# First\n<Callout id="choice" tone="decision">Use events.</Callout>\n';
     const second =
-      "# Second\n<FileTree title=\"Files\">apps/web — UI</FileTree>\n<Checklist title=\"Work\">- [ ] Test it</Checklist>\n";
+      '# Second\n<Checklist id="work" items={[{ id: "test", label: "Test it" }]} />\n';
     await fs.promises.writeFile(watcher.filePath, first, "utf8");
     await watcher.flush();
     await watcher.flush();
@@ -69,10 +82,10 @@ describe("plan file", () => {
   });
 
   it("validates the structured Trace MDX contract", () => {
-    expect(validateTraceVisualPlan("# Plain\n\nJust Markdown.")).toHaveLength(2);
+    expect(validateTraceVisualPlan("# Plain\n\nJust Markdown.")).toHaveLength(1);
     expect(
       validateTraceVisualPlan(
-        '# Plan\n<Diagram title="Flow">A -> B</Diagram>\n<Checklist title="Checks">- [ ] Verify</Checklist>',
+        '# Plan\n<Checklist id="checks" items={[{ id: "verify", label: "Verify" }]} />',
       ),
     ).toEqual([]);
   });
