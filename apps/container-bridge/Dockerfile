@@ -69,8 +69,7 @@ RUN mkdir -p /home/coder/.ssh && chmod 700 /home/coder/.ssh
 # first `pnpm install` in a session hardlinks from cache instead of hitting the
 # registry cold. Keep the store; drop the throwaway node_modules.
 RUN cd /opt/trace/app-starter && \
-    pnpm install --ignore-workspace --frozen-lockfile && \
-    rm -rf node_modules
+    pnpm fetch
 
 # Run under tini as PID 1 so orphaned grandchildren of killed dev-server process
 # trees (pnpm/vite) and the daemonized redis/postgres are reaped instead of
