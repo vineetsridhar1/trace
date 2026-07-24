@@ -563,3 +563,127 @@ describe("managed git PDF exports", () => {
     expect(storage.deleteObject).toHaveBeenCalledWith(storageKey);
   });
 });
+
+describe("managed git animation preview exports", () => {
+  it("sends an animation export command to the bridge after an accepted branch push", async () => {
+    prismaMock.sessionGroup.findMany.mockImplementation((args?: { where?: { kind?: string } }) =>
+      Promise.resolve(
+        args?.where?.kind === "animation"
+          ? [
+              {
+                id: "animation-group-1",
+                branch: null,
+                animationPreviewPendingKey: null,
+                sessions: [
+                  {
+                    id: "session-1",
+                    connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+                  },
+                ],
+              },
+            ]
+          : [],
+      ),
+    );
+    prismaMock.sessionGroup.update.mockResolvedValue({ id: "animation-group-1" });
+
+    await managedGitService.recordPush({
+      organizationId: ORG,
+      repoId: REPO,
+      commands: [
+        {
+          ref: "refs/heads/main",
+          oldSha: "a".repeat(40),
+          newSha: "b".repeat(40),
+        },
+      ],
+      actorType: "system",
+      actorId: "runtime-1",
+    });
+
+    expect(sessionRouter.send).toHaveBeenCalledWith(
+      "session-1",
+      expect.objectContaining({
+        type: "animation_export",
+        sessionGroupId: "animation-group-1",
+        commitSha: "b".repeat(40),
+      }),
+      { expectedHomeRuntimeId: "runtime-1", organizationId: ORG },
+    );
+    expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ branch: "main", animationPreviewStatus: "publishing" }),
+      }),
+    );
+  });
+
+  it("atomically promotes a completed export and emits a resolved preview URL", async () => {
+    const storageKey = "animation-previews/org-1/animation-group-1/new.html";
+    const previousKey = "animation-previews/org-1/animation-group-1/previous.html";
+    prismaMock.sessionGroup.findFirst.mockResolvedValue({
+      animationPreviewPendingKey: storageKey,
+      animationPreviewKey: previousKey,
+    });
+    prismaMock.sessionGroup.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.sessionGroup.findUniqueOrThrow.mockResolvedValue({
+      id: "animation-group-1",
+      animationPreviewStatus: "captured",
+      animationPreviewKey: storageKey,
+      animationPreviewCommitSha: "f".repeat(40),
+      animationPreviewCapturedAt: new Date(),
+      animationPreviewError: null,
+    });
+    const { storage } = await import("../lib/storage/index.js");
+
+    await managedGitService.completeAnimationExport({
+      organizationId: ORG,
+      sessionGroupId: "animation-group-1",
+      commitSha: "f".repeat(40),
+      requestId: "current-request",
+      storageKey,
+    });
+
+    expect(prismaMock.sessionGroup.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ animationPreviewPendingKey: storageKey }),
+        data: expect.objectContaining({
+          animationPreviewStatus: "captured",
+          animationPreviewKey: storageKey,
+          animationPreviewPendingKey: null,
+        }),
+      }),
+    );
+    expect(storage.deleteObject).toHaveBeenCalledWith(previousKey);
+    // Regression check: the event payload must carry the resolved preview URL
+    // (not just the status), since the client only patches its store from
+    // what the event carries — it never refetches. A payload missing this
+    // field means the live preview panel never learns the export finished.
+    expect(createEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "animation_preview_updated",
+        payload: expect.objectContaining({
+          sessionGroupId: "animation-group-1",
+          animationPreviewStatus: "captured",
+          animationPreviewUrl: expect.stringContaining("animation-group-1"),
+        }),
+      }),
+    );
+  });
+
+  it("ignores a superseded animation export result and removes its uploaded object", async () => {
+    prismaMock.sessionGroup.findFirst.mockResolvedValue(null);
+    const { storage } = await import("../lib/storage/index.js");
+
+    await managedGitService.completeAnimationExport({
+      organizationId: ORG,
+      sessionGroupId: "animation-group-1",
+      commitSha: "d".repeat(40),
+      requestId: "old-request",
+      storageKey: "animation-previews/org-1/animation-group-1/old-request.html",
+    });
+
+    expect(storage.deleteObject).toHaveBeenCalledWith(
+      "animation-previews/org-1/animation-group-1/old-request.html",
+    );
+  });
+});

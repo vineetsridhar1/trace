@@ -620,6 +620,38 @@ describe("handleOrgEvent", () => {
     });
   });
 
+  it("updates a saved animation preview from its event", () => {
+    useEntityStore.setState({
+      sessionGroups: {
+        "group-1": {
+          id: "group-1",
+          name: "Animation",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        } as never,
+      },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "animation_preview_updated",
+        scopeId: "group-1",
+        timestamp: "2026-01-02T00:00:00.000Z",
+        payload: {
+          sessionGroupId: "group-1",
+          animationPreviewStatus: "captured",
+          animationPreviewCommitSha: "a".repeat(40),
+          animationPreviewUrl: "/animation-previews/groups/group-1",
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toMatchObject({
+      animationPreviewStatus: "captured",
+      animationPreviewCommitSha: "a".repeat(40),
+      animationPreviewUrl: "/animation-previews/groups/group-1",
+    });
+  });
+
   it("routes session_output question_pending into needs_input + bumps sort", () => {
     useEntityStore.setState({
       sessions: {

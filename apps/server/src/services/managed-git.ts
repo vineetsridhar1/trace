@@ -23,6 +23,7 @@ import {
   type PdfPageFormat,
 } from "../lib/pdf-format.js";
 import { designSystemService } from "./design-system.js";
+import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
 
 const JWT_SECRET = resolveJwtSecret();
 
@@ -928,6 +929,7 @@ class ManagedGitService {
           select: {
             id: true,
             animationPreviewStatus: true,
+            animationPreviewKey: true,
             animationPreviewCommitSha: true,
             animationPreviewCapturedAt: true,
             animationPreviewError: true,
@@ -1073,6 +1075,7 @@ class ManagedGitService {
       select: {
         id: true,
         animationPreviewStatus: true,
+        animationPreviewKey: true,
         animationPreviewCommitSha: true,
         animationPreviewCapturedAt: true,
         animationPreviewError: true,
@@ -1155,6 +1158,7 @@ class ManagedGitService {
     group: {
       id: string;
       animationPreviewStatus: string | null;
+      animationPreviewKey: string | null;
       animationPreviewCommitSha: string | null;
       animationPreviewCapturedAt: Date | null;
       animationPreviewError: string | null;
@@ -1172,6 +1176,9 @@ class ManagedGitService {
       payload: {
         sessionGroupId: group.id,
         animationPreviewStatus: group.animationPreviewStatus,
+        animationPreviewUrl: group.animationPreviewKey
+          ? animationCommitPreviewUrl(group.id)
+          : null,
         animationPreviewCommitSha: group.animationPreviewCommitSha,
         animationPreviewCapturedAt: group.animationPreviewCapturedAt?.toISOString() ?? null,
         animationPreviewError: group.animationPreviewError,
