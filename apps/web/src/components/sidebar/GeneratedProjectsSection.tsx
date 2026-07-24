@@ -139,6 +139,8 @@ const GENERATED_PROJECTS_QUERY = gql`
       owner {
         id
       }
+      animationPreviewUrl
+      animationPreviewStatus
       gitCheckpoints {
         id
         committedAt

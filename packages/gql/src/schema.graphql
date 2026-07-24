@@ -325,6 +325,7 @@ enum EventType {
   session_group_renamed
   design_preview_updated
   pdf_export_updated
+  animation_preview_updated
   design_element_text_updated
   design_element_styles_updated
   manual_element_saved
@@ -557,6 +558,11 @@ type SessionGroup {
   pdfPageHeight: Float!
   pdfPageUnit: String!
   pdfFormatVersion: Int!
+  animationPreviewStatus: String
+  animationPreviewUrl: String
+  animationPreviewCommitSha: String
+  animationPreviewCapturedAt: DateTime
+  animationPreviewError: String
   sessions: [Session!]!
   workdir: String
   connection: SessionConnection

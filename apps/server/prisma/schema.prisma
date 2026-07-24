@@ -222,6 +222,7 @@ enum EventType {
   session_group_renamed
   design_preview_updated
   pdf_export_updated
+  animation_preview_updated
   design_element_text_updated
   design_element_styles_updated
   manual_element_saved
@@ -608,6 +609,14 @@ model SessionGroup {
   pdfPageUnit              String                      @default("mm")
   pdfFormatVersion         Int                         @default(0)
   pdfExportFormatVersion   Int?
+  animationPreviewStatus      String?
+  animationPreviewKey         String?
+  animationPreviewPendingKey  String?
+  animationPreviewCommitSha   String?
+  animationPreviewRequestId   String?
+  animationPreviewCapturedAt  DateTime?
+  animationPreviewAttemptedAt DateTime?
+  animationPreviewError       String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -620,6 +629,7 @@ model SessionGroup {
   @@index([repoId, branch, updatedAt])
   @@index([kind, designPreviewStatus])
   @@index([kind, pdfExportStatus])
+  @@index([kind, animationPreviewStatus])
   @@index([designSystemVersionId])
 }
 

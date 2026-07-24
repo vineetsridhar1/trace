@@ -128,6 +128,7 @@ vi.mock("./managed-git.js", () => ({
     mintAccessToken: vi.fn(),
     retryPendingDesignCommitPreviews: vi.fn().mockResolvedValue(undefined),
     retryPdfCommitExport: vi.fn().mockResolvedValue(undefined),
+    retryAnimationCommitExport: vi.fn().mockResolvedValue(undefined),
     updatePdfFormat: vi.fn().mockResolvedValue(undefined),
   },
 }));

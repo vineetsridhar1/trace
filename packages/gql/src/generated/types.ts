@@ -640,6 +640,7 @@ export type EventType =
   | "agent_environment_created"
   | "agent_environment_deleted"
   | "agent_environment_updated"
+  | "animation_preview_updated"
   | "application_config_updated"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
@@ -2407,6 +2408,11 @@ export type SessionFilters = {
 
 export type SessionGroup = {
   __typename?: "SessionGroup";
+  animationPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  animationPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
+  animationPreviewError?: Maybe<Scalars["String"]["output"]>;
+  animationPreviewStatus?: Maybe<Scalars["String"]["output"]>;
+  animationPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   archivedAt?: Maybe<Scalars["DateTime"]["output"]>;
   branch?: Maybe<Scalars["String"]["output"]>;
   channel?: Maybe<Channel>;

@@ -642,6 +642,7 @@ export type EventType =
   | "agent_environment_created"
   | "agent_environment_deleted"
   | "agent_environment_updated"
+  | "animation_preview_updated"
   | "application_config_updated"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
@@ -2409,6 +2410,11 @@ export type SessionFilters = {
 
 export type SessionGroup = {
   __typename?: "SessionGroup";
+  animationPreviewCapturedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  animationPreviewCommitSha?: Maybe<Scalars["String"]["output"]>;
+  animationPreviewError?: Maybe<Scalars["String"]["output"]>;
+  animationPreviewStatus?: Maybe<Scalars["String"]["output"]>;
+  animationPreviewUrl?: Maybe<Scalars["String"]["output"]>;
   archivedAt?: Maybe<Scalars["DateTime"]["output"]>;
   branch?: Maybe<Scalars["String"]["output"]>;
   channel?: Maybe<Channel>;
@@ -3358,6 +3364,11 @@ export type SessionGroupDetailQuery = {
     pdfPageHeight: number;
     pdfPageUnit: string;
     pdfFormatVersion: number;
+    animationPreviewUrl?: string | null;
+    animationPreviewStatus?: string | null;
+    animationPreviewCommitSha?: string | null;
+    animationPreviewCapturedAt?: string | null;
+    animationPreviewError?: string | null;
     setupStatus: SetupStatus;
     setupError?: string | null;
     createdAt: string;
@@ -4431,6 +4442,8 @@ export type GeneratedProjectsQuery = {
     kind: SessionGroupKind;
     status: SessionGroupStatus;
     visibility: SessionGroupVisibility;
+    animationPreviewUrl?: string | null;
+    animationPreviewStatus?: string | null;
     archivedAt?: string | null;
     updatedAt: string;
     owner: { __typename?: "User"; id: string };
@@ -6951,6 +6964,11 @@ export const SessionGroupDetailDocument = {
                 { kind: "Field", name: { kind: "Name", value: "pdfPageHeight" } },
                 { kind: "Field", name: { kind: "Name", value: "pdfPageUnit" } },
                 { kind: "Field", name: { kind: "Name", value: "pdfFormatVersion" } },
+                { kind: "Field", name: { kind: "Name", value: "animationPreviewUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "animationPreviewStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "animationPreviewCommitSha" } },
+                { kind: "Field", name: { kind: "Name", value: "animationPreviewCapturedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "animationPreviewError" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "gitCheckpoints" },
@@ -10389,6 +10407,8 @@ export const GeneratedProjectsDocument = {
                     selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
                   },
                 },
+                { kind: "Field", name: { kind: "Name", value: "animationPreviewUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "animationPreviewStatus" } },
                 {
                   kind: "Field",
                   name: { kind: "Name", value: "gitCheckpoints" },

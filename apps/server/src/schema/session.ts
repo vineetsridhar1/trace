@@ -26,6 +26,7 @@ import {
   designCheckpointPreviewUrl,
   designCommitPreviewUrl,
 } from "../lib/design-checkpoint-preview-url.js";
+import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
 
 export const sessionQueries = {
   sessionGroups: (
@@ -896,6 +897,8 @@ export const sessionTypeResolvers = {
   SessionGroup: {
     designPreviewUrl: (group: { id: string; designPreviewKey?: string | null }) =>
       group.designPreviewKey ? designCommitPreviewUrl(group.id) : null,
+    animationPreviewUrl: (group: { id: string; animationPreviewKey?: string | null }) =>
+      group.animationPreviewKey ? animationCommitPreviewUrl(group.id) : null,
     status: async (
       group: {
         id: string;

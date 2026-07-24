@@ -257,24 +257,34 @@ describe("managed git authorization", () => {
 
 describe("managed git PDF exports", () => {
   it("sends a PDF export command to the bridge after an accepted branch push", async () => {
-    prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      {
-        id: "pdf-group-1",
-        branch: null,
-        pdfPageWidth: 210,
-        pdfPageHeight: 297,
-        pdfPageUnit: "mm",
-        pdfFormatVersion: 0,
-        pdfExportKey: null,
-        pdfExportPendingKey: null,
-        sessions: [
-          {
-            id: "session-1",
-            connection: { state: "connected", runtimeInstanceId: "runtime-1" },
-          },
-        ],
-      },
-    ]);
+    // Design, PDF, and animation exports are dispatched concurrently from the
+    // same push and each issues its own kind-filtered findMany — branch on
+    // the query's `kind` rather than call order, which is not guaranteed
+    // across concurrent branches with differing internal await timing.
+    prismaMock.sessionGroup.findMany.mockImplementation((args?: { where?: { kind?: string } }) =>
+      Promise.resolve(
+        args?.where?.kind === "pdf"
+          ? [
+              {
+                id: "pdf-group-1",
+                branch: null,
+                pdfPageWidth: 210,
+                pdfPageHeight: 297,
+                pdfPageUnit: "mm",
+                pdfFormatVersion: 0,
+                pdfExportKey: null,
+                pdfExportPendingKey: null,
+                sessions: [
+                  {
+                    id: "session-1",
+                    connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+                  },
+                ],
+              },
+            ]
+          : [],
+      ),
+    );
     prismaMock.sessionGroup.update.mockResolvedValue({ id: "pdf-group-1" });
 
     await managedGitService.recordPush({
@@ -320,24 +330,30 @@ describe("managed git PDF exports", () => {
     gitStorageMock.readFileAtCommit.mockResolvedValueOnce(
       JSON.stringify({ width: 297, height: 297, unit: "mm" }),
     );
-    prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      {
-        id: "pdf-group-1",
-        branch: "main",
-        pdfPageWidth: 210,
-        pdfPageHeight: 297,
-        pdfPageUnit: "mm",
-        pdfFormatVersion: 2,
-        pdfExportKey: null,
-        pdfExportPendingKey: null,
-        sessions: [
-          {
-            id: "session-1",
-            connection: { state: "connected", runtimeInstanceId: "runtime-1" },
-          },
-        ],
-      },
-    ]);
+    prismaMock.sessionGroup.findMany.mockImplementation((args?: { where?: { kind?: string } }) =>
+      Promise.resolve(
+        args?.where?.kind === "pdf"
+          ? [
+              {
+                id: "pdf-group-1",
+                branch: "main",
+                pdfPageWidth: 210,
+                pdfPageHeight: 297,
+                pdfPageUnit: "mm",
+                pdfFormatVersion: 2,
+                pdfExportKey: null,
+                pdfExportPendingKey: null,
+                sessions: [
+                  {
+                    id: "session-1",
+                    connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+                  },
+                ],
+              },
+            ]
+          : [],
+      ),
+    );
     prismaMock.sessionGroup.update.mockResolvedValue({
       id: "pdf-group-1",
       pdfExportStatus: "publishing",

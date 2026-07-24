@@ -100,6 +100,13 @@ export function GeneratedProjectGalleryCard({
             />
           ) : kind === "pdf" ? (
             <PdfArtifactPreview title={group.name} previewUrl={pdfPreviewUrl} />
+          ) : kind === "animation" && group.animationPreviewUrl ? (
+            <iframe
+              src={group.animationPreviewUrl}
+              title={`${group.name} preview`}
+              className="pointer-events-none size-full border-0 bg-background"
+              sandbox="allow-scripts"
+            />
           ) : (
             <ArtifactPlaceholder Icon={Icon} label={label} />
           )}

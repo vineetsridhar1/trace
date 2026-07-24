@@ -99,6 +99,11 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       pdfPageHeight
       pdfPageUnit
       pdfFormatVersion
+      animationPreviewUrl
+      animationPreviewStatus
+      animationPreviewCommitSha
+      animationPreviewCapturedAt
+      animationPreviewError
       gitCheckpoints {
         id
         sessionId

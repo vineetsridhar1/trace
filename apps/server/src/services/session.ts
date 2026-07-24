@@ -7568,6 +7568,11 @@ export class SessionService {
         .catch((error: unknown) => {
           console.error("[session] PDF export retry after runtime reconnect failed", error);
         });
+      void managedGitService
+        .retryAnimationCommitExport(session.sessionGroupId)
+        .catch((error: unknown) => {
+          console.error("[session] animation preview retry after runtime reconnect failed", error);
+        });
     }
   }
 
