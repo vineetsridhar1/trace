@@ -14,5 +14,5 @@
 
 1. Resolve the concept: what triggers the motion (load, hover, click, drag, scroll), and what should it communicate or feel like.
 2. Make a valid first change quickly, then refine timing, easing, and states in small batches.
-3. Check the interaction in the live preview by actually triggering it.
+3. Run `pnpm review` to drive the live preview headlessly, trigger the interaction, and capture before/after screenshots to `.trace/review/` — then use your Read tool on those PNG files to actually look at the result. playwright-core and a system Chromium are already installed for this; do not install your own browser or automation tooling.
 4. Run `pnpm test` before delivery.
