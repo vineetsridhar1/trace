@@ -23,6 +23,7 @@ import {
   type BridgeRepoWorktree,
 } from "@trace/shared";
 import { PLAN_FILE_MAX_BYTES } from "@trace/shared/plan-file";
+import { validateTraceVisualPlan } from "@trace/shared/visual-plan-skill";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
 import {
@@ -5730,9 +5731,7 @@ export class SessionService {
     const normalizedFilePath = snapshot.filePath.replaceAll("\\", "/");
     if (!content.trim() || Buffer.byteLength(content, "utf8") > PLAN_FILE_MAX_BYTES) return;
     if (!normalizedFilePath.endsWith(`/trace-plans/${sessionId}/plan.mdx`)) return;
-    if (/^\s*(?:import|export)\s/m.test(content) || /<(?:script|style|iframe)\b/i.test(content)) {
-      return;
-    }
+    if (validateTraceVisualPlan(content).length > 0) return;
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },

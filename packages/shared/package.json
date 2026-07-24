@@ -28,6 +28,11 @@
       "import": "./dist/plan-file.js",
       "require": "./dist/cjs/plan-file.js"
     },
+    "./visual-plan-skill": {
+      "types": "./dist/visual-plan-skill.d.ts",
+      "import": "./dist/visual-plan-skill.js",
+      "require": "./dist/cjs/visual-plan-skill.js"
+    },
     "./adapters": {
       "types": "./dist/adapters.d.ts",
       "import": "./dist/adapters.js",
@@ -44,6 +49,9 @@
       ],
       "plan-file": [
         "dist/plan-file.d.ts"
+      ],
+      "visual-plan-skill": [
+        "dist/visual-plan-skill.d.ts"
       ],
       "adapters": [
         "dist/adapters.d.ts"

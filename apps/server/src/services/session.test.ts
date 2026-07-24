@@ -4355,13 +4355,15 @@ describe("SessionService", () => {
 
   describe("recordOutput", () => {
     it("records validated plan file snapshots without changing session status", async () => {
+      const planContent =
+        '# Implementation plan\n<Callout title="Decision">Use events.</Callout>\n<Checklist title="Verification">- [ ] Run tests</Checklist>\n';
       prismaMock.session.findUnique.mockResolvedValueOnce({
         organizationId: "org-1",
         agentStatus: "active",
       });
 
       await service.recordPlanFileUpdate("session-1", {
-        content: "# Implementation plan\n",
+        content: planContent,
         contentHash: "hash-1",
         filePath: "/tmp/trace-plans/session-1/plan.mdx",
       });
@@ -4371,13 +4373,24 @@ describe("SessionService", () => {
           eventType: "session_output",
           payload: {
             type: "plan_file_updated",
-            planContent: "# Implementation plan\n",
+            planContent,
             planFilePath: "/tmp/trace-plans/session-1/plan.mdx",
-            contentHash: "953715a1cedb6723c5314443d085fe31c34d423fc67ef07695bec0fb1dbc59a8",
+            contentHash: "a8635d230f76941aca53bce87f4c581cd621a8a58d97a3e7a7d3fdb5f7354fc7",
           },
         }),
       );
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("rejects Markdown-only plan file snapshots", async () => {
+      await service.recordPlanFileUpdate("session-1", {
+        content: "# Implementation plan\n\n- Change the service\n",
+        contentHash: "hash-1",
+        filePath: "/tmp/trace-plans/session-1/plan.mdx",
+      });
+
+      expect(prismaMock.session.findUnique).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
     });
 
     it("preserves the full branch name when syncing a trace-branch tag", async () => {

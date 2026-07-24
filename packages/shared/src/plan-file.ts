@@ -2,6 +2,10 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {
+  TRACE_VISUAL_PLAN_SKILL,
+  validateTraceVisualPlan,
+} from "./visual-plan-skill.js";
 
 export const PLAN_FILE_MAX_BYTES = 512 * 1024;
 export const PLAN_FILE_WATCH_INTERVAL_MS = 200;
@@ -24,7 +28,18 @@ export function getPlanFilePath(sessionId: string): string {
 
 export function buildPlanFileInstruction(filePath: string): string {
   return `<system-instruction>
-This is a Trace plan-mode run. Research the task without modifying implementation files. Write the complete working plan to ${filePath}. Create its parent directory if needed. The file is the source of truth and must be Markdown-compatible MDX with no imports, exports, scripts, styles, JavaScript expressions, or arbitrary HTML. Update the file whenever the plan changes and keep it standalone. Do not paste the plan into chat. Finish the turn after the plan file is complete.
+This is a Trace plan-mode run. The following Trace Visual Plans skill is
+mandatory and overrides any provider-native plan format or plan-mode behavior.
+Follow it whether you are Claude, Codex, Agy, Pi, or another coding agent.
+
+${TRACE_VISUAL_PLAN_SKILL}
+
+Write the complete working plan to ${filePath}. Create its parent directory if
+needed. Write the file directly; do not emit a provider-native plan block and do
+not call a provider-native "exit plan mode" tool. Update the same file whenever
+the plan changes. Before finishing, verify that it has a level-one title, at
+least two complete allowlisted blocks, and a complete Checklist block. Do not
+paste the plan into chat. Finish the turn after the plan file is complete.
 </system-instruction>`;
 }
 
@@ -84,6 +99,11 @@ export function createPlanFileWatcher({
           if (!content.trim()) continue;
           if (Buffer.byteLength(content, "utf8") > PLAN_FILE_MAX_BYTES) {
             onError?.(`Plan file exceeds ${PLAN_FILE_MAX_BYTES} bytes`);
+            continue;
+          }
+          const validationErrors = validateTraceVisualPlan(content);
+          if (validationErrors.length > 0) {
+            onError?.(`Plan is not valid Trace visual MDX: ${validationErrors.join(" ")}`);
             continue;
           }
           const contentHash = createHash("sha256").update(content).digest("hex");

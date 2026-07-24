@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { FileText } from "lucide-react";
-import { Markdown } from "../ui/Markdown";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
+import { PlanMdx } from "./PlanMdx";
 
 export const PlanFileReviewPanel = memo(function PlanFileReviewPanel({
   content,
@@ -35,14 +35,13 @@ export const PlanFileReviewPanel = memo(function PlanFileReviewPanel({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <div className="mx-auto max-w-3xl">
-          <Markdown
-            steerableBlocks={ready}
+          <PlanMdx
+            content={content}
+            steerable={ready}
             comments={comments}
             onAddComment={onAddComment}
             onRemoveComment={onRemoveComment}
-          >
-            {content}
-          </Markdown>
+          />
         </div>
       </div>
     </aside>
