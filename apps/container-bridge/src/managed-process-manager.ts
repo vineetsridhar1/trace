@@ -11,6 +11,9 @@ type ManagedProcess = {
   sessionGroupId: string;
   child: ChildProcessWithoutNullStreams;
   bridgeProcessId: string;
+  ports: number[];
+  ready: boolean;
+  childExited: boolean;
 };
 
 const MAX_LOG_CHUNK_BYTES = 16 * 1024;
@@ -133,6 +136,40 @@ function waitForListeningPort(
   });
 }
 
+function hasListeningPort(ports: number[]): Promise<boolean> {
+  if (ports.length === 0) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    let pending = ports.length;
+    let settled = false;
+    const sockets: net.Socket[] = [];
+    const settle = (listening: boolean) => {
+      if (settled) return;
+      settled = true;
+      for (const socket of sockets) socket.destroy();
+      resolve(listening);
+    };
+    const unavailable = () => {
+      pending -= 1;
+      if (pending === 0) settle(false);
+    };
+    for (const port of ports) {
+      const socket = net.createConnection({ host: "127.0.0.1", port });
+      sockets.push(socket);
+      socket.once("connect", () => settle(true));
+      socket.once("error", unavailable);
+    }
+  });
+}
+
+async function waitForBackgroundHandoff(ports: number[], timeoutMs = 1_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  do {
+    if (await hasListeningPort(ports)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  } while (Date.now() < deadline);
+  return false;
+}
+
 export class ManagedProcessManager {
   private processes = new Map<string, ManagedProcess>();
   // Per-processInstanceId serialization for start/restart (see start()).
@@ -228,6 +265,9 @@ export class ManagedProcessManager {
         sessionGroupId: options.sessionGroupId,
         child,
         bridgeProcessId,
+        ports: options.ports ?? [],
+        ready: false,
+        childExited: false,
       });
       child.stdout.on("data", (chunk: Buffer) => {
         this.send({
@@ -256,18 +296,49 @@ export class ManagedProcessManager {
         });
       });
       child.on("exit", (exitCode, signal) => {
-        if (this.processes.get(options.processInstanceId)?.child !== child) return;
-        this.processes.delete(options.processInstanceId);
-        this.send({
-          type: "app_process_exited",
-          processInstanceId: options.processInstanceId,
-          exitCode,
-          signal: signal ?? undefined,
+        const managed = this.processes.get(options.processInstanceId);
+        if (managed?.child !== child) return;
+        managed.childExited = true;
+        void this.enqueue(options.processInstanceId, async () => {
+          const current = this.processes.get(options.processInstanceId);
+          if (current?.child !== child) return;
+          // Some launchers return successfully after handing the real server to
+          // a background supervisor. The live port is the application lifecycle
+          // signal in that case, so reporting the launcher exit would disable a
+          // working endpoint.
+          const handedOff =
+            exitCode === 0 &&
+            signal == null &&
+            current.ports.length > 0 &&
+            (await waitForBackgroundHandoff(current.ports));
+          if (this.processes.get(options.processInstanceId)?.child !== child) return;
+          if (handedOff) {
+            if (!current.ready) {
+              current.ready = true;
+              this.send({
+                type: "app_process_started",
+                requestId: options.requestId,
+                processInstanceId: options.processInstanceId,
+                bridgeProcessId,
+              });
+            }
+            this.processes.delete(options.processInstanceId);
+            return;
+          }
+          this.processes.delete(options.processInstanceId);
+          this.send({
+            type: "app_process_exited",
+            processInstanceId: options.processInstanceId,
+            exitCode,
+            signal: signal ?? undefined,
+          });
         });
       });
       void waitForListeningPort(child, options.ports ?? [])
         .then(() => {
-          if (this.processes.get(options.processInstanceId)?.child !== child) return;
+          const managed = this.processes.get(options.processInstanceId);
+          if (managed?.child !== child || managed.ready) return;
+          managed.ready = true;
           this.send({
             type: "app_process_started",
             requestId: options.requestId,
@@ -276,7 +347,8 @@ export class ManagedProcessManager {
           });
         })
         .catch((error: unknown) => {
-          if (this.processes.get(options.processInstanceId)?.child !== child) return;
+          const managed = this.processes.get(options.processInstanceId);
+          if (managed?.child !== child || managed.childExited) return;
           this.stop(options.processInstanceId);
           this.send({
             type: "app_process_error",
