@@ -133,6 +133,72 @@ describe("ManagedProcessManager", () => {
     expect(exit).toMatchObject({ type: "app_process_exited", processInstanceId: "process-1" });
   });
 
+  it("keeps forwarding when a successful launcher hands the port to a background process", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>
+      messages.push(message),
+    );
+    const port = await getFreePort();
+    const backgroundSource = `
+      const http = require("http");
+      const server = http.createServer((req, res) => {
+        res.end("background");
+        if (req.url === "/shutdown") setImmediate(() => server.close());
+      });
+      server.listen(${port}, "127.0.0.1");
+    `;
+    const launcherSource = `
+      const { spawn } = require("child_process");
+      const child = spawn(process.execPath, [
+        "-e",
+        Buffer.from("${Buffer.from(backgroundSource).toString("base64")}", "base64").toString()
+      ], { detached: true, stdio: "ignore" });
+      child.unref();
+    `;
+
+    manager.start({
+      requestId: "start-background",
+      processInstanceId: "process-background",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: `'${process.execPath}' -e "eval(Buffer.from('${Buffer.from(launcherSource).toString("base64")}','base64').toString())"`,
+      cwd: ".",
+      ports: [port],
+    });
+
+    await waitFor(messages, (message) => message.type === "app_process_started");
+    await waitForHttp(port);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(messages.some((message) => message.type === "app_process_exited")).toBe(false);
+
+    manager.proxyHttp({
+      requestId: "background-http",
+      port,
+      method: "GET",
+      path: "/",
+      headers: {},
+    });
+    const response = await waitFor(
+      messages,
+      (message) =>
+        message.type === "endpoint_http_response" && message.requestId === "background-http",
+    );
+    expect(response).toMatchObject({
+      type: "endpoint_http_response",
+      status: 200,
+      bodyBase64: Buffer.from("background").toString("base64"),
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      const request = http.get({ host: "127.0.0.1", port, path: "/shutdown" }, (shutdown) => {
+        shutdown.resume();
+        shutdown.on("end", resolve);
+      });
+      request.on("error", reject);
+    });
+    await waitForPortAvailable(port);
+  });
+
   it("stops the full process tree so ports can be reused", async () => {
     const messages: BridgeMessage[] = [];
     const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>
