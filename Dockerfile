@@ -54,7 +54,6 @@ COPY --from=build /app/apps/web/package.json apps/web/
 
 COPY --from=build /app/node_modules/ node_modules/
 COPY --from=build /app/packages/gql/node_modules/ packages/gql/node_modules/
-COPY --from=build /app/packages/shared/node_modules/ packages/shared/node_modules/
 COPY --from=build /app/packages/client-core/node_modules/ packages/client-core/node_modules/
 COPY --from=build /app/apps/mcp/node_modules/ apps/mcp/node_modules/
 COPY --from=build /app/apps/server/node_modules/ apps/server/node_modules/
