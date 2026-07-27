@@ -250,6 +250,74 @@ const MORTGAGES_APPLICATION_CONFIG: HardcodedApplicationConfig = {
   ],
 };
 
+const CODE_APPLICATION_CONFIG: HardcodedApplicationConfig = {
+  setupScripts: [
+    {
+      id: "container-bootstrap",
+      name: "Prepare code monorepo",
+      command: "prepare-trace-code-checkout",
+      workingDirectory: ".",
+      dependsOn: [],
+      env: [
+        { key: "NPM_TOKEN", secretName: "NPM_TOKEN" },
+        { key: "JFROG_USERNAME", secretName: "JFROG_USERNAME" },
+        { key: "JFROG_PASSWORD", secretName: "JFROG_PASSWORD" },
+      ],
+    },
+  ],
+  applications: [
+    {
+      id: "localdev",
+      name: "Code localdev",
+      processes: [
+        {
+          id: "dev-up",
+          name: "Full localdev",
+          command: "direnv exec . scripts/bin/dev up 5000 --profile full",
+          workingDirectory: ".",
+          required: true,
+          dependsOn: ["container-bootstrap"],
+          env: [
+            { key: "NPM_TOKEN", secretName: "NPM_TOKEN" },
+            { key: "JFROG_USERNAME", secretName: "JFROG_USERNAME" },
+            { key: "JFROG_PASSWORD", secretName: "JFROG_PASSWORD" },
+            { key: "ASDF_JAVA_VERSION", value: "temurin-17.0.17+10" },
+            { key: "PGHOST", value: "127.0.0.1" },
+            { key: "PGPORT", value: "5432" },
+            { key: "PGDATABASE", value: "postgres" },
+          ],
+          ports: [
+            {
+              id: "www",
+              label: "Public site",
+              port: 8080,
+              protocol: "http",
+              defaultForwardingEnabled: true,
+              healthPath: "/",
+            },
+            {
+              id: "consumer",
+              label: "Consumer",
+              port: 8081,
+              protocol: "http",
+              defaultForwardingEnabled: true,
+              healthPath: "/",
+            },
+            {
+              id: "opshub",
+              label: "OpsHub",
+              port: 8082,
+              protocol: "http",
+              defaultForwardingEnabled: true,
+              healthPath: "/",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 const HARDCODED_CONFIGS: Array<{
   matches: (repo: { name?: string | null; remoteUrl?: string | null }) => boolean;
   config: HardcodedApplicationConfig;
@@ -260,6 +328,10 @@ const HARDCODED_CONFIGS: Array<{
     // user could set on an unrelated repo.
     matches: (repo) => /[/:]opendoor-labs\/mortgages(\.git)?$/i.test(repo.remoteUrl ?? ""),
     config: MORTGAGES_APPLICATION_CONFIG,
+  },
+  {
+    matches: (repo) => /[/:]opendoor-labs\/code(\.git)?$/i.test(repo.remoteUrl ?? ""),
+    config: CODE_APPLICATION_CONFIG,
   },
 ];
 
