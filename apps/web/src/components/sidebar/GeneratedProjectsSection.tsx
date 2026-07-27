@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { gql } from "@urql/core";
 import type { Session, SessionGroup } from "@trace/gql";
 import {
+  mergeSessionGroupEntity,
   useEntityStore,
   type SessionEntity,
   type SessionGroupEntity,
@@ -222,7 +223,13 @@ export function GeneratedProjectsSection({
           ...(result.data?.animationSessionGroups ?? []),
         ] as ProjectGroup[];
         if (!projectGroups.length) return;
-        upsertMany("sessionGroups", projectGroups as SessionGroupEntity[]);
+        const existingGroups = useEntityStore.getState().sessionGroups;
+        upsertMany(
+          "sessionGroups",
+          projectGroups.map((group) =>
+            mergeSessionGroupEntity(existingGroups[group.id], group as SessionGroupEntity),
+          ),
+        );
         const sessions = projectGroups.flatMap((group) => group.sessions ?? []);
         if (sessions.length) upsertMany("sessions", sessions as SessionEntity[]);
       });

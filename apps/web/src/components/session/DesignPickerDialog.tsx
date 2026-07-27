@@ -3,6 +3,7 @@ import { gql } from "@urql/core";
 import { LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 import {
+  mergeSessionGroupEntity,
   useAuthStore,
   useEntityStore,
   type SessionGroupEntity,
@@ -71,7 +72,13 @@ export function DesignPickerDialog({
       .then((result) => {
         if (!active || result.error) return;
         const groups = (result.data?.designSessionGroups ?? []) as SessionGroupEntity[];
-        if (groups.length > 0) upsertMany("sessionGroups", groups);
+        if (groups.length > 0) {
+          const existingGroups = useEntityStore.getState().sessionGroups;
+          upsertMany(
+            "sessionGroups",
+            groups.map((group) => mergeSessionGroupEntity(existingGroups[group.id], group)),
+          );
+        }
       });
     return () => {
       active = false;

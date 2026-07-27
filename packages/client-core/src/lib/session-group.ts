@@ -18,6 +18,24 @@ type SessionGroupRuntimeConnection = Partial<
   >
 >;
 
+export function mergeSessionGroupEntity(
+  existing: SessionGroupEntity | undefined,
+  incoming: SessionGroupEntity,
+): SessionGroupEntity {
+  if (!existing) return incoming;
+
+  return {
+    ...existing,
+    ...incoming,
+    repo:
+      incoming.repo === undefined
+        ? existing.repo
+        : incoming.repo === null
+          ? null
+          : { ...existing.repo, ...incoming.repo },
+  };
+}
+
 export function getSessionChannelId(session: SessionEntity | null | undefined): string | null {
   if (!session) return null;
   const channel = session.channel as ChannelRef;

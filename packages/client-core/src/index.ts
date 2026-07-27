@@ -35,6 +35,7 @@ export {
   getSessionChannelId,
   getSessionGroupChannelId,
   hasSelectedSessionGroupRuntime,
+  mergeSessionGroupEntity,
 } from "./lib/session-group.js";
 
 export * from "./mutations/index.js";
