@@ -83,6 +83,7 @@ function assertConfigHasNoRawSecrets(value: unknown): void {
     if (key === "auth") {
       assertAuthConfigKeysAreAllowed(child);
     } else if (
+      normalizedKey !== "secretid" &&
       RAW_SECRET_KEY_PATTERNS.some((pattern) => normalizedKey.includes(pattern)) &&
       typeof child === "string" &&
       child.trim()

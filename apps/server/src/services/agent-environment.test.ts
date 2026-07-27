@@ -389,6 +389,46 @@ describe("AgentEnvironmentService", () => {
     expect(prismaMock.agentEnvironment.create).not.toHaveBeenCalled();
   });
 
+  it("accepts runtimeEnv entries that reference org secrets by secretId", async () => {
+    const config = {
+      startUrl: "https://launcher.example/start",
+      stopUrl: "https://launcher.example/stop",
+      statusUrl: "https://launcher.example/status",
+      auth: { type: "bearer" },
+      startupTimeoutSeconds: 120,
+      deprovisionPolicy: "on_session_end",
+      runtimeEnv: [{ name: "JFROG_USERNAME", secretId: "secret-1" }],
+    };
+    const record = {
+      id: "env-1",
+      organizationId: "org-1",
+      name: "Launcher",
+      adapterType: "provisioned",
+      config,
+      enabled: true,
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    prismaMock.agentEnvironment.create.mockResolvedValueOnce(record);
+    prismaMock.agentEnvironment.findMany.mockResolvedValueOnce([record]);
+
+    const service = new AgentEnvironmentService();
+    const environment = await service.create(
+      {
+        organizationId: "org-1",
+        name: "Launcher",
+        adapterType: "provisioned",
+        config,
+      },
+      "user",
+      "user-1",
+    );
+
+    expect(environment.id).toBe("env-1");
+    expect(prismaMock.agentEnvironment.create).toHaveBeenCalled();
+  });
+
   it("rejects manual local environment creation", async () => {
     const service = new AgentEnvironmentService();
 
