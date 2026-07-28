@@ -12,10 +12,12 @@ import {
   verifyEndpointPreviewToken,
 } from "./endpoint-preview-auth.js";
 import {
+  applyInternalHostHeaders,
   bodyPreview,
   endpointProxyMaxRequestBodyBytes,
   endpointProxyMaxResponseBodyBytes,
   endpointProxyRequestTimeoutMs,
+  extractEndpointHost,
   extractEndpointKey,
   forwardableRequestHeaders,
   forwardableResponseHeaders,
@@ -107,6 +109,21 @@ function requestUrl(req: IncomingMessage): URL {
   return new URL(req.url ?? "/", "http://trace-endpoint.local");
 }
 
+// A host-mode endpoint (internalHostTemplate set) is only reachable through a
+// `<sub>--<key>` host — a bare-key request has no sub to route by, so it is
+// rejected rather than defaulted. A port-mode endpoint is only reachable
+// through its bare key host. Mismatches read as unknown hosts.
+function resolveInternalHost(
+  endpoint: { internalHostTemplate: string | null },
+  sub: string | null,
+): { internalHost: string | null } | null {
+  if (endpoint.internalHostTemplate) {
+    if (!sub) return null;
+    return { internalHost: endpoint.internalHostTemplate.replaceAll("{sub}", sub) };
+  }
+  return sub ? null : { internalHost: null };
+}
+
 function safeRedirectPath(value: string | null): string {
   // Must be a same-origin absolute path. Reject protocol-relative (`//host`) and
   // backslash variants (`/\host`, which browsers normalize to `//host`).
@@ -190,6 +207,12 @@ export class EndpointProxyService {
     }
     if (endpoint.status === "revoked") {
       res.writeHead(410).end("Endpoint revoked");
+      return;
+    }
+    const sub = extractEndpointHost(req.headers.host)?.sub ?? null;
+    const routing = resolveInternalHost(endpoint, sub);
+    if (!routing) {
+      res.writeHead(404).end("Endpoint not found");
       return;
     }
     if (requestUrl(req).pathname === "/__trace_preview_auth") {
@@ -325,9 +348,12 @@ export class EndpointProxyService {
         // Authenticated AppPreview requests are a live authoring surface.
         // Revalidating Vite's module and stylesheet responses can leave the
         // iframe with a mixed pre/post-HMR asset graph, so fetch current bytes.
-        headers: forwardableRequestHeaders(req.headers, {
-          disableCache: authenticatedPreview,
-        }),
+        headers: applyInternalHostHeaders(
+          forwardableRequestHeaders(req.headers, {
+            disableCache: authenticatedPreview,
+          }),
+          routing.internalHost,
+        ),
         bodyBase64: requestBody.byteLength ? requestBody.toString("base64") : undefined,
       },
       endpoint.organizationId,
@@ -451,6 +477,12 @@ export class EndpointProxyService {
       client.close();
       return;
     }
+    const sub = extractEndpointHost(req.headers.host)?.sub ?? null;
+    const routing = resolveInternalHost(endpoint, sub);
+    if (!routing) {
+      client.close();
+      return;
+    }
     if (endpoint.accessMode === "private") {
       // Guard against Cross-Site WebSocket Hijacking: the SameSite=None preview
       // cookie rides cross-site upgrades, so require a same-endpoint or Trace
@@ -523,7 +555,10 @@ export class EndpointProxyService {
         endpointId: endpoint.id,
         port: endpoint.targetPort,
         path: `${path}${query ? `?${query}` : ""}`,
-        headers: forwardableRequestHeaders(req.headers, { websocket: true }),
+        headers: applyInternalHostHeaders(
+          forwardableRequestHeaders(req.headers, { websocket: true }),
+          routing.internalHost,
+        ),
         protocols: webSocketProtocols(req.headers),
       },
       endpoint.organizationId,

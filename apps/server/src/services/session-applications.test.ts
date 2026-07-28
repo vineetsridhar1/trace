@@ -22,6 +22,7 @@ vi.mock("./event.js", () => ({
 import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { eventService } from "./event.js";
+import { repoApplicationConfigService } from "./repo-application-config.js";
 import {
   PROCESS_LOG_ENTRY_MAX_CHARS,
   PROCESS_LOG_RETAINED_ROWS,
@@ -88,6 +89,43 @@ function mockGroup() {
   });
 }
 
+// Host-mode ports (internalHostTemplate) only exist in hardcoded configs — the
+// stored-setupConfig normalizer strips the field and rejects sub-1024 ports —
+// so stub the resolved config rather than routing through repo JSON.
+function mockHostModeConfig() {
+  vi.spyOn(repoApplicationConfigService, "resolveApplicationConfig").mockReturnValueOnce({
+    setupScripts: [],
+    applications: [
+      {
+        id: "web",
+        name: "Web",
+        processes: [
+          {
+            id: "dev",
+            name: "Dev",
+            command: "dev up",
+            workingDirectory: ".",
+            required: true,
+            dependsOn: [],
+            env: [],
+            ports: [
+              {
+                id: "web",
+                label: "Localdev",
+                port: 80,
+                protocol: "http",
+                defaultForwardingEnabled: true,
+                healthPath: "/",
+                internalHostTemplate: "{sub}.5000.localhost",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+}
+
 describe("SessionApplicationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -119,6 +157,9 @@ describe("SessionApplicationService", () => {
       disabledAt: null,
       revokedAt: null,
     });
+    prismaMock.sessionEndpoint.findMany.mockResolvedValue([
+      { portConfigId: "web", key: "endpointkey1" },
+    ]);
     prismaMock.sessionApplicationProcess.upsert.mockResolvedValue({
       id: "process-1",
       organizationId: "org-1",
@@ -190,13 +231,69 @@ describe("SessionApplicationService", () => {
     );
     expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
       "runtime-1",
-      expect.objectContaining({ type: "app_process_start", processInstanceId: "process-1" }),
+      expect.objectContaining({
+        type: "app_process_start",
+        processInstanceId: "process-1",
+        env: expect.objectContaining({
+          TRACE_ENDPOINT_URL_WEB: "http://endpointkey1.preview.localhost",
+        }),
+      }),
       "org-1",
     );
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: "session_endpoint_created" }),
       prismaMock,
     );
+  });
+
+  it("creates host-mode endpoints and injects the sub URL pattern", async () => {
+    mockHostModeConfig();
+    prismaMock.sessionEndpoint.findMany.mockResolvedValueOnce([
+      {
+        portConfigId: "web",
+        key: "endpointkey1",
+        internalHostTemplate: "{sub}.5000.localhost",
+      },
+    ]);
+
+    await new SessionApplicationService().startProcess("group-1", "web", "dev", "org-1", "user-1");
+
+    expect(prismaMock.sessionEndpoint.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          portConfigId: "web",
+          targetPort: 80,
+          internalHostTemplate: "{sub}.5000.localhost",
+        }),
+      }),
+    );
+    expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+      "runtime-1",
+      expect.objectContaining({
+        type: "app_process_start",
+        env: expect.objectContaining({
+          TRACE_ENDPOINT_URL_WEB: "http://www--endpointkey1.preview.localhost",
+          TRACE_ENDPOINT_HOST_PATTERN_WEB: "http://{sub}--endpointkey1.preview.localhost",
+        }),
+      }),
+      "org-1",
+    );
+  });
+
+  it("syncs internalHostTemplate onto existing endpoint rows when the config changes", async () => {
+    mockHostModeConfig();
+    prismaMock.sessionEndpoint.findUnique.mockResolvedValueOnce({
+      id: "endpoint-1",
+      internalHostTemplate: null,
+    });
+
+    await new SessionApplicationService().startProcess("group-1", "web", "dev", "org-1", "user-1");
+
+    expect(prismaMock.sessionEndpoint.update).toHaveBeenCalledWith({
+      where: { id: "endpoint-1" },
+      data: { internalHostTemplate: "{sub}.5000.localhost" },
+    });
+    expect(prismaMock.sessionEndpoint.create).not.toHaveBeenCalled();
   });
 
   it("starts the default full-stack process for a repo-less app group", async () => {

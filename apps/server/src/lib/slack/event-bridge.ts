@@ -1,7 +1,7 @@
 import type { Event as PrismaEvent } from "@prisma/client";
 import { prisma } from "../db.js";
 import { pubsub, topics } from "../pubsub.js";
-import { buildEndpointUrl } from "../../services/endpoint-utils.js";
+import { buildEndpointPublicUrl } from "../../services/endpoint-utils.js";
 import { getSlackClient } from "./client.js";
 
 type ThreadBinding = {
@@ -336,11 +336,11 @@ class SlackEventBridgeManager {
   private async enabledEndpointLinks(sessionGroupId: string): Promise<string | null> {
     const endpoints = await prisma.sessionEndpoint.findMany({
       where: { sessionGroupId, status: "enabled" },
-      select: { key: true, label: true },
+      select: { key: true, label: true, internalHostTemplate: true },
     });
     if (endpoints.length === 0) return null;
     return endpoints
-      .map((endpoint) => `• <${buildEndpointUrl(endpoint.key)}|${endpoint.label}>`)
+      .map((endpoint) => `• <${buildEndpointPublicUrl(endpoint)}|${endpoint.label}>`)
       .join("\n");
   }
 

@@ -2,7 +2,7 @@ import type { EndpointTrafficCaptureMode, SessionEndpointAccessMode } from "@pri
 import type { Context } from "../context.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { requireOrgContext } from "../lib/require-org.js";
-import { buildEndpointUrl } from "../services/endpoint-utils.js";
+import { buildEndpointPublicUrl } from "../services/endpoint-utils.js";
 import { sessionApplicationService } from "../services/session-applications.js";
 import { sessionApplicationWorkflowService } from "../services/session-application-workflow.js";
 
@@ -206,7 +206,8 @@ export const sessionApplicationMutations = {
 
 export const sessionApplicationTypeResolvers = {
   SessionEndpoint: {
-    url: (endpoint: { key: string }) => buildEndpointUrl(endpoint.key),
+    url: (endpoint: { key: string; internalHostTemplate?: string | null }) =>
+      buildEndpointPublicUrl(endpoint),
   },
   SessionApplicationProcess: {
     endpoints: (process: {

@@ -87,10 +87,15 @@ function signalProcessTree(child: ChildProcessWithoutNullStreams, signal: NodeJS
 
 // SIGTERM a child's process group, escalate to SIGKILL after a grace period,
 // and resolve once it has actually exited so a replacement can spawn cleanly.
+// The grace must cover supervisors whose SIGTERM handler tears down a whole
+// service stack (e.g. `dev up --attach` running `dev down`), not just a
+// single process flushing state.
+const STOP_KILL_GRACE_MS = 90_000;
+
 function terminateChild(child: ChildProcessWithoutNullStreams): Promise<void> {
   if (child.exitCode !== null || child.killed) return Promise.resolve();
   return new Promise((resolve) => {
-    const kill = setTimeout(() => signalProcessTree(child, "SIGKILL"), 5_000);
+    const kill = setTimeout(() => signalProcessTree(child, "SIGKILL"), STOP_KILL_GRACE_MS);
     kill.unref();
     child.once("exit", () => {
       clearTimeout(kill);
@@ -384,7 +389,7 @@ export class ManagedProcessManager {
       if (this.processes.get(processInstanceId)?.child === child) {
         signalProcessTree(child, "SIGKILL");
       }
-    }, 5_000).unref();
+    }, STOP_KILL_GRACE_MS).unref();
   }
 
   destroyForSessionGroup(sessionGroupId: string): void {

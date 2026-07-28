@@ -749,6 +749,9 @@ model SessionEndpoint {
   label           String
   targetPort      Int
   protocol        String @default("http")
+  // Host-mode endpoints: container-internal hostname pattern that a request's
+  // `<sub>--<key>` label maps to, e.g. "{sub}.5000.localhost". Null = port-mode.
+  internalHostTemplate String?
 
   status             SessionEndpointStatus      @default(disabled)
   accessMode         SessionEndpointAccessMode  @default(private)

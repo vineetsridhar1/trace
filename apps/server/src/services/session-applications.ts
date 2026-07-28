@@ -13,7 +13,11 @@ import { eventService } from "./event.js";
 import { orgSecretService } from "./org-secret.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
 import { sessionApplicationWorkflowService } from "./session-application-workflow.js";
-import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
+import {
+  buildEndpointHostPattern,
+  buildEndpointPublicUrl,
+  generateEndpointKey,
+} from "./endpoint-utils.js";
 import {
   DEFAULT_APP_SESSION_CONFIG,
   isLiteralEnv,
@@ -120,6 +124,7 @@ function publicEndpoint(endpoint: {
   portConfigId: string;
   label: string;
   targetPort: number;
+  internalHostTemplate?: string | null;
   status: string;
   accessMode: string;
   trafficCaptureMode: string;
@@ -130,13 +135,14 @@ function publicEndpoint(endpoint: {
   return {
     id: endpoint.id,
     key: endpoint.key,
-    url: buildEndpointUrl(endpoint.key),
+    url: buildEndpointPublicUrl(endpoint),
     sessionGroupId: endpoint.sessionGroupId,
     appConfigId: endpoint.appConfigId,
     processConfigId: endpoint.processConfigId,
     portConfigId: endpoint.portConfigId,
     label: endpoint.label,
     targetPort: endpoint.targetPort,
+    internalHostTemplate: endpoint.internalHostTemplate ?? null,
     status: endpoint.status,
     accessMode: endpoint.accessMode,
     trafficCaptureMode: endpoint.trafficCaptureMode,
@@ -469,6 +475,26 @@ export class SessionApplicationService {
       actorId: options?.asSystem ? "system" : (userId ?? "system"),
     });
 
+    // Hand the process its ports' public preview URLs so apps can generate
+    // absolute links that stay reachable when the preview URL is shared, instead
+    // of container-internal hostnames the viewer's browser cannot resolve.
+    // Host-mode endpoints additionally get the `{sub}` URL pattern so apps can
+    // derive the public host for any internal hostname.
+    const endpoints = await prisma.sessionEndpoint.findMany({
+      where: { sessionGroupId, appConfigId, processConfigId },
+      select: { portConfigId: true, key: true, internalHostTemplate: true },
+    });
+    const endpointEnv: Record<string, string> = {};
+    for (const endpoint of endpoints) {
+      const suffix = endpoint.portConfigId.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+      endpointEnv[`TRACE_ENDPOINT_URL_${suffix}`] = buildEndpointPublicUrl(endpoint);
+      if (endpoint.internalHostTemplate) {
+        endpointEnv[`TRACE_ENDPOINT_HOST_PATTERN_${suffix}`] = buildEndpointHostPattern(
+          endpoint.key,
+        );
+      }
+    }
+
     const delivery = sessionRouter.sendToRuntime(
       runtimeId,
       {
@@ -481,7 +507,7 @@ export class SessionApplicationService {
         processConfigId,
         command: processConfig.command,
         cwd: processConfig.workingDirectory ?? ".",
-        env,
+        env: endpoints.length > 0 ? { ...endpointEnv, ...env } : env,
         ports: processConfig.ports.map((port) => ({
           portConfigId: port.id,
           port: port.port,
@@ -709,14 +735,21 @@ export class SessionApplicationService {
   async createEndpointPreview(endpointId: string, organizationId: string, userId: string) {
     const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
       where: { id: endpointId, organizationId },
-      select: { id: true, sessionGroupId: true, status: true, revokedAt: true, key: true },
+      select: {
+        id: true,
+        sessionGroupId: true,
+        status: true,
+        revokedAt: true,
+        key: true,
+        internalHostTemplate: true,
+      },
     });
     await this.assertCanView(endpoint.sessionGroupId, organizationId, userId);
     if (endpoint.revokedAt || endpoint.status === "revoked") {
       throw new ValidationError("Endpoint has been revoked");
     }
     const credential = createEndpointPreviewToken({ userId, organizationId, endpointId });
-    const url = new URL(buildEndpointUrl(endpoint.key));
+    const url = new URL(buildEndpointPublicUrl(endpoint));
     url.pathname = "/__trace_preview_auth";
     url.searchParams.set("token", credential.token);
     url.searchParams.set("next", "/");
@@ -1147,7 +1180,13 @@ export class SessionApplicationService {
     group: ManagedSessionGroup,
     appConfigId: string,
     processConfigId: string,
-    ports: Array<{ id: string; label: string; port: number; protocol: string }>,
+    ports: Array<{
+      id: string;
+      label: string;
+      port: number;
+      protocol: string;
+      internalHostTemplate?: string | null;
+    }>,
   ) {
     for (const port of ports) {
       const existing = await tx.sessionEndpoint.findUnique({
@@ -1160,7 +1199,18 @@ export class SessionApplicationService {
           },
         },
       });
-      if (existing) continue;
+      if (existing) {
+        // Endpoint rows survive config edits; sync the routing template so a
+        // changed (or removed) internalHostTemplate takes effect on restart.
+        const template = port.internalHostTemplate ?? null;
+        if (existing.internalHostTemplate !== template) {
+          await tx.sessionEndpoint.update({
+            where: { id: existing.id },
+            data: { internalHostTemplate: template },
+          });
+        }
+        continue;
+      }
       const endpoint = await tx.sessionEndpoint.create({
         data: {
           key: await this.createEndpointKey(tx),
@@ -1173,6 +1223,7 @@ export class SessionApplicationService {
           label: port.label,
           targetPort: port.port,
           protocol: port.protocol,
+          internalHostTemplate: port.internalHostTemplate ?? null,
         },
       });
       await eventService.create(

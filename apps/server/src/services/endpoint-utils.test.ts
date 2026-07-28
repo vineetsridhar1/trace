@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  applyInternalHostHeaders,
   bodyPreview,
+  buildEndpointHostPattern,
+  buildEndpointPublicUrl,
   buildEndpointUrl,
   endpointPreviewBaseHost,
+  extractEndpointHost,
   extractEndpointKey,
   forwardableRequestHeaders,
   forwardableResponseHeaders,
@@ -60,6 +64,81 @@ describe("endpoint utils", () => {
     expect(extractEndpointKey("abc123.preview.localhost")).toBe("abc123");
   });
 
+  it("parses sub--key host labels", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.localhost");
+
+    expect(extractEndpointHost("abcdef.preview.localhost")).toEqual({
+      key: "abcdef",
+      sub: null,
+    });
+    expect(extractEndpointHost("www--abcdef.preview.localhost:4000")).toEqual({
+      key: "abcdef",
+      sub: "www",
+    });
+    expect(extractEndpointHost("opshub-2--abcdef.preview.localhost")).toEqual({
+      key: "abcdef",
+      sub: "opshub-2",
+    });
+    expect(extractEndpointKey("www--abcdef.preview.localhost")).toBe("abcdef");
+  });
+
+  it("rejects malformed sub--key host labels", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.localhost");
+
+    // Key must be base32 [a-z2-7].
+    expect(extractEndpointHost("www--abc189.preview.localhost")).toBeNull();
+    expect(extractEndpointHost("www--abc-def.preview.localhost")).toBeNull();
+    // Sub must be a valid DNS-label fragment without its own `--`.
+    expect(extractEndpointHost("-www--abcdef.preview.localhost")).toBeNull();
+    expect(extractEndpointHost("www---abcdef.preview.localhost")).toBeNull();
+    expect(extractEndpointHost("a--b--abcdef.preview.localhost")).toBeNull();
+    expect(extractEndpointHost("--abcdef.preview.localhost")).toBeNull();
+    // Still exactly one label: dotted prefixes are rejected.
+    expect(extractEndpointHost("evil.www--abcdef.preview.localhost")).toBeNull();
+    expect(extractEndpointHost("www--abcdef.evil.preview.localhost")).toBeNull();
+  });
+
+  it("builds sub-qualified endpoint URLs and host patterns", () => {
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_BASE_HOST", "preview.example.test");
+    vi.stubEnv("TRACE_ENDPOINT_PREVIEW_PUBLIC_SCHEME", "https");
+
+    expect(buildEndpointUrl("abcdef", "www")).toBe("https://www--abcdef.preview.example.test");
+    expect(buildEndpointHostPattern("abcdef")).toBe(
+      "https://{sub}--abcdef.preview.example.test",
+    );
+    expect(buildEndpointPublicUrl({ key: "abcdef", internalHostTemplate: null })).toBe(
+      "https://abcdef.preview.example.test",
+    );
+    expect(
+      buildEndpointPublicUrl({ key: "abcdef", internalHostTemplate: "{sub}.5000.localhost" }),
+    ).toBe("https://www--abcdef.preview.example.test");
+  });
+
+  it("rewrites Host and a present Origin to the internal host", () => {
+    expect(
+      applyInternalHostHeaders(
+        {
+          host: "www--abcdef.preview.localhost",
+          origin: "https://www--abcdef.preview.localhost",
+          accept: "text/html",
+        },
+        "www.5000.localhost",
+      ),
+    ).toEqual({
+      host: "www.5000.localhost",
+      origin: "http://www.5000.localhost",
+      accept: "text/html",
+    });
+    // No Origin on the request means none is fabricated.
+    expect(applyInternalHostHeaders({ accept: "text/html" }, "www.5000.localhost")).toEqual({
+      accept: "text/html",
+      host: "www.5000.localhost",
+    });
+    // Port-mode requests pass through untouched.
+    const headers = { host: "abcdef.preview.localhost" };
+    expect(applyInternalHostHeaders(headers, null)).toBe(headers);
+  });
+
   it("strips the Domain attribute from forwarded Set-Cookie", () => {
     expect(
       forwardableResponseHeaders({
@@ -87,6 +166,13 @@ describe("endpoint utils", () => {
     // A different endpoint or an attacker origin is rejected.
     expect(isAllowedPreviewRequestOrigin("http://other.preview.localhost", "abc123")).toBe(false);
     expect(isAllowedPreviewRequestOrigin("https://evil.test", "abc123")).toBe(false);
+    // Any sub of the same key is a same-endpoint origin; other keys' subs are not.
+    expect(isAllowedPreviewRequestOrigin("http://consumer--abcdef.preview.localhost", "abcdef")).toBe(
+      true,
+    );
+    expect(isAllowedPreviewRequestOrigin("http://consumer--other.preview.localhost", "abcdef")).toBe(
+      false,
+    );
   });
 
   it("generates DNS-safe random keys", () => {

@@ -7,7 +7,7 @@ import { promisify } from "util";
 import { prisma } from "../lib/db.js";
 import { storage } from "../lib/storage/index.js";
 import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
-import { buildEndpointUrl } from "./endpoint-utils.js";
+import { buildEndpointPublicUrl } from "./endpoint-utils.js";
 
 const execFileAsync = promisify(execFile);
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -47,10 +47,11 @@ function captureUrl(
     key: string;
     organizationId: string;
     accessMode: string;
+    internalHostTemplate?: string | null;
   },
   userId: string,
 ): string {
-  const url = new URL(buildEndpointUrl(endpoint.key));
+  const url = new URL(buildEndpointPublicUrl(endpoint));
   if (endpoint.accessMode === "public") return url.toString();
   const credential = createEndpointPreviewToken({
     userId,
@@ -111,7 +112,13 @@ export const appCheckpointCaptureService = {
         protocol: "http",
       },
       orderBy: [{ enabledAt: "desc" }, { createdAt: "asc" }],
-      select: { id: true, key: true, organizationId: true, accessMode: true },
+      select: {
+        id: true,
+        key: true,
+        organizationId: true,
+        accessMode: true,
+        internalHostTemplate: true,
+      },
     });
     if (!endpoint) return { captureStatus: "unavailable" };
 

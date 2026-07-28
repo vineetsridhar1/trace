@@ -15,6 +15,10 @@ describe("code monorepo application config", () => {
           { key: "NPM_TOKEN", secretName: "NPM_TOKEN" },
           { key: "JFROG_USERNAME", secretName: "JFROG_USERNAME" },
           { key: "JFROG_PASSWORD", secretName: "JFROG_PASSWORD" },
+          {
+            key: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
+            secretName: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
+          },
         ],
       }),
     ]);
@@ -25,22 +29,29 @@ describe("code monorepo application config", () => {
         processes: [
           expect.objectContaining({
             id: "dev-up",
-            command: "direnv exec . scripts/bin/dev up 5000 --profile full",
+            command: "direnv exec . scripts/bin/dev up 5000 --profile full --attach",
             required: true,
             dependsOn: ["container-bootstrap"],
             env: [
               { key: "NPM_TOKEN", secretName: "NPM_TOKEN" },
               { key: "JFROG_USERNAME", secretName: "JFROG_USERNAME" },
               { key: "JFROG_PASSWORD", secretName: "JFROG_PASSWORD" },
+              {
+                key: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
+                secretName: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
+              },
               { key: "ASDF_JAVA_VERSION", value: "temurin-17.0.17+10" },
               { key: "PGHOST", value: "127.0.0.1" },
               { key: "PGPORT", value: "5432" },
               { key: "PGDATABASE", value: "postgres" },
             ],
             ports: [
-              expect.objectContaining({ id: "www", port: 8080 }),
-              expect.objectContaining({ id: "consumer", port: 8081 }),
-              expect.objectContaining({ id: "opshub", port: 8082 }),
+              expect.objectContaining({
+                id: "web",
+                port: 80,
+                defaultForwardingEnabled: true,
+                internalHostTemplate: "{sub}.5000.localhost",
+              }),
             ],
           }),
         ],

@@ -36,8 +36,29 @@ export function endpointProxyMaxResponseBodyBytes(): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 25 * 1024 * 1024;
 }
 
-export function buildEndpointUrl(key: string): string {
-  return `${endpointPreviewScheme()}://${key}.${endpointPreviewBaseHost()}`;
+export function buildEndpointUrl(key: string, sub?: string | null): string {
+  const label = sub ? `${sub}--${key}` : key;
+  return `${endpointPreviewScheme()}://${label}.${endpointPreviewBaseHost()}`;
+}
+
+// Host-mode endpoints (internalHostTemplate set) route by hostname inside the
+// container; `www` is the conventional public entry sub.
+export const ENDPOINT_DEFAULT_SUB = "www";
+
+export function buildEndpointPublicUrl(endpoint: {
+  key: string;
+  internalHostTemplate?: string | null;
+}): string {
+  return buildEndpointUrl(
+    endpoint.key,
+    endpoint.internalHostTemplate ? ENDPOINT_DEFAULT_SUB : null,
+  );
+}
+
+// Public URL pattern with `{sub}` preserved, for applications that need to
+// construct links to arbitrary subs of a host-mode endpoint.
+export function buildEndpointHostPattern(key: string): string {
+  return buildEndpointUrl(key, "{sub}");
 }
 
 export function generateEndpointKey(length = 12): string {
@@ -49,16 +70,35 @@ export function generateEndpointKey(length = 12): string {
   return key;
 }
 
-export function extractEndpointKey(hostHeader: string | undefined | null): string | null {
+const ENDPOINT_KEY_PATTERN = /^[a-z2-7]+$/;
+const ENDPOINT_SUB_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+
+// Parse `<key>.<baseHost>` (sub: null) or `<sub>--<key>.<baseHost>` — a single
+// DNS label, so the wildcard preview TLS cert still covers it.
+export function extractEndpointHost(
+  hostHeader: string | undefined | null,
+): { key: string; sub: string | null } | null {
   if (!hostHeader) return null;
   const host = hostHeader.split(":")[0]?.toLowerCase();
   const baseHost = endpointPreviewBaseHost().toLowerCase().split(":")[0];
   if (!host || host === baseHost || !host.endsWith(`.${baseHost}`)) return null;
-  // The key must be exactly one label: `<key>.<baseHost>`. Reject deeper
+  // The endpoint must be exactly one label under the base host. Reject deeper
   // subdomains (`evil.<key>.<baseHost>`) so one endpoint isn't reachable from
   // unbounded origins that could script/set cookies across the isolation seam.
   const prefix = host.slice(0, -1 * (`.${baseHost}`).length);
-  return /^[a-z0-9-]+$/.test(prefix) ? prefix : null;
+  const separator = prefix.lastIndexOf("--");
+  if (separator === -1) {
+    return /^[a-z0-9-]+$/.test(prefix) ? { key: prefix, sub: null } : null;
+  }
+  const sub = prefix.slice(0, separator);
+  const key = prefix.slice(separator + 2);
+  if (!ENDPOINT_KEY_PATTERN.test(key)) return null;
+  if (sub.includes("--") || !ENDPOINT_SUB_PATTERN.test(sub)) return null;
+  return { key, sub };
+}
+
+export function extractEndpointKey(hostHeader: string | undefined | null): string | null {
+  return extractEndpointHost(hostHeader)?.key ?? null;
 }
 
 // Origins Trace itself serves from — the legitimate embedder of a preview iframe.
@@ -200,6 +240,33 @@ export function forwardableRequestHeaders(
     forwarded.pragma = "no-cache";
   }
   return forwarded;
+}
+
+// Host-mode endpoints route by hostname inside the container. Rewrite Host
+// (and Origin, when the browser sent one) to the endpoint's internal host so
+// the container's name-based edge picks the right upstream and the app's own
+// origin checks see a hostname they recognize. Applied after
+// forwardableRequestHeaders so the credential/hop-by-hop filtering is
+// unaffected.
+export function applyInternalHostHeaders(
+  headers: Record<string, string | string[]>,
+  internalHost: string | null,
+): Record<string, string | string[]> {
+  if (!internalHost) return headers;
+  const rewritten: Record<string, string | string[]> = {};
+  let hadOrigin = false;
+  for (const [rawName, value] of Object.entries(headers)) {
+    const name = rawName.toLowerCase();
+    if (name === "host") continue;
+    if (name === "origin") {
+      hadOrigin = true;
+      continue;
+    }
+    rewritten[rawName] = value;
+  }
+  rewritten.host = internalHost;
+  if (hadOrigin) rewritten.origin = `http://${internalHost}`;
+  return rewritten;
 }
 
 export function webSocketProtocols(

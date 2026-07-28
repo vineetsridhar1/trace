@@ -1,6 +1,7 @@
 import type {
   RepoApplicationDefinition,
   RepoEnvVar,
+  RepoPortDefinition,
   RepoProcessDefinition,
   RepoSetupScript,
 } from "@trace/gql";
@@ -16,7 +17,14 @@ export type AppEnvVar = { key: string; value: string } | RepoEnvVar;
 // walks this graph. Dependencies reference setup script IDs or process IDs
 // within the same application config (a single ID namespace across both).
 export type AppSetupScript = Omit<RepoSetupScript, "env"> & { env: AppEnvVar[] };
-export type AppProcessDefinition = Omit<RepoProcessDefinition, "env"> & { env: AppEnvVar[] };
+// Hardcoded ports may set internalHostTemplate for host-routed containers (one
+// edge listener serving many hostnames): requests to `<sub>--<key>` preview
+// hosts are forwarded with Host rewritten to the template's `{sub}` expansion.
+export type AppPortDefinition = RepoPortDefinition & { internalHostTemplate?: string };
+export type AppProcessDefinition = Omit<RepoProcessDefinition, "env" | "ports"> & {
+  env: AppEnvVar[];
+  ports: AppPortDefinition[];
+};
 export type AppDefinition = Omit<RepoApplicationDefinition, "processes"> & {
   processes: AppProcessDefinition[];
 };
@@ -262,6 +270,10 @@ const CODE_APPLICATION_CONFIG: HardcodedApplicationConfig = {
         { key: "NPM_TOKEN", secretName: "NPM_TOKEN" },
         { key: "JFROG_USERNAME", secretName: "JFROG_USERNAME" },
         { key: "JFROG_PASSWORD", secretName: "JFROG_PASSWORD" },
+        {
+          key: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
+          secretName: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
+        },
       ],
     },
   ],
@@ -273,7 +285,10 @@ const CODE_APPLICATION_CONFIG: HardcodedApplicationConfig = {
         {
           id: "dev-up",
           name: "Full localdev",
-          command: "direnv exec . scripts/bin/dev up 5000 --profile full",
+          // --attach keeps dev up alive as the run's supervisor: without it the
+          // command exits once services are ready (process-compose runs
+          // detached), which reads as the app exiting and drops forwarding.
+          command: "direnv exec . scripts/bin/dev up 5000 --profile full --attach",
           workingDirectory: ".",
           required: true,
           dependsOn: ["container-bootstrap"],
@@ -281,35 +296,28 @@ const CODE_APPLICATION_CONFIG: HardcodedApplicationConfig = {
             { key: "NPM_TOKEN", secretName: "NPM_TOKEN" },
             { key: "JFROG_USERNAME", secretName: "JFROG_USERNAME" },
             { key: "JFROG_PASSWORD", secretName: "JFROG_PASSWORD" },
+            {
+              key: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
+              secretName: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
+            },
             { key: "ASDF_JAVA_VERSION", value: "temurin-17.0.17+10" },
             { key: "PGHOST", value: "127.0.0.1" },
             { key: "PGPORT", value: "5432" },
             { key: "PGDATABASE", value: "postgres" },
           ],
+          // Localdev is hostname-routed: one Caddy edge on container port 80
+          // serves www/consumer/sell/buy/opshub.5000.localhost. A single
+          // host-mode endpoint covers all of them via `<sub>--<key>` preview
+          // hosts instead of one port-mode endpoint per app.
           ports: [
             {
-              id: "www",
-              label: "Public site",
-              port: 8080,
+              id: "web",
+              label: "Localdev",
+              port: 80,
               protocol: "http",
               defaultForwardingEnabled: true,
               healthPath: "/",
-            },
-            {
-              id: "consumer",
-              label: "Consumer",
-              port: 8081,
-              protocol: "http",
-              defaultForwardingEnabled: true,
-              healthPath: "/",
-            },
-            {
-              id: "opshub",
-              label: "OpsHub",
-              port: 8082,
-              protocol: "http",
-              defaultForwardingEnabled: true,
-              healthPath: "/",
+              internalHostTemplate: "{sub}.5000.localhost",
             },
           ],
         },
