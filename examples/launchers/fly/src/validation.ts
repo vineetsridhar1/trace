@@ -21,6 +21,8 @@ export function validateStartSessionRequest(body: unknown): StartSessionRequest 
     runtimeToken: requireString(value.runtimeToken, "runtimeToken"),
     runtimeTokenExpiresAt: requireString(value.runtimeTokenExpiresAt, "runtimeTokenExpiresAt"),
     runtimeTokenScope: requireLiteral(value.runtimeTokenScope, "session", "runtimeTokenScope"),
+    runtimeLeaseExpiresAt: requireTimestamp(value.runtimeLeaseExpiresAt, "runtimeLeaseExpiresAt"),
+    runtimeHardDeadlineAt: requireTimestamp(value.runtimeHardDeadlineAt, "runtimeHardDeadlineAt"),
     bridgeUrl: requireString(value.bridgeUrl, "bridgeUrl"),
     repo,
     tool: requireOneOf(value.tool, ["claude_code", "codex", "cursor_composer", "pi"], "tool"),
@@ -106,6 +108,14 @@ function requireString(value: unknown, path: string): string {
   }
 
   return value;
+}
+
+function requireTimestamp(value: unknown, path: string): string {
+  const timestamp = requireString(value, path);
+  if (!Number.isFinite(Date.parse(timestamp))) {
+    throw new RequestValidationError(`${path} must be an ISO-8601 timestamp`);
+  }
+  return timestamp;
 }
 
 function requireBoolean(value: unknown, path: string): boolean {

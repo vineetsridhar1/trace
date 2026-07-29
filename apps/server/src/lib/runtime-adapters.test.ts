@@ -363,6 +363,8 @@ describe("ProvisionedRuntimeAdapter", () => {
       expect(body.runtimeToken).not.toBe("runtime-token");
       expect(body.runtimeTokenScope).toBe("session");
       expect(body.runtimeTokenExpiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(body.runtimeLeaseExpiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(body.runtimeHardDeadlineAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       expect(body.reasoningEffort).toBe("xhigh");
       expect(body.bootstrapEnv).toEqual(
         expect.objectContaining({
@@ -371,6 +373,8 @@ describe("ProvisionedRuntimeAdapter", () => {
           TRACE_RUNTIME_INSTANCE_ID: result.runtimeInstanceId,
           TRACE_RUNTIME_TOKEN: body.runtimeToken,
           TRACE_BRIDGE_URL: "wss://trace.example/bridge",
+          TRACE_RUNTIME_LEASE_EXPIRES_AT: body.runtimeLeaseExpiresAt,
+          TRACE_RUNTIME_HARD_DEADLINE_AT: body.runtimeHardDeadlineAt,
         }),
       );
 

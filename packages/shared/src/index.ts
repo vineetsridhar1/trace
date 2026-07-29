@@ -42,6 +42,7 @@ export type {
   BridgePauseCommand,
   BridgeResumeCommand,
   BridgeDeleteCommand,
+  BridgeRuntimeLeaseCommand,
   BridgeListBranchesCommand,
   BridgeListWorkspaceSlugsCommand,
   BridgeRuntimeHello,

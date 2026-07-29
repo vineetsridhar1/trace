@@ -183,6 +183,8 @@ function startRequest(): StartSessionRequest {
     runtimeToken: "runtime-token",
     runtimeTokenExpiresAt: "2026-01-01T00:00:00.000Z",
     runtimeTokenScope: "session",
+    runtimeLeaseExpiresAt: "2026-01-01T00:05:00.000Z",
+    runtimeHardDeadlineAt: "2026-01-02T00:00:00.000Z",
     bridgeUrl: "wss://trace.example/bridge",
     repo: null,
     tool: "codex",

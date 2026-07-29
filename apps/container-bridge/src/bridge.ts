@@ -148,6 +148,7 @@ export class ContainerBridge implements IBridgeClient {
     private readonly token: string,
     private readonly runtimeInstanceId: string,
     private readonly defaultTool: string,
+    private readonly renewRuntimeLease?: (expiresAt: string) => void,
   ) {
     this.terminalManager = new TerminalManager({
       onOutput: (terminalId, data) => {
@@ -337,6 +338,11 @@ export class ContainerBridge implements IBridgeClient {
 
   private handleCommand(cmd: BridgeCommand): void {
     switch (cmd.type) {
+      case "runtime_lease": {
+        this.renewRuntimeLease?.(cmd.expiresAt);
+        break;
+      }
+
       case "run":
       case "send": {
         this.runPrompt({

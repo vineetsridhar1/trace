@@ -3,6 +3,7 @@ import { execFileSync } from "child_process";
 import { ContainerBridge } from "./bridge.js";
 import { installCodexAuthFile, loginAvailableTools } from "./tool-auth.js";
 import { parseRuntimeSetupCommands, runRuntimeSetupCommands } from "./runtime-setup.js";
+import { RuntimeLeaseWatchdog, type RuntimeLeaseExpirationReason } from "./runtime-lease.js";
 
 /**
  * If an SSH private key was injected (base64-encoded), decode it to ~/.ssh/id_rsa
@@ -57,7 +58,24 @@ async function main(): Promise<void> {
   const bridgeUrl = requireEnv("TRACE_BRIDGE_URL");
   const bridgeToken = requireEnv("TRACE_RUNTIME_TOKEN");
   const runtimeInstanceId = requireEnv("TRACE_RUNTIME_INSTANCE_ID");
+  const leaseExpiresAt = requireEnv("TRACE_RUNTIME_LEASE_EXPIRES_AT");
+  const hardDeadlineAt = requireEnv("TRACE_RUNTIME_HARD_DEADLINE_AT");
   const tool = process.env.CODING_TOOL ?? process.env.TRACE_TOOL ?? "claude_code";
+
+  // Arm the fail-safe before setup, authentication, or bridge connection.
+  // A hung bootstrap command must not bypass the same lifetime boundary that
+  // protects an already-connected runtime.
+  let bridge: ContainerBridge | null = null;
+  const leaseWatchdog = new RuntimeLeaseWatchdog({
+    leaseExpiresAt,
+    hardDeadlineAt,
+    onExpired: (reason: RuntimeLeaseExpirationReason) => {
+      console.error(`[container-bridge] runtime lease expired: ${reason}; shutting down`);
+      bridge?.disconnect();
+      process.exit(0);
+    },
+  });
+  leaseWatchdog.start();
 
   // Set up SSH key before any git operations
   setupSshKey();
@@ -71,18 +89,24 @@ async function main(): Promise<void> {
   await loginAvailableTools();
 
   // Connect to server — sessions register dynamically via prepare commands
-  const bridge = new ContainerBridge(bridgeUrl, bridgeToken, runtimeInstanceId, tool);
+  bridge = new ContainerBridge(bridgeUrl, bridgeToken, runtimeInstanceId, tool, (expiresAt) => {
+    if (!leaseWatchdog.renew(expiresAt)) {
+      console.warn("[container-bridge] ignored invalid or stale runtime lease renewal");
+    }
+  });
   bridge.connect();
 
   // Keep the process alive
   process.on("SIGTERM", () => {
     console.log("[container-bridge] received SIGTERM, shutting down");
+    leaseWatchdog.stop();
     bridge.disconnect();
     process.exit(0);
   });
 
   process.on("SIGINT", () => {
     console.log("[container-bridge] received SIGINT, shutting down");
+    leaseWatchdog.stop();
     bridge.disconnect();
     process.exit(0);
   });

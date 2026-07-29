@@ -129,6 +129,15 @@ export interface BridgeDeleteCommand {
   sessionGroupId?: string;
 }
 
+/**
+ * Renewable control-plane lease for provisioned runtimes. Cloud bridges exit
+ * when this deadline passes without a newer lease from an authenticated server.
+ */
+export interface BridgeRuntimeLeaseCommand {
+  type: "runtime_lease";
+  expiresAt: string;
+}
+
 export interface BridgeListBranchesCommand {
   type: "list_branches";
   requestId: string;
@@ -438,6 +447,7 @@ export type BridgeCommand =
   | BridgePauseCommand
   | BridgeResumeCommand
   | BridgeDeleteCommand
+  | BridgeRuntimeLeaseCommand
   | BridgeListBranchesCommand
   | BridgeListWorkspaceSlugsCommand
   | BridgeListWorktreesCommand

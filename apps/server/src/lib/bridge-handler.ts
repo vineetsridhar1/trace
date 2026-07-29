@@ -8,6 +8,7 @@ import {
   type BridgeLinkedCheckoutActionResultPayload,
   type BridgeWorkspaceWarning,
   type BridgeRepoWorktree,
+  type BridgeRuntimeLeaseCommand,
   type GitCheckpointContext,
 } from "@trace/shared";
 import { runtimeRouterKey, sessionRouter } from "./session-router.js";
@@ -21,6 +22,7 @@ import { managedGitService } from "../services/managed-git.js";
 import { endpointProxyService } from "../services/endpoint-proxy.js";
 import { prisma } from "./db.js";
 import { AuthorizationError } from "./errors.js";
+import { nextRuntimeLeaseExpiresAt } from "./provisioned-runtime-lease.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
@@ -101,6 +103,15 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
   let runtimeKey = runtimeId;
   let registered = false;
   const bridgeAuth = req?.bridgeAuth;
+
+  function renewCloudRuntimeLease(): void {
+    if (bridgeAuth?.kind !== "cloud" || ws.readyState !== ws.OPEN) return;
+    const command: BridgeRuntimeLeaseCommand = {
+      type: "runtime_lease",
+      expiresAt: nextRuntimeLeaseExpiresAt(),
+    };
+    ws.send(JSON.stringify(command));
+  }
 
   runtimeDebug("bridge websocket connected", {
     provisionalRuntimeId: runtimeId,
@@ -411,6 +422,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           }
 
           registered = true;
+          renewCloudRuntimeLease();
 
           // Restore all sessions owned by this runtime from the DB.
           // The DB (connection.runtimeInstanceId) is the single source of truth —
@@ -468,6 +480,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         if (!registered) return;
         const recorded = sessionRouter.recordHeartbeat(runtimeKey, ws);
         if (!recorded) return;
+        renewCloudRuntimeLease();
         if (Array.isArray(msg.activeSessionIds)) {
           const activeSessionIds = (msg.activeSessionIds as unknown[]).filter(
             (sessionId): sessionId is string => typeof sessionId === "string" && !!sessionId,

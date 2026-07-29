@@ -351,6 +351,24 @@ describe("bridge handler auth", () => {
       }),
     );
     expect(ws.close).not.toHaveBeenCalledWith(1008, "Bridge auth mismatch");
+
+    const initialLease = ws.send.mock.calls
+      .map(([payload]) => JSON.parse(String(payload)) as Record<string, unknown>)
+      .find((payload) => payload.type === "runtime_lease");
+    expect(initialLease).toEqual({
+      type: "runtime_lease",
+      expiresAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+
+    ws.emitMessage({
+      type: "runtime_heartbeat",
+      instanceId: "runtime_owned",
+      activeSessionIds: [],
+    });
+    const leaseRenewals = ws.send.mock.calls
+      .map(([payload]) => JSON.parse(String(payload)) as Record<string, unknown>)
+      .filter((payload) => payload.type === "runtime_lease");
+    expect(leaseRenewals).toHaveLength(2);
   });
 
   it("rejects a provisioned cloud bridge with incompatible protocol metadata", async () => {

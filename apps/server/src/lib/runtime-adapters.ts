@@ -18,6 +18,7 @@ import { resolveJwtSecret } from "./jwt-secret.js";
 import { isLocalMode } from "./mode.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 import { CODING_TOOL_IDS } from "@trace/shared";
+import { nextRuntimeLeaseExpiresAt, runtimeHardDeadlineAt } from "./provisioned-runtime-lease.js";
 
 const CODING_TOOLS = new Set(CODING_TOOL_IDS);
 const DEFAULT_STARTUP_TIMEOUT_SECONDS = 180;
@@ -672,6 +673,11 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       },
       runtimeTokenTtlSeconds,
     );
+    const startedAt = Date.now();
+    const startupLeaseMinimumMs =
+      (config.startupTimeoutSeconds + RUNTIME_TOKEN_STARTUP_MARGIN_SECONDS) * 1000;
+    const runtimeLeaseExpiresAt = nextRuntimeLeaseExpiresAt(startedAt, startupLeaseMinimumMs);
+    const hardDeadlineAt = runtimeHardDeadlineAt(startedAt, startupLeaseMinimumMs);
     const bridgeUrl = input.bridgeUrl ?? defaultBridgeUrl();
     const [runtimeEnv, userApiTokenEnv] = await Promise.all([
       resolveProvisionedRuntimeEnv(input.organizationId, config.runtimeEnv),
@@ -690,6 +696,8 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       runtimeToken: runtimeToken.token,
       runtimeTokenExpiresAt: runtimeToken.expiresAt.toISOString(),
       runtimeTokenScope: "session",
+      runtimeLeaseExpiresAt,
+      runtimeHardDeadlineAt: hardDeadlineAt,
       bridgeUrl,
       repo: input.repo
         ? {
@@ -711,6 +719,8 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
         TRACE_RUNTIME_INSTANCE_ID: runtimeInstanceId,
         TRACE_RUNTIME_TOKEN: runtimeToken.token,
         TRACE_BRIDGE_URL: bridgeUrl,
+        TRACE_RUNTIME_LEASE_EXPIRES_AT: runtimeLeaseExpiresAt,
+        TRACE_RUNTIME_HARD_DEADLINE_AT: hardDeadlineAt,
         // The app is served through the `<key>.<previewHost>` proxy origin, not
         // the container's localhost. Dev servers (e.g. Next 15) otherwise flag
         // requests from that origin as cross-origin and block /_next/HMR/API
@@ -724,7 +734,6 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       },
     };
 
-    const startedAt = Date.now();
     const json = await authenticatedLauncherRequest({
       organizationId: input.organizationId,
       url: config.startUrl,
@@ -747,6 +756,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       runtimeInstanceId,
       providerRuntimeId,
       providerStatus: startStatus(record.status),
+      runtimeHardDeadlineAt: hardDeadlineAt,
       latencyMs: Date.now() - startedAt,
     });
 

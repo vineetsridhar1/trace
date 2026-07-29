@@ -76,6 +76,9 @@ Recommended ECS inputs:
 - `networkConfiguration.awsvpcConfiguration.assignPublicIp`: `DISABLED` for private VPC egress, or
   `ENABLED` only when intentional
 - `overrides.containerOverrides[].environment`: Trace bootstrap env vars plus optional repo/tool env
+- Schedule an independent `StopTask` for `runtimeHardDeadlineAt`. EventBridge Scheduler is one
+  option; a launcher-owned sweeper keyed by task tags is another. Do not rely on Trace calling the
+  stop endpoint—the hard deadline is the containment boundary when control-plane cleanup fails.
 
 Inject these runtime env vars:
 
@@ -84,12 +87,22 @@ TRACE_SESSION_ID
 TRACE_ORG_ID
 TRACE_RUNTIME_INSTANCE_ID
 TRACE_RUNTIME_TOKEN
+TRACE_RUNTIME_LEASE_EXPIRES_AT
+TRACE_RUNTIME_HARD_DEADLINE_AT
 TRACE_BRIDGE_URL
 TRACE_TOOL
 TRACE_MODEL
 TRACE_REPO_URL
 TRACE_REPO_BRANCH
 ```
+
+The runtime process enforces both deadlines itself:
+
+- `runtimeLeaseExpiresAt` is renewable over the authenticated bridge. If Trace no longer recognizes
+  the runtime or remains unavailable past the lease, the essential container exits.
+- `runtimeHardDeadlineAt` is never renewable. The container and launcher must both enforce it so a
+  broken image, failed bridge startup, stale database row, or missed cleanup job cannot create
+  unbounded provider compute.
 
 Return the ECS task ARN as `runtimeId`:
 
@@ -121,14 +134,14 @@ For `POST /trace/session-status`, call `DescribeTasks` with the task ARN.
 
 Map ECS task state to Trace status:
 
-| ECS state | Trace status |
-| --- | --- |
-| `PROVISIONING`, `PENDING` | `provisioning` |
-| `ACTIVATING` | `booting` |
-| `RUNNING` | `connected` |
-| `DEACTIVATING`, `STOPPING`, `DEPROVISIONING` | `stopping` |
-| `STOPPED`, missing task | `stopped` |
-| other/unknown | `unknown` |
+| ECS state                                    | Trace status   |
+| -------------------------------------------- | -------------- |
+| `PROVISIONING`, `PENDING`                    | `provisioning` |
+| `ACTIVATING`                                 | `booting`      |
+| `RUNNING`                                    | `connected`    |
+| `DEACTIVATING`, `STOPPING`, `DEPROVISIONING` | `stopping`     |
+| `STOPPED`, missing task                      | `stopped`      |
+| other/unknown                                | `unknown`      |
 
 Trace still treats the runtime as ready only when the bridge connects back. A `RUNNING` ECS task does
 not by itself mean the agent bridge is usable.

@@ -36,6 +36,15 @@ describe("validateStartSessionRequest", () => {
 
     expect(request.tool).toBe("pi");
   });
+
+  it("rejects invalid runtime lease deadlines", () => {
+    expect(() =>
+      validateStartSessionRequest({
+        ...startRequest(),
+        runtimeHardDeadlineAt: "not-a-timestamp",
+      }),
+    ).toThrow("runtimeHardDeadlineAt must be an ISO-8601 timestamp");
+  });
 });
 
 function startRequest(): StartSessionRequest {
@@ -47,6 +56,8 @@ function startRequest(): StartSessionRequest {
     runtimeToken: "runtime-token",
     runtimeTokenExpiresAt: "2026-01-01T00:00:00.000Z",
     runtimeTokenScope: "session",
+    runtimeLeaseExpiresAt: "2026-01-01T00:05:00.000Z",
+    runtimeHardDeadlineAt: "2026-01-02T00:00:00.000Z",
     bridgeUrl: "wss://trace.example/bridge",
     repo: null,
     tool: "codex",
