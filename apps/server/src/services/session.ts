@@ -1787,13 +1787,17 @@ export class SessionService {
         // runtime is starting.
         //
         // A new launch may ALSO claim a connection whose previous runtime ended
-        // in a terminal state (failed/timed_out/stopped/deprovisioned): that
-        // runtime is dead, so a fresh provision must be able to take over. Without
-        // this, a startup timeout left the connection pinned to the dead runtime's
-        // id, and every re-provision (a different id) was fenced out here — the
-        // session could never recover.
+        // in a terminal state, or was deprovisioned by idle cleanup. That runtime
+        // is dead, so a fresh provision must be able to take over. Idle cleanup
+        // records its completed teardown as `disconnected` to preserve the reason,
+        // but it also keeps the old binding ids; treat that specific shape as stale.
+        // Without this, the replacement task is launched but its bridge is fenced
+        // out because the database still points at the old runtime generation.
         const canClaimStaleConnection =
-          isNewRuntimeRequest && (!conn.runtimeInstanceId || isRuntimeTerminalState(conn.state));
+          isNewRuntimeRequest &&
+          (!conn.runtimeInstanceId ||
+            isRuntimeTerminalState(conn.state) ||
+            isRuntimeComputeGone(conn));
         if (conn.runtimeInstanceId !== update.runtimeInstanceId && !canClaimStaleConnection) {
           return null;
         }

@@ -5885,6 +5885,54 @@ describe("SessionService", () => {
       );
     });
 
+    it("lets a fresh provision claim an idle-cleaned runtime binding", async () => {
+      prismaMock.session.findUnique.mockReset();
+      prismaMock.session.updateMany.mockReset();
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          sessionGroupId: null,
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+        })
+        .mockResolvedValueOnce({
+          sessionGroupId: null,
+          connection: {
+            state: "disconnected",
+            version: 3,
+            adapterType: "provisioned",
+            runtimeInstanceId: "runtime-old",
+            deprovisionedAt: "2026-07-29T16:15:27.000Z",
+          },
+        });
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await (
+        service as unknown as {
+          recordRuntimeLifecycle: (
+            sessionId: string,
+            eventType: "session_runtime_start_requested",
+            update: { runtimeInstanceId: string },
+          ) => Promise<void>;
+        }
+      ).recordRuntimeLifecycle("session-1", "session_runtime_start_requested", {
+        runtimeInstanceId: "runtime-new",
+      });
+
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { id: "session-1", connection: { path: ["version"], equals: 3 } },
+        data: {
+          connection: expect.objectContaining({
+            state: "requested",
+            runtimeInstanceId: "runtime-new",
+          }),
+        },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: "session_runtime_start_requested" }),
+      );
+    });
+
     it("still fences a fresh provision from claiming a live connection bound to another runtime", async () => {
       prismaMock.session.findUnique.mockReset();
       prismaMock.session.updateMany.mockReset();
