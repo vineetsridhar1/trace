@@ -244,6 +244,9 @@ export type SessionConnectionData = {
   providerRuntimeId?: string;
   providerRuntimeUrl?: string;
   providerStatus?: string;
+  runtimeHardDeadlineAt?: string;
+  providerDeadlineEnforcementId?: string;
+  hardDeadlineWarningAt?: string;
   requestedAt?: string;
   provisioningAt?: string;
   connectingAt?: string;
@@ -288,6 +291,17 @@ export type SessionConnectionData = {
   autoRetryable?: boolean;
   [key: string]: unknown;
 };
+
+export type RuntimeLeaseAuthorization =
+  | { authorized: true }
+  | {
+      authorized: false;
+      reason:
+        | "session_not_active"
+        | "runtime_not_owner"
+        | "environment_mismatch"
+        | "runtime_stopping";
+    };
 
 const RUNTIME_IDENTITY_FIELDS = [
   "environmentId",
@@ -1775,7 +1789,12 @@ export class SessionService {
         sessionStatus: true,
       },
     });
-    if (!session) return;
+    if (!session) {
+      if (eventType === "session_runtime_start_requested") {
+        throw new Error(`Cannot reserve runtime ownership for missing session ${sessionId}`);
+      }
+      return;
+    }
 
     const result = await this.updateConnectionConditional(sessionId, (conn) => {
       if (update.runtimeInstanceId) {
@@ -1828,7 +1847,14 @@ export class SessionService {
       return { ...conn, ...this.lifecycleConnectionPatch(eventType, conn, update, adapterType) };
     });
 
-    if (!result) return;
+    if (!result) {
+      if (eventType === "session_runtime_start_requested") {
+        throw new Error(
+          `Cannot reserve runtime ${update.runtimeInstanceId ?? "unknown"} for session ${sessionId}`,
+        );
+      }
+      return;
+    }
 
     const adapterType = this.lifecycleAdapterType(result.updated, update);
     const lifecycleState = this.lifecycleConnectionState(eventType, adapterType);
@@ -1853,6 +1879,12 @@ export class SessionService {
         ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
         ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
         ...(update.providerStatus && { providerStatus: update.providerStatus }),
+        ...(update.runtimeHardDeadlineAt && {
+          runtimeHardDeadlineAt: update.runtimeHardDeadlineAt,
+        }),
+        ...(update.providerDeadlineEnforcementId && {
+          providerDeadlineEnforcementId: update.providerDeadlineEnforcementId,
+        }),
         ...(update.error && { error: update.error }),
         ...(update.abandoned && { abandoned: true }),
         ...(update.reconcileAttempts !== undefined && {
@@ -1920,6 +1952,12 @@ export class SessionService {
       ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
       ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
       ...(update.providerStatus && { providerStatus: update.providerStatus }),
+      ...(update.runtimeHardDeadlineAt && {
+        runtimeHardDeadlineAt: update.runtimeHardDeadlineAt,
+      }),
+      ...(update.providerDeadlineEnforcementId && {
+        providerDeadlineEnforcementId: update.providerDeadlineEnforcementId,
+      }),
     };
 
     switch (eventType) {
@@ -1928,6 +1966,9 @@ export class SessionService {
           ...runtimePatch,
           state: "requested",
           requestedAt: now,
+          runtimeHardDeadlineAt: undefined,
+          providerDeadlineEnforcementId: undefined,
+          hardDeadlineWarningAt: undefined,
           lastError: undefined,
           canRetry: true,
           canMove: true,
@@ -10692,6 +10733,208 @@ export class SessionService {
     });
   }
 
+  /**
+   * Authoritative renewable-lease check. A connected socket is only transport
+   * identity; the persisted runtime generation remains the ownership source of
+   * truth. Keeping this in the service layer also makes registration and later
+   * renewal use the same lifecycle policy.
+   */
+  async authorizeRuntimeLease(input: {
+    sessionId: string;
+    organizationId: string;
+    runtimeInstanceId: string;
+    environmentId?: string;
+  }): Promise<RuntimeLeaseAuthorization> {
+    const session = await prisma.session.findFirst({
+      where: {
+        id: input.sessionId,
+        organizationId: input.organizationId,
+        hosting: "cloud",
+      },
+      select: {
+        agentStatus: true,
+        sessionStatus: true,
+        connection: true,
+      },
+    });
+    if (
+      !session ||
+      session.sessionStatus === "merged" ||
+      session.agentStatus === "failed" ||
+      session.agentStatus === "stopped"
+    ) {
+      return { authorized: false, reason: "session_not_active" };
+    }
+
+    const connection = this.parseConnection(session.connection);
+    if (connection.runtimeInstanceId !== input.runtimeInstanceId) {
+      return { authorized: false, reason: "runtime_not_owner" };
+    }
+    if (
+      input.environmentId &&
+      connection.environmentId &&
+      connection.environmentId !== input.environmentId
+    ) {
+      return { authorized: false, reason: "environment_mismatch" };
+    }
+    if (
+      connection.adapterType === "local" ||
+      connection.disconnectOnDeprovision === true ||
+      connection.state === "failed" ||
+      connection.state === "stopping" ||
+      connection.state === "stopped" ||
+      connection.state === "deprovisioned" ||
+      connection.state === "deprovision_failed" ||
+      isRuntimeComputeGone(connection)
+    ) {
+      return { authorized: false, reason: "runtime_stopping" };
+    }
+
+    return { authorized: true };
+  }
+
+  /**
+   * Gracefully reconciles persisted hard deadlines before the independent
+   * container/provider kill switches fire. The hard cap remains authoritative;
+   * this job exists to publish a warning and drive the normal service-layer
+   * teardown so UI, events, terminals, and provider state converge cleanly.
+   */
+  async reconcileRuntimeHardDeadlines(
+    options: {
+      now?: number;
+      warningBeforeMs?: number;
+      batchSize?: number;
+    } = {},
+  ): Promise<{ scanned: number; warned: string[]; stopped: string[] }> {
+    const now = options.now ?? Date.now();
+    const warningBeforeMs = Math.max(60_000, options.warningBeforeMs ?? 60 * 60 * 1000);
+    const batchSize = Math.max(1, Math.min(options.batchSize ?? 500, 1_000));
+    const sessions = await prisma.session.findMany({
+      where: {
+        hosting: "cloud",
+        sessionStatus: { not: "merged" },
+        connection: {
+          path: ["runtimeHardDeadlineAt"],
+          not: Prisma.AnyNull,
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        sessionGroupId: true,
+        agentStatus: true,
+        connection: true,
+      },
+      orderBy: { updatedAt: "asc" },
+      take: batchSize,
+    });
+
+    const warned: string[] = [];
+    const stopped: string[] = [];
+    const processedGroups = new Set<string>();
+    for (const session of sessions) {
+      const connection = this.parseConnection(session.connection);
+      if (isRuntimeComputeGone(connection) || !connection.runtimeInstanceId) continue;
+      const deadline = Date.parse(connection.runtimeHardDeadlineAt ?? "");
+      if (!Number.isFinite(deadline)) continue;
+      const groupKey = session.sessionGroupId ?? session.id;
+      if (processedGroups.has(groupKey)) continue;
+
+      if (deadline <= now) {
+        processedGroups.add(groupKey);
+        const activeSessionIds = session.sessionGroupId
+          ? (
+              await prisma.session.findMany({
+                where: {
+                  sessionGroupId: session.sessionGroupId,
+                  agentStatus: "active",
+                },
+                select: { id: true },
+              })
+            ).map((activeSession) => activeSession.id)
+          : session.agentStatus === "active"
+            ? [session.id]
+            : [];
+        for (const activeSessionId of activeSessionIds) {
+          await this.complete(activeSessionId, { drainPending: false });
+        }
+        const unloaded = await this.fullyUnloadSession(
+          session.id,
+          !!session.sessionGroupId,
+          "runtime_hard_deadline",
+        );
+        if (unloaded) {
+          if (session.sessionGroupId) {
+            await sessionApplicationService.markSessionGroupRuntimeStopped(
+              session.sessionGroupId,
+              session.organizationId,
+            );
+          }
+          stopped.push(session.id);
+          logAgentEnvironmentTelemetry("runtime.hard_deadline_reconciled", {
+            organizationId: session.organizationId,
+            sessionId: session.id,
+            sessionGroupId: session.sessionGroupId,
+            runtimeInstanceId: connection.runtimeInstanceId,
+            runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+          });
+        } else {
+          alertAgentEnvironmentOperator("runtime.hard_deadline_stop_failed", {
+            organizationId: session.organizationId,
+            sessionId: session.id,
+            sessionGroupId: session.sessionGroupId,
+            runtimeInstanceId: connection.runtimeInstanceId,
+            providerRuntimeId: connection.providerRuntimeId,
+            runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+            overdueMs: now - deadline,
+          });
+        }
+        continue;
+      }
+
+      if (deadline - now > warningBeforeMs || connection.hardDeadlineWarningAt) continue;
+      const warningAt = new Date(now).toISOString();
+      const warningRecorded = await this.updateConnectionConditional(session.id, (latest) => {
+        if (
+          latest.runtimeInstanceId !== connection.runtimeInstanceId ||
+          latest.runtimeHardDeadlineAt !== connection.runtimeHardDeadlineAt ||
+          latest.hardDeadlineWarningAt
+        ) {
+          return null;
+        }
+        return { ...latest, hardDeadlineWarningAt: warningAt };
+      });
+      if (!warningRecorded) continue;
+
+      warned.push(session.id);
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: session.id,
+        eventType: "session_output",
+        payload: {
+          type: "runtime_hard_deadline_warning",
+          sessionId: session.id,
+          runtimeInstanceId: connection.runtimeInstanceId,
+          runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+          warningBeforeMs,
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+      logAgentEnvironmentTelemetry("runtime.hard_deadline_approaching", {
+        organizationId: session.organizationId,
+        sessionId: session.id,
+        sessionGroupId: session.sessionGroupId,
+        runtimeInstanceId: connection.runtimeInstanceId,
+        runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+        remainingMs: deadline - now,
+      });
+    }
+
+    return { scanned: sessions.length, warned, stopped };
+  }
+
   async cleanupIdleCloudSessionGroups(options: {
     idleAfterMs: number;
     activeIdleAfterMs?: number;
@@ -10791,7 +11034,10 @@ export class SessionService {
         const activity = session.lastMessageAt ?? session.lastUserMessageAt ?? session.createdAt;
         return activity > activeCutoff;
       });
-      if (activeSessionHasRecentActivity || activeSessions.some((session) => session.hosting !== "cloud")) {
+      if (
+        activeSessionHasRecentActivity ||
+        activeSessions.some((session) => session.hosting !== "cloud")
+      ) {
         continue;
       }
       const cloudSession =

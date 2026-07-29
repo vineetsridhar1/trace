@@ -135,7 +135,12 @@ export interface BridgeDeleteCommand {
  */
 export interface BridgeRuntimeLeaseCommand {
   type: "runtime_lease";
-  expiresAt: string;
+  /**
+   * Renewable control-plane lease duration. The bridge applies this to its
+   * local monotonic clock so host clock skew cannot invalidate a healthy
+   * runtime.
+   */
+  ttlMs: number;
 }
 
 export interface BridgeListBranchesCommand {
@@ -496,6 +501,8 @@ export interface BridgeRuntimeHello {
   protocolVersion?: number;
   /** Required for provisioned cloud runtimes. */
   agentVersion?: string;
+  /** Optional protocol features this bridge has actively enabled. */
+  capabilities?: string[];
   supportedTools: string[];
   /** Repo IDs this bridge has locally registered (device bridges only). Empty for cloud. */
   registeredRepoIds: string[];

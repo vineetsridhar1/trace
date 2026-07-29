@@ -185,6 +185,17 @@ function renderSessionOutput(
     if (message) return <SystemBadge text={message} />;
   }
 
+  if (type === "runtime_hard_deadline_warning") {
+    const warningBeforeMs =
+      typeof payload.warningBeforeMs === "number" ? payload.warningBeforeMs : 0;
+    const warningMinutes = Math.max(1, Math.round(warningBeforeMs / 60_000));
+    return (
+      <SystemBadge
+        text={`Cloud workspace reaches its safety deadline in about ${warningMinutes} minutes. Save or checkpoint work before Trace stops it.`}
+      />
+    );
+  }
+
   return null;
 }
 

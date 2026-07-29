@@ -21,7 +21,11 @@ export function validateStartSessionRequest(body: unknown): StartSessionRequest 
     runtimeToken: requireString(value.runtimeToken, "runtimeToken"),
     runtimeTokenExpiresAt: requireString(value.runtimeTokenExpiresAt, "runtimeTokenExpiresAt"),
     runtimeTokenScope: requireLiteral(value.runtimeTokenScope, "session", "runtimeTokenScope"),
-    runtimeLeaseExpiresAt: requireTimestamp(value.runtimeLeaseExpiresAt, "runtimeLeaseExpiresAt"),
+    runtimeLeaseTtlMs: requirePositiveInteger(value.runtimeLeaseTtlMs, "runtimeLeaseTtlMs"),
+    runtimeHardDeadlineTtlMs: requirePositiveInteger(
+      value.runtimeHardDeadlineTtlMs,
+      "runtimeHardDeadlineTtlMs",
+    ),
     runtimeHardDeadlineAt: requireTimestamp(value.runtimeHardDeadlineAt, "runtimeHardDeadlineAt"),
     bridgeUrl: requireString(value.bridgeUrl, "bridgeUrl"),
     repo,
@@ -123,6 +127,13 @@ function requireBoolean(value: unknown, path: string): boolean {
     throw new RequestValidationError(`${path} must be a boolean`);
   }
 
+  return value;
+}
+
+function requirePositiveInteger(value: unknown, path: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new RequestValidationError(`${path} must be a positive integer`);
+  }
   return value;
 }
 

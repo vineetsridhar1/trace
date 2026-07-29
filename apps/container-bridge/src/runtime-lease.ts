@@ -3,21 +3,17 @@ export type RuntimeLeaseExpirationReason = "control_lease_expired" | "hard_deadl
 // Node clamps larger setTimeout values to 1ms. Long configured hard deadlines
 // must wake periodically rather than accidentally expiring immediately.
 const MAX_TIMER_DELAY_MS = 2_147_000_000;
+const MIN_CONTROL_LEASE_TTL_MS = 1_000;
+const DEFAULT_HARD_DEADLINE_WARNING_MS = 60 * 60 * 1000;
 
 type RuntimeLeaseWatchdogOptions = {
-  leaseExpiresAt: string;
-  hardDeadlineAt: string;
+  leaseTtlMs: number;
+  hardDeadlineTtlMs: number;
   onExpired: (reason: RuntimeLeaseExpirationReason) => void;
-  now?: () => number;
+  onHardDeadlineApproaching?: (remainingMs: number) => void;
+  hardDeadlineWarningMs?: number;
+  monotonicNow?: () => number;
 };
-
-function parseDeadline(value: string, name: string): number {
-  const deadline = Date.parse(value);
-  if (!Number.isFinite(deadline)) {
-    throw new Error(`${name} must be a valid ISO-8601 timestamp`);
-  }
-  return deadline;
-}
 
 /**
  * Fail-safe lifetime boundary for a provisioned runtime.
@@ -29,29 +25,34 @@ function parseDeadline(value: string, name: string): number {
 export class RuntimeLeaseWatchdog {
   private leaseDeadline: number;
   private readonly hardDeadline: number;
-  private readonly now: () => number;
+  private readonly hardDeadlineWarningAt: number;
+  private readonly monotonicNow: () => number;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private expired = false;
+  private hardDeadlineWarningSent = false;
 
   constructor(private readonly options: RuntimeLeaseWatchdogOptions) {
-    this.leaseDeadline = parseDeadline(options.leaseExpiresAt, "TRACE_RUNTIME_LEASE_EXPIRES_AT");
-    this.hardDeadline = parseDeadline(options.hardDeadlineAt, "TRACE_RUNTIME_HARD_DEADLINE_AT");
-    this.now = options.now ?? Date.now;
-    if (this.hardDeadline < this.leaseDeadline) {
-      this.leaseDeadline = this.hardDeadline;
-    }
+    const leaseTtlMs = this.validateLeaseTtl(options.leaseTtlMs);
+    const hardDeadlineTtlMs = this.validateHardDeadlineTtl(options.hardDeadlineTtlMs);
+    this.monotonicNow = options.monotonicNow ?? (() => performance.now());
+    const monotonicStartedAt = this.monotonicNow();
+    this.hardDeadline = monotonicStartedAt + hardDeadlineTtlMs;
+    this.leaseDeadline = Math.min(monotonicStartedAt + leaseTtlMs, this.hardDeadline);
+    const warningMs = Math.max(
+      0,
+      options.hardDeadlineWarningMs ?? DEFAULT_HARD_DEADLINE_WARNING_MS,
+    );
+    this.hardDeadlineWarningAt = Math.max(monotonicStartedAt, this.hardDeadline - warningMs);
   }
 
   start(): void {
     this.schedule();
   }
 
-  renew(expiresAt: string): boolean {
+  renew(ttlMs: number): boolean {
     if (this.expired) return false;
-    const requestedDeadline = Date.parse(expiresAt);
-    if (!Number.isFinite(requestedDeadline) || requestedDeadline <= this.leaseDeadline) {
-      return false;
-    }
+    if (!Number.isFinite(ttlMs) || ttlMs < MIN_CONTROL_LEASE_TTL_MS) return false;
+    const requestedDeadline = this.monotonicNow() + Math.floor(ttlMs);
     this.leaseDeadline = Math.min(requestedDeadline, this.hardDeadline);
     this.schedule();
     return true;
@@ -67,14 +68,21 @@ export class RuntimeLeaseWatchdog {
   private schedule(): void {
     this.stop();
     if (this.expired) return;
-    const deadline = Math.min(this.leaseDeadline, this.hardDeadline);
-    const delay = Math.min(MAX_TIMER_DELAY_MS, Math.max(0, deadline - this.now()));
+    const warningDeadline = this.hardDeadlineWarningSent
+      ? Number.POSITIVE_INFINITY
+      : this.hardDeadlineWarningAt;
+    const deadline = Math.min(this.leaseDeadline, this.hardDeadline, warningDeadline);
+    const delay = Math.min(MAX_TIMER_DELAY_MS, Math.max(0, deadline - this.monotonicNow()));
     this.timer = setTimeout(() => this.expireIfDue(), delay);
   }
 
   private expireIfDue(): void {
     if (this.expired) return;
-    const now = this.now();
+    const now = this.monotonicNow();
+    if (!this.hardDeadlineWarningSent && now >= this.hardDeadlineWarningAt) {
+      this.hardDeadlineWarningSent = true;
+      this.options.onHardDeadlineApproaching?.(Math.max(0, this.hardDeadline - now));
+    }
     if (now < this.leaseDeadline && now < this.hardDeadline) {
       this.schedule();
       return;
@@ -84,5 +92,21 @@ export class RuntimeLeaseWatchdog {
     this.options.onExpired(
       now >= this.hardDeadline ? "hard_deadline_reached" : "control_lease_expired",
     );
+  }
+
+  private validateLeaseTtl(ttlMs: number): number {
+    if (!Number.isFinite(ttlMs) || ttlMs < MIN_CONTROL_LEASE_TTL_MS) {
+      throw new Error(`TRACE_RUNTIME_LEASE_TTL_MS must be at least ${MIN_CONTROL_LEASE_TTL_MS}`);
+    }
+    return Math.floor(ttlMs);
+  }
+
+  private validateHardDeadlineTtl(ttlMs: number): number {
+    if (!Number.isFinite(ttlMs) || ttlMs < MIN_CONTROL_LEASE_TTL_MS) {
+      throw new Error(
+        `TRACE_RUNTIME_HARD_DEADLINE_TTL_MS must be at least ${MIN_CONTROL_LEASE_TTL_MS}`,
+      );
+    }
+    return Math.floor(ttlMs);
   }
 }

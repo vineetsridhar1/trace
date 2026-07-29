@@ -17,12 +17,13 @@ import { runtimeDebug } from "./runtime-debug.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 import { agentEnvironmentService } from "../services/agent-environment.js";
+import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 import { sessionApplicationService } from "../services/session-applications.js";
 import { managedGitService } from "../services/managed-git.js";
 import { endpointProxyService } from "../services/endpoint-proxy.js";
 import { prisma } from "./db.js";
 import { AuthorizationError } from "./errors.js";
-import { nextRuntimeLeaseExpiresAt } from "./provisioned-runtime-lease.js";
+import { runtimeLeaseTtlMs } from "./provisioned-runtime-lease.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
@@ -30,6 +31,8 @@ const DISCONNECT_GRACE_MS = 10_000;
 /** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
 const PING_INTERVAL_MS = 20_000;
 const BRIDGE_PROTOCOL_VERSION = 2;
+const RUNTIME_LEASE_CAPABILITY = "runtime_lease_v1";
+const LEASE_OWNERSHIP_REVALIDATE_INTERVAL_MS = 30_000;
 const CODING_TOOLS = new Set<CodingTool>(CODING_TOOL_IDS as CodingTool[]);
 
 type LocalBridgeAuth = {
@@ -48,6 +51,7 @@ type CloudBridgeAuth = {
   environmentId?: string;
   allowedScope?: "session";
   tool?: string;
+  leaseRequired?: boolean;
 };
 
 type BridgeAuth = CloudBridgeAuth | LocalBridgeAuth;
@@ -90,27 +94,61 @@ function isTerminalConnectionState(connection: unknown): boolean {
   return state === "failed" || state === "timed_out" || state === "stopped";
 }
 
-function connectionRuntimeInstanceId(connection: unknown): string | null {
-  const runtimeInstanceId = jsonRecord(connection)?.runtimeInstanceId;
-  return typeof runtimeInstanceId === "string" && runtimeInstanceId.trim()
-    ? runtimeInstanceId
-    : null;
-}
-
 export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequest) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
   let runtimeId: string = randomUUID();
   let runtimeKey = runtimeId;
   let registered = false;
   const bridgeAuth = req?.bridgeAuth;
+  let lastLeaseAuthorizationAt = 0;
 
   function renewCloudRuntimeLease(): void {
     if (bridgeAuth?.kind !== "cloud" || ws.readyState !== ws.OPEN) return;
     const command: BridgeRuntimeLeaseCommand = {
       type: "runtime_lease",
-      expiresAt: nextRuntimeLeaseExpiresAt(),
+      ttlMs: runtimeLeaseTtlMs(),
     };
     ws.send(JSON.stringify(command));
+  }
+
+  async function revalidateAndRenewCloudRuntimeLease(): Promise<boolean> {
+    if (bridgeAuth?.kind !== "cloud") return true;
+    if (!bridgeAuth.sessionId) {
+      if (bridgeAuth.leaseRequired === true) {
+        ws.close(1008, "Runtime lease scope required");
+        return false;
+      }
+      return true;
+    }
+    const now = Date.now();
+    if (now - lastLeaseAuthorizationAt < LEASE_OWNERSHIP_REVALIDATE_INTERVAL_MS) {
+      return true;
+    }
+    const authorization = await sessionService.authorizeRuntimeLease({
+      sessionId: bridgeAuth.sessionId,
+      organizationId: bridgeAuth.organizationId,
+      runtimeInstanceId: runtimeId,
+      environmentId: bridgeAuth.environmentId,
+    });
+    if (!authorization.authorized) {
+      runtimeDebug("runtime lease renewal rejected", {
+        runtimeId,
+        sessionId: bridgeAuth.sessionId,
+        reason: authorization.reason,
+      });
+      logAgentEnvironmentTelemetry("runtime.lease_authorization_rejected", {
+        organizationId: bridgeAuth.organizationId,
+        sessionId: bridgeAuth.sessionId,
+        runtimeInstanceId: runtimeId,
+        reason: authorization.reason,
+        phase: "renewal",
+      });
+      ws.close(1008, "Runtime lease ownership lost");
+      return false;
+    }
+    lastLeaseAuthorizationAt = now;
+    renewCloudRuntimeLease();
+    return true;
   }
 
   runtimeDebug("bridge websocket connected", {
@@ -219,6 +257,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             "custom",
           ];
           const registeredRepoIds = stringArray(msg.registeredRepoIds) ?? [];
+          const capabilities = stringArray(msg.capabilities) ?? [];
 
           runtimeDebug("received runtime_hello", {
             oldId,
@@ -344,6 +383,33 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 ws.close(1008, "Runtime does not support requested tool");
                 return;
               }
+              if (
+                bridgeAuth.leaseRequired === true &&
+                !capabilities.includes(RUNTIME_LEASE_CAPABILITY)
+              ) {
+                runtimeDebug("cloud bridge auth rejected missing runtime lease capability", {
+                  runtimeId: newId,
+                  capabilities,
+                });
+                logAgentEnvironmentTelemetry("runtime.lease_capability_rejected", {
+                  organizationId: bridgeAuth.organizationId,
+                  sessionId: bridgeAuth.sessionId,
+                  runtimeInstanceId: newId,
+                });
+                ws.close(1008, "Runtime lease capability required");
+                return;
+              }
+              if (
+                bridgeAuth.leaseRequired !== true &&
+                !capabilities.includes(RUNTIME_LEASE_CAPABILITY)
+              ) {
+                logAgentEnvironmentTelemetry("runtime.lease_capability_missing", {
+                  organizationId: bridgeAuth.organizationId,
+                  sessionId: bridgeAuth.sessionId,
+                  runtimeInstanceId: newId,
+                  required: false,
+                });
+              }
             }
 
             if (registered && oldId !== newId) {
@@ -353,6 +419,31 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             runtimeId = newId;
             runtimeKey = runtimeId;
             const existingRuntime = sessionRouter.getRuntime(newId);
+            if (bridgeAuth.sessionId) {
+              const authorization = await sessionService.authorizeRuntimeLease({
+                sessionId: bridgeAuth.sessionId,
+                organizationId: bridgeAuth.organizationId,
+                runtimeInstanceId: runtimeId,
+                environmentId: bridgeAuth.environmentId,
+              });
+              if (!authorization.authorized) {
+                runtimeDebug("cloud bridge auth rejected inactive scoped session", {
+                  runtimeId,
+                  sessionId: bridgeAuth.sessionId,
+                  reason: authorization.reason,
+                });
+                logAgentEnvironmentTelemetry("runtime.lease_authorization_rejected", {
+                  organizationId: bridgeAuth.organizationId,
+                  sessionId: bridgeAuth.sessionId,
+                  runtimeInstanceId: runtimeId,
+                  reason: authorization.reason,
+                  phase: "registration",
+                });
+                ws.close(1008, "Session is not waiting for this runtime");
+                return;
+              }
+              lastLeaseAuthorizationAt = Date.now();
+            }
             sessionRouter.registerRuntime({
               id: runtimeId,
               label: (msg.label as string) ?? runtimeId,
@@ -365,49 +456,6 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               registeredRepoIds,
             });
             if (bridgeAuth.sessionId) {
-              const scopedSession = await prisma.session.findFirst({
-                where: {
-                  id: bridgeAuth.sessionId,
-                  organizationId: bridgeAuth.organizationId,
-                  agentStatus: { notIn: ["failed", "stopped"] },
-                  sessionStatus: { not: "merged" },
-                },
-                select: { id: true, connection: true },
-              });
-              const connectionRuntimeId = scopedSession
-                ? connectionRuntimeInstanceId(scopedSession.connection)
-                : null;
-              // A provision-wait timeout leaves the connection in a terminal
-              // `timed_out` state. If the session's *own* runtime finally shows
-              // up (a slow boot that missed the 300s window), it must be allowed
-              // to reclaim and heal the session — rejecting it wedges the
-              // session forever, since every re-provision re-times-out the same
-              // way. Only the runtime the connection already points at may
-              // reclaim; a different runtime, or a `failed`/`stopped` state, is
-              // still rejected. `restoreSessionsForRuntime` (called after this
-              // hello) heals the `timed_out` connection back to `connected`.
-              const scopedState = jsonRecord(scopedSession?.connection)?.state;
-              const reclaimableTimeout =
-                connectionRuntimeId === runtimeId && scopedState === "timed_out";
-              if (
-                !scopedSession ||
-                (isTerminalConnectionState(scopedSession.connection) && !reclaimableTimeout) ||
-                (connectionRuntimeId && connectionRuntimeId !== runtimeId)
-              ) {
-                runtimeDebug("cloud bridge auth rejected inactive scoped session", {
-                  runtimeId,
-                  sessionId: bridgeAuth.sessionId,
-                  connectionRuntimeId,
-                });
-                ws.close(1008, "Session is not waiting for this runtime");
-                return;
-              }
-              if (reclaimableTimeout) {
-                runtimeDebug("cloud bridge reclaiming timed-out scoped session", {
-                  runtimeId,
-                  sessionId: bridgeAuth.sessionId,
-                });
-              }
               sessionRouter.bindSession(bridgeAuth.sessionId, runtimeKey);
             }
 
@@ -480,7 +528,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         if (!registered) return;
         const recorded = sessionRouter.recordHeartbeat(runtimeKey, ws);
         if (!recorded) return;
-        renewCloudRuntimeLease();
+        if (bridgeAuth?.kind === "cloud" && !(await revalidateAndRenewCloudRuntimeLease())) {
+          return;
+        }
         if (Array.isArray(msg.activeSessionIds)) {
           const activeSessionIds = (msg.activeSessionIds as unknown[]).filter(
             (sessionId): sessionId is string => typeof sessionId === "string" && !!sessionId,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { nextRuntimeLeaseExpiresAt, runtimeHardDeadlineAt } from "./provisioned-runtime-lease.js";
+import { runtimeHardDeadlineAt, runtimeLeaseTtlMs } from "./provisioned-runtime-lease.js";
 
 describe("provisioned runtime lease deadlines", () => {
   afterEach(() => {
@@ -9,8 +9,8 @@ describe("provisioned runtime lease deadlines", () => {
   it("uses bounded defaults independent of session state", () => {
     const now = Date.parse("2026-07-29T12:00:00.000Z");
 
-    expect(nextRuntimeLeaseExpiresAt(now)).toBe("2026-07-29T12:05:00.000Z");
-    expect(runtimeHardDeadlineAt(now)).toBe("2026-07-30T12:00:00.000Z");
+    expect(runtimeLeaseTtlMs(0, () => 0)).toBe(15 * 60 * 1000);
+    expect(runtimeHardDeadlineAt(now)).toBe("2026-08-05T12:00:00.000Z");
   });
 
   it("honors valid deployment overrides", () => {
@@ -18,13 +18,15 @@ describe("provisioned runtime lease deadlines", () => {
     vi.stubEnv("TRACE_PROVISIONED_RUNTIME_MAX_LIFETIME_MS", "7200000");
     const now = Date.parse("2026-07-29T12:00:00.000Z");
 
-    expect(nextRuntimeLeaseExpiresAt(now)).toBe("2026-07-29T12:01:00.000Z");
+    expect(runtimeLeaseTtlMs(0, () => 0)).toBe(60_000);
     expect(runtimeHardDeadlineAt(now)).toBe("2026-07-29T14:00:00.000Z");
   });
 
   it("keeps the initial lease alive through a longer startup window", () => {
-    const now = Date.parse("2026-07-29T12:00:00.000Z");
+    expect(runtimeLeaseTtlMs(31 * 60 * 1000, () => 0)).toBe(31 * 60 * 1000);
+  });
 
-    expect(nextRuntimeLeaseExpiresAt(now, 31 * 60 * 1000)).toBe("2026-07-29T12:31:00.000Z");
+  it("adds bounded positive jitter to spread regional lease expiry", () => {
+    expect(runtimeLeaseTtlMs(0, () => 1)).toBe(Math.floor(16.5 * 60 * 1000));
   });
 });

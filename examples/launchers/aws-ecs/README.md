@@ -87,8 +87,9 @@ TRACE_SESSION_ID
 TRACE_ORG_ID
 TRACE_RUNTIME_INSTANCE_ID
 TRACE_RUNTIME_TOKEN
-TRACE_RUNTIME_LEASE_EXPIRES_AT
-TRACE_RUNTIME_HARD_DEADLINE_AT
+TRACE_RUNTIME_LEASE_REQUIRED
+TRACE_RUNTIME_LEASE_TTL_MS
+TRACE_RUNTIME_HARD_DEADLINE_TTL_MS
 TRACE_BRIDGE_URL
 TRACE_TOOL
 TRACE_MODEL
@@ -98,11 +99,12 @@ TRACE_REPO_BRANCH
 
 The runtime process enforces both deadlines itself:
 
-- `runtimeLeaseExpiresAt` is renewable over the authenticated bridge. If Trace no longer recognizes
-  the runtime or remains unavailable past the lease, the essential container exits.
-- `runtimeHardDeadlineAt` is never renewable. The container and launcher must both enforce it so a
-  broken image, failed bridge startup, stale database row, or missed cleanup job cannot create
-  unbounded provider compute.
+- `runtimeLeaseTtlMs` is renewed over the authenticated bridge and applied to the container's
+  monotonic clock. If Trace no longer recognizes the runtime or remains unavailable past the lease,
+  the essential container exits without depending on synchronized wall clocks.
+- `runtimeHardDeadlineTtlMs` is never renewable and is applied to the container's monotonic clock.
+  The launcher independently enforces the absolute `runtimeHardDeadlineAt` so a broken image, failed
+  bridge startup, stale database row, or missed cleanup job cannot create unbounded provider compute.
 
 Return the ECS task ARN as `runtimeId`:
 
@@ -111,13 +113,28 @@ Return the ECS task ARN as `runtimeId`:
   "runtimeId": "arn:aws:ecs:us-east-1:123456789012:task/trace-runtime/abc",
   "runtimeUrl": "https://console.aws.amazon.com/ecs/v2/clusters/trace-runtime/tasks/abc",
   "label": "ECS Fargate abc",
-  "status": "provisioning"
+  "status": "provisioning",
+  "deadlineEnforcement": {
+    "deadlineAt": "2026-04-01T12:00:00.000Z",
+    "enforcementId": "trace-runtime-deadline-abc"
+  }
 }
 ```
 
+`deadlineEnforcement` is a fail-closed acknowledgement, not informational metadata. Return it only
+after the EventBridge Scheduler rule (or equivalent independent provider control) has been created
+for the exact `runtimeHardDeadlineAt`. Start with `runtimeLeaseEnforcement` and
+`providerHardDeadlineEnforcement` set to `optional` while deploying the server, runtime image, and
+launcher. After telemetry confirms the new capability and scheduler acknowledgement, change both to
+`required`. A missing or mismatched acknowledgement then causes Trace to immediately stop the new
+task and fail the launch.
+
 ## Stop Mapping
 
-For `POST /trace/stop-session`, call `StopTask` with the `runtimeId` task ARN and return:
+For `POST /trace/stop-session`, call `StopTask` with the `runtimeId` task ARN, then delete the
+deadline schedule identified by the runtime/task tags. Both operations must be idempotent. The
+schedule target should contain only the task ARN and stop reason—never bootstrap credentials.
+Return:
 
 ```json
 {

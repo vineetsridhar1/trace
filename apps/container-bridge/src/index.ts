@@ -54,28 +54,68 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function optionalPositiveIntegerEnv(name: string): number | null {
+  const raw = process.env[name]?.trim();
+  if (!raw) return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 1) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return Math.floor(value);
+}
+
 async function main(): Promise<void> {
   const bridgeUrl = requireEnv("TRACE_BRIDGE_URL");
   const bridgeToken = requireEnv("TRACE_RUNTIME_TOKEN");
   const runtimeInstanceId = requireEnv("TRACE_RUNTIME_INSTANCE_ID");
-  const leaseExpiresAt = requireEnv("TRACE_RUNTIME_LEASE_EXPIRES_AT");
-  const hardDeadlineAt = requireEnv("TRACE_RUNTIME_HARD_DEADLINE_AT");
+  const leaseRequired = process.env.TRACE_RUNTIME_LEASE_REQUIRED === "true";
+  const leaseTtlMs = optionalPositiveIntegerEnv("TRACE_RUNTIME_LEASE_TTL_MS");
+  const hardDeadlineTtlMs = optionalPositiveIntegerEnv("TRACE_RUNTIME_HARD_DEADLINE_TTL_MS");
   const tool = process.env.CODING_TOOL ?? process.env.TRACE_TOOL ?? "claude_code";
 
   // Arm the fail-safe before setup, authentication, or bridge connection.
   // A hung bootstrap command must not bypass the same lifetime boundary that
   // protects an already-connected runtime.
   let bridge: ContainerBridge | null = null;
-  const leaseWatchdog = new RuntimeLeaseWatchdog({
-    leaseExpiresAt,
-    hardDeadlineAt,
-    onExpired: (reason: RuntimeLeaseExpirationReason) => {
-      console.error(`[container-bridge] runtime lease expired: ${reason}; shutting down`);
-      bridge?.disconnect();
-      process.exit(0);
-    },
-  });
-  leaseWatchdog.start();
+  if (leaseRequired && (!leaseTtlMs || !hardDeadlineTtlMs)) {
+    throw new Error(
+      "runtime lease enforcement is required but TRACE_RUNTIME_LEASE_TTL_MS or TRACE_RUNTIME_HARD_DEADLINE_TTL_MS is missing",
+    );
+  }
+  const leaseWatchdog =
+    leaseTtlMs && hardDeadlineTtlMs
+      ? new RuntimeLeaseWatchdog({
+          leaseTtlMs,
+          hardDeadlineTtlMs,
+          onHardDeadlineApproaching: (remainingMs) => {
+            console.warn(
+              JSON.stringify({
+                event: "runtime_hard_deadline_approaching",
+                runtimeInstanceId,
+                remainingMs,
+              }),
+            );
+          },
+          onExpired: (reason: RuntimeLeaseExpirationReason) => {
+            console.error(
+              JSON.stringify({
+                event: "runtime_lease_expired",
+                runtimeInstanceId,
+                reason,
+              }),
+            );
+            bridge?.disconnect();
+            process.exit(0);
+          },
+        })
+      : null;
+  if (leaseWatchdog) {
+    leaseWatchdog.start();
+  } else {
+    console.warn(
+      "[container-bridge] runtime lease enforcement disabled for legacy launch compatibility",
+    );
+  }
 
   // Set up SSH key before any git operations
   setupSshKey();
@@ -89,24 +129,31 @@ async function main(): Promise<void> {
   await loginAvailableTools();
 
   // Connect to server — sessions register dynamically via prepare commands
-  bridge = new ContainerBridge(bridgeUrl, bridgeToken, runtimeInstanceId, tool, (expiresAt) => {
-    if (!leaseWatchdog.renew(expiresAt)) {
-      console.warn("[container-bridge] ignored invalid or stale runtime lease renewal");
-    }
-  });
+  bridge = new ContainerBridge(
+    bridgeUrl,
+    bridgeToken,
+    runtimeInstanceId,
+    tool,
+    leaseWatchdog !== null,
+    (ttlMs) => {
+      if (!leaseWatchdog?.renew(ttlMs)) {
+        console.warn("[container-bridge] ignored invalid runtime lease renewal");
+      }
+    },
+  );
   bridge.connect();
 
   // Keep the process alive
   process.on("SIGTERM", () => {
     console.log("[container-bridge] received SIGTERM, shutting down");
-    leaseWatchdog.stop();
+    leaseWatchdog?.stop();
     bridge.disconnect();
     process.exit(0);
   });
 
   process.on("SIGINT", () => {
     console.log("[container-bridge] received SIGINT, shutting down");
-    leaseWatchdog.stop();
+    leaseWatchdog?.stop();
     bridge.disconnect();
     process.exit(0);
   });

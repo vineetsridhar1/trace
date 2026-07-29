@@ -66,6 +66,7 @@ const execFileAsync = promisify(execFile);
 const BRIDGE_PROTOCOL_VERSION = 2;
 const AGENT_VERSION = "0.1.0";
 const BRIDGE_USER_AGENT = "Trace-Container-Bridge/0.1";
+const RUNTIME_LEASE_CAPABILITY = "runtime_lease_v1";
 function hasExecutable(command: string): boolean {
   return resolveExecutable(command) !== null;
 }
@@ -148,7 +149,8 @@ export class ContainerBridge implements IBridgeClient {
     private readonly token: string,
     private readonly runtimeInstanceId: string,
     private readonly defaultTool: string,
-    private readonly renewRuntimeLease?: (expiresAt: string) => void,
+    private readonly runtimeLeaseEnabled: boolean,
+    private readonly renewRuntimeLease?: (ttlMs: number) => void,
   ) {
     this.terminalManager = new TerminalManager({
       onOutput: (terminalId, data) => {
@@ -187,6 +189,7 @@ export class ContainerBridge implements IBridgeClient {
         hostingMode: "cloud",
         protocolVersion: BRIDGE_PROTOCOL_VERSION,
         agentVersion: AGENT_VERSION,
+        capabilities: this.runtimeLeaseEnabled ? [RUNTIME_LEASE_CAPABILITY] : [],
         supportedTools,
         registeredRepoIds: [],
         activeTerminals: this.terminalManager.getActiveTerminals(),
@@ -339,7 +342,7 @@ export class ContainerBridge implements IBridgeClient {
   private handleCommand(cmd: BridgeCommand): void {
     switch (cmd.type) {
       case "runtime_lease": {
-        this.renewRuntimeLease?.(cmd.expiresAt);
+        this.renewRuntimeLease?.(cmd.ttlMs);
         break;
       }
 

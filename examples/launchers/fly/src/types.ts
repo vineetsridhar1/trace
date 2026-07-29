@@ -16,7 +16,8 @@ export type StartSessionRequest = {
   runtimeToken: string;
   runtimeTokenExpiresAt: string;
   runtimeTokenScope: "session";
-  runtimeLeaseExpiresAt: string;
+  runtimeLeaseTtlMs: number;
+  runtimeHardDeadlineTtlMs: number;
   runtimeHardDeadlineAt: string;
   bridgeUrl: string;
   repo: TraceRepo | null;
