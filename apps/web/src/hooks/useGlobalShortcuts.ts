@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useAuthStore } from "@trace/client-core";
 import { useCommandPaletteStore } from "../stores/command-palette";
 import { matchesShortcut, useCommandRegistryStore } from "../stores/command-registry";
 
@@ -17,6 +18,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export function useGlobalShortcuts() {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (useAuthStore.getState().reauthRequired) return;
       const key = event.key.toLowerCase();
       if ((event.metaKey || event.ctrlKey) && key === "k") {
         event.preventDefault();
@@ -72,6 +74,7 @@ export function useGlobalShortcuts() {
     const trace = window.trace;
     if (!trace?.onMenuCommand) return;
     return trace.onMenuCommand((command) => {
+      if (useAuthStore.getState().reauthRequired) return;
       if (command !== "close-tab") return;
       const commands = Object.values(
         useCommandRegistryStore.getState().commandsByToken,

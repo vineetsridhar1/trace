@@ -10,6 +10,7 @@ import {
   getRequestToken,
   getSessionCookieOptions,
   isExternalLocalModeRequest,
+  refreshSessionCookieIfNeeded,
   setSessionCookie,
   signSessionToken,
 } from "../lib/auth.js";
@@ -682,6 +683,9 @@ router.get("/auth/me", async (req: Request, res: Response) => {
   if (!authenticated) {
     return res.status(401).json({ error: "Not authenticated" });
   }
+  if (authenticated.auth.kind === "session" && !req.headers.authorization) {
+    refreshSessionCookieIfNeeded(res, authenticated.token);
+  }
 
   try {
     const user = await prisma.user.findUnique({
@@ -723,7 +727,7 @@ router.get("/auth/me", async (req: Request, res: Response) => {
       },
     });
   } catch {
-    return res.status(401).json({ error: "Invalid token" });
+    return res.status(500).json({ error: "Failed to load current user" });
   }
 });
 

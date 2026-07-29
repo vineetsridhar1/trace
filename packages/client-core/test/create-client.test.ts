@@ -38,11 +38,68 @@ beforeEach(() => {
     activeOrgId: "org-1",
     orgMemberships: [],
     loading: false,
+    authUnavailable: false,
+    reauthRequired: false,
     token: "token-1",
   });
 });
 
 describe("createGqlClient", () => {
+  it("notifies the app when an HTTP GraphQL operation loses authentication", async () => {
+    const onUnauthorized = vi.fn();
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        errors: [
+          {
+            message: "Not authenticated",
+            extensions: { code: "UNAUTHENTICATED" },
+          },
+        ],
+      }),
+    );
+
+    setPlatform({
+      apiUrl: "http://example.test",
+      clientSource: "web",
+      authMode: "cookie",
+      storage: {
+        getItem: () => null,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
+      secureStorage: {
+        getToken: async () => null,
+        setToken: async () => undefined,
+        clearToken: async () => undefined,
+      },
+      fetch: fetchMock,
+      createWebSocket: () => {
+        throw new Error("WebSocket is not used by this test");
+      },
+    });
+
+    const client = createGqlClient({
+      httpUrl: "http://example.test/graphql",
+      wsUrl: "ws://example.test/graphql",
+      onUnauthorized,
+    });
+
+    const result = await client
+      .query(
+        gql`
+          query TestQuery {
+            __typename
+          }
+        `,
+        {},
+      )
+      .toPromise();
+
+    expect(result.error?.graphQLErrors[0]?.extensions?.code).toBe("UNAUTHENTICATED");
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    await client.dispose();
+  });
+
   it("uses the injected platform websocket implementation for subscriptions", async () => {
     const socket = createMockWebSocket();
     const createWebSocket = vi.fn(

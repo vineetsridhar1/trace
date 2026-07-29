@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { gql } from "@urql/core";
 import type { Event } from "@trace/gql";
-import { handleOrgEvent, useAuthStore } from "@trace/client-core";
+import { handleOrgEvent, isUnauthorizedError, useAuthStore } from "@trace/client-core";
 import { client } from "../lib/urql";
 import { reconcileManualElementSaved } from "../stores/design-editor";
 
@@ -36,6 +36,10 @@ export function useOrgEvents() {
       .subscription(ORG_EVENTS_SUBSCRIPTION, { organizationId: activeOrgId })
       .subscribe((result: { error?: unknown; data?: Record<string, unknown> }) => {
         if (result.error) {
+          if (isUnauthorizedError(result.error)) {
+            useAuthStore.getState().requireReauthentication();
+            return;
+          }
           console.error("[orgEvents] subscription error:", result.error);
         }
         if (!result.data?.orgEvents) return;

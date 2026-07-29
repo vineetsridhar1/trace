@@ -22,10 +22,15 @@ export interface AuthState {
   activeOrgId: string | null;
   orgMemberships: OrgMembership[];
   loading: boolean;
+  /** The identity check could not reach Trace; this is not an authentication failure. */
+  authUnavailable: boolean;
+  /** Keeps the authenticated UI mounted while an expired browser session is reconnected. */
+  reauthRequired: boolean;
   /** In-memory cache of the auth token for synchronous header construction. */
   token: string | null;
   signInWithToken: (token: string) => Promise<void>;
-  fetchMe: () => Promise<void>;
+  fetchMe: () => Promise<boolean>;
+  requireReauthentication: () => void;
   logout: (options?: LogoutOptions) => Promise<void>;
   setActiveOrg: (orgId: string) => void;
 }
@@ -46,6 +51,8 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
   activeOrgId: null,
   orgMemberships: [],
   loading: true,
+  authUnavailable: false,
+  reauthRequired: false,
   token: null,
 
   signInWithToken: async (token: string) => {
@@ -82,14 +89,32 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         headers,
       });
       if (!res.ok) {
-        set({ user: null, activeOrgId: null, orgMemberships: [], loading: false });
-        return;
+        const hasAuthenticatedUser = useAuthStore.getState().user !== null;
+        if (res.status === 401 && platform.authMode === "cookie" && hasAuthenticatedUser) {
+          set({ authUnavailable: false, reauthRequired: true, loading: false });
+        } else if (res.status === 401) {
+          set({
+            user: null,
+            activeOrgId: null,
+            orgMemberships: [],
+            authUnavailable: false,
+            reauthRequired: false,
+            loading: false,
+          });
+        } else {
+          set({ authUnavailable: true, loading: false });
+        }
+        return false;
       }
       const data = (await res.json()) as { user: Record<string, unknown> };
       const { orgMemberships: memberships, ...userFields } = data.user;
 
       const user = userFields as User;
       const orgMemberships = (memberships ?? []) as OrgMembership[];
+      const previousUserId = useAuthStore.getState().user?.id;
+      if (previousUserId && previousUserId !== user.id) {
+        useEntityStore.getState().reset();
+      }
 
       // Determine active org: stored preference → first membership → null
       const validStoredOrg = orgMemberships.find(
@@ -103,7 +128,14 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         await platform.storage.setItem(ACTIVE_ORG_KEY, activeOrgId);
       }
 
-      set({ user, activeOrgId, orgMemberships, loading: false });
+      set({
+        user,
+        activeOrgId,
+        orgMemberships,
+        authUnavailable: false,
+        reauthRequired: false,
+        loading: false,
+      });
 
       // Hydrate entity store
       const { upsert } = useEntityStore.getState();
@@ -117,9 +149,28 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
           );
         }
       }
+      return true;
     } catch {
-      set({ user: null, activeOrgId: null, orgMemberships: [], loading: false });
+      if (useAuthStore.getState().user) {
+        set({ authUnavailable: true, loading: false });
+      } else {
+        set({
+          user: null,
+          activeOrgId: null,
+          orgMemberships: [],
+          authUnavailable: true,
+          reauthRequired: false,
+          loading: false,
+        });
+      }
+      return false;
     }
+  },
+
+  requireReauthentication: () => {
+    const { user } = useAuthStore.getState();
+    if (shouldUseBearerAuth() || !user) return;
+    set({ authUnavailable: false, reauthRequired: true, loading: false });
   },
 
   logout: async (options?: LogoutOptions) => {
@@ -153,6 +204,8 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         user: null,
         activeOrgId: null,
         orgMemberships: [],
+        authUnavailable: false,
+        reauthRequired: false,
         token: null,
         loading: false,
       });
@@ -177,4 +230,39 @@ export function getAuthHeaders(): Record<string, string> {
   if (shouldUseBearerAuth() && token) headers.Authorization = `Bearer ${token}`;
   if (activeOrgId) headers["X-Organization-Id"] = activeOrgId;
   return headers;
+}
+
+/** Detect the HTTP, GraphQL, and WebSocket forms of an expired auth session. */
+export function isUnauthorizedError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as {
+    response?: { status?: number };
+    networkError?: { statusCode?: number; message?: string };
+    graphQLErrors?: Array<{ extensions?: { code?: string } }>;
+    code?: number;
+    message?: string;
+  };
+  if (candidate.response?.status === 401 || candidate.networkError?.statusCode === 401) {
+    return true;
+  }
+  if (
+    typeof candidate.networkError?.message === "string" &&
+    /\b401\b/.test(candidate.networkError.message)
+  ) {
+    return true;
+  }
+  if (
+    candidate.graphQLErrors?.some(
+      (graphQLError) =>
+        graphQLError.extensions?.code === "UNAUTHENTICATED" ||
+        graphQLError.extensions?.code === "UNAUTHORIZED",
+    )
+  ) {
+    return true;
+  }
+  if (candidate.code === 4401 || candidate.code === 4403) return true;
+  return (
+    typeof candidate.message === "string" &&
+    /\b401\b|unauthenticated|unauthorized/i.test(candidate.message)
+  );
 }

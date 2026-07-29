@@ -652,6 +652,48 @@ describe("bridge auth tokens", () => {
     });
   });
 
+  it("renews an aging browser session during auth/me", async () => {
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: "user-1",
+      email: "local@trace.dev",
+      name: "Local User",
+      avatarUrl: null,
+      orgMemberships: [],
+    });
+
+    const oldIssuedAt = Math.floor(Date.now() / 1000) - 2 * 24 * 60 * 60;
+    const token = jwt.sign({ userId: "user-1", iat: oldIssuedAt }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Cookie: `trace_token=${token}`,
+      },
+    });
+
+    expect(res.status).toBe(200);
+    const setCookie = res.headers.get("set-cookie");
+    const refreshedToken = setCookie?.match(/trace_token=([^;]+)/)?.[1];
+    expect(refreshedToken).toBeTruthy();
+    expect(jwt.verify(refreshedToken!, JWT_SECRET)).toMatchObject({
+      userId: "user-1",
+      iat: expect.any(Number),
+    });
+    expect((jwt.decode(refreshedToken!) as { iat: number }).iat).toBeGreaterThan(oldIssuedAt);
+  });
+
+  it("does not report a transient auth/me database failure as an expired login", async () => {
+    prismaMock.user.findUnique.mockRejectedValueOnce(new Error("database unavailable"));
+
+    const token = jwt.sign({ userId: "user-1" }, JWT_SECRET);
+    const res = await fetch(`${baseUrl}/auth/me`, {
+      headers: {
+        Cookie: `trace_token=${token}`,
+      },
+    });
+
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toEqual({ error: "Failed to load current user" });
+  });
+
   it("does not return 304 for auth/me conditional requests", async () => {
     const user = {
       id: "user-1",

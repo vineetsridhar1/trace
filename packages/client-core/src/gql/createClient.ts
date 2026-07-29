@@ -1,11 +1,12 @@
 import {
   createClient as createUrqlClient,
+  errorExchange,
   fetchExchange,
   subscriptionExchange,
   type Client,
 } from "@urql/core";
 import { createClient as createWSClient } from "graphql-ws";
-import { getAuthHeaders, useAuthStore } from "../stores/auth.js";
+import { getAuthHeaders, isUnauthorizedError, useAuthStore } from "../stores/auth.js";
 import { getPlatform, type Platform } from "../platform.js";
 
 export interface CreateGqlClientOptions {
@@ -15,6 +16,8 @@ export interface CreateGqlClientOptions {
   lazy?: boolean;
   /** Notified when the WebSocket transport connects or disconnects. */
   onConnectionChange?: (connected: boolean) => void;
+  /** Notified when the WebSocket handshake rejects an expired or invalid identity. */
+  onUnauthorized?: () => void;
 }
 
 interface GraphqlWsWebSocketImpl {
@@ -83,8 +86,11 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
       connected: () => {
         options.onConnectionChange?.(true);
       },
-      closed: () => {
+      closed: (event: unknown) => {
         options.onConnectionChange?.(false);
+        if (isUnauthorizedError(event)) {
+          options.onUnauthorized?.();
+        }
       },
       error: (error: unknown) => {
         console.debug("[ws] error", error);
@@ -103,6 +109,13 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
       },
     }),
     exchanges: [
+      errorExchange({
+        onError(error) {
+          if (isUnauthorizedError(error)) {
+            options.onUnauthorized?.();
+          }
+        },
+      }),
       fetchExchange,
       subscriptionExchange({
         forwardSubscription(request) {

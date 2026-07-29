@@ -26,18 +26,23 @@ import { useBridgePendingRequestToasts } from "./hooks/useBridgePendingRequestTo
 import { Toaster } from "./components/ui/sonner";
 import { TraceLoader } from "./components/ui/trace-loader";
 import { LoginPage } from "./components/auth/LoginPage";
+import { AuthReconnectDialog } from "./components/auth/AuthReconnectDialog";
+import { AuthUnavailablePage } from "./components/auth/AuthUnavailablePage";
 import { features } from "./lib/features";
 import { createQuickSession } from "./lib/create-quick-session";
 import { ManualEditNavigationGuard } from "./components/session/applications/ManualEditNavigationGuard";
+import { useAuthSessionRefresh } from "./hooks/useAuthSessionRefresh";
 
 export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
   const loading = useAuthStore((s: AuthState) => s.loading);
+  const authUnavailable = useAuthStore((s: AuthState) => s.authUnavailable);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const hasOrg = useAuthStore((s: AuthState) => s.orgMemberships.length > 0);
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   const isDesktopShell = typeof window.trace !== "undefined";
+  useAuthSessionRefresh();
 
   useEffect(() => {
     document.documentElement.classList.toggle("trace-desktop-shell", isDesktopShell);
@@ -77,6 +82,9 @@ export function App() {
   }
 
   if (!user) {
+    if (authUnavailable) {
+      return <AuthUnavailablePage />;
+    }
     return <LoginPage />;
   }
 
@@ -84,6 +92,7 @@ export function App() {
     return (
       <>
         <NoOrgWelcome />
+        <AuthReconnectDialog />
         <Toaster position="top-right" />
       </>
     );
@@ -92,6 +101,7 @@ export function App() {
   return (
     <>
       <AuthenticatedApp activeChannelId={activeChannelId} />
+      <AuthReconnectDialog />
       <Toaster position="top-right" />
     </>
   );
@@ -114,6 +124,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   // Cmd+, / Ctrl+, opens the settings page.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      if (useAuthStore.getState().reauthRequired) return;
       if ((e.metaKey || e.ctrlKey) && e.key === "n") {
         e.preventDefault();
         const channelId = useUIStore.getState().activeChannelId;

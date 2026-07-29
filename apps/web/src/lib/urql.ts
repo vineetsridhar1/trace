@@ -1,4 +1,4 @@
-import { createGqlClient, type GqlClient } from "@trace/client-core";
+import { createGqlClient, useAuthStore, type GqlClient } from "@trace/client-core";
 import { useConnectionStore } from "../stores/connection";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
@@ -15,6 +15,9 @@ function buildClient(): GqlClient {
     wsUrl: `${wsBase}/ws`,
     onConnectionChange: (connected) => {
       useConnectionStore.getState().setConnected(connected);
+    },
+    onUnauthorized: () => {
+      useAuthStore.getState().requireReauthentication();
     },
   });
 }
