@@ -10,7 +10,7 @@ describe("provisioned runtime lease deadlines", () => {
     const now = Date.parse("2026-07-29T12:00:00.000Z");
 
     expect(runtimeLeaseTtlMs(0, () => 0)).toBe(15 * 60 * 1000);
-    expect(runtimeHardDeadlineAt(now)).toBe("2026-08-05T12:00:00.000Z");
+    expect(runtimeHardDeadlineAt(now)).toBe("2026-07-30T12:00:00.000Z");
   });
 
   it("honors valid deployment overrides", () => {
