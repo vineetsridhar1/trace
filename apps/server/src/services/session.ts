@@ -5577,12 +5577,13 @@ export class SessionService {
       ...(parentToolUseId ? { parentId: parentToolUseId } : {}),
     });
 
-    if (data.type === "assistant") {
-      await prisma.session.update({
-        where: { id: sessionId },
-        data: { lastMessageAt: new Date() },
-      });
-    }
+    // Every bridge output is evidence that the agent is still doing work. This
+    // includes tool progress, not only assistant text: treating only assistant
+    // messages as activity let long-running tool calls look idle and be reaped.
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { lastMessageAt: new Date() },
+    });
 
     if (data.usage) {
       await this.recordUsage(sessionId, session.organizationId, data);
@@ -5837,7 +5838,7 @@ export class SessionService {
     });
   }
 
-  async complete(id: string) {
+  async complete(id: string, options?: { drainPending?: boolean }) {
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({
       where: { id },
@@ -5935,7 +5936,7 @@ export class SessionService {
       }
     }
 
-    if (!hasPendingInput) {
+    if (!hasPendingInput && options?.drainPending !== false) {
       setImmediate(() => {
         void this.drainNextPendingOrQueuedMessage(id);
       });
@@ -10693,12 +10694,18 @@ export class SessionService {
 
   async cleanupIdleCloudSessionGroups(options: {
     idleAfterMs: number;
+    activeIdleAfterMs?: number;
     now?: number;
     batchSize?: number;
   }): Promise<{ scanned: number; cleaned: string[] }> {
     const idleAfterMs = Math.max(1, Math.floor(options.idleAfterMs));
+    const activeIdleAfterMs = Math.max(
+      idleAfterMs,
+      Math.floor(options.activeIdleAfterMs ?? 60 * 60 * 1000),
+    );
     const now = options.now ?? Date.now();
     const cutoff = new Date(now - idleAfterMs);
+    const activeCutoff = new Date(now - activeIdleAfterMs);
     const batchSize = Math.max(1, Math.min(options.batchSize ?? 25, 100));
 
     const groups: IdleCloudSessionGroupCandidate[] = await prisma.sessionGroup.findMany({
@@ -10709,7 +10716,6 @@ export class SessionService {
           some: { hosting: "cloud" },
           none: {
             OR: [
-              { agentStatus: "active" },
               { lastMessageAt: { gt: cutoff } },
               { lastUserMessageAt: { gt: cutoff } },
               {
@@ -10717,6 +10723,25 @@ export class SessionService {
                 lastUserMessageAt: null,
                 createdAt: { gt: cutoff },
               },
+              // A cloud agent that is still actively producing output gets a
+              // longer lease than an idle session. Once that lease expires,
+              // it is treated as abandoned so a crashed bridge cannot keep a
+              // Fargate task alive forever.
+              {
+                agentStatus: "active",
+                OR: [
+                  { lastMessageAt: { gt: activeCutoff } },
+                  { lastMessageAt: null, lastUserMessageAt: { gt: activeCutoff } },
+                  {
+                    lastMessageAt: null,
+                    lastUserMessageAt: null,
+                    createdAt: { gt: activeCutoff },
+                  },
+                ],
+              },
+              // A local session can share the group, but its active process
+              // must never be interrupted by cloud-runtime cleanup.
+              { hosting: { not: "cloud" }, agentStatus: "active" },
             ],
           },
         },
@@ -10761,7 +10786,14 @@ export class SessionService {
         !!groupConnection.runtimeInstanceId ||
         !!groupConnection.providerRuntimeId;
       const cloudSessions = group.sessions.filter((session) => session.hosting === "cloud");
-      if (cloudSessions.some((session) => session.agentStatus === "active")) continue;
+      const activeSessions = group.sessions.filter((session) => session.agentStatus === "active");
+      const activeSessionHasRecentActivity = activeSessions.some((session) => {
+        const activity = session.lastMessageAt ?? session.lastUserMessageAt ?? session.createdAt;
+        return activity > activeCutoff;
+      });
+      if (activeSessionHasRecentActivity || activeSessions.some((session) => session.hosting !== "cloud")) {
+        continue;
+      }
       const cloudSession =
         cloudSessions.find((session) => {
           const sessionConnection = this.parseConnection(session.connection);
@@ -10790,6 +10822,13 @@ export class SessionService {
       // Re-checked race-safely inside the conditional update below.
       if (isRuntimeStartingWithinGrace(this.parseConnection(cloudSession.connection), now))
         continue;
+
+      // The bridge no longer reports these runs as complete, so settle their
+      // session state before reclaiming the runtime. This prevents a stale
+      // `active` row from blocking future cleanup or misleading the UI.
+      for (const session of activeSessions) {
+        await this.complete(session.id, { drainPending: false });
+      }
 
       const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(
         group,

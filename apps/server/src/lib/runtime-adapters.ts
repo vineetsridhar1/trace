@@ -47,20 +47,42 @@ async function resolveUserApiTokenEnv(userId: string): Promise<Record<string, st
     apiTokenService.getDecryptedTokens(userId),
     codexCredentialService.getDecryptedCredential(userId),
   ]);
+  // Codex supports a dedicated credential as well as the user's OpenAI API
+  // key. Prefer the dedicated credential when both are present.
+  const codexAuthMethod = codexCredential?.method ?? (tokens.openai ? "api_key" : undefined);
+  const codexApiKey =
+    codexCredential?.method === "api_key"
+      ? codexCredential.credential
+      : codexCredential
+        ? undefined
+        : tokens.openai;
   return {
     ...(tokens.anthropic ? { ANTHROPIC_API_KEY: tokens.anthropic } : {}),
     ...(tokens.openai ? { OPENAI_API_KEY: tokens.openai } : {}),
-    ...(codexCredential ? { CODEX_AUTH_METHOD: codexCredential.method } : {}),
+    ...(codexAuthMethod ? { CODEX_AUTH_METHOD: codexAuthMethod } : {}),
     ...(codexCredential?.method === "access_token"
       ? { CODEX_ACCESS_TOKEN: codexCredential.credential }
       : {}),
-    ...(codexCredential?.method === "api_key" ? { CODEX_API_KEY: codexCredential.credential } : {}),
+    ...(codexApiKey ? { CODEX_API_KEY: codexApiKey } : {}),
     ...(codexCredential?.method === "chatgpt_session"
       ? { CODEX_AUTH_JSON: codexCredential.credential }
       : {}),
     ...(tokens.github ? { GITHUB_TOKEN: tokens.github } : {}),
     ...(tokens.ssh_key ? { SSH_PRIVATE_KEY: tokens.ssh_key } : {}),
   };
+}
+
+function assertToolCredentialAvailable(tool: string, env: Record<string, string>): void {
+  if (tool === "claude_code" && !env.ANTHROPIC_API_KEY) {
+    throw new Error(
+      "Cannot start cloud runtime for claude_code: add an Anthropic API key in Settings → API Tokens.",
+    );
+  }
+  if (tool === "codex" && !env.CODEX_AUTH_METHOD) {
+    throw new Error(
+      "Cannot start cloud runtime for codex: add a ChatGPT session, Codex access token, or OpenAI API key in Settings → API Tokens.",
+    );
+  }
 }
 
 type ProvisionedAuthConfig = {
@@ -655,6 +677,10 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       resolveProvisionedRuntimeEnv(input.organizationId, config.runtimeEnv),
       resolveUserApiTokenEnv(input.actorId),
     ]);
+    // Check before contacting the launcher. The bridge can only discover a
+    // missing credential after Fargate has started, which leaves an unusable
+    // task behind until the idle reaper catches it.
+    assertToolCredentialAvailable(input.tool, userApiTokenEnv);
 
     const body = {
       sessionId: input.sessionId,

@@ -8692,7 +8692,6 @@ describe("SessionService", () => {
               some: { hosting: "cloud" },
               none: {
                 OR: [
-                  { agentStatus: "active" },
                   { lastMessageAt: { gt: new Date("2026-05-12T11:35:00.000Z") } },
                   { lastUserMessageAt: { gt: new Date("2026-05-12T11:35:00.000Z") } },
                   {
@@ -8700,6 +8699,22 @@ describe("SessionService", () => {
                     lastUserMessageAt: null,
                     createdAt: { gt: new Date("2026-05-12T11:35:00.000Z") },
                   },
+                  {
+                    agentStatus: "active",
+                    OR: [
+                      { lastMessageAt: { gt: new Date("2026-05-12T10:45:00.000Z") } },
+                      {
+                        lastMessageAt: null,
+                        lastUserMessageAt: { gt: new Date("2026-05-12T10:45:00.000Z") },
+                      },
+                      {
+                        lastMessageAt: null,
+                        lastUserMessageAt: null,
+                        createdAt: { gt: new Date("2026-05-12T10:45:00.000Z") },
+                      },
+                    ],
+                  },
+                  { hosting: { not: "cloud" }, agentStatus: "active" },
                 ],
               },
             }),
@@ -8868,6 +8883,44 @@ describe("SessionService", () => {
       expect(result).toEqual({ scanned: 1, cleaned: [] });
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
+
+    it("selects cloud groups whose active runs have been quiet past the safety window", async () => {
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
+
+      await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        activeIdleAfterMs: 60 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            sessions: expect.objectContaining({
+              none: expect.objectContaining({
+                OR: expect.arrayContaining([
+                  {
+                    agentStatus: "active",
+                    OR: [
+                      { lastMessageAt: { gt: new Date("2026-05-12T10:45:00.000Z") } },
+                      {
+                        lastMessageAt: null,
+                        lastUserMessageAt: { gt: new Date("2026-05-12T10:45:00.000Z") },
+                      },
+                      {
+                        lastMessageAt: null,
+                        lastUserMessageAt: null,
+                        createdAt: { gt: new Date("2026-05-12T10:45:00.000Z") },
+                      },
+                    ],
+                  },
+                ]),
+              }),
+            }),
+          }),
+        }),
+      );
     });
 
     it("keeps a reviving cloud runtime that is still within the startup grace window", async () => {

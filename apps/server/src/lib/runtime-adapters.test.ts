@@ -48,7 +48,10 @@ describe("ProvisionedRuntimeAdapter", () => {
     vi.clearAllMocks();
     vi.mocked(orgSecretService.getDecryptedValue).mockResolvedValue("launcher-secret");
     vi.mocked(apiTokenService.getDecryptedTokens).mockResolvedValue({});
-    vi.mocked(codexCredentialService.getDecryptedCredential).mockResolvedValue(null);
+    vi.mocked(codexCredentialService.getDecryptedCredential).mockResolvedValue({
+      method: "api_key",
+      credential: "codex-api-key",
+    });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(makeResponse({ status: "unknown" })));
     delete process.env.TRACE_SERVER_PUBLIC_URL;
     delete process.env.TRACE_CLOUD_BRIDGE_URL;
@@ -217,6 +220,57 @@ describe("ProvisionedRuntimeAdapter", () => {
       CODEX_AUTH_JSON: '{"tokens":{"access_token":"chatgpt-session"}}',
       GITHUB_TOKEN: "github-token",
       SSH_PRIVATE_KEY: "ssh-private-key",
+    });
+  });
+
+  it("rejects a Codex launch before contacting the launcher when credentials are missing", async () => {
+    vi.mocked(codexCredentialService.getDecryptedCredential).mockResolvedValue(null);
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.startSession({
+        sessionId: "session-without-codex-auth",
+        organizationId: "org-1",
+        actorId: "user-1",
+        environment: {
+          id: "env-1",
+          name: "Company Launcher",
+          adapterType: "provisioned",
+          config: provisionedConfig,
+        },
+        tool: "codex",
+        bridgeUrl: "wss://trace.example/bridge",
+      }),
+    ).rejects.toThrow("Cannot start cloud runtime for codex");
+
+    expect(fetchMock()).not.toHaveBeenCalled();
+  });
+
+  it("uses an OpenAI API token as the Codex API-key credential", async () => {
+    vi.mocked(codexCredentialService.getDecryptedCredential).mockResolvedValue(null);
+    vi.mocked(apiTokenService.getDecryptedTokens).mockResolvedValue({ openai: "openai-api-key" });
+    fetchMock().mockResolvedValueOnce(makeResponse({ runtimeId: "provider-runtime-1" }));
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await adapter.startSession({
+      sessionId: "session-with-openai-token",
+      organizationId: "org-1",
+      actorId: "user-1",
+      environment: {
+        id: "env-1",
+        name: "Company Launcher",
+        adapterType: "provisioned",
+        config: provisionedConfig,
+      },
+      tool: "codex",
+      bridgeUrl: "wss://trace.example/bridge",
+    });
+
+    const init = fetchMock().mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(init.body as string) as { bootstrapEnv: Record<string, string> };
+    expect(body.bootstrapEnv).toMatchObject({
+      CODEX_AUTH_METHOD: "api_key",
+      CODEX_API_KEY: "openai-api-key",
     });
   });
 

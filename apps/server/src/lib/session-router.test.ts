@@ -11,17 +11,30 @@ vi.mock("../services/org-secret.js", () => ({
   },
 }));
 
+vi.mock("../services/codex-credential.js", () => ({
+  codexCredentialService: {
+    getDecryptedCredential: vi.fn().mockResolvedValue({
+      method: "api_key",
+      credential: "codex-api-key",
+    }),
+  },
+}));
+
 import type WebSocket from "ws";
 import { prisma } from "./db.js";
 import { SessionRouter, runtimeRouterKey } from "./session-router.js";
 import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
 import { ProvisionedRuntimeAdapter } from "./runtime-adapters.js";
 import { orgSecretService } from "../services/org-secret.js";
+import { codexCredentialService } from "../services/codex-credential.js";
 import type { createPrismaMock } from "../../test/helpers.js";
 
 const prismaMock = prisma as unknown as ReturnType<typeof createPrismaMock>;
 const orgSecretServiceMock = orgSecretService as unknown as {
   getDecryptedValue: ReturnType<typeof vi.fn>;
+};
+const codexCredentialServiceMock = codexCredentialService as unknown as {
+  getDecryptedCredential: ReturnType<typeof vi.fn>;
 };
 
 function makeWs() {
@@ -53,6 +66,10 @@ beforeEach(() => {
   prismaMock.agentEnvironment.findFirst.mockReset();
   prismaMock.apiToken.findMany.mockReset().mockResolvedValue([]);
   orgSecretServiceMock.getDecryptedValue.mockResolvedValue("launcher-secret");
+  codexCredentialServiceMock.getDecryptedCredential.mockResolvedValue({
+    method: "api_key",
+    credential: "codex-api-key",
+  });
 });
 
 afterEach(() => {
