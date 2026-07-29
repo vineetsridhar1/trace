@@ -64,8 +64,11 @@ const require = createRequire(import.meta.url);
 const typeDefs = readFileSync(require.resolve("@trace/gql/schema.graphql"), "utf-8");
 const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 2 * 60 * 60 * 1000;
+const DEFAULT_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS = 60 * 60 * 1000;
 const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
+const RUNTIME_HARD_DEADLINE_RECONCILE_INTERVAL_MS = 60 * 1000;
+const RUNTIME_HARD_DEADLINE_RECONCILE_LOCK_KEY = "trace:jobs:runtime-hard-deadline-reconcile";
 const ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
 const ENDPOINT_TRAFFIC_CLEANUP_LOCK_KEY = "trace:jobs:endpoint-traffic-cleanup";
 const DESIGN_PREVIEW_RECONCILE_INTERVAL_MS = 30 * 1000;
@@ -215,17 +218,14 @@ async function main() {
     const token = readBearerToken(req);
     const runtime = token ? authenticateProvisionedRuntimeToken(token) : null;
     const authJson = (req.body as { authJson?: unknown }).authJson;
-    if (!runtime || runtime.tool !== "codex") return res.status(401).json({ error: "Unauthorized" });
+    if (!runtime || runtime.tool !== "codex")
+      return res.status(401).json({ error: "Unauthorized" });
     if (typeof authJson !== "string" || authJson.length > 64 * 1024) {
       return res.status(400).json({ error: "Invalid Codex session credential" });
     }
     try {
       JSON.parse(authJson) as unknown;
-      await codexCredentialService.set(
-        runtime.userId,
-        "chatgpt_session",
-        authJson,
-      );
+      await codexCredentialService.set(runtime.userId, "chatgpt_session", authJson);
       return res.status(204).end();
     } catch {
       return res.status(400).json({ error: "Invalid Codex session credential" });
@@ -410,6 +410,10 @@ async function main() {
     "TRACE_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS",
     DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS,
   );
+  const cloudActiveIdleCleanupAfterMs = readDurationEnv(
+    "TRACE_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS",
+    DEFAULT_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS,
+  );
   const cloudIdleCleanupLockTtlMs = Math.max(cloudIdleCleanupIntervalMs * 2, 5 * 60 * 1000);
   let cloudIdleCleanupRunning = false;
   const cloudIdleCleanup =
@@ -432,6 +436,7 @@ async function main() {
             run: () =>
               sessionService.cleanupIdleCloudSessionGroups({
                 idleAfterMs: cloudIdleCleanupAfterMs,
+                activeIdleAfterMs: cloudActiveIdleCleanupAfterMs,
               }),
           })
             .then((result) => {
@@ -452,6 +457,7 @@ async function main() {
                 scannedCount: result.scanned,
                 cleanedCount: result.cleaned.length,
                 idleAfterMs: cloudIdleCleanupAfterMs,
+                activeIdleAfterMs: cloudActiveIdleCleanupAfterMs,
                 durationMs: Date.now() - startedAt,
               });
             })
@@ -469,6 +475,33 @@ async function main() {
             });
         }, cloudIdleCleanupIntervalMs)
       : null;
+
+  const runtimeHardDeadlineReconciler = setInterval(() => {
+    const startedAt = Date.now();
+    void withRedisJobLock({
+      enabled: !localMode,
+      key: RUNTIME_HARD_DEADLINE_RECONCILE_LOCK_KEY,
+      ttlMs: RUNTIME_HARD_DEADLINE_RECONCILE_INTERVAL_MS * 2,
+      run: () => sessionService.reconcileRuntimeHardDeadlines(),
+    })
+      .then((result) => {
+        if (!result) return;
+        logAgentEnvironmentTelemetry("runtime.hard_deadline_reconciler_iteration", {
+          scannedCount: result.scanned,
+          warnedCount: result.warned.length,
+          stoppedCount: result.stopped.length,
+          durationMs: Date.now() - startedAt,
+        });
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[runtime-hard-deadline-reconciler] iteration failed: ${message}`);
+        logAgentEnvironmentTelemetry("runtime.hard_deadline_reconciler_failed", {
+          durationMs: Date.now() - startedAt,
+          error: message,
+        });
+      });
+  }, RUNTIME_HARD_DEADLINE_RECONCILE_INTERVAL_MS);
 
   const endpointTrafficCleanup = setInterval(() => {
     const startedAt = Date.now();
@@ -540,6 +573,7 @@ async function main() {
             environmentId: bridge.environmentId,
             allowedScope: bridge.allowedScope,
             tool: bridge.tool,
+            leaseRequired: bridge.leaseRequired,
           };
         } else if (bridgeAuthToken) {
           const payload = verifyBridgeAuthToken(bridgeAuthToken);
@@ -588,6 +622,7 @@ async function main() {
               clearInterval(pdfExportReconciler);
               clearInterval(runtimePreviewReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
+              clearInterval(runtimeHardDeadlineReconciler);
               clearInterval(endpointTrafficCleanup);
               bridgeWss.close();
               terminalWss.close();

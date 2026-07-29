@@ -129,6 +129,20 @@ export interface BridgeDeleteCommand {
   sessionGroupId?: string;
 }
 
+/**
+ * Renewable control-plane lease for provisioned runtimes. Cloud bridges exit
+ * when this deadline passes without a newer lease from an authenticated server.
+ */
+export interface BridgeRuntimeLeaseCommand {
+  type: "runtime_lease";
+  /**
+   * Renewable control-plane lease duration. The bridge applies this to its
+   * local monotonic clock so host clock skew cannot invalidate a healthy
+   * runtime.
+   */
+  ttlMs: number;
+}
+
 export interface BridgeListBranchesCommand {
   type: "list_branches";
   requestId: string;
@@ -462,6 +476,7 @@ export type BridgeCommand =
   | BridgePauseCommand
   | BridgeResumeCommand
   | BridgeDeleteCommand
+  | BridgeRuntimeLeaseCommand
   | BridgeListBranchesCommand
   | BridgeListWorkspaceSlugsCommand
   | BridgeListWorktreesCommand
@@ -512,6 +527,8 @@ export interface BridgeRuntimeHello {
   protocolVersion?: number;
   /** Required for provisioned cloud runtimes. */
   agentVersion?: string;
+  /** Optional protocol features this bridge has actively enabled. */
+  capabilities?: string[];
   supportedTools: string[];
   /** Repo IDs this bridge has locally registered (device bridges only). Empty for cloud. */
   registeredRepoIds: string[];

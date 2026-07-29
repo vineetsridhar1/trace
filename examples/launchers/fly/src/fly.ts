@@ -170,6 +170,7 @@ function buildMachineMetadata(
     trace_session_id: request.sessionId,
     trace_org_id: request.orgId,
     trace_runtime_instance_id: request.runtimeInstanceId,
+    trace_runtime_hard_deadline_at: request.runtimeHardDeadlineAt,
     trace_environment_id: request.metadata.environmentId,
     trace_requested_by: request.metadata.requestedBy,
     trace_workspace_isolation: "per_session_runtime",

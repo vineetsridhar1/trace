@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   restoreSessionsForRuntime: vi.fn(() => Promise.resolve()),
   recordOutput: vi.fn(() => Promise.resolve()),
   complete: vi.fn(() => Promise.resolve()),
+  authorizeRuntimeLease: vi.fn(() => Promise.resolve({ authorized: true as const })),
   listIdleActiveRunSessionIds: vi.fn(() => Promise.resolve([])),
   reconcileIdleActiveRuns: vi.fn(() => Promise.resolve([])),
   syncPrObservation: vi.fn(() => Promise.resolve()),
@@ -56,6 +57,7 @@ vi.mock("../services/session.js", () => ({
     restoreSessionsForRuntime: mocks.restoreSessionsForRuntime,
     recordOutput: mocks.recordOutput,
     complete: mocks.complete,
+    authorizeRuntimeLease: mocks.authorizeRuntimeLease,
     listIdleActiveRunSessionIds: mocks.listIdleActiveRunSessionIds,
     reconcileIdleActiveRuns: mocks.reconcileIdleActiveRuns,
     syncPrObservation: mocks.syncPrObservation,
@@ -132,6 +134,7 @@ describe("bridge handler auth", () => {
     mocks.getHeartbeatReconcileSessionIds.mockReturnValue([]);
     mocks.recordHeartbeat.mockReturnValue(true);
     mocks.listIdleActiveRunSessionIds.mockResolvedValue([]);
+    mocks.authorizeRuntimeLease.mockResolvedValue({ authorized: true });
     mocks.sessionFindFirst.mockResolvedValue(null);
   });
 
@@ -351,6 +354,136 @@ describe("bridge handler auth", () => {
       }),
     );
     expect(ws.close).not.toHaveBeenCalledWith(1008, "Bridge auth mismatch");
+
+    const initialLease = ws.send.mock.calls
+      .map(([payload]) => JSON.parse(String(payload)) as Record<string, unknown>)
+      .find((payload) => payload.type === "runtime_lease");
+    expect(initialLease).toEqual({
+      type: "runtime_lease",
+      ttlMs: expect.any(Number),
+    });
+
+    ws.emitMessage({
+      type: "runtime_heartbeat",
+      instanceId: "runtime_owned",
+      activeSessionIds: [],
+    });
+    const leaseRenewals = ws.send.mock.calls
+      .map(([payload]) => JSON.parse(String(payload)) as Record<string, unknown>)
+      .filter((payload) => payload.type === "runtime_lease");
+    expect(leaseRenewals).toHaveLength(1);
+  });
+
+  it("requires an armed lease watchdog for newly minted cloud runtime tokens", async () => {
+    const ws = createMockWs();
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "runtime_owned",
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+        leaseRequired: true,
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "runtime_owned",
+      hostingMode: "cloud",
+      protocolVersion: 2,
+      agentVersion: "0.1.0",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+      capabilities: [],
+    });
+    await Promise.resolve();
+
+    expect(ws.close).toHaveBeenCalledWith(1008, "Runtime lease capability required");
+    expect(mocks.registerRuntime).not.toHaveBeenCalled();
+  });
+
+  it("accepts a legacy cloud runtime while lease enforcement is optional", async () => {
+    const ws = createMockWs();
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "runtime_owned",
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+        leaseRequired: false,
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "runtime_owned",
+      hostingMode: "cloud",
+      protocolVersion: 2,
+      agentVersion: "0.1.0",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+      capabilities: [],
+    });
+
+    await vi.waitFor(() => expect(mocks.registerRuntime).toHaveBeenCalled());
+    expect(ws.close).not.toHaveBeenCalled();
+  });
+
+  it("revokes renewal when persisted runtime ownership changes", async () => {
+    const ws = createMockWs();
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(100_000);
+    mocks.authorizeRuntimeLease
+      .mockResolvedValueOnce({ authorized: true })
+      .mockResolvedValueOnce({ authorized: false, reason: "runtime_not_owner" });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "cloud",
+        instanceId: "runtime_owned",
+        organizationId: "org-1",
+        userId: "user-1",
+        sessionId: "session-1",
+        environmentId: "env-1",
+        allowedScope: "session",
+        tool: "codex",
+        leaseRequired: true,
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "runtime_owned",
+      hostingMode: "cloud",
+      protocolVersion: 2,
+      agentVersion: "0.1.0",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+      capabilities: ["runtime_lease_v1"],
+    });
+    await vi.waitFor(() => expect(mocks.bindSession).toHaveBeenCalled());
+
+    nowSpy.mockReturnValue(131_000);
+    ws.emitMessage({
+      type: "runtime_heartbeat",
+      instanceId: "runtime_owned",
+      activeSessionIds: [],
+    });
+    await vi.waitFor(() => {
+      expect(ws.close).toHaveBeenCalledWith(1008, "Runtime lease ownership lost");
+    });
+
+    const leaseRenewals = ws.send.mock.calls
+      .map(([payload]) => JSON.parse(String(payload)) as Record<string, unknown>)
+      .filter((payload) => payload.type === "runtime_lease");
+    expect(leaseRenewals).toHaveLength(1);
+    nowSpy.mockRestore();
   });
 
   it("rejects a provisioned cloud bridge with incompatible protocol metadata", async () => {
@@ -454,11 +587,11 @@ describe("bridge handler auth", () => {
     );
   });
 
-  it("binds a scoped provisioned bridge before lifecycle state records the runtime id", async () => {
+  it("rejects a scoped provisioned bridge before lifecycle state records the runtime id", async () => {
     const ws = createMockWs();
-    mocks.sessionFindFirst.mockResolvedValue({
-      id: "session-1",
-      connection: { state: "requested" },
+    mocks.authorizeRuntimeLease.mockResolvedValueOnce({
+      authorized: false,
+      reason: "runtime_not_owner",
     });
 
     handleBridgeConnection(ws as never, {
@@ -484,15 +617,15 @@ describe("bridge handler auth", () => {
     });
     await Promise.resolve();
 
-    expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "runtime_owned");
-    expect(ws.close).not.toHaveBeenCalledWith(1008, "Session is not waiting for this runtime");
+    expect(mocks.bindSession).not.toHaveBeenCalled();
+    expect(ws.close).toHaveBeenCalledWith(1008, "Session is not waiting for this runtime");
   });
 
   it("rejects a scoped provisioned bridge bound to a different runtime id", async () => {
     const ws = createMockWs();
-    mocks.sessionFindFirst.mockResolvedValue({
-      id: "session-1",
-      connection: { state: "connecting", runtimeInstanceId: "other-runtime" },
+    mocks.authorizeRuntimeLease.mockResolvedValueOnce({
+      authorized: false,
+      reason: "runtime_not_owner",
     });
 
     handleBridgeConnection(ws as never, {
@@ -560,9 +693,9 @@ describe("bridge handler auth", () => {
 
   it("still rejects a scoped cloud bridge whose runtime differs after a startup timeout", async () => {
     const ws = createMockWs();
-    mocks.sessionFindFirst.mockResolvedValue({
-      id: "session-1",
-      connection: { state: "timed_out", runtimeInstanceId: "other-runtime" },
+    mocks.authorizeRuntimeLease.mockResolvedValueOnce({
+      authorized: false,
+      reason: "runtime_not_owner",
     });
 
     handleBridgeConnection(ws as never, {

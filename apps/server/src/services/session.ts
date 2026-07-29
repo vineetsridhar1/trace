@@ -246,6 +246,9 @@ export type SessionConnectionData = {
   providerRuntimeId?: string;
   providerRuntimeUrl?: string;
   providerStatus?: string;
+  runtimeHardDeadlineAt?: string;
+  providerDeadlineEnforcementId?: string;
+  hardDeadlineWarningAt?: string;
   requestedAt?: string;
   provisioningAt?: string;
   connectingAt?: string;
@@ -290,6 +293,17 @@ export type SessionConnectionData = {
   autoRetryable?: boolean;
   [key: string]: unknown;
 };
+
+export type RuntimeLeaseAuthorization =
+  | { authorized: true }
+  | {
+      authorized: false;
+      reason:
+        | "session_not_active"
+        | "runtime_not_owner"
+        | "environment_mismatch"
+        | "runtime_stopping";
+    };
 
 const RUNTIME_IDENTITY_FIELDS = [
   "environmentId",
@@ -1825,7 +1839,12 @@ export class SessionService {
         sessionStatus: true,
       },
     });
-    if (!session) return;
+    if (!session) {
+      if (eventType === "session_runtime_start_requested") {
+        throw new Error(`Cannot reserve runtime ownership for missing session ${sessionId}`);
+      }
+      return;
+    }
 
     const result = await this.updateConnectionConditional(sessionId, (conn) => {
       if (update.runtimeInstanceId) {
@@ -1837,13 +1856,17 @@ export class SessionService {
         // runtime is starting.
         //
         // A new launch may ALSO claim a connection whose previous runtime ended
-        // in a terminal state (failed/timed_out/stopped/deprovisioned): that
-        // runtime is dead, so a fresh provision must be able to take over. Without
-        // this, a startup timeout left the connection pinned to the dead runtime's
-        // id, and every re-provision (a different id) was fenced out here — the
-        // session could never recover.
+        // in a terminal state, or was deprovisioned by idle cleanup. That runtime
+        // is dead, so a fresh provision must be able to take over. Idle cleanup
+        // records its completed teardown as `disconnected` to preserve the reason,
+        // but it also keeps the old binding ids; treat that specific shape as stale.
+        // Without this, the replacement task is launched but its bridge is fenced
+        // out because the database still points at the old runtime generation.
         const canClaimStaleConnection =
-          isNewRuntimeRequest && (!conn.runtimeInstanceId || isRuntimeTerminalState(conn.state));
+          isNewRuntimeRequest &&
+          (!conn.runtimeInstanceId ||
+            isRuntimeTerminalState(conn.state) ||
+            isRuntimeComputeGone(conn));
         if (conn.runtimeInstanceId !== update.runtimeInstanceId && !canClaimStaleConnection) {
           return null;
         }
@@ -1874,7 +1897,14 @@ export class SessionService {
       return { ...conn, ...this.lifecycleConnectionPatch(eventType, conn, update, adapterType) };
     });
 
-    if (!result) return;
+    if (!result) {
+      if (eventType === "session_runtime_start_requested") {
+        throw new Error(
+          `Cannot reserve runtime ${update.runtimeInstanceId ?? "unknown"} for session ${sessionId}`,
+        );
+      }
+      return;
+    }
 
     const adapterType = this.lifecycleAdapterType(result.updated, update);
     const lifecycleState = this.lifecycleConnectionState(eventType, adapterType);
@@ -1899,6 +1929,12 @@ export class SessionService {
         ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
         ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
         ...(update.providerStatus && { providerStatus: update.providerStatus }),
+        ...(update.runtimeHardDeadlineAt && {
+          runtimeHardDeadlineAt: update.runtimeHardDeadlineAt,
+        }),
+        ...(update.providerDeadlineEnforcementId && {
+          providerDeadlineEnforcementId: update.providerDeadlineEnforcementId,
+        }),
         ...(update.error && { error: update.error }),
         ...(update.abandoned && { abandoned: true }),
         ...(update.reconcileAttempts !== undefined && {
@@ -1966,6 +2002,12 @@ export class SessionService {
       ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
       ...(update.providerRuntimeUrl && { providerRuntimeUrl: update.providerRuntimeUrl }),
       ...(update.providerStatus && { providerStatus: update.providerStatus }),
+      ...(update.runtimeHardDeadlineAt && {
+        runtimeHardDeadlineAt: update.runtimeHardDeadlineAt,
+      }),
+      ...(update.providerDeadlineEnforcementId && {
+        providerDeadlineEnforcementId: update.providerDeadlineEnforcementId,
+      }),
     };
 
     switch (eventType) {
@@ -1974,6 +2016,9 @@ export class SessionService {
           ...runtimePatch,
           state: "requested",
           requestedAt: now,
+          runtimeHardDeadlineAt: undefined,
+          providerDeadlineEnforcementId: undefined,
+          hardDeadlineWarningAt: undefined,
           lastError: undefined,
           canRetry: true,
           canMove: true,
@@ -5629,12 +5674,13 @@ export class SessionService {
       ...(parentToolUseId ? { parentId: parentToolUseId } : {}),
     });
 
-    if (data.type === "assistant") {
-      await prisma.session.update({
-        where: { id: sessionId },
-        data: { lastMessageAt: new Date() },
-      });
-    }
+    // Every bridge output is evidence that the agent is still doing work. This
+    // includes tool progress, not only assistant text: treating only assistant
+    // messages as activity let long-running tool calls look idle and be reaped.
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { lastMessageAt: new Date() },
+    });
 
     if (data.usage) {
       await this.recordUsage(sessionId, session.organizationId, data);
@@ -5889,7 +5935,7 @@ export class SessionService {
     });
   }
 
-  async complete(id: string) {
+  async complete(id: string, options?: { drainPending?: boolean }) {
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({
       where: { id },
@@ -5987,7 +6033,7 @@ export class SessionService {
       }
     }
 
-    if (!hasPendingInput) {
+    if (!hasPendingInput && options?.drainPending !== false) {
       setImmediate(() => {
         void this.drainNextPendingOrQueuedMessage(id);
       });
@@ -11081,14 +11127,222 @@ export class SessionService {
     });
   }
 
+  /**
+   * Authoritative renewable-lease check. A connected socket is only transport
+   * identity; the persisted runtime generation remains the ownership source of
+   * truth. Keeping this in the service layer also makes registration and later
+   * renewal use the same lifecycle policy.
+   */
+  async authorizeRuntimeLease(input: {
+    sessionId: string;
+    organizationId: string;
+    runtimeInstanceId: string;
+    environmentId?: string;
+  }): Promise<RuntimeLeaseAuthorization> {
+    const session = await prisma.session.findFirst({
+      where: {
+        id: input.sessionId,
+        organizationId: input.organizationId,
+        hosting: "cloud",
+      },
+      select: {
+        agentStatus: true,
+        sessionStatus: true,
+        connection: true,
+      },
+    });
+    if (
+      !session ||
+      session.sessionStatus === "merged" ||
+      session.agentStatus === "failed" ||
+      session.agentStatus === "stopped"
+    ) {
+      return { authorized: false, reason: "session_not_active" };
+    }
+
+    const connection = this.parseConnection(session.connection);
+    if (connection.runtimeInstanceId !== input.runtimeInstanceId) {
+      return { authorized: false, reason: "runtime_not_owner" };
+    }
+    if (
+      input.environmentId &&
+      connection.environmentId &&
+      connection.environmentId !== input.environmentId
+    ) {
+      return { authorized: false, reason: "environment_mismatch" };
+    }
+    if (
+      connection.adapterType === "local" ||
+      connection.disconnectOnDeprovision === true ||
+      connection.state === "failed" ||
+      connection.state === "stopping" ||
+      connection.state === "stopped" ||
+      connection.state === "deprovisioned" ||
+      connection.state === "deprovision_failed" ||
+      isRuntimeComputeGone(connection)
+    ) {
+      return { authorized: false, reason: "runtime_stopping" };
+    }
+
+    return { authorized: true };
+  }
+
+  /**
+   * Gracefully reconciles persisted hard deadlines before the independent
+   * container/provider kill switches fire. The hard cap remains authoritative;
+   * this job exists to publish a warning and drive the normal service-layer
+   * teardown so UI, events, terminals, and provider state converge cleanly.
+   */
+  async reconcileRuntimeHardDeadlines(
+    options: {
+      now?: number;
+      warningBeforeMs?: number;
+      batchSize?: number;
+    } = {},
+  ): Promise<{ scanned: number; warned: string[]; stopped: string[] }> {
+    const now = options.now ?? Date.now();
+    const warningBeforeMs = Math.max(60_000, options.warningBeforeMs ?? 60 * 60 * 1000);
+    const batchSize = Math.max(1, Math.min(options.batchSize ?? 500, 1_000));
+    const sessions = await prisma.session.findMany({
+      where: {
+        hosting: "cloud",
+        sessionStatus: { not: "merged" },
+        connection: {
+          path: ["runtimeHardDeadlineAt"],
+          not: Prisma.AnyNull,
+        },
+      },
+      select: {
+        id: true,
+        organizationId: true,
+        sessionGroupId: true,
+        agentStatus: true,
+        connection: true,
+      },
+      orderBy: { updatedAt: "asc" },
+      take: batchSize,
+    });
+
+    const warned: string[] = [];
+    const stopped: string[] = [];
+    const processedGroups = new Set<string>();
+    for (const session of sessions) {
+      const connection = this.parseConnection(session.connection);
+      if (isRuntimeComputeGone(connection) || !connection.runtimeInstanceId) continue;
+      const deadline = Date.parse(connection.runtimeHardDeadlineAt ?? "");
+      if (!Number.isFinite(deadline)) continue;
+      const groupKey = session.sessionGroupId ?? session.id;
+      if (processedGroups.has(groupKey)) continue;
+
+      if (deadline <= now) {
+        processedGroups.add(groupKey);
+        const activeSessionIds = session.sessionGroupId
+          ? (
+              await prisma.session.findMany({
+                where: {
+                  sessionGroupId: session.sessionGroupId,
+                  agentStatus: "active",
+                },
+                select: { id: true },
+              })
+            ).map((activeSession) => activeSession.id)
+          : session.agentStatus === "active"
+            ? [session.id]
+            : [];
+        for (const activeSessionId of activeSessionIds) {
+          await this.complete(activeSessionId, { drainPending: false });
+        }
+        const unloaded = await this.fullyUnloadSession(
+          session.id,
+          !!session.sessionGroupId,
+          "runtime_hard_deadline",
+        );
+        if (unloaded) {
+          if (session.sessionGroupId) {
+            await sessionApplicationService.markSessionGroupRuntimeStopped(
+              session.sessionGroupId,
+              session.organizationId,
+            );
+          }
+          stopped.push(session.id);
+          logAgentEnvironmentTelemetry("runtime.hard_deadline_reconciled", {
+            organizationId: session.organizationId,
+            sessionId: session.id,
+            sessionGroupId: session.sessionGroupId,
+            runtimeInstanceId: connection.runtimeInstanceId,
+            runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+          });
+        } else {
+          alertAgentEnvironmentOperator("runtime.hard_deadline_stop_failed", {
+            organizationId: session.organizationId,
+            sessionId: session.id,
+            sessionGroupId: session.sessionGroupId,
+            runtimeInstanceId: connection.runtimeInstanceId,
+            providerRuntimeId: connection.providerRuntimeId,
+            runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+            overdueMs: now - deadline,
+          });
+        }
+        continue;
+      }
+
+      if (deadline - now > warningBeforeMs || connection.hardDeadlineWarningAt) continue;
+      const warningAt = new Date(now).toISOString();
+      const warningRecorded = await this.updateConnectionConditional(session.id, (latest) => {
+        if (
+          latest.runtimeInstanceId !== connection.runtimeInstanceId ||
+          latest.runtimeHardDeadlineAt !== connection.runtimeHardDeadlineAt ||
+          latest.hardDeadlineWarningAt
+        ) {
+          return null;
+        }
+        return { ...latest, hardDeadlineWarningAt: warningAt };
+      });
+      if (!warningRecorded) continue;
+
+      warned.push(session.id);
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: session.id,
+        eventType: "session_output",
+        payload: {
+          type: "runtime_hard_deadline_warning",
+          sessionId: session.id,
+          runtimeInstanceId: connection.runtimeInstanceId,
+          runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+          warningBeforeMs,
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+      logAgentEnvironmentTelemetry("runtime.hard_deadline_approaching", {
+        organizationId: session.organizationId,
+        sessionId: session.id,
+        sessionGroupId: session.sessionGroupId,
+        runtimeInstanceId: connection.runtimeInstanceId,
+        runtimeHardDeadlineAt: connection.runtimeHardDeadlineAt,
+        remainingMs: deadline - now,
+      });
+    }
+
+    return { scanned: sessions.length, warned, stopped };
+  }
+
   async cleanupIdleCloudSessionGroups(options: {
     idleAfterMs: number;
+    activeIdleAfterMs?: number;
     now?: number;
     batchSize?: number;
   }): Promise<{ scanned: number; cleaned: string[] }> {
     const idleAfterMs = Math.max(1, Math.floor(options.idleAfterMs));
+    const activeIdleAfterMs = Math.max(
+      idleAfterMs,
+      Math.floor(options.activeIdleAfterMs ?? 60 * 60 * 1000),
+    );
     const now = options.now ?? Date.now();
     const cutoff = new Date(now - idleAfterMs);
+    const activeCutoff = new Date(now - activeIdleAfterMs);
     const batchSize = Math.max(1, Math.min(options.batchSize ?? 25, 100));
 
     const groups: IdleCloudSessionGroupCandidate[] = await prisma.sessionGroup.findMany({
@@ -11099,7 +11353,6 @@ export class SessionService {
           some: { hosting: "cloud" },
           none: {
             OR: [
-              { agentStatus: "active" },
               { lastMessageAt: { gt: cutoff } },
               { lastUserMessageAt: { gt: cutoff } },
               {
@@ -11107,6 +11360,25 @@ export class SessionService {
                 lastUserMessageAt: null,
                 createdAt: { gt: cutoff },
               },
+              // A cloud agent that is still actively producing output gets a
+              // longer lease than an idle session. Once that lease expires,
+              // it is treated as abandoned so a crashed bridge cannot keep a
+              // Fargate task alive forever.
+              {
+                agentStatus: "active",
+                OR: [
+                  { lastMessageAt: { gt: activeCutoff } },
+                  { lastMessageAt: null, lastUserMessageAt: { gt: activeCutoff } },
+                  {
+                    lastMessageAt: null,
+                    lastUserMessageAt: null,
+                    createdAt: { gt: activeCutoff },
+                  },
+                ],
+              },
+              // A local session can share the group, but its active process
+              // must never be interrupted by cloud-runtime cleanup.
+              { hosting: { not: "cloud" }, agentStatus: "active" },
             ],
           },
         },
@@ -11151,7 +11423,17 @@ export class SessionService {
         !!groupConnection.runtimeInstanceId ||
         !!groupConnection.providerRuntimeId;
       const cloudSessions = group.sessions.filter((session) => session.hosting === "cloud");
-      if (cloudSessions.some((session) => session.agentStatus === "active")) continue;
+      const activeSessions = group.sessions.filter((session) => session.agentStatus === "active");
+      const activeSessionHasRecentActivity = activeSessions.some((session) => {
+        const activity = session.lastMessageAt ?? session.lastUserMessageAt ?? session.createdAt;
+        return activity > activeCutoff;
+      });
+      if (
+        activeSessionHasRecentActivity ||
+        activeSessions.some((session) => session.hosting !== "cloud")
+      ) {
+        continue;
+      }
       const cloudSession =
         cloudSessions.find((session) => {
           const sessionConnection = this.parseConnection(session.connection);
@@ -11180,6 +11462,13 @@ export class SessionService {
       // Re-checked race-safely inside the conditional update below.
       if (isRuntimeStartingWithinGrace(this.parseConnection(cloudSession.connection), now))
         continue;
+
+      // The bridge no longer reports these runs as complete, so settle their
+      // session state before reclaiming the runtime. This prevents a stale
+      // `active` row from blocking future cleanup or misleading the UI.
+      for (const session of activeSessions) {
+        await this.complete(session.id, { drainPending: false });
+      }
 
       const cleanedRuntime = await this.deprovisionIdleCloudSessionGroupRuntime(
         group,

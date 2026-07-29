@@ -18,6 +18,11 @@ import { resolveJwtSecret } from "./jwt-secret.js";
 import { isLocalMode } from "./mode.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
 import { CODING_TOOL_IDS } from "@trace/shared";
+import {
+  runtimeHardDeadlineAt,
+  runtimeLeaseTtlMs,
+  runtimeMaxLifetimeMs,
+} from "./provisioned-runtime-lease.js";
 
 const CODING_TOOLS = new Set(CODING_TOOL_IDS);
 const DEFAULT_STARTUP_TIMEOUT_SECONDS = 180;
@@ -47,20 +52,42 @@ async function resolveUserApiTokenEnv(userId: string): Promise<Record<string, st
     apiTokenService.getDecryptedTokens(userId),
     codexCredentialService.getDecryptedCredential(userId),
   ]);
+  // Codex supports a dedicated credential as well as the user's OpenAI API
+  // key. Prefer the dedicated credential when both are present.
+  const codexAuthMethod = codexCredential?.method ?? (tokens.openai ? "api_key" : undefined);
+  const codexApiKey =
+    codexCredential?.method === "api_key"
+      ? codexCredential.credential
+      : codexCredential
+        ? undefined
+        : tokens.openai;
   return {
     ...(tokens.anthropic ? { ANTHROPIC_API_KEY: tokens.anthropic } : {}),
     ...(tokens.openai ? { OPENAI_API_KEY: tokens.openai } : {}),
-    ...(codexCredential ? { CODEX_AUTH_METHOD: codexCredential.method } : {}),
+    ...(codexAuthMethod ? { CODEX_AUTH_METHOD: codexAuthMethod } : {}),
     ...(codexCredential?.method === "access_token"
       ? { CODEX_ACCESS_TOKEN: codexCredential.credential }
       : {}),
-    ...(codexCredential?.method === "api_key" ? { CODEX_API_KEY: codexCredential.credential } : {}),
+    ...(codexApiKey ? { CODEX_API_KEY: codexApiKey } : {}),
     ...(codexCredential?.method === "chatgpt_session"
       ? { CODEX_AUTH_JSON: codexCredential.credential }
       : {}),
     ...(tokens.github ? { GITHUB_TOKEN: tokens.github } : {}),
     ...(tokens.ssh_key ? { SSH_PRIVATE_KEY: tokens.ssh_key } : {}),
   };
+}
+
+function assertToolCredentialAvailable(tool: string, env: Record<string, string>): void {
+  if (tool === "claude_code" && !env.ANTHROPIC_API_KEY) {
+    throw new Error(
+      "Cannot start cloud runtime for claude_code: add an Anthropic API key in Settings → API Tokens.",
+    );
+  }
+  if (tool === "codex" && !env.CODEX_AUTH_METHOD) {
+    throw new Error(
+      "Cannot start cloud runtime for codex: add a ChatGPT session, Codex access token, or OpenAI API key in Settings → API Tokens.",
+    );
+  }
 }
 
 type ProvisionedAuthConfig = {
@@ -76,6 +103,8 @@ type ProvisionedConfig = {
   startupTimeoutSeconds: number;
   deprovisionPolicy: "on_session_end" | "manual";
   runtimeEnv: ProvisionedRuntimeEnv[];
+  runtimeLeaseEnforcement: "required" | "optional";
+  providerHardDeadlineEnforcement: "required" | "optional";
   launcherMetadata?: Record<string, unknown>;
 };
 
@@ -92,6 +121,7 @@ type ProvisionedRuntimeTokenAuth = {
   environmentId: string;
   allowedScope: "session";
   tool: string;
+  leaseRequired: boolean;
 };
 
 type ProvisionedRuntimeTokenPayload = ProvisionedRuntimeTokenAuth & {
@@ -126,6 +156,7 @@ export function authenticateProvisionedRuntimeToken(
       environmentId: payload.environmentId,
       allowedScope: payload.allowedScope,
       tool: payload.tool,
+      leaseRequired: payload.leaseRequired === true,
     };
   } catch {
     return null;
@@ -274,6 +305,28 @@ function parseProvisionedConfig(config: Record<string, unknown>): ProvisionedCon
   }
 
   const normalizedDeprovisionPolicy = deprovisionPolicy as ProvisionedConfig["deprovisionPolicy"];
+  const rawDeadlineEnforcement = config.providerHardDeadlineEnforcement;
+  if (
+    rawDeadlineEnforcement !== undefined &&
+    rawDeadlineEnforcement !== "required" &&
+    rawDeadlineEnforcement !== "optional"
+  ) {
+    throw new Error(
+      "Provisioned agent environment providerHardDeadlineEnforcement must be required or optional",
+    );
+  }
+  const providerHardDeadlineEnforcement = rawDeadlineEnforcement ?? "optional";
+  const rawLeaseEnforcement = config.runtimeLeaseEnforcement;
+  if (
+    rawLeaseEnforcement !== undefined &&
+    rawLeaseEnforcement !== "required" &&
+    rawLeaseEnforcement !== "optional"
+  ) {
+    throw new Error(
+      "Provisioned agent environment runtimeLeaseEnforcement must be required or optional",
+    );
+  }
+  const runtimeLeaseEnforcement = rawLeaseEnforcement ?? "optional";
 
   return {
     startUrl: assertHttpsUrl(config.startUrl, "startUrl"),
@@ -283,6 +336,8 @@ function parseProvisionedConfig(config: Record<string, unknown>): ProvisionedCon
     startupTimeoutSeconds,
     deprovisionPolicy: normalizedDeprovisionPolicy,
     runtimeEnv: parseProvisionedRuntimeEnv(config.runtimeEnv),
+    runtimeLeaseEnforcement,
+    providerHardDeadlineEnforcement,
     ...(launcherMetadata !== undefined
       ? { launcherMetadata: launcherMetadata as Record<string, unknown> }
       : {}),
@@ -378,6 +433,11 @@ function responseRecord(value: unknown, endpointName: string): Record<string, un
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`Provisioned ${endpointName} response must be an object`);
   }
+  return value as Record<string, unknown>;
+}
+
+function jsonRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
 
@@ -638,6 +698,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       RUNTIME_TOKEN_TTL_SECONDS,
       config.startupTimeoutSeconds + RUNTIME_TOKEN_STARTUP_MARGIN_SECONDS,
     );
+    const leaseRequired = config.runtimeLeaseEnforcement === "required";
     const runtimeToken = createProvisionedRuntimeToken(
       {
         instanceId: runtimeInstanceId,
@@ -647,14 +708,25 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
         environmentId: input.environment.id,
         allowedScope: "session",
         tool: input.tool,
+        leaseRequired,
       },
       runtimeTokenTtlSeconds,
     );
+    const startedAt = Date.now();
+    const startupLeaseMinimumMs =
+      (config.startupTimeoutSeconds + RUNTIME_TOKEN_STARTUP_MARGIN_SECONDS) * 1000;
+    const controlLeaseTtlMs = runtimeLeaseTtlMs(startupLeaseMinimumMs);
+    const hardDeadlineTtlMs = Math.max(runtimeMaxLifetimeMs(), startupLeaseMinimumMs);
+    const hardDeadlineAt = runtimeHardDeadlineAt(startedAt, startupLeaseMinimumMs);
     const bridgeUrl = input.bridgeUrl ?? defaultBridgeUrl();
     const [runtimeEnv, userApiTokenEnv] = await Promise.all([
       resolveProvisionedRuntimeEnv(input.organizationId, config.runtimeEnv),
       resolveUserApiTokenEnv(input.actorId),
     ]);
+    // Check before contacting the launcher. The bridge can only discover a
+    // missing credential after Fargate has started, which leaves an unusable
+    // task behind until the idle reaper catches it.
+    assertToolCredentialAvailable(input.tool, userApiTokenEnv);
 
     const body = {
       sessionId: input.sessionId,
@@ -664,6 +736,11 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       runtimeToken: runtimeToken.token,
       runtimeTokenExpiresAt: runtimeToken.expiresAt.toISOString(),
       runtimeTokenScope: "session",
+      runtimeLeaseTtlMs: controlLeaseTtlMs,
+      runtimeLeaseEnforcement: config.runtimeLeaseEnforcement,
+      runtimeHardDeadlineTtlMs: hardDeadlineTtlMs,
+      runtimeHardDeadlineAt: hardDeadlineAt,
+      providerHardDeadlineEnforcement: config.providerHardDeadlineEnforcement,
       bridgeUrl,
       repo: input.repo
         ? {
@@ -685,6 +762,9 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
         TRACE_RUNTIME_INSTANCE_ID: runtimeInstanceId,
         TRACE_RUNTIME_TOKEN: runtimeToken.token,
         TRACE_BRIDGE_URL: bridgeUrl,
+        TRACE_RUNTIME_LEASE_REQUIRED: String(leaseRequired),
+        TRACE_RUNTIME_LEASE_TTL_MS: String(controlLeaseTtlMs),
+        TRACE_RUNTIME_HARD_DEADLINE_TTL_MS: String(hardDeadlineTtlMs),
         // The app is served through the `<key>.<previewHost>` proxy origin, not
         // the container's localhost. Dev servers (e.g. Next 15) otherwise flag
         // requests from that origin as cross-origin and block /_next/HMR/API
@@ -698,7 +778,6 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       },
     };
 
-    const startedAt = Date.now();
     const json = await authenticatedLauncherRequest({
       organizationId: input.organizationId,
       url: config.startUrl,
@@ -713,6 +792,49 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
     if (!providerRuntimeId) {
       throw new Error("Provisioned start response requires runtimeId");
     }
+    const deadlineEnforcement = jsonRecord(record.deadlineEnforcement);
+    const providerDeadlineAt = optionalString(deadlineEnforcement?.deadlineAt);
+    const providerDeadlineEnforcementId = optionalString(deadlineEnforcement?.enforcementId);
+    const providerDeadlineAcknowledged =
+      providerDeadlineAt === hardDeadlineAt && !!providerDeadlineEnforcementId;
+    if (deadlineEnforcement && !providerDeadlineAcknowledged) {
+      await this.stopUnenforcedRuntime({
+        config,
+        organizationId: input.organizationId,
+        sessionId: input.sessionId,
+        providerRuntimeId,
+      });
+      throw new Error(
+        "Provisioned launcher returned invalid hard-deadline enforcement acknowledgement",
+      );
+    }
+    if (config.providerHardDeadlineEnforcement === "required" && !providerDeadlineAcknowledged) {
+      logAgentEnvironmentTelemetry("provisioned.deadline_enforcement_missing", {
+        organizationId: input.organizationId,
+        sessionId: input.sessionId,
+        environmentId: input.environment.id,
+        runtimeInstanceId,
+        providerRuntimeId,
+        required: true,
+      });
+      await this.stopUnenforcedRuntime({
+        config,
+        organizationId: input.organizationId,
+        sessionId: input.sessionId,
+        providerRuntimeId,
+      });
+      throw new Error("Provisioned launcher did not prove independent hard-deadline enforcement");
+    }
+    if (!providerDeadlineAcknowledged) {
+      logAgentEnvironmentTelemetry("provisioned.deadline_enforcement_missing", {
+        organizationId: input.organizationId,
+        sessionId: input.sessionId,
+        environmentId: input.environment.id,
+        runtimeInstanceId,
+        providerRuntimeId,
+        required: false,
+      });
+    }
 
     logAgentEnvironmentTelemetry("provisioned.start", {
       organizationId: input.organizationId,
@@ -721,6 +843,9 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       runtimeInstanceId,
       providerRuntimeId,
       providerStatus: startStatus(record.status),
+      runtimeHardDeadlineAt: hardDeadlineAt,
+      providerDeadlineEnforced: providerDeadlineAcknowledged,
+      providerDeadlineEnforcementId,
       latencyMs: Date.now() - startedAt,
     });
 
@@ -729,8 +854,39 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       runtimeLabel: optionalString(record.label),
       providerRuntimeId,
       providerRuntimeUrl: optionalString(record.runtimeUrl),
+      runtimeHardDeadlineAt: hardDeadlineAt,
+      ...(providerDeadlineEnforcementId && { providerDeadlineEnforcementId }),
       status: startStatus(record.status),
     };
+  }
+
+  private async stopUnenforcedRuntime(input: {
+    config: ProvisionedConfig;
+    organizationId: string;
+    sessionId: string;
+    providerRuntimeId: string;
+  }): Promise<void> {
+    try {
+      await authenticatedLauncherRequest({
+        organizationId: input.organizationId,
+        url: input.config.stopUrl,
+        auth: input.config.auth,
+        body: {
+          sessionId: input.sessionId,
+          runtimeId: input.providerRuntimeId,
+          reason: "missing_provider_hard_deadline_enforcement",
+        },
+        idempotencyKey: idempotencyKey(input.sessionId, "stop", input.providerRuntimeId),
+        endpointName: "stop",
+      });
+    } catch (error) {
+      logAgentEnvironmentTelemetry("provisioned.unenforced_runtime_stop_failed", {
+        organizationId: input.organizationId,
+        sessionId: input.sessionId,
+        providerRuntimeId: input.providerRuntimeId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   async stopSession(input: RuntimeStopInput): Promise<RuntimeStopResult> {

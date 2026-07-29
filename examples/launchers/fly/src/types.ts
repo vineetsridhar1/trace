@@ -16,6 +16,9 @@ export type StartSessionRequest = {
   runtimeToken: string;
   runtimeTokenExpiresAt: string;
   runtimeTokenScope: "session";
+  runtimeLeaseTtlMs: number;
+  runtimeHardDeadlineTtlMs: number;
+  runtimeHardDeadlineAt: string;
   bridgeUrl: string;
   repo: TraceRepo | null;
   tool: "claude_code" | "codex" | "cursor_composer" | "pi";

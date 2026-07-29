@@ -199,6 +199,8 @@ export type RuntimeLifecycleUpdate = {
   providerRuntimeId?: string;
   providerRuntimeUrl?: string;
   providerStatus?: string;
+  runtimeHardDeadlineAt?: string;
+  providerDeadlineEnforcementId?: string;
   error?: string;
   /**
    * Set on `session_runtime_deprovision_failed` to mark the runtime
@@ -272,6 +274,15 @@ function lifecycleSnapshotFromConnection(
   if (providerRuntimeId) snapshot.providerRuntimeId = providerRuntimeId;
   const providerRuntimeUrl = optionalConnectionString(connection, "providerRuntimeUrl");
   if (providerRuntimeUrl) snapshot.providerRuntimeUrl = providerRuntimeUrl;
+  const runtimeHardDeadlineAt = optionalConnectionString(connection, "runtimeHardDeadlineAt");
+  if (runtimeHardDeadlineAt) snapshot.runtimeHardDeadlineAt = runtimeHardDeadlineAt;
+  const providerDeadlineEnforcementId = optionalConnectionString(
+    connection,
+    "providerDeadlineEnforcementId",
+  );
+  if (providerDeadlineEnforcementId) {
+    snapshot.providerDeadlineEnforcementId = providerDeadlineEnforcementId;
+  }
   return snapshot;
 }
 
@@ -2092,6 +2103,12 @@ export class SessionRouter {
             }),
             ...(startResult.providerRuntimeUrl && {
               providerRuntimeUrl: startResult.providerRuntimeUrl,
+            }),
+            ...(startResult.runtimeHardDeadlineAt && {
+              runtimeHardDeadlineAt: startResult.runtimeHardDeadlineAt,
+            }),
+            ...(startResult.providerDeadlineEnforcementId && {
+              providerDeadlineEnforcementId: startResult.providerDeadlineEnforcementId,
             }),
             providerStatus: startResult.status,
           } satisfies RuntimeLifecycleUpdate;

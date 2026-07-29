@@ -119,6 +119,9 @@ curl -sS http://localhost:8787/trace/start-session \
     "runtimeToken": "runtime-token",
     "runtimeTokenExpiresAt": "2026-04-30T00:00:00.000Z",
     "runtimeTokenScope": "session",
+    "runtimeLeaseTtlMs": 900000,
+    "runtimeHardDeadlineTtlMs": 604800000,
+    "runtimeHardDeadlineAt": "2026-04-01T12:00:00.000Z",
     "bridgeUrl": "wss://trace.example/bridge",
     "repo": {
       "id": "repo-123",
@@ -136,6 +139,9 @@ curl -sS http://localhost:8787/trace/start-session \
       "TRACE_ORG_ID": "org-123",
       "TRACE_RUNTIME_INSTANCE_ID": "runtime-456",
       "TRACE_RUNTIME_TOKEN": "runtime-token",
+      "TRACE_RUNTIME_LEASE_REQUIRED": "true",
+      "TRACE_RUNTIME_LEASE_TTL_MS": "900000",
+      "TRACE_RUNTIME_HARD_DEADLINE_TTL_MS": "604800000",
       "TRACE_BRIDGE_URL": "wss://trace.example/bridge"
     },
     "metadata": {

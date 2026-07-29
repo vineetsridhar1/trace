@@ -34,6 +34,8 @@ export type RuntimeStartResult = {
   runtimeLabel?: string;
   providerRuntimeId?: string;
   providerRuntimeUrl?: string;
+  runtimeHardDeadlineAt?: string;
+  providerDeadlineEnforcementId?: string;
   status: "selected" | "provisioning" | "booting" | "connecting" | "connected";
   metadata?: Record<string, unknown>;
 };

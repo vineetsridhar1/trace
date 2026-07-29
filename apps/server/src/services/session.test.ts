@@ -5887,6 +5887,54 @@ describe("SessionService", () => {
       );
     });
 
+    it("lets a fresh provision claim an idle-cleaned runtime binding", async () => {
+      prismaMock.session.findUnique.mockReset();
+      prismaMock.session.updateMany.mockReset();
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          sessionGroupId: null,
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+        })
+        .mockResolvedValueOnce({
+          sessionGroupId: null,
+          connection: {
+            state: "disconnected",
+            version: 3,
+            adapterType: "provisioned",
+            runtimeInstanceId: "runtime-old",
+            deprovisionedAt: "2026-07-29T16:15:27.000Z",
+          },
+        });
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await (
+        service as unknown as {
+          recordRuntimeLifecycle: (
+            sessionId: string,
+            eventType: "session_runtime_start_requested",
+            update: { runtimeInstanceId: string },
+          ) => Promise<void>;
+        }
+      ).recordRuntimeLifecycle("session-1", "session_runtime_start_requested", {
+        runtimeInstanceId: "runtime-new",
+      });
+
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { id: "session-1", connection: { path: ["version"], equals: 3 } },
+        data: {
+          connection: expect.objectContaining({
+            state: "requested",
+            runtimeInstanceId: "runtime-new",
+          }),
+        },
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: "session_runtime_start_requested" }),
+      );
+    });
+
     it("still fences a fresh provision from claiming a live connection bound to another runtime", async () => {
       prismaMock.session.findUnique.mockReset();
       prismaMock.session.updateMany.mockReset();
@@ -5907,17 +5955,19 @@ describe("SessionService", () => {
           },
         });
 
-      await (
-        service as unknown as {
-          recordRuntimeLifecycle: (
-            sessionId: string,
-            eventType: "session_runtime_start_requested",
-            update: { runtimeInstanceId: string },
-          ) => Promise<void>;
-        }
-      ).recordRuntimeLifecycle("session-1", "session_runtime_start_requested", {
-        runtimeInstanceId: "runtime-new",
-      });
+      await expect(
+        (
+          service as unknown as {
+            recordRuntimeLifecycle: (
+              sessionId: string,
+              eventType: "session_runtime_start_requested",
+              update: { runtimeInstanceId: string },
+            ) => Promise<void>;
+          }
+        ).recordRuntimeLifecycle("session-1", "session_runtime_start_requested", {
+          runtimeInstanceId: "runtime-new",
+        }),
+      ).rejects.toThrow("Cannot reserve runtime runtime-new for session session-1");
 
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(eventServiceMock.create).not.toHaveBeenCalled();
@@ -8496,6 +8546,107 @@ describe("SessionService", () => {
     });
   });
 
+  describe("authorizeRuntimeLease", () => {
+    it("authorizes only the persisted cloud runtime generation", async () => {
+      prismaMock.session.findFirst.mockResolvedValue({
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        connection: {
+          state: "connected",
+          adapterType: "provisioned",
+          environmentId: "env-1",
+          runtimeInstanceId: "runtime-1",
+        },
+      });
+
+      await expect(
+        service.authorizeRuntimeLease({
+          sessionId: "session-1",
+          organizationId: "org-1",
+          runtimeInstanceId: "runtime-1",
+          environmentId: "env-1",
+        }),
+      ).resolves.toEqual({ authorized: true });
+
+      await expect(
+        service.authorizeRuntimeLease({
+          sessionId: "session-1",
+          organizationId: "org-1",
+          runtimeInstanceId: "runtime-2",
+          environmentId: "env-1",
+        }),
+      ).resolves.toEqual({ authorized: false, reason: "runtime_not_owner" });
+    });
+
+    it("rejects renewal once teardown has started", async () => {
+      prismaMock.session.findFirst.mockResolvedValue({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        connection: {
+          state: "stopping",
+          adapterType: "provisioned",
+          environmentId: "env-1",
+          runtimeInstanceId: "runtime-1",
+        },
+      });
+
+      await expect(
+        service.authorizeRuntimeLease({
+          sessionId: "session-1",
+          organizationId: "org-1",
+          runtimeInstanceId: "runtime-1",
+          environmentId: "env-1",
+        }),
+      ).resolves.toEqual({ authorized: false, reason: "runtime_stopping" });
+    });
+  });
+
+  describe("reconcileRuntimeHardDeadlines", () => {
+    it("persists and emits a single warning before provider enforcement", async () => {
+      const connection = {
+        state: "connected",
+        adapterType: "provisioned",
+        runtimeInstanceId: "runtime-1",
+        runtimeHardDeadlineAt: "2026-07-29T13:00:00.000Z",
+        retryCount: 0,
+        canRetry: true,
+        canMove: true,
+      };
+      prismaMock.session.findMany.mockResolvedValue([
+        {
+          id: "session-1",
+          organizationId: "org-1",
+          sessionGroupId: null,
+          agentStatus: "active",
+          connection,
+        },
+      ]);
+      prismaMock.session.findUnique.mockResolvedValue({
+        connection,
+        sessionGroupId: null,
+      });
+      prismaMock.session.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.reconcileRuntimeHardDeadlines({
+        now: Date.parse("2026-07-29T12:30:00.000Z"),
+        warningBeforeMs: 60 * 60 * 1000,
+      });
+
+      expect(result).toEqual({ scanned: 1, warned: ["session-1"], stopped: [] });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: "org-1",
+          scopeId: "session-1",
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "runtime_hard_deadline_warning",
+            runtimeInstanceId: "runtime-1",
+          }),
+        }),
+      );
+    });
+  });
+
   describe("cleanupIdleCloudSessionGroups", () => {
     beforeEach(() => {
       prismaMock.sessionGroup.findMany.mockReset();
@@ -8646,7 +8797,6 @@ describe("SessionService", () => {
               some: { hosting: "cloud" },
               none: {
                 OR: [
-                  { agentStatus: "active" },
                   { lastMessageAt: { gt: new Date("2026-05-12T11:35:00.000Z") } },
                   { lastUserMessageAt: { gt: new Date("2026-05-12T11:35:00.000Z") } },
                   {
@@ -8654,6 +8804,22 @@ describe("SessionService", () => {
                     lastUserMessageAt: null,
                     createdAt: { gt: new Date("2026-05-12T11:35:00.000Z") },
                   },
+                  {
+                    agentStatus: "active",
+                    OR: [
+                      { lastMessageAt: { gt: new Date("2026-05-12T10:45:00.000Z") } },
+                      {
+                        lastMessageAt: null,
+                        lastUserMessageAt: { gt: new Date("2026-05-12T10:45:00.000Z") },
+                      },
+                      {
+                        lastMessageAt: null,
+                        lastUserMessageAt: null,
+                        createdAt: { gt: new Date("2026-05-12T10:45:00.000Z") },
+                      },
+                    ],
+                  },
+                  { hosting: { not: "cloud" }, agentStatus: "active" },
                 ],
               },
             }),
@@ -8822,6 +8988,44 @@ describe("SessionService", () => {
       expect(result).toEqual({ scanned: 1, cleaned: [] });
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
+
+    it("selects cloud groups whose active runs have been quiet past the safety window", async () => {
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
+
+      await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        activeIdleAfterMs: 60 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            sessions: expect.objectContaining({
+              none: expect.objectContaining({
+                OR: expect.arrayContaining([
+                  {
+                    agentStatus: "active",
+                    OR: [
+                      { lastMessageAt: { gt: new Date("2026-05-12T10:45:00.000Z") } },
+                      {
+                        lastMessageAt: null,
+                        lastUserMessageAt: { gt: new Date("2026-05-12T10:45:00.000Z") },
+                      },
+                      {
+                        lastMessageAt: null,
+                        lastUserMessageAt: null,
+                        createdAt: { gt: new Date("2026-05-12T10:45:00.000Z") },
+                      },
+                    ],
+                  },
+                ]),
+              }),
+            }),
+          }),
+        }),
+      );
     });
 
     it("keeps a reviving cloud runtime that is still within the startup grace window", async () => {
