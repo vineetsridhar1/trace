@@ -17,7 +17,6 @@ test("keeps the screen label constant-sized and on one line", () => {
   const html = renderToStaticMarkup(
     <DesignArtboard
       screen={screen}
-      sectionName="Onboarding"
       component={() => <div>Screen content</div>}
       onFocus={() => undefined}
       zoom={0.5}
@@ -27,6 +26,5 @@ test("keeps the screen label constant-sized and on one line", () => {
   assert.match(html, /bottom:868px/);
   assert.match(html, /transform:scale\(2\)/);
   assert.match(html, /truncate/);
-  assert.match(html, /Onboarding/);
   assert.match(html, /Screen content/);
 });

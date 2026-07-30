@@ -5,104 +5,309 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Trace design canvas preview</title>
     <style>
-      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
-      * { box-sizing: border-box; }
-      body { margin: 0; overflow: hidden; background: #111113; color: #e4e4e7; }
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #111113;
+        color: #e4e4e7;
+      }
       .canvas {
-        height: 100vh; width: 100vw; overflow: hidden; position: relative; touch-action: none;
-        background-image: radial-gradient(#3f3f46 1px, transparent 1px); background-size: 24px 24px;
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
+        position: relative;
+        touch-action: none;
+        background-image: radial-gradient(#3f3f46 1px, transparent 1px);
+        background-size: 24px 24px;
         cursor: grab;
       }
-      .canvas:active { cursor: grabbing; }
-      .world { position: absolute; inset: 0 auto auto 0; transform-origin: top left; }
-      .artboard { position: absolute; width: 390px; }
-      .label {
-        --inverse-zoom: 1; --label-width: 390px;
-        bottom: calc(844px + 12px * var(--inverse-zoom)); left: 0; position: absolute;
-        transform: scale(var(--inverse-zoom)); transform-origin: bottom left; width: var(--label-width);
+      .canvas:active {
+        cursor: grabbing;
       }
-      .section { margin: 0 0 8px; color: #71717a; font-size: 12px; font-weight: 700; letter-spacing: .18em; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
-      .screen-label { align-items: end; display: flex; gap: 12px; justify-content: space-between; }
-      .screen-copy { flex: 1; min-width: 0; }
-      .screen-title { font-size: 24px; font-weight: 500; line-height: 32px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .screen-meta { color: #71717a; font-size: 18px; line-height: 26px; margin: 8px 0 0; }
-      .focus { background: transparent; border: 0; border-radius: 6px; color: #a1a1aa; cursor: pointer; font: inherit; font-size: 14px; padding: 8px; }
-      .focus:hover { background: #ffffff16; color: white; }
-      .frame { background: white; border-radius: 20px; box-shadow: 0 24px 80px #00000073; height: 844px; overflow: hidden; width: 390px; }
-      .product { color: #18181b; padding: 28px; }
-      .eyebrow { color: #71717a; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
-      h3 { font-size: 30px; line-height: 1.1; margin: 16px 0 8px; }
-      .copy { color: #52525b; line-height: 1.5; }
-      .card { border: 1px solid #e4e4e7; border-radius: 14px; margin-top: 28px; padding: 18px; }
-      .bar { background: #e4e4e7; border-radius: 5px; height: 10px; margin-top: 13px; }
-      .bar.short { width: 60%; }
-      .button { background: #18181b; border-radius: 10px; color: white; margin-top: 28px; padding: 14px; text-align: center; }
-      .hint { bottom: 20px; color: #71717a; font-size: 13px; left: 24px; position: fixed; pointer-events: none; }
+      .world {
+        position: absolute;
+        inset: 0 auto auto 0;
+        transform-origin: top left;
+      }
+      .artboard {
+        position: absolute;
+        width: 390px;
+      }
+      .label {
+        --inverse-zoom: 1;
+        --label-width: 390px;
+        bottom: calc(844px + 12px * var(--inverse-zoom));
+        left: 0;
+        position: absolute;
+        transform: scale(var(--inverse-zoom));
+        transform-origin: bottom left;
+        width: var(--label-width);
+      }
+      .section-label {
+        --inverse-zoom: 1;
+        left: 140px;
+        position: absolute;
+        top: calc(190px - 164px * var(--inverse-zoom));
+        transform: scale(var(--inverse-zoom));
+        transform-origin: bottom left;
+      }
+      .section {
+        margin: 0 0 8px;
+        color: #71717a;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .screen-label {
+        align-items: end;
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+      }
+      .screen-copy {
+        flex: 1;
+        min-width: 0;
+      }
+      .screen-title {
+        font-size: 24px;
+        font-weight: 500;
+        line-height: 32px;
+        margin: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .screen-meta {
+        color: #71717a;
+        font-size: 18px;
+        line-height: 26px;
+        margin: 8px 0 0;
+      }
+      .focus {
+        background: transparent;
+        border: 0;
+        border-radius: 6px;
+        color: #a1a1aa;
+        cursor: pointer;
+        font: inherit;
+        font-size: 14px;
+        padding: 8px;
+      }
+      .focus:hover {
+        background: #ffffff16;
+        color: white;
+      }
+      .frame {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 24px 80px #00000073;
+        height: 844px;
+        overflow: hidden;
+        width: 390px;
+      }
+      .product {
+        color: #18181b;
+        padding: 28px;
+      }
+      .eyebrow {
+        color: #71717a;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      h3 {
+        font-size: 30px;
+        line-height: 1.1;
+        margin: 16px 0 8px;
+      }
+      .copy {
+        color: #52525b;
+        line-height: 1.5;
+      }
+      .card {
+        border: 1px solid #e4e4e7;
+        border-radius: 14px;
+        margin-top: 28px;
+        padding: 18px;
+      }
+      .bar {
+        background: #e4e4e7;
+        border-radius: 5px;
+        height: 10px;
+        margin-top: 13px;
+      }
+      .bar.short {
+        width: 60%;
+      }
+      .button {
+        background: #18181b;
+        border-radius: 10px;
+        color: white;
+        margin-top: 28px;
+        padding: 14px;
+        text-align: center;
+      }
+      .hint {
+        bottom: 20px;
+        color: #71717a;
+        font-size: 13px;
+        left: 24px;
+        position: fixed;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
     <main class="canvas" id="canvas">
       <div class="world" id="world">
+        <h2 class="section-label section">Key states &amp; responsive</h2>
         <article class="artboard" style="left: 140px; top: 190px">
-          <div class="label"><p class="section">Key states &amp; responsive</p><header class="screen-label"><div class="screen-copy"><h2 class="screen-title">Repositories</h2><p class="screen-meta">First run · Empty</p></div><button class="focus">Focus</button></header></div>
-          <div class="frame"><div class="product"><span class="eyebrow">Trace</span><h3>Your repositories</h3><p class="copy">Connect a repository to start building with your team.</p><div class="card"><strong>GitHub connection</strong><div class="bar"></div><div class="bar short"></div></div><div class="button">Connect repository</div></div></div>
+          <div class="label">
+            <header class="screen-label">
+              <div class="screen-copy">
+                <h2 class="screen-title">Repositories</h2>
+                <p class="screen-meta">First run · Empty</p>
+              </div>
+              <button class="focus">Focus</button>
+            </header>
+          </div>
+          <div class="frame">
+            <div class="product">
+              <span class="eyebrow">Trace</span>
+              <h3>Your repositories</h3>
+              <p class="copy">Connect a repository to start building with your team.</p>
+              <div class="card">
+                <strong>GitHub connection</strong>
+                <div class="bar"></div>
+                <div class="bar short"></div>
+              </div>
+              <div class="button">Connect repository</div>
+            </div>
+          </div>
         </article>
         <article class="artboard" style="left: 650px; top: 190px">
-          <div class="label"><p class="section">Key states &amp; responsive</p><header class="screen-label"><div class="screen-copy"><h2 class="screen-title">A deliberately long design starter screen title that truncates</h2><p class="screen-meta">Desktop · Default</p></div><button class="focus">Focus</button></header></div>
-          <div class="frame"><div class="product"><span class="eyebrow">Trace</span><h3>Project workspace</h3><p class="copy">A responsive canvas that keeps its labels readable while you zoom.</p><div class="card"><strong>Recent activity</strong><div class="bar"></div><div class="bar short"></div></div><div class="button">Open project</div></div></div>
+          <div class="label">
+            <header class="screen-label">
+              <div class="screen-copy">
+                <h2 class="screen-title">
+                  A deliberately long design starter screen title that truncates
+                </h2>
+                <p class="screen-meta">Desktop · Default</p>
+              </div>
+              <button class="focus">Focus</button>
+            </header>
+          </div>
+          <div class="frame">
+            <div class="product">
+              <span class="eyebrow">Trace</span>
+              <h3>Project workspace</h3>
+              <p class="copy">A responsive canvas that keeps its labels readable while you zoom.</p>
+              <div class="card">
+                <strong>Recent activity</strong>
+                <div class="bar"></div>
+                <div class="bar short"></div>
+              </div>
+              <div class="button">Open project</div>
+            </div>
+          </div>
         </article>
       </div>
-      <p class="hint">Drag to pan · Pinch or scroll to zoom · Preview controls are intentionally hidden</p>
+      <p class="hint">
+        Drag to pan · Pinch or scroll to zoom · Preview controls are intentionally hidden
+      </p>
     </main>
     <script>
-      const canvas = document.querySelector('#canvas');
-      const world = document.querySelector('#world');
-      const labels = [...document.querySelectorAll('.label')];
+      const canvas = document.querySelector("#canvas");
+      const world = document.querySelector("#world");
+      const labels = [...document.querySelectorAll(".label")];
+      const sectionLabels = [...document.querySelectorAll(".section-label")];
       let viewport = { zoom: 0.72, x: 20, y: 40 };
       const pointers = new Map();
       let drag = null;
       let pinch = null;
-      const clamp = value => Math.min(2, Math.max(.1, value));
+      const clamp = (value) => Math.min(2, Math.max(0.1, value));
       const midpoint = ([a, b]) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
       const distance = ([a, b]) => Math.hypot(b.x - a.x, b.y - a.y);
       function render() {
         world.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`;
-        canvas.style.backgroundPosition = `${viewport.x * .25}px ${viewport.y * .25}px`;
+        canvas.style.backgroundPosition = `${viewport.x * 0.25}px ${viewport.y * 0.25}px`;
         for (const label of labels) {
-          label.style.setProperty('--inverse-zoom', 1 / viewport.zoom);
-          label.style.setProperty('--label-width', `${390 * viewport.zoom}px`);
+          label.style.setProperty("--inverse-zoom", 1 / viewport.zoom);
+          label.style.setProperty("--label-width", `${390 * viewport.zoom}px`);
         }
+        for (const label of sectionLabels)
+          label.style.setProperty("--inverse-zoom", 1 / viewport.zoom);
       }
       function zoomAt(start, point, startDistance, currentDistance) {
-        const zoom = clamp(start.zoom * currentDistance / startDistance);
+        const zoom = clamp((start.zoom * currentDistance) / startDistance);
         const worldX = (start.point.x - start.viewport.x) / start.viewport.zoom;
         const worldY = (start.point.y - start.viewport.y) / start.viewport.zoom;
         viewport = { zoom, x: point.x - worldX * zoom, y: point.y - worldY * zoom };
       }
-      canvas.addEventListener('pointerdown', event => {
+      canvas.addEventListener("pointerdown", (event) => {
         canvas.setPointerCapture(event.pointerId);
         pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         if (pointers.size >= 2) {
           const pair = [...pointers.values()].slice(0, 2);
           pinch = { viewport: { ...viewport }, point: midpoint(pair), distance: distance(pair) };
           drag = null;
-        } else drag = { id: event.pointerId, x: event.clientX, y: event.clientY, viewport: { ...viewport } };
+        } else
+          drag = {
+            id: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            viewport: { ...viewport },
+          };
       });
-      canvas.addEventListener('pointermove', event => {
+      canvas.addEventListener("pointermove", (event) => {
         if (!pointers.has(event.pointerId)) return;
         pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         const pair = [...pointers.values()].slice(0, 2);
-        if (pinch && pair.length === 2) zoomAt(pinch, midpoint(pair), pinch.distance, distance(pair));
-        else if (drag?.id === event.pointerId) viewport = { ...drag.viewport, x: drag.viewport.x + event.clientX - drag.x, y: drag.viewport.y + event.clientY - drag.y };
+        if (pinch && pair.length === 2)
+          zoomAt(pinch, midpoint(pair), pinch.distance, distance(pair));
+        else if (drag?.id === event.pointerId)
+          viewport = {
+            ...drag.viewport,
+            x: drag.viewport.x + event.clientX - drag.x,
+            y: drag.viewport.y + event.clientY - drag.y,
+          };
         render();
       });
       function endPointer(event) {
-        pointers.delete(event.pointerId); pinch = null;
-        if (pointers.size === 1) { const [id, point] = pointers.entries().next().value; drag = { id, x: point.x, y: point.y, viewport: { ...viewport } }; }
-        else drag = null;
+        pointers.delete(event.pointerId);
+        pinch = null;
+        if (pointers.size === 1) {
+          const [id, point] = pointers.entries().next().value;
+          drag = { id, x: point.x, y: point.y, viewport: { ...viewport } };
+        } else drag = null;
       }
-      canvas.addEventListener('pointerup', endPointer); canvas.addEventListener('pointercancel', endPointer);
-      canvas.addEventListener('wheel', event => { event.preventDefault(); const point = { x: event.clientX, y: event.clientY }; const zoom = clamp(viewport.zoom * Math.exp(-event.deltaY * .002)); const worldX = (point.x - viewport.x) / viewport.zoom; const worldY = (point.y - viewport.y) / viewport.zoom; viewport = { zoom, x: point.x - worldX * zoom, y: point.y - worldY * zoom }; render(); }, { passive: false });
+      canvas.addEventListener("pointerup", endPointer);
+      canvas.addEventListener("pointercancel", endPointer);
+      canvas.addEventListener(
+        "wheel",
+        (event) => {
+          event.preventDefault();
+          const point = { x: event.clientX, y: event.clientY };
+          const zoom = clamp(viewport.zoom * Math.exp(-event.deltaY * 0.002));
+          const worldX = (point.x - viewport.x) / viewport.zoom;
+          const worldY = (point.y - viewport.y) / viewport.zoom;
+          viewport = { zoom, x: point.x - worldX * zoom, y: point.y - worldY * zoom };
+          render();
+        },
+        { passive: false },
+      );
       render();
     </script>
   </body>
