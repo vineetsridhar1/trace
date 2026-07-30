@@ -3855,11 +3855,6 @@ export type AppPreviewStateQuery = {
     exitCode?: number | null;
     lastError?: string | null;
   }>;
-  sessionGroup?: {
-    __typename?: "SessionGroup";
-    id: string;
-    designPreviewUrl?: string | null;
-  } | null;
 };
 
 export type SessionGroupFileTreeQueryVariables = Exact<{
@@ -8572,24 +8567,6 @@ export const AppPreviewStateDocument = {
                 ],
               },
             ],
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "sessionGroup" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "id" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
-              ],
-            },
           },
         ],
       },
