@@ -9,6 +9,7 @@ import type { InteractionMode } from "../session/interactionModes";
 import { getReasoningEffortsForTool } from "../session/modelOptions";
 import type { ToolOptionValue } from "../session/picker/pickerShared";
 import { HomeRepoPicker } from "./HomeRepoPicker";
+import { externalPromptNeedsSync } from "./home-composer-sync";
 
 export function HomeComposer({
   prompt,
@@ -46,6 +47,7 @@ export function HomeComposer({
   onSubmit: (prompt: string, mode: InteractionMode) => Promise<boolean>;
 }) {
   const editorRef = useRef<ChatEditorHandle>(null);
+  const lastEditorTextRef = useRef(prompt);
   const focusRequest = useHomeComposerStore((state) => state.focusRequest);
   const prefill = useHomeComposerStore((state) => state.prefill);
   const consumePrefill = useHomeComposerStore((state) => state.consumePrefill);
@@ -58,6 +60,7 @@ export function HomeComposer({
 
   useEffect(() => {
     if (!prefill) return;
+    lastEditorTextRef.current = prefill.text;
     editorRef.current?.setText(prefill.text);
     consumePrefill(prefill.id);
     requestAnimationFrame(() => editorRef.current?.focus());
@@ -65,7 +68,8 @@ export function HomeComposer({
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (!editor || editor.getText() === prompt) return;
+    if (!editor || !externalPromptNeedsSync(prompt, lastEditorTextRef.current)) return;
+    lastEditorTextRef.current = prompt;
     editor.setText(prompt);
   }, [prompt]);
 
@@ -78,11 +82,13 @@ export function HomeComposer({
         disabled={submitting}
         submitDisabled={!canSubmit}
         onSubmit={async (_html, text) => {
-          onPromptChange(text);
           const created = await onSubmit(text, mode);
           if (!created) throw new Error("Session creation failed");
         }}
-        onChange={(text) => onPromptChange(text)}
+        onChange={(text) => {
+          lastEditorTextRef.current = text;
+          onPromptChange(text);
+        }}
         onShiftTab={() => onModeChange(mode)}
         onAttachClick={() =>
           toast.info("Start the session first, then add attachments in its composer.")
