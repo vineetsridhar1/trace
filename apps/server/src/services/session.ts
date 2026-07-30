@@ -1105,7 +1105,23 @@ const ANIMATION_SESSION_INSTRUCTION = `\n\n<system-instruction>
 This is a Trace Animation session, not an App or Coding session. Build one interactive motion piece in the provided Vite/React/Tailwind starter, not a full-stack application or product screen. Before changing it, read AGENTS.md and docs/ai-guidance.md. Keep the artifact in src/Animation.tsx; do not modify src/main.tsx. Use framer-motion for animation and interaction (spring transitions, gestures, AnimatePresence for enter/exit) and build for real pointer/keyboard interaction, not a passive autoplay loop. Keep src/Animation.tsx self-contained (React, framer-motion, Tailwind classes, and small local helpers only) — the user's goal is to copy this one file into their own codebase, so avoid dependencies or file-spanning state that would make that harder. Do not add routing, a backend, a database, or external integrations. The dev server is already running on port 3000 and hot-reloads your file changes; do not start another server. Run pnpm review to drive the live preview headlessly and capture screenshots (playwright-core and a system Chromium are already installed for this — do not install your own), then look at the screenshots with your Read tool. Run pnpm test before delivery. Before every response that changes the animation, commit and push the changes to the configured managed origin.
 </system-instruction>`;
 
+// Prepended to every creation-session instruction so the agent nails down what
+// the user actually wants before building, rather than assuming and producing
+// something generic. Creation requests are usually specific in the user's head
+// but underspecified in the prompt.
+const CLARIFYING_QUESTIONS_INSTRUCTION = `\n\n<system-instruction>
+This is a creation session: the user is building something specific and wants it to match what they have in mind. Before you start building from a new request, first ask the user the clarifying questions you need so that what you create is exactly what the user wants, and wait for their answers — do not silently assume and jump straight to building. If you have an interactive tool for asking the user structured questions, use it so they can pick from options; otherwise just ask in your reply and stop for their response. Ask in a single upfront batch of a few high-value questions covering only the decisions that most shape the result: purpose and audience, the must-have scope and features, visual style and tone, the specific content or data to use, and any hard constraints. Do not ask about trivial or easily-reversible details, and never re-ask anything the user already specified. Only skip questions when the request is already detailed enough to build confidently, or the user tells you to just build it or to stop asking. Once the user has answered, proceed to build as instructed below; on later turns follow the same judgment — ask when a new request is ambiguous, otherwise keep working.
+</system-instruction>`;
+
 function generatedProjectInstruction(
+  kind: SessionGroupKind | string | null | undefined,
+  selected?: { version: number; contentDigest: string; designSystem: { name: string } } | null,
+): string | undefined {
+  const base = generatedProjectBaseInstruction(kind, selected);
+  return base === undefined ? undefined : CLARIFYING_QUESTIONS_INSTRUCTION + base;
+}
+
+function generatedProjectBaseInstruction(
   kind: SessionGroupKind | string | null | undefined,
   selected?: { version: number; contentDigest: string; designSystem: { name: string } } | null,
 ): string | undefined {
