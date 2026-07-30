@@ -83,4 +83,31 @@ The service owns checkpoint selection.
 
     expect(html).toContain("Run unit tests");
   });
+
+  it("renders the visual block shapes produced by the bundled skill", () => {
+    const html = renderToStaticMarkup(
+      createElement(PlanMdx, {
+        content: `
+<Diagram frame="hide" html={'<div><strong>Architecture</strong></div>'} />
+
+<AnnotatedCode language="ts" code={"const score = 3;"} annotations={[{"lines":"1","label":"Score","note":"Award once."}]} />
+
+<DesignBoard>
+  <Section title="Scoring flow">
+    <Artboard id="score" title="Scoreboard">
+      <Screen surface="browser" frame="show" html={'<div><strong>Alex 3</strong></div>'} />
+    </Artboard>
+    <Annotation targetId="score" placement="right" title="Award">Update once.</Annotation>
+  </Section>
+</DesignBoard>
+
+<QuestionForm title="Open Questions" questions={[{"id":"turns","title":"How many turns?","mode":"single","options":[{"id":"five","label":"Five","recommended":true}]}]} />`,
+        steerable: false,
+      }),
+    );
+
+    expect(html).toContain("Score");
+    expect(html).toContain("DesignBoard");
+    expect(html).toContain("How many turns?");
+  });
 });

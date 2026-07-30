@@ -1,6 +1,7 @@
 import { lazy, memo, Suspense } from "react";
 import { FileText } from "lucide-react";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
+import { PlanRenderErrorBoundary } from "./PlanRenderErrorBoundary";
 
 const PlanMdx = lazy(() =>
   import("./PlanMdx").then((module) => ({ default: module.PlanMdx })),
@@ -38,21 +39,23 @@ export const PlanFileReviewPanel = memo(function PlanFileReviewPanel({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <div className="mx-auto max-w-5xl">
-          <Suspense
-            fallback={
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                Loading visual plan…
-              </div>
-            }
-          >
-            <PlanMdx
-              content={content}
-              steerable={ready}
-              comments={comments}
-              onAddComment={onAddComment}
-              onRemoveComment={onRemoveComment}
-            />
-          </Suspense>
+          <PlanRenderErrorBoundary>
+            <Suspense
+              fallback={
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  Loading visual plan…
+                </div>
+              }
+            >
+              <PlanMdx
+                content={content}
+                steerable={ready}
+                comments={comments}
+                onAddComment={onAddComment}
+                onRemoveComment={onRemoveComment}
+              />
+            </Suspense>
+          </PlanRenderErrorBoundary>
         </div>
       </div>
     </aside>
