@@ -211,9 +211,9 @@ export function BridgeAccessSection() {
         title="Devices & access"
         description="Your connected devices, mobile pairing, and who may run sessions on your local bridges."
       />
-      <div className="mb-8 grid items-start gap-4 lg:grid-cols-[3fr_2fr]">
-        <CurrentBridgeSection onRenamed={fetchRuntimes} />
+      <div className="mb-8 space-y-4">
         <MobilePairingSection />
+        <CurrentBridgeSection onRenamed={fetchRuntimes} />
       </div>
 
       {loading ? (
