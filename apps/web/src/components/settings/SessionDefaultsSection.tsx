@@ -113,10 +113,9 @@ export function SessionDefaultsSection() {
     }
   };
 
-  const handleAutoArchiveChange = async (value: string | null) => {
-    if (value !== "yes" && value !== "no") return;
+  const handleAutoArchiveChange = async (value: boolean) => {
     try {
-      await saveDefaults({ autoArchiveMergedSessions: value === "yes" });
+      await saveDefaults({ autoArchiveMergedSessions: value });
     } catch (error) {
       toast.error("Failed to update session defaults", {
         description: error instanceof Error ? error.message : undefined,
@@ -124,10 +123,9 @@ export function SessionDefaultsSection() {
     }
   };
 
-  const handleClaudeInChromeChange = async (value: string | null) => {
-    if (value !== "yes" && value !== "no") return;
+  const handleClaudeInChromeChange = async (value: boolean) => {
     try {
-      await saveDefaults({ enableClaudeInChrome: value === "yes" });
+      await saveDefaults({ enableClaudeInChrome: value });
     } catch (error) {
       toast.error("Failed to update session defaults", {
         description: error instanceof Error ? error.message : undefined,
@@ -138,7 +136,9 @@ export function SessionDefaultsSection() {
   return (
     <div>
       <div className="mb-4">
-        <h2 className="text-base font-semibold text-foreground">Session Defaults</h2>
+        <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">
+          Session defaults
+        </h2>
         <p className="text-sm text-muted-foreground">
           Set your preferred coding tool, model, and effort. New sessions use these defaults.
         </p>
@@ -226,40 +226,54 @@ export function SessionDefaultsSection() {
           </div>
         </div>
 
-        <div className="border-t border-border pt-4">
-          <label className="mb-1.5 block text-sm text-muted-foreground">
-            Auto archive merged sessions
-          </label>
-          <Select
-            value={autoArchiveMergedSessions ? "yes" : "no"}
-            onValueChange={handleAutoArchiveChange}
-          >
-            <SelectTrigger className="w-full md:w-56">
-              <SelectValue>{autoArchiveMergedSessions ? "Yes" : "No"}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="yes">Yes</SelectItem>
-              <SelectItem value="no">No</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="border-t border-border pt-4">
-          <label className="mb-1.5 block text-sm text-muted-foreground">Claude in Chrome</label>
-          <Select
-            value={enableClaudeInChrome ? "yes" : "no"}
-            onValueChange={handleClaudeInChromeChange}
-          >
-            <SelectTrigger className="w-full md:w-56">
-              <SelectValue>{enableClaudeInChrome ? "Yes" : "No"}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="yes">Yes</SelectItem>
-              <SelectItem value="no">No</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="divide-y divide-border border-t border-border">
+          <SettingsToggle
+            label="Auto-archive merged sessions"
+            description="Move a session to the archive automatically when its pull request merges."
+            checked={autoArchiveMergedSessions}
+            onCheckedChange={handleAutoArchiveChange}
+          />
+          <SettingsToggle
+            label="Claude in Chrome"
+            description="Let Claude Code drive Chrome in cloud sessions for web tasks and UI verification."
+            checked={enableClaudeInChrome}
+            onCheckedChange={handleClaudeInChromeChange}
+          />
         </div>
       </div>
+    </div>
+  );
+}
+
+function SettingsToggle({
+  label,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-6 py-4">
+      <div>
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="mt-0.5 text-sm leading-5 text-muted-foreground">{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => void onCheckedChange(!checked)}
+        className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full border transition-colors ${checked ? "border-zinc-100 bg-zinc-100" : "border-border bg-surface-deep"}`}
+      >
+        <span
+          className={`absolute top-[2px] h-[18px] w-[18px] rounded-full transition-all ${checked ? "left-[22px] bg-zinc-950" : "left-[3px] bg-zinc-400"}`}
+        />
+      </button>
     </div>
   );
 }

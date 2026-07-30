@@ -41,7 +41,10 @@ const DELETE_API_TOKEN = gql`
 
 const SET_CODEX_CREDENTIAL = gql`
   mutation SetCodexCredential($input: SetCodexCredentialInput!) {
-    setCodexCredential(input: $input) { method updatedAt }
+    setCodexCredential(input: $input) {
+      method
+      updatedAt
+    }
   }
 `;
 
@@ -105,7 +108,10 @@ export function ApiTokensSection() {
   const user = useAuthStore((s: { user: { id: string } | null }) => s.user);
   const isDesktopShell = typeof window !== "undefined" && typeof window.trace !== "undefined";
   const [tokens, setTokens] = useState<TokenStatus[]>([]);
-  const [codexCredential, setCodexCredential] = useState<{ method: string; updatedAt: string } | null>(null);
+  const [codexCredential, setCodexCredential] = useState<{
+    method: string;
+    updatedAt: string;
+  } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [showInput, setShowInput] = useState(false);
@@ -119,7 +125,9 @@ export function ApiTokensSection() {
     const result = await client.query(API_TOKENS_QUERY, {}).toPromise();
     if (result.data?.myApiTokens) {
       setTokens(result.data.myApiTokens as TokenStatus[]);
-      setCodexCredential(result.data.myCodexCredential as { method: string; updatedAt: string } | null);
+      setCodexCredential(
+        result.data.myCodexCredential as { method: string; updatedAt: string } | null,
+      );
     }
   }, [user]);
 
@@ -138,7 +146,9 @@ export function ApiTokensSection() {
     method: "chatgpt_session" | "access_token" | "api_key",
     credential: string,
   ) {
-    const result = await client.mutation(SET_CODEX_CREDENTIAL, { input: { method, credential } }).toPromise();
+    const result = await client
+      .mutation(SET_CODEX_CREDENTIAL, { input: { method, credential } })
+      .toPromise();
     if (result.error) throw new Error(result.error.message);
     fetchTokens();
   }
@@ -187,9 +197,7 @@ export function ApiTokensSection() {
       const token = await window.trace.getGithubAuthToken();
       await saveToken("github", token);
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Failed to read GitHub CLI token",
-      );
+      setErrorMessage(error instanceof Error ? error.message : "Failed to read GitHub CLI token");
     } finally {
       setImportingGithubToken(false);
     }
@@ -209,7 +217,7 @@ export function ApiTokensSection() {
   return (
     <div>
       <div className="mb-4">
-        <h2 className="text-base font-semibold text-foreground">API Keys</h2>
+        <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">API keys</h2>
         <p className="text-sm text-muted-foreground">
           Tokens are encrypted and used only for integrations that need them.
         </p>
@@ -247,8 +255,8 @@ export function ApiTokensSection() {
                 <div className="flex items-center gap-2">
                   {token.isSet && !isEditing && (
                     <>
-                      <span className="flex items-center gap-1 text-xs text-emerald-500">
-                        <Check size={12} />
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
                         Configured
                       </span>
                       {canShowGithubCliImport && (
@@ -264,7 +272,11 @@ export function ApiTokensSection() {
                         </Button>
                       )}
                       {canAuthenticateCodex && (
-                        <Button variant="outline" size="sm" onClick={() => setCodexAuthenticationOpen(true)}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCodexAuthenticationOpen(true)}
+                        >
                           Authenticate Codex
                         </Button>
                       )}
@@ -388,9 +400,7 @@ export function ApiTokensSection() {
                       {importingGithubToken ? "Importing..." : "Import from GitHub CLI"}
                     </Button>
                   )}
-                  {errorMessage && (
-                    <p className="text-xs text-destructive">{errorMessage}</p>
-                  )}
+                  {errorMessage && <p className="text-xs text-destructive">{errorMessage}</p>}
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"

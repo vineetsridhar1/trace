@@ -38,10 +38,10 @@ export function OrgSecretsSection() {
   return (
     <div>
       <div className="mb-4">
-        <h2 className="text-base font-semibold text-foreground">Org Secrets</h2>
+        <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">Secrets</h2>
         <p className="text-sm text-muted-foreground">
-          Manage encrypted organization secrets for runtime launchers and shared server actions.
-          Add GITHUB_TOKEN to let users view GitHub files and diffs without personal setup.
+          Manage encrypted workspace secrets for runtime launchers and shared server actions. Add
+          GITHUB_TOKEN to let users view GitHub files and diffs without personal setup.
         </p>
       </div>
 

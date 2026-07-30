@@ -15,7 +15,9 @@ export function AgentEnvironmentsSection() {
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">Agent Environments</h2>
+          <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">
+            Agent environments
+          </h2>
           <p className="text-sm text-muted-foreground">
             Manage where agent sessions can run for this organization.
           </p>

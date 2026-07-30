@@ -86,6 +86,12 @@ export function IntegrationsSection() {
 
   return (
     <section className="space-y-3">
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">Integrations</h2>
+        <p className="text-sm text-muted-foreground">
+          Connect outside tools to this workspace and keep work flowing into Trace.
+        </p>
+      </div>
       <div className="overflow-hidden rounded-md border border-border bg-surface-elevated">
         {loading && !settings ? (
           <div className="p-4 text-sm text-muted-foreground">Loading...</div>
@@ -164,15 +170,21 @@ export function IntegrationsSection() {
                 <div className="mt-2 grid gap-2 text-sm text-muted-foreground md:grid-cols-3">
                   <div>
                     <span className="font-medium text-foreground">1. Invite Trace</span>
-                    <p>Run <code className="text-foreground">/invite @Trace</code> in Slack.</p>
+                    <p>
+                      Run <code className="text-foreground">/invite @Trace</code> in Slack.
+                    </p>
                   </div>
                   <div>
                     <span className="font-medium text-foreground">2. Bind channel</span>
-                    <p>Run <code className="text-foreground">/trace bind</code> in that channel.</p>
+                    <p>
+                      Run <code className="text-foreground">/trace bind</code> in that channel.
+                    </p>
                   </div>
                   <div>
                     <span className="font-medium text-foreground">3. Start sessions</span>
-                    <p>Mention <code className="text-foreground">@trace</code> with a prompt.</p>
+                    <p>
+                      Mention <code className="text-foreground">@trace</code> with a prompt.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -196,9 +208,7 @@ export function IntegrationsSection() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  No Slack channels are bound yet.
-                </p>
+                <p className="text-sm text-muted-foreground">No Slack channels are bound yet.</p>
               )}
             </div>
           </div>

@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "sections": [
+    {
+      "id": "workspace-settings",
+      "name": "Workspace settings",
+      "screenIds": [
+        "settings-members",
+        "settings-repositories",
+        "settings-agent-environments",
+        "settings-secrets",
+        "settings-integrations"
+      ]
+    },
+    {
+      "id": "personal-settings",
+      "name": "Personal settings",
+      "screenIds": ["settings-session-defaults", "settings-api-keys", "settings-devices"]
+    },
+    {
+      "id": "states-responsive",
+      "name": "Key states & responsive",
+      "screenIds": ["settings-repositories-empty", "settings-mobile-nav"]
+    }
+  ],
+  "screens": [
+    {
+      "id": "settings-members",
+      "name": "Members",
+      "component": "./screens/SettingsMembers.tsx",
+      "variation": "Workspace",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-repositories",
+      "name": "Repositories",
+      "component": "./screens/SettingsRepositories.tsx",
+      "variation": "Workspace",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-agent-environments",
+      "name": "Agent environments",
+      "component": "./screens/SettingsAgentEnvironments.tsx",
+      "variation": "Workspace",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-secrets",
+      "name": "Secrets",
+      "component": "./screens/SettingsSecrets.tsx",
+      "variation": "Workspace",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-integrations",
+      "name": "Integrations",
+      "component": "./screens/SettingsIntegrations.tsx",
+      "variation": "Workspace",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-session-defaults",
+      "name": "Session defaults",
+      "component": "./screens/SettingsSessionDefaults.tsx",
+      "variation": "Personal",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-api-keys",
+      "name": "API keys",
+      "component": "./screens/SettingsApiKeys.tsx",
+      "variation": "Personal",
+      "state": "Editing",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-devices",
+      "name": "Devices & access",
+      "component": "./screens/SettingsDevices.tsx",
+      "variation": "Personal",
+      "state": "Pending approval",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-repositories-empty",
+      "name": "Repositories",
+      "component": "./screens/SettingsRepositoriesEmpty.tsx",
+      "variation": "First run",
+      "state": "Empty",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-mobile-nav",
+      "name": "Settings home",
+      "component": "./screens/SettingsMobileNav.tsx",
+      "variation": "Mobile",
+      "state": "Default",
+      "viewport": { "width": 390, "height": 844 }
+    }
+  ]
+}

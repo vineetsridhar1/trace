@@ -50,6 +50,17 @@ export function AgentEnvironmentRow({
         <button type="button" onClick={onEdit} className="min-w-0 flex-1 text-left">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-sm font-medium text-foreground">{environment.name}</h3>
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                environment.enabled
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                  : "border-border bg-surface-deep text-muted-foreground",
+              )}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+              {environment.enabled ? "Enabled" : "Disabled"}
+            </span>
           </div>
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span>{formatAdapterType(environment.adapterType)}</span>
@@ -60,7 +71,10 @@ export function AgentEnvironmentRow({
               <span className="truncate">{config.statusUrl}</span>
             ) : null}
           </div>
-          <p className={cn("mt-2 text-xs", testStatusClass)}>{testStatusMessage}</p>
+          <p className={cn("mt-2 flex items-center gap-1.5 text-xs", testStatusClass)}>
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {testStatusMessage}
+          </p>
         </button>
 
         <Button

@@ -101,7 +101,8 @@ export function BridgeAccessSection() {
     (request: BridgeAccessRequest): BridgeAccessCapability[] => {
       const terminal =
         grantTerminalByRequestId[request.id] ??
-        (request.requestedCapabilities?.includes("terminal") ?? false);
+        request.requestedCapabilities?.includes("terminal") ??
+        false;
       return terminal ? ["session", "terminal"] : ["session"];
     },
     [grantTerminalByRequestId],
@@ -124,10 +125,9 @@ export function BridgeAccessSection() {
             input?.scopeType === "all_sessions"
               ? null
               : (input?.sessionGroupId ?? request.sessionGroup?.id ?? null),
-          expiresAt:
-            Object.prototype.hasOwnProperty.call(input ?? {}, "expiresAt")
-              ? input?.expiresAt
-              : (request.requestedExpiresAt ?? null),
+          expiresAt: Object.prototype.hasOwnProperty.call(input ?? {}, "expiresAt")
+            ? input?.expiresAt
+            : (request.requestedExpiresAt ?? null),
           capabilities: buildCapabilities(request),
         })
         .toPromise();
@@ -196,14 +196,16 @@ export function BridgeAccessSection() {
 
   return (
     <div>
-      <MobilePairingSection />
-      <CurrentBridgeSection onRenamed={fetchRuntimes} />
       <div className="mb-4">
-        <h2 className="text-base font-semibold text-foreground">Bridge Access</h2>
+        <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">
+          Devices &amp; access
+        </h2>
         <p className="text-sm text-muted-foreground">
           Review requests for your local bridges, approve shared access, and revoke grants.
         </p>
       </div>
+      <MobilePairingSection />
+      <CurrentBridgeSection onRenamed={fetchRuntimes} />
 
       {loading ? (
         <div className="rounded-lg border border-border bg-surface-deep p-4 text-sm text-muted-foreground">
@@ -223,12 +225,13 @@ export function BridgeAccessSection() {
                     <Laptop size={16} className="text-muted-foreground" />
                     <h3 className="text-sm font-semibold text-foreground">{runtime.label}</h3>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                         runtime.connected
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : "bg-border text-muted-foreground"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                          : "border-border bg-surface-deep text-muted-foreground"
                       }`}
                     >
+                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
                       {runtime.connected ? "Connected" : "Offline"}
                     </span>
                   </div>

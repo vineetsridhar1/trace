@@ -14,6 +14,7 @@ import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { WEBHOOK_REPO_REMOTE_REQUIRED, hasRepoRemote } from "../../lib/repo-capabilities";
 import { isLocalMode } from "../../lib/runtime-mode";
 import { RepoApplicationsSection } from "./repo-applications/RepoApplicationsSection";
+import { cn } from "../../lib/utils";
 
 const isElectron = typeof window.trace?.getRepoConfig === "function";
 const LOCAL_MODE_WEBHOOK_DISABLED = "Local mode does not support GitHub webhooks.";
@@ -140,11 +141,17 @@ export function RepoCard({
             )}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <p
-              className={`text-xs ${webhookActive ? "text-emerald-500" : "text-muted-foreground"}`}
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                webhookActive
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                  : "border-border bg-surface-deep text-muted-foreground",
+              )}
             >
-              {webhookActive ? "GitHub webhook connected" : "GitHub webhook not connected"}
-            </p>
+              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+              {webhookActive ? "Webhook connected" : "Webhook off"}
+            </span>
             <DisabledTooltip message={webhookDisabledReason}>
               <Button
                 variant={webhookActive ? "ghost" : "outline"}
