@@ -3615,6 +3615,12 @@ export type SessionApplicationsStateQuery = {
           workingDirectory?: string | null;
           env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
         }>;
+        runScripts: Array<{
+          __typename?: "RepoRunScript";
+          id: string;
+          name: string;
+          command: string;
+        }>;
         applications: Array<{
           __typename?: "RepoApplicationDefinition";
           id: string;
@@ -4995,11 +5001,42 @@ export type ReposQuery = {
     webhookActive: boolean;
     applicationConfig: {
       __typename?: "RepoApplicationConfig";
+      setupScripts: Array<{
+        __typename?: "RepoSetupScript";
+        id: string;
+        name: string;
+        command: string;
+        workingDirectory?: string | null;
+        env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+      }>;
       runScripts: Array<{
         __typename?: "RepoRunScript";
         id: string;
         name: string;
         command: string;
+      }>;
+      applications: Array<{
+        __typename?: "RepoApplicationDefinition";
+        id: string;
+        name: string;
+        processes: Array<{
+          __typename?: "RepoProcessDefinition";
+          id: string;
+          name: string;
+          command: string;
+          workingDirectory?: string | null;
+          required: boolean;
+          env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
+          ports: Array<{
+            __typename?: "RepoPortDefinition";
+            id: string;
+            label: string;
+            port: number;
+            protocol: string;
+            defaultForwardingEnabled: boolean;
+            healthPath?: string | null;
+          }>;
+        }>;
       }>;
     };
   }>;
@@ -7622,6 +7659,18 @@ export const SessionApplicationsStateDocument = {
                                       ],
                                     },
                                   },
+                                ],
+                              },
+                            },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "runScripts" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "id" } },
+                                  { kind: "Field", name: { kind: "Name", value: "name" } },
+                                  { kind: "Field", name: { kind: "Name", value: "command" } },
                                 ],
                               },
                             },
@@ -12137,6 +12186,30 @@ export const ReposDocument = {
                     selections: [
                       {
                         kind: "Field",
+                        name: { kind: "Name", value: "setupScripts" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "command" } },
+                            { kind: "Field", name: { kind: "Name", value: "workingDirectory" } },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "env" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "key" } },
+                                  { kind: "Field", name: { kind: "Name", value: "secretName" } },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
                         name: { kind: "Name", value: "runScripts" },
                         selectionSet: {
                           kind: "SelectionSet",
@@ -12144,6 +12217,72 @@ export const ReposDocument = {
                             { kind: "Field", name: { kind: "Name", value: "id" } },
                             { kind: "Field", name: { kind: "Name", value: "name" } },
                             { kind: "Field", name: { kind: "Name", value: "command" } },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "applications" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "processes" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "id" } },
+                                  { kind: "Field", name: { kind: "Name", value: "name" } },
+                                  { kind: "Field", name: { kind: "Name", value: "command" } },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "workingDirectory" },
+                                  },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "env" },
+                                    selectionSet: {
+                                      kind: "SelectionSet",
+                                      selections: [
+                                        { kind: "Field", name: { kind: "Name", value: "key" } },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "secretName" },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                  { kind: "Field", name: { kind: "Name", value: "required" } },
+                                  {
+                                    kind: "Field",
+                                    name: { kind: "Name", value: "ports" },
+                                    selectionSet: {
+                                      kind: "SelectionSet",
+                                      selections: [
+                                        { kind: "Field", name: { kind: "Name", value: "id" } },
+                                        { kind: "Field", name: { kind: "Name", value: "label" } },
+                                        { kind: "Field", name: { kind: "Name", value: "port" } },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "protocol" },
+                                        },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "defaultForwardingEnabled" },
+                                        },
+                                        {
+                                          kind: "Field",
+                                          name: { kind: "Name", value: "healthPath" },
+                                        },
+                                      ],
+                                    },
+                                  },
+                                ],
+                              },
+                            },
                           ],
                         },
                       },

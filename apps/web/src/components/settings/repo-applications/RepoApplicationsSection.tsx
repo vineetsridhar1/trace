@@ -4,18 +4,17 @@ import { useAuthStore, useEntityField, useEntityStore } from "@trace/client-core
 import type { OrgSecret, RepoApplicationConfig } from "@trace/gql";
 import { UPDATE_REPO_MUTATION } from "@trace/client-core";
 import { client } from "../../../lib/urql";
+import { withRepoApplicationConfigDefaults } from "../../../lib/repo-application-config";
 import { Button } from "../../ui/button";
 import { ORG_SECRETS_QUERY } from "../agent-environment-queries";
 import { ApplicationConfigDialog } from "./ApplicationConfigDialog";
-
-const EMPTY_CONFIG: RepoApplicationConfig = { setupScripts: [], runScripts: [], applications: [] };
 
 export function RepoApplicationsSection({ repoId }: { repoId: string }) {
   const applicationConfig = useEntityField("repos", repoId, "applicationConfig") as
     | RepoApplicationConfig
     | undefined;
   const repoName = useEntityField("repos", repoId, "name") ?? "Repository";
-  const config = applicationConfig ?? EMPTY_CONFIG;
+  const config = withRepoApplicationConfigDefaults(applicationConfig);
   const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);

@@ -19,6 +19,11 @@ export const APPLICATIONS_STATE_QUERY = gql`
               secretName
             }
           }
+          runScripts {
+            id
+            name
+            command
+          }
           applications {
             id
             name
