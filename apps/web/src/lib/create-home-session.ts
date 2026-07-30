@@ -3,13 +3,35 @@ import type { Channel, CodingTool, Repo, SessionGroupKind } from "@trace/gql";
 import { START_SESSION_MUTATION } from "@trace/client-core";
 import { client } from "./urql";
 import { navigateToSession } from "../stores/ui";
+import type { InteractionMode } from "../components/session/interactionModes";
 
 interface CreateHomeSessionInput {
   prompt: string;
   kind: SessionGroupKind;
   tool: CodingTool;
+  model: string | null;
+  reasoningEffort: string | null;
+  interactionMode: InteractionMode;
   repo: Repo | null;
   channels: Channel[];
+}
+
+export function buildHomeStartInput(
+  input: Omit<CreateHomeSessionInput, "channels">,
+  channel: Channel | null,
+) {
+  const linkedRepo = input.kind === "coding" ? input.repo : null;
+  return {
+    kind: input.kind,
+    tool: input.tool,
+    model: input.model,
+    reasoningEffort: input.reasoningEffort,
+    interactionMode: input.interactionMode,
+    prompt: input.prompt.trim(),
+    ...(linkedRepo ? { repoId: linkedRepo.id } : {}),
+    ...(channel ? { channelId: channel.id } : {}),
+    ...(input.kind !== "coding" ? { hosting: "cloud" as const } : {}),
+  };
 }
 
 export function resolveHomeCodingChannel(
@@ -27,6 +49,9 @@ export async function createHomeSession({
   prompt,
   kind,
   tool,
+  model,
+  reasoningEffort,
+  interactionMode,
   repo,
   channels,
 }: CreateHomeSessionInput): Promise<boolean> {
@@ -39,14 +64,18 @@ export async function createHomeSession({
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
-        input: {
-          kind,
-          tool,
-          prompt: normalizedPrompt,
-          ...(linkedRepo ? { repoId: linkedRepo.id } : {}),
-          ...(channel ? { channelId: channel.id } : {}),
-          ...(kind !== "coding" ? { hosting: "cloud" } : {}),
-        },
+        input: buildHomeStartInput(
+          {
+            prompt: normalizedPrompt,
+            kind,
+            tool,
+            model,
+            reasoningEffort,
+            interactionMode,
+            repo: linkedRepo,
+          },
+          channel,
+        ),
       })
       .toPromise();
 

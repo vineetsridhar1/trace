@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { LayoutTemplate, Paperclip, Send, Square } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { LayoutTemplate } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import {
   isSessionPreparing,
@@ -14,7 +14,7 @@ import {
   SEND_SESSION_MESSAGE_MUTATION,
   QUEUE_SESSION_MESSAGE_MUTATION,
 } from "@trace/client-core";
-import { type InteractionMode, MODE_CYCLE, MODE_CONFIG, wrapPrompt } from "./interactionModes";
+import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
 import { isDisconnected, canSendMessage, canQueueMessage } from "./sessionStatus";
@@ -22,23 +22,19 @@ import { SessionRecoveryPanel } from "./SessionRecoveryPanel";
 import { getModelLabel } from "./modelOptions";
 import { getToolLabel } from "./picker/pickerShared";
 import { TraceLoader } from "../ui/trace-loader";
-import { cn } from "../../lib/utils";
 import { toast } from "sonner";
 import {
   optimisticallyInsertSessionMessage,
   reconcileOptimisticSessionMessage,
   removeOptimisticSessionMessage,
 } from "@trace/client-core";
-import {
-  ChatEditor,
-  type ChatEditorHandle,
-  type ChatEditorSubmitOptions,
-} from "../chat/ChatEditor";
+import { type ChatEditorHandle, type ChatEditorSubmitOptions } from "../chat/ChatEditor";
+import { SessionComposer } from "./SessionComposer";
 import { useSlashCommands } from "./useSlashCommands";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { showToolNotInstalledToast } from "../../lib/coding-tool-install";
 import { useUIStore } from "../../stores/ui";
-import { ImageAttachmentBar, type FileAttachment } from "./ImageAttachmentBar";
+import type { FileAttachment } from "./ImageAttachmentBar";
 import { uploadFile } from "../../lib/upload";
 import { useAddAttachments, MAX_ATTACHMENTS } from "./useAddAttachments";
 import { useAuthStore } from "@trace/client-core";
@@ -48,10 +44,7 @@ import { useTerminalStore } from "../../stores/terminal";
 import { useAttachmentOpen } from "./AttachmentOpenContext";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
-import {
-  getSessionEmptyStateContent,
-  kindSupportsDesignImplementation,
-} from "./sessionEmptyState";
+import { getSessionEmptyStateContent, kindSupportsDesignImplementation } from "./sessionEmptyState";
 import { DesignPickerDialog } from "./DesignPickerDialog";
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
@@ -114,7 +107,6 @@ export function SessionInput({
   const [showDesignPicker, setShowDesignPicker] = useState(false);
   const isSendingRef = useRef(false);
   const hasAutoFocusedRef = useRef(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<ChatEditorHandle>(null);
   const isActive = agentStatus === "active";
   const isNotStarted = agentStatus === "not_started";
@@ -196,14 +188,6 @@ export function SessionInput({
   }, []);
 
   const addAttachments = useAddAttachments(sessionId);
-
-  const handleFileInputChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      addAttachments(Array.from(event.currentTarget.files ?? []));
-      event.currentTarget.value = "";
-    },
-    [addAttachments],
-  );
 
   const handleOpenAttachment = useCallback(
     (attachment: FileAttachment) => {
@@ -491,92 +475,58 @@ export function SessionInput({
             />
           )}
         </AnimatePresence>
-        <div
-          className={cn(
-            "relative rounded-2xl border bg-surface-mid px-2 pt-2 shadow-sm transition-colors focus-within:ring-1 focus-within:ring-border",
-            MODE_CONFIG[mode as InteractionMode].inputBorder,
-          )}
-        >
-        {!hasContent && (
-          <span className="pointer-events-none absolute right-3 top-2 text-[11px] text-muted-foreground">
-            <kbd className="font-sans">⌘L</kbd> to focus
-          </span>
-        )}
-        <ImageAttachmentBar
+        <SessionComposer
+          editorRef={editorRef}
+          mode={mode}
+          initialHtml={initialDraftHtml}
+          placeholder={placeholder}
+          disabled={!canSend || isSending}
+          submitDisabled={(!hasContent && images.length === 0) || !canSend || isSending}
+          attachmentDisabled={images.length >= MAX_ATTACHMENTS}
           attachments={images}
-          onRemove={handleRemoveImage}
+          slashCommands={slashCommands.commands}
+          onSubmit={handleSubmit}
+          onShiftTab={cycleMode}
+          onPasteFiles={addAttachments}
+          onFilesSelected={addAttachments}
+          onRemoveAttachment={handleRemoveImage}
           onOpenAttachment={handleOpenAttachment}
+          onChange={(text: string, html: string) => {
+            setHasContent(text.trim().length > 0);
+            setDraftText(sessionId, text, html);
+          }}
+          emptyHint={
+            !hasContent ? (
+              <span className="pointer-events-none absolute right-3 top-2 text-[11px] text-muted-foreground">
+                <kbd className="font-sans">⌘L</kbd> to focus
+              </span>
+            ) : null
+          }
+          afterAttachment={
+            kindSupportsDesignImplementation(groupKind) ? (
+              <button
+                type="button"
+                onClick={() => setShowDesignPicker(true)}
+                disabled={!canSend || isSending || isActive}
+                className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                title="Implement a design"
+              >
+                <LayoutTemplate size={16} />
+              </button>
+            ) : null
+          }
+          controls={
+            <SessionInputOptions
+              sessionId={sessionId}
+              mode={mode}
+              onModeChange={cycleMode}
+              isActive={isActive}
+            />
+          }
+          isActive={isActive}
+          onStop={onStop}
+          onSend={handleQueueSubmit}
         />
-        <div className="session-editor">
-          <ChatEditor
-            ref={editorRef}
-            initialHtml={initialDraftHtml}
-            onSubmit={handleSubmit}
-            placeholder={placeholder}
-            disabled={!canSend || isSending}
-            slashCommands={slashCommands.commands}
-            onShiftTab={cycleMode}
-            onPasteFiles={addAttachments}
-            hasAttachments={images.length > 0}
-            onChange={(text: string, html: string) => {
-              setHasContent(text.trim().length > 0);
-              setDraftText(sessionId, text, html);
-            }}
-          />
-        </div>
-        <div className="@container flex items-center gap-1 pb-2 pl-1 pr-2 pt-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleFileInputChange}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!canSend || isSending || images.length >= MAX_ATTACHMENTS}
-            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-            title="Attach files"
-          >
-            <Paperclip size={16} />
-          </button>
-          {kindSupportsDesignImplementation(groupKind) && (
-            <button
-              onClick={() => setShowDesignPicker(true)}
-              disabled={!canSend || isSending || isActive}
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-              title="Implement a design"
-            >
-              <LayoutTemplate size={16} />
-            </button>
-          )}
-          <SessionInputOptions
-            sessionId={sessionId}
-            mode={mode}
-            onModeChange={cycleMode}
-            isActive={isActive}
-          />
-          <div className="flex-1" />
-          {isActive ? (
-            <button
-              onClick={onStop}
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground"
-              title="Stop"
-            >
-              <Square size={15} />
-            </button>
-          ) : (
-            <button
-              onClick={handleQueueSubmit}
-              disabled={(!hasContent && images.length === 0) || !canSend || isSending}
-              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
-              title="Send"
-            >
-              <Send size={15} />
-            </button>
-          )}
-        </div>
-        </div>
       </div>
     </div>
   );

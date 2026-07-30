@@ -312,12 +312,6 @@
   outline-offset: 2px;
 }
 
-.home-composer-shadow {
-  box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--th-accent) 6%, transparent),
-    0 16px 48px rgb(0 0 0 / 0.45);
-}
-
 .home-status-pulse {
   animation: home-status-pulse 2s ease-in-out infinite;
 }

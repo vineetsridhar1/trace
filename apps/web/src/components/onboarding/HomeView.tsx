@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CodingTool, SessionGroupKind } from "@trace/gql";
+import type { SessionGroupKind } from "@trace/gql";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { normalizeTool } from "../session/picker/pickerShared";
 import { createHomeSession } from "../../lib/create-home-session";
@@ -14,6 +14,9 @@ import { HomeKindSelector } from "../home/HomeKindSelector";
 import { HomeLedgerSkeleton } from "../home/HomeLedgerSkeleton";
 import { HomeWorkLedger } from "../home/HomeWorkLedger";
 import { useHomeWorkData } from "../home/useHomeWorkData";
+import { MODE_CYCLE, type InteractionMode } from "../session/interactionModes";
+import { getDefaultModel, getDefaultReasoningEffort } from "../session/modelOptions";
+import type { ToolOptionValue } from "../session/picker/pickerShared";
 import {
   clearHomeDraft,
   isSubstantialPromptEdit,
@@ -36,7 +39,14 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   const [prompt, setPrompt] = useState(() => readHomeDraft(activeOrgId));
   const [manualKind, setManualKind] = useState<SessionGroupKind | null>(null);
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
-  const [tool, setTool] = useState<CodingTool>(() => normalizeTool(defaultTool ?? "claude_code"));
+  const [tool, setTool] = useState<ToolOptionValue>(() =>
+    normalizeTool(defaultTool ?? "claude_code"),
+  );
+  const [model, setModel] = useState<string | null>(() => getDefaultModel(tool) ?? null);
+  const [reasoningEffort, setReasoningEffort] = useState<string | null>(
+    () => getDefaultReasoningEffort(tool) ?? null,
+  );
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>("code");
   const [submitting, setSubmitting] = useState(false);
   const manualPromptRef = useRef("");
   const homeDataReady = useHomeDataStore(
@@ -82,13 +92,30 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
     if (kind !== "coding") setSelectedRepoId(null);
   };
 
-  const submit = async () => {
-    if (!activeKind || !prompt.trim() || submitting) return;
+  const selectTool = (nextTool: ToolOptionValue) => {
+    setTool(nextTool);
+    setModel(getDefaultModel(nextTool) ?? null);
+    setReasoningEffort(getDefaultReasoningEffort(nextTool) ?? null);
+  };
+
+  const cycleMode = (currentMode: InteractionMode) => {
+    const index = MODE_CYCLE.indexOf(currentMode);
+    setInteractionMode(MODE_CYCLE[(index + 1) % MODE_CYCLE.length]);
+  };
+
+  const submit = async (
+    submittedPrompt: string = prompt,
+    submittedInteractionMode: InteractionMode = interactionMode,
+  ): Promise<boolean> => {
+    if (!submittedPrompt.trim() || submitting) return false;
     setSubmitting(true);
     const created = await createHomeSession({
-      prompt,
+      prompt: submittedPrompt,
       kind: activeKind,
       tool,
+      model,
+      reasoningEffort,
+      interactionMode: submittedInteractionMode,
       repo: effectiveRepo,
       channels,
     });
@@ -99,6 +126,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
       clearHomeDraft(activeOrgId);
     }
     setSubmitting(false);
+    return created;
   };
 
   const firstRun = homeDataReady && work.totalOwnedOrParticipating === 0;
@@ -130,11 +158,17 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
               repos={repos}
               repoId={effectiveRepoId}
               tool={tool}
+              model={model}
+              reasoningEffort={reasoningEffort}
+              mode={interactionMode}
               submitting={submitting}
               onPromptChange={updatePrompt}
               onRepoChange={setSelectedRepoId}
-              onToolChange={setTool}
-              onSubmit={() => void submit()}
+              onToolChange={selectTool}
+              onModelChange={setModel}
+              onReasoningEffortChange={setReasoningEffort}
+              onModeChange={cycleMode}
+              onSubmit={submit}
             />
             <HomeKindSelector
               activeKind={activeKind}
