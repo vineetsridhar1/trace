@@ -65,7 +65,7 @@ test("uses responsive zoom for trackpad pinch gestures", () => {
 
   assert.ok(zoomedIn > 1.45);
   assert.ok(zoomedOut < 0.7);
-  assert.ok(acceleratedGestureScale(1.1) > 1.1);
+  assert.ok(acceleratedGestureScale(1.1) > 1.25);
   assert.ok(acceleratedGestureScale(0.9) < 0.9);
   assert.equal(acceleratedGestureScale(1), 1);
 });

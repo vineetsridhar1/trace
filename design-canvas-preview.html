@@ -304,7 +304,7 @@
             return;
           }
           const point = { x: event.clientX, y: event.clientY };
-          const zoom = clamp(viewport.zoom * Math.exp(-event.deltaY * 0.002));
+          const zoom = clamp(viewport.zoom * Math.exp(-event.deltaY * 0.006));
           const worldX = (point.x - viewport.x) / viewport.zoom;
           const worldY = (point.y - viewport.y) / viewport.zoom;
           viewport = { zoom, x: point.x - worldX * zoom, y: point.y - worldY * zoom };

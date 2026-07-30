@@ -1,7 +1,7 @@
 export const MIN_CANVAS_ZOOM = 0.1;
 export const MAX_CANVAS_ZOOM = 2;
-const WHEEL_ZOOM_SENSITIVITY = 0.004;
-const GESTURE_ZOOM_EXPONENT = 1.75;
+const WHEEL_ZOOM_SENSITIVITY = 0.006;
+const GESTURE_ZOOM_EXPONENT = 2.5;
 
 export type CanvasViewport = {
   zoom: number;
