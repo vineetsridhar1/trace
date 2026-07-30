@@ -149,12 +149,7 @@ export interface ErrorEvent {
   message: string;
 }
 
-export type ToolOutput =
-  | AssistantEvent
-  | UserEvent
-  | ResultEvent
-  | UsageEvent
-  | ErrorEvent;
+export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | UsageEvent | ErrorEvent;
 
 export type OutputCallback = (data: ToolOutput) => void;
 
@@ -183,6 +178,8 @@ export interface RunOptions {
   enableClaudeInChrome?: boolean;
   /** Tool-specific session ID for resuming (e.g. Claude Code's --resume flag) */
   toolSessionId?: string;
+  /** Run-scoped environment injected by Trace. */
+  env?: Record<string, string>;
 }
 
 /**

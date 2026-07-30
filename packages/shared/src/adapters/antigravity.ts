@@ -95,7 +95,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
   private processGeneration = 0;
   private lastUsage: TokenUsage | undefined;
 
-  run({ prompt, cwd, onOutput, onComplete, toolSessionId }: RunOptions) {
+  run({ prompt, cwd, onOutput, onComplete, toolSessionId, env }: RunOptions) {
     this.lastUsage = undefined;
 
     // Restore resume capability after a bridge restart.
@@ -116,7 +116,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
     const child = spawn("agy", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: { ...process.env, ...env },
       detached: true,
     });
     this.process = child;

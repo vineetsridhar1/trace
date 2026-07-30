@@ -22,6 +22,7 @@ import { slackRouter } from "./routes/slack.js";
 import { gitRouter } from "./routes/git.js";
 import { designPreviewRouter } from "./routes/design-preview.js";
 import { animationPreviewRouter } from "./routes/animation-preview.js";
+import { agentOutputRouter } from "./routes/agent-output.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -212,6 +213,10 @@ async function main() {
   app.use("/git", gitRouter);
   app.use(designPreviewRouter);
   app.use(animationPreviewRouter);
+  // Agent output submissions need a larger JSON limit than ordinary API calls.
+  // The route authenticates a run-scoped token and must parse before the global
+  // express.json() middleware consumes the request body.
+  app.use(agentOutputRouter);
 
   app.use(express.json());
   app.post("/runtime/codex-auth", async (req: express.Request, res: express.Response) => {

@@ -59,6 +59,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     reasoningEffort,
     enableClaudeInChrome,
     toolSessionId,
+    env,
   }: RunOptions) {
     this.resultEmitted = false;
     this.emittedIncrementalUsage = false;
@@ -97,7 +98,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     const child = spawn("claude", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv(),
+      env: buildChildProcessEnv({ ...process.env, ...env }),
       detached: true,
     });
     child.stdin?.on("error", () => {});

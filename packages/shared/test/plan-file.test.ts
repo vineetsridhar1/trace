@@ -18,14 +18,12 @@ const sessionIds: string[] = [];
 afterEach(async () => {
   vi.useRealTimers();
   await Promise.all(
-    sessionIds
-      .splice(0)
-      .map((sessionId) =>
-        fs.promises.rm(path.dirname(getPlanFilePath(sessionId)), {
-          force: true,
-          recursive: true,
-        }),
-      ),
+    sessionIds.splice(0).map((sessionId) =>
+      fs.promises.rm(path.dirname(getPlanFilePath(sessionId)), {
+        force: true,
+        recursive: true,
+      }),
+    ),
   );
 });
 
@@ -39,7 +37,7 @@ describe("plan file", () => {
     expect(buildPlanFileInstruction(filePath)).toContain(getTraceVisualPlanSkillPath(filePath));
     expect(TRACE_VISUAL_PLAN_SKILL).toContain("# Agent-Native Plans");
     expect(createHash("sha256").update(TRACE_VISUAL_PLAN_SKILL).digest("hex")).toBe(
-      "25c76d8f1c385c9e5ead466bf4270acef37222cf946dba48b1a21aac8211f77d",
+      "410a088c67c404ef10d21321abc1905d45237b2e2548f18cd0941f9f6ec408b3",
     );
   });
 
@@ -53,8 +51,7 @@ describe("plan file", () => {
     });
 
     const first = '# First\n<Callout id="choice" tone="decision">Use events.</Callout>\n';
-    const second =
-      '# Second\n<Checklist id="work" items={[{ id: "test", label: "Test it" }]} />\n';
+    const second = '# Second\n<Checklist id="work" items={[{ id: "test", label: "Test it" }]} />\n';
     await fs.promises.writeFile(watcher.filePath, first, "utf8");
     await watcher.flush();
     await watcher.flush();
@@ -71,8 +68,7 @@ describe("plan file", () => {
     const snapshots: Array<{ content: string; validationErrors: string[] }> = [];
     const watcher = createPlanFileWatcher({
       sessionId,
-      onSnapshot: ({ content, validationErrors }) =>
-        snapshots.push({ content, validationErrors }),
+      onSnapshot: ({ content, validationErrors }) => snapshots.push({ content, validationErrors }),
     });
 
     const content = "# Ordinary plan\n\n- Change the code\n";
@@ -99,9 +95,7 @@ describe("plan file", () => {
       validateTraceVisualPlan(
         '<AnnotatedCode language="ts" code={"const score = 3;" annotations={[]} />',
       ),
-    ).toEqual([
-      expect.stringContaining("Invalid MDX at line 1"),
-    ]);
+    ).toEqual([expect.stringContaining("Invalid MDX at line 1")]);
   });
 
   it("preserves a previous draft but only publishes a changed revision", async () => {
@@ -109,10 +103,8 @@ describe("plan file", () => {
     sessionIds.push(sessionId);
     const filePath = getPlanFilePath(sessionId);
     await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-    const previous =
-      '# Previous plan\n<Callout tone="decision">Use events.</Callout>\n';
-    const revised =
-      '# Revised plan\n<Callout tone="decision">Use durable events.</Callout>\n';
+    const previous = '# Previous plan\n<Callout tone="decision">Use events.</Callout>\n';
+    const revised = '# Revised plan\n<Callout tone="decision">Use durable events.</Callout>\n';
     await fs.promises.writeFile(filePath, previous, "utf8");
     const snapshots: string[] = [];
 

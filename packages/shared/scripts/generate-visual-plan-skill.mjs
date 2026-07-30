@@ -13,6 +13,7 @@ const fileNames = [
   "references/document-quality.md",
   "references/exemplar.md",
   "references/local-files.md",
+  "references/trace-plan-blocks.md",
   "references/wireframe.md",
 ];
 const files = Object.fromEntries(

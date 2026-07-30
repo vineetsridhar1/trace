@@ -8,7 +8,7 @@ import { VISUAL_PLAN_SKILL_FILES } from "./visual-plan-skill.generated.js";
 export const TRACE_VISUAL_PLAN_SKILL = VISUAL_PLAN_SKILL_FILES["SKILL.md"];
 
 const PLAN_BLOCK_PATTERN =
-  /<(RichText|Callout|Checklist|Table|CodeTabs|Code|AnnotatedCode|Tabs|Columns|Diagram|Mermaid|ApiEndpoint|DataModel|Diff|FileTree|Json|OpenApi|WireframeBlock|QuestionForm|VisualQuestions|Decision)\b/g;
+  /<(AnnotatedCode|Endpoint|Callout|Checklist|Code|CodeTabs|Columns|HtmlBlock|DataModel|Diagram|Diff|FileTree|Json|Mermaid|OpenApi|QuestionForm|Table|TabsBlock|VisualQuestions|WireframeBlock)\b/g;
 
 export function getTraceVisualPlanSkillPath(planFilePath: string): string {
   return path.join(path.dirname(planFilePath), "visual-plan-skill", "SKILL.md");
@@ -16,6 +16,10 @@ export function getTraceVisualPlanSkillPath(planFilePath: string): string {
 
 export function materializeTraceVisualPlanSkill(planFilePath: string): string {
   const skillRoot = path.dirname(getTraceVisualPlanSkillPath(planFilePath));
+  return materializeTraceVisualPlanSkillAt(skillRoot);
+}
+
+export function materializeTraceVisualPlanSkillAt(skillRoot: string): string {
   for (const [relativePath, content] of Object.entries(VISUAL_PLAN_SKILL_FILES)) {
     const targetPath = path.join(skillRoot, relativePath);
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });

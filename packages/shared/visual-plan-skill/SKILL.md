@@ -27,6 +27,46 @@ planning. When a Codex, Claude Code, Markdown, or pasted plan already exists,
 `/visual-plan` uses that source plan as the starting point and builds the review
 surface from it instead of starting over.
 
+## Trace Runtime Transport
+
+When the `TRACE_RUN_ID` environment variable is present, Trace owns the
+publishing transport for this skill. This section overrides the hosted Plan
+tools and the local-files CLI workflow described later in this skill.
+
+1. Read `references/trace-plan-blocks.md` in full before authoring. It is the
+   exact block catalog generated from the Agent-Native renderer version pinned
+   by Trace. Copy its valid examples and component names instead of guessing
+   schemas or falling back to prose.
+2. Research and author the complete plan in any local `.mdx` file you choose.
+   Keep related working files together when that helps, but do not edit product
+   source files during planning.
+3. After the first renderable draft and after meaningful revisions, upload the
+   document with:
+
+   ```bash
+   trace output push --type visual-plan --file <path> --draft
+   ```
+
+   Trace opens or updates the live review panel from that exact file content.
+
+4. Fix every validation error returned by the command. Do not simplify a rich
+   plan to plain Markdown or repeated callouts merely to avoid repairing an
+   invalid structured block.
+5. When the plan is complete and standalone, submit it exactly once with:
+
+   ```bash
+   trace output push --type visual-plan --file <path> --final
+   ```
+
+   A successful final submission is the approval handoff. Finish the planning
+   turn without pasting the plan into chat and without invoking a
+   provider-native exit-plan tool.
+
+The Trace CLI is installed and authenticated automatically for the current
+run. Never print, inspect, copy, or persist `TRACE_RUN_TOKEN`. Do not call hosted
+Agent-Native publishing tools, run `plan local`, or assume a fixed `plan.mdx`
+path when the Trace runtime is active.
+
 ## When To Use
 
 Create or adapt a visual plan whenever the plan would be better as a reviewable
@@ -423,7 +463,7 @@ local bridge check/serve/verify command, and report the new local URL.
 
 `get-plan-feedback` returns rich anchors — read them before acting on any comment.
 
-- **Coordinate frames.** `targetX`/`targetY` are percentages *within* the
+- **Coordinate frames.** `targetX`/`targetY` are percentages _within_ the
   element named by `targetSelector`/`targetKind`. Bare `x`/`y` are percentages
   of the whole plan document. `canvasX`/`canvasY` are raw board-world pixels on
   the design canvas (board size given when available).
