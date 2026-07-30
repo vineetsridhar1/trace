@@ -11,6 +11,8 @@ import {
   getReasoningEffortLabel,
   getReasoningEffortsForTool,
 } from "../session/modelOptions";
+import { Info, SlidersHorizontal } from "lucide-react";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
 
 const TOOL_OPTIONS = [
   { value: "claude_code", label: "Claude Code" },
@@ -135,20 +137,17 @@ export function SessionDefaultsSection() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">
-          Session defaults
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Set your preferred coding tool, model, and effort. New sessions use these defaults.
-        </p>
-      </div>
+      <SettingsSectionHeader
+        title="Session defaults"
+        description="Your personal defaults for new coding sessions. You can still change the tool, model, and effort when starting any session."
+      />
 
-      <div className="space-y-4 rounded-lg border border-border bg-surface-deep p-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="rounded-xl border border-border bg-card p-5">
+        <p className="text-[13px] font-semibold text-foreground">New sessions start with</p>
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label className="mb-1.5 block text-sm text-muted-foreground">
-              Default Coding Tool
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              Coding tool
             </label>
             <Select value={defaultTool ?? "__none__"} onValueChange={handleToolChange}>
               <SelectTrigger className="w-full">
@@ -168,7 +167,7 @@ export function SessionDefaultsSection() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm text-muted-foreground">Default Model</label>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Model</label>
             <Select
               value={defaultModel ?? "__none__"}
               onValueChange={handleModelChange}
@@ -197,7 +196,9 @@ export function SessionDefaultsSection() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm text-muted-foreground">Default Effort</label>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              Reasoning effort
+            </label>
             <Select
               value={defaultReasoningEffort ?? "__none__"}
               onValueChange={handleReasoningEffortChange}
@@ -225,8 +226,13 @@ export function SessionDefaultsSection() {
             </Select>
           </div>
         </div>
+        <p className="mt-3 flex items-center gap-1.5 text-xs leading-4 text-muted-foreground">
+          <Info size={13} />
+          Model and effort options follow the selected tool. Changing the tool resets both to that
+          tool's defaults.
+        </p>
 
-        <div className="divide-y divide-border border-t border-border">
+        <div className="mt-5 divide-y divide-border border-t border-border">
           <SettingsToggle
             label="Auto-archive merged sessions"
             description="Move a session to the archive automatically when its pull request merges."
@@ -240,6 +246,14 @@ export function SessionDefaultsSection() {
             onCheckedChange={handleClaudeInChromeChange}
           />
         </div>
+      </div>
+      <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-border bg-card/50 px-4 py-3">
+        <SlidersHorizontal size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
+        <p className="text-xs leading-5 text-muted-foreground">
+          These defaults apply only to you. Workspace runtime configuration lives under{" "}
+          <span className="text-foreground">Agent environments</span>, and shared credentials under{" "}
+          <span className="text-foreground">Secrets</span>.
+        </p>
       </div>
     </div>
   );

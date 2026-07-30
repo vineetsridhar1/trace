@@ -14,17 +14,15 @@ import { ExistingRepoForm } from "./ExistingRepoForm";
 import { ManualRepoForm } from "./ManualRepoForm";
 import { NewLocalProjectForm } from "./NewLocalProjectForm";
 import { RepoDialogModeSwitch } from "./RepoDialogModeSwitch";
-import {
-  canCreateLocalProject,
-  isElectron,
-  useCreateRepoDialog,
-} from "./useCreateRepoDialog";
+import { canCreateLocalProject, isElectron, useCreateRepoDialog } from "./useCreateRepoDialog";
 
 interface CreateRepoDialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
   onCreated?: () => void;
+  triggerLabel?: string;
+  triggerVariant?: "default" | "outline";
 }
 
 export function CreateRepoDialog({
@@ -32,6 +30,8 @@ export function CreateRepoDialog({
   onOpenChange,
   hideTrigger = false,
   onCreated,
+  triggerLabel = "Link Repository",
+  triggerVariant = "outline",
 }: CreateRepoDialogProps) {
   const isMobile = useIsMobile();
   const state = useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated });
@@ -40,9 +40,9 @@ export function CreateRepoDialog({
     <Dialog open={state.open} onOpenChange={state.handleOpenChange}>
       {!hideTrigger && (
         <DialogTrigger className="inline-flex">
-          <Button variant="outline" size="sm" className="gap-1.5">
+          <Button variant={triggerVariant} size="sm" className="gap-1.5">
             <Plus size={14} />
-            Link Repository
+            {triggerLabel}
           </Button>
         </DialogTrigger>
       )}

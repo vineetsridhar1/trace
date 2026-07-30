@@ -43,7 +43,11 @@ export function RepoApplicationsSection({ repoId }: { repoId: string }) {
   );
   const portCount = config.applications.reduce(
     (count, application) =>
-      count + application.processes.reduce((processTotal, process) => processTotal + process.ports.length, 0),
+      count +
+      application.processes.reduce(
+        (processTotal, process) => processTotal + process.ports.length,
+        0,
+      ),
     0,
   );
 
@@ -60,7 +64,8 @@ export function RepoApplicationsSection({ repoId }: { repoId: string }) {
       if (result.error) throw result.error;
       useEntityStore.getState().patch("repos", repoId, { applicationConfig: nextConfig });
     } catch (saveError) {
-      const message = saveError instanceof Error ? saveError.message : "Failed to save applications";
+      const message =
+        saveError instanceof Error ? saveError.message : "Failed to save applications";
       setError(message);
       throw new Error(message);
     } finally {
@@ -69,17 +74,22 @@ export function RepoApplicationsSection({ repoId }: { repoId: string }) {
   };
 
   return (
-    <div className="mt-4 border-t border-border pt-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="border-t border-border bg-background/30 px-4 py-4">
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">Applications</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {config.setupScripts.length} setup, {config.applications.length} apps, {processCount} processes, {portCount} ports
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Session automation
+          </p>
+          <p className="mt-1 text-xs leading-4 text-muted-foreground">
+            {config.setupScripts.length} setup script{config.setupScripts.length === 1 ? "" : "s"} ·{" "}
+            {config.applications.length} application{config.applications.length === 1 ? "" : "s"} ·{" "}
+            {processCount} process{processCount === 1 ? "" : "es"} · {portCount} port
+            {portCount === 1 ? "" : "s"}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
           <Settings2 size={14} />
-          Configure
+          Edit automation
         </Button>
       </div>
       {error && <p className="mt-2 text-xs text-destructive">{error}</p>}

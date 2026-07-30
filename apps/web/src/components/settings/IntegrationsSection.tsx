@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthStore } from "@trace/client-core";
-import { CheckCircle2, CircleAlert, ExternalLink, Hash, MessageSquare, Unplug } from "lucide-react";
+import { CircleAlert, ExternalLink, Hash, MessageSquare, Unplug } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
+import { SettingsStatusPill } from "./SettingsStatusPill";
 
 type SlackSettings = {
   configured: boolean;
@@ -86,13 +88,11 @@ export function IntegrationsSection() {
 
   return (
     <section className="space-y-3">
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">Integrations</h2>
-        <p className="text-sm text-muted-foreground">
-          Connect outside tools to this workspace and keep work flowing into Trace.
-        </p>
-      </div>
-      <div className="overflow-hidden rounded-md border border-border bg-surface-elevated">
+      <SettingsSectionHeader
+        title="Integrations"
+        description="Connect outside tools to this workspace. Members can keep working where conversations already happen."
+      />
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         {loading && !settings ? (
           <div className="p-4 text-sm text-muted-foreground">Loading...</div>
         ) : !settings?.configured ? (
@@ -103,9 +103,7 @@ export function IntegrationsSection() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-semibold text-foreground">Slack</h2>
-                <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                  Not configured
-                </span>
+                <SettingsStatusPill tone="warning" label="Not configured" />
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 Slack is disabled until the server has Slack credentials configured.
@@ -128,14 +126,9 @@ export function IntegrationsSection() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-sm font-semibold text-foreground">Slack</h2>
                     {settings.install ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 text-xs text-foreground">
-                        <CheckCircle2 size={12} />
-                        Installed
-                      </span>
+                      <SettingsStatusPill tone="success" label="Installed" />
                     ) : (
-                      <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
-                        Ready to install
-                      </span>
+                      <SettingsStatusPill tone="muted" label="Ready to install" />
                     )}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Key, Trash2, Check, Eye, EyeOff, Github } from "lucide-react";
+import { Key, Trash2, Eye, EyeOff, Github, Shield } from "lucide-react";
 import { useAuthStore } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
@@ -8,6 +8,8 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { CodexAuthenticationDialog } from "./CodexAuthenticationDialog";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
+import { SettingsStatusPill } from "./SettingsStatusPill";
 
 const API_TOKENS_QUERY = gql`
   query MyApiTokens {
@@ -216,12 +218,10 @@ export function ApiTokensSection() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">API keys</h2>
-        <p className="text-sm text-muted-foreground">
-          Tokens are encrypted and used only for integrations that need them.
-        </p>
-      </div>
+      <SettingsSectionHeader
+        title="API keys"
+        description="Your personal credentials. They are encrypted at rest and used only for sessions and integrations you start—never shared with other members."
+      />
 
       <div className="space-y-3">
         {[
@@ -241,24 +241,26 @@ export function ApiTokensSection() {
           return (
             <div
               key={token.provider}
-              className="rounded-lg border border-border bg-surface-deep p-4"
+              className="overflow-hidden rounded-xl border border-border bg-card"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4 px-4 py-3.5">
                 <div className="flex items-center gap-3">
-                  <ProviderIcon provider={token.provider} />
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
+                    <ProviderIcon provider={token.provider} />
+                  </span>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{meta.label}</p>
-                    <p className="text-xs text-muted-foreground">{meta.description}</p>
+                    <p className="text-[13px] font-medium text-foreground">{meta.label}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{meta.description}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                   {token.isSet && !isEditing && (
                     <>
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
-                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                        Configured
-                      </span>
+                      <SettingsStatusPill
+                        tone="success"
+                        label={canAuthenticateCodex ? "Authenticated" : "Configured"}
+                      />
                       {canShowGithubCliImport && (
                         <Button
                           variant="outline"
@@ -302,6 +304,7 @@ export function ApiTokensSection() {
                   )}
                   {!token.isSet && !isEditing && (
                     <>
+                      <SettingsStatusPill tone="muted" label="Not set" />
                       {canAuthenticateCodex && (
                         <Button
                           variant="outline"
@@ -338,11 +341,18 @@ export function ApiTokensSection() {
               </div>
 
               {!isEditing && errorMessage && canShowGithubCliImport && (
-                <p className="mt-2 text-xs text-destructive">{errorMessage}</p>
+                <p className="border-t border-border px-4 py-2 text-xs text-destructive">
+                  {errorMessage}
+                </p>
               )}
 
               {isEditing && (
-                <div className="mt-3 space-y-2">
+                <div className="space-y-2 border-t border-border bg-background/30 px-4 py-3.5">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {token.isSet
+                      ? "Replace key — saving overwrites the current one"
+                      : `Add ${meta.label} credential`}
+                  </p>
                   {token.provider === "ssh_key" ? (
                     <Textarea
                       placeholder={meta.placeholder}
@@ -357,7 +367,7 @@ export function ApiTokensSection() {
                           setErrorMessage(null);
                         }
                       }}
-                      className="font-mono text-xs min-h-[120px]"
+                      className="min-h-[120px] bg-background font-mono text-xs"
                       autoFocus
                     />
                   ) : (
@@ -377,6 +387,7 @@ export function ApiTokensSection() {
                             setErrorMessage(null);
                           }
                         }}
+                        className="h-9 border-primary bg-background pr-9 font-mono text-xs ring-2 ring-primary/25"
                         autoFocus
                       />
                       <button
@@ -426,6 +437,14 @@ export function ApiTokensSection() {
             </div>
           );
         })}
+      </div>
+      <div className="mt-5 flex items-start gap-2.5 rounded-lg border border-border bg-card/50 px-4 py-3">
+        <Shield size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
+        <p className="text-xs leading-5 text-muted-foreground">
+          Setting up keys for the whole team? Workspace-wide credentials such as{" "}
+          <code className="font-mono text-foreground">GITHUB_TOKEN</code> live under{" "}
+          <span className="text-foreground">Workspace → Secrets</span>.
+        </p>
       </div>
       <CodexAuthenticationDialog
         open={codexAuthenticationOpen}

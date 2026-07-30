@@ -8,7 +8,9 @@ import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { RepoCard } from "./RepoCard";
 import { CreateRepoDialog } from "./CreateRepoDialog";
-import { GitBranch, Info } from "lucide-react";
+import { GitBranch, Info, Terminal } from "lucide-react";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
+import { SettingsStatusPill } from "./SettingsStatusPill";
 
 const REPOS_QUERY = gql`
   query SettingsRepos($organizationId: ID!) {
@@ -110,11 +112,6 @@ export function RepositoriesSection() {
       (b as EntityTableMap["repos"]).name ?? "",
     ),
   );
-  const githubCliTone = !githubCliStatus
-    ? "text-muted-foreground border-border/70 bg-surface-deep"
-    : !githubCliStatus.installed || !githubCliStatus.authenticated
-      ? "text-amber-300 border-amber-500/30 bg-amber-500/10"
-      : "text-emerald-300 border-emerald-500/30 bg-emerald-500/10";
   const githubCliLabel = !githubCliStatus
     ? "Checking GitHub CLI status..."
     : !githubCliStatus.installed
@@ -132,26 +129,39 @@ export function RepositoriesSection() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">Repositories</h2>
-          <p className="text-sm text-muted-foreground">Codebases linked to your organization.</p>
-        </div>
-        <CreateRepoDialog
-          onCreated={() => {
-            setDesktopRefreshKey((k: number) => k + 1);
-            useOnboardingStore.getState().invalidateRepos();
-          }}
-        />
-      </div>
+      <SettingsSectionHeader
+        title="Repositories"
+        description="Codebases linked to this workspace. Each repository carries its own setup and run automation for coding sessions."
+        action={
+          <CreateRepoDialog
+            triggerLabel="Connect repository"
+            triggerVariant="default"
+            onCreated={() => {
+              setDesktopRefreshKey((k: number) => k + 1);
+              useOnboardingStore.getState().invalidateRepos();
+            }}
+          />
+        }
+      />
 
       {isElectron && (
-        <div className={`mb-4 rounded-lg border px-4 py-3 ${githubCliTone}`}>
-          <p className="text-sm font-medium">Local PR Polling</p>
-          <p className="mt-1 text-sm">{githubCliLabel}</p>
-          {githubCliDetail && <p className="mt-1 text-sm opacity-90">{githubCliDetail}</p>}
+        <div className="mb-5 flex items-center gap-2.5 rounded-lg border border-border bg-card/50 px-4 py-2.5">
+          <Terminal size={14} className="shrink-0 text-muted-foreground" />
+          <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            {githubCliDetail ?? "Checking GitHub CLI support for local pull-request polling."}
+          </p>
+          <SettingsStatusPill
+            tone={
+              !githubCliStatus
+                ? "muted"
+                : githubCliStatus.installed && githubCliStatus.authenticated
+                  ? "success"
+                  : "warning"
+            }
+            label={githubCliLabel}
+          />
           {githubCliStatus?.error && !githubCliStatus.authenticated && (
-            <p className="mt-2 break-words font-mono text-xs opacity-80">{githubCliStatus.error}</p>
+            <span className="sr-only">{githubCliStatus.error}</span>
           )}
         </div>
       )}
@@ -169,6 +179,8 @@ export function RepositoriesSection() {
             </p>
             <div className="mt-5 flex justify-center">
               <CreateRepoDialog
+                triggerLabel="Connect repository"
+                triggerVariant="default"
                 onCreated={() => {
                   setDesktopRefreshKey((key: number) => key + 1);
                   useOnboardingStore.getState().invalidateRepos();

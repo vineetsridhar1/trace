@@ -12,7 +12,7 @@ export function AgentEnvironmentLocalBridgeList({ localBridges }: Props) {
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-foreground">Local bridges</h3>
         <p className="text-xs text-muted-foreground">
-          Local environments are created automatically when desktop bridges connect.
+          Desktop apps connected under members' accounts. Manage sharing under Devices &amp; access.
         </p>
       </div>
 
@@ -21,11 +21,11 @@ export function AgentEnvironmentLocalBridgeList({ localBridges }: Props) {
           No local bridges are connected for this organization.
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
           {localBridges.map((bridge) => (
-            <div key={bridge.id} className="rounded-lg border border-border bg-surface-deep p-3">
+            <div key={bridge.id} className="border-b border-border px-4 py-3 last:border-b-0">
               <div className="flex items-start gap-3">
-                <Laptop size={16} className="mt-0.5 shrink-0 text-muted-foreground" />
+                <Laptop size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h4 className="truncate text-sm font-medium text-foreground">{bridge.label}</h4>

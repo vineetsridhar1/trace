@@ -14,7 +14,7 @@ import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { WEBHOOK_REPO_REMOTE_REQUIRED, hasRepoRemote } from "../../lib/repo-capabilities";
 import { isLocalMode } from "../../lib/runtime-mode";
 import { RepoApplicationsSection } from "./repo-applications/RepoApplicationsSection";
-import { cn } from "../../lib/utils";
+import { SettingsStatusPill } from "./SettingsStatusPill";
 
 const isElectron = typeof window.trace?.getRepoConfig === "function";
 const LOCAL_MODE_WEBHOOK_DISABLED = "Local mode does not support GitHub webhooks.";
@@ -95,86 +95,103 @@ export function RepoCard({
   };
 
   return (
-    <div className="rounded-lg border border-border bg-surface-deep p-4">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-md bg-surface-elevated p-1.5">
-          <GitBranch size={16} className="text-muted-foreground" />
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
+          <GitBranch size={15} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-foreground">{name}</p>
+          <div className="flex items-center gap-2">
+            <p className="truncate text-[13px] font-semibold text-foreground">{name}</p>
+            <SettingsStatusPill
+              tone={webhookActive ? "success" : "muted"}
+              label={webhookActive ? "Webhook connected" : remoteUrl ? "Webhook off" : "Local only"}
+            />
+          </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {remoteUrl ?? "No remote configured"}
+            {remoteUrl ?? "Local project — no remote configured"}
           </p>
-          <div className="mt-1 flex items-center gap-1.5">
-            {editing ? (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">Default branch:</span>
-                <div className="w-48">
-                  <BranchCombobox repoId={id} value={editBranch} onChange={setEditBranch} />
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5"
-                  onClick={saveBranch}
-                  disabled={saving}
-                >
-                  <Check size={12} />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={cancelEditing}>
-                  <X size={12} />
-                </Button>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+          {editing ? (
+            <>
+              <span>Default branch</span>
+              <div className="w-40">
+                <BranchCombobox repoId={id} value={editBranch} onChange={setEditBranch} />
               </div>
-            ) : (
-              <>
-                <p className="text-xs text-muted-foreground">
-                  Default branch: <span className="font-mono text-foreground">{defaultBranch}</span>
-                </p>
-                <button
-                  onClick={startEditing}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                  title="Edit default branch"
-                >
-                  <Pencil size={10} />
-                </button>
-              </>
-            )}
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                webhookActive
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                  : "border-border bg-surface-deep text-muted-foreground",
-              )}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-current" />
-              {webhookActive ? "Webhook connected" : "Webhook off"}
-            </span>
-            <DisabledTooltip message={webhookDisabledReason}>
               <Button
-                variant={webhookActive ? "ghost" : "outline"}
-                size="sm"
-                onClick={toggleWebhook}
-                disabled={webhookPending || !!webhookDisabledReason}
+                variant="ghost"
+                size="icon-sm"
+                onClick={saveBranch}
+                disabled={saving}
+                aria-label="Save default branch"
               >
-                {webhookPending
-                  ? webhookActive
-                    ? "Disconnecting..."
-                    : "Connecting..."
-                  : webhookActive
-                    ? "Disconnect Webhook"
-                    : "Connect Webhook"}
+                <Check size={12} />
               </Button>
-            </DisabledTooltip>
-          </div>
-          {webhookError && <p className="mt-2 text-xs text-destructive">{webhookError}</p>}
-
-          {isElectron && <RepoDesktopSection repoId={id} desktopRefreshKey={desktopRefreshKey} />}
-          <RepoApplicationsSection repoId={id} />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={cancelEditing}
+                aria-label="Cancel editing default branch"
+              >
+                <X size={12} />
+              </Button>
+            </>
+          ) : (
+            <>
+              <span>Default branch</span>
+              <code className="rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+                {defaultBranch}
+              </code>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={startEditing}
+                aria-label="Edit default branch"
+              >
+                <Pencil size={11} />
+              </Button>
+            </>
+          )}
         </div>
       </div>
+
+      {!webhookActive && remoteUrl ? (
+        <div className="flex items-center justify-between gap-4 border-t border-border px-4 py-2.5">
+          <p className="text-xs text-muted-foreground">
+            Connect the webhook to sync pull-request status and respond to GitHub events.
+          </p>
+          <DisabledTooltip message={webhookDisabledReason}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleWebhook}
+              disabled={webhookPending || !!webhookDisabledReason}
+            >
+              {webhookPending ? "Connecting..." : "Connect webhook"}
+            </Button>
+          </DisabledTooltip>
+        </div>
+      ) : webhookActive ? (
+        <div className="flex justify-end border-t border-border px-4 py-2">
+          <DisabledTooltip message={webhookDisabledReason}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleWebhook}
+              disabled={webhookPending || !!webhookDisabledReason}
+            >
+              {webhookPending ? "Disconnecting..." : "Disconnect webhook"}
+            </Button>
+          </DisabledTooltip>
+        </div>
+      ) : null}
+      {webhookError && (
+        <p className="border-t border-border px-4 py-2 text-xs text-destructive">{webhookError}</p>
+      )}
+
+      {isElectron && <RepoDesktopSection repoId={id} desktopRefreshKey={desktopRefreshKey} />}
+      <RepoApplicationsSection repoId={id} />
     </div>
   );
 }

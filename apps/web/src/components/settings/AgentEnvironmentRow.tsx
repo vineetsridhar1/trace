@@ -1,15 +1,10 @@
-import { MoreHorizontal, PlugZap, Trash2 } from "lucide-react";
+import { Cloud, PlugZap, Trash2 } from "lucide-react";
 import type { AgentEnvironment } from "@trace/gql";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { TraceLoader } from "../ui/trace-loader";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 import { environmentConfig, formatAdapterType } from "./agent-environment-utils";
+import { SettingsStatusPill } from "./SettingsStatusPill";
 
 type TestResult = {
   ok: boolean;
@@ -45,24 +40,27 @@ export function AgentEnvironmentRow({
     : "Last test: not run";
 
   return (
-    <div className="rounded-lg border border-border bg-surface-deep p-4">
-      <div className="flex items-start gap-3">
-        <button type="button" onClick={onEdit} className="min-w-0 flex-1 text-left">
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
+          <Cloud size={15} />
+        </span>
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-sm font-medium text-foreground">{environment.name}</h3>
-            <span
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                environment.enabled
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                  : "border-border bg-surface-deep text-muted-foreground",
-              )}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-current" />
-              {environment.enabled ? "Enabled" : "Disabled"}
-            </span>
+            <h3 className="truncate text-[13px] font-semibold text-foreground">
+              {environment.name}
+            </h3>
+            <SettingsStatusPill
+              tone={environment.enabled ? "success" : "muted"}
+              label={environment.enabled ? "Enabled" : "Disabled"}
+            />
+            {environment.isDefault ? (
+              <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                Default
+              </span>
+            ) : null}
           </div>
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-muted-foreground">
             <span>{formatAdapterType(environment.adapterType)}</span>
             {environment.adapterType === "local" && config.runtimeInstanceId ? (
               <span>{config.runtimeInstanceId}</span>
@@ -71,11 +69,7 @@ export function AgentEnvironmentRow({
               <span className="truncate">{config.statusUrl}</span>
             ) : null}
           </div>
-          <p className={cn("mt-2 flex items-center gap-1.5 text-xs", testStatusClass)}>
-            <span className="h-1.5 w-1.5 rounded-full bg-current" />
-            {testStatusMessage}
-          </p>
-        </button>
+        </div>
 
         <Button
           variant="outline"
@@ -91,22 +85,72 @@ export function AgentEnvironmentRow({
           )}
           Test
         </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground">
-            <MoreHorizontal size={16} />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onEdit}>Edit</DropdownMenuItem>
-            {environment.adapterType === "provisioned" ? (
-              <DropdownMenuItem onClick={onDelete} className="text-destructive">
-                <Trash2 size={14} />
-                Delete
-              </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          Edit
+        </Button>
+        {environment.adapterType === "provisioned" ? (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onDelete}
+            className="text-muted-foreground hover:text-destructive"
+            aria-label={`Delete ${environment.name}`}
+          >
+            <Trash2 size={14} />
+          </Button>
+        ) : null}
       </div>
+      <div
+        className={cn(
+          "flex items-center gap-2 border-t border-border bg-background/30 px-4 py-2.5 text-xs",
+          testStatusClass,
+        )}
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+        {testStatusMessage}
+      </div>
+      {environment.adapterType === "provisioned" ? (
+        <div className="grid gap-6 border-t border-border px-4 py-4 lg:grid-cols-2">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Launcher endpoints
+            </p>
+            <div className="space-y-1.5 text-xs">
+              {[
+                ["Start", config.startUrl],
+                ["Stop", config.stopUrl],
+                ["Status", config.statusUrl],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-center gap-2">
+                  <span className="w-12 shrink-0 text-muted-foreground">{label}</span>
+                  <code className="min-w-0 truncate rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+                    {value ?? "Not configured"}
+                  </code>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Runtime policy
+            </p>
+            <div className="space-y-1.5 text-xs text-muted-foreground">
+              <p>
+                Startup timeout{" "}
+                <span className="text-foreground">
+                  {config.startupTimeoutSeconds ?? 180} seconds
+                </span>
+              </p>
+              <p>
+                Deprovision{" "}
+                <span className="text-foreground">
+                  {config.deprovisionPolicy === "manual" ? "Manually" : "On session end"}
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

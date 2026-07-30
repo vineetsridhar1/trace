@@ -22,6 +22,7 @@ import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { MobilePairingSection } from "./MobilePairingSection";
 import { CurrentBridgeSection } from "./CurrentBridgeSection";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
 
 type BridgeUser = {
   id: string;
@@ -206,16 +207,14 @@ export function BridgeAccessSection() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">
-          Devices &amp; access
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Review requests for your local bridges, approve shared access, and revoke grants.
-        </p>
+      <SettingsSectionHeader
+        title="Devices & access"
+        description="Your connected devices, mobile pairing, and who may run sessions on your local bridges."
+      />
+      <div className="mb-8 grid gap-4 lg:grid-cols-[3fr_2fr]">
+        <CurrentBridgeSection onRenamed={fetchRuntimes} />
+        <MobilePairingSection />
       </div>
-      <MobilePairingSection />
-      <CurrentBridgeSection onRenamed={fetchRuntimes} />
 
       {loading ? (
         <div className="rounded-lg border border-border bg-surface-deep p-4 text-sm text-muted-foreground">
@@ -228,8 +227,8 @@ export function BridgeAccessSection() {
       ) : (
         <div className="space-y-4">
           {runtimes.map((runtime) => (
-            <div key={runtime.id} className="rounded-xl border border-border bg-surface-deep p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+            <div key={runtime.id} className="space-y-6">
+              <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3.5">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <Laptop size={16} className="text-muted-foreground" />
@@ -255,8 +254,8 @@ export function BridgeAccessSection() {
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-lg border border-border/70 bg-surface p-3">
+              <div className="space-y-8">
+                <section>
                   <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     <Inbox size={12} />
                     Pending Requests
@@ -279,7 +278,7 @@ export function BridgeAccessSection() {
                         return (
                           <div
                             key={request.id}
-                            className="rounded-lg border border-border bg-surface-deep p-3"
+                            className="rounded-xl border border-amber-500/40 bg-card p-4"
                           >
                             <div className="text-sm font-medium text-foreground">
                               {request.requesterUser.name ||
@@ -302,80 +301,84 @@ export function BridgeAccessSection() {
                                 Asked for: {formatCapabilities(request.requestedCapabilities)}
                               </div>
                             ) : null}
-                            <div className="mt-3 rounded-md border border-border/60 bg-surface p-2">
-                              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                <Shield size={11} />
-                                Grant capabilities
-                              </div>
-                              <div className="grid gap-2 sm:grid-cols-2">
-                                <div className="rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground">
-                                  <div className="font-medium">Sessions</div>
-                                  <div className="text-[11px] text-muted-foreground">Required</div>
+                            <div className="mt-4 grid gap-6 lg:grid-cols-2">
+                              <div>
+                                <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  <Shield size={11} />
+                                  Grant capabilities
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setGrantTerminalByRequestId((prev) => ({
-                                      ...prev,
-                                      [request.id]: !grantTerminal,
-                                    }))
-                                  }
-                                  className={cn(
-                                    "rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
-                                    grantTerminal
-                                      ? "border-foreground bg-surface-elevated text-foreground"
-                                      : "border-border bg-surface-deep text-muted-foreground hover:text-foreground",
-                                  )}
-                                >
-                                  <div className="font-medium">Terminal</div>
-                                  <div className="text-[11px] text-muted-foreground">
-                                    {grantTerminal
-                                      ? requestedTerminal
-                                        ? "Requested by the user"
-                                        : "Will grant shell access"
-                                      : requestedTerminal
-                                        ? "Removed from approval"
-                                        : "Off"}
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  <div className="rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground">
+                                    <div className="font-medium">Sessions</div>
+                                    <div className="text-[11px] text-muted-foreground">
+                                      Required
+                                    </div>
                                   </div>
-                                </button>
-                              </div>
-                            </div>
-                            <div className="mt-3">
-                              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                <Clock3 size={11} />
-                                Access expires after
-                              </div>
-                              <div
-                                role="radiogroup"
-                                aria-label="Access duration"
-                                className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-surface-deep p-1"
-                              >
-                                {BRIDGE_ACCESS_APPROVAL_OPTIONS.map((option) => (
                                   <button
-                                    key={option.id}
                                     type="button"
-                                    role="radio"
-                                    aria-checked={grantDuration === option.id}
                                     onClick={() =>
-                                      setGrantDurationByRequestId((prev) => ({
+                                      setGrantTerminalByRequestId((prev) => ({
                                         ...prev,
-                                        [request.id]: option.id,
+                                        [request.id]: !grantTerminal,
                                       }))
                                     }
                                     className={cn(
-                                      "h-8 rounded-md text-xs transition-colors",
-                                      grantDuration === option.id
-                                        ? "bg-surface-elevated font-medium text-foreground"
-                                        : "text-muted-foreground hover:text-foreground",
+                                      "rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
+                                      grantTerminal
+                                        ? "border-foreground bg-surface-elevated text-foreground"
+                                        : "border-border bg-surface-deep text-muted-foreground hover:text-foreground",
                                     )}
                                   >
-                                    {option.label}
+                                    <div className="font-medium">Terminal</div>
+                                    <div className="text-[11px] text-muted-foreground">
+                                      {grantTerminal
+                                        ? requestedTerminal
+                                          ? "Requested by the user"
+                                          : "Will grant shell access"
+                                        : requestedTerminal
+                                          ? "Removed from approval"
+                                          : "Off"}
+                                    </div>
                                   </button>
-                                ))}
+                                </div>
                               </div>
-                              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                                Access ends automatically and can be revoked sooner.
-                              </p>
+                              <div>
+                                <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  <Clock3 size={11} />
+                                  Access expires after
+                                </div>
+                                <div
+                                  role="radiogroup"
+                                  aria-label="Access duration"
+                                  className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-surface-deep p-1"
+                                >
+                                  {BRIDGE_ACCESS_APPROVAL_OPTIONS.map((option) => (
+                                    <button
+                                      key={option.id}
+                                      type="button"
+                                      role="radio"
+                                      aria-checked={grantDuration === option.id}
+                                      onClick={() =>
+                                        setGrantDurationByRequestId((prev) => ({
+                                          ...prev,
+                                          [request.id]: option.id,
+                                        }))
+                                      }
+                                      className={cn(
+                                        "h-8 rounded-md text-xs transition-colors",
+                                        grantDuration === option.id
+                                          ? "bg-surface-elevated font-medium text-foreground"
+                                          : "text-muted-foreground hover:text-foreground",
+                                      )}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                  Access ends automatically and can be revoked sooner.
+                                </p>
+                              </div>
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2">
                               <Button
@@ -426,9 +429,9 @@ export function BridgeAccessSection() {
                       })}
                     </div>
                   )}
-                </div>
+                </section>
 
-                <div className="rounded-lg border border-border/70 bg-surface p-3">
+                <section>
                   <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     <UserRoundCheck size={12} />
                     Active Grants
@@ -533,7 +536,7 @@ export function BridgeAccessSection() {
                       })}
                     </div>
                   )}
-                </div>
+                </section>
               </div>
             </div>
           ))}

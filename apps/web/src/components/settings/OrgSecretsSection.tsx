@@ -5,11 +5,15 @@ import { toast } from "sonner";
 import { AgentEnvironmentSecretsPanel } from "./AgentEnvironmentSecretsPanel";
 import { ORG_SECRETS_QUERY } from "./agent-environment-queries";
 import { client } from "../../lib/urql";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
+import { Button } from "../ui/button";
+import { Terminal } from "lucide-react";
 
 export function OrgSecretsSection() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
   const [loading, setLoading] = useState(true);
   const [orgSecrets, setOrgSecrets] = useState<OrgSecret[]>([]);
+  const [showImport, setShowImport] = useState(false);
 
   const fetchSecrets = useCallback(async () => {
     if (!activeOrgId) {
@@ -37,13 +41,16 @@ export function OrgSecretsSection() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold tracking-[-0.01em] text-foreground">Secrets</h2>
-        <p className="text-sm text-muted-foreground">
-          Manage encrypted workspace secrets for runtime launchers and shared server actions. Add
-          GITHUB_TOKEN to let users view GitHub files and diffs without personal setup.
-        </p>
-      </div>
+      <SettingsSectionHeader
+        title="Secrets"
+        description="Encrypted workspace-wide values for cloud launchers, session runtimes, and shared server actions. Values are write-only and can never be read back."
+        action={
+          <Button variant="outline" size="sm" onClick={() => setShowImport((open) => !open)}>
+            <Terminal size={14} />
+            {showImport ? "Hide import" : "Import from .env"}
+          </Button>
+        }
+      />
 
       {loading ? (
         <div className="rounded-lg border border-border bg-surface-deep p-4 text-sm text-muted-foreground">
@@ -54,6 +61,7 @@ export function OrgSecretsSection() {
           organizationId={activeOrgId}
           orgSecrets={orgSecrets}
           onSaved={() => void fetchSecrets()}
+          showImport={showImport}
         />
       ) : null}
     </div>
