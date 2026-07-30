@@ -1,8 +1,9 @@
 import { AppWindow, CodeXml, Component, FileText, Frame, Gem, type LucideIcon } from "lucide-react";
 import type { SessionGroupKind } from "@trace/gql";
 import { cn } from "../../lib/utils";
+import type { HomeCreatableKind } from "./home-kinds";
 
-export const DEFAULT_HOME_KIND: SessionGroupKind = "coding";
+export const DEFAULT_HOME_KIND: HomeCreatableKind = "coding";
 
 export const HOME_KIND_OPTIONS: ReadonlyArray<{
   kind: SessionGroupKind;
@@ -27,6 +28,13 @@ export const HOME_KIND_OPTIONS: ReadonlyArray<{
     colorClass: "text-[var(--th-kind-system)]",
   },
 ];
+
+export const HOME_CREATE_KIND_OPTIONS: ReadonlyArray<
+  (typeof HOME_KIND_OPTIONS)[number] & { kind: HomeCreatableKind }
+> = HOME_KIND_OPTIONS.filter(
+  (option): option is (typeof HOME_KIND_OPTIONS)[number] & { kind: HomeCreatableKind } =>
+    option.kind !== "design_system",
+);
 
 export function HomeKindIcon({ kind, className }: { kind: SessionGroupKind; className?: string }) {
   const option = HOME_KIND_OPTIONS.find((candidate) => candidate.kind === kind);

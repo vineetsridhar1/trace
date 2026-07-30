@@ -1,26 +1,32 @@
 import { create } from "zustand";
 
+export type HomeDataLoadStatus = "idle" | "loading" | "ready" | "error";
+
 interface HomeDataState {
   organizationId: string | null;
-  codingLoaded: boolean;
-  generatedLoaded: boolean;
+  codingStatus: HomeDataLoadStatus;
+  generatedStatus: HomeDataLoadStatus;
+  retryRequest: number;
   ensureOrganization: (organizationId: string) => void;
-  markCodingLoaded: (organizationId: string) => void;
-  markGeneratedLoaded: (organizationId: string) => void;
+  markCodingStatus: (organizationId: string, status: HomeDataLoadStatus) => void;
+  markGeneratedStatus: (organizationId: string, status: HomeDataLoadStatus) => void;
+  requestRetry: () => void;
 }
 
 export const useHomeDataStore = create<HomeDataState>((set) => ({
   organizationId: null,
-  codingLoaded: false,
-  generatedLoaded: false,
+  codingStatus: "idle",
+  generatedStatus: "idle",
+  retryRequest: 0,
   ensureOrganization: (organizationId) =>
     set((state) =>
       state.organizationId === organizationId
         ? {}
-        : { organizationId, codingLoaded: false, generatedLoaded: false },
+        : { organizationId, codingStatus: "idle", generatedStatus: "idle" },
     ),
-  markCodingLoaded: (organizationId) =>
-    set((state) => (state.organizationId === organizationId ? { codingLoaded: true } : {})),
-  markGeneratedLoaded: (organizationId) =>
-    set((state) => (state.organizationId === organizationId ? { generatedLoaded: true } : {})),
+  markCodingStatus: (organizationId, status) =>
+    set((state) => (state.organizationId === organizationId ? { codingStatus: status } : {})),
+  markGeneratedStatus: (organizationId, status) =>
+    set((state) => (state.organizationId === organizationId ? { generatedStatus: status } : {})),
+  requestRetry: () => set((state) => ({ retryRequest: state.retryRequest + 1 })),
 }));

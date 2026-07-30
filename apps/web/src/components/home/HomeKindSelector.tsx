@@ -1,6 +1,6 @@
-import type { SessionGroupKind } from "@trace/gql";
 import { cn } from "../../lib/utils";
-import { HOME_KIND_OPTIONS, homeKindLabel } from "./HomeKindIcon";
+import { HOME_CREATE_KIND_OPTIONS, homeKindLabel } from "./HomeKindIcon";
+import type { HomeCreatableKind } from "./home-kinds";
 
 export function HomeKindSelector({
   activeKind,
@@ -8,15 +8,15 @@ export function HomeKindSelector({
   manuallySelected,
   onSelect,
 }: {
-  activeKind: SessionGroupKind | null;
+  activeKind: HomeCreatableKind | null;
   hasPrompt: boolean;
   manuallySelected: boolean;
-  onSelect: (kind: SessionGroupKind) => void;
+  onSelect: (kind: HomeCreatableKind) => void;
 }) {
   return (
     <>
       <div className="mt-3.5 flex max-w-full flex-wrap justify-center gap-1.5 px-1">
-        {HOME_KIND_OPTIONS.map(({ kind, label, Icon }) => {
+        {HOME_CREATE_KIND_OPTIONS.map(({ kind, label, Icon }) => {
           const active = kind === activeKind;
           return (
             <button

@@ -24,6 +24,7 @@ export function HomeWorkRow({ item }: { item: HomeWorkItem }) {
       tabIndex={0}
       onClick={open}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           open();

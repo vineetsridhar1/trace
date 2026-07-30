@@ -29,6 +29,7 @@ export function HomeHeader({ people, title = "Home" }: { people: HeaderPerson[];
       <div className="app-region-no-drag ml-auto flex items-center gap-3">
         <button
           type="button"
+          aria-label="Search Trace"
           onClick={() => setPaletteOpen(true)}
           className="flex h-7 items-center gap-2 rounded-md border border-[var(--th-edge)] bg-[var(--th-surface)] px-2 text-xs text-[var(--th-muted)] transition-colors hover:border-[var(--th-edge-hover)] hover:text-[var(--th-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--th-accent-light)] sm:w-48"
         >

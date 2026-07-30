@@ -31,14 +31,19 @@ export function HomeWorkRowActions({ item }: { item: HomeWorkItem }) {
       agentStatus: "active",
       sessionStatus: "in_progress",
     });
-    const result = await client.mutation(RUN_SESSION_MUTATION, { id: item.sessionId }).toPromise();
-    if (result.error) {
+    try {
+      const result = await client
+        .mutation(RUN_SESSION_MUTATION, { id: item.sessionId })
+        .toPromise();
+      if (result.error) throw result.error;
+    } catch (error) {
       if (previous) store.upsert("sessions", item.sessionId, previous);
       toast.error(failed ? "Could not retry session" : "Could not resume session", {
-        description: result.error.message,
+        description: error instanceof Error ? error.message : "Unknown error",
       });
+    } finally {
+      setRunning(false);
     }
-    setRunning(false);
   };
 
   if (failed) {

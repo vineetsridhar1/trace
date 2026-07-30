@@ -45,24 +45,45 @@ export function buildHomeWorkData({
 }: BuildHomeWorkDataInput): HomeWorkData {
   if (!currentUserId) return { items: [], totalOwnedOrParticipating: 0 };
 
-  const activeInbox = Object.values(inboxItems).filter(
-    (item) => item.userId === currentUserId && item.status === "active",
-  );
+  const activeInboxBySourceId = new Map<string, InboxItem>();
+  for (const item of Object.values(inboxItems)) {
+    if (
+      item.userId === currentUserId &&
+      item.status === "active" &&
+      !activeInboxBySourceId.has(item.sourceId)
+    ) {
+      activeInboxBySourceId.set(item.sourceId, item);
+    }
+  }
   const items: HomeWorkItem[] = [];
   let totalOwnedOrParticipating = 0;
 
   for (const group of Object.values(groups)) {
-    const groupSessions = (sessionIdsByGroup[group.id] ?? [])
-      .map((id) => sessions[id])
-      .filter((session): session is SessionEntity => Boolean(session))
-      .sort(compareSessionsByActivity);
-    const participates =
-      group.owner?.id === currentUserId ||
-      groupSessions.some((session) => session.createdBy?.id === currentUserId);
+    const groupSessions: SessionEntity[] = [];
+    let latestSession: SessionEntity | null = null;
+    let latestSessionActivity = Number.NEGATIVE_INFINITY;
+    let participates = group.owner?.id === currentUserId;
+    let inboxItem = activeInboxBySourceId.get(group.id) ?? null;
+
+    for (const id of sessionIdsByGroup[group.id] ?? []) {
+      const session = sessions[id];
+      if (!session) continue;
+      groupSessions.push(session);
+      if (session.createdBy?.id === currentUserId) participates = true;
+      if (!inboxItem) inboxItem = activeInboxBySourceId.get(session.id) ?? null;
+      const sessionActivity = sessionActivityTime(session);
+      if (
+        !latestSession ||
+        sessionActivity > latestSessionActivity ||
+        (sessionActivity === latestSessionActivity && session.id < latestSession.id)
+      ) {
+        latestSession = session;
+        latestSessionActivity = sessionActivity;
+      }
+    }
     if (!participates) continue;
 
     totalOwnedOrParticipating += 1;
-    const latestSession = groupSessions[0] ?? null;
     const activityAt =
       latestSession?.lastMessageAt ??
       latestSession?.lastUserMessageAt ??
@@ -74,11 +95,6 @@ export function buildHomeWorkData({
     const bucket = resolveBucket(status, group.archivedAt ?? null, activityAt, now);
     if (!bucket) continue;
 
-    const groupSessionIds = new Set(groupSessions.map((session) => session.id));
-    const inboxItem =
-      activeInbox.find(
-        (item) => item.sourceId === group.id || groupSessionIds.has(item.sourceId),
-      ) ?? null;
     const agentStatus = latestSession?.agentStatus ?? status;
     const sessionStatus = latestSession?.sessionStatus ?? status;
 
@@ -109,10 +125,11 @@ export function buildHomeWorkData({
   return { items, totalOwnedOrParticipating };
 }
 
-function compareSessionsByActivity(a: SessionEntity, b: SessionEntity): number {
-  const aTime = a.lastMessageAt ?? a.lastUserMessageAt ?? a.updatedAt ?? a.createdAt;
-  const bTime = b.lastMessageAt ?? b.lastUserMessageAt ?? b.updatedAt ?? b.createdAt;
-  return new Date(bTime).getTime() - new Date(aTime).getTime();
+function sessionActivityTime(session: SessionEntity): number {
+  const value =
+    session.lastMessageAt ?? session.lastUserMessageAt ?? session.updatedAt ?? session.createdAt;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
 function resolveStatus(group: SessionGroupEntity, sessions: SessionEntity[]): string {

@@ -1,32 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SessionGroupKind } from "@trace/gql";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { normalizeTool } from "../session/picker/pickerShared";
 import { createHomeSession } from "../../lib/create-home-session";
-import { detectHomeSessionKind, detectPromptRepo } from "../home/home-kind-routing";
-import { useHomeComposerStore } from "../../stores/home-composer";
+import {
+  detectHomeSessionKind,
+  detectPromptRepo,
+  isSubstantialPromptEdit,
+} from "../home/home-kind-routing";
+import { homeComposerDraftScope, useHomeComposerStore } from "../../stores/home-composer";
 import { useHomeDataStore } from "../../stores/home-data";
 import { HomeComposer } from "../home/HomeComposer";
 import { HomeFirstRunSparks } from "../home/HomeFirstRunSparks";
 import { HomeHeader } from "../home/HomeHeader";
 import { DEFAULT_HOME_KIND } from "../home/HomeKindIcon";
 import { HomeKindSelector } from "../home/HomeKindSelector";
+import { HomeLedgerError } from "../home/HomeLedgerError";
 import { HomeLedgerSkeleton } from "../home/HomeLedgerSkeleton";
 import { HomeWorkLedger } from "../home/HomeWorkLedger";
 import { useHomeWorkData } from "../home/useHomeWorkData";
 import { MODE_CYCLE, type InteractionMode } from "../session/interactionModes";
 import { getDefaultModel, getDefaultReasoningEffort } from "../session/modelOptions";
 import type { ToolOptionValue } from "../session/picker/pickerShared";
-import {
-  clearHomeDraft,
-  isSubstantialPromptEdit,
-  readHomeDraft,
-  saveHomeDraft,
-} from "../home/home-draft";
+import { GeneratedProjectsGallery } from "../sidebar/GeneratedProjectsGallery";
+import type { HomeCreatableKind } from "../home/home-kinds";
 
 export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   const activeOrgId = useAuthStore((state: AuthState) => state.activeOrgId);
+  const currentUserId = useAuthStore((state: AuthState) => state.user?.id);
   const defaultTool = useAuthStore((state: AuthState) => state.user?.defaultSessionTool);
+  const draftScope = homeComposerDraftScope(currentUserId, activeOrgId);
+  const prompt = useHomeComposerStore((state) => state.drafts[draftScope] ?? "");
+  const setDraft = useHomeComposerStore((state) => state.setDraft);
+  const clearDraft = useHomeComposerStore((state) => state.clearDraft);
+  const retryHomeData = useHomeDataStore((state) => state.requestRetry);
   const reposTable = useEntityStore((state) => state.repos);
   const channelsTable = useEntityStore((state) => state.channels);
   const repos = useMemo(
@@ -35,9 +41,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   );
   const channels = useMemo(() => Object.values(channelsTable), [channelsTable]);
   const work = useHomeWorkData();
-  const [draftOrgId, setDraftOrgId] = useState(activeOrgId);
-  const [prompt, setPrompt] = useState(() => readHomeDraft(activeOrgId));
-  const [manualKind, setManualKind] = useState<SessionGroupKind | null>(null);
+  const [manualKind, setManualKind] = useState<HomeCreatableKind | null>(null);
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
   const [tool, setTool] = useState<ToolOptionValue>(() =>
     normalizeTool(defaultTool ?? "claude_code"),
@@ -50,7 +54,15 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   const [submitting, setSubmitting] = useState(false);
   const manualPromptRef = useRef("");
   const homeDataReady = useHomeDataStore(
-    (state) => state.organizationId === activeOrgId && state.codingLoaded && state.generatedLoaded,
+    (state) =>
+      state.organizationId === activeOrgId &&
+      state.codingStatus === "ready" &&
+      state.generatedStatus === "ready",
+  );
+  const homeDataFailed = useHomeDataStore(
+    (state) =>
+      state.organizationId === activeOrgId &&
+      (state.codingStatus === "error" || state.generatedStatus === "error"),
   );
   const detectedKind = detectHomeSessionKind(prompt) ?? DEFAULT_HOME_KIND;
   const activeKind = manualKind ?? detectedKind;
@@ -67,26 +79,19 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   }, [isCreateMode]);
 
   useEffect(() => {
-    if (draftOrgId === activeOrgId) return;
-    setDraftOrgId(activeOrgId);
-    setPrompt(readHomeDraft(activeOrgId));
     setManualKind(null);
     setSelectedRepoId(null);
-  }, [activeOrgId, draftOrgId]);
-
-  useEffect(() => {
-    if (draftOrgId !== activeOrgId) return;
-    saveHomeDraft(activeOrgId, prompt);
-  }, [activeOrgId, draftOrgId, prompt]);
+    manualPromptRef.current = "";
+  }, [draftScope]);
 
   const updatePrompt = (nextPrompt: string) => {
-    setPrompt(nextPrompt);
+    setDraft(draftScope, nextPrompt);
     if (manualKind && isSubstantialPromptEdit(manualPromptRef.current, nextPrompt)) {
       setManualKind(null);
     }
   };
 
-  const selectKind = (kind: SessionGroupKind) => {
+  const selectKind = (kind: HomeCreatableKind) => {
     setManualKind(kind);
     manualPromptRef.current = prompt;
     if (kind !== "coding") setSelectedRepoId(null);
@@ -109,24 +114,26 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   ): Promise<boolean> => {
     if (!submittedPrompt.trim() || submitting) return false;
     setSubmitting(true);
-    const created = await createHomeSession({
-      prompt: submittedPrompt,
-      kind: activeKind,
-      tool,
-      model,
-      reasoningEffort,
-      interactionMode: submittedInteractionMode,
-      repo: effectiveRepo,
-      channels,
-    });
-    if (created) {
-      setPrompt("");
-      setManualKind(null);
-      setSelectedRepoId(null);
-      clearHomeDraft(activeOrgId);
+    try {
+      const created = await createHomeSession({
+        prompt: submittedPrompt,
+        kind: activeKind,
+        tool,
+        model,
+        reasoningEffort,
+        interactionMode: submittedInteractionMode,
+        repo: effectiveRepo,
+        channels,
+      });
+      if (created) {
+        clearDraft(draftScope);
+        setManualKind(null);
+        setSelectedRepoId(null);
+      }
+      return created;
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
-    return created;
   };
 
   const firstRun = homeDataReady && work.totalOwnedOrParticipating === 0;
@@ -179,12 +186,16 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
           </div>
 
           {isCreateMode ? (
-            <HomeFirstRunSparks
-              showCollectionHint={false}
-              onUsePrompt={(starter) => useHomeComposerStore.getState().requestFocus(starter)}
-            />
+            <GeneratedProjectsGallery />
           ) : !homeDataReady ? (
-            <HomeLedgerSkeleton />
+            homeDataFailed ? (
+              <>
+                <HomeLedgerError onRetry={retryHomeData} />
+                {work.items.length > 0 && <HomeWorkLedger items={work.items} />}
+              </>
+            ) : (
+              <HomeLedgerSkeleton />
+            )
           ) : firstRun ? (
             <HomeFirstRunSparks
               onUsePrompt={(starter) => useHomeComposerStore.getState().requestFocus(starter)}

@@ -21,24 +21,25 @@ export function HomeDecisionPopover({ item }: { item: HomeWorkItem }) {
       ...(approved ? { agentStatus: "active" } : {}),
     });
 
-    const result = await client
-      .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-        sessionId: item.sessionId,
-        text: approved
-          ? "Approved. Continue with this plan."
-          : "Denied. Do not proceed with this plan.",
-      })
-      .toPromise();
-
-    if (result.error) {
+    try {
+      const result = await client
+        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+          sessionId: item.sessionId,
+          text: approved
+            ? "Approved. Continue with this plan."
+            : "Denied. Do not proceed with this plan.",
+        })
+        .toPromise();
+      if (result.error) throw result.error;
+      setOpen(false);
+    } catch (error) {
       if (previous) store.upsert("sessions", item.sessionId, previous);
       toast.error(`Could not ${approved ? "approve" : "deny"} request`, {
-        description: result.error.message,
+        description: error instanceof Error ? error.message : "Unknown error",
       });
-    } else {
-      setOpen(false);
+    } finally {
+      setSending(false);
     }
-    setSending(false);
   };
 
   return (

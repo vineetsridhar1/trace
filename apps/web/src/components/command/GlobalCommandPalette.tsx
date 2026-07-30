@@ -35,6 +35,7 @@ import { isLocalMode } from "../../lib/runtime-mode";
 import { NewGeneratedProjectDialog } from "./NewGeneratedProjectDialog";
 import { HomeKindIcon, homeKindLabel } from "../home/HomeKindIcon";
 import { useHomeComposerStore } from "../../stores/home-composer";
+import { limitCommandPaletteGroups } from "./command-palette-limits";
 
 interface PaletteItem {
   key: string;
@@ -459,8 +460,11 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     // Message hits intentionally live only on the dedicated search page — running
     // a live search per keystroke here would be slow with lots of messages.
     ordered.sort((a, b) => groupPriority(a.name) - groupPriority(b.name));
-    if (searchGroup) ordered.push(searchGroup);
-    return ordered;
+    // cmdk does not virtualize. Bound the mounted rows and let search expose
+    // results outside the default preview without creating an unbounded DOM.
+    const limited = limitCommandPaletteGroups(ordered, q ? 20 : 8, 80);
+    if (searchGroup) limited.push(searchGroup);
+    return limited;
   }, [items, trimmedQuery, isQuoted, searchTerm, openSearch, setActiveChannelId]);
 
   return (

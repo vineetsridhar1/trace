@@ -1,124 +1,85 @@
-import { useAuthStore, useEntityStore } from "@trace/client-core";
-import { useEffect } from "react";
+import { useMemo, memo } from "react";
 import { Plus } from "lucide-react";
-import { gql } from "@urql/core";
-import { client } from "../../lib/urql";
+import { useAuthStore, useEntityStore } from "@trace/client-core";
 import { useCommandPaletteStore } from "../../stores/command-palette";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
+import { useHomeDataStore } from "../../stores/home-data";
 import { Button } from "../ui/button";
+import { GeneratedDesignSystemsGallery } from "./GeneratedDesignSystemsGallery";
 import { GeneratedProjectGalleryCard } from "./GeneratedProjectGalleryCard";
 import { usePdfArtifactPreviewUrls } from "./usePdfArtifactPreviewUrls";
-const DESIGN_SYSTEMS_QUERY = gql`
-  query GalleryDesignSystems($organizationId: ID!) {
-    designSystems(organizationId: $organizationId) {
-      id
-      authoringSessionGroupId
-      archivedAt
-      name
-      status
-    }
-  }
-`;
 
-export function GeneratedProjectsGallery() {
+export const GeneratedProjectsGallery = memo(function GeneratedProjectsGallery() {
   const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const groups = useEntityStore((state) => state.sessionGroups);
-  const upsertMany = useEntityStore((state) => state.upsertMany);
   const openGeneratedProjectDialog = useCommandPaletteStore(
     (state) => state.openGeneratedProjectDialog,
   );
-  useEffect(() => {
-    if (!activeOrgId) return;
-    void client
-      .query(
-        DESIGN_SYSTEMS_QUERY,
-        { organizationId: activeOrgId },
-        { requestPolicy: "network-only" },
-      )
-      .toPromise()
-      .then((result) => {
-        if (!result.error) upsertMany("designSystems", result.data?.designSystems ?? []);
-      });
-  }, [activeOrgId, upsertMany]);
-  const visibleGroups = Object.values(groups)
-    .filter(
-      (group) =>
-        !group.archivedAt &&
-        (group.kind === "app" ||
-          group.kind === "design" ||
-          group.kind === "design_system" ||
-          group.kind === "pdf" ||
-          group.kind === "animation"),
-    )
-    .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-  const projectGroups = visibleGroups.filter((group) => group.kind !== "design_system");
-  const designSystemGroups = visibleGroups.filter((group) => group.kind === "design_system");
-  const pdfGroups = projectGroups.filter((group) => group.kind === "pdf");
+  const generatedStatus = useHomeDataStore((state) =>
+    state.organizationId === activeOrgId ? state.generatedStatus : "idle",
+  );
+  const retryHomeData = useHomeDataStore((state) => state.requestRetry);
+  const visibleGroups = useMemo(
+    () =>
+      Object.values(groups)
+        .filter(
+          (group) =>
+            !group.archivedAt &&
+            (group.kind === "app" ||
+              group.kind === "design" ||
+              group.kind === "pdf" ||
+              group.kind === "animation"),
+        )
+        .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")),
+    [groups],
+  );
+  const pdfGroups = visibleGroups.filter((group) => group.kind === "pdf");
   const pdfPreviewUrls = usePdfArtifactPreviewUrls(pdfGroups);
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="app-region-drag flex h-12 shrink-0 items-center border-b border-border py-0 pl-[var(--trace-header-title-offset)] pr-4 transition-[padding-left] duration-200 ease-in-out">
-        <h2 className="text-sm font-semibold text-foreground">Create</h2>
-      </header>
-      <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6">
-          <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h1 className="text-xl font-semibold text-foreground">Your creations</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Apps, designs, documents, and animations created by your workspace.
-              </p>
-            </div>
-            <Button onClick={() => openGeneratedProjectDialog("choose")}>
-              <Plus className="size-4" />
-              Create new
-            </Button>
-          </div>
-          {projectGroups.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
-              Your generated projects will appear here.
-            </p>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {projectGroups.map((group) => (
-                <GeneratedProjectGalleryCard
-                  key={group.id}
-                  group={group}
-                  pdfPreviewUrl={pdfPreviewUrls[group.id]}
-                />
-              ))}
-            </div>
-          )}
-          <Accordion className="mt-10 border-t border-border">
-            <AccordionItem value="design-systems" className="border-b-0">
-              <AccordionTrigger className="py-5 hover:no-underline">
-                <span className="flex flex-col gap-1">
-                  <span className="font-semibold text-foreground">Design systems</span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {designSystemGroups.length === 1
-                      ? "1 shared system"
-                      : `${designSystemGroups.length} shared systems`}
-                  </span>
-                </span>
-              </AccordionTrigger>
-              <AccordionContent className="pb-4">
-                {designSystemGroups.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
-                    Your design systems will appear here.
-                  </p>
-                ) : (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {designSystemGroups.map((group) => (
-                      <GeneratedProjectGalleryCard key={group.id} group={group} />
-                    ))}
-                  </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+    <section className="mx-auto mt-12 w-full max-w-7xl border-t border-[var(--th-edge)] pt-8">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Your creations</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Apps, designs, documents, animations, and design systems from your workspace.
+          </p>
         </div>
-      </main>
-    </div>
+        <Button onClick={() => openGeneratedProjectDialog("choose")}>
+          <Plus className="size-4" />
+          Create new
+        </Button>
+      </div>
+      {generatedStatus === "error" && visibleGroups.length === 0 ? (
+        <div className="rounded-lg border border-[var(--th-edge)] bg-[var(--th-surface)] p-6 text-sm text-muted-foreground">
+          <p>Creations could not be loaded.</p>
+          <button
+            type="button"
+            onClick={retryHomeData}
+            className="mt-3 text-xs font-medium text-[var(--th-accent-light)] hover:text-foreground"
+          >
+            Try again
+          </button>
+        </div>
+      ) : generatedStatus !== "ready" && visibleGroups.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+          Loading creations…
+        </p>
+      ) : visibleGroups.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+          Your generated projects will appear here.
+        </p>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visibleGroups.map((group) => (
+            <GeneratedProjectGalleryCard
+              key={group.id}
+              group={group}
+              pdfPreviewUrl={pdfPreviewUrls[group.id]}
+            />
+          ))}
+        </div>
+      )}
+      <GeneratedDesignSystemsGallery />
+    </section>
   );
-}
+});

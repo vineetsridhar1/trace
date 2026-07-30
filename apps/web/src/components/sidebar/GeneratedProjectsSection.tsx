@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Sparkles } from "lucide-react";
 import { gql } from "@urql/core";
-import type { Session, SessionGroup } from "@trace/gql";
+import type { DesignSystem, Session, SessionGroup } from "@trace/gql";
 import {
   mergeSessionGroupEntity,
   useEntityStore,
@@ -27,6 +27,8 @@ const GENERATED_PROJECTS_QUERY = gql`
       visibility
       owner {
         id
+        name
+        avatarUrl
       }
       designPreviewUrl
       gitCheckpoints {
@@ -43,6 +45,11 @@ const GENERATED_PROJECTS_QUERY = gql`
       sessions {
         id
         sessionGroupId
+        createdBy {
+          id
+          name
+          avatarUrl
+        }
         agentStatus
         sessionStatus
         prUrl
@@ -62,6 +69,8 @@ const GENERATED_PROJECTS_QUERY = gql`
       visibility
       owner {
         id
+        name
+        avatarUrl
       }
       designPreviewUrl
       gitCheckpoints {
@@ -78,6 +87,11 @@ const GENERATED_PROJECTS_QUERY = gql`
       sessions {
         id
         sessionGroupId
+        createdBy {
+          id
+          name
+          avatarUrl
+        }
         agentStatus
         sessionStatus
         prUrl
@@ -97,6 +111,8 @@ const GENERATED_PROJECTS_QUERY = gql`
       visibility
       owner {
         id
+        name
+        avatarUrl
       }
       designPreviewUrl
       gitCheckpoints {
@@ -121,6 +137,11 @@ const GENERATED_PROJECTS_QUERY = gql`
       sessions {
         id
         sessionGroupId
+        createdBy {
+          id
+          name
+          avatarUrl
+        }
         agentStatus
         sessionStatus
         prUrl
@@ -140,6 +161,8 @@ const GENERATED_PROJECTS_QUERY = gql`
       visibility
       owner {
         id
+        name
+        avatarUrl
       }
       animationPreviewUrl
       animationPreviewStatus
@@ -157,6 +180,11 @@ const GENERATED_PROJECTS_QUERY = gql`
       sessions {
         id
         sessionGroupId
+        createdBy {
+          id
+          name
+          avatarUrl
+        }
         agentStatus
         sessionStatus
         prUrl
@@ -167,55 +195,117 @@ const GENERATED_PROJECTS_QUERY = gql`
         createdAt
       }
     }
+    designSystems(organizationId: $organizationId) {
+      id
+      authoringSessionGroupId
+      archivedAt
+      name
+      status
+      authoringSessionGroup {
+        id
+        name
+        slug
+        kind
+        status
+        visibility
+        owner {
+          id
+          name
+          avatarUrl
+        }
+        designPreviewUrl
+        gitCheckpoints {
+          id
+          committedAt
+          previewStatus
+          previewUrl
+        }
+        archivedAt
+        updatedAt
+        connection {
+          state
+        }
+        sessions {
+          id
+          sessionGroupId
+          createdBy {
+            id
+            name
+            avatarUrl
+          }
+          agentStatus
+          sessionStatus
+          prUrl
+          worktreeDeleted
+          lastMessageAt
+          lastUserMessageAt
+          updatedAt
+          createdAt
+        }
+      }
+    }
   }
 `;
 
 type ProjectGroup = SessionGroup & { id: string; sessions?: Array<Session & { id: string }> };
+type LoadedDesignSystem = DesignSystem & { authoringSessionGroup: ProjectGroup };
 
 export function GeneratedProjectsSection({ activeOrgId }: { activeOrgId: string | null }) {
   const upsertMany = useEntityStore((state) => state.upsertMany);
   const activePage = useUIStore((state) => state.activePage);
   const setActivePage = useUIStore((state) => state.setActivePage);
+  const homeRetryRequest = useHomeDataStore((state) => state.retryRequest);
   const requestComposerFocus = useHomeComposerStore((state) => state.requestFocus);
   const { isMobile, setOpenMobile } = useSidebar();
 
   useEffect(() => {
     if (!activeOrgId) return;
     useHomeDataStore.getState().ensureOrganization(activeOrgId);
+    useHomeDataStore.getState().markGeneratedStatus(activeOrgId, "loading");
     let active = true;
-    void client
-      .query(
-        GENERATED_PROJECTS_QUERY,
-        { organizationId: activeOrgId },
-        { requestPolicy: "cache-and-network" },
-      )
-      .toPromise()
-      .then((result) => {
+    void (async () => {
+      try {
+        const result = await client
+          .query(
+            GENERATED_PROJECTS_QUERY,
+            { organizationId: activeOrgId },
+            { requestPolicy: "cache-and-network" },
+          )
+          .toPromise();
         if (!active) return;
         const projectGroups = [
           ...(result.data?.appSessionGroups ?? []),
           ...(result.data?.designSessionGroups ?? []),
           ...(result.data?.pdfSessionGroups ?? []),
           ...(result.data?.animationSessionGroups ?? []),
-        ] as ProjectGroup[];
-        if (!projectGroups.length) return;
-        const existingGroups = useEntityStore.getState().sessionGroups;
-        upsertMany(
-          "sessionGroups",
-          projectGroups.map((group) =>
-            mergeSessionGroupEntity(existingGroups[group.id], group as SessionGroupEntity),
+          ...(result.data?.designSystems ?? []).map(
+            (system: LoadedDesignSystem) => system.authoringSessionGroup,
           ),
-        );
-        const sessions = projectGroups.flatMap((group) => group.sessions ?? []);
-        if (sessions.length) upsertMany("sessions", sessions as SessionEntity[]);
-      })
-      .finally(() => {
-        useHomeDataStore.getState().markGeneratedLoaded(activeOrgId);
-      });
+        ] as ProjectGroup[];
+        const designSystems = (result.data?.designSystems ?? []) as DesignSystem[];
+        if (designSystems.length) upsertMany("designSystems", designSystems);
+        if (projectGroups.length) {
+          const existingGroups = useEntityStore.getState().sessionGroups;
+          upsertMany(
+            "sessionGroups",
+            projectGroups.map((group) =>
+              mergeSessionGroupEntity(existingGroups[group.id], group as SessionGroupEntity),
+            ),
+          );
+          const sessions = projectGroups.flatMap((group) => group.sessions ?? []);
+          if (sessions.length) upsertMany("sessions", sessions as SessionEntity[]);
+        }
+        useHomeDataStore
+          .getState()
+          .markGeneratedStatus(activeOrgId, result.error ? "error" : "ready");
+      } catch {
+        if (active) useHomeDataStore.getState().markGeneratedStatus(activeOrgId, "error");
+      }
+    })();
     return () => {
       active = false;
     };
-  }, [activeOrgId, upsertMany]);
+  }, [activeOrgId, homeRetryRequest, upsertMany]);
 
   const openCreate = () => {
     setActivePage("create");

@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Repo } from "@trace/gql";
-import { DEFAULT_HOME_KIND, HOME_KIND_OPTIONS } from "./HomeKindIcon";
+import { DEFAULT_HOME_KIND, HOME_CREATE_KIND_OPTIONS, HOME_KIND_OPTIONS } from "./HomeKindIcon";
 import { detectHomeSessionKind, detectPromptRepo } from "./home-kind-routing";
 
 describe("home prompt routing", () => {
   it("routes specific artifact kinds before broad coding language", () => {
-    expect(detectHomeSessionKind("Create a component library and design tokens")).toBe(
-      "design_system",
-    );
+    expect(detectHomeSessionKind("Create a component library and design tokens")).toBe("coding");
     expect(detectHomeSessionKind("Build an animated product reveal")).toBe("animation");
     expect(detectHomeSessionKind("Prepare a printable quarterly report")).toBe("pdf");
     expect(detectHomeSessionKind("Make Figma wireframes for checkout")).toBe("design");
@@ -23,6 +21,8 @@ describe("home prompt routing", () => {
   it("presents code first and uses it as the empty composer default", () => {
     expect(DEFAULT_HOME_KIND).toBe("coding");
     expect(HOME_KIND_OPTIONS[0]?.kind).toBe(DEFAULT_HOME_KIND);
+    expect(HOME_CREATE_KIND_OPTIONS[0]?.kind).toBe(DEFAULT_HOME_KIND);
+    expect(HOME_CREATE_KIND_OPTIONS).toHaveLength(HOME_KIND_OPTIONS.length - 1);
   });
 
   it("detects an explicitly mentioned repo", () => {

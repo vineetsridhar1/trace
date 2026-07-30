@@ -1,18 +1,10 @@
-import type { Repo, SessionGroupKind } from "@trace/gql";
+import type { Repo } from "@trace/gql";
+import type { HomeCreatableKind } from "./home-kinds";
 
 const KIND_PATTERNS: Array<{
-  kind: SessionGroupKind;
+  kind: HomeCreatableKind;
   patterns: RegExp[];
 }> = [
-  {
-    kind: "design_system",
-    patterns: [
-      /\bdesign system\b/i,
-      /\bcomponent librar(?:y|ies)\b/i,
-      /\bdesign tokens?\b/i,
-      /\bstorybook\b/i,
-    ],
-  },
   {
     kind: "animation",
     patterns: [/\banimat(?:e|ed|ion)\b/i, /\bmotion\b/i, /\blottie\b/i, /\bkeyframes?\b/i],
@@ -68,7 +60,7 @@ const KIND_PATTERNS: Array<{
   },
 ];
 
-export function detectHomeSessionKind(prompt: string): SessionGroupKind | null {
+export function detectHomeSessionKind(prompt: string): HomeCreatableKind | null {
   const normalized = prompt.trim();
   if (!normalized) return null;
 
@@ -102,6 +94,11 @@ export function detectPromptRepo(prompt: string, repos: Repo[]): Repo | null {
         });
       }) ?? null
   );
+}
+
+export function isSubstantialPromptEdit(original: string, next: string): boolean {
+  const difference = Math.abs(original.trim().length - next.trim().length);
+  return difference >= Math.max(12, Math.round(original.trim().length * 0.35));
 }
 
 function normalizeSearchText(value: string): string {

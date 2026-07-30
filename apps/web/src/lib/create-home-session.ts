@@ -1,13 +1,14 @@
 import { toast } from "sonner";
-import type { Channel, CodingTool, Repo, SessionGroupKind } from "@trace/gql";
+import type { Channel, CodingTool, Repo } from "@trace/gql";
 import { START_SESSION_MUTATION } from "@trace/client-core";
 import { client } from "./urql";
 import { navigateToSession } from "../stores/ui";
 import type { InteractionMode } from "../components/session/interactionModes";
+import type { HomeCreatableKind } from "../components/home/home-kinds";
 
 interface CreateHomeSessionInput {
   prompt: string;
-  kind: SessionGroupKind;
+  kind: HomeCreatableKind;
   tool: CodingTool;
   model: string | null;
   reasoningEffort: string | null;
@@ -35,7 +36,7 @@ export function buildHomeStartInput(
 }
 
 export function resolveHomeCodingChannel(
-  kind: SessionGroupKind,
+  kind: HomeCreatableKind,
   repo: Repo | null,
   channels: Channel[],
 ): Channel | null {

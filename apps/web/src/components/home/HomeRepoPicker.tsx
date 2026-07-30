@@ -69,6 +69,7 @@ export function HomeRepoPicker({
         <label className="flex h-10 items-center gap-2 border-b border-[var(--th-edge)] px-3">
           <Search className="size-3.5 text-[var(--th-muted)]" />
           <input
+            aria-label="Find a repository"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Find a repo…"
