@@ -1,8 +1,11 @@
 import { useAuthStore, useEntityStore } from "@trace/client-core";
 import { useEffect } from "react";
+import { Plus } from "lucide-react";
 import { gql } from "@urql/core";
 import { client } from "../../lib/urql";
+import { useCommandPaletteStore } from "../../stores/command-palette";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
+import { Button } from "../ui/button";
 import { GeneratedProjectGalleryCard } from "./GeneratedProjectGalleryCard";
 import { usePdfArtifactPreviewUrls } from "./usePdfArtifactPreviewUrls";
 const DESIGN_SYSTEMS_QUERY = gql`
@@ -21,6 +24,9 @@ export function GeneratedProjectsGallery() {
   const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const groups = useEntityStore((state) => state.sessionGroups);
   const upsertMany = useEntityStore((state) => state.upsertMany);
+  const openGeneratedProjectDialog = useCommandPaletteStore(
+    (state) => state.openGeneratedProjectDialog,
+  );
   useEffect(() => {
     if (!activeOrgId) return;
     void client
@@ -57,11 +63,17 @@ export function GeneratedProjectsGallery() {
       </header>
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6">
-          <div className="mb-5">
-            <h1 className="text-xl font-semibold text-foreground">Your creations</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Apps, designs, and documents created by your workspace.
-            </p>
+          <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold text-foreground">Your creations</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Apps, designs, documents, and animations created by your workspace.
+              </p>
+            </div>
+            <Button onClick={() => openGeneratedProjectDialog("choose")}>
+              <Plus className="size-4" />
+              Create new
+            </Button>
           </div>
           {projectGroups.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">

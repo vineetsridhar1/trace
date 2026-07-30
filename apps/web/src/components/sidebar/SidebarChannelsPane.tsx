@@ -79,12 +79,8 @@ export function SidebarChannelsPane({
           <HomeButton />
           <InboxButton />
           {features.tickets && <TicketsButton />}
+          <GeneratedProjectsSection activeOrgId={activeOrgId} />
         </div>
-
-        <GeneratedProjectsSection
-          activeOrgId={activeOrgId}
-          activeSessionGroupId={activeSessionGroupId}
-        />
 
         <div className="group/projects-header flex items-center justify-between rounded-md pr-1 transition-colors hover:bg-white/10">
           <button

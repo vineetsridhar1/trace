@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Plus } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useEffect } from "react";
+import { Plus, Sparkles } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Session, SessionGroup } from "@trace/gql";
 import {
@@ -10,11 +9,11 @@ import {
   type SessionGroupEntity,
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
+import { cn } from "../../lib/utils";
 import { useCommandPaletteStore } from "../../stores/command-palette";
 import { useUIStore } from "../../stores/ui";
-import { GeneratedProjectTypeSection } from "./GeneratedProjectTypeSection";
-import type { GeneratedProjectKind } from "./generated-project-types";
 import { useHomeDataStore } from "../../stores/home-data";
+import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 
 const GENERATED_PROJECTS_QUERY = gql`
   query GeneratedProjects($organizationId: ID!) {
@@ -172,32 +171,9 @@ const GENERATED_PROJECTS_QUERY = gql`
 
 type ProjectGroup = SessionGroup & { id: string; sessions?: Array<Session & { id: string }> };
 
-export function isCreateListKind(kind: SessionGroup["kind"]): kind is GeneratedProjectKind {
-  return (
-    kind === "app" ||
-    kind === "design" ||
-    kind === "design_system" ||
-    kind === "pdf" ||
-    kind === "animation"
-  );
-}
-
-type SidebarProjectKind = Exclude<GeneratedProjectKind, "design_system">;
-
-export function isSidebarCreateListKind(kind: SessionGroup["kind"]): kind is SidebarProjectKind {
-  return kind === "app" || kind === "design" || kind === "pdf" || kind === "animation";
-}
-
-export function GeneratedProjectsSection({
-  activeOrgId,
-  activeSessionGroupId,
-}: {
-  activeOrgId: string | null;
-  activeSessionGroupId: string | null;
-}) {
+export function GeneratedProjectsSection({ activeOrgId }: { activeOrgId: string | null }) {
   const upsertMany = useEntityStore((state) => state.upsertMany);
-  const groups = useEntityStore((state) => state.sessionGroups);
-  const [expanded, setExpanded] = useState(true);
+  const activePage = useUIStore((state) => state.activePage);
   const openGeneratedProjectDialog = useCommandPaletteStore(
     (state) => state.openGeneratedProjectDialog,
   );
@@ -241,80 +217,37 @@ export function GeneratedProjectsSection({
     };
   }, [activeOrgId, upsertMany]);
 
-  const projectGroupsByKind = useMemo(() => {
-    const byKind: Record<SidebarProjectKind, SessionGroupEntity[]> = {
-      app: [],
-      design: [],
-      pdf: [],
-      animation: [],
-    };
-    for (const group of Object.values(groups)) {
-      if (!group.archivedAt && isSidebarCreateListKind(group.kind)) {
-        byKind[group.kind].push(group);
-      }
-    }
-    for (const projectGroups of Object.values(byKind)) {
-      projectGroups.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
-    }
-    return byKind;
-  }, [groups]);
-
   return (
-    <div className="space-y-1 pb-3 pt-2">
-      <div className="group/generated-projects-header flex items-center justify-between rounded-md pr-1 transition-colors hover:bg-white/10">
-        <button
-          type="button"
-          aria-controls="generated-projects-list"
-          aria-expanded={expanded}
-          aria-label={`${expanded ? "Collapse" : "Expand"} Create`}
-          onClick={() => setExpanded((current) => !current)}
-          className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-foreground transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ChevronRight
-            size={14}
-            className={
-              expanded ? "shrink-0 rotate-90 transition-transform" : "shrink-0 transition-transform"
-            }
-          />
-        </button>
-        <button
-          type="button"
-          onClick={() => setActivePage("create")}
-          className="flex flex-1 cursor-pointer items-center rounded-md py-1 text-left text-xs font-semibold uppercase tracking-wider text-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span>Create</span>
-        </button>
-        <button
-          type="button"
-          title="Create new"
-          aria-label="Create new"
-          onClick={() => openGeneratedProjectDialog("choose")}
-          className="pointer-events-none flex size-5 items-center justify-center rounded text-foreground opacity-0 transition-opacity hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring group-hover/generated-projects-header:pointer-events-auto group-hover/generated-projects-header:opacity-100 group-focus-within/generated-projects-header:pointer-events-auto group-focus-within/generated-projects-header:opacity-100"
-        >
-          <Plus size={14} />
-        </button>
-      </div>
-      <AnimatePresence initial={false}>
-        {expanded ? (
-          <motion.div
-            id="generated-projects-list"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
-            className="overflow-hidden pl-3"
-          >
-            {(Object.keys(projectGroupsByKind) as SidebarProjectKind[]).map((kind) => (
-              <GeneratedProjectTypeSection
-                key={kind}
-                activeSessionGroupId={activeSessionGroupId}
-                groups={projectGroupsByKind[kind]}
-                kind={kind}
-              />
-            ))}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+    <div className="group/create relative">
+      <button
+        type="button"
+        onClick={() => setActivePage("create")}
+        className={cn(
+          "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 pr-10 text-left transition-colors",
+          sidebarRootLeftEdgeRowClass,
+          "pl-4",
+          activePage === "create"
+            ? "bg-white/10 text-foreground"
+            : "text-foreground hover:bg-white/10",
+        )}
+      >
+        <Sparkles size={16} className="shrink-0" />
+        <span className="min-w-0">
+          <span className="block text-sm font-medium">Create</span>
+          <span className="block truncate text-[10px] font-normal text-muted-foreground">
+            Apps, designs, documents & animations
+          </span>
+        </span>
+      </button>
+      <button
+        type="button"
+        title="Create new"
+        aria-label="Create new"
+        onClick={() => openGeneratedProjectDialog("choose")}
+        className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-60 transition-colors hover:bg-white/10 hover:text-foreground hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/create:opacity-100"
+      >
+        <Plus size={14} />
+      </button>
     </div>
   );
 }
