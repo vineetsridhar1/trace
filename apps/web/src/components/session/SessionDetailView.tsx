@@ -7,6 +7,7 @@ import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
 import {
   useEntityStore,
   useEntityField,
+  useScopedEventIds,
   useScopedEvents,
   eventScopeKey,
   getLatestPlanFile,
@@ -257,6 +258,9 @@ export function SessionDetailView({
   });
   const scopeKey = eventScopeKey("session", sessionId);
   const events = useScopedEvents(scopeKey);
+  // Plan transport events are intentionally absent from compact timeline items,
+  // but artifact state must still observe the complete scoped event stream.
+  const allEventIds = useScopedEventIds(scopeKey);
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
     | string
@@ -473,15 +477,18 @@ export function SessionDetailView({
       ? connectionState
       : null;
 
-  const latestPlanFile = useMemo(() => getLatestPlanFile(eventIds, events), [eventIds, events]);
+  const latestPlanFile = useMemo(
+    () => getLatestPlanFile(allEventIds, events),
+    [allEventIds, events],
+  );
 
   const lastUserEventIndex = useMemo(() => {
-    for (let index = eventIds.length - 1; index >= 0; index--) {
-      const eventType = events[eventIds[index]]?.eventType;
+    for (let index = allEventIds.length - 1; index >= 0; index--) {
+      const eventType = events[allEventIds[index]]?.eventType;
       if (eventType === "message_sent" || eventType === "session_started") return index;
     }
     return -1;
-  }, [eventIds, events]);
+  }, [allEventIds, events]);
 
   const visiblePlanFile =
     latestPlanFile &&
@@ -563,7 +570,13 @@ export function SessionDetailView({
   const showQuestion = (() => {
     if (!activeQuestion) return null;
     if (activeQuestion.node.id === dismissedQuestionId) return null;
-    if (activePlan && activePlan.index > activeQuestion.index) return null;
+    if (
+      activePlan &&
+      new Date(activePlan.node.timestamp).getTime() >
+        new Date(activeQuestion.node.timestamp).getTime()
+    ) {
+      return null;
+    }
     return activeQuestion.node;
   })();
 

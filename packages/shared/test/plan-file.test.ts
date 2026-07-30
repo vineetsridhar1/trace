@@ -104,12 +104,16 @@ describe("plan file", () => {
     ]);
   });
 
-  it("clears a previous turn's artifact before watching", async () => {
+  it("preserves a previous draft but only publishes a changed revision", async () => {
     const sessionId = `plan-file-stale-${Date.now()}`;
     sessionIds.push(sessionId);
     const filePath = getPlanFilePath(sessionId);
     await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.promises.writeFile(filePath, "# Stale plan\n", "utf8");
+    const previous =
+      '# Previous plan\n<Callout tone="decision">Use events.</Callout>\n';
+    const revised =
+      '# Revised plan\n<Callout tone="decision">Use durable events.</Callout>\n';
+    await fs.promises.writeFile(filePath, previous, "utf8");
     const snapshots: string[] = [];
 
     const watcher = createPlanFileWatcher({
@@ -117,9 +121,13 @@ describe("plan file", () => {
       onSnapshot: (snapshot) => snapshots.push(snapshot.content),
     });
     await watcher.flush();
+    expect(await fs.promises.readFile(filePath, "utf8")).toBe(previous);
+    expect(snapshots).toEqual([]);
+
+    await fs.promises.writeFile(filePath, revised, "utf8");
+    await watcher.flush();
     watcher.stop();
 
-    expect(fs.existsSync(filePath)).toBe(false);
-    expect(snapshots).toEqual([]);
+    expect(snapshots).toEqual([revised]);
   });
 });

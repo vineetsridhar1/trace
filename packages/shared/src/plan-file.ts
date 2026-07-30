@@ -43,8 +43,11 @@ Trace watches and renders that file. Create its parent directory if needed,
 update the same file whenever feedback changes the plan, and use the skill's
 native MDX block vocabulary—not ordinary Markdown and not Trace-specific custom
 tags. Do not emit a provider-native plan block or call a provider-native exit
-plan mode tool. Do not paste the plan into chat. Finish after the file contains
-the complete standalone plan.
+plan mode tool. If plan.mdx already exists, it is the prior review draft: read
+and edit it in place. Trace requires a changed file content hash for every
+revision run, so do not finish by merely reporting that the existing file is
+complete. Do not paste the plan into chat. Finish after the file contains the
+complete standalone plan.
 </system-instruction>`;
 }
 
@@ -60,13 +63,25 @@ export function createPlanFileWatcher({
   const filePath = getPlanFilePath(sessionId);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   materializeTraceVisualPlanSkill(filePath);
-  // Each planning turn must produce a fresh artifact. Otherwise an agent that
-  // exits before writing could accidentally submit the previous turn's plan.
-  fs.rmSync(filePath, { force: true });
 
   let stopped = false;
   let readAgain = false;
+  // Preserve the previous draft so revision/repair runs can edit it. Seed the
+  // hash without publishing: only a changed write from this run is fresh.
   let lastHash: string | null = null;
+  try {
+    const existing = fs.readFileSync(filePath, "utf8");
+    if (
+      existing.trim() &&
+      Buffer.byteLength(existing, "utf8") <= PLAN_FILE_MAX_BYTES
+    ) {
+      lastHash = createHash("sha256").update(existing).digest("hex");
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      onError?.(error instanceof Error ? error.message : "Failed to inspect prior plan file");
+    }
+  }
   let activeRead: Promise<void> | null = null;
 
   const readCurrent = (): Promise<void> => {
