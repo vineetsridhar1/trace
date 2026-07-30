@@ -41,6 +41,24 @@ export function zoomCanvasViewportAt(
   };
 }
 
+export function pinchCanvasViewport(
+  viewport: CanvasViewport,
+  startPoint: CanvasPoint,
+  currentPoint: CanvasPoint,
+  startDistance: number,
+  currentDistance: number,
+): CanvasViewport {
+  if (startDistance <= 0 || currentDistance <= 0) return viewport;
+  const zoom = clampCanvasZoom(viewport.zoom * (currentDistance / startDistance));
+  const worldX = (startPoint.x - viewport.x) / viewport.zoom;
+  const worldY = (startPoint.y - viewport.y) / viewport.zoom;
+  return {
+    zoom,
+    x: currentPoint.x - worldX * zoom,
+    y: currentPoint.y - worldY * zoom,
+  };
+}
+
 export function zoomFromWheel(viewport: CanvasViewport, deltaY: number, point: CanvasPoint) {
   return zoomCanvasViewportAt(
     viewport,

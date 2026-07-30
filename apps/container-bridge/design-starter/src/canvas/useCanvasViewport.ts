@@ -11,6 +11,7 @@ import {
   type CanvasViewport,
   acceleratedGestureScale,
   panCanvasViewport,
+  pinchCanvasViewport,
   wheelDeltaPixels,
   zoomCanvasViewportAt,
   zoomFromWheel,
@@ -22,13 +23,28 @@ type WebKitGestureEvent = Event & {
   scale?: number;
 };
 
+type TouchPointer = { x: number; y: number };
+type PinchGesture = {
+  viewport: CanvasViewport;
+  point: CanvasPoint;
+  distance: number;
+};
+
 const INITIAL_VIEWPORT: CanvasViewport = { zoom: 0.75, x: 100, y: 100 };
 
 export function useCanvasViewport(containerRef: RefObject<HTMLDivElement | null>) {
   const [viewport, setViewportState] = useState(INITIAL_VIEWPORT);
   const viewportRef = useRef(viewport);
-  const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    panX: number;
+    panY: number;
+  } | null>(null);
   const gestureRef = useRef<{ viewport: CanvasViewport; point: CanvasPoint } | null>(null);
+  const touchPointersRef = useRef(new Map<number, TouchPointer>());
+  const pinchRef = useRef<PinchGesture | null>(null);
 
   const setViewport = useCallback(
     (update: CanvasViewport | ((current: CanvasViewport) => CanvasViewport)) => {
@@ -68,6 +84,7 @@ export function useCanvasViewport(containerRef: RefObject<HTMLDivElement | null>
     };
     const onGestureStart = (event: Event) => {
       event.preventDefault();
+      if (touchPointersRef.current.size > 0) return;
       const gesture = event as WebKitGestureEvent;
       gestureRef.current = {
         viewport: viewportRef.current,
@@ -79,6 +96,7 @@ export function useCanvasViewport(containerRef: RefObject<HTMLDivElement | null>
     };
     const onGestureChange = (event: Event) => {
       event.preventDefault();
+      if (touchPointersRef.current.size > 0) return;
       const start = gestureRef.current;
       const scale = (event as WebKitGestureEvent).scale;
       if (!start || typeof scale !== "number" || !Number.isFinite(scale)) return;
@@ -107,20 +125,81 @@ export function useCanvasViewport(containerRef: RefObject<HTMLDivElement | null>
     };
   }, [containerRef, setViewport]);
 
-  const onPointerDown: PointerEventHandler<HTMLDivElement> = useCallback((event) => {
-    if (event.button !== 0 || event.target !== event.currentTarget) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = {
-      x: event.clientX,
-      y: event.clientY,
-      panX: viewportRef.current.x,
-      panY: viewportRef.current.y,
+  const startPinch = useCallback(() => {
+    const [first, second] = [...touchPointersRef.current.values()];
+    if (!first || !second) return;
+    const point = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+    pinchRef.current = {
+      viewport: viewportRef.current,
+      point,
+      distance: Math.hypot(second.x - first.x, second.y - first.y),
     };
+    dragRef.current = null;
   }, []);
+
+  const onPointerDown: PointerEventHandler<HTMLDivElement> = useCallback(
+    (event) => {
+      if (event.pointerType === "touch") {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        touchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (touchPointersRef.current.size >= 2) {
+          startPinch();
+        } else {
+          dragRef.current = {
+            pointerId: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            panX: viewportRef.current.x,
+            panY: viewportRef.current.y,
+          };
+        }
+        return;
+      }
+      if (event.button !== 0 || event.target !== event.currentTarget) return;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      dragRef.current = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        panX: viewportRef.current.x,
+        panY: viewportRef.current.y,
+      };
+    },
+    [startPinch],
+  );
   const onPointerMove: PointerEventHandler<HTMLDivElement> = useCallback(
     (event) => {
+      if (event.pointerType === "touch") {
+        const pointer = touchPointersRef.current.get(event.pointerId);
+        if (!pointer) return;
+        pointer.x = event.clientX;
+        pointer.y = event.clientY;
+        const pinch = pinchRef.current;
+        const [first, second] = [...touchPointersRef.current.values()];
+        if (!pinch || !first || !second) {
+          const drag = dragRef.current;
+          if (!drag || drag.pointerId !== event.pointerId) return;
+          setViewport((current) => ({
+            ...current,
+            x: drag.panX + event.clientX - drag.x,
+            y: drag.panY + event.clientY - drag.y,
+          }));
+          return;
+        }
+        const point = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+        setViewport(
+          pinchCanvasViewport(
+            pinch.viewport,
+            pinch.point,
+            point,
+            pinch.distance,
+            Math.hypot(second.x - first.x, second.y - first.y),
+          ),
+        );
+        return;
+      }
       const drag = dragRef.current;
-      if (!drag) return;
+      if (!drag || drag.pointerId !== event.pointerId) return;
       setViewport((current) => ({
         ...current,
         x: drag.panX + event.clientX - drag.x,
@@ -129,8 +208,26 @@ export function useCanvasViewport(containerRef: RefObject<HTMLDivElement | null>
     },
     [setViewport],
   );
-  const endPointerDrag = useCallback(() => {
-    dragRef.current = null;
+  const endPointerDrag: PointerEventHandler<HTMLDivElement> = useCallback((event) => {
+    if (event.pointerType === "touch") {
+      touchPointersRef.current.delete(event.pointerId);
+      pinchRef.current = null;
+      if (touchPointersRef.current.size === 1) {
+        const [pointerId, pointer] = touchPointersRef.current.entries().next().value as [
+          number,
+          TouchPointer,
+        ];
+        dragRef.current = {
+          pointerId,
+          x: pointer.x,
+          y: pointer.y,
+          panX: viewportRef.current.x,
+          panY: viewportRef.current.y,
+        };
+      }
+      return;
+    }
+    if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
   }, []);
   const zoomAtCenter = useCallback(
     (factor: number) => {

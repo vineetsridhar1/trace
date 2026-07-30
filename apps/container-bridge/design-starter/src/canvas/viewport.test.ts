@@ -5,6 +5,7 @@ import {
   MIN_CANVAS_ZOOM,
   acceleratedGestureScale,
   panCanvasViewport,
+  pinchCanvasViewport,
   wheelDeltaPixels,
   zoomCanvasViewportAt,
   zoomFromWheel,
@@ -29,6 +30,13 @@ test("keeps the world point under the pointer fixed while zooming", () => {
 
   assert.equal(after.x + worldPoint.x * after.zoom, point.x);
   assert.equal(after.y + worldPoint.y * after.zoom, point.y);
+});
+
+test("keeps a pinch anchored between the fingers while allowing two-finger panning", () => {
+  const viewport = { zoom: 1, x: 20, y: 30 };
+  const next = pinchCanvasViewport(viewport, { x: 100, y: 100 }, { x: 140, y: 120 }, 80, 160);
+
+  assert.deepEqual(next, { zoom: 2, x: -20, y: -20 });
 });
 
 test("clamps wheel zoom without moving the pointer anchor", () => {
