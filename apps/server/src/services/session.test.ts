@@ -5140,6 +5140,13 @@ describe("SessionService", () => {
           ),
         }),
       );
+      expect(command).toEqual(
+        expect.objectContaining({
+          appendSystemPrompt: expect.stringContaining(
+            "first use your question capability (e.g. the AskUserQuestion tool) to ask the clarifying questions",
+          ),
+        }),
+      );
     });
 
     it("passes enableClaudeInChrome on the delivery command when the creator enabled it", async () => {
