@@ -14,6 +14,7 @@ import { useCommandPaletteStore } from "../../stores/command-palette";
 import { useUIStore } from "../../stores/ui";
 import { GeneratedProjectTypeSection } from "./GeneratedProjectTypeSection";
 import type { GeneratedProjectKind } from "./generated-project-types";
+import { useHomeDataStore } from "../../stores/home-data";
 
 const GENERATED_PROJECTS_QUERY = gql`
   query GeneratedProjects($organizationId: ID!) {
@@ -183,9 +184,7 @@ export function isCreateListKind(kind: SessionGroup["kind"]): kind is GeneratedP
 
 type SidebarProjectKind = Exclude<GeneratedProjectKind, "design_system">;
 
-export function isSidebarCreateListKind(
-  kind: SessionGroup["kind"],
-): kind is SidebarProjectKind {
+export function isSidebarCreateListKind(kind: SessionGroup["kind"]): kind is SidebarProjectKind {
   return kind === "app" || kind === "design" || kind === "pdf" || kind === "animation";
 }
 
@@ -206,6 +205,7 @@ export function GeneratedProjectsSection({
 
   useEffect(() => {
     if (!activeOrgId) return;
+    useHomeDataStore.getState().ensureOrganization(activeOrgId);
     let active = true;
     void client
       .query(
@@ -232,6 +232,9 @@ export function GeneratedProjectsSection({
         );
         const sessions = projectGroups.flatMap((group) => group.sessions ?? []);
         if (sessions.length) upsertMany("sessions", sessions as SessionEntity[]);
+      })
+      .finally(() => {
+        useHomeDataStore.getState().markGeneratedLoaded(activeOrgId);
       });
     return () => {
       active = false;
@@ -269,7 +272,9 @@ export function GeneratedProjectsSection({
         >
           <ChevronRight
             size={14}
-            className={expanded ? "shrink-0 rotate-90 transition-transform" : "shrink-0 transition-transform"}
+            className={
+              expanded ? "shrink-0 rotate-90 transition-transform" : "shrink-0 transition-transform"
+            }
           />
         </button>
         <button

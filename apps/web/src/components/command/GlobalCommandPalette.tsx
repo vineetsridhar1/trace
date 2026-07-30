@@ -3,7 +3,6 @@ import {
   ChevronRight,
   AppWindow,
   Code,
-  GitBranch,
   Hash,
   Inbox,
   Figma,
@@ -14,9 +13,10 @@ import {
   Settings,
   Sparkles,
   Ticket,
+  UserRound,
 } from "lucide-react";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
-import type { Channel, Chat } from "@trace/gql";
+import type { Channel, Chat, Repo, User } from "@trace/gql";
 import type { SessionGroupEntity } from "@trace/client-core";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "../ui/command";
@@ -33,6 +33,8 @@ import { features } from "../../lib/features";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { isLocalMode } from "../../lib/runtime-mode";
 import { NewGeneratedProjectDialog } from "./NewGeneratedProjectDialog";
+import { HomeKindIcon, homeKindLabel } from "../home/HomeKindIcon";
+import { useHomeComposerStore } from "../../stores/home-composer";
 
 interface PaletteItem {
   key: string;
@@ -40,6 +42,7 @@ interface PaletteItem {
   label: string;
   search: string;
   icon: ReactNode;
+  meta?: string;
   shortcut?: CommandShortcut;
   onSelect: () => void;
 }
@@ -64,7 +67,7 @@ export function GlobalCommandPalette() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           showCloseButton={false}
-          className="max-h-[calc(100dvh-4rem)] w-[min(92vw,640px)] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden rounded-lg border border-[#2a2a2a] bg-[#111111] p-0 shadow-2xl sm:max-w-[640px]"
+          className="max-h-[calc(100dvh-2rem)] w-[min(92vw,620px)] max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-xl border border-[var(--th-edge-strong)] bg-[var(--th-surface)] p-0 shadow-[0_24px_64px_rgb(0_0_0/0.65)] sm:max-w-[620px]"
         >
           <DialogTitle className="sr-only">Command palette</DialogTitle>
           <DialogDescription className="sr-only">
@@ -113,13 +116,15 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
   const sessionGroupsTable = useEntityStore(
     (s: { sessionGroups: Record<string, SessionGroupEntity> }) => s.sessionGroups,
   );
+  const reposTable = useEntityStore((s: { repos: Record<string, Repo> }) => s.repos);
+  const usersTable = useEntityStore((s: { users: Record<string, User> }) => s.users);
 
   const channels = useMemo(
     () =>
       Object.values(channelsTable)
         .filter((c) => features.messaging || c.type !== "text")
         .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-        .map((c) => ({ id: c.id, name: c.name, type: c.type })),
+        .map((c) => ({ id: c.id, name: c.name, type: c.type, repoId: c.repo?.id ?? null })),
     [channelsTable],
   );
 
@@ -141,8 +146,23 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
       new Date(g._sortTimestamp ?? g.updatedAt ?? g.createdAt ?? 0).getTime();
     return Object.values(sessionGroupsTable)
       .sort((a, b) => sortTs(b) - sortTs(a))
-      .map((g) => ({ id: g.id, name: g.name ?? g.slug ?? "Untitled session" }));
+      .map((g) => ({
+        id: g.id,
+        name: g.name ?? g.slug ?? "Untitled session",
+        kind: g.kind,
+        status: g.status,
+        repoName: g.repo?.name ?? null,
+        channelId: g.channel?.id ?? null,
+      }));
   }, [sessionGroupsTable]);
+  const repos = useMemo(
+    () => Object.values(reposTable).sort((a, b) => a.name.localeCompare(b.name)),
+    [reposTable],
+  );
+  const people = useMemo(
+    () => Object.values(usersTable).sort((a, b) => a.name.localeCompare(b.name)),
+    [usersTable],
+  );
 
   const activeChannelIsCoding = useEntityStore((s: { channels: Record<string, Channel> }) =>
     activeChannelId ? s.channels[activeChannelId]?.type === "coding" : false,
@@ -322,11 +342,52 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     for (const group of sessionGroups) {
       list.push({
         key: `session-${group.id}`,
-        group: "Sessions",
+        group: paletteSessionGroup(group.kind),
         label: group.name,
-        search: `session ${group.name} ${group.id}`,
-        icon: <GitBranch size={16} />,
-        onSelect: () => navigateToSessionGroup(null, group.id),
+        search: `session ${homeKindLabel(group.kind)} ${group.name} ${group.repoName ?? ""} ${group.id}`,
+        icon: <HomeKindIcon kind={group.kind} className="size-4" />,
+        meta:
+          group.status === "needs_input"
+            ? "needs input"
+            : group.status === "in_review"
+              ? "needs review"
+              : (group.repoName ?? undefined),
+        onSelect: () => navigateToSessionGroup(group.channelId, group.id),
+      });
+    }
+
+    for (const repo of repos) {
+      const channel = channels.find((candidate) => candidate.repoId === repo.id);
+      list.push({
+        key: `repo-${repo.id}`,
+        group: "Repos",
+        label: repo.name,
+        search: `repo repository ${repo.name} ${repo.remoteUrl ?? ""}`,
+        icon: <Hash size={16} />,
+        meta: repo.defaultBranch,
+        onSelect: () => {
+          if (channel) {
+            setActiveChannelId(channel.id);
+          } else {
+            setSettingsInitialTab("repositories");
+            setActivePage("settings");
+          }
+        },
+      });
+    }
+
+    for (const person of people) {
+      list.push({
+        key: `person-${person.id}`,
+        group: "People",
+        label: person.name,
+        search: `person people member ${person.name} ${person.email}`,
+        icon: <UserRound size={16} />,
+        meta: person.email,
+        onSelect: () => {
+          setSettingsInitialTab("members");
+          setActivePage("settings");
+        },
       });
     }
 
@@ -337,6 +398,8 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     channels,
     chats,
     sessionGroups,
+    repos,
+    people,
     chatLabel,
     activeChannelIsCoding,
     activeChannelId,
@@ -351,11 +414,23 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     // falls through to it when nothing else matches.
     const searchGroup: { name: string; items: PaletteItem[] } | null = searchTerm
       ? {
-          name: "Search",
+          name: "More",
           items: [
             {
+              key: "__start-session__",
+              group: "More",
+              label: `Start a new session: “${searchTerm}”`,
+              search: "",
+              icon: <Sparkles size={16} className="text-[var(--th-accent-light)]" />,
+              meta: "⌘↵",
+              onSelect: () => {
+                setActiveChannelId(null);
+                useHomeComposerStore.getState().requestFocus(searchTerm);
+              },
+            },
+            {
               key: "__search-page__",
-              group: "Search",
+              group: "More",
               label: `Search for “${searchTerm}”`,
               search: "",
               icon: <Search size={16} />,
@@ -383,16 +458,29 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
     }
     // Message hits intentionally live only on the dedicated search page — running
     // a live search per keystroke here would be slow with lots of messages.
+    ordered.sort((a, b) => groupPriority(a.name) - groupPriority(b.name));
     if (searchGroup) ordered.push(searchGroup);
     return ordered;
-  }, [items, trimmedQuery, isQuoted, searchTerm, openSearch]);
+  }, [items, trimmedQuery, isQuoted, searchTerm, openSearch, setActiveChannelId]);
 
   return (
-    <Command shouldFilter={false} loop className="rounded-lg bg-[#111111]">
+    <Command
+      shouldFilter={false}
+      loop
+      className="rounded-xl bg-[var(--th-surface)]"
+      onKeyDown={(event) => {
+        if (!(event.metaKey || event.ctrlKey) || event.key !== "Enter" || !searchTerm) return;
+        event.preventDefault();
+        run(() => {
+          setActiveChannelId(null);
+          useHomeComposerStore.getState().requestFocus(searchTerm);
+        });
+      }}
+    >
       <CommandInput
         value={query}
         onValueChange={setQuery}
-        placeholder="Search messages, or jump to a channel, conversation, or session…"
+        placeholder="Search sessions, repos, people, or actions…"
         autoFocus
       />
       <CommandList>
@@ -404,7 +492,18 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
               {group.items.map((item) => (
                 <CommandItem key={item.key} value={item.key} onSelect={() => run(item.onSelect)}>
                   {item.icon}
-                  <span className="truncate">{item.label}</span>
+                  <HighlightedLabel label={item.label} query={searchTerm} />
+                  {item.meta && (
+                    <span
+                      className={`ml-auto max-w-36 truncate text-[11px] ${
+                        item.meta.includes("needs")
+                          ? "text-[var(--th-warn)]"
+                          : "text-[var(--th-muted)]"
+                      }`}
+                    >
+                      {item.meta}
+                    </span>
+                  )}
                   {item.shortcut && (
                     <span className="ml-auto flex items-center gap-1">
                       {formatShortcut(item.shortcut).map((key, i) => (
@@ -423,6 +522,55 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
           ))
         )}
       </CommandList>
+      <div className="flex h-8 items-center gap-3 border-t border-[var(--th-edge)] bg-[var(--th-raised)] px-3 text-[10px] text-[var(--th-faint)]">
+        <span>↑↓ navigate</span>
+        <span>⏎ open</span>
+        <span className="hidden sm:inline">⌘⏎ start new</span>
+        <span className="ml-auto hidden sm:inline">sessions · repos · people</span>
+      </div>
     </Command>
+  );
+}
+
+function paletteSessionGroup(kind: SessionGroupEntity["kind"]): string {
+  if (kind === "coding") return "Sessions";
+  if (kind === "design") return "Designs";
+  if (kind === "design_system") return "Design systems";
+  if (kind === "app") return "Apps";
+  if (kind === "pdf") return "PDFs";
+  return "Animations";
+}
+
+function groupPriority(group: string): number {
+  const order = [
+    "Sessions",
+    "Designs",
+    "Apps",
+    "PDFs",
+    "Animations",
+    "Design systems",
+    "Repos",
+    "People",
+    "Actions",
+    "Go to",
+    "Channels",
+    "Direct Messages",
+    "Settings",
+  ];
+  const index = order.indexOf(group);
+  return index === -1 ? order.length : index;
+}
+
+function HighlightedLabel({ label, query }: { label: string; query: string }) {
+  const index = query ? label.toLowerCase().indexOf(query.toLowerCase()) : -1;
+  if (index === -1) return <span className="min-w-0 flex-1 truncate">{label}</span>;
+  return (
+    <span className="min-w-0 flex-1 truncate">
+      {label.slice(0, index)}
+      <mark className="rounded-sm bg-[color-mix(in_srgb,var(--th-accent)_28%,transparent)] text-inherit">
+        {label.slice(index, index + query.length)}
+      </mark>
+      {label.slice(index + query.length)}
+    </span>
   );
 }

@@ -8,6 +8,7 @@ import { useUIStore } from "../stores/ui";
 import { client } from "../lib/urql";
 import { features } from "../lib/features";
 import { gql } from "@urql/core";
+import { useHomeDataStore } from "../stores/home-data";
 
 const CHANNELS_QUERY = gql`
   query Channels($organizationId: ID!, $memberOnly: Boolean) {
@@ -304,7 +305,11 @@ export function useSidebarData() {
 
   const fetchSidebarSessionGroups = useCallback(
     async (channelIds: string[]) => {
-      if (!activeOrgId || channelIds.length === 0) return;
+      if (!activeOrgId) return;
+      if (channelIds.length === 0) {
+        useHomeDataStore.getState().markCodingLoaded(activeOrgId);
+        return;
+      }
       const results = await Promise.all(
         channelIds.map((channelId) =>
           client
@@ -322,7 +327,10 @@ export function useSidebarData() {
           ? (result.data.sessionGroups as Array<SessionGroup & { id: string }>)
           : [],
       );
-      if (groups.length === 0) return;
+      if (groups.length === 0) {
+        useHomeDataStore.getState().markCodingLoaded(activeOrgId);
+        return;
+      }
 
       const entityState = useEntityStore.getState();
       const sessions = groups.flatMap((group) => group.sessions ?? []);
@@ -342,6 +350,7 @@ export function useSidebarData() {
         "sessionGroups",
         sessionGroups as Array<EntityTableMap["sessionGroups"] & { id: string }>,
       );
+      useHomeDataStore.getState().markCodingLoaded(activeOrgId);
     },
     [activeOrgId, upsertMany],
   );
@@ -349,13 +358,14 @@ export function useSidebarData() {
   // Initial fetch — channels, channelGroups, and chats are kept fresh by useOrgEvents,
   // so they don't need to refetch on refreshTick. Only inbox items need periodic refresh.
   useEffect(() => {
+    if (activeOrgId) useHomeDataStore.getState().ensureOrganization(activeOrgId);
     fetchChannels();
     fetchChannelGroups();
     if (features.messaging) {
       fetchChats();
     }
     fetchRepos();
-  }, [fetchChannels, fetchChannelGroups, fetchChats, fetchRepos]);
+  }, [activeOrgId, fetchChannels, fetchChannelGroups, fetchChats, fetchRepos]);
 
   useEffect(() => {
     if (features.messaging) return;

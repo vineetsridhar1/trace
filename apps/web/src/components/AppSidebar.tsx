@@ -11,6 +11,8 @@ import { SidebarDirectMessagesPane } from "./sidebar/SidebarDirectMessagesPane";
 import { PeekOverlay } from "./sidebar/PeekOverlay";
 import { SidebarTabSwitcher } from "./sidebar/SidebarTabSwitcher";
 import { UserMenu } from "./sidebar/UserMenu";
+import { StartAnythingButton } from "./sidebar/StartAnythingButton";
+import { SidebarGettingStartedItem } from "./sidebar/SidebarGettingStartedItem";
 import { getPreferredSidebarTab, getTabIndex, type SidebarTab } from "./sidebar/sidebarTabs";
 import { Sidebar, SidebarContent, SidebarFooter, useSidebar } from "./ui/sidebar";
 
@@ -134,6 +136,9 @@ export function AppSidebar() {
           style={{ backgroundColor: "transparent" }}
         >
           <div className="app-region-drag h-12 shrink-0" />
+          <div className="app-region-no-drag px-2 pb-1">
+            <StartAnythingButton />
+          </div>
           <SidebarContent className="app-region-no-drag overflow-hidden">
             {features.messaging ? (
               <div
@@ -188,6 +193,7 @@ export function AppSidebar() {
                 <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={expandedTabs.selectTab} />
               </div>
             )}
+            <SidebarGettingStartedItem />
             <div className="border-t border-white/10">
               <UserMenu />
             </div>
