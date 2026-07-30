@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Shield, Trash2 } from "lucide-react";
 import type { OrgSecret } from "@trace/gql";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -28,9 +28,9 @@ export function AgentEnvironmentRuntimeEnvFields({ draft, orgSecrets, update }: 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <AgentEnvironmentFieldLabel tooltip="Expose selected organization secrets inside cloud runtimes. The AI and app processes can use variables such as DATABASE_URL without storing credentials in git.">
+        <span className="text-xs font-medium text-muted-foreground">
           Runtime environment variables
-        </AgentEnvironmentFieldLabel>
+        </span>
         <Button
           type="button"
           variant="outline"
@@ -45,20 +45,28 @@ export function AgentEnvironmentRuntimeEnvFields({ draft, orgSecrets, update }: 
       {draft.runtimeEnv.map((entry, index) => {
         const secret = orgSecrets.find((item) => item.id === entry.secretId);
         return (
-          <div key={`${index}-${entry.secretId}`} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+          <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
             <Input
               aria-label={`Runtime variable ${index + 1} name`}
               placeholder="DATABASE_URL"
               value={entry.name}
               onChange={(event) => updateEntry(index, "name", event.target.value.toUpperCase())}
+              className="h-9 bg-background font-mono text-xs"
             />
             <Select
               value={secret?.id}
               onValueChange={(value) => updateEntry(index, "secretId", value ?? "")}
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-9 w-full bg-background">
                 <SelectValue placeholder="Select secret">
-                  {secret?.name ?? "Select secret"}
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    {secret ? (
+                      <Shield size={13} className="shrink-0 text-muted-foreground" />
+                    ) : null}
+                    <span className="truncate font-mono text-xs">
+                      {secret?.name ?? "Select secret"}
+                    </span>
+                  </span>
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -74,6 +82,7 @@ export function AgentEnvironmentRuntimeEnvFields({ draft, orgSecrets, update }: 
               variant="ghost"
               size="icon"
               aria-label={`Remove runtime variable ${index + 1}`}
+              className="text-muted-foreground hover:text-destructive"
               onClick={() =>
                 update(
                   "runtimeEnv",
@@ -87,10 +96,11 @@ export function AgentEnvironmentRuntimeEnvFields({ draft, orgSecrets, update }: 
         );
       })}
       {!draft.runtimeEnv.length ? (
-        <p className="text-xs text-muted-foreground">
-          Add database or service credentials from organization secrets when apps need them.
-        </p>
+        <p className="text-xs text-muted-foreground">No runtime variables added.</p>
       ) : null}
+      <p className="text-xs leading-4 text-muted-foreground">
+        Injected when a runtime starts, so sessions read credentials without committing them.
+      </p>
     </div>
   );
 }

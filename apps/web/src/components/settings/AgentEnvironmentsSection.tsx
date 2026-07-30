@@ -94,6 +94,17 @@ export function AgentEnvironmentsSection() {
           orgSecrets={settings.orgSecrets}
           onOpenChange={settings.setFormOpen}
           onSaved={() => void settings.fetchSettings()}
+          onTest={
+            settings.editingEnvironment
+              ? () => settings.testEnvironment(settings.editingEnvironment!)
+              : undefined
+          }
+          testPending={settings.pendingActionId === settings.editingEnvironment?.id}
+          testResult={
+            settings.editingEnvironment
+              ? settings.testResults[settings.editingEnvironment.id]
+              : undefined
+          }
         />
       ) : null}
     </div>

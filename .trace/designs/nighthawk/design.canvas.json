@@ -18,6 +18,11 @@
       "screenIds": ["settings-session-defaults", "settings-api-keys", "settings-devices"]
     },
     {
+      "id": "edit-dialogs",
+      "name": "Edit dialogs",
+      "screenIds": ["settings-cloud-env-edit", "settings-automation-edit"]
+    },
+    {
       "id": "states-responsive",
       "name": "Key states & responsive",
       "screenIds": ["settings-repositories-empty", "settings-mobile-nav"]
@@ -86,6 +91,22 @@
       "component": "./screens/SettingsDevices.tsx",
       "variation": "Personal",
       "state": "Pending approval",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-cloud-env-edit",
+      "name": "Edit cloud environment",
+      "component": "./screens/SettingsCloudEnvEdit.tsx",
+      "variation": "Dialog",
+      "state": "Editing",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-automation-edit",
+      "name": "Edit session automation",
+      "component": "./screens/SettingsAutomationEdit.tsx",
+      "variation": "Dialog",
+      "state": "Editing",
       "viewport": { "width": 1440, "height": 900 }
     },
     {

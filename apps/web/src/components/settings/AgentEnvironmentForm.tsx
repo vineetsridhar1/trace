@@ -1,16 +1,15 @@
 import { useEffect, useState } from "react";
-import { Info, Plus, Save } from "lucide-react";
+import { PlugZap } from "lucide-react";
 import type { AgentEnvironment, OrgSecret } from "@trace/gql";
 import { client } from "../../lib/urql";
 import { Button } from "../ui/button";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
-  ResponsiveDialogFooter as DialogFooter,
   ResponsiveDialogHeader as DialogHeader,
   ResponsiveDialogTitle as DialogTitle,
+  ResponsiveDialogDescription as DialogDescription,
 } from "../ui/responsive-dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { environmentConfig, type LocalBridgeSummary } from "./agent-environment-utils";
 import {
@@ -30,6 +29,14 @@ type Props = {
   orgSecrets: OrgSecret[];
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
+  onTest?: () => Promise<TestResult | undefined>;
+  testPending?: boolean;
+  testResult?: TestResult;
+};
+
+type TestResult = {
+  ok: boolean;
+  message?: string | null;
 };
 
 function createDraft(environment: AgentEnvironment | null): AgentEnvironmentDraft {
@@ -97,6 +104,9 @@ export function AgentEnvironmentForm({
   orgSecrets,
   onOpenChange,
   onSaved,
+  onTest,
+  testPending = false,
+  testResult,
 }: Props) {
   const [draft, setDraft] = useState<AgentEnvironmentDraft>(() => createDraft(environment));
   const [saving, setSaving] = useState(false);
@@ -109,7 +119,8 @@ export function AgentEnvironmentForm({
     }
   }, [environment, open]);
 
-  const title = environment ? "Edit Agent Environment" : "Create Provisioned Environment";
+  const isCloud = draft.adapterType === "provisioned";
+  const title = environment ? "Edit cloud environment" : "Add cloud environment";
 
   function update<K extends keyof AgentEnvironmentDraft>(key: K, value: AgentEnvironmentDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -161,59 +172,94 @@ export function AgentEnvironmentForm({
   const canSubmit =
     !saving &&
     !!draft.name.trim() &&
-    (draft.adapterType !== "provisioned" || !!draft.authSecretId.trim());
+    (draft.adapterType !== "provisioned" || !!draft.authSecretId.trim()) &&
+    isValidMetadata(draft.launcherMetadata);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {title}
-            <Tooltip>
-              <TooltipTrigger render={<span className="inline-flex" />}>
-                <Info size={14} className="text-muted-foreground" />
-              </TooltipTrigger>
-              <TooltipContent side="right" className="max-w-72">
-                Provisioned environments let Trace call your launcher to start a cloud runtime, wait
-                for it to connect back, and stop it when the session ends.
-              </TooltipContent>
-            </Tooltip>
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent
+        overlayClassName="bg-black/60 backdrop-blur-[2px]"
+        className="max-h-[calc(100dvh-3rem)] gap-0 overflow-hidden p-0 sm:max-w-[660px]"
+      >
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
+          <DialogHeader className="shrink-0 gap-0.5 border-b border-border px-6 py-4 pr-14 text-left">
+            <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
+              {title}
+            </DialogTitle>
+            <DialogDescription className="text-[13px] leading-5">
+              Trace calls these launcher endpoints to start a runtime for each session, poll it
+              while it boots, and stop it when the session ends.
+            </DialogDescription>
+          </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {error ? (
-            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </div>
-          ) : null}
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+            {error ? (
+              <div className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            ) : null}
 
-          <AgentEnvironmentBasicsFields draft={draft} update={update} />
+            <div className="flex flex-col gap-4">
+              <AgentEnvironmentBasicsFields draft={draft} update={update} />
 
-          {draft.adapterType === "local" ? (
-            <AgentEnvironmentLocalFields draft={draft} localBridges={localBridges} />
-          ) : (
-            <AgentEnvironmentProvisionedFields
-              draft={draft}
-              orgSecrets={orgSecrets}
-              update={update}
-            />
-          )}
-
-          <DialogFooter>
-            <Button type="submit" disabled={!canSubmit}>
-              {saving ? (
-                <TraceLoader size={14} showLabel={false} className="mr-1.5" />
-              ) : environment ? (
-                <Save size={14} className="mr-1.5" />
+              {draft.adapterType === "local" ? (
+                <AgentEnvironmentLocalFields draft={draft} localBridges={localBridges} />
               ) : (
-                <Plus size={14} className="mr-1.5" />
+                <AgentEnvironmentProvisionedFields
+                  draft={draft}
+                  orgSecrets={orgSecrets}
+                  update={update}
+                />
               )}
-              {saving ? "Saving..." : environment ? "Save changes" : "Create environment"}
-            </Button>
-          </DialogFooter>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-background px-6 py-3.5">
+            <div className="flex min-w-0 items-center gap-2">
+              {isCloud ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!environment || testPending || !onTest}
+                  onClick={() => void onTest?.()}
+                >
+                  {testPending ? (
+                    <TraceLoader size={14} showLabel={false} />
+                  ) : (
+                    <PlugZap size={14} />
+                  )}
+                  Test connection
+                </Button>
+              ) : null}
+              {isCloud ? (
+                <span className="truncate text-xs text-muted-foreground">
+                  {environment ? (testResult?.message ?? "Not tested yet") : "Save before testing"}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!canSubmit}>
+                {saving ? <TraceLoader size={14} showLabel={false} /> : null}
+                {saving ? "Saving..." : environment ? "Save changes" : "Create environment"}
+              </Button>
+            </div>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
   );
+}
+
+function isValidMetadata(value: string): boolean {
+  if (!value.trim()) return true;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed);
+  } catch {
+    return false;
+  }
 }
