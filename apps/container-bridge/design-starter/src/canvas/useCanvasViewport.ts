@@ -31,6 +31,8 @@ type PinchGesture = {
 };
 
 const INITIAL_VIEWPORT: CanvasViewport = { zoom: 0.75, x: 100, y: 100 };
+const PINCH_PAN_THRESHOLD_PX = 12;
+const PINCH_ZOOM_EXPONENT = 1.5;
 
 export function useCanvasViewport(containerRef: RefObject<HTMLDivElement | null>) {
   const [viewport, setViewportState] = useState(INITIAL_VIEWPORT);
@@ -187,13 +189,23 @@ export function useCanvasViewport(containerRef: RefObject<HTMLDivElement | null>
           return;
         }
         const point = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+        const currentDistance = Math.hypot(second.x - first.x, second.y - first.y);
+        if (Math.abs(currentDistance - pinch.distance) < PINCH_PAN_THRESHOLD_PX) {
+          setViewport({
+            ...pinch.viewport,
+            x: pinch.viewport.x + point.x - pinch.point.x,
+            y: pinch.viewport.y + point.y - pinch.point.y,
+          });
+          return;
+        }
         setViewport(
           pinchCanvasViewport(
             pinch.viewport,
             pinch.point,
             point,
             pinch.distance,
-            Math.hypot(second.x - first.x, second.y - first.y),
+            currentDistance,
+            PINCH_ZOOM_EXPONENT,
           ),
         );
         return;

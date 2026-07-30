@@ -47,9 +47,12 @@ export function pinchCanvasViewport(
   currentPoint: CanvasPoint,
   startDistance: number,
   currentDistance: number,
+  zoomExponent = 1,
 ): CanvasViewport {
   if (startDistance <= 0 || currentDistance <= 0) return viewport;
-  const zoom = clampCanvasZoom(viewport.zoom * (currentDistance / startDistance));
+  const zoom = clampCanvasZoom(
+    viewport.zoom * Math.pow(currentDistance / startDistance, zoomExponent),
+  );
   const worldX = (startPoint.x - viewport.x) / viewport.zoom;
   const worldY = (startPoint.y - viewport.y) / viewport.zoom;
   return {

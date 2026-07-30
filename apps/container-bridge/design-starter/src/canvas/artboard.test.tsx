@@ -15,12 +15,7 @@ const screen: DesignScreen = {
 
 test("keeps the screen label constant-sized and on one line", () => {
   const html = renderToStaticMarkup(
-    <DesignArtboard
-      screen={screen}
-      component={() => <div>Screen content</div>}
-      onFocus={() => undefined}
-      zoom={0.5}
-    />,
+    <DesignArtboard screen={screen} component={() => <div>Screen content</div>} zoom={0.5} />,
   );
 
   assert.match(html, /bottom:868px/);

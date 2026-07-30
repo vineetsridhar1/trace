@@ -5,12 +5,10 @@ import { ArtboardErrorBoundary } from "./ArtboardErrorBoundary";
 export function DesignArtboard({
   screen,
   component: ScreenComponent,
-  onFocus,
   zoom,
 }: {
   screen: DesignScreen;
   component: ComponentType;
-  onFocus: () => void;
   zoom: number;
 }) {
   const inverseZoom = 1 / zoom;
@@ -38,13 +36,6 @@ export function DesignArtboard({
               {[screen.variation, screen.state].filter(Boolean).join(" · ") || "Default"}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onFocus}
-            className="rounded px-2 py-1 text-sm text-zinc-400 hover:bg-white/10 hover:text-white"
-          >
-            Focus
-          </button>
         </header>
       </div>
       <div
