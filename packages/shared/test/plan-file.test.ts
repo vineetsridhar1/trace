@@ -65,20 +65,27 @@ describe("plan file", () => {
     expect(snapshots).toEqual([first, second]);
   });
 
-  it("does not publish ordinary Markdown plans", async () => {
+  it("publishes invalid drafts with validation errors so the sidecar can open", async () => {
     const sessionId = `plan-file-invalid-${Date.now()}`;
     sessionIds.push(sessionId);
-    const snapshots: string[] = [];
+    const snapshots: Array<{ content: string; validationErrors: string[] }> = [];
     const watcher = createPlanFileWatcher({
       sessionId,
-      onSnapshot: (snapshot) => snapshots.push(snapshot.content),
+      onSnapshot: ({ content, validationErrors }) =>
+        snapshots.push({ content, validationErrors }),
     });
 
-    await fs.promises.writeFile(watcher.filePath, "# Ordinary plan\n\n- Change the code\n", "utf8");
+    const content = "# Ordinary plan\n\n- Change the code\n";
+    await fs.promises.writeFile(watcher.filePath, content, "utf8");
     await watcher.flush();
     watcher.stop();
 
-    expect(snapshots).toEqual([]);
+    expect(snapshots).toEqual([
+      {
+        content,
+        validationErrors: ["Use the structured Agent-Native Plan MDX block vocabulary."],
+      },
+    ]);
   });
 
   it("validates the structured Trace MDX contract", () => {

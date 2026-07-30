@@ -23,6 +23,8 @@ import { PendingRichTextInput } from "./PendingRichTextInput";
 interface PlanResponseBarProps {
   sessionId: string;
   planContent: string;
+  canApprove?: boolean;
+  validationErrors?: string[];
   planComments?: MarkdownSteerCommentsByBlock;
   onClearPlanComments?: () => void;
   onDismiss: () => void;
@@ -42,6 +44,8 @@ function getApprovalLabel(label: string, hasComments: boolean): string {
 export function PlanResponseBar({
   sessionId,
   planContent,
+  canApprove = true,
+  validationErrors = [],
   planComments,
   onClearPlanComments,
   onDismiss,
@@ -241,12 +245,17 @@ export function PlanResponseBar({
 
   const hasAnswer = selected !== null || feedback.trim().length > 0 || hasComments;
   const primaryLabel = hasComments ? "Send comments" : selected ? "Approve" : "Revise";
+  const handleRepair = useCallback(() => {
+    void handleRevise(
+      `Repair the plan so it is valid Agent-Native MDX. Trace reported: ${validationErrors.join(" ")}`,
+    );
+  }, [handleRevise, validationErrors]);
 
   return (
     <div className="shrink-0 border-t border-accent/30 bg-surface px-4 py-3">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-accent">
-          Plan Review
+          {canApprove ? "Plan Review" : "Plan needs correction"}
         </span>
         {hasComments && (
           <span className="rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
@@ -272,7 +281,7 @@ export function PlanResponseBar({
       )}
 
       <div className="mb-2 flex flex-wrap gap-1.5">
-        {PRESETS.map((label) => (
+        {canApprove ? PRESETS.map((label) => (
           <button
             key={label}
             type="button"
@@ -290,7 +299,16 @@ export function PlanResponseBar({
           >
             {getApprovalLabel(label, hasComments)}
           </button>
-        ))}
+        )) : (
+          <button
+            type="button"
+            onClick={handleRepair}
+            disabled={sending}
+            className="min-h-8 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-400/15 disabled:opacity-50"
+          >
+            Repair plan
+          </button>
+        )}
       </div>
 
       <div className="flex items-end gap-2">
@@ -305,7 +323,9 @@ export function PlanResponseBar({
             if (hasAnswer) handleSubmit(text);
           }}
           placeholder={
-            hasComments
+            !canApprove
+              ? "Add guidance for the repair…"
+              : hasComments
               ? "Optional note to include with comments..."
               : "Suggest changes to revise the plan..."
           }

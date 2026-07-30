@@ -38,6 +38,7 @@ export interface PlanFileState {
   timestamp: string;
   eventIndex: number;
   ready: boolean;
+  validationErrors: string[];
 }
 
 export function getLatestPlanFile(
@@ -51,6 +52,9 @@ export function getLatestPlanFile(
     const payload = asJsonObject(event.payload);
     if (!payload || !PLAN_FILE_PAYLOAD_TYPES.has(String(payload.type ?? ""))) continue;
     if (typeof payload.planContent !== "string" || !payload.planContent.trim()) continue;
+    const validationErrors = Array.isArray(payload.planValidationErrors)
+      ? payload.planValidationErrors.filter((error): error is string => typeof error === "string")
+      : [];
     return {
       id,
       content: payload.planContent,
@@ -58,7 +62,8 @@ export function getLatestPlanFile(
       filePath: typeof payload.planFilePath === "string" ? payload.planFilePath : "",
       timestamp: event.timestamp,
       eventIndex: index,
-      ready: payload.type === "plan_file_ready",
+      ready: payload.type === "plan_file_ready" && validationErrors.length === 0,
+      validationErrors,
     };
   }
   return null;

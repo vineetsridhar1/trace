@@ -15,6 +15,7 @@ export interface PlanFileSnapshot {
   content: string;
   contentHash: string;
   filePath: string;
+  validationErrors: string[];
 }
 
 export interface PlanFileWatcher {
@@ -107,15 +108,11 @@ export function createPlanFileWatcher({
             continue;
           }
           const validationErrors = validateTraceVisualPlan(content);
-          if (validationErrors.length > 0) {
-            onError?.(`Plan is not valid Trace visual MDX: ${validationErrors.join(" ")}`);
-            continue;
-          }
           const contentHash = createHash("sha256").update(content).digest("hex");
           if (contentHash === lastHash) continue;
           lastHash = contentHash;
           try {
-            onSnapshot({ content, contentHash, filePath });
+            onSnapshot({ content, contentHash, filePath, validationErrors });
           } catch (error) {
             onError?.(error instanceof Error ? error.message : "Failed to publish plan file");
           }

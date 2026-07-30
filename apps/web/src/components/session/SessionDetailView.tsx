@@ -774,6 +774,8 @@ export function SessionDetailView({
                 <PlanResponseBar
                   sessionId={sessionId}
                   planContent={activePlan.node.planContent}
+                  canApprove={latestPlanFile?.ready ?? true}
+                  validationErrors={latestPlanFile?.validationErrors}
                   planComments={planComments}
                   onClearPlanComments={handleClearPlanComments}
                   onDismiss={handleDismissPlan}
@@ -800,6 +802,11 @@ export function SessionDetailView({
               content={visiblePlanFile.content}
               filePath={visiblePlanFile.filePath}
               ready={sessionStatus === "needs_input" && visiblePlanFile.ready}
+              needsCorrection={
+                sessionStatus === "needs_input" &&
+                visiblePlanFile.validationErrors.length > 0
+              }
+              validationErrors={visiblePlanFile.validationErrors}
               comments={activePlan ? planComments : undefined}
               onAddComment={activePlan ? handleAddPlanComment : undefined}
               onRemoveComment={activePlan ? handleRemovePlanComment : undefined}

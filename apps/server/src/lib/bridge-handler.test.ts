@@ -821,6 +821,7 @@ describe("bridge handler auth", () => {
       content: "# Plan",
       contentHash: "bridge-hash",
       filePath: "/tmp/trace-plans/session-1/plan.mdx",
+      validationErrors: ["Invalid MDX"],
     });
 
     await vi.waitFor(() => {
@@ -828,6 +829,7 @@ describe("bridge handler auth", () => {
         content: "# Plan",
         contentHash: "bridge-hash",
         filePath: "/tmp/trace-plans/session-1/plan.mdx",
+        validationErrors: ["Invalid MDX"],
       });
     });
   });

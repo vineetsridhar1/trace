@@ -5725,13 +5725,14 @@ export class SessionService {
       content: string;
       contentHash: string;
       filePath: string;
+      validationErrors?: string[];
     },
   ) {
     const content = snapshot.content;
     const normalizedFilePath = snapshot.filePath.replaceAll("\\", "/");
     if (!content.trim() || Buffer.byteLength(content, "utf8") > PLAN_FILE_MAX_BYTES) return;
     if (!normalizedFilePath.endsWith(`/trace-plans/${sessionId}/plan.mdx`)) return;
-    if (validateTraceVisualPlan(content).length > 0) return;
+    const validationErrors = validateTraceVisualPlan(content);
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
@@ -5749,6 +5750,7 @@ export class SessionService {
         planContent: content,
         planFilePath: snapshot.filePath,
         contentHash: createHash("sha256").update(content).digest("hex"),
+        planValidationErrors: validationErrors,
       },
       actorType: "system",
       actorId: "system",
@@ -6099,7 +6101,18 @@ export class SessionService {
     const completedPlanRun =
       interactionMode === "plan" ||
       (interactionMode == null && resumePayload?.interactionMode === "plan");
-    const hasPendingPlan = legacyPendingPlan || (completedPlanRun && !!latestPlanFileEvent);
+    const latestPlanPayload = latestPlanFileEvent?.payload as Record<string, unknown> | undefined;
+    const latestPlanContent =
+      typeof latestPlanPayload?.planContent === "string" ? latestPlanPayload.planContent : "";
+    const latestPlanValidationErrors = latestPlanPayload
+      ? validateTraceVisualPlan(latestPlanContent)
+      : [];
+    const hasValidPlanFile =
+      completedPlanRun && !!latestPlanFileEvent && latestPlanValidationErrors.length === 0;
+    const hasInvalidPlanFile =
+      completedPlanRun && !!latestPlanFileEvent && latestPlanValidationErrors.length > 0;
+    const hasPendingPlan =
+      legacyPendingPlan || hasValidPlanFile || hasInvalidPlanFile;
 
     // Safety net for adapters that exit cleanly after emitting a question
     // (Claude Code hangs on stdin so recordOutput handles it first, but other
@@ -6127,10 +6140,7 @@ export class SessionService {
     });
     const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
 
-    const latestPlanPayload = latestPlanFileEvent?.payload as Record<string, unknown> | undefined;
-    if (completedPlanRun && latestPlanPayload && current.sessionStatus !== "needs_input") {
-      const planContent =
-        typeof latestPlanPayload.planContent === "string" ? latestPlanPayload.planContent : "";
+    if (hasValidPlanFile && latestPlanPayload && current.sessionStatus !== "needs_input") {
       const planFilePath =
         typeof latestPlanPayload.planFilePath === "string" ? latestPlanPayload.planFilePath : "";
       const contentHash =
@@ -6142,9 +6152,10 @@ export class SessionService {
         eventType: "session_output",
         payload: {
           type: "plan_file_ready",
-          planContent,
+          planContent: latestPlanContent,
           planFilePath,
           contentHash,
+          planValidationErrors: [],
           sessionStatus: newSessionStatus,
           ...(sessionGroup ? { sessionGroup } : {}),
         },
@@ -6153,7 +6164,20 @@ export class SessionService {
       });
     }
 
-    if (completedPlanRun && !latestPlanFileEvent && !legacyPendingPlan) {
+    if (hasInvalidPlanFile) {
+      await eventService.create({
+        organizationId: session.organizationId,
+        scopeType: "session",
+        scopeId: id,
+        eventType: "session_output",
+        payload: {
+          type: "error",
+          message: `Plan mode finished with invalid visual MDX: ${latestPlanValidationErrors.join(" ")}`,
+        },
+        actorType: "system",
+        actorId: "system",
+      });
+    } else if (completedPlanRun && !latestPlanFileEvent && !legacyPendingPlan) {
       await eventService.create({
         organizationId: session.organizationId,
         scopeType: "session",

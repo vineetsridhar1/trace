@@ -560,6 +560,7 @@ export interface BridgePlanFileUpdated {
   content: string;
   contentHash: string;
   filePath: string;
+  validationErrors: string[];
 }
 
 export interface BridgeSessionComplete {

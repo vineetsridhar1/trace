@@ -913,8 +913,15 @@ export class BridgeClient implements IBridgeClient {
 
     const watcher = createPlanFileWatcher({
       sessionId,
-      onSnapshot: ({ content, contentHash, filePath }) => {
-        this.send({ type: "plan_file_updated", sessionId, content, contentHash, filePath });
+      onSnapshot: ({ content, contentHash, filePath, validationErrors }) => {
+        this.send({
+          type: "plan_file_updated",
+          sessionId,
+          content,
+          contentHash,
+          filePath,
+          validationErrors,
+        });
       },
       onError: (message) => {
         console.warn(`[bridge] plan file error for ${sessionId}:`, message);

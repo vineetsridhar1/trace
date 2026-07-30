@@ -4376,21 +4376,37 @@ describe("SessionService", () => {
             planContent,
             planFilePath: "/tmp/trace-plans/session-1/plan.mdx",
             contentHash: "a8635d230f76941aca53bce87f4c581cd621a8a58d97a3e7a7d3fdb5f7354fc7",
+            planValidationErrors: [],
           },
         }),
       );
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
     });
 
-    it("rejects Markdown-only plan file snapshots", async () => {
+    it("records Markdown-only plan drafts with validation errors", async () => {
+      const planContent = "# Implementation plan\n\n- Change the service\n";
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        organizationId: "org-1",
+        agentStatus: "active",
+      });
+
       await service.recordPlanFileUpdate("session-1", {
-        content: "# Implementation plan\n\n- Change the service\n",
+        content: planContent,
         contentHash: "hash-1",
         filePath: "/tmp/trace-plans/session-1/plan.mdx",
       });
 
-      expect(prismaMock.session.findUnique).not.toHaveBeenCalled();
-      expect(eventServiceMock.create).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            type: "plan_file_updated",
+            planContent,
+            planValidationErrors: [
+              "Use the structured Agent-Native Plan MDX block vocabulary.",
+            ],
+          }),
+        }),
+      );
     });
 
     it("preserves the full branch name when syncing a trace-branch tag", async () => {
@@ -4563,6 +4579,8 @@ describe("SessionService", () => {
 
   describe("complete", () => {
     it("marks a completed plan-file run ready for review", async () => {
+      const planContent =
+        '# Ready plan\n<Callout tone="decision">Use the service layer.</Callout>';
       prismaMock.session.findUnique.mockReset();
       prismaMock.event.findFirst.mockReset();
       prismaMock.event.findMany.mockReset();
@@ -4580,7 +4598,7 @@ describe("SessionService", () => {
         {
           payload: {
             type: "plan_file_updated",
-            planContent: "# Ready plan",
+            planContent,
             planFilePath: "/tmp/trace-plans/session-1/plan.mdx",
             contentHash: "ready-hash",
           },
@@ -4604,7 +4622,7 @@ describe("SessionService", () => {
           eventType: "session_output",
           payload: expect.objectContaining({
             type: "plan_file_ready",
-            planContent: "# Ready plan",
+            planContent,
             contentHash: "ready-hash",
             sessionStatus: "needs_input",
           }),
@@ -4613,7 +4631,61 @@ describe("SessionService", () => {
       expect(inboxServiceMock.createItem).toHaveBeenCalledWith(
         expect.objectContaining({
           itemType: "plan",
-          payload: expect.objectContaining({ planContent: "# Ready plan" }),
+          payload: expect.objectContaining({ planContent }),
+        }),
+      );
+    });
+
+    it("keeps an invalid plan in review and asks for repair instead of implementation", async () => {
+      prismaMock.session.findUnique.mockReset();
+      prismaMock.event.findFirst.mockReset();
+      prismaMock.event.findMany.mockReset();
+      prismaMock.session.update.mockReset();
+
+      const invalidPlan =
+        '<AnnotatedCode language="ts" code={"const score = 3;" annotations={[]} />';
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        agentStatus: "active",
+        sessionStatus: "in_progress",
+        sessionGroupId: "group-1",
+      });
+      prismaMock.event.findFirst.mockResolvedValueOnce({
+        payload: { interactionMode: "plan" },
+      });
+      prismaMock.event.findMany.mockResolvedValueOnce([
+        {
+          payload: {
+            type: "plan_file_updated",
+            planContent: invalidPlan,
+            planFilePath: "/tmp/trace-plans/session-1/plan.mdx",
+            contentHash: "invalid-hash",
+          },
+        },
+      ]);
+      prismaMock.session.update.mockResolvedValueOnce({
+        organizationId: "org-1",
+        createdById: "user-1",
+        name: "Implement dashboard filters",
+      });
+
+      await service.complete("session-1", "plan");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { agentStatus: "done", sessionStatus: "needs_input" },
+        }),
+      );
+      expect(eventServiceMock.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ type: "plan_file_ready" }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            type: "error",
+            message: expect.stringContaining("Plan mode finished with invalid visual MDX"),
+          }),
         }),
       );
     });

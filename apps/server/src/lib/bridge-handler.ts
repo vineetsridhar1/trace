@@ -1083,6 +1083,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             content: typeof msg.content === "string" ? msg.content : "",
             contentHash: typeof msg.contentHash === "string" ? msg.contentHash : "",
             filePath: typeof msg.filePath === "string" ? msg.filePath : "",
+            validationErrors: Array.isArray(msg.validationErrors)
+              ? msg.validationErrors.filter(
+                  (error: unknown): error is string => typeof error === "string",
+                )
+              : [],
           });
         });
       } else if (msg.type === "session_output" && msg.sessionId) {
