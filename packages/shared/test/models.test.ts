@@ -12,18 +12,18 @@ import {
 } from "../src/models.js";
 
 describe("model catalog", () => {
-  it("exposes Fable 5 as an option while defaulting Claude Code to Opus 4.8 (1M)", () => {
-    expect(getDefaultModel("claude_code")).toBe("claude-opus-4-8[1m]");
+  it("exposes Fable 5 as an option while defaulting Claude Code to Opus 5 (1M)", () => {
+    expect(getDefaultModel("claude_code")).toBe("claude-opus-5[1m]");
     expect(getModelsForTool("claude_code")).toEqual([
       { value: "claude-fable-5", label: "Fable 5" },
       { value: "claude-sonnet-5", label: "Sonnet 5" },
       { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
-      { value: "claude-opus-4-8", label: "Opus 4.8" },
-      { value: "claude-opus-4-8[1m]", label: "Opus 4.8 (1M)" },
+      { value: "claude-opus-5", label: "Opus 5" },
+      { value: "claude-opus-5[1m]", label: "Opus 5 (1M)" },
       { value: "claude-haiku-4-5", label: "Haiku 4.5" },
     ]);
     expect(isSupportedModel("claude_code", "claude-fable-5")).toBe(true);
-    expect(isSupportedModel("claude_code", "claude-opus-4-8[1m]")).toBe(true);
+    expect(isSupportedModel("claude_code", "claude-opus-5[1m]")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-4-7")).toBe(false);
   });
 
@@ -145,8 +145,8 @@ describe("resolveCursorComposerModel", () => {
   });
 
   it("folds the thinking level into Claude model ids", () => {
-    expect(resolveCursorComposerModel("opus-4.8", "low")).toBe("claude-opus-4-8-thinking-low");
-    expect(resolveCursorComposerModel("opus-4.8", "max")).toBe("claude-opus-4-8-thinking-max");
+    expect(resolveCursorComposerModel("opus-5", "low")).toBe("claude-opus-5-thinking-low");
+    expect(resolveCursorComposerModel("opus-5", "max")).toBe("claude-opus-5-thinking-max");
     expect(resolveCursorComposerModel("sonnet-5", "high")).toBe("claude-sonnet-5-thinking-high");
   });
 
@@ -176,11 +176,11 @@ describe("resolveCursorComposerModel", () => {
   });
 
   it("defaults to medium when the level is missing or foreign", () => {
-    expect(resolveCursorComposerModel("opus-4.8", undefined)).toBe(
-      "claude-opus-4-8-thinking-medium",
+    expect(resolveCursorComposerModel("opus-5", undefined)).toBe(
+      "claude-opus-5-thinking-medium",
     );
-    expect(resolveCursorComposerModel("opus-4.8", "auto")).toBe(
-      "claude-opus-4-8-thinking-medium",
+    expect(resolveCursorComposerModel("opus-5", "auto")).toBe(
+      "claude-opus-5-thinking-medium",
     );
   });
 });

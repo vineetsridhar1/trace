@@ -19,8 +19,8 @@ const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
   { value: "claude-fable-5", label: "Fable 5" },
   { value: "claude-sonnet-5", label: "Sonnet 5" },
   { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
-  { value: "claude-opus-4-8", label: "Opus 4.8" },
-  { value: "claude-opus-4-8[1m]", label: "Opus 4.8 (1M)" },
+  { value: "claude-opus-5", label: "Opus 5" },
+  { value: "claude-opus-5[1m]", label: "Opus 5 (1M)" },
   { value: "claude-haiku-4-5", label: "Haiku 4.5" },
 ];
 
@@ -51,13 +51,13 @@ const CURSOR_COMPOSER_MODELS: readonly ModelOption[] = [
   { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
   { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
   { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
-  { value: "opus-4.8", label: "Opus 4.8" },
+  { value: "opus-5", label: "Opus 5" },
   { value: "sonnet-5", label: "Sonnet 5" },
   { value: "grok-4.5", label: "Grok 4.5" },
 ];
 
 // Cursor encodes the thinking level in the model id (e.g. gpt-5.6-sol-high,
-// claude-opus-4-8-thinking-high) rather than accepting a separate flag, so the
+// claude-opus-5-thinking-high) rather than accepting a separate flag, so the
 // effort selector maps to those id suffixes in resolveCursorComposerModel.
 const CURSOR_COMPOSER_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
   { value: "low", label: "Low" },
@@ -101,7 +101,7 @@ export function resolveCursorComposerModel(
     const grokLevel = level === "low" ? "medium" : level === "max" ? "xhigh" : level;
     return `grok-4.5-${grokLevel}`;
   }
-  if (model === "opus-4.8") return `claude-opus-4-8-thinking-${level}`;
+  if (model === "opus-5") return `claude-opus-5-thinking-${level}`;
   if (model === "sonnet-5") return `claude-sonnet-5-thinking-${level}`;
   return model;
 }
@@ -159,7 +159,7 @@ const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly Reasoni
 };
 
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
-  claude_code: "claude-opus-4-8[1m]",
+  claude_code: "claude-opus-5[1m]",
   codex: "gpt-5.6-sol",
   cursor_composer: "auto",
   pi: "openai/gpt-5.5",

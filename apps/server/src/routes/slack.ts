@@ -190,7 +190,7 @@ function normalizeTool(value: string | null | undefined): CodingTool | null {
 
 function normalizeModelAlias(value: string): string {
   const normalized = value.trim().toLowerCase();
-  if (normalized === "opus") return "claude-opus-4-8[1m]";
+  if (normalized === "opus") return "claude-opus-5[1m]";
   if (normalized === "sonnet") return "claude-sonnet-4-6";
   if (normalized === "haiku") return "claude-haiku-4-5";
   return value.trim();

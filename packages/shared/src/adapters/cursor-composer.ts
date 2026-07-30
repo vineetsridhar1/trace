@@ -65,7 +65,7 @@ export class CursorComposerAdapter implements CodingToolAdapter {
 
     const args = ["-p", "--output-format", "stream-json", "--force"];
     // Cursor encodes the thinking level into the model id (e.g.
-    // claude-opus-4-8-thinking-high), so fold the effort in here.
+    // claude-opus-5-thinking-high), so fold the effort in here.
     const resolvedModel = resolveCursorComposerModel(model, reasoningEffort);
     if (resolvedModel) {
       args.push("--model", resolvedModel);
