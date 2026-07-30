@@ -9,6 +9,7 @@ import { useHomeDataStore } from "../../stores/home-data";
 import { HomeComposer } from "../home/HomeComposer";
 import { HomeFirstRunSparks } from "../home/HomeFirstRunSparks";
 import { HomeHeader } from "../home/HomeHeader";
+import { DEFAULT_HOME_KIND } from "../home/HomeKindIcon";
 import { HomeKindSelector } from "../home/HomeKindSelector";
 import { HomeLedgerSkeleton } from "../home/HomeLedgerSkeleton";
 import { HomeWorkLedger } from "../home/HomeWorkLedger";
@@ -41,7 +42,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   const homeDataReady = useHomeDataStore(
     (state) => state.organizationId === activeOrgId && state.codingLoaded && state.generatedLoaded,
   );
-  const detectedKind = detectHomeSessionKind(prompt);
+  const detectedKind = detectHomeSessionKind(prompt) ?? DEFAULT_HOME_KIND;
   const activeKind = manualKind ?? detectedKind;
   const detectedRepo = useMemo(() => detectPromptRepo(prompt, repos), [prompt, repos]);
   const effectiveRepoId =

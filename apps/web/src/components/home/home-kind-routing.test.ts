@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Repo } from "@trace/gql";
+import { DEFAULT_HOME_KIND, HOME_KIND_OPTIONS } from "./HomeKindIcon";
 import { detectHomeSessionKind, detectPromptRepo } from "./home-kind-routing";
 
 describe("home prompt routing", () => {
@@ -17,6 +18,11 @@ describe("home prompt routing", () => {
   it("keeps an empty prompt unclassified and defaults prose to code", () => {
     expect(detectHomeSessionKind("")).toBeNull();
     expect(detectHomeSessionKind("Explore a better way to organize this")).toBe("coding");
+  });
+
+  it("presents code first and uses it as the empty composer default", () => {
+    expect(DEFAULT_HOME_KIND).toBe("coding");
+    expect(HOME_KIND_OPTIONS[0]?.kind).toBe(DEFAULT_HOME_KIND);
   });
 
   it("detects an explicitly mentioned repo", () => {

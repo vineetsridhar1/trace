@@ -39,8 +39,10 @@ export function HomeKindSelector({
         })}
       </div>
       <p className="mt-2.5 min-h-4 text-center text-xs text-[var(--th-muted)]">
-        {!hasPrompt || !activeKind ? (
-          "The kind lights up as you type — select one to override"
+        {!hasPrompt ? (
+          "Code is the default — select another kind to override"
+        ) : !activeKind ? (
+          "Select a kind to route this session"
         ) : (
           <>
             {manuallySelected ? "Manually routed" : "Routed automatically"} — this opens a{" "}

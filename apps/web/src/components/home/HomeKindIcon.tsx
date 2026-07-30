@@ -2,14 +2,16 @@ import { AppWindow, CodeXml, Component, FileText, Frame, Gem, type LucideIcon } 
 import type { SessionGroupKind } from "@trace/gql";
 import { cn } from "../../lib/utils";
 
+export const DEFAULT_HOME_KIND: SessionGroupKind = "coding";
+
 export const HOME_KIND_OPTIONS: ReadonlyArray<{
   kind: SessionGroupKind;
   label: string;
   Icon: LucideIcon;
   colorClass: string;
 }> = [
-  { kind: "design", label: "Design", Icon: Frame, colorClass: "text-[var(--th-kind-design)]" },
   { kind: "coding", label: "Code", Icon: CodeXml, colorClass: "text-[var(--th-kind-code)]" },
+  { kind: "design", label: "Design", Icon: Frame, colorClass: "text-[var(--th-kind-design)]" },
   { kind: "app", label: "App", Icon: AppWindow, colorClass: "text-[var(--th-kind-app)]" },
   { kind: "pdf", label: "PDF", Icon: FileText, colorClass: "text-[var(--th-kind-pdf)]" },
   {
