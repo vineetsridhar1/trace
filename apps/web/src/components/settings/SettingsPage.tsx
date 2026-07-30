@@ -244,7 +244,7 @@ export function SettingsPage() {
                             type="button"
                             onClick={() => setActiveTab(tab.id)}
                             className={cn(
-                              "relative flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13px] whitespace-nowrap transition-colors",
+                              "relative flex h-8 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] whitespace-nowrap transition-colors",
                               selected
                                 ? "bg-[#161619] font-medium text-zinc-50 before:absolute before:-left-3 before:h-5 before:w-0.5 before:rounded-full before:bg-zinc-100"
                                 : "text-zinc-400 hover:bg-[#161619] hover:text-zinc-100",
