@@ -88,6 +88,13 @@ describe("plan file", () => {
         '# Plan\n<Checklist id="checks" items={[{ id: "verify", label: "Verify" }]} />',
       ),
     ).toEqual([]);
+    expect(
+      validateTraceVisualPlan(
+        '<AnnotatedCode language="ts" code={"const score = 3;" annotations={[]} />',
+      ),
+    ).toEqual([
+      expect.stringContaining("Invalid MDX at line 1"),
+    ]);
   });
 
   it("clears a previous turn's artifact before watching", async () => {

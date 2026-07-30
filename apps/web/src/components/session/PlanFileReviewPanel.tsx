@@ -39,7 +39,7 @@ export const PlanFileReviewPanel = memo(function PlanFileReviewPanel({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <div className="mx-auto max-w-5xl">
-          <PlanRenderErrorBoundary>
+          <PlanRenderErrorBoundary key={content}>
             <Suspense
               fallback={
                 <div className="py-8 text-center text-sm text-muted-foreground">

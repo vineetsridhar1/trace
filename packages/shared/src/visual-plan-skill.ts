@@ -1,5 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import remarkMdx from "remark-mdx";
+import remarkParse from "remark-parse";
+import { unified } from "unified";
 import { VISUAL_PLAN_SKILL_FILES } from "./visual-plan-skill.generated.js";
 
 export const TRACE_VISUAL_PLAN_SKILL = VISUAL_PLAN_SKILL_FILES["SKILL.md"];
@@ -23,6 +26,22 @@ export function materializeTraceVisualPlanSkill(planFilePath: string): string {
 
 export function validateTraceVisualPlan(content: string): string[] {
   const errors: string[] = [];
+
+  try {
+    unified().use(remarkParse).use(remarkMdx).parse(content);
+  } catch (error) {
+    const position =
+      typeof error === "object" &&
+      error !== null &&
+      "line" in error &&
+      "column" in error &&
+      typeof error.line === "number" &&
+      typeof error.column === "number"
+        ? ` at line ${error.line}, column ${error.column}`
+        : "";
+    const message = error instanceof Error ? error.message : "Could not parse MDX";
+    errors.push(`Invalid MDX${position}: ${message}`);
+  }
 
   if (!PLAN_BLOCK_PATTERN.test(content)) {
     errors.push("Use the structured Agent-Native Plan MDX block vocabulary.");
