@@ -11,18 +11,17 @@ import {
 } from "../src/models.js";
 
 describe("model catalog", () => {
-  it("exposes Fable 5 as an option while defaulting Claude Code to Opus 5 (1M)", () => {
-    expect(getDefaultModel("claude_code")).toBe("claude-opus-5[1m]");
+  it("exposes Fable 5 as an option while defaulting Claude Code to Opus 5", () => {
+    expect(getDefaultModel("claude_code")).toBe("claude-opus-5");
     expect(getModelsForTool("claude_code")).toEqual([
       { value: "claude-fable-5", label: "Fable 5" },
       { value: "claude-sonnet-5", label: "Sonnet 5" },
       { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
       { value: "claude-opus-5", label: "Opus 5" },
-      { value: "claude-opus-5[1m]", label: "Opus 5 (1M)" },
       { value: "claude-haiku-4-5", label: "Haiku 4.5" },
     ]);
     expect(isSupportedModel("claude_code", "claude-fable-5")).toBe(true);
-    expect(isSupportedModel("claude_code", "claude-opus-5[1m]")).toBe(true);
+    expect(isSupportedModel("claude_code", "claude-opus-5")).toBe(true);
     expect(isSupportedModel("claude_code", "claude-opus-4-7")).toBe(false);
   });
 

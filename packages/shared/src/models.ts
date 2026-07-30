@@ -20,7 +20,6 @@ const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
   { value: "claude-sonnet-5", label: "Sonnet 5" },
   { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
   { value: "claude-opus-5", label: "Opus 5" },
-  { value: "claude-opus-5[1m]", label: "Opus 5 (1M)" },
   { value: "claude-haiku-4-5", label: "Haiku 4.5" },
 ];
 
@@ -149,7 +148,7 @@ const REASONING_EFFORT_OPTIONS_BY_TOOL: Readonly<Record<string, readonly Reasoni
   };
 
 const DEFAULT_MODEL_BY_TOOL: Readonly<Record<string, string>> = {
-  claude_code: "claude-opus-5[1m]",
+  claude_code: "claude-opus-5",
   codex: "gpt-5.6-sol",
   cursor_composer: "auto",
   pi: "openai/gpt-5.5",
