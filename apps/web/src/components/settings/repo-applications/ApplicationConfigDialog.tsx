@@ -52,7 +52,7 @@ export function ApplicationConfigDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-black/60 backdrop-blur-[2px]"
-        className="flex h-[660px] max-h-[calc(100dvh-3rem)] gap-0 overflow-hidden p-0 sm:max-w-[880px]"
+        className="flex h-[660px] max-h-[calc(100dvh-3rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[880px]"
       >
         <DialogHeader className="shrink-0 gap-0.5 border-b border-border px-6 py-4 pr-14 text-left">
           <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
