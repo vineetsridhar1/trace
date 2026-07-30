@@ -81,6 +81,14 @@ export function SessionAutomationRail({
 
 function summarize(names: string[]): string {
   if (!names.length) return "Not configured";
-  const visible = names.slice(0, 2).join(" · ");
-  return names.length > 2 ? `${visible} +${names.length - 2}` : visible;
+  let text = "";
+  let shown = 0;
+  for (const name of names) {
+    const candidate = shown === 0 ? name : `${text} · ${name}`;
+    if (shown > 0 && candidate.length > 26) break;
+    text = candidate;
+    shown += 1;
+  }
+  const remaining = names.length - shown;
+  return remaining > 0 ? `${text} +${remaining}` : text;
 }

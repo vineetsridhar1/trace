@@ -46,7 +46,7 @@ export function SessionAutomationSetupScripts({
                     <Input
                       value={script.name}
                       onChange={(event) => onUpdate(script.id, { name: event.target.value })}
-                      className="h-9 bg-background text-[13px]"
+                      className="h-9 border-border bg-background px-3 text-[13px] focus-visible:ring-2 focus-visible:ring-primary/25"
                     />
                   </Field>
                   <Button
@@ -65,7 +65,7 @@ export function SessionAutomationSetupScripts({
                     <Input
                       value={script.command}
                       onChange={(event) => onUpdate(script.id, { command: event.target.value })}
-                      className="h-9 bg-background font-mono text-xs"
+                      className="h-9 border-border bg-background px-3 font-mono text-xs focus-visible:ring-2 focus-visible:ring-primary/25"
                     />
                   </Field>
                   <Field label="Working directory">
@@ -74,7 +74,7 @@ export function SessionAutomationSetupScripts({
                       onChange={(event) =>
                         onUpdate(script.id, { workingDirectory: event.target.value })
                       }
-                      className="h-9 bg-background font-mono text-xs"
+                      className="h-9 border-border bg-background px-3 font-mono text-xs focus-visible:ring-2 focus-visible:ring-primary/25"
                     />
                   </Field>
                 </div>
@@ -123,7 +123,13 @@ export function AutomationSection({
             {description}
           </p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={onAdd}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onAdd}
+          className="h-8 px-2.5 text-[13px]"
+        >
           <Plus size={14} />
           {actionLabel}
         </Button>

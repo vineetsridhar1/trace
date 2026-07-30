@@ -280,7 +280,7 @@ export function useSessionAutomationDraft({
   }
 
   function addEnv(target: EnvTarget) {
-    updateEnv(target, (env) => [...env, { key: "", secretName: secretNames[0] ?? "" }]);
+    updateEnv(target, (env) => [...env, { key: "", secretName: "" }]);
   }
 
   function updateEnvEntry(target: EnvTarget, index: number, patch: Partial<RepoEnvVar>) {

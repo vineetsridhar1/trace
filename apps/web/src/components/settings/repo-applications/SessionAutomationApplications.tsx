@@ -61,7 +61,7 @@ export function SessionAutomationApplications(props: Props) {
                   onChange={(event) =>
                     props.onUpdateApplication(application.id, { name: event.target.value })
                   }
-                  className="h-9 bg-background text-[13px]"
+                  className="h-9 border-border bg-background px-3 text-[13px] focus-visible:ring-2 focus-visible:ring-primary/25"
                 />
               </Field>
               <Button
@@ -100,6 +100,7 @@ export function SessionAutomationApplications(props: Props) {
                 variant="ghost"
                 size="sm"
                 onClick={() => props.onAddProcess(application.id)}
+                className="h-8 px-2.5 text-[13px] text-muted-foreground"
               >
                 <Plus size={14} />
                 Add process to {application.name || "application"}
@@ -199,7 +200,7 @@ function ExpandedProcess({
               onChange={(event) =>
                 onUpdateProcess(applicationId, process.id, { name: event.target.value })
               }
-              className="h-9 bg-background text-[13px]"
+              className="h-9 border-border bg-background px-3 text-[13px] focus-visible:ring-2 focus-visible:ring-primary/25"
             />
           </Field>
           <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -229,7 +230,7 @@ function ExpandedProcess({
             onChange={(event) =>
               onUpdateProcess(applicationId, process.id, { command: event.target.value })
             }
-            className="h-9 bg-background font-mono text-xs"
+            className="h-9 border-border bg-background px-3 font-mono text-xs focus-visible:ring-2 focus-visible:ring-primary/25"
           />
         </Field>
         <Field label="Working directory">
@@ -240,7 +241,7 @@ function ExpandedProcess({
                 workingDirectory: event.target.value,
               })
             }
-            className="h-9 bg-background font-mono text-xs"
+            className="h-9 border-border bg-background px-3 font-mono text-xs focus-visible:ring-2 focus-visible:ring-primary/25"
           />
         </Field>
       </div>
@@ -286,6 +287,7 @@ function PortsEditor({
           variant="ghost"
           size="sm"
           onClick={() => onAdd(applicationId, process.id)}
+          className="h-8 px-2.5 text-[13px] text-muted-foreground"
         >
           <Plus size={13} />
           Add port
@@ -311,7 +313,7 @@ function PortsEditor({
                 onChange={(event) =>
                   onUpdate(applicationId, process.id, port.id, { label: event.target.value })
                 }
-                className="h-9 bg-background text-xs"
+                className="h-9 border-border bg-background px-3 text-xs focus-visible:ring-2 focus-visible:ring-primary/25"
               />
               <Input
                 type="number"
@@ -323,7 +325,7 @@ function PortsEditor({
                     port: Number(event.target.value),
                   })
                 }
-                className="h-9 bg-background px-2 font-mono text-xs"
+                className="h-9 border-border bg-background px-2 font-mono text-xs focus-visible:ring-2 focus-visible:ring-primary/25"
               />
               <Select
                 value={port.protocol}
@@ -333,10 +335,10 @@ function PortsEditor({
                   })
                 }
               >
-                <SelectTrigger className="h-9 bg-background px-2 text-xs">
+                <SelectTrigger className="h-9 border-border bg-background px-2 text-xs focus-visible:ring-2 focus-visible:ring-primary/25">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="border border-[#27272d] bg-[#161619] text-[#fafafa] shadow-[0_12px_32px_rgba(0,0,0,0.4)] ring-0 [--border:#27272d] [--muted-foreground:#9d9da8] [--popover-foreground:#fafafa] [--popover:#161619]">
                   <SelectItem value="http">http</SelectItem>
                 </SelectContent>
               </Select>
@@ -348,7 +350,7 @@ function PortsEditor({
                     healthPath: event.target.value || null,
                   })
                 }
-                className="h-9 bg-background font-mono text-xs"
+                className="h-9 border-border bg-background px-3 font-mono text-xs focus-visible:ring-2 focus-visible:ring-primary/25"
               />
               <div className="flex justify-center">
                 <MiniToggle

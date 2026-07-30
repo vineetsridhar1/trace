@@ -1,4 +1,4 @@
-import { ExternalLink, Plus, Shield, Trash2 } from "lucide-react";
+import { ExternalLink, Info, Plus, Shield, Trash2 } from "lucide-react";
 import type { RepoEnvVar } from "@trace/gql";
 import { cn } from "../../../lib/utils";
 import { Button } from "../../ui/button";
@@ -27,7 +27,13 @@ export function SessionAutomationEnvVars({
     <div>
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] font-medium text-muted-foreground">Environment variables</p>
-        <Button type="button" variant="ghost" size="sm" onClick={() => onAdd(target)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => onAdd(target)}
+          className="h-8 px-2.5 text-[13px] text-muted-foreground"
+        >
           <Plus size={13} />
           Add variable
         </Button>
@@ -46,7 +52,7 @@ export function SessionAutomationEnvVars({
                     onChange={(event) =>
                       onUpdate(target, index, { key: event.target.value.toUpperCase() })
                     }
-                    className="h-9 bg-background font-mono text-xs"
+                    className="h-9 border-border bg-background px-3 font-mono text-xs focus-visible:ring-2 focus-visible:ring-primary/25"
                   />
                   <Select
                     value={entry.secretName || undefined}
@@ -60,7 +66,10 @@ export function SessionAutomationEnvVars({
                   >
                     <SelectTrigger
                       aria-invalid={missing || undefined}
-                      className={cn("h-9 w-full bg-background", missing && "border-destructive")}
+                      className={cn(
+                        "h-9 w-full border-border bg-background px-3 text-[13px] focus-visible:ring-2 focus-visible:ring-primary/25",
+                        missing && "border-destructive text-destructive",
+                      )}
                     >
                       <SelectValue placeholder="Select secret">
                         <span
@@ -76,7 +85,7 @@ export function SessionAutomationEnvVars({
                         </span>
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="border border-[#27272d] bg-[#161619] text-[#fafafa] shadow-[0_12px_32px_rgba(0,0,0,0.4)] ring-0 [--border:#27272d] [--muted-foreground:#9d9da8] [--popover-foreground:#fafafa] [--popover:#161619]">
                       {secretNames.map((name) => (
                         <SelectItem key={name} value={name}>
                           <span className="flex items-center gap-2">
@@ -107,7 +116,15 @@ export function SessionAutomationEnvVars({
                 </div>
                 {missing ? (
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-destructive">
-                    This secret was removed from Workspace → Secrets — pick a replacement.
+                    <Info size={12} className="shrink-0" />
+                    This secret was removed from workspace Secrets — pick a replacement.
+                  </p>
+                ) : null}
+                {!entry.key && !entry.secretName ? (
+                  <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-4 text-muted-foreground">
+                    <Info size={12} className="mt-0.5 shrink-0" />
+                    Name the variable your command reads. Its value is pulled from the chosen secret
+                    when the runtime starts — the secret value is never shown or stored here.
                   </p>
                 ) : null}
               </div>
