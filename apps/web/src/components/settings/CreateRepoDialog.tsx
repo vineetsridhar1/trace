@@ -14,6 +14,7 @@ import { ExistingRepoForm } from "./ExistingRepoForm";
 import { ManualRepoForm } from "./ManualRepoForm";
 import { NewLocalProjectForm } from "./NewLocalProjectForm";
 import { RepoDialogModeSwitch } from "./RepoDialogModeSwitch";
+import type { RepoDialogMode } from "./repo-dialog-types";
 import { canCreateLocalProject, isElectron, useCreateRepoDialog } from "./useCreateRepoDialog";
 
 interface CreateRepoDialogProps {
@@ -23,6 +24,7 @@ interface CreateRepoDialogProps {
   onCreated?: () => void;
   triggerLabel?: string;
   triggerVariant?: "default" | "outline";
+  initialMode?: RepoDialogMode;
 }
 
 export function CreateRepoDialog({
@@ -32,9 +34,10 @@ export function CreateRepoDialog({
   onCreated,
   triggerLabel = "Link Repository",
   triggerVariant = "outline",
+  initialMode = "link",
 }: CreateRepoDialogProps) {
   const isMobile = useIsMobile();
-  const state = useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated });
+  const state = useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated, initialMode });
 
   return (
     <Dialog open={state.open} onOpenChange={state.handleOpenChange}>

@@ -149,6 +149,57 @@ export function ModalField({
   );
 }
 
+/* Static select trigger at dialog density — secret values carry a shield, missing refs go danger. */
+export function ModalSelect({
+  traceId,
+  value,
+  label,
+  withShield = false,
+  danger = false,
+  className,
+}: {
+  traceId: string;
+  value: string;
+  label: string;
+  withShield?: boolean;
+  danger?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-haspopup="listbox"
+      aria-label={label}
+      aria-invalid={danger || undefined}
+      data-trace-id={traceId}
+      data-trace-source={SOURCE}
+      className={cn(
+        "flex h-9 w-full items-center justify-between gap-2 rounded-design-control border bg-design-background px-3 text-left text-[13px] transition-colors duration-design ease-design",
+        danger
+          ? "border-design-danger/60 text-design-danger"
+          : "border-design-border text-design-foreground hover:border-design-secondary",
+        className,
+      )}
+    >
+      <span className="flex min-w-0 items-center gap-1.5 truncate">
+        {withShield ? (
+          <Icon
+            name="shield"
+            size={13}
+            className={cn("shrink-0", danger ? "text-design-danger" : "text-design-muted")}
+          />
+        ) : null}
+        <span className="truncate font-design-mono text-xs">{value}</span>
+      </span>
+      <Icon
+        name="chevronDown"
+        size={14}
+        className={cn("shrink-0", danger ? "text-design-danger" : "text-design-muted")}
+      />
+    </button>
+  );
+}
+
 /* Text input at dialog density. */
 export function ModalInput({
   traceId,

@@ -49,6 +49,7 @@
     "The audit and redesign target the web app's SettingsPage; the mobile app settings are out of scope except one responsive navigation artboard",
     "The 'Channels' tab (setup/run scripts for coding channels) is folded into Repositories as per-repo automation, since scripts conceptually belong to the codebase being run",
     "'Org Secrets' is renamed 'Secrets' under Workspace; personal 'API Keys' stays under Your account so credential ownership is unambiguous",
-    "Invite-by-email with pending invites is proposed to replace search-only member adding (current UX dead-ends when the user has not signed up)"
+    "Invite-by-email with pending invites is proposed to replace search-only member adding (current UX dead-ends when the user has not signed up)",
+    "The Session automation dialog unifies the repo ApplicationConfigDialog (setup scripts with env secrets, applications, processes, ports) with channel run scripts into one repo-level editor, since members meet them as one job: how sessions run this codebase"
   ]
 }

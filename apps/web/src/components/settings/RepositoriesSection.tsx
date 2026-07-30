@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState } from "react";
 import type { Repo } from "@trace/gql";
-import { useAuthStore } from "@trace/client-core";
+import { useAuthStore, type AuthState, type OrgMembership } from "@trace/client-core";
 import { useEntityStore, useEntityIds } from "@trace/client-core";
 import type { EntityTableMap } from "@trace/client-core";
 import { useOnboardingStore } from "../../stores/onboarding";
@@ -8,9 +8,10 @@ import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { RepoCard } from "./RepoCard";
 import { CreateRepoDialog } from "./CreateRepoDialog";
-import { GitBranch, Info, Terminal } from "lucide-react";
+import { Terminal } from "lucide-react";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { SettingsStatusPill } from "./SettingsStatusPill";
+import { RepositoriesEmptyState } from "./RepositoriesEmptyState";
 
 const REPOS_QUERY = gql`
   query SettingsRepos($organizationId: ID!) {
@@ -64,6 +65,7 @@ const isElectron = typeof window.trace?.getRepoConfig === "function";
 
 export function RepositoriesSection() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const memberships = useAuthStore((s: AuthState) => s.orgMemberships);
   const upsertMany = useEntityStore(
     (s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany,
   );
@@ -112,6 +114,13 @@ export function RepositoriesSection() {
       (b as EntityTableMap["repos"]).name ?? "",
     ),
   );
+  const workspaceName = memberships.find(
+    (membership: OrgMembership) => membership.organizationId === activeOrgId,
+  )?.organization.name;
+  const handleCreated = () => {
+    setDesktopRefreshKey((key) => key + 1);
+    useOnboardingStore.getState().invalidateRepos();
+  };
   const githubCliLabel = !githubCliStatus
     ? "Checking GitHub CLI status..."
     : !githubCliStatus.installed
@@ -131,16 +140,15 @@ export function RepositoriesSection() {
     <div>
       <SettingsSectionHeader
         title="Repositories"
-        description="Codebases linked to this workspace. Each repository carries its own setup and run automation for coding sessions."
+        description={`Codebases linked to ${workspaceName ?? "this workspace"}. Each repository carries its own automation: a setup script and named run scripts for sessions.`}
         action={
-          <CreateRepoDialog
-            triggerLabel="Connect repository"
-            triggerVariant="default"
-            onCreated={() => {
-              setDesktopRefreshKey((k: number) => k + 1);
-              useOnboardingStore.getState().invalidateRepos();
-            }}
-          />
+          sortedRepoIds.length ? (
+            <CreateRepoDialog
+              triggerLabel="Connect repository"
+              triggerVariant="default"
+              onCreated={handleCreated}
+            />
+          ) : undefined
         }
       />
 
@@ -167,52 +175,7 @@ export function RepositoriesSection() {
       )}
 
       {sortedRepoIds.length === 0 ? (
-        <>
-          <div className="rounded-xl border border-dashed border-border bg-surface-deep px-6 py-10 text-center">
-            <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-[#0a0a0c] text-muted-foreground">
-              <GitBranch size={18} />
-            </span>
-            <h3 className="mt-4 text-sm font-semibold text-foreground">No repositories yet</h3>
-            <p className="mx-auto mt-1 max-w-md text-sm leading-5 text-muted-foreground">
-              Connect the codebase your team works in. Agents and members start every coding session
-              from a repository.
-            </p>
-            <div className="mt-5 flex justify-center">
-              <CreateRepoDialog
-                triggerLabel="Connect repository"
-                triggerVariant="default"
-                onCreated={() => {
-                  setDesktopRefreshKey((key: number) => key + 1);
-                  useOnboardingStore.getState().invalidateRepos();
-                }}
-              />
-            </div>
-          </div>
-          <div className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-3">
-            {[
-              ["1", "Connect a repository", "Paste a GitHub URL, or add a local project."],
-              [
-                "2",
-                "Set the default branch",
-                "Sessions branch from it and open pull requests against it.",
-              ],
-              ["3", "Add automation", "Setup and run scripts make every session ready to work."],
-            ].map(([number, title, description]) => (
-              <div key={number} className="rounded-xl border border-border bg-surface-deep p-4">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-[#0a0a0c] text-[11px] font-semibold text-muted-foreground">
-                  {number}
-                </span>
-                <p className="mt-3 text-[13px] font-medium text-foreground">{title}</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-5 flex items-start gap-1.5 text-xs leading-5 text-muted-foreground">
-            <Info size={13} className="mt-0.5 shrink-0" />
-            Cloud sessions need a GitHub token or SSH key. Add yours under API keys, or share one
-            with the workspace under Secrets.
-          </p>
-        </>
+        <RepositoriesEmptyState onCreated={handleCreated} />
       ) : (
         <div className="space-y-3">
           {sortedRepoIds.map((id) => (

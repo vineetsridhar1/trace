@@ -20,7 +20,11 @@
     {
       "id": "edit-dialogs",
       "name": "Edit dialogs",
-      "screenIds": ["settings-cloud-env-edit", "settings-automation-edit"]
+      "screenIds": [
+        "settings-cloud-env-edit",
+        "settings-automation-edit",
+        "settings-automation-apps"
+      ]
     },
     {
       "id": "states-responsive",
@@ -103,8 +107,16 @@
     },
     {
       "id": "settings-automation-edit",
-      "name": "Edit session automation",
+      "name": "Session automation · Setup",
       "component": "./screens/SettingsAutomationEdit.tsx",
+      "variation": "Dialog",
+      "state": "Editing",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-automation-apps",
+      "name": "Session automation · Applications",
+      "component": "./screens/SettingsAutomationApps.tsx",
       "variation": "Dialog",
       "state": "Editing",
       "viewport": { "width": 1440, "height": 900 }

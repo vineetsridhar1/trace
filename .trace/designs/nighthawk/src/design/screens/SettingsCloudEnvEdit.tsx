@@ -6,6 +6,7 @@ import {
   ModalField,
   ModalInput,
   ModalScreen,
+  ModalSelect,
 } from "../components/settings/modal";
 
 const SOURCE = "src/design/screens/SettingsCloudEnvEdit.tsx";
@@ -20,36 +21,6 @@ const RUNTIME_VARS = [
   ["GITHUB_TOKEN", "GITHUB_TOKEN"],
   ["ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"],
 ] as const;
-
-/* Static select trigger at dialog density — value + chevron, secret values carry a shield. */
-function SelectTrigger({
-  traceId,
-  value,
-  withShield = false,
-  label,
-}: {
-  traceId: string;
-  value: string;
-  withShield?: boolean;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-haspopup="listbox"
-      aria-label={label}
-      data-trace-id={traceId}
-      data-trace-source={SOURCE}
-      className="flex h-9 w-full items-center justify-between gap-2 rounded-design-control border border-design-border bg-design-background px-3 text-left text-[13px] text-design-foreground transition-colors duration-design ease-design hover:border-design-secondary"
-    >
-      <span className="flex min-w-0 items-center gap-1.5 truncate">
-        {withShield ? <Icon name="shield" size={13} className="shrink-0 text-design-muted" /> : null}
-        <span className="truncate font-design-mono text-xs">{value}</span>
-      </span>
-      <Icon name="chevronDown" size={14} className="shrink-0 text-design-muted" />
-    </button>
-  );
-}
 
 export default function SettingsCloudEnvEdit() {
   return (
@@ -125,7 +96,7 @@ export default function SettingsCloudEnvEdit() {
               required
               hint="Manage values in Workspace → Secrets."
             >
-              <SelectTrigger
+              <ModalSelect
                 traceId="cloudedit-secret-trigger"
                 value="FLY_LAUNCHER_TOKEN"
                 withShield
@@ -168,7 +139,7 @@ export default function SettingsCloudEnvEdit() {
                   className="grid grid-cols-[1fr_1fr_auto] items-center gap-2"
                 >
                   <ModalInput traceId={`cloudedit-var-${name.toLowerCase()}-name`} label={`Variable ${name}`} value={name} mono />
-                  <SelectTrigger
+                  <ModalSelect
                     traceId={`cloudedit-var-${name.toLowerCase()}-secret`}
                     value={secret}
                     withShield
