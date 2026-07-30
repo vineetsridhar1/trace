@@ -32,7 +32,7 @@ export function DesignArtboard({
         <header className="flex items-end justify-between gap-3 text-zinc-200">
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[24px] font-medium leading-8">{screen.name}</h2>
-            <p className="mt-2 text-[18px] leading-[26px] text-zinc-500">
+            <p className="mt-2 truncate text-[18px] leading-[26px] text-zinc-500">
               {[screen.variation, screen.state].filter(Boolean).join(" · ") || "Default"}
             </p>
           </div>

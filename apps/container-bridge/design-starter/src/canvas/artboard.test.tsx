@@ -20,6 +20,6 @@ test("keeps the screen label constant-sized and on one line", () => {
 
   assert.match(html, /bottom:868px/);
   assert.match(html, /transform:scale\(2\)/);
-  assert.match(html, /truncate/);
+  assert.equal((html.match(/truncate/g) ?? []).length, 2);
   assert.match(html, /Screen content/);
 });
