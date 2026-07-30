@@ -1,7 +1,7 @@
 export const MIN_CANVAS_ZOOM = 0.1;
 export const MAX_CANVAS_ZOOM = 2;
-const WHEEL_ZOOM_SENSITIVITY = 0.004;
-const GESTURE_ZOOM_EXPONENT = 1.75;
+const WHEEL_ZOOM_SENSITIVITY = 0.006;
+const GESTURE_ZOOM_EXPONENT = 2.5;
 
 export type CanvasViewport = {
   zoom: number;
@@ -38,6 +38,27 @@ export function zoomCanvasViewportAt(
     zoom,
     x: point.x - worldX * zoom,
     y: point.y - worldY * zoom,
+  };
+}
+
+export function pinchCanvasViewport(
+  viewport: CanvasViewport,
+  startPoint: CanvasPoint,
+  currentPoint: CanvasPoint,
+  startDistance: number,
+  currentDistance: number,
+  zoomExponent = 1,
+): CanvasViewport {
+  if (startDistance <= 0 || currentDistance <= 0) return viewport;
+  const zoom = clampCanvasZoom(
+    viewport.zoom * Math.pow(currentDistance / startDistance, zoomExponent),
+  );
+  const worldX = (startPoint.x - viewport.x) / viewport.zoom;
+  const worldY = (startPoint.y - viewport.y) / viewport.zoom;
+  return {
+    zoom,
+    x: currentPoint.x - worldX * zoom,
+    y: currentPoint.y - worldY * zoom,
   };
 }
 

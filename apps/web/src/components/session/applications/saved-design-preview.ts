@@ -25,3 +25,9 @@ export function savedDesignPreviewUrl(
 ): string | null {
   return groupPreviewUrl ?? latestSavedDesignPreviewUrl(checkpoints);
 }
+
+export function designPreviewModeUrl(url: string): string {
+  const [path, hash] = url.split("#", 2);
+  if (/(?:^|[?&])__trace_preview(?:=|&|$)/.test(path)) return url;
+  return `${path}${path.includes("?") ? "&" : "?"}__trace_preview=1${hash ? `#${hash}` : ""}`;
+}

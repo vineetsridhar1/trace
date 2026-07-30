@@ -5,6 +5,7 @@ import {
   MIN_CANVAS_ZOOM,
   acceleratedGestureScale,
   panCanvasViewport,
+  pinchCanvasViewport,
   wheelDeltaPixels,
   zoomCanvasViewportAt,
   zoomFromWheel,
@@ -31,6 +32,26 @@ test("keeps the world point under the pointer fixed while zooming", () => {
   assert.equal(after.y + worldPoint.y * after.zoom, point.y);
 });
 
+test("keeps two-finger panning anchored between the fingers", () => {
+  const viewport = { zoom: 1, x: 20, y: 30 };
+  const next = pinchCanvasViewport(viewport, { x: 100, y: 100 }, { x: 140, y: 120 }, 80, 80);
+
+  assert.deepEqual(next, { zoom: 1, x: 60, y: 50 });
+});
+
+test("supports a faster pinch response", () => {
+  const next = pinchCanvasViewport(
+    { zoom: 1, x: 0, y: 0 },
+    { x: 100, y: 100 },
+    { x: 100, y: 100 },
+    100,
+    120,
+    1.5,
+  );
+
+  assert.equal(next.zoom, Math.pow(1.2, 1.5));
+});
+
 test("clamps wheel zoom without moving the pointer anchor", () => {
   const viewport = { zoom: 1, x: 0, y: 0 };
   assert.equal(zoomFromWheel(viewport, -100_000, { x: 0, y: 0 }).zoom, MAX_CANVAS_ZOOM);
@@ -44,7 +65,7 @@ test("uses responsive zoom for trackpad pinch gestures", () => {
 
   assert.ok(zoomedIn > 1.45);
   assert.ok(zoomedOut < 0.7);
-  assert.ok(acceleratedGestureScale(1.1) > 1.1);
+  assert.ok(acceleratedGestureScale(1.1) > 1.25);
   assert.ok(acceleratedGestureScale(0.9) < 0.9);
   assert.equal(acceleratedGestureScale(1), 1);
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { DesignArtboard } from "./DesignArtboard";
 import { DesignSectionLabel } from "./DesignSectionLabel";
@@ -9,53 +9,51 @@ import { useCanvasViewport } from "./useCanvasViewport";
 
 export function DesignCanvas({
   manifest,
+  preview = false,
   screenModules,
 }: {
   manifest: DesignManifest;
+  preview?: boolean;
   screenModules: Record<string, unknown>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [focusedId, setFocusedId] = useState<string | null>(null);
   const { viewport, setViewport, onPointerDown, onPointerMove, endPointerDrag, zoomAtCenter } =
     useCanvasViewport(containerRef);
 
   const placed = useMemo(() => placeScreens(manifest), [manifest]);
 
-  const fit = useCallback(
-    (screenId?: string) => {
-      const container = containerRef.current;
-      if (!container || placed.length === 0) return;
-      const targets = screenId ? placed.filter((item) => item.screen.id === screenId) : placed;
-      const left = Math.min(...targets.map((item) => item.x));
-      const top = Math.min(...targets.map((item) => item.y));
-      const right = Math.max(...targets.map((item) => item.x + item.screen.viewport.width));
-      const bottom = Math.max(...targets.map((item) => item.y + item.screen.viewport.height));
-      const padding = screenId ? 160 : 140;
-      const nextZoom = Math.min(
-        1.25,
-        Math.max(
-          0.1,
-          Math.min(
-            (container.clientWidth - padding) / (right - left),
-            (container.clientHeight - padding) / (bottom - top),
-          ),
+  const fit = useCallback(() => {
+    const container = containerRef.current;
+    if (!container || placed.length === 0) return;
+    const targets = placed;
+    const left = Math.min(...targets.map((item) => item.x));
+    const top = Math.min(...targets.map((item) => item.y));
+    const right = Math.max(...targets.map((item) => item.x + item.screen.viewport.width));
+    const bottom = Math.max(...targets.map((item) => item.y + item.screen.viewport.height));
+    const padding = 140;
+    const nextZoom = Math.min(
+      1.25,
+      Math.max(
+        0.1,
+        Math.min(
+          (container.clientWidth - padding) / (right - left),
+          (container.clientHeight - padding) / (bottom - top),
         ),
-      );
-      setViewport({
-        zoom: nextZoom,
-        x: (container.clientWidth - (right - left) * nextZoom) / 2 - left * nextZoom,
-        y: (container.clientHeight - (bottom - top) * nextZoom) / 2 - top * nextZoom,
-      });
-    },
-    [placed, setViewport],
-  );
+      ),
+    );
+    setViewport({
+      zoom: nextZoom,
+      x: (container.clientWidth - (right - left) * nextZoom) / 2 - left * nextZoom,
+      y: (container.clientHeight - (bottom - top) * nextZoom) / 2 - top * nextZoom,
+    });
+  }, [placed, setViewport]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => fit());
     return () => cancelAnimationFrame(frame);
   }, [fit]);
 
-  const visible = focusedId ? placed.filter((item) => item.screen.id === focusedId) : placed;
+  const visible = placed;
   const sectionLabels = Array.from(
     visible.reduce((labels, item) => {
       const existing = labels.get(item.sectionId);
@@ -65,7 +63,6 @@ export function DesignCanvas({
       return labels;
     }, new Map<string, (typeof visible)[number]>()),
   );
-
   return (
     <div
       ref={containerRef}
@@ -88,10 +85,10 @@ export function DesignCanvas({
         {sectionLabels.map(([sectionId, item]) => (
           <div
             key={sectionId}
-            className="absolute pointer-events-none"
-            style={{ left: item.x, top: item.y - 132 }}
+            className="pointer-events-none absolute"
+            style={{ left: item.x, top: item.y - 164 / viewport.zoom }}
           >
-            <DesignSectionLabel name={item.sectionName} />
+            <DesignSectionLabel name={item.sectionName} zoom={viewport.zoom} />
           </div>
         ))}
         {visible.map(({ screen, x, y }) => {
@@ -99,14 +96,7 @@ export function DesignCanvas({
           return (
             <div key={screen.id} className="absolute" style={{ left: x, top: y }}>
               {component ? (
-                <DesignArtboard
-                  screen={screen}
-                  component={component}
-                  onFocus={() => {
-                    setFocusedId(screen.id);
-                    requestAnimationFrame(() => fit(screen.id));
-                  }}
-                />
+                <DesignArtboard screen={screen} component={component} zoom={viewport.zoom} />
               ) : (
                 <div
                   className="flex items-center justify-center bg-rose-950/50 p-8 text-sm text-rose-200"
@@ -119,17 +109,14 @@ export function DesignCanvas({
           );
         })}
       </div>
-      <CanvasToolbar
-        zoom={viewport.zoom}
-        focused={focusedId !== null}
-        onZoomIn={() => zoomAtCenter(1.2)}
-        onZoomOut={() => zoomAtCenter(1 / 1.2)}
-        onFit={() => fit(focusedId ?? undefined)}
-        onClearFocus={() => {
-          setFocusedId(null);
-          requestAnimationFrame(() => fit());
-        }}
-      />
+      {!preview ? (
+        <CanvasToolbar
+          zoom={viewport.zoom}
+          onZoomIn={() => zoomAtCenter(1.2)}
+          onZoomOut={() => zoomAtCenter(1 / 1.2)}
+          onFit={fit}
+        />
+      ) : null}
     </div>
   );
 }

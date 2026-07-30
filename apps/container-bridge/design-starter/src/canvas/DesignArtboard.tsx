@@ -5,12 +5,15 @@ import { ArtboardErrorBoundary } from "./ArtboardErrorBoundary";
 export function DesignArtboard({
   screen,
   component: ScreenComponent,
-  onFocus,
+  zoom,
 }: {
   screen: DesignScreen;
   component: ComponentType;
-  onFocus: () => void;
+  zoom: number;
 }) {
+  const inverseZoom = 1 / zoom;
+  const labelWidth = screen.viewport.width * zoom;
+
   return (
     <article
       data-screen-id={screen.id}
@@ -20,24 +23,19 @@ export function DesignArtboard({
       <div
         className="absolute left-0"
         style={{
-          bottom: screen.viewport.height + 12,
-          width: screen.viewport.width,
+          bottom: screen.viewport.height + 12 * inverseZoom,
+          transform: `scale(${inverseZoom})`,
+          transformOrigin: "bottom left",
+          width: labelWidth,
         }}
       >
         <header className="flex items-end justify-between gap-3 text-zinc-200">
-          <div>
-            <h2 className="text-[24px] font-medium leading-8">{screen.name}</h2>
-            <p className="mt-2 text-[18px] leading-[26px] text-zinc-500">
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-[24px] font-medium leading-8">{screen.name}</h2>
+            <p className="mt-2 truncate text-[18px] leading-[26px] text-zinc-500">
               {[screen.variation, screen.state].filter(Boolean).join(" · ") || "Default"}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onFocus}
-            className="rounded px-2 py-1 text-sm text-zinc-400 hover:bg-white/10 hover:text-white"
-          >
-            Focus
-          </button>
         </header>
       </div>
       <div
