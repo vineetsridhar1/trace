@@ -15,7 +15,10 @@ import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { navigateToSessionGroup } from "../../stores/ui";
-import { savedDesignPreviewUrl } from "../session/applications/saved-design-preview";
+import {
+  designPreviewModeUrl,
+  savedDesignPreviewUrl,
+} from "../session/applications/saved-design-preview";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -93,7 +96,7 @@ export function GeneratedProjectGalleryCard({
         <div className="aspect-[16/10] overflow-hidden bg-surface-deep">
           {kind === "design" && designPreview ? (
             <iframe
-              src={designPreview}
+              src={designPreviewModeUrl(designPreview)}
               title={`${group.name} preview`}
               className="pointer-events-none size-full border-0 bg-background"
               sandbox="allow-forms allow-modals allow-popups allow-scripts"

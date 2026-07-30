@@ -13,16 +13,18 @@ const screen: DesignScreen = {
   viewport: { width: 390, height: 844 },
 };
 
-test("positions the canvas-scaled screen label above the artboard", () => {
+test("keeps the screen label constant-sized and on one line", () => {
   const html = renderToStaticMarkup(
     <DesignArtboard
       screen={screen}
       component={() => <div>Screen content</div>}
       onFocus={() => undefined}
+      zoom={0.5}
     />,
   );
 
-  assert.match(html, /bottom:856px/);
-  assert.doesNotMatch(html, /scale\(/);
+  assert.match(html, /bottom:868px/);
+  assert.match(html, /transform:scale\(2\)/);
+  assert.match(html, /truncate/);
   assert.match(html, /Screen content/);
 });

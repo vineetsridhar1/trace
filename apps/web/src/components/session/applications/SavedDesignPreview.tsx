@@ -1,6 +1,7 @@
 import { Archive } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SavedPreviewSkeleton } from "./SavedPreviewSkeleton";
+import { designPreviewModeUrl } from "./saved-design-preview";
 
 export function SavedDesignPreview({ url }: { url: string }) {
   const [loading, setLoading] = useState(true);
@@ -19,7 +20,7 @@ export function SavedDesignPreview({ url }: { url: string }) {
         </div>
       ) : null}
       <iframe
-        src={url}
+        src={designPreviewModeUrl(url)}
         title="Saved design preview"
         className={
           loading ? "absolute left-0 top-0 size-px opacity-0" : "size-full border-0 bg-background"

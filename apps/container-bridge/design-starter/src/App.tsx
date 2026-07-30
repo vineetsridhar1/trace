@@ -11,7 +11,9 @@ const manifest = validateDesignManifest(manifestSource);
 const tokens = validateDesignTokens(tokenSource);
 
 export function App() {
-  const reviewScreenId = new URLSearchParams(window.location.search).get("__trace_review_screen");
+  const searchParams = new URLSearchParams(window.location.search);
+  const reviewScreenId = searchParams.get("__trace_review_screen");
+  const preview = searchParams.has("__trace_preview");
   const reviewScreen = manifest.screens.find((screen) => screen.id === reviewScreenId);
   const reviewComponent = reviewScreen
     ? resolveScreenComponent(screenModules, reviewScreen.component)
@@ -22,7 +24,7 @@ export function App() {
       {reviewScreen && reviewComponent ? (
         <ReviewScreen screen={reviewScreen} component={reviewComponent} />
       ) : (
-        <DesignCanvas manifest={manifest} screenModules={screenModules} />
+        <DesignCanvas manifest={manifest} screenModules={screenModules} preview={preview} />
       )}
     </div>
   );

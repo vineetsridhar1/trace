@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  designPreviewModeUrl,
   hasSavedDesignPreview,
   latestSavedDesignPreviewUrl,
   savedDesignPreviewUrl,
@@ -63,5 +64,19 @@ describe("savedDesignPreviewUrl", () => {
         },
       ] as never),
     ).toBe("/design-previews/groups/group-1");
+  });
+});
+
+describe("designPreviewModeUrl", () => {
+  it("adds preview mode without disturbing URL fragments", () => {
+    expect(designPreviewModeUrl("/design-previews/group-1#screen")).toBe(
+      "/design-previews/group-1?__trace_preview=1#screen",
+    );
+  });
+
+  it("preserves an existing preview mode", () => {
+    expect(designPreviewModeUrl("/design-previews/group-1?__trace_preview=1")).toBe(
+      "/design-previews/group-1?__trace_preview=1",
+    );
   });
 });

@@ -10,7 +10,7 @@ import {
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
-import { savedDesignPreviewUrl } from "./applications/saved-design-preview";
+import { designPreviewModeUrl, savedDesignPreviewUrl } from "./applications/saved-design-preview";
 import {
   ResponsiveDialog as Dialog,
   ResponsiveDialogContent as DialogContent,
@@ -175,7 +175,7 @@ function DesignPickerCard({
       <div className="aspect-[16/10] overflow-hidden bg-surface-deep">
         {previewUrl ? (
           <iframe
-            src={previewUrl}
+            src={designPreviewModeUrl(previewUrl)}
             title={`${group.name} preview`}
             loading="lazy"
             className="pointer-events-none size-full border-0 bg-background"

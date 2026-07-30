@@ -9,9 +9,11 @@ import { useCanvasViewport } from "./useCanvasViewport";
 
 export function DesignCanvas({
   manifest,
+  preview = false,
   screenModules,
 }: {
   manifest: DesignManifest;
+  preview?: boolean;
   screenModules: Record<string, unknown>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -102,6 +104,7 @@ export function DesignCanvas({
                 <DesignArtboard
                   screen={screen}
                   component={component}
+                  zoom={viewport.zoom}
                   onFocus={() => {
                     setFocusedId(screen.id);
                     requestAnimationFrame(() => fit(screen.id));
@@ -119,17 +122,19 @@ export function DesignCanvas({
           );
         })}
       </div>
-      <CanvasToolbar
-        zoom={viewport.zoom}
-        focused={focusedId !== null}
-        onZoomIn={() => zoomAtCenter(1.2)}
-        onZoomOut={() => zoomAtCenter(1 / 1.2)}
-        onFit={() => fit(focusedId ?? undefined)}
-        onClearFocus={() => {
-          setFocusedId(null);
-          requestAnimationFrame(() => fit());
-        }}
-      />
+      {!preview ? (
+        <CanvasToolbar
+          zoom={viewport.zoom}
+          focused={focusedId !== null}
+          onZoomIn={() => zoomAtCenter(1.2)}
+          onZoomOut={() => zoomAtCenter(1 / 1.2)}
+          onFit={() => fit(focusedId ?? undefined)}
+          onClearFocus={() => {
+            setFocusedId(null);
+            requestAnimationFrame(() => fit());
+          }}
+        />
+      ) : null}
     </div>
   );
 }
