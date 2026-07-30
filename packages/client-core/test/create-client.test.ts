@@ -96,7 +96,55 @@ describe("createGqlClient", () => {
       .toPromise();
 
     expect(result.error?.graphQLErrors[0]?.extensions?.code).toBe("UNAUTHENTICATED");
-    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(onUnauthorized).toHaveBeenCalledWith("query");
+    await client.dispose();
+  });
+
+  it("blocks mutations locally while the app is waiting for reauthentication", async () => {
+    const onUnauthorized = vi.fn();
+    const fetchMock = vi.fn<typeof fetch>();
+
+    setPlatform({
+      apiUrl: "http://example.test",
+      clientSource: "web",
+      authMode: "cookie",
+      storage: {
+        getItem: () => null,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+      },
+      secureStorage: {
+        getToken: async () => null,
+        setToken: async () => undefined,
+        clearToken: async () => undefined,
+      },
+      fetch: fetchMock,
+      createWebSocket: () => {
+        throw new Error("WebSocket is not used by this test");
+      },
+    });
+
+    const client = createGqlClient({
+      httpUrl: "http://example.test/graphql",
+      wsUrl: "ws://example.test/graphql",
+      shouldBlockMutation: () => true,
+      onUnauthorized,
+    });
+
+    const result = await client
+      .mutation(
+        gql`
+          mutation TestMutation {
+            test
+          }
+        `,
+        {},
+      )
+      .toPromise();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.error?.graphQLErrors[0]?.extensions?.code).toBe("UNAUTHENTICATED");
+    expect(onUnauthorized).toHaveBeenCalledWith("mutation");
     await client.dispose();
   });
 

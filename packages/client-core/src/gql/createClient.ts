@@ -9,6 +9,8 @@ import { createClient as createWSClient } from "graphql-ws";
 import { getAuthHeaders, isUnauthorizedError, useAuthStore } from "../stores/auth.js";
 import { getPlatform, type Platform } from "../platform.js";
 
+export type AuthFailureSource = "mutation" | "query" | "subscription";
+
 export interface CreateGqlClientOptions {
   httpUrl: string;
   wsUrl: string;
@@ -16,8 +18,10 @@ export interface CreateGqlClientOptions {
   lazy?: boolean;
   /** Notified when the WebSocket transport connects or disconnects. */
   onConnectionChange?: (connected: boolean) => void;
-  /** Notified when the WebSocket handshake rejects an expired or invalid identity. */
-  onUnauthorized?: () => void;
+  /** Notified when an operation rejects an expired or invalid identity. */
+  onUnauthorized?: (source: AuthFailureSource) => void;
+  /** Prevent mutations from leaving the client while the UI is waiting for reauthentication. */
+  shouldBlockMutation?: () => boolean;
 }
 
 interface GraphqlWsWebSocketImpl {
@@ -44,6 +48,16 @@ function createPlatformWebSocketImpl(platform: Platform): GraphqlWsWebSocketImpl
     CLOSING: 2,
     CLOSED: 3,
   }) as unknown as GraphqlWsWebSocketImpl;
+}
+
+function isGraphqlMutationRequest(init?: RequestInit): boolean {
+  if (typeof init?.body !== "string") return false;
+  try {
+    const body = JSON.parse(init.body) as { query?: unknown };
+    return typeof body.query === "string" && /^\s*mutation\b/.test(body.query);
+  } catch {
+    return false;
+  }
 }
 
 /** A urql `Client` augmented with a `dispose()` that closes the underlying graphql-ws transport. */
@@ -89,7 +103,7 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
       closed: (event: unknown) => {
         options.onConnectionChange?.(false);
         if (isUnauthorizedError(event)) {
-          options.onUnauthorized?.();
+          options.onUnauthorized?.("subscription");
         }
       },
       error: (error: unknown) => {
@@ -98,9 +112,26 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
     },
   });
 
+  const guardedFetch: typeof fetch = (input, init) => {
+    if (options.shouldBlockMutation?.() && isGraphqlMutationRequest(init)) {
+      options.onUnauthorized?.("mutation");
+      return Promise.resolve(
+        Response.json({
+          errors: [
+            {
+              message: "Reconnect to Trace before making changes.",
+              extensions: { code: "UNAUTHENTICATED" },
+            },
+          ],
+        }),
+      );
+    }
+    return platform.fetch(input, init);
+  };
+
   const client = createUrqlClient({
     url: options.httpUrl,
-    fetch: platform.fetch,
+    fetch: guardedFetch,
     fetchOptions: () => ({
       credentials: "include" as const,
       headers: {
@@ -110,9 +141,15 @@ export function createGqlClient(options: CreateGqlClientOptions): GqlClient {
     }),
     exchanges: [
       errorExchange({
-        onError(error) {
+        onError(error, operation) {
           if (isUnauthorizedError(error)) {
-            options.onUnauthorized?.();
+            const source =
+              operation.kind === "mutation"
+                ? "mutation"
+                : operation.kind === "subscription"
+                  ? "subscription"
+                  : "query";
+            options.onUnauthorized?.(source);
           }
         },
       }),

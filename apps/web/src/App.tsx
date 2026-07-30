@@ -27,16 +27,21 @@ import { Toaster } from "./components/ui/sonner";
 import { TraceLoader } from "./components/ui/trace-loader";
 import { LoginPage } from "./components/auth/LoginPage";
 import { AuthReconnectDialog } from "./components/auth/AuthReconnectDialog";
+import { AuthReconnectPill } from "./components/auth/AuthReconnectPill";
+import { AuthStatusBanner } from "./components/auth/AuthStatusBanner";
 import { AuthUnavailablePage } from "./components/auth/AuthUnavailablePage";
+import { ReturningUserReconnectPage } from "./components/auth/ReturningUserReconnectPage";
 import { features } from "./lib/features";
 import { createQuickSession } from "./lib/create-quick-session";
 import { ManualEditNavigationGuard } from "./components/session/applications/ManualEditNavigationGuard";
 import { useAuthSessionRefresh } from "./hooks/useAuthSessionRefresh";
+import { useAuthReconnectStore } from "./stores/auth-reconnect";
 
 export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
   const loading = useAuthStore((s: AuthState) => s.loading);
   const authUnavailable = useAuthStore((s: AuthState) => s.authUnavailable);
+  const returningUser = useAuthStore((s: AuthState) => s.returningUser);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const hasOrg = useAuthStore((s: AuthState) => s.orgMemberships.length > 0);
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
@@ -85,6 +90,14 @@ export function App() {
     if (authUnavailable) {
       return <AuthUnavailablePage />;
     }
+    if (returningUser) {
+      return (
+        <>
+          <ReturningUserReconnectPage />
+          <Toaster position="top-right" />
+        </>
+      );
+    }
     return <LoginPage />;
   }
 
@@ -92,6 +105,10 @@ export function App() {
     return (
       <>
         <NoOrgWelcome />
+        <div className="fixed inset-x-0 top-[calc(env(safe-area-inset-top)+3.5rem)] z-[105]">
+          <AuthStatusBanner />
+        </div>
+        <AuthReconnectPill />
         <AuthReconnectDialog />
         <Toaster position="top-right" />
       </>
@@ -101,6 +118,7 @@ export function App() {
   return (
     <>
       <AuthenticatedApp activeChannelId={activeChannelId} />
+      <AuthReconnectPill />
       <AuthReconnectDialog />
       <Toaster position="top-right" />
     </>
@@ -124,7 +142,11 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   // Cmd+, / Ctrl+, opens the settings page.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (useAuthStore.getState().reauthRequired) return;
+      if (useAuthStore.getState().reauthRequired && (e.metaKey || e.ctrlKey) && e.key === "n") {
+        e.preventDefault();
+        useAuthReconnectStore.getState().openDialog();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key === "n") {
         e.preventDefault();
         const channelId = useUIStore.getState().activeChannelId;
@@ -217,6 +239,7 @@ function MainContentFrame({ children }: { children: ReactNode }) {
     <div className="flex w-full flex-1 overflow-hidden" style={style}>
       <div className="flex min-w-0 flex-1 overflow-hidden rounded-tr-lg border border-border/80 bg-background/95">
         <SidebarInset className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <AuthStatusBanner />
           {children}
         </SidebarInset>
       </div>

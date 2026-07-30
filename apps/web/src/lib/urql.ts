@@ -1,9 +1,9 @@
 import { createGqlClient, useAuthStore, type GqlClient } from "@trace/client-core";
+import { useAuthReconnectStore } from "../stores/auth-reconnect";
 import { useConnectionStore } from "../stores/connection";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
-const browserLocation =
-  typeof window === "undefined" ? undefined : window.location;
+const browserLocation = typeof window === "undefined" ? undefined : window.location;
 const wsProtocol = browserLocation?.protocol === "https:" ? "wss:" : "ws:";
 const wsBase = API_URL
   ? API_URL.replace(/^https?:/, wsProtocol)
@@ -16,8 +16,12 @@ function buildClient(): GqlClient {
     onConnectionChange: (connected) => {
       useConnectionStore.getState().setConnected(connected);
     },
-    onUnauthorized: () => {
+    shouldBlockMutation: () => useAuthStore.getState().reauthRequired,
+    onUnauthorized: (source) => {
       useAuthStore.getState().requireReauthentication();
+      if (source === "mutation") {
+        useAuthReconnectStore.getState().openDialog();
+      }
     },
   });
 }

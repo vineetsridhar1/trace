@@ -1,24 +1,17 @@
 import { useEffect } from "react";
-import { useAuthStore } from "@trace/client-core";
 import { useCommandPaletteStore } from "../stores/command-palette";
 import { matchesShortcut, useCommandRegistryStore } from "../stores/command-registry";
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
-  return (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    target.isContentEditable
-  );
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
 /** Registers app-wide keyboard shortcuts: command palette (⌘K / ⌘F) and help (?). */
 export function useGlobalShortcuts() {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (useAuthStore.getState().reauthRequired) return;
       const key = event.key.toLowerCase();
       if ((event.metaKey || event.ctrlKey) && key === "k") {
         event.preventDefault();
@@ -48,9 +41,7 @@ export function useGlobalShortcuts() {
 
       // Chords contributed by mounted components via the command registry.
       const editable = isEditableTarget(event.target);
-      for (const commands of Object.values(
-        useCommandRegistryStore.getState().commandsByToken,
-      )) {
+      for (const commands of Object.values(useCommandRegistryStore.getState().commandsByToken)) {
         for (const command of commands) {
           if (!command.shortcut) continue;
           // Plain (modifier-less) chords are suppressed while typing.
@@ -74,11 +65,8 @@ export function useGlobalShortcuts() {
     const trace = window.trace;
     if (!trace?.onMenuCommand) return;
     return trace.onMenuCommand((command) => {
-      if (useAuthStore.getState().reauthRequired) return;
       if (command !== "close-tab") return;
-      const commands = Object.values(
-        useCommandRegistryStore.getState().commandsByToken,
-      ).flat();
+      const commands = Object.values(useCommandRegistryStore.getState().commandsByToken).flat();
       const closeTab = commands.find((c) => c.id === "session.close-tab");
       if (closeTab) {
         closeTab.run();

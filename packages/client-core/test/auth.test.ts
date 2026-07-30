@@ -10,7 +10,7 @@ const existingUser = {
   name: "Existing User",
 } as User;
 
-function configureFetch(fetchMock: typeof fetch): void {
+function configureFetch(fetchMock: typeof fetch): Map<string, string> {
   const storage = new Map<string, string>();
   setPlatform({
     apiUrl: "https://trace.example.test",
@@ -35,12 +35,14 @@ function configureFetch(fetchMock: typeof fetch): void {
       throw new Error("WebSocket is not used by auth store tests");
     },
   });
+  return storage;
 }
 
 beforeEach(() => {
   useEntityStore.getState().reset();
   useAuthStore.setState({
     user: null,
+    returningUser: null,
     activeOrgId: null,
     orgMemberships: [],
     loading: true,
@@ -84,6 +86,34 @@ describe("auth session recovery", () => {
     });
   });
 
+  it("shows a returning-user reconnect hint after a cold expired session", async () => {
+    const storage = configureFetch(
+      vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 401 })),
+    );
+    storage.set(
+      "trace_returning_user",
+      JSON.stringify({
+        name: "Existing User",
+        avatarUrl: "https://example.test/avatar.png",
+        organizationName: "Trace",
+      }),
+    );
+
+    await expect(useAuthStore.getState().fetchMe()).resolves.toBe(false);
+
+    expect(useAuthStore.getState()).toMatchObject({
+      user: null,
+      returningUser: {
+        name: "Existing User",
+        avatarUrl: "https://example.test/avatar.png",
+        organizationName: "Trace",
+      },
+      authUnavailable: false,
+      reauthRequired: false,
+      loading: false,
+    });
+  });
+
   it("distinguishes an initial server outage from a missing login", async () => {
     configureFetch(vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 503 })));
 
@@ -117,7 +147,7 @@ describe("auth session recovery", () => {
   });
 
   it("clears the reconnect requirement after GitHub restores the session", async () => {
-    configureFetch(
+    const storage = configureFetch(
       vi.fn<typeof fetch>().mockResolvedValue(
         Response.json({
           user: {
@@ -145,11 +175,41 @@ describe("auth session recovery", () => {
 
     expect(useAuthStore.getState()).toMatchObject({
       user: existingUser,
+      returningUser: {
+        name: "Existing User",
+        avatarUrl: null,
+        organizationName: "Trace",
+      },
       activeOrgId: "org-1",
       authUnavailable: false,
       reauthRequired: false,
       loading: false,
     });
+    expect(JSON.parse(storage.get("trace_returning_user") ?? "{}")).toEqual({
+      name: "Existing User",
+      avatarUrl: null,
+      organizationName: "Trace",
+    });
+  });
+
+  it("forgets the returning-user hint when explicitly requested", async () => {
+    const storage = configureFetch(vi.fn<typeof fetch>());
+    storage.set(
+      "trace_returning_user",
+      JSON.stringify({ name: "Existing User", avatarUrl: null, organizationName: "Trace" }),
+    );
+    useAuthStore.setState({
+      returningUser: {
+        name: "Existing User",
+        avatarUrl: null,
+        organizationName: "Trace",
+      },
+    });
+
+    await useAuthStore.getState().forgetReturningUser();
+
+    expect(storage.has("trace_returning_user")).toBe(false);
+    expect(useAuthStore.getState().returningUser).toBeNull();
   });
 });
 

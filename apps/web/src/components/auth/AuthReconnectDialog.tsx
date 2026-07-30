@@ -1,53 +1,39 @@
-import { useCallback, useState } from "react";
-import { LOCAL_LOGIN_NAME_KEY, useAuthStore, type AuthState } from "@trace/client-core";
+import { useCallback, useEffect } from "react";
+import { toast } from "sonner";
+import { useAuthStore, type AuthState } from "@trace/client-core";
+import { useAuthReconnectStore } from "../../stores/auth-reconnect";
 import { useUIStore } from "../../stores/ui";
 import { isLocalMode } from "../../lib/runtime-mode";
 import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { GitHubDeviceLoginPanel } from "./GitHubDeviceLoginPanel";
+import { LocalReconnectPanel } from "./LocalReconnectPanel";
 
 export function AuthReconnectDialog() {
-  const open = useAuthStore((state: AuthState) => state.reauthRequired);
-  const fetchMe = useAuthStore((state: AuthState) => state.fetchMe);
+  const reauthRequired = useAuthStore((state: AuthState) => state.reauthRequired);
   const logout = useAuthStore((state: AuthState) => state.logout);
-  const [localPending, setLocalPending] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
+  const dialogOpen = useAuthReconnectStore((state) => state.dialogOpen);
+  const closeDialog = useAuthReconnectStore((state) => state.closeDialog);
+  const reset = useAuthReconnectStore((state) => state.reset);
 
   const handleReconnect = useCallback(() => {
+    reset();
     useUIStore.getState().triggerRefresh();
-  }, []);
+    toast.success("You’re reconnected", { description: "Syncing has resumed." });
+  }, [reset]);
 
-  const reconnectLocal = useCallback(async () => {
-    if (localPending) return;
-    setLocalPending(true);
-    setLocalError(null);
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL ?? "";
-      const rememberedName = localStorage.getItem(LOCAL_LOGIN_NAME_KEY)?.trim() ?? "";
-      const response = await fetch(`${apiUrl}/auth/local/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(rememberedName ? { name: rememberedName } : {}),
-      });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to reconnect");
-      }
-      if (!(await fetchMe())) {
-        throw new Error("Trace could not restore your local session.");
-      }
-      handleReconnect();
-    } catch (error) {
-      setLocalError(error instanceof Error ? error.message : "Failed to reconnect");
-    } finally {
-      setLocalPending(false);
-    }
-  }, [fetchMe, handleReconnect, localPending]);
+  useEffect(() => {
+    if (!reauthRequired) reset();
+  }, [reauthRequired, reset]);
 
   return (
-    <Dialog open={open}>
-      <DialogContent showCloseButton={false} className="sm:max-w-md">
+    <Dialog
+      open={reauthRequired && dialogOpen}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) closeDialog();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Reconnect to Trace</DialogTitle>
           <DialogDescription>
@@ -57,18 +43,7 @@ export function AuthReconnectDialog() {
         </DialogHeader>
 
         {isLocalMode ? (
-          <div className="space-y-3">
-            <Button
-              className="w-full"
-              onClick={() => void reconnectLocal()}
-              disabled={localPending}
-            >
-              {localPending ? "Reconnecting..." : "Reconnect"}
-            </Button>
-            {localError ? (
-              <p className="text-center text-sm text-destructive">{localError}</p>
-            ) : null}
-          </div>
+          <LocalReconnectPanel onSuccess={handleReconnect} />
         ) : (
           <GitHubDeviceLoginPanel actionLabel="Reconnect with GitHub" onSuccess={handleReconnect} />
         )}

@@ -3,6 +3,7 @@ import { client } from "./urql";
 import { START_SESSION_MUTATION, useEntityStore } from "@trace/client-core";
 import { navigateToSession, navigateToSessionGroup } from "../stores/ui";
 import type { CreatableGeneratedProjectKind } from "../components/sidebar/generated-project-types";
+import { canPerformAuthenticatedAction } from "./auth-action";
 
 const pendingQuickSessionChannels = new Set<string>();
 const pendingGeneratedProjectKinds = new Set<CreatableGeneratedProjectKind>();
@@ -30,6 +31,7 @@ export async function createQuickSession(
   channelId: string,
   options: { visibility?: "public" | "private" } = {},
 ): Promise<void> {
+  if (!canPerformAuthenticatedAction()) return;
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
 
@@ -108,6 +110,7 @@ async function createGeneratedProjectSession(
   kind: CreatableGeneratedProjectKind,
   designSystemVersionId?: string,
 ): Promise<boolean> {
+  if (!canPerformAuthenticatedAction()) return false;
   if (pendingGeneratedProjectKinds.has(kind)) return false;
   pendingGeneratedProjectKinds.add(kind);
   const label = kind;

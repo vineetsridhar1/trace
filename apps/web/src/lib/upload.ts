@@ -1,9 +1,13 @@
 import { getAuthHeaders } from "@trace/client-core";
+import { canPerformAuthenticatedAction } from "./auth-action";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
 export async function uploadFile(file: File, organizationId?: string): Promise<string> {
+  if (!canPerformAuthenticatedAction()) {
+    throw new Error("Reconnect to Trace before uploading files.");
+  }
   if (file.size > MAX_FILE_SIZE_BYTES) {
     throw new Error("File must be 5MB or smaller");
   }

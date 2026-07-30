@@ -4,6 +4,7 @@ import type { Event } from "@trace/gql";
 import { handleOrgEvent, isUnauthorizedError, useAuthStore } from "@trace/client-core";
 import { client } from "../lib/urql";
 import { reconcileManualElementSaved } from "../stores/design-editor";
+import { useUIStore } from "../stores/ui";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -28,6 +29,7 @@ const ORG_EVENTS_SUBSCRIPTION = gql`
 
 export function useOrgEvents() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const refreshTick = useUIStore((state) => state.refreshTick);
 
   useEffect(() => {
     if (!activeOrgId) return;
@@ -51,5 +53,5 @@ export function useOrgEvents() {
       });
 
     return () => subscription.unsubscribe();
-  }, [activeOrgId]);
+  }, [activeOrgId, refreshTick]);
 }

@@ -4,6 +4,7 @@ import { getPlatform } from "../platform.js";
 import { useEntityStore } from "./entity.js";
 
 const ACTIVE_ORG_KEY = "trace_active_org";
+const RETURNING_USER_KEY = "trace_returning_user";
 export const LOCAL_LOGIN_NAME_KEY = "trace_local_login_name";
 
 export interface OrgMembership {
@@ -13,12 +14,20 @@ export interface OrgMembership {
   organization: { id: string; name: string };
 }
 
+export interface ReturningUser {
+  name: string;
+  avatarUrl: string | null;
+  organizationName: string | null;
+}
+
 export interface LogoutOptions {
   pushToken?: string | null;
 }
 
 export interface AuthState {
   user: User | null;
+  /** Minimal identity hint used for the cold-start "Welcome back" reconnect screen. */
+  returningUser: ReturningUser | null;
   activeOrgId: string | null;
   orgMemberships: OrgMembership[];
   loading: boolean;
@@ -31,6 +40,7 @@ export interface AuthState {
   signInWithToken: (token: string) => Promise<void>;
   fetchMe: () => Promise<boolean>;
   requireReauthentication: () => void;
+  forgetReturningUser: () => Promise<void>;
   logout: (options?: LogoutOptions) => Promise<void>;
   setActiveOrg: (orgId: string) => void;
 }
@@ -46,8 +56,66 @@ async function readActiveOrgId(): Promise<string | null> {
   return value ?? null;
 }
 
+async function readReturningUser(): Promise<ReturningUser | null> {
+  let value: string | null;
+  try {
+    value = await getPlatform().storage.getItem(RETURNING_USER_KEY);
+  } catch {
+    return null;
+  }
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value) as Partial<ReturningUser>;
+    if (typeof parsed.name !== "string" || !parsed.name.trim()) return null;
+    if (
+      parsed.avatarUrl !== undefined &&
+      parsed.avatarUrl !== null &&
+      typeof parsed.avatarUrl !== "string"
+    ) {
+      return null;
+    }
+    if (
+      parsed.organizationName !== undefined &&
+      parsed.organizationName !== null &&
+      typeof parsed.organizationName !== "string"
+    ) {
+      return null;
+    }
+    return {
+      name: parsed.name.trim(),
+      avatarUrl: parsed.avatarUrl ?? null,
+      organizationName: parsed.organizationName?.trim() || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function rememberReturningUser(
+  user: User,
+  orgMemberships: OrgMembership[],
+  activeOrgId: string | null,
+): Promise<ReturningUser> {
+  const activeMembership =
+    orgMemberships.find((membership) => membership.organizationId === activeOrgId) ??
+    orgMemberships[0];
+  const returningUser: ReturningUser = {
+    name: user.name.trim() || user.email,
+    avatarUrl: user.avatarUrl ?? null,
+    organizationName: activeMembership?.organization.name ?? null,
+  };
+  try {
+    await getPlatform().storage.setItem(RETURNING_USER_KEY, JSON.stringify(returningUser));
+  } catch (error) {
+    console.warn("[auth] failed to persist returning user", error);
+  }
+  return returningUser;
+}
+
 export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
   user: null,
+  returningUser: null,
   activeOrgId: null,
   orgMemberships: [],
   loading: true,
@@ -68,6 +136,12 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
   fetchMe: async () => {
     const platform = getPlatform();
     try {
+      let returningUser = useAuthStore.getState().returningUser;
+      if (!useAuthStore.getState().user && !returningUser) {
+        returningUser = await readReturningUser();
+        if (returningUser) set({ returningUser });
+      }
+
       let token: string | null = null;
       if (platform.authMode === "bearer") {
         // Hydrate the in-memory token from secure storage on first call so
@@ -95,6 +169,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         } else if (res.status === 401) {
           set({
             user: null,
+            returningUser,
             activeOrgId: null,
             orgMemberships: [],
             authUnavailable: false,
@@ -128,8 +203,10 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
         await platform.storage.setItem(ACTIVE_ORG_KEY, activeOrgId);
       }
 
+      returningUser = await rememberReturningUser(user, orgMemberships, activeOrgId);
       set({
         user,
+        returningUser,
         activeOrgId,
         orgMemberships,
         authUnavailable: false,
@@ -156,6 +233,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
       } else {
         set({
           user: null,
+          returningUser: useAuthStore.getState().returningUser,
           activeOrgId: null,
           orgMemberships: [],
           authUnavailable: true,
@@ -173,6 +251,16 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
     set({ authUnavailable: false, reauthRequired: true, loading: false });
   },
 
+  forgetReturningUser: async () => {
+    try {
+      await getPlatform().storage.removeItem(RETURNING_USER_KEY);
+    } catch (error) {
+      console.warn("[auth] failed to forget returning user", error);
+    } finally {
+      set({ returningUser: null });
+    }
+  },
+
   logout: async (options?: LogoutOptions) => {
     const platform = getPlatform();
     const headers: Record<string, string> = {};
@@ -186,6 +274,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
       await platform.secureStorage.clearToken();
       await platform.storage.removeItem(ACTIVE_ORG_KEY);
       await platform.storage.removeItem(LOCAL_LOGIN_NAME_KEY);
+      await platform.storage.removeItem(RETURNING_USER_KEY);
       // Time-box the server call: clearing local state doesn't require a
       // successful response, and without a cap a slow/offline network would
       // leave the UI stuck on "Sign out" for the fetch default (30s+).
@@ -202,6 +291,7 @@ export const useAuthStore = create<AuthState>((set: SetState<AuthState>) => ({
       useEntityStore.getState().reset();
       set({
         user: null,
+        returningUser: null,
         activeOrgId: null,
         orgMemberships: [],
         authUnavailable: false,
