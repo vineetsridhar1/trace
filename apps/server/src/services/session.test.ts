@@ -5143,7 +5143,7 @@ describe("SessionService", () => {
       expect(command).toEqual(
         expect.objectContaining({
           appendSystemPrompt: expect.stringContaining(
-            "first use your question capability (e.g. the AskUserQuestion tool) to ask the clarifying questions",
+            "first ask the user the clarifying questions you need",
           ),
         }),
       );
