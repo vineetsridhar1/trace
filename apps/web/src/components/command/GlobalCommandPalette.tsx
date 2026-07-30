@@ -45,17 +45,14 @@ interface PaletteItem {
 }
 
 const SETTINGS_TABS: { id: string; label: string }[] = [
-  { id: "repositories", label: "Repositories" },
-  { id: "connections", label: "Connections" },
   { id: "members", label: "Members" },
-  { id: "session-defaults", label: "Session Defaults" },
-  { id: "notifications", label: "Notifications" },
-  { id: "api-keys", label: "API Keys" },
-  { id: "bridge-access", label: "Bridge Access" },
+  { id: "repositories", label: "Repositories" },
   { id: "agent-environments", label: "Agent Environments" },
-  { id: "org-secrets", label: "Org Secrets" },
+  { id: "org-secrets", label: "Secrets" },
   { id: "integrations", label: "Integrations" },
-  { id: "channels", label: "Channels" },
+  { id: "session-defaults", label: "Session Defaults" },
+  { id: "api-keys", label: "API Keys" },
+  { id: "bridge-access", label: "Devices & Access" },
 ];
 
 export function GlobalCommandPalette() {

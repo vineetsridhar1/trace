@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, Laptop, Shield, Clock3, Inbox, UserRoundCheck, Zap } from "lucide-react";
+import { Laptop, Shield, Clock3, Inbox, UserRoundCheck, Zap } from "lucide-react";
 import { toast } from "sonner";
 import type { BridgeAccessCapability } from "@trace/gql";
 import { client } from "../../lib/urql";
@@ -13,20 +13,16 @@ import {
 import { useUIStore } from "../../stores/ui";
 import {
   BRIDGE_ACCESS_APPROVAL_OPTIONS,
+  type BridgeAccessApprovalDuration,
   ensureSessionCapability,
   formatCapabilities,
   getBridgeAccessApprovalExpiresAt,
 } from "../../lib/bridge-access";
 import { cn } from "../../lib/utils";
-import { Button, buttonVariants } from "../ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
+import { Button } from "../ui/button";
 import { MobilePairingSection } from "./MobilePairingSection";
 import { CurrentBridgeSection } from "./CurrentBridgeSection";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
 
 type BridgeUser = {
   id: string;
@@ -95,13 +91,17 @@ export function BridgeAccessSection() {
   const [grantTerminalByRequestId, setGrantTerminalByRequestId] = useState<Record<string, boolean>>(
     {},
   );
+  const [grantDurationByRequestId, setGrantDurationByRequestId] = useState<
+    Record<string, BridgeAccessApprovalDuration>
+  >({});
   const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
 
   const buildCapabilities = useCallback(
     (request: BridgeAccessRequest): BridgeAccessCapability[] => {
       const terminal =
         grantTerminalByRequestId[request.id] ??
-        (request.requestedCapabilities?.includes("terminal") ?? false);
+        request.requestedCapabilities?.includes("terminal") ??
+        false;
       return terminal ? ["session", "terminal"] : ["session"];
     },
     [grantTerminalByRequestId],
@@ -124,10 +124,9 @@ export function BridgeAccessSection() {
             input?.scopeType === "all_sessions"
               ? null
               : (input?.sessionGroupId ?? request.sessionGroup?.id ?? null),
-          expiresAt:
-            Object.prototype.hasOwnProperty.call(input ?? {}, "expiresAt")
-              ? input?.expiresAt
-              : (request.requestedExpiresAt ?? null),
+          expiresAt: Object.prototype.hasOwnProperty.call(input ?? {}, "expiresAt")
+            ? input?.expiresAt
+            : (request.requestedExpiresAt ?? null),
           capabilities: buildCapabilities(request),
         })
         .toPromise();
@@ -176,6 +175,18 @@ export function BridgeAccessSection() {
       }
       return changed ? next : prev;
     });
+    setGrantDurationByRequestId((prev) => {
+      const next: Record<string, BridgeAccessApprovalDuration> = {};
+      let changed = false;
+      for (const [id, value] of Object.entries(prev)) {
+        if (activeIds.has(id)) {
+          next[id] = value;
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
   }, [runtimes]);
 
   const runAction = useCallback(
@@ -196,13 +207,13 @@ export function BridgeAccessSection() {
 
   return (
     <div>
-      <MobilePairingSection />
-      <CurrentBridgeSection onRenamed={fetchRuntimes} />
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-foreground">Bridge Access</h2>
-        <p className="text-sm text-muted-foreground">
-          Review requests for your local bridges, approve shared access, and revoke grants.
-        </p>
+      <SettingsSectionHeader
+        title="Devices & access"
+        description="Your connected devices, mobile pairing, and who may run sessions on your local bridges."
+      />
+      <div className="mb-8 space-y-4">
+        <MobilePairingSection />
+        <CurrentBridgeSection onRenamed={fetchRuntimes} />
       </div>
 
       {loading ? (
@@ -216,40 +227,33 @@ export function BridgeAccessSection() {
       ) : (
         <div className="space-y-4">
           {runtimes.map((runtime) => (
-            <div key={runtime.id} className="rounded-xl border border-border bg-surface-deep p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Laptop size={16} className="text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">{runtime.label}</h3>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                        runtime.connected
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : "bg-border text-muted-foreground"
-                      }`}
-                    >
-                      {runtime.connected ? "Connected" : "Offline"}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Last seen {formatDate(runtime.lastSeenAt)}
-                  </p>
-                </div>
-                <div className="text-right text-xs text-muted-foreground">
-                  <div>{runtime.accessRequests.length} pending request(s)</div>
-                  <div>{runtime.accessGrants.length} active grant(s)</div>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-lg border border-border/70 bg-surface p-3">
-                  <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <Inbox size={12} />
-                    Pending Requests
+            <div key={runtime.id} className="space-y-8">
+              <div className="space-y-8">
+                <section>
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Inbox size={13} className="text-muted-foreground" />
+                      <h3 className="text-sm font-semibold text-foreground">
+                        Access requests{" "}
+                        <span className="ml-1 font-normal text-muted-foreground">
+                          {runtime.accessRequests.length} pending
+                        </span>
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Laptop size={13} />
+                      {runtime.label}
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          runtime.connected ? "bg-emerald-300" : "bg-muted-foreground"
+                        }`}
+                      />
+                    </div>
                   </div>
                   {runtime.accessRequests.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No pending requests.</p>
+                    <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                      No pending access requests.
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       {runtime.accessRequests.map((request) => {
@@ -257,11 +261,16 @@ export function BridgeAccessSection() {
                           request.requestedCapabilities?.includes("terminal") ?? false;
                         const grantTerminal =
                           grantTerminalByRequestId[request.id] ?? requestedTerminal;
+                        const grantDuration = grantDurationByRequestId[request.id] ?? "3h";
+                        const grantDurationLabel =
+                          BRIDGE_ACCESS_APPROVAL_OPTIONS.find(
+                            (option) => option.id === grantDuration,
+                          )?.label ?? "3 hours";
                         const capabilities = buildCapabilities(request);
                         return (
                           <div
                             key={request.id}
-                            className="rounded-lg border border-border bg-surface-deep p-3"
+                            className="rounded-xl border border-amber-500/40 bg-card p-4"
                           >
                             <div className="text-sm font-medium text-foreground">
                               {request.requesterUser.name ||
@@ -284,42 +293,83 @@ export function BridgeAccessSection() {
                                 Asked for: {formatCapabilities(request.requestedCapabilities)}
                               </div>
                             ) : null}
-                            <div className="mt-3 rounded-md border border-border/60 bg-surface p-2">
-                              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                <Shield size={11} />
-                                Grant capabilities
-                              </div>
-                              <div className="grid gap-2 sm:grid-cols-2">
-                                <div className="rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground">
-                                  <div className="font-medium">Sessions</div>
-                                  <div className="text-[11px] text-muted-foreground">Required</div>
+                            <div className="mt-4 grid gap-6 lg:grid-cols-2">
+                              <div>
+                                <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  <Shield size={11} />
+                                  Grant capabilities
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setGrantTerminalByRequestId((prev) => ({
-                                      ...prev,
-                                      [request.id]: !grantTerminal,
-                                    }))
-                                  }
-                                  className={cn(
-                                    "rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
-                                    grantTerminal
-                                      ? "border-foreground bg-surface-elevated text-foreground"
-                                      : "border-border bg-surface-deep text-muted-foreground hover:text-foreground",
-                                  )}
-                                >
-                                  <div className="font-medium">Terminal</div>
-                                  <div className="text-[11px] text-muted-foreground">
-                                    {grantTerminal
-                                      ? requestedTerminal
-                                        ? "Requested by the user"
-                                        : "Will grant shell access"
-                                      : requestedTerminal
-                                        ? "Removed from approval"
-                                        : "Off"}
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  <div className="rounded-md border border-border bg-surface-deep px-2.5 py-1.5 text-xs text-foreground">
+                                    <div className="font-medium">Sessions</div>
+                                    <div className="text-[11px] text-muted-foreground">
+                                      Required
+                                    </div>
                                   </div>
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setGrantTerminalByRequestId((prev) => ({
+                                        ...prev,
+                                        [request.id]: !grantTerminal,
+                                      }))
+                                    }
+                                    className={cn(
+                                      "rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
+                                      grantTerminal
+                                        ? "border-foreground bg-surface-elevated text-foreground"
+                                        : "border-border bg-surface-deep text-muted-foreground hover:text-foreground",
+                                    )}
+                                  >
+                                    <div className="font-medium">Terminal</div>
+                                    <div className="text-[11px] text-muted-foreground">
+                                      {grantTerminal
+                                        ? requestedTerminal
+                                          ? "Requested by the user"
+                                          : "Will grant shell access"
+                                        : requestedTerminal
+                                          ? "Removed from approval"
+                                          : "Off"}
+                                    </div>
+                                  </button>
+                                </div>
+                              </div>
+                              <div>
+                                <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                  <Clock3 size={11} />
+                                  Access expires after
+                                </div>
+                                <div
+                                  role="radiogroup"
+                                  aria-label="Access duration"
+                                  className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-surface-deep p-1"
+                                >
+                                  {BRIDGE_ACCESS_APPROVAL_OPTIONS.map((option) => (
+                                    <button
+                                      key={option.id}
+                                      type="button"
+                                      role="radio"
+                                      aria-checked={grantDuration === option.id}
+                                      onClick={() =>
+                                        setGrantDurationByRequestId((prev) => ({
+                                          ...prev,
+                                          [request.id]: option.id,
+                                        }))
+                                      }
+                                      className={cn(
+                                        "h-8 rounded-md text-xs transition-colors",
+                                        grantDuration === option.id
+                                          ? "bg-surface-elevated font-medium text-foreground"
+                                          : "text-muted-foreground hover:text-foreground",
+                                      )}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                  Access ends automatically and can be revoked sooner.
+                                </p>
                               </div>
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2">
@@ -333,67 +383,17 @@ export function BridgeAccessSection() {
                                 onClick={() =>
                                   void runAction(
                                     request.id,
-                                    () => approveRequest(request),
-                                    `Access granted — ${formatCapabilities(capabilities)}`,
+                                    () =>
+                                      approveRequest(request, {
+                                        expiresAt: getBridgeAccessApprovalExpiresAt(grantDuration),
+                                      }),
+                                    `Access granted for ${grantDurationLabel} — ${formatCapabilities(capabilities)}`,
                                   )
                                 }
                               >
-                                Approve Request
+                                Approve — {formatCapabilities(capabilities)} for{" "}
+                                {grantDurationLabel}
                               </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger
-                                  className={cn(
-                                    buttonVariants({ variant: "outline", size: "sm" }),
-                                    "gap-1",
-                                  )}
-                                  disabled={pendingActionId === request.id}
-                                >
-                                  Approve with changes
-                                  <ChevronDown size={14} />
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="w-44">
-                                  {request.sessionGroup?.id &&
-                                  request.scopeType !== "session_group" ? (
-                                    <DropdownMenuItem
-                                      onClick={() =>
-                                        void runAction(
-                                          request.id,
-                                          () =>
-                                            approveRequest(request, {
-                                              scopeType: "session_group",
-                                              sessionGroupId: request.sessionGroup?.id,
-                                              expiresAt: request.requestedExpiresAt ?? null,
-                                            }),
-                                          `Access granted — ${formatCapabilities(capabilities)}`,
-                                        )
-                                      }
-                                    >
-                                      This workspace
-                                    </DropdownMenuItem>
-                                  ) : null}
-                                  {BRIDGE_ACCESS_APPROVAL_OPTIONS.map((option) => (
-                                    <DropdownMenuItem
-                                      key={option.id}
-                                      onClick={() =>
-                                        void runAction(
-                                          request.id,
-                                          () =>
-                                            approveRequest(request, {
-                                              scopeType: "all_sessions",
-                                              sessionGroupId: null,
-                                              expiresAt: getBridgeAccessApprovalExpiresAt(
-                                                option.id,
-                                              ),
-                                            }),
-                                          `Access granted for ${option.label} — ${formatCapabilities(capabilities)}`,
-                                        )
-                                      }
-                                    >
-                                      {option.label}
-                                    </DropdownMenuItem>
-                                  ))}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -421,15 +421,22 @@ export function BridgeAccessSection() {
                       })}
                     </div>
                   )}
-                </div>
+                </section>
 
-                <div className="rounded-lg border border-border/70 bg-surface p-3">
-                  <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <UserRoundCheck size={12} />
-                    Active Grants
+                <section>
+                  <div className="mb-3 flex items-center gap-2">
+                    <UserRoundCheck size={13} className="text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Active grants{" "}
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        {runtime.accessGrants.length}
+                      </span>
+                    </h3>
                   </div>
                   {runtime.accessGrants.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No active grants.</p>
+                    <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                      No active access grants.
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       {runtime.accessGrants.map((grant) => {
@@ -528,7 +535,7 @@ export function BridgeAccessSection() {
                       })}
                     </div>
                   )}
-                </div>
+                </section>
               </div>
             </div>
           ))}

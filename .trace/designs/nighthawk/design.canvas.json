@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "sections": [
+    {
+      "id": "workspace-settings",
+      "name": "Workspace settings",
+      "screenIds": [
+        "settings-members",
+        "settings-repositories",
+        "settings-agent-environments",
+        "settings-secrets",
+        "settings-integrations"
+      ]
+    },
+    {
+      "id": "personal-settings",
+      "name": "Personal settings",
+      "screenIds": ["settings-session-defaults", "settings-api-keys", "settings-devices"]
+    },
+    {
+      "id": "edit-dialogs",
+      "name": "Edit dialogs",
+      "screenIds": [
+        "settings-cloud-env-edit",
+        "settings-automation-edit",
+        "settings-automation-apps",
+        "settings-automation-env-var"
+      ]
+    },
+    {
+      "id": "states-responsive",
+      "name": "Key states & responsive",
+      "screenIds": ["settings-repositories-empty", "settings-mobile-nav"]
+    }
+  ],
+  "screens": [
+    {
+      "id": "settings-members",
+      "name": "Members",
+      "component": "./screens/SettingsMembers.tsx",
+      "variation": "Workspace",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-repositories",
+      "name": "Repositories",
+      "component": "./screens/SettingsRepositories.tsx",
+      "variation": "Workspace",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-agent-environments",
+      "name": "Agent environments",
+      "component": "./screens/SettingsAgentEnvironments.tsx",
+      "variation": "Workspace",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-secrets",
+      "name": "Secrets",
+      "component": "./screens/SettingsSecrets.tsx",
+      "variation": "Workspace",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-integrations",
+      "name": "Integrations",
+      "component": "./screens/SettingsIntegrations.tsx",
+      "variation": "Workspace",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-session-defaults",
+      "name": "Session defaults",
+      "component": "./screens/SettingsSessionDefaults.tsx",
+      "variation": "Personal",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-api-keys",
+      "name": "API keys",
+      "component": "./screens/SettingsApiKeys.tsx",
+      "variation": "Personal",
+      "state": "Editing",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-devices",
+      "name": "Devices & access",
+      "component": "./screens/SettingsDevices.tsx",
+      "variation": "Personal",
+      "state": "Pending approval",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-cloud-env-edit",
+      "name": "Edit cloud environment",
+      "component": "./screens/SettingsCloudEnvEdit.tsx",
+      "variation": "Dialog",
+      "state": "Editing",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-automation-edit",
+      "name": "Session automation · Setup",
+      "component": "./screens/SettingsAutomationEdit.tsx",
+      "variation": "Dialog",
+      "state": "Editing",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-automation-apps",
+      "name": "Session automation · Applications",
+      "component": "./screens/SettingsAutomationApps.tsx",
+      "variation": "Dialog",
+      "state": "Editing",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-automation-env-var",
+      "name": "Session automation · Add variable",
+      "component": "./screens/SettingsAutomationEnvVar.tsx",
+      "variation": "Dialog",
+      "state": "Editing",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-repositories-empty",
+      "name": "Repositories",
+      "component": "./screens/SettingsRepositoriesEmpty.tsx",
+      "variation": "First run",
+      "state": "Empty",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-mobile-nav",
+      "name": "Settings home",
+      "component": "./screens/SettingsMobileNav.tsx",
+      "variation": "Mobile",
+      "state": "Default",
+      "viewport": { "width": 390, "height": 844 }
+    }
+  ]
+}

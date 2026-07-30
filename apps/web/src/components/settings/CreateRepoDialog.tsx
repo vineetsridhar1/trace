@@ -14,17 +14,17 @@ import { ExistingRepoForm } from "./ExistingRepoForm";
 import { ManualRepoForm } from "./ManualRepoForm";
 import { NewLocalProjectForm } from "./NewLocalProjectForm";
 import { RepoDialogModeSwitch } from "./RepoDialogModeSwitch";
-import {
-  canCreateLocalProject,
-  isElectron,
-  useCreateRepoDialog,
-} from "./useCreateRepoDialog";
+import type { RepoDialogMode } from "./repo-dialog-types";
+import { canCreateLocalProject, isElectron, useCreateRepoDialog } from "./useCreateRepoDialog";
 
 interface CreateRepoDialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   hideTrigger?: boolean;
   onCreated?: () => void;
+  triggerLabel?: string;
+  triggerVariant?: "default" | "outline";
+  initialMode?: RepoDialogMode;
 }
 
 export function CreateRepoDialog({
@@ -32,17 +32,20 @@ export function CreateRepoDialog({
   onOpenChange,
   hideTrigger = false,
   onCreated,
+  triggerLabel = "Link Repository",
+  triggerVariant = "outline",
+  initialMode = "link",
 }: CreateRepoDialogProps) {
   const isMobile = useIsMobile();
-  const state = useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated });
+  const state = useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated, initialMode });
 
   return (
     <Dialog open={state.open} onOpenChange={state.handleOpenChange}>
       {!hideTrigger && (
         <DialogTrigger className="inline-flex">
-          <Button variant="outline" size="sm" className="gap-1.5">
+          <Button variant={triggerVariant} size="sm" className="gap-1.5">
             <Plus size={14} />
-            Link Repository
+            {triggerLabel}
           </Button>
         </DialogTrigger>
       )}

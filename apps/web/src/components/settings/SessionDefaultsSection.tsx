@@ -11,6 +11,8 @@ import {
   getReasoningEffortLabel,
   getReasoningEffortsForTool,
 } from "../session/modelOptions";
+import { Info, SlidersHorizontal } from "lucide-react";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
 
 const TOOL_OPTIONS = [
   { value: "claude_code", label: "Claude Code" },
@@ -113,10 +115,9 @@ export function SessionDefaultsSection() {
     }
   };
 
-  const handleAutoArchiveChange = async (value: string | null) => {
-    if (value !== "yes" && value !== "no") return;
+  const handleAutoArchiveChange = async (value: boolean) => {
     try {
-      await saveDefaults({ autoArchiveMergedSessions: value === "yes" });
+      await saveDefaults({ autoArchiveMergedSessions: value });
     } catch (error) {
       toast.error("Failed to update session defaults", {
         description: error instanceof Error ? error.message : undefined,
@@ -124,10 +125,9 @@ export function SessionDefaultsSection() {
     }
   };
 
-  const handleClaudeInChromeChange = async (value: string | null) => {
-    if (value !== "yes" && value !== "no") return;
+  const handleClaudeInChromeChange = async (value: boolean) => {
     try {
-      await saveDefaults({ enableClaudeInChrome: value === "yes" });
+      await saveDefaults({ enableClaudeInChrome: value });
     } catch (error) {
       toast.error("Failed to update session defaults", {
         description: error instanceof Error ? error.message : undefined,
@@ -137,18 +137,17 @@ export function SessionDefaultsSection() {
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-foreground">Session Defaults</h2>
-        <p className="text-sm text-muted-foreground">
-          Set your preferred coding tool, model, and effort. New sessions use these defaults.
-        </p>
-      </div>
+      <SettingsSectionHeader
+        title="Session defaults"
+        description="Your personal defaults for new coding sessions. You can still change the tool, model, and effort when starting any session."
+      />
 
-      <div className="space-y-4 rounded-lg border border-border bg-surface-deep p-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="rounded-xl border border-border bg-card p-5">
+        <p className="text-[13px] font-semibold text-foreground">New sessions start with</p>
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label className="mb-1.5 block text-sm text-muted-foreground">
-              Default Coding Tool
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              Coding tool
             </label>
             <Select value={defaultTool ?? "__none__"} onValueChange={handleToolChange}>
               <SelectTrigger className="w-full">
@@ -168,7 +167,7 @@ export function SessionDefaultsSection() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm text-muted-foreground">Default Model</label>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Model</label>
             <Select
               value={defaultModel ?? "__none__"}
               onValueChange={handleModelChange}
@@ -197,7 +196,9 @@ export function SessionDefaultsSection() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm text-muted-foreground">Default Effort</label>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              Reasoning effort
+            </label>
             <Select
               value={defaultReasoningEffort ?? "__none__"}
               onValueChange={handleReasoningEffortChange}
@@ -225,41 +226,68 @@ export function SessionDefaultsSection() {
             </Select>
           </div>
         </div>
+        <p className="mt-3 flex items-center gap-1.5 text-xs leading-4 text-muted-foreground">
+          <Info size={13} />
+          Model and effort options follow the selected tool. Changing the tool resets both to that
+          tool's defaults.
+        </p>
 
-        <div className="border-t border-border pt-4">
-          <label className="mb-1.5 block text-sm text-muted-foreground">
-            Auto archive merged sessions
-          </label>
-          <Select
-            value={autoArchiveMergedSessions ? "yes" : "no"}
-            onValueChange={handleAutoArchiveChange}
-          >
-            <SelectTrigger className="w-full md:w-56">
-              <SelectValue>{autoArchiveMergedSessions ? "Yes" : "No"}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="yes">Yes</SelectItem>
-              <SelectItem value="no">No</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="border-t border-border pt-4">
-          <label className="mb-1.5 block text-sm text-muted-foreground">Claude in Chrome</label>
-          <Select
-            value={enableClaudeInChrome ? "yes" : "no"}
-            onValueChange={handleClaudeInChromeChange}
-          >
-            <SelectTrigger className="w-full md:w-56">
-              <SelectValue>{enableClaudeInChrome ? "Yes" : "No"}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="yes">Yes</SelectItem>
-              <SelectItem value="no">No</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="mt-5 divide-y divide-border border-t border-border">
+          <SettingsToggle
+            label="Auto-archive merged sessions"
+            description="Move a session to the archive automatically when its pull request merges."
+            checked={autoArchiveMergedSessions}
+            onCheckedChange={handleAutoArchiveChange}
+          />
+          <SettingsToggle
+            label="Claude in Chrome"
+            description="Let Claude Code drive Chrome in cloud sessions for web tasks and UI verification."
+            checked={enableClaudeInChrome}
+            onCheckedChange={handleClaudeInChromeChange}
+          />
         </div>
       </div>
+      <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-border bg-card/50 px-4 py-3">
+        <SlidersHorizontal size={14} className="mt-0.5 shrink-0 text-muted-foreground" />
+        <p className="text-xs leading-5 text-muted-foreground">
+          These defaults apply only to you. Workspace runtime configuration lives under{" "}
+          <span className="text-foreground">Agent environments</span>, and shared credentials under{" "}
+          <span className="text-foreground">Secrets</span>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SettingsToggle({
+  label,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-6 py-4">
+      <div>
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="mt-0.5 text-sm leading-5 text-muted-foreground">{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => void onCheckedChange(!checked)}
+        className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full border transition-colors ${checked ? "border-zinc-100 bg-zinc-100" : "border-border bg-surface-deep"}`}
+      >
+        <span
+          className={`absolute top-[2px] h-[18px] w-[18px] rounded-full transition-all ${checked ? "left-[22px] bg-zinc-950" : "left-[3px] bg-zinc-400"}`}
+        />
+      </button>
     </div>
   );
 }

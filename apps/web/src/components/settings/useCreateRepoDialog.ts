@@ -23,11 +23,17 @@ interface Options {
   controlledOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   onCreated?: () => void;
+  initialMode?: RepoDialogMode;
 }
 
-export function useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated }: Options) {
+export function useCreateRepoDialog({
+  controlledOpen,
+  onOpenChange,
+  onCreated,
+  initialMode = "link",
+}: Options) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const [mode, setMode] = useState<RepoDialogMode>("link");
+  const [mode, setMode] = useState<RepoDialogMode>(initialMode);
   const [detected, setDetected] = useState<DetectedRepo | null>(null);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -164,7 +170,7 @@ export function useCreateRepoDialog({ controlledOpen, onOpenChange, onCreated }:
   }
 
   function resetAndClose() {
-    setMode("link");
+    setMode(initialMode);
     setDetected(null);
     setSelectedPath(null);
     setError(null);

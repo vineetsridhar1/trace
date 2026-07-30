@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Laptop } from "lucide-react";
+import { Info, Laptop, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { SettingsStatusPill } from "./SettingsStatusPill";
 
 const isElectron =
   typeof window !== "undefined" && typeof window.trace?.getBridgeInfo === "function";
@@ -16,6 +17,7 @@ export function CurrentBridgeSection({ onRenamed }: CurrentBridgeSectionProps) {
   const [label, setLabel] = useState("");
   const [loading, setLoading] = useState(isElectron);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     if (!isElectron || !window.trace?.getBridgeInfo) return;
@@ -55,6 +57,7 @@ export function CurrentBridgeSection({ onRenamed }: CurrentBridgeSectionProps) {
       const nextInfo = await window.trace.setBridgeLabel(trimmedLabel);
       setBridgeInfo(nextInfo);
       setLabel(nextInfo.label);
+      setEditing(false);
       toast.success("Bridge renamed");
       await onRenamed?.();
     } catch (error) {
@@ -65,18 +68,40 @@ export function CurrentBridgeSection({ onRenamed }: CurrentBridgeSectionProps) {
   };
 
   return (
-    <section className="mb-4 rounded-lg border border-border bg-surface-deep p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Laptop size={16} className="text-muted-foreground" />
-        <h2 className="text-base font-semibold text-foreground">This Bridge</h2>
-      </div>
-      <div className="flex flex-col gap-2 sm:flex-row">
+    <section className="rounded-xl border border-border bg-card p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
+          <Laptop size={16} />
+        </span>
         <div className="min-w-0 flex-1">
-          <label className="mb-1.5 block text-sm text-muted-foreground" htmlFor="bridge-name">
-            Bridge name
-          </label>
+          <div className="flex items-center gap-2">
+            <p className="text-[13px] font-semibold text-foreground">
+              {bridgeInfo?.label ?? "This device"}
+            </p>
+            <SettingsStatusPill tone="success" label="Connected" />
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            This device · bridge running in the desktop app
+          </p>
+          <p className="mt-2 truncate font-mono text-[11px] text-muted-foreground">
+            instance {bridgeInfo?.instanceId ?? "Loading..."}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setEditing((value) => !value)}
+          disabled={loading}
+        >
+          <Pencil size={13} />
+          Rename
+        </Button>
+      </div>
+      {editing ? (
+        <div className="mt-4 flex gap-2">
           <Input
             id="bridge-name"
+            aria-label="Bridge name"
             value={label}
             maxLength={80}
             disabled={loading || saving}
@@ -88,16 +113,18 @@ export function CurrentBridgeSection({ onRenamed }: CurrentBridgeSectionProps) {
               }
             }}
           />
-        </div>
-        <div className="flex items-end">
           <Button onClick={() => void saveLabel()} disabled={!canSave}>
             {saving ? "Saving..." : "Save"}
           </Button>
         </div>
+      ) : null}
+      <div className="mt-4 flex items-start gap-2 rounded-lg bg-background/50 px-3 py-2.5">
+        <Info size={13} className="mt-0.5 shrink-0 text-muted-foreground" />
+        <p className="text-xs leading-4 text-muted-foreground">
+          Sessions on this bridge run against your local checkouts. Other members need your approval
+          before they can use it.
+        </p>
       </div>
-      <p className="mt-2 truncate text-xs text-muted-foreground">
-        Instance ID: {bridgeInfo?.instanceId ?? "Loading..."}
-      </p>
     </section>
   );
 }

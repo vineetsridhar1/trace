@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState } from "react";
 import type { Repo } from "@trace/gql";
-import { useAuthStore } from "@trace/client-core";
+import { useAuthStore, type AuthState, type OrgMembership } from "@trace/client-core";
 import { useEntityStore, useEntityIds } from "@trace/client-core";
 import type { EntityTableMap } from "@trace/client-core";
 import { useOnboardingStore } from "../../stores/onboarding";
@@ -8,6 +8,10 @@ import { client } from "../../lib/urql";
 import { gql } from "@urql/core";
 import { RepoCard } from "./RepoCard";
 import { CreateRepoDialog } from "./CreateRepoDialog";
+import { Terminal } from "lucide-react";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
+import { SettingsStatusPill } from "./SettingsStatusPill";
+import { RepositoriesEmptyState } from "./RepositoriesEmptyState";
 
 const REPOS_QUERY = gql`
   query SettingsRepos($organizationId: ID!) {
@@ -28,6 +32,11 @@ const REPOS_QUERY = gql`
             key
             secretName
           }
+        }
+        runScripts {
+          id
+          name
+          command
         }
         applications {
           id
@@ -61,6 +70,7 @@ const isElectron = typeof window.trace?.getRepoConfig === "function";
 
 export function RepositoriesSection() {
   const activeOrgId = useAuthStore((s: { activeOrgId: string | null }) => s.activeOrgId);
+  const memberships = useAuthStore((s: AuthState) => s.orgMemberships);
   const upsertMany = useEntityStore(
     (s: { upsertMany: ReturnType<typeof useEntityStore.getState>["upsertMany"] }) => s.upsertMany,
   );
@@ -109,11 +119,13 @@ export function RepositoriesSection() {
       (b as EntityTableMap["repos"]).name ?? "",
     ),
   );
-  const githubCliTone = !githubCliStatus
-    ? "text-muted-foreground border-border/70 bg-surface-deep"
-    : !githubCliStatus.installed || !githubCliStatus.authenticated
-      ? "text-amber-300 border-amber-500/30 bg-amber-500/10"
-      : "text-emerald-300 border-emerald-500/30 bg-emerald-500/10";
+  const workspaceName = memberships.find(
+    (membership: OrgMembership) => membership.organizationId === activeOrgId,
+  )?.organization.name;
+  const handleCreated = () => {
+    setDesktopRefreshKey((key) => key + 1);
+    useOnboardingStore.getState().invalidateRepos();
+  };
   const githubCliLabel = !githubCliStatus
     ? "Checking GitHub CLI status..."
     : !githubCliStatus.installed
@@ -131,36 +143,44 @@ export function RepositoriesSection() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-base font-semibold text-foreground">Repositories</h2>
-          <p className="text-sm text-muted-foreground">Codebases linked to your organization.</p>
-        </div>
-        <CreateRepoDialog
-          onCreated={() => {
-            setDesktopRefreshKey((k: number) => k + 1);
-            useOnboardingStore.getState().invalidateRepos();
-          }}
-        />
-      </div>
+      <SettingsSectionHeader
+        title="Repositories"
+        description={`Codebases linked to ${workspaceName ?? "this workspace"}. Each repository carries its own automation: a setup script and named run scripts for sessions.`}
+        action={
+          sortedRepoIds.length ? (
+            <CreateRepoDialog
+              triggerLabel="Connect repository"
+              triggerVariant="default"
+              onCreated={handleCreated}
+            />
+          ) : undefined
+        }
+      />
 
       {isElectron && (
-        <div className={`mb-4 rounded-lg border px-4 py-3 ${githubCliTone}`}>
-          <p className="text-sm font-medium">Local PR Polling</p>
-          <p className="mt-1 text-sm">{githubCliLabel}</p>
-          {githubCliDetail && <p className="mt-1 text-sm opacity-90">{githubCliDetail}</p>}
+        <div className="mb-5 flex items-center gap-2.5 rounded-lg border border-border bg-card/50 px-4 py-2.5">
+          <Terminal size={14} className="shrink-0 text-muted-foreground" />
+          <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            {githubCliDetail ?? "Checking GitHub CLI support for local pull-request polling."}
+          </p>
+          <SettingsStatusPill
+            tone={
+              !githubCliStatus
+                ? "muted"
+                : githubCliStatus.installed && githubCliStatus.authenticated
+                  ? "success"
+                  : "warning"
+            }
+            label={githubCliLabel}
+          />
           {githubCliStatus?.error && !githubCliStatus.authenticated && (
-            <p className="mt-2 break-words font-mono text-xs opacity-80">{githubCliStatus.error}</p>
+            <span className="sr-only">{githubCliStatus.error}</span>
           )}
         </div>
       )}
 
       {sortedRepoIds.length === 0 ? (
-        <div className="rounded-lg border border-border bg-surface-deep p-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            No repositories yet. Add one to get started.
-          </p>
-        </div>
+        <RepositoriesEmptyState onCreated={handleCreated} />
       ) : (
         <div className="space-y-3">
           {sortedRepoIds.map((id) => (

@@ -8,6 +8,7 @@ import type {
 } from "@trace/gql";
 import { useEntityField, useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import { client } from "../../../lib/urql";
+import { withRepoApplicationConfigDefaults } from "../../../lib/repo-application-config";
 import {
   APPLICATIONS_STATE_QUERY,
   DEFAULT_APP_CONFIG,
@@ -18,7 +19,8 @@ import {
 function hasContent(
   config: RepoApplicationConfig | null | undefined,
 ): config is RepoApplicationConfig {
-  return Boolean(config && (config.applications.length > 0 || config.setupScripts.length > 0));
+  const normalized = withRepoApplicationConfigDefaults(config);
+  return normalized.applications.length > 0 || normalized.setupScripts.length > 0;
 }
 
 export function useSessionApplicationsData(sessionGroupId: string) {
@@ -35,7 +37,9 @@ export function useSessionApplicationsData(sessionGroupId: string) {
       ? (state.repos[groupRepo.id]?.applicationConfig as RepoApplicationConfig | null | undefined)
       : undefined,
   );
-  const resolvedConfig = groupRepo?.applicationConfig ?? repoConfig;
+  const resolvedConfig = withRepoApplicationConfigDefaults(
+    groupRepo?.applicationConfig ?? repoConfig,
+  );
   const config = hasContent(resolvedConfig)
     ? resolvedConfig
     : usesDefaultApplicationConfig(groupKind)

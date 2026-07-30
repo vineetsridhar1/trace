@@ -448,7 +448,14 @@ type Repo {
 
 type RepoApplicationConfig {
   setupScripts: [RepoSetupScript!]!
+  runScripts: [RepoRunScript!]!
   applications: [RepoApplicationDefinition!]!
+}
+
+type RepoRunScript {
+  id: ID!
+  name: String!
+  command: String!
 }
 
 type RepoSetupScript {
@@ -1501,7 +1508,14 @@ input UpdateRepoInput {
 
 input RepoApplicationConfigInput {
   setupScripts: [RepoSetupScriptInput!]
+  runScripts: [RepoRunScriptInput!]
   applications: [RepoApplicationDefinitionInput!]
+}
+
+input RepoRunScriptInput {
+  id: ID!
+  name: String!
+  command: String!
 }
 
 input RepoSetupScriptInput {

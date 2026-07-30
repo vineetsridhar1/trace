@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "artifactType": "Desktop web settings suite",
+  "audience": "Trace workspace admins and engineers configuring repositories, members, agent runtimes, credentials, and device access",
+  "platform": "Desktop web at 1440x900, with one 390x844 mobile artboard for responsive navigation intent",
+  "fidelity": "High-fidelity",
+  "primaryJob": "Redesign Trace's nine-tab Settings page into a grouped, scannable settings suite that separates workspace configuration from personal configuration and fixes the weakest interaction patterns",
+  "coreFlow": [
+    "Open Settings and orient via grouped navigation (Workspace vs Your account)",
+    "Manage workspace: members and invites, repositories with automation scripts, agent environments, shared secrets, integrations",
+    "Manage personal: session defaults, API keys, devices and bridge access",
+    "Approve a pending bridge access request with explicit capabilities and duration"
+  ],
+  "requiredStates": ["Default", "Empty", "Editing", "Pending approval"],
+  "direction": {
+    "name": "Console calm",
+    "principles": [
+      "Quiet dark zinc surfaces matching the Trace product; hierarchy from type and spacing, not boxes in boxes",
+      "Status is never color alone: dot + label pills for connected/offline/configured",
+      "White primary action, emerald reserved for healthy status, amber for attention, red only for destructive",
+      "Desktop density: 13-14px body, 32-36px controls, generous section rhythm"
+    ]
+  },
+  "references": [
+    {
+      "source": "trace/apps/web/src/components/settings/*",
+      "preserve": [
+        "Feature inventory: all nine settings areas and their fields",
+        "Exact domain vocabulary: role names (Admin/Member/Observer), capability labels (Sessions/Terminal), grant durations (1 hour/3 hours/1 day), tool and model labels"
+      ],
+      "reinterpret": [
+        "Flat nine-tab navigation becomes grouped Workspace vs Your account navigation",
+        "Yes/No dropdowns become toggle switches",
+        "Channels scripts tab folds into Repositories automation",
+        "Search-only member adding becomes invite-by-email with pending invites"
+      ],
+      "avoidCopying": [
+        "Triple-nested card styling in Bridge Access",
+        "Color-only status text"
+      ],
+      "evidence": [
+        "Read directly from SettingsPage.tsx and its nine section components in trace/apps/web/src/components/settings/",
+        "Model and tool labels from trace/packages/shared/src/models.ts; capability and duration labels from trace/apps/web/src/lib/bridge-access.ts",
+        "Sample people, repos, and dates are placeholder data"
+      ]
+    }
+  ],
+  "assumptions": [
+    "The audit and redesign target the web app's SettingsPage; the mobile app settings are out of scope except one responsive navigation artboard",
+    "The 'Channels' tab (setup/run scripts for coding channels) is folded into Repositories as per-repo automation, since scripts conceptually belong to the codebase being run",
+    "'Org Secrets' is renamed 'Secrets' under Workspace; personal 'API Keys' stays under Your account so credential ownership is unambiguous",
+    "Invite-by-email with pending invites is proposed to replace search-only member adding (current UX dead-ends when the user has not signed up)",
+    "The Session automation dialog unifies the repo ApplicationConfigDialog (setup scripts with env secrets, applications, processes, ports) with channel run scripts into one repo-level editor, since members meet them as one job: how sessions run this codebase"
+  ]
+}

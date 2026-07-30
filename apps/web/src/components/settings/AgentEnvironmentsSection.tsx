@@ -4,6 +4,7 @@ import { AgentEnvironmentForm } from "./AgentEnvironmentForm";
 import { AgentEnvironmentLocalBridgeList } from "./AgentEnvironmentLocalBridgeList";
 import { AgentEnvironmentRow } from "./AgentEnvironmentRow";
 import { useAgentEnvironmentsSettings } from "./useAgentEnvironmentsSettings";
+import { SettingsSectionHeader } from "./SettingsSectionHeader";
 
 export function AgentEnvironmentsSection() {
   const settings = useAgentEnvironmentsSettings();
@@ -13,18 +14,10 @@ export function AgentEnvironmentsSection() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-foreground">Agent Environments</h2>
-          <p className="text-sm text-muted-foreground">
-            Manage where agent sessions can run for this organization.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => void settings.fetchSettings()}>
-          <RefreshCw size={14} className="mr-1.5" />
-          Refresh
-        </Button>
-      </div>
+      <SettingsSectionHeader
+        title="Agent environments"
+        description="Where agent sessions run for this workspace: members' local bridges, plus one cloud launcher that provisions managed runtimes on demand."
+      />
 
       {settings.loading ? (
         <div className="rounded-lg border border-border bg-surface-deep p-4 text-sm text-muted-foreground">
@@ -34,27 +27,34 @@ export function AgentEnvironmentsSection() {
         <>
           <AgentEnvironmentLocalBridgeList localBridges={settings.localBridges} />
 
-          <section className="flex flex-col gap-3">
+          <section className="mt-8 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-foreground">Cloud</h3>
+                <h3 className="text-sm font-semibold text-foreground">Cloud environment</h3>
                 <p className="text-xs text-muted-foreground">
-                  Cloud environments use your launcher to provision managed runtimes on demand.
+                  One cloud environment per workspace. Trace uses it to provision managed runtimes
+                  on demand.
                 </p>
               </div>
-              <Button
-                size="sm"
-                onClick={settings.createEnvironment}
-                disabled={!settings.activeOrgId || hasEnabledProvisionedEnvironment}
-                title={
-                  hasEnabledProvisionedEnvironment
-                    ? "Only one cloud environment can be enabled per organization"
-                    : undefined
-                }
-              >
-                <Plus size={14} className="mr-1.5" />
-                New cloud
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => void settings.fetchSettings()}>
+                  <RefreshCw size={14} />
+                  Refresh
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={settings.createEnvironment}
+                  disabled={!settings.activeOrgId || hasEnabledProvisionedEnvironment}
+                  title={
+                    hasEnabledProvisionedEnvironment
+                      ? "Only one cloud environment can be enabled per organization"
+                      : undefined
+                  }
+                >
+                  <Plus size={14} />
+                  New cloud
+                </Button>
+              </div>
             </div>
 
             {settings.environmentIds.length === 0 ? (
@@ -94,6 +94,17 @@ export function AgentEnvironmentsSection() {
           orgSecrets={settings.orgSecrets}
           onOpenChange={settings.setFormOpen}
           onSaved={() => void settings.fetchSettings()}
+          onTest={
+            settings.editingEnvironment
+              ? () => settings.testEnvironment(settings.editingEnvironment!)
+              : undefined
+          }
+          testPending={settings.pendingActionId === settings.editingEnvironment?.id}
+          testResult={
+            settings.editingEnvironment
+              ? settings.testResults[settings.editingEnvironment.id]
+              : undefined
+          }
         />
       ) : null}
     </div>
