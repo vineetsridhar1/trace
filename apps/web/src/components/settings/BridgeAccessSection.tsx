@@ -211,7 +211,7 @@ export function BridgeAccessSection() {
         title="Devices & access"
         description="Your connected devices, mobile pairing, and who may run sessions on your local bridges."
       />
-      <div className="mb-8 grid gap-4 lg:grid-cols-[3fr_2fr]">
+      <div className="mb-8 grid items-start gap-4 lg:grid-cols-[3fr_2fr]">
         <CurrentBridgeSection onRenamed={fetchRuntimes} />
         <MobilePairingSection />
       </div>
@@ -227,41 +227,33 @@ export function BridgeAccessSection() {
       ) : (
         <div className="space-y-4">
           {runtimes.map((runtime) => (
-            <div key={runtime.id} className="space-y-6">
-              <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3.5">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Laptop size={16} className="text-muted-foreground" />
-                    <h3 className="text-sm font-semibold text-foreground">{runtime.label}</h3>
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                        runtime.connected
-                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                          : "border-border bg-surface-deep text-muted-foreground"
-                      }`}
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      {runtime.connected ? "Connected" : "Offline"}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Last seen {formatDate(runtime.lastSeenAt)}
-                  </p>
-                </div>
-                <div className="text-right text-xs text-muted-foreground">
-                  <div>{runtime.accessRequests.length} pending request(s)</div>
-                  <div>{runtime.accessGrants.length} active grant(s)</div>
-                </div>
-              </div>
-
+            <div key={runtime.id} className="space-y-8">
               <div className="space-y-8">
                 <section>
-                  <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <Inbox size={12} />
-                    Pending Requests
+                  <div className="mb-3 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <Inbox size={13} className="text-muted-foreground" />
+                      <h3 className="text-sm font-semibold text-foreground">
+                        Access requests{" "}
+                        <span className="ml-1 font-normal text-muted-foreground">
+                          {runtime.accessRequests.length} pending
+                        </span>
+                      </h3>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Laptop size={13} />
+                      {runtime.label}
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          runtime.connected ? "bg-emerald-300" : "bg-muted-foreground"
+                        }`}
+                      />
+                    </div>
                   </div>
                   {runtime.accessRequests.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No pending requests.</p>
+                    <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                      No pending access requests.
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       {runtime.accessRequests.map((request) => {
@@ -432,12 +424,19 @@ export function BridgeAccessSection() {
                 </section>
 
                 <section>
-                  <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <UserRoundCheck size={12} />
-                    Active Grants
+                  <div className="mb-3 flex items-center gap-2">
+                    <UserRoundCheck size={13} className="text-muted-foreground" />
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Active grants{" "}
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        {runtime.accessGrants.length}
+                      </span>
+                    </h3>
                   </div>
                   {runtime.accessGrants.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No active grants.</p>
+                    <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                      No active access grants.
+                    </div>
                   ) : (
                     <div className="space-y-3">
                       {runtime.accessGrants.map((grant) => {

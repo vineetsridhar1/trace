@@ -20,22 +20,19 @@ export function PairedMobileDevicesList({
   onRevoke,
 }: PairedMobileDevicesListProps) {
   return (
-    <div className="mt-4 min-w-0 rounded-lg border border-border bg-background p-3">
-      <div className="mb-3 flex items-center gap-2">
-        <Smartphone size={15} className="text-muted-foreground" />
-        <div className="text-sm font-medium text-foreground">Paired devices</div>
+    <div className="mt-4 min-w-0 border-t border-border pt-3">
+      <div className="mb-2 flex items-center gap-2">
+        <Smartphone size={13} className="text-muted-foreground" />
+        <div className="text-xs font-medium text-foreground">Paired devices</div>
       </div>
       {loading ? (
-        <div className="text-sm text-muted-foreground">Loading paired devices...</div>
+        <div className="text-xs text-muted-foreground">Loading paired devices...</div>
       ) : devices.length === 0 ? (
-        <div className="text-sm text-muted-foreground">No mobile devices are paired yet.</div>
+        <div className="text-xs text-muted-foreground">No mobile devices paired.</div>
       ) : (
-        <div className="space-y-3">
+        <div className="divide-y divide-border">
           {devices.map((device) => (
-            <div
-              key={device.id}
-              className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-surface-deep p-3"
-            >
+            <div key={device.id} className="flex flex-wrap items-start justify-between gap-3 py-2">
               <div className="min-w-0">
                 <div className="text-sm font-medium text-foreground">
                   {mobileDeviceLabel(device)}
