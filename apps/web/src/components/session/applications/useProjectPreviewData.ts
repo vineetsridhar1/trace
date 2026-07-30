@@ -4,9 +4,10 @@ import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import { useEntityStore } from "@trace/client-core";
 import { client } from "../../../lib/urql";
 import { findReadyPreviewEndpoint, isLivePreviewRuntimeAvailable } from "./app-preview-readiness";
-
-const SAVED_DESIGN_PREVIEW_RETRY_MS = 3_000;
-const MAX_SAVED_DESIGN_PREVIEW_ATTEMPTS = 10;
+import {
+  getSavedDesignPreviewRecoveryState,
+  SAVED_DESIGN_PREVIEW_RETRY_MS,
+} from "./saved-design-preview-recovery";
 
 const PROJECT_PREVIEW_ENDPOINTS_QUERY = gql`
   query AppPreviewState($sessionGroupId: ID!, $includePdf: Boolean!) {
@@ -109,14 +110,14 @@ export function useProjectPreviewData(
   }, [sessionGroupId]);
 
   useEffect(() => {
-    if (
-      projectKind !== "design" ||
-      isLivePreviewRuntimeAvailable(runtimeState) ||
-      designPreviewUrl
-    ) {
-      return;
-    }
-    if (savedDesignPreviewAttempts >= MAX_SAVED_DESIGN_PREVIEW_ATTEMPTS) {
+    const recoveryState = getSavedDesignPreviewRecoveryState({
+      projectKind,
+      liveRuntimeAvailable: isLivePreviewRuntimeAvailable(runtimeState),
+      designPreviewUrl,
+      attempts: savedDesignPreviewAttempts,
+    });
+    if (recoveryState === "idle") return;
+    if (recoveryState === "unavailable") {
       setError("Saved design preview is still being prepared. Try again in a moment.");
       return;
     }
