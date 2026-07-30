@@ -4,11 +4,13 @@ import { ArtboardErrorBoundary } from "./ArtboardErrorBoundary";
 
 export function DesignArtboard({
   screen,
+  sectionName,
   component: ScreenComponent,
   onFocus,
   zoom,
 }: {
   screen: DesignScreen;
+  sectionName: string;
   component: ComponentType;
   onFocus: () => void;
   zoom: number;
@@ -31,6 +33,9 @@ export function DesignArtboard({
           width: labelWidth,
         }}
       >
+        <p className="mb-2 truncate text-xs font-semibold uppercase tracking-[0.18em] text-zinc-600">
+          {sectionName}
+        </p>
         <header className="flex items-end justify-between gap-3 text-zinc-200">
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[24px] font-medium leading-8">{screen.name}</h2>
