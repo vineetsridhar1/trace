@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Plus, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Session, SessionGroup } from "@trace/gql";
 import {
@@ -10,9 +10,10 @@ import {
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
-import { useCommandPaletteStore } from "../../stores/command-palette";
+import { useHomeComposerStore } from "../../stores/home-composer";
 import { useUIStore } from "../../stores/ui";
 import { useHomeDataStore } from "../../stores/home-data";
+import { useSidebar } from "../ui/sidebar";
 import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 
 const GENERATED_PROJECTS_QUERY = gql`
@@ -174,10 +175,9 @@ type ProjectGroup = SessionGroup & { id: string; sessions?: Array<Session & { id
 export function GeneratedProjectsSection({ activeOrgId }: { activeOrgId: string | null }) {
   const upsertMany = useEntityStore((state) => state.upsertMany);
   const activePage = useUIStore((state) => state.activePage);
-  const openGeneratedProjectDialog = useCommandPaletteStore(
-    (state) => state.openGeneratedProjectDialog,
-  );
   const setActivePage = useUIStore((state) => state.setActivePage);
+  const requestComposerFocus = useHomeComposerStore((state) => state.requestFocus);
+  const { isMobile, setOpenMobile } = useSidebar();
 
   useEffect(() => {
     if (!activeOrgId) return;
@@ -217,37 +217,32 @@ export function GeneratedProjectsSection({ activeOrgId }: { activeOrgId: string 
     };
   }, [activeOrgId, upsertMany]);
 
+  const openCreate = () => {
+    setActivePage("create");
+    requestComposerFocus();
+    if (isMobile) setOpenMobile(false);
+  };
+
   return (
-    <div className="group/create relative">
-      <button
-        type="button"
-        onClick={() => setActivePage("create")}
-        className={cn(
-          "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 pr-10 text-left transition-colors",
-          sidebarRootLeftEdgeRowClass,
-          "pl-4",
-          activePage === "create"
-            ? "bg-white/10 text-foreground"
-            : "text-foreground hover:bg-white/10",
-        )}
-      >
-        <Sparkles size={16} className="shrink-0" />
-        <span className="min-w-0">
-          <span className="block text-sm font-medium">Create</span>
-          <span className="block truncate text-[10px] font-normal text-muted-foreground">
-            Apps, designs, documents & animations
-          </span>
+    <button
+      type="button"
+      onClick={openCreate}
+      className={cn(
+        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
+        sidebarRootLeftEdgeRowClass,
+        "pl-4",
+        activePage === "create"
+          ? "bg-white/10 text-foreground"
+          : "text-foreground hover:bg-white/10",
+      )}
+    >
+      <Sparkles size={16} className="shrink-0" />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium">Create</span>
+        <span className="block truncate text-[10px] font-normal text-muted-foreground">
+          Apps, designs, documents & animations
         </span>
-      </button>
-      <button
-        type="button"
-        title="Create new"
-        aria-label="Create new"
-        onClick={() => openGeneratedProjectDialog("choose")}
-        className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-60 transition-colors hover:bg-white/10 hover:text-foreground hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/create:opacity-100"
-      >
-        <Plus size={14} />
-      </button>
-    </div>
+      </span>
+    </button>
   );
 }

@@ -9,14 +9,16 @@ interface HeaderPerson {
   avatarUrl?: string | null;
 }
 
-export function HomeHeader({ people }: { people: HeaderPerson[] }) {
+export function HomeHeader({ people, title = "Home" }: { people: HeaderPerson[]; title?: string }) {
   const currentUser = useAuthStore((state: AuthState) => state.user);
   const setPaletteOpen = useCommandPaletteStore((state) => state.setPaletteOpen);
   const team = uniquePeople(currentUser ? [currentUser, ...people] : people).slice(0, 4);
 
   return (
     <header className="app-region-drag flex h-12 shrink-0 items-center border-b border-[var(--th-edge)] pl-[var(--trace-header-title-offset)] pr-3 transition-[padding-left] duration-200 ease-in-out sm:pr-4">
-      <span className="hidden text-sm font-semibold text-[var(--th-heading)] md:inline">Home</span>
+      <span className="hidden text-sm font-semibold text-[var(--th-heading)] md:inline">
+        {title}
+      </span>
       <span className="ml-3 hidden text-xs text-[var(--th-faint)] lg:inline">
         {new Intl.DateTimeFormat(undefined, {
           weekday: "long",

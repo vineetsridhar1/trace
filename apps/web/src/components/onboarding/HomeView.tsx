@@ -20,7 +20,7 @@ import {
   saveHomeDraft,
 } from "../home/home-draft";
 
-export function HomeView() {
+export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   const activeOrgId = useAuthStore((state: AuthState) => state.activeOrgId);
   const defaultTool = useAuthStore((state: AuthState) => state.user?.defaultSessionTool);
   const reposTable = useEntityStore((state) => state.repos);
@@ -47,6 +47,13 @@ export function HomeView() {
   const effectiveRepoId =
     activeKind === "coding" ? (selectedRepoId ?? detectedRepo?.id ?? null) : null;
   const effectiveRepo = repos.find((repo) => repo.id === effectiveRepoId) ?? null;
+  const isCreateMode = mode === "create";
+
+  useEffect(() => {
+    if (!isCreateMode) return;
+    const frame = requestAnimationFrame(() => useHomeComposerStore.getState().requestFocus());
+    return () => cancelAnimationFrame(frame);
+  }, [isCreateMode]);
 
   useEffect(() => {
     if (draftOrgId === activeOrgId) return;
@@ -94,22 +101,23 @@ export function HomeView() {
   };
 
   const firstRun = homeDataReady && work.totalOwnedOrParticipating === 0;
+  const showIntro = isCreateMode || firstRun;
   const people = work.items.flatMap((item) => (item.owner ? [item.owner] : []));
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--th-surface-mid)]">
-      <HomeHeader people={people} />
+      <HomeHeader people={people} title={isCreateMode ? "Create" : "Home"} />
       <div className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="pointer-events-none absolute left-1/2 top-[-70px] h-[420px] w-[min(900px,100vw)] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,color-mix(in_srgb,var(--th-accent)_8%,transparent),transparent_70%)]" />
         <main
           className={`relative mx-auto flex min-h-full w-full flex-col px-4 pb-7 sm:px-6 ${
-            firstRun ? "pt-16 sm:pt-24" : "pt-8 sm:pt-11"
+            showIntro ? "pt-16 sm:pt-24" : "pt-8 sm:pt-11"
           }`}
         >
           <h1 className="text-center text-[22px] font-semibold tracking-[-0.01em] text-[var(--th-heading)] sm:text-2xl">
             What are you making?
           </h1>
-          {firstRun && (
+          {showIntro && (
             <p className="mt-1.5 text-center text-[13px] text-[var(--th-muted)]">
               Describe it — Trace routes it to the right kind of session.
             </p>
@@ -135,7 +143,12 @@ export function HomeView() {
             />
           </div>
 
-          {!homeDataReady ? (
+          {isCreateMode ? (
+            <HomeFirstRunSparks
+              showCollectionHint={false}
+              onUsePrompt={(starter) => useHomeComposerStore.getState().requestFocus(starter)}
+            />
+          ) : !homeDataReady ? (
             <HomeLedgerSkeleton />
           ) : firstRun ? (
             <HomeFirstRunSparks

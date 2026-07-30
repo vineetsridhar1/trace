@@ -16,7 +16,13 @@ const SPARKS: Array<{ kind: SessionGroupKind; prompt: string }> = [
   },
 ];
 
-export function HomeFirstRunSparks({ onUsePrompt }: { onUsePrompt: (prompt: string) => void }) {
+export function HomeFirstRunSparks({
+  onUsePrompt,
+  showCollectionHint = true,
+}: {
+  onUsePrompt: (prompt: string) => void;
+  showCollectionHint?: boolean;
+}) {
   return (
     <section className="mx-auto mt-10 w-full max-w-[720px]">
       <p className="mb-3 text-center text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--th-faint)]">
@@ -37,9 +43,11 @@ export function HomeFirstRunSparks({ onUsePrompt }: { onUsePrompt: (prompt: stri
           </button>
         ))}
       </div>
-      <p className="mt-5 text-center text-xs text-[var(--th-faint)]">
-        Your work will collect here once you start something
-      </p>
+      {showCollectionHint && (
+        <p className="mt-5 text-center text-xs text-[var(--th-faint)]">
+          Your work will collect here once you start something
+        </p>
+      )}
     </section>
   );
 }
