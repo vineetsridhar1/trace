@@ -2154,11 +2154,13 @@ export type Repo = {
 export type RepoApplicationConfig = {
   __typename?: "RepoApplicationConfig";
   applications: Array<RepoApplicationDefinition>;
+  runScripts: Array<RepoRunScript>;
   setupScripts: Array<RepoSetupScript>;
 };
 
 export type RepoApplicationConfigInput = {
   applications?: InputMaybe<Array<RepoApplicationDefinitionInput>>;
+  runScripts?: InputMaybe<Array<RepoRunScriptInput>>;
   setupScripts?: InputMaybe<Array<RepoSetupScriptInput>>;
 };
 
@@ -2227,6 +2229,19 @@ export type RepoProcessDefinitionInput = {
 };
 
 export type RepoProvider = "github" | "managed";
+
+export type RepoRunScript = {
+  __typename?: "RepoRunScript";
+  command: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+};
+
+export type RepoRunScriptInput = {
+  command: Scalars["String"]["input"];
+  id: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+};
 
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";
@@ -4011,6 +4026,12 @@ export type SettingsReposQuery = {
         workingDirectory?: string | null;
         env: Array<{ __typename?: "RepoEnvVar"; key: string; secretName: string }>;
       }>;
+      runScripts: Array<{
+        __typename?: "RepoRunScript";
+        id: string;
+        name: string;
+        command: string;
+      }>;
       applications: Array<{
         __typename?: "RepoApplicationDefinition";
         id: string;
@@ -4972,6 +4993,15 @@ export type ReposQuery = {
     remoteUrl?: string | null;
     defaultBranch: string;
     webhookActive: boolean;
+    applicationConfig: {
+      __typename?: "RepoApplicationConfig";
+      runScripts: Array<{
+        __typename?: "RepoRunScript";
+        id: string;
+        name: string;
+        command: string;
+      }>;
+    };
   }>;
 };
 
@@ -9138,6 +9168,18 @@ export const SettingsReposDocument = {
                       },
                       {
                         kind: "Field",
+                        name: { kind: "Name", value: "runScripts" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "command" } },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
                         name: { kind: "Name", value: "applications" },
                         selectionSet: {
                           kind: "SelectionSet",
@@ -12087,6 +12129,27 @@ export const ReposDocument = {
                 { kind: "Field", name: { kind: "Name", value: "remoteUrl" } },
                 { kind: "Field", name: { kind: "Name", value: "defaultBranch" } },
                 { kind: "Field", name: { kind: "Name", value: "webhookActive" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "applicationConfig" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "runScripts" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "command" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
               ],
             },
           },

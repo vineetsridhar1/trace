@@ -33,6 +33,11 @@ const REPOS_QUERY = gql`
             secretName
           }
         }
+        runScripts {
+          id
+          name
+          command
+        }
         applications {
           id
           name

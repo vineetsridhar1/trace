@@ -8,6 +8,7 @@ describe("repoApplicationConfigService", () => {
       { legacy: { keep: true } },
       {
         setupScripts: [{ id: "install", name: "Install", command: "pnpm install" }],
+        runScripts: [{ id: "test", name: "Test", command: "pnpm test" }],
         applications: [
           {
             id: "web",
@@ -36,6 +37,7 @@ describe("repoApplicationConfigService", () => {
             workingDirectory: ".",
           },
         ],
+        runScripts: [{ id: "test", name: "Test", command: "pnpm test" }],
         applications: [
           {
             id: "web",
@@ -83,6 +85,27 @@ describe("repoApplicationConfigService", () => {
         ],
       }),
     ).toThrow("Setup script IDs must be unique");
+  });
+
+  it("rejects duplicate and excessive run scripts", () => {
+    expect(() =>
+      repoApplicationConfigService.normalize({
+        runScripts: [
+          { id: "test", name: "Test", command: "pnpm test" },
+          { id: "test", name: "Test again", command: "pnpm test" },
+        ],
+      }),
+    ).toThrow("Run script IDs must be unique");
+
+    expect(() =>
+      repoApplicationConfigService.normalize({
+        runScripts: Array.from({ length: 11 }, (_, index) => ({
+          id: `script-${index}`,
+          name: `Script ${index}`,
+          command: "pnpm test",
+        })),
+      }),
+    ).toThrow("Run scripts cannot exceed 10 entries");
   });
 
   it("normalizes env vars into key/secret pairs", () => {

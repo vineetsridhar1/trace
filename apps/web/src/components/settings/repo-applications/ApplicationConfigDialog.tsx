@@ -1,3 +1,4 @@
+import { AlertCircle } from "lucide-react";
 import type { RepoApplicationConfig } from "@trace/gql";
 import { Button } from "../../ui/button";
 import {
@@ -7,14 +8,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../ui/dialog";
-import { Textarea } from "../../ui/textarea";
+import { SessionAutomationApplications } from "./SessionAutomationApplications";
+import { SessionAutomationRail } from "./SessionAutomationRail";
 import { SessionAutomationRunScripts } from "./SessionAutomationRunScripts";
+import { SessionAutomationSetupScripts } from "./SessionAutomationSetupScripts";
 import { useSessionAutomationDraft } from "./useSessionAutomationDraft";
+import { useUIStore } from "../../../stores/ui";
 
 export function ApplicationConfigDialog({
   open,
   repoName,
   config,
+  secretNames,
   saving,
   error,
   onOpenChange,
@@ -23,6 +28,7 @@ export function ApplicationConfigDialog({
   open: boolean;
   repoName: string;
   config: RepoApplicationConfig | undefined;
+  secretNames: string[];
   saving: boolean;
   error: string | null;
   onOpenChange: (open: boolean) => void;
@@ -32,77 +38,112 @@ export function ApplicationConfigDialog({
     open,
     config,
     error,
+    secretNames,
     onOpenChange,
     onSave,
   });
+  const setSettingsInitialTab = useUIStore((state) => state.setSettingsInitialTab);
+  const manageSecrets = () => {
+    onOpenChange(false);
+    setSettingsInitialTab("org-secrets");
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-black/60 backdrop-blur-[2px]"
-        className="max-h-[calc(100dvh-3rem)] gap-0 overflow-hidden p-0 sm:max-w-[620px]"
+        className="flex h-[660px] max-h-[calc(100dvh-3rem)] gap-0 overflow-hidden p-0 sm:max-w-[880px]"
       >
         <DialogHeader className="shrink-0 gap-0.5 border-b border-border px-6 py-4 pr-14 text-left">
           <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
-            Edit session automation
+            Session automation
           </DialogTitle>
           <DialogDescription className="text-[13px] leading-5">
-            <span className="font-medium text-foreground">{repoName}</span> · shared by every coding
-            channel on this repository.
+            <span className="font-medium text-foreground">{repoName}</span> · how sessions on this
+            repository install, run, and expose the codebase. Shared by every coding channel.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-4">
-          <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
-              Setup script
-            </span>
-            <Textarea
-              rows={4}
-              value={draft.setupScript}
-              onChange={(event) => draft.updateSetupScript(event.target.value)}
-              placeholder="e.g. npm install && npm run build"
-              className="min-h-24 resize-none bg-background font-mono text-xs leading-5"
-            />
-            <span className="mt-1.5 block text-xs leading-4 text-muted-foreground">
-              Runs once from the repository root when a session workspace starts. Terminals stay
-              blocked until it finishes.
-            </span>
-          </label>
-
-          <SessionAutomationRunScripts
-            scripts={draft.runScripts}
-            focusedProcessId={draft.focusedProcessId}
-            onAdd={draft.addRunScript}
-            onRemove={draft.removeRunScript}
-            onUpdate={draft.updateRunScript}
+        <div className="flex min-h-0 flex-1">
+          <SessionAutomationRail
+            active={draft.activeSection}
+            config={draft.draft}
+            issueSections={draft.issueSections}
+            onChange={draft.setActiveSection}
           />
+          <div className="flex min-w-0 flex-1 flex-col">
+            {draft.activeSection === "setup" ? (
+              <SessionAutomationSetupScripts
+                scripts={draft.draft.setupScripts}
+                secretNames={secretNames}
+                onAdd={draft.addSetupScript}
+                onRemove={draft.removeSetupScript}
+                onUpdate={draft.updateSetupScript}
+                onAddEnv={draft.addEnv}
+                onRemoveEnv={draft.removeEnvEntry}
+                onUpdateEnv={draft.updateEnvEntry}
+                onManageSecrets={manageSecrets}
+              />
+            ) : draft.activeSection === "run" ? (
+              <SessionAutomationRunScripts
+                scripts={draft.draft.runScripts}
+                onAdd={draft.addRunScript}
+                onRemove={draft.removeRunScript}
+                onUpdate={draft.updateRunScript}
+              />
+            ) : (
+              <SessionAutomationApplications
+                applications={draft.draft.applications}
+                expandedProcessId={draft.expandedProcessId}
+                secretNames={secretNames}
+                onAddApplication={draft.addApplication}
+                onAddEnv={draft.addEnv}
+                onAddPort={draft.addPort}
+                onAddProcess={draft.addProcess}
+                onRemoveApplication={draft.removeApplication}
+                onRemoveEnv={draft.removeEnvEntry}
+                onRemovePort={draft.removePort}
+                onRemoveProcess={draft.removeProcess}
+                onSetExpanded={draft.setExpandedProcessId}
+                onUpdateApplication={draft.updateApplication}
+                onUpdateEnv={draft.updateEnvEntry}
+                onUpdatePort={draft.updatePort}
+                onUpdateProcess={draft.updateProcess}
+                onManageSecrets={manageSecrets}
+              />
+            )}
+          </div>
         </div>
 
-        {draft.formError ? (
-          <p className="border-t border-border px-6 py-2 text-xs text-destructive">
-            {draft.formError}
-          </p>
-        ) : null}
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-background px-6 py-3.5">
-          <span className="flex items-center gap-1.5 text-xs text-amber-400">
-            {draft.dirty ? (
-              <>
-                <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                Unsaved changes
-              </>
-            ) : null}
-          </span>
-          <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-card px-6 py-3.5">
+          <button
+            type="button"
+            disabled={!draft.issues.length}
+            onClick={() => {
+              if (draft.issueSection) draft.setActiveSection(draft.issueSection);
+            }}
+            className="flex min-w-0 items-center gap-1.5 text-left text-xs text-amber-400 disabled:text-muted-foreground"
+          >
+            {draft.issues.length ? <AlertCircle size={13} className="shrink-0" /> : null}
+            <span className="truncate">
+              {draft.formError ??
+                (draft.issues.length
+                  ? `${draft.issues.length} issue${draft.issues.length === 1 ? "" : "s"} — ${draft.issues[0]}`
+                  : draft.dirty
+                    ? "Unsaved changes"
+                    : "Configuration saved")}
+            </span>
+          </button>
+          <div className="flex shrink-0 items-center gap-2">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button
               type="button"
-              disabled={!draft.dirty || saving}
+              disabled={!draft.dirty || saving || draft.issues.length > 0}
               onClick={() => void draft.save()}
             >
-              {saving ? "Saving..." : "Save changes"}
+              {saving ? "Saving..." : "Save configuration"}
             </Button>
           </div>
         </div>

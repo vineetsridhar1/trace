@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Settings2 } from "lucide-react";
-import { useEntityField, useEntityStore } from "@trace/client-core";
-import type { RepoApplicationConfig } from "@trace/gql";
+import { useAuthStore, useEntityField, useEntityStore } from "@trace/client-core";
+import type { OrgSecret, RepoApplicationConfig } from "@trace/gql";
 import { UPDATE_REPO_MUTATION } from "@trace/client-core";
 import { client } from "../../../lib/urql";
 import { Button } from "../../ui/button";
+import { ORG_SECRETS_QUERY } from "../agent-environment-queries";
 import { ApplicationConfigDialog } from "./ApplicationConfigDialog";
 
-const EMPTY_CONFIG: RepoApplicationConfig = { setupScripts: [], applications: [] };
+const EMPTY_CONFIG: RepoApplicationConfig = { setupScripts: [], runScripts: [], applications: [] };
 
 export function RepoApplicationsSection({ repoId }: { repoId: string }) {
   const applicationConfig = useEntityField("repos", repoId, "applicationConfig") as
@@ -15,13 +16,29 @@ export function RepoApplicationsSection({ repoId }: { repoId: string }) {
     | undefined;
   const repoName = useEntityField("repos", repoId, "name") ?? "Repository";
   const config = applicationConfig ?? EMPTY_CONFIG;
+  const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [secretNames, setSecretNames] = useState<string[]>([]);
 
-  const runScripts = config.applications.flatMap((application) =>
-    application.processes.map((process) => ({ ...process, applicationId: application.id })),
-  );
+  useEffect(() => {
+    if (!open || !activeOrgId) return;
+    let active = true;
+    void client
+      .query(ORG_SECRETS_QUERY, { orgId: activeOrgId }, { requestPolicy: "network-only" })
+      .toPromise()
+      .then((result) => {
+        if (!active || result.error) return;
+        const secrets = (result.data?.orgSecrets as OrgSecret[] | undefined) ?? [];
+        setSecretNames(secrets.map((secret) => secret.name));
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeOrgId, open]);
+
+  const runScripts = config.runScripts;
   const setupScript = config.setupScripts[0]?.command;
 
   const save = async (nextConfig: RepoApplicationConfig) => {
@@ -78,7 +95,7 @@ export function RepoApplicationsSection({ repoId }: { repoId: string }) {
             <div className="space-y-1.5">
               {runScripts.map((script) => (
                 <div
-                  key={`${script.applicationId}:${script.id}`}
+                  key={script.id}
                   className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5"
                 >
                   <span className="w-24 shrink-0 truncate text-xs font-medium text-foreground">
@@ -102,6 +119,7 @@ export function RepoApplicationsSection({ repoId }: { repoId: string }) {
         open={open}
         repoName={repoName}
         config={config}
+        secretNames={secretNames}
         saving={saving}
         error={error}
         onOpenChange={setOpen}

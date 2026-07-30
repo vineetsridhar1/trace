@@ -2155,11 +2155,13 @@ export type Repo = {
 export type RepoApplicationConfig = {
   __typename?: "RepoApplicationConfig";
   applications: Array<RepoApplicationDefinition>;
+  runScripts: Array<RepoRunScript>;
   setupScripts: Array<RepoSetupScript>;
 };
 
 export type RepoApplicationConfigInput = {
   applications?: InputMaybe<Array<RepoApplicationDefinitionInput>>;
+  runScripts?: InputMaybe<Array<RepoRunScriptInput>>;
   setupScripts?: InputMaybe<Array<RepoSetupScriptInput>>;
 };
 
@@ -2228,6 +2230,19 @@ export type RepoProcessDefinitionInput = {
 };
 
 export type RepoProvider = "github" | "managed";
+
+export type RepoRunScript = {
+  __typename?: "RepoRunScript";
+  command: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  name: Scalars["String"]["output"];
+};
+
+export type RepoRunScriptInput = {
+  command: Scalars["String"]["input"];
+  id: Scalars["ID"]["input"];
+  name: Scalars["String"]["input"];
+};
 
 export type RepoSetupScript = {
   __typename?: "RepoSetupScript";
@@ -2997,6 +3012,8 @@ export type ResolversTypes = ResolversObject<{
   RepoProcessDefinition: ResolverTypeWrapper<RepoProcessDefinition>;
   RepoProcessDefinitionInput: RepoProcessDefinitionInput;
   RepoProvider: RepoProvider;
+  RepoRunScript: ResolverTypeWrapper<RepoRunScript>;
+  RepoRunScriptInput: RepoRunScriptInput;
   RepoSetupScript: ResolverTypeWrapper<RepoSetupScript>;
   RepoSetupScriptInput: RepoSetupScriptInput;
   RepoWorktree: ResolverTypeWrapper<RepoWorktree>;
@@ -3141,6 +3158,8 @@ export type ResolversParentTypes = ResolversObject<{
   RepoPortDefinitionInput: RepoPortDefinitionInput;
   RepoProcessDefinition: RepoProcessDefinition;
   RepoProcessDefinitionInput: RepoProcessDefinitionInput;
+  RepoRunScript: RepoRunScript;
+  RepoRunScriptInput: RepoRunScriptInput;
   RepoSetupScript: RepoSetupScript;
   RepoSetupScriptInput: RepoSetupScriptInput;
   RepoWorktree: RepoWorktree;
@@ -5209,6 +5228,7 @@ export type RepoApplicationConfigResolvers<
     ParentType,
     ContextType
   >;
+  runScripts?: Resolver<Array<ResolversTypes["RepoRunScript"]>, ParentType, ContextType>;
   setupScripts?: Resolver<Array<ResolversTypes["RepoSetupScript"]>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
@@ -5259,6 +5279,16 @@ export type RepoProcessDefinitionResolvers<
   ports?: Resolver<Array<ResolversTypes["RepoPortDefinition"]>, ParentType, ContextType>;
   required?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   workingDirectory?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type RepoRunScriptResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["RepoRunScript"] = ResolversParentTypes["RepoRunScript"],
+> = ResolversObject<{
+  command?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -5840,6 +5870,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   RepoEnvVar?: RepoEnvVarResolvers<ContextType>;
   RepoPortDefinition?: RepoPortDefinitionResolvers<ContextType>;
   RepoProcessDefinition?: RepoProcessDefinitionResolvers<ContextType>;
+  RepoRunScript?: RepoRunScriptResolvers<ContextType>;
   RepoSetupScript?: RepoSetupScriptResolvers<ContextType>;
   RepoWorktree?: RepoWorktreeResolvers<ContextType>;
   Session?: SessionResolvers<ContextType>;

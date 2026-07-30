@@ -23,7 +23,8 @@
       "screenIds": [
         "settings-cloud-env-edit",
         "settings-automation-edit",
-        "settings-automation-apps"
+        "settings-automation-apps",
+        "settings-automation-env-var"
       ]
     },
     {
@@ -117,6 +118,14 @@
       "id": "settings-automation-apps",
       "name": "Session automation · Applications",
       "component": "./screens/SettingsAutomationApps.tsx",
+      "variation": "Dialog",
+      "state": "Editing",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-automation-env-var",
+      "name": "Session automation · Add variable",
+      "component": "./screens/SettingsAutomationEnvVar.tsx",
       "variation": "Dialog",
       "state": "Editing",
       "viewport": { "width": 1440, "height": 900 }

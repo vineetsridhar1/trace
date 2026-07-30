@@ -197,6 +197,7 @@ export const PDF_SESSION_DOWNLOAD_URL_QUERY = gql`
 
 export const DEFAULT_APP_CONFIG: RepoApplicationConfig = {
   setupScripts: [],
+  runScripts: [],
   applications: [
     {
       id: "app",

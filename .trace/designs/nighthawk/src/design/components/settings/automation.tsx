@@ -100,12 +100,78 @@ function CommandRow({ idPrefix, command, workdir }: { idPrefix: string; command:
   );
 }
 
+/* Workspace secrets available to reference — mirrors the Secrets settings screen. */
+const WORKSPACE_SECRETS = ["GITHUB_TOKEN", "ANTHROPIC_API_KEY", "DATABASE_URL", "FLY_LAUNCHER_TOKEN"];
+
+/* Open secret picker: the list you get after clicking into a variable's secret cell. */
+function SecretPickerOpen({ idPrefix }: { idPrefix: string }) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded
+        aria-label="Select secret"
+        data-trace-id={`${idPrefix}-trigger`}
+        data-trace-source={SOURCE}
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-design-control border border-design-primary bg-design-background px-3 text-left text-[13px] text-design-muted ring-2 ring-design-primary/25"
+      >
+        <span className="font-design-mono text-xs">Select secret</span>
+        <Icon name="chevronDown" size={14} className="shrink-0 text-design-muted" />
+      </button>
+      <ul
+        role="listbox"
+        aria-label="Workspace secrets"
+        data-trace-id={`${idPrefix}-menu`}
+        data-trace-source={SOURCE}
+        className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-design-control border border-design-border bg-design-surface py-1 shadow-design-surface"
+      >
+        {WORKSPACE_SECRETS.map((name, index) => (
+          <li key={name}>
+            <button
+              type="button"
+              role="option"
+              aria-selected={index === 0}
+              data-trace-id={`${idPrefix}-opt-${name.toLowerCase()}`}
+              data-trace-source={SOURCE}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] transition-colors",
+                index === 0
+                  ? "bg-design-background text-design-foreground"
+                  : "text-design-muted hover:bg-design-background/60 hover:text-design-foreground",
+              )}
+            >
+              <Icon name="shield" size={13} className="shrink-0 text-design-secondary" />
+              <span className="min-w-0 flex-1 truncate font-design-mono text-xs">{name}</span>
+              {index === 0 ? <Icon name="check" size={13} className="shrink-0" /> : null}
+            </button>
+          </li>
+        ))}
+        <li className="mt-1 border-t border-design-border pt-1">
+          <button
+            type="button"
+            data-trace-id={`${idPrefix}-manage`}
+            data-trace-source={SOURCE}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] text-design-foreground transition-colors hover:bg-design-background/60"
+          >
+            <Icon name="plus" size={13} className="shrink-0 text-design-secondary" />
+            <span className="flex-1">Manage workspace secrets</span>
+            <Icon name="externalLink" size={12} className="shrink-0 text-design-secondary" />
+          </button>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
 function EnvVars({
   idPrefix,
   rows,
+  adding = false,
 }: {
   idPrefix: string;
   rows: { key: string; secret: string; missing?: boolean }[];
+  adding?: boolean;
 }) {
   return (
     <div data-trace-id={`${idPrefix}-env`} data-trace-source={SOURCE}>
@@ -115,7 +181,7 @@ function EnvVars({
           Add variable
         </ControlButton>
       </div>
-      {rows.length === 0 ? (
+      {rows.length === 0 && !adding ? (
         <p className="text-xs text-design-muted">None — add one to expose a workspace secret here.</p>
       ) : (
         <div className="space-y-2">
@@ -156,6 +222,34 @@ function EnvVars({
               ) : null}
             </div>
           ))}
+          {adding ? (
+            <div data-trace-id={`${idPrefix}-env-new`} data-trace-source={SOURCE}>
+              <div className="grid grid-cols-[200px_1fr_32px] items-start gap-2">
+                <input
+                  type="text"
+                  placeholder="VARIABLE_NAME"
+                  aria-label="New variable name"
+                  data-trace-id={`${idPrefix}-env-new-key`}
+                  data-trace-source={SOURCE}
+                  className="h-9 w-full rounded-design-control border border-design-primary bg-design-background px-3 font-design-mono text-xs uppercase text-design-foreground outline-none ring-2 ring-design-primary/25 placeholder:normal-case placeholder:text-design-secondary"
+                />
+                <SecretPickerOpen idPrefix={`${idPrefix}-env-new-secret`} />
+                <ControlButton
+                  traceId={`${idPrefix}-env-new-remove`}
+                  variant="ghost"
+                  size="icon"
+                  icon="trash"
+                  aria-label="Remove new variable"
+                  className="hover:text-design-danger"
+                />
+              </div>
+              <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-4 text-design-muted">
+                <Icon name="info" size={12} className="mt-0.5 shrink-0" />
+                Name the variable your command reads. Its value is pulled from the chosen secret when
+                the runtime starts — the secret value is never shown or stored here.
+              </p>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -231,7 +325,7 @@ function PortsEditor({
 
 /* ---- section bodies ---------------------------------------------------- */
 
-function SetupSection() {
+function SetupSection({ addingEnv = false }: { addingEnv?: boolean }) {
   return (
     <div className="space-y-2.5">
       {[
@@ -242,6 +336,7 @@ function SetupSection() {
           command: "pnpm install && pnpm gql:codegen",
           workdir: ".",
           env: [] as { key: string; secret: string; missing?: boolean }[],
+          adding: addingEnv,
         },
         {
           id: "autoedit-step-db",
@@ -250,6 +345,7 @@ function SetupSection() {
           command: "pnpm db:migrate && pnpm db:generate",
           workdir: "apps/server",
           env: [{ key: "DATABASE_URL", secret: "DATABASE_URL", missing: true }],
+          adding: false,
         },
       ].map((step) => (
         <div
@@ -278,7 +374,7 @@ function SetupSection() {
                 />
               </div>
               <CommandRow idPrefix={step.id} command={step.command} workdir={step.workdir} />
-              <EnvVars idPrefix={step.id} rows={step.env} />
+              <EnvVars idPrefix={step.id} rows={step.env} adding={step.adding} />
             </div>
           </div>
         </div>
@@ -445,23 +541,26 @@ function ApplicationsSection() {
   );
 }
 
-const SECTION_BODY: Record<AutomationSection, () => ReactNode> = {
-  setup: SetupSection,
-  run: RunScriptsSection,
-  apps: ApplicationsSection,
-};
-
 /* ---- dialog shell with in-dialog section rail -------------------------- */
 
 export function AutomationDialog({
   active,
   background,
+  addingEnv = false,
 }: {
   active: AutomationSection;
   background: ReactNode;
+  addingEnv?: boolean;
 }) {
   const intro = SECTION_INTRO[active];
-  const Body = SECTION_BODY[active];
+  const body =
+    active === "setup" ? (
+      <SetupSection addingEnv={addingEnv} />
+    ) : active === "run" ? (
+      <RunScriptsSection />
+    ) : (
+      <ApplicationsSection />
+    );
   return (
     <ModalScreen traceId="autoedit-screen" background={background}>
       <div
@@ -584,7 +683,7 @@ export function AutomationDialog({
               data-trace-source={SOURCE}
               className="min-h-0 flex-1 overflow-y-auto px-6 py-4"
             >
-              <Body />
+              {body}
             </div>
           </div>
         </div>

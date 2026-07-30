@@ -50,6 +50,13 @@ const REPOS_QUERY = gql`
       remoteUrl
       defaultBranch
       webhookActive
+      applicationConfig {
+        runScripts {
+          id
+          name
+          command
+        }
+      }
     }
   }
 `;

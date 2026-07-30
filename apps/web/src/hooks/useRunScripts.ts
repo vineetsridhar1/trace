@@ -1,11 +1,12 @@
 import { useCallback } from "react";
 import { useEntityField, useEntityStore } from "@trace/client-core";
+import type { RepoApplicationConfig } from "@trace/gql";
 import { useUIStore, type UIState } from "../stores/ui";
 import { useTerminalStore } from "../stores/terminal";
 import { client } from "../lib/urql";
 import { CREATE_TERMINAL_MUTATION } from "@trace/client-core";
 
-interface RunScript {
+interface LegacyRunScript {
   name: string;
   command: string;
 }
@@ -26,10 +27,20 @@ export function useRunScripts(sessionGroupId: string, selectedSessionId: string 
       null,
   );
   const channelId = sessionGroupChannel?.id ?? rawChannelId ?? null;
-  const runScripts = useEntityField("channels", channelId ?? "", "runScripts") as
-    | RunScript[]
+  const channelRepo = useEntityField("channels", channelId ?? "", "repo") as
+    | { id: string }
     | null
     | undefined;
+  const repoApplicationConfig = useEntityField(
+    "repos",
+    channelRepo?.id ?? "",
+    "applicationConfig",
+  ) as RepoApplicationConfig | null | undefined;
+  const channelRunScripts = useEntityField("channels", channelId ?? "", "runScripts") as
+    | LegacyRunScript[]
+    | null
+    | undefined;
+  const runScripts = repoApplicationConfig?.runScripts ?? channelRunScripts;
   const setupStatus = useEntityField("sessionGroups", sessionGroupId, "setupStatus") as
     | "idle"
     | "running"
