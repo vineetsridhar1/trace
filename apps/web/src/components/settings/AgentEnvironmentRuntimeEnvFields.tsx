@@ -57,7 +57,7 @@ export function AgentEnvironmentRuntimeEnvFields({ draft, orgSecrets, update }: 
               value={secret?.id}
               onValueChange={(value) => updateEntry(index, "secretId", value ?? "")}
             >
-              <SelectTrigger className="h-9 w-full bg-background">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select secret">
                   <span className="flex min-w-0 items-center gap-1.5">
                     {secret ? (
@@ -72,6 +72,7 @@ export function AgentEnvironmentRuntimeEnvFields({ draft, orgSecrets, update }: 
               <SelectContent>
                 {orgSecrets.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
+                    <Shield size={13} />
                     {item.name}
                   </SelectItem>
                 ))}

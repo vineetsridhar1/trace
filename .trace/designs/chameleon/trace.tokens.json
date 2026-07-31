@@ -1,0 +1,41 @@
+{
+  "direction": {
+    "name": "Trace Web Design System",
+    "rationale": "Source-backed foundations and components extracted from apps/web (Base UI + Tailwind v4, shadcn base-nova style). Two accessibility overrides for review artboards: muted raised #71717a to #90909a and danger raised #ef4444 to #f87171 so muted/destructive text meets 4.5:1 AA on the #171717/#262626 surfaces."
+  },
+  "color": {
+    "background": "#171717",
+    "surface": "#262626",
+    "foreground": "#d4d4d8",
+    "muted": "#90909a",
+    "border": "#262626",
+    "primary": "#3b82f6",
+    "primaryForeground": "#171717",
+    "secondary": "#262626",
+    "success": "#22c55e",
+    "warning": "#f59e0b",
+    "danger": "#f87171",
+    "dangerForeground": "#171717"
+  },
+  "typography": {
+    "display": "\"Geist Variable\", sans-serif",
+    "body": "\"Geist Variable\", sans-serif",
+    "mono": "ui-monospace, monospace",
+    "scale": "1.25"
+  },
+  "spacing": {
+    "base": 4,
+    "density": "balanced"
+  },
+  "radius": {
+    "control": 6,
+    "surface": 8
+  },
+  "elevation": {
+    "surface": "0 16px 48px #0004"
+  },
+  "motion": {
+    "duration": 200,
+    "easing": "ease"
+  }
+}

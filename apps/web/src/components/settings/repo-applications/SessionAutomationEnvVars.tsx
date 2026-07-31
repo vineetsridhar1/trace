@@ -27,16 +27,28 @@ export function SessionAutomationEnvVars({
     <div>
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] font-medium text-muted-foreground">Environment variables</p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => onAdd(target)}
-          className="h-8 px-2.5 text-[13px] text-muted-foreground"
-        >
-          <Plus size={13} />
-          Add variable
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onManageSecrets}
+            className="h-8 px-2.5 text-[13px] text-muted-foreground"
+          >
+            <ExternalLink size={13} />
+            Manage secrets
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onAdd(target)}
+            className="h-8 px-2.5 text-[13px] text-muted-foreground"
+          >
+            <Plus size={13} />
+            Add variable
+          </Button>
+        </div>
       </div>
       {env.length ? (
         <div className="space-y-2">
@@ -56,20 +68,13 @@ export function SessionAutomationEnvVars({
                   />
                   <Select
                     value={entry.secretName || undefined}
-                    onValueChange={(value) => {
-                      if (value === "__manage__") {
-                        onManageSecrets();
-                        return;
-                      }
-                      onUpdate(target, index, { secretName: value ?? "" });
-                    }}
+                    onValueChange={(value) =>
+                      onUpdate(target, index, { secretName: value ?? "" })
+                    }
                   >
                     <SelectTrigger
                       aria-invalid={missing || undefined}
-                      className={cn(
-                        "h-9 w-full border-border bg-background px-3 text-[13px] focus-visible:ring-2 focus-visible:ring-primary/25",
-                        missing && "border-destructive text-destructive",
-                      )}
+                      className="w-full"
                     >
                       <SelectValue placeholder="Select secret">
                         <span
@@ -85,7 +90,7 @@ export function SessionAutomationEnvVars({
                         </span>
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent className="border border-[#27272d] bg-[#161619] text-[#fafafa] shadow-[0_12px_32px_rgba(0,0,0,0.4)] ring-0 [--border:#27272d] [--muted-foreground:#9d9da8] [--popover-foreground:#fafafa] [--popover:#161619]">
+                    <SelectContent>
                       {secretNames.map((name) => (
                         <SelectItem key={name} value={name}>
                           <span className="flex items-center gap-2">
@@ -94,13 +99,6 @@ export function SessionAutomationEnvVars({
                           </span>
                         </SelectItem>
                       ))}
-                      <SelectItem value="__manage__" className="mt-1 border-t border-border">
-                        <span className="flex w-full items-center gap-2">
-                          <Plus size={13} className="text-muted-foreground" />
-                          <span className="flex-1">Manage workspace secrets</span>
-                          <ExternalLink size={12} className="text-muted-foreground" />
-                        </span>
-                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <Button

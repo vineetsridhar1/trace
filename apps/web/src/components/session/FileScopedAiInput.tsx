@@ -11,13 +11,10 @@ import {
   Select,
   SelectContent,
   SelectItem,
-  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
 import { canQueueMessage, canSendMessage } from "./sessionStatus";
-
-const NEW_CHAT_VALUE = "__new_chat__";
 
 function formatFileScopedPrompt(filePath: string, text: string): string {
   return `File context: \`${filePath}\`\n\n${text}`;
@@ -68,26 +65,26 @@ export function FileScopedAiInput({
   const handleSessionChange = useCallback(
     (sessionId: string | null) => {
       if (!sessionId) return;
-      if (sessionId === NEW_CHAT_VALUE) {
-        userSelectedSessionRef.current = false;
-        setCreatingNewChat(true);
-        void onStartNewChat()
-          .then((newSessionId) => {
-            if (!newSessionId) return;
-            userSelectedSessionRef.current = true;
-            setSelectedSessionId(newSessionId);
-          })
-          .catch((error) => {
-            toast.error(error instanceof Error ? error.message : "Failed to create session");
-          })
-          .finally(() => setCreatingNewChat(false));
-        return;
-      }
       userSelectedSessionRef.current = true;
       setSelectedSessionId(sessionId);
     },
-    [onStartNewChat],
+    [],
   );
+
+  const handleStartNewChat = useCallback(() => {
+    userSelectedSessionRef.current = false;
+    setCreatingNewChat(true);
+    void onStartNewChat()
+      .then((newSessionId) => {
+        if (!newSessionId) return;
+        userSelectedSessionRef.current = true;
+        setSelectedSessionId(newSessionId);
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Failed to create session");
+      })
+      .finally(() => setCreatingNewChat(false));
+  }, [onStartNewChat]);
 
   const trimmedMessage = message.trim();
   const canSendSelected =
@@ -146,7 +143,7 @@ export function FileScopedAiInput({
       >
         <SelectTrigger
           size="sm"
-          className="h-8 w-44 shrink-0 border-[#3c3c3c] bg-[#1e1e1e] px-2 text-[11px] text-[#cccccc] hover:bg-white/10 hover:text-foreground focus:ring-0"
+          className="w-44 shrink-0"
           title="Choose agent"
         >
           <SelectValue placeholder="No agents">
@@ -157,29 +154,27 @@ export function FileScopedAiInput({
                 : undefined}
           </SelectValue>
         </SelectTrigger>
-        <SelectContent align="start" className="min-w-56">
+        <SelectContent className="min-w-56">
           {sessions.map((session) => (
-            <SelectItem
-              key={session.id}
-              value={session.id}
-              className="hover:bg-white/10 focus:bg-white/10 focus:text-foreground"
-            >
+            <SelectItem key={session.id} value={session.id}>
               <span className="min-w-0 truncate">{sessionLabel(session)}</span>
             </SelectItem>
           ))}
-          <SelectSeparator />
-          <SelectItem
-            value={NEW_CHAT_VALUE}
-            disabled={!canStartNewChat}
-            className="hover:bg-white/10 focus:bg-white/10 focus:text-foreground"
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <MessageSquarePlus size={14} />
-              New chat
-            </span>
-          </SelectItem>
         </SelectContent>
       </Select>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="size-7 shrink-0"
+        aria-label="Start new chat"
+        title="Start new chat"
+        disabled={!canStartNewChat || sending || creatingNewChat}
+        onClick={handleStartNewChat}
+      >
+        <MessageSquarePlus size={14} />
+      </Button>
 
       <Input
         value={message}
