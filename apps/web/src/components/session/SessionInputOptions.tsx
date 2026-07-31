@@ -150,6 +150,7 @@ interface ComposerInputOptionsProps {
   reasoningEffortOptions: readonly ReasoningEffortOption[];
   disabled?: boolean;
   compact?: boolean;
+  showMode?: boolean;
   betweenModeAndTool?: ReactNode;
   afterTool?: ReactNode;
   afterEffort?: ReactNode;
@@ -167,6 +168,7 @@ export function ComposerInputOptions({
   reasoningEffortOptions,
   disabled,
   compact = false,
+  showMode = true,
   betweenModeAndTool,
   afterTool,
   afterEffort,
@@ -180,33 +182,35 @@ export function ComposerInputOptions({
 
   return (
     <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap">
-      <button
-        type="button"
-        onClick={() => onModeChange(mode)}
-        disabled={disabled}
-        aria-label={`${modeConfig.label} mode`}
-        title={`${modeConfig.label} mode`}
-        className={cn(
-          "relative flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border text-[11px] font-medium transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
-          compact ? "w-7 justify-center px-0" : "px-2",
-          modeConfig.style,
-        )}
-      >
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.span
-            key={mode}
-            initial={{ y: 12, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -12, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="flex items-center gap-1.5"
-          >
-            <ModeIcon size={14} className="shrink-0" />
-            {compact ? null : modeConfig.label}
-          </motion.span>
-        </AnimatePresence>
-      </button>
-      {betweenModeAndTool}
+      {showMode ? (
+        <button
+          type="button"
+          onClick={() => onModeChange(mode)}
+          disabled={disabled}
+          aria-label={`${modeConfig.label} mode`}
+          title={`${modeConfig.label} mode`}
+          className={cn(
+            "relative flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border text-[11px] font-medium transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+            compact ? "w-7 justify-center px-0" : "px-2",
+            modeConfig.style,
+          )}
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={mode}
+              initial={{ y: 12, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -12, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="flex items-center gap-1.5"
+            >
+              <ModeIcon size={14} className="shrink-0" />
+              {compact ? null : modeConfig.label}
+            </motion.span>
+          </AnimatePresence>
+        </button>
+      ) : null}
+      {showMode ? betweenModeAndTool : null}
       <ToolModelPicker
         tool={tool}
         model={model}

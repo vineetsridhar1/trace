@@ -153,6 +153,7 @@ export function HomeComposer({
               reasoningEffortOptions={effortOptions}
               disabled={submitting}
               compact={false}
+              showMode={kind === "coding"}
               onModeChange={onModeChange}
               onToolChange={onToolChange}
               onModelChange={onModelChange}
