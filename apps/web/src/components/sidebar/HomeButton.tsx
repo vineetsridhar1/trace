@@ -24,7 +24,7 @@ export function HomeButton() {
     >
       <Home size={16} />
       <span>Home</span>
-      <kbd className="ml-auto mr-2 rounded border border-[var(--th-edge)] bg-[var(--th-surface)] px-1.5 py-0.5 font-mono text-[9px] font-normal text-[var(--th-muted)]">
+      <kbd className="ml-auto mr-2 rounded border border-[var(--th-edge)] bg-[var(--th-surface)] px-1.5 py-0.5 font-mono text-[9px] font-normal tracking-wider text-white">
         ⌘N
       </kbd>
     </button>
