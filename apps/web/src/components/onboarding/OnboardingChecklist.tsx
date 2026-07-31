@@ -40,11 +40,7 @@ export function OnboardingChecklist({ status, variant = "popover" }: Props) {
           title="Create or connect a repository"
           onClick={() => setRepoOpen(true)}
         />
-        <SidebarChannelRow
-          done={status.hasChannel}
-          onBrowseClick={() => setBrowseOpen(true)}
-          onCreateClick={() => setCreateOpen(true)}
-        />
+        <SidebarChannelRow done={status.hasChannel} onClick={() => setBrowseOpen(true)} />
         <SidebarRow
           done={status.hasSessionDefaults}
           title="Choose session defaults"
@@ -243,17 +239,13 @@ function SidebarRow({
   );
 }
 
-function SidebarChannelRow({
-  done,
-  onBrowseClick,
-  onCreateClick,
-}: {
-  done: boolean;
-  onBrowseClick: () => void;
-  onCreateClick: () => void;
-}) {
+function SidebarChannelRow({ done, onClick }: { done: boolean; onClick: () => void }) {
   return (
-    <div className="flex items-center gap-3 rounded-md px-1 py-1.5">
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--th-accent-light)]"
+    >
       <SidebarStatusIcon done={done} />
       <span
         className={
@@ -264,24 +256,6 @@ function SidebarChannelRow({
       >
         Join or create a channel
       </span>
-      {!done && (
-        <span className="flex shrink-0 gap-1">
-          <SidebarActionButton label="Join" onClick={onBrowseClick} />
-          <SidebarActionButton label="Create" onClick={onCreateClick} />
-        </span>
-      )}
-    </div>
-  );
-}
-
-function SidebarActionButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded px-1.5 py-0.5 text-[11px] font-medium text-[var(--th-muted)] transition-colors hover:bg-white/10 hover:text-[var(--th-heading)] focus-visible:outline-2 focus-visible:outline-[var(--th-accent-light)]"
-    >
-      {label}
     </button>
   );
 }
