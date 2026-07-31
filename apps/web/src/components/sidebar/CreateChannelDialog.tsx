@@ -67,6 +67,7 @@ interface CreateChannelDialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   defaultGroupId?: string | null;
+  hideTrigger?: boolean;
   onTriggerClick?: () => void;
 }
 
@@ -74,6 +75,7 @@ export function CreateChannelDialog({
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
   defaultGroupId,
+  hideTrigger = false,
   onTriggerClick,
 }: CreateChannelDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
@@ -225,13 +227,15 @@ export function CreateChannelDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <button
-        className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-foreground transition-colors hover:bg-white/10"
-        title="Create project or group"
-        onClick={handleTriggerClick}
-      >
-        <Plus size={16} />
-      </button>
+      {!hideTrigger && (
+        <button
+          className="flex cursor-pointer items-center justify-center rounded-md p-0.5 text-foreground transition-colors hover:bg-white/10"
+          title="Create project or group"
+          onClick={handleTriggerClick}
+        >
+          <Plus size={16} />
+        </button>
+      )}
       <DialogContent>
         {mode === "choose" && (
           <>

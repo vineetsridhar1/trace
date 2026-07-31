@@ -123,7 +123,7 @@ export function OnboardingChecklist({ status, variant = "popover" }: Props) {
         hideTrigger
         onCreated={invalidateRepos}
       />
-      <CreateChannelDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateChannelDialog open={createOpen} onOpenChange={setCreateOpen} hideTrigger />
       <BrowseChannelsDialog open={browseOpen} onOpenChange={setBrowseOpen} hideTrigger />
     </>
   );
