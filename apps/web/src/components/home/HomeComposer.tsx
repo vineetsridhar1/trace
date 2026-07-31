@@ -98,6 +98,7 @@ export function HomeComposer({
     <div className="mx-auto w-full max-w-[720px]">
       <SessionComposer
         className="home-session-composer"
+        sendLabel="Start session"
         editorRef={editorRef}
         mode={mode}
         placeholder="Describe what you want to make…"
@@ -115,53 +116,60 @@ export function HomeComposer({
         onAttachClick={() =>
           toast.info("Start the session first, then add attachments in its composer.")
         }
-        controls={
-          <ComposerInputOptions
-            mode={mode}
-            tool={tool}
-            model={model}
-            reasoningEffort={reasoningEffort}
-            reasoningEffortOptions={effortOptions}
-            disabled={submitting}
-            compact={false}
-            betweenModeAndTool={
+        contextControls={
+          <>
+            <span className="shrink-0 text-[12px] text-muted-foreground">
+              {kind === "coding" ? "Run in" : "Using"}
+            </span>
+            {kind === "coding" ? (
               <>
                 <HomeChannelPicker
                   channels={channels}
                   projects={projects}
                   selectedKey={channelTargetKey}
-                  disabled={kind !== "coding"}
+                  disabled={false}
                   onSelect={onChannelTargetChange}
                 />
                 <HomeBridgePicker
                   selectedBridgeId={bridgeId}
                   repoId={selectedChannelRepoId}
                   tool={tool}
-                  disabled={kind !== "coding"}
+                  disabled={false}
                   onSelect={onBridgeChange}
                 />
               </>
-            }
-            afterTool={
-              kind === "design" ? (
-                <HomeDesignSystemPicker
-                  selectedVersionId={designSystemVersionId}
-                  disabled={submitting}
-                  onSelect={onDesignSystemChange}
-                />
-              ) : (
-                <HomeDesignPicker
-                  selectedDesignId={designSessionGroupId}
-                  disabled={submitting}
-                  onSelect={onDesignChange}
-                />
-              )
-            }
-            onModeChange={onModeChange}
-            onToolChange={onToolChange}
-            onModelChange={onModelChange}
-            onReasoningEffortChange={onReasoningEffortChange}
-          />
+            ) : kind === "design" ? (
+              <HomeDesignSystemPicker
+                selectedVersionId={designSystemVersionId}
+                disabled={submitting}
+                onSelect={onDesignSystemChange}
+              />
+            ) : null}
+            <ComposerInputOptions
+              mode={mode}
+              tool={tool}
+              model={model}
+              reasoningEffort={reasoningEffort}
+              reasoningEffortOptions={effortOptions}
+              disabled={submitting}
+              compact={false}
+              onModeChange={onModeChange}
+              onToolChange={onToolChange}
+              onModelChange={onModelChange}
+              onReasoningEffortChange={onReasoningEffortChange}
+            />
+          </>
+        }
+        controls={
+          <>
+            {kind !== "design" ? (
+              <HomeDesignPicker
+                selectedDesignId={designSessionGroupId}
+                disabled={submitting}
+                onSelect={onDesignChange}
+              />
+            ) : null}
+          </>
         }
       />
     </div>

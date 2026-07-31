@@ -22,6 +22,7 @@ interface SessionComposerProps {
   attachments?: FileAttachment[];
   slashCommands?: SlashCommandItem[];
   controls: ReactNode;
+  contextControls?: ReactNode;
   afterAttachment?: ReactNode;
   emptyHint?: ReactNode;
   isActive?: boolean;
@@ -36,6 +37,7 @@ interface SessionComposerProps {
   onStop?: () => void;
   onSend?: () => void;
   className?: string;
+  sendLabel?: string;
 }
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
@@ -51,6 +53,7 @@ export function SessionComposer({
   attachments = EMPTY_ATTACHMENTS,
   slashCommands,
   controls,
+  contextControls,
   afterAttachment,
   emptyHint,
   isActive,
@@ -65,6 +68,7 @@ export function SessionComposer({
   onStop,
   onSend,
   className,
+  sendLabel,
 }: SessionComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -101,6 +105,11 @@ export function SessionComposer({
           onChange={onChange}
         />
       </div>
+      {contextControls ? (
+        <div className="session-composer-context flex min-h-[52px] items-center gap-2 border-t border-border px-3 py-2">
+          {contextControls}
+        </div>
+      ) : null}
       <div className="@container flex items-center gap-1 pb-2 pl-1 pr-2 pt-2">
         <input
           ref={fileInputRef}
@@ -135,9 +144,13 @@ export function SessionComposer({
             type="button"
             onClick={onSend ?? (() => void editorRef.current?.submit())}
             disabled={submitDisabled || disabled}
-            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
+            className={cn(
+              "flex h-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40",
+              sendLabel ? "gap-1.5 px-3 text-[13px] font-medium" : "w-8",
+            )}
             title="Send"
           >
+            {sendLabel}
             <Send size={15} />
           </button>
         )}

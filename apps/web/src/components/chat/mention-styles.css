@@ -127,6 +127,11 @@
   padding: 9px 12px;
 }
 
+.home-session-composer .session-composer-context {
+  border-color: var(--th-edge-strong);
+  padding: 9px 12px;
+}
+
 .home-session-composer .\@container > button,
 .home-session-composer .\@container [data-slot="popover-trigger"] {
   border-radius: 8px;
