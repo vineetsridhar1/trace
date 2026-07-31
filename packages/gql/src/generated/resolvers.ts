@@ -84,6 +84,34 @@ export type ApplicationProcessStatus =
   | "stopped"
   | "stopping";
 
+export type Artifact = {
+  __typename?: "Artifact";
+  bundleDigest: Scalars["String"]["output"];
+  byteSize: Scalars["Int"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdBy: User;
+  id: Scalars["ID"]["output"];
+  key: Scalars["String"]["output"];
+  manifest: ArtifactManifest;
+  organizationId: Scalars["ID"]["output"];
+  sessionId: Scalars["ID"]["output"];
+  type: Scalars["String"]["output"];
+};
+
+export type ArtifactFile = {
+  __typename?: "ArtifactFile";
+  digest: Scalars["String"]["output"];
+  mediaType: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+  size: Scalars["Int"]["output"];
+};
+
+export type ArtifactManifest = {
+  __typename?: "ArtifactManifest";
+  files: Array<ArtifactFile>;
+  schemaVersion: Scalars["Int"]["output"];
+};
+
 export type BranchDiffFile = {
   __typename?: "BranchDiffFile";
   additions: Scalars["Int"]["output"];
@@ -645,6 +673,8 @@ export type EventType =
   | "agent_environment_updated"
   | "animation_preview_updated"
   | "application_config_updated"
+  | "artifact_approved"
+  | "artifact_created"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
   | "bridge_access_revoked"
@@ -901,6 +931,7 @@ export type Mutation = {
   addChannelMember: Channel;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  approveArtifact: Artifact;
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveDesignSystem: DesignSystem;
   archiveSessionGroup?: Maybe<SessionGroup>;
@@ -1041,6 +1072,10 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars["ID"]["input"];
   role?: InputMaybe<UserRole>;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationApproveArtifactArgs = {
+  artifactId: Scalars["ID"]["input"];
 };
 
 export type MutationApproveBridgeAccessRequestArgs = {
@@ -1711,6 +1746,7 @@ export type Query = {
    * listing surface (the sidebar Apps section).
    */
   appSessionGroups: Array<SessionGroup>;
+  artifacts: Array<Artifact>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   bridgeRuntimeAccess: BridgeRuntimeAccess;
@@ -1795,6 +1831,12 @@ export type QueryAnimationSessionGroupsArgs = {
 
 export type QueryAppSessionGroupsArgs = {
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryArtifactsArgs = {
+  key?: InputMaybe<Scalars["String"]["input"]>;
+  sessionId: Scalars["ID"]["input"];
+  type?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type QueryAvailableRuntimesArgs = {
@@ -2282,6 +2324,7 @@ export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
 export type Session = {
   __typename?: "Session";
   agentStatus: AgentStatus;
+  artifacts: Array<Artifact>;
   branch?: Maybe<Scalars["String"]["output"]>;
   cacheCreationTokens: Scalars["Float"]["output"];
   cacheReadTokens: Scalars["Float"]["output"];
@@ -2916,6 +2959,9 @@ export type ResolversTypes = ResolversObject<{
   ApiTokenProvider: ApiTokenProvider;
   ApiTokenStatus: ResolverTypeWrapper<ApiTokenStatus>;
   ApplicationProcessStatus: ApplicationProcessStatus;
+  Artifact: ResolverTypeWrapper<Artifact>;
+  ArtifactFile: ResolverTypeWrapper<ArtifactFile>;
+  ArtifactManifest: ResolverTypeWrapper<ArtifactManifest>;
   Boolean: ResolverTypeWrapper<Scalars["Boolean"]["output"]>;
   BranchDiffFile: ResolverTypeWrapper<BranchDiffFile>;
   BridgeAccessCapability: BridgeAccessCapability;
@@ -3086,6 +3132,9 @@ export type ResolversParentTypes = ResolversObject<{
   AgentEnvironment: AgentEnvironment;
   AgentEnvironmentTestResult: AgentEnvironmentTestResult;
   ApiTokenStatus: ApiTokenStatus;
+  Artifact: Artifact;
+  ArtifactFile: ArtifactFile;
+  ArtifactManifest: ArtifactManifest;
   Boolean: Scalars["Boolean"]["output"];
   BranchDiffFile: BranchDiffFile;
   BridgeAccessGrant: BridgeAccessGrant;
@@ -3254,6 +3303,44 @@ export type ApiTokenStatusResolvers<
   isSet?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   provider?: Resolver<ResolversTypes["ApiTokenProvider"], ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ArtifactResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["Artifact"] = ResolversParentTypes["Artifact"],
+> = ResolversObject<{
+  bundleDigest?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  byteSize?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  createdBy?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  key?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  manifest?: Resolver<ResolversTypes["ArtifactManifest"], ParentType, ContextType>;
+  organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  type?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ArtifactFileResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ArtifactFile"] = ResolversParentTypes["ArtifactFile"],
+> = ResolversObject<{
+  digest?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  mediaType?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  path?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  size?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ArtifactManifestResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ArtifactManifest"] =
+    ResolversParentTypes["ArtifactManifest"],
+> = ResolversObject<{
+  files?: Resolver<Array<ResolversTypes["ArtifactFile"]>, ParentType, ContextType>;
+  schemaVersion?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3960,6 +4047,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationAddOrgMemberArgs, "organizationId" | "userId">
+  >;
+  approveArtifact?: Resolver<
+    ResolversTypes["Artifact"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationApproveArtifactArgs, "artifactId">
   >;
   approveBridgeAccessRequest?: Resolver<
     ResolversTypes["BridgeAccessGrant"],
@@ -4800,6 +4893,12 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryAppSessionGroupsArgs, "organizationId">
   >;
+  artifacts?: Resolver<
+    Array<ResolversTypes["Artifact"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryArtifactsArgs, "sessionId">
+  >;
   availableRuntimes?: Resolver<
     Array<ResolversTypes["SessionRuntimeInstance"]>,
     ParentType,
@@ -5325,6 +5424,7 @@ export type SessionResolvers<
   ParentType extends ResolversParentTypes["Session"] = ResolversParentTypes["Session"],
 > = ResolversObject<{
   agentStatus?: Resolver<ResolversTypes["AgentStatus"], ParentType, ContextType>;
+  artifacts?: Resolver<Array<ResolversTypes["Artifact"]>, ParentType, ContextType>;
   branch?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
   cacheCreationTokens?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
   cacheReadTokens?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
@@ -5822,6 +5922,9 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   AgentEnvironment?: AgentEnvironmentResolvers<ContextType>;
   AgentEnvironmentTestResult?: AgentEnvironmentTestResultResolvers<ContextType>;
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
+  Artifact?: ArtifactResolvers<ContextType>;
+  ArtifactFile?: ArtifactFileResolvers<ContextType>;
+  ArtifactManifest?: ArtifactManifestResolvers<ContextType>;
   BranchDiffFile?: BranchDiffFileResolvers<ContextType>;
   BridgeAccessGrant?: BridgeAccessGrantResolvers<ContextType>;
   BridgeAccessRequest?: BridgeAccessRequestResolvers<ContextType>;

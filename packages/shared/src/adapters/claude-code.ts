@@ -59,11 +59,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     cwd,
     onOutput,
     onComplete,
-    interactionMode,
     model,
     reasoningEffort,
     enableClaudeInChrome,
     toolSessionId,
+    runtimeEnv,
   }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
@@ -75,14 +75,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       this.claudeSessionId = toolSessionId;
     }
 
-    const args = [
-      "-p",
-      "--input-format",
-      "text",
-      "--output-format",
-      "stream-json",
-      "--verbose",
-    ];
+    const args = ["-p", "--input-format", "text", "--output-format", "stream-json", "--verbose"];
     if (model) {
       args.push("--model", model);
     }
@@ -92,11 +85,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     if (enableClaudeInChrome) {
       args.push("--chrome");
     }
-    if (interactionMode === "plan") {
-      args.push("--permission-mode", "plan");
-    } else {
-      args.push("--dangerously-skip-permissions");
-    }
+    // Trace plan mode is artifact-driven. Claude's native plan mode prevents
+    // the shell command that publishes the completed artifact.
+    args.push("--dangerously-skip-permissions");
     if (this.claudeSessionId) {
       args.push("--resume", this.claudeSessionId);
     }
@@ -105,7 +96,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     const child = spawn("claude", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv(),
+      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
       detached: true,
     });
     child.stdin?.on("error", () => {});

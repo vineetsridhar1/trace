@@ -82,6 +82,7 @@ import { managedGitService } from "./managed-git.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 import { gitStorage } from "../lib/git-storage/index.js";
+import { createAgentInvocationToken } from "../lib/agent-invocation-auth.js";
 import { parseGitTreeArchive } from "../lib/design-system-archive.js";
 import { isGeneratedProjectKind } from "../lib/generated-project.js";
 import {
@@ -1156,6 +1157,20 @@ function appendPromptInstructions(
   return result;
 }
 
+function appendArtifactSkillInstruction(prompt: string, interactionMode?: string | null): string {
+  if (interactionMode !== "plan") return prompt;
+  return `${prompt}
+
+<system-instruction>
+Trace visual plans are immutable artifacts. Before planning, read these files completely:
+1. $TRACE_SKILLS_DIR/trace-artifacts/SKILL.md
+2. $TRACE_SKILLS_DIR/visual-plan/SKILL.md
+
+Follow their authoring and publishing instructions. Publish one complete visual-plan artifact with
+the Trace CLI when it is ready for review. Do not use a provider-native plan approval tool.
+</system-instruction>`;
+}
+
 function buildBaseBranchInstruction(baseBranch: string): string {
   return `\n\n<system-instruction>
 This session is working off the base branch "${baseBranch}". All work should be branched from this base branch, and when merging, merge into "${baseBranch}" (not main/master). When pushing, ensure your branch is based on origin/${baseBranch}.
@@ -1470,6 +1485,36 @@ export function isFullyUnloadedSession(
 
 export class SessionService {
   private manualElementSaveQueues = new Map<string, Promise<void>>();
+
+  private async prepareArtifactInvocation(
+    sessionId: string,
+    organizationId: string,
+  ): Promise<{ invocationId: string; runtimeEnv: Record<string, string> }> {
+    const invocationId = randomUUID();
+    await prisma.session.updateMany({
+      where: { id: sessionId, organizationId },
+      data: { activeInvocationId: invocationId },
+    });
+    return {
+      invocationId,
+      runtimeEnv: {
+        TRACE_SESSION_ID: sessionId,
+        TRACE_INVOCATION_ID: invocationId,
+        TRACE_INVOCATION_TOKEN: createAgentInvocationToken({
+          organizationId,
+          sessionId,
+          invocationId,
+        }),
+      },
+    };
+  }
+
+  private async clearArtifactInvocation(sessionId: string, invocationId: string): Promise<void> {
+    await prisma.session.updateMany({
+      where: { id: sessionId, activeInvocationId: invocationId },
+      data: { activeInvocationId: null },
+    });
+  }
 
   private async withManualElementSaveLock<Result>(
     sessionGroupId: string,
@@ -4938,6 +4983,9 @@ export class SessionService {
     if (isFirstRun && resolvedPrompt && channelBaseBranch) {
       resolvedPrompt = resolvedPrompt + buildBaseBranchInstruction(channelBaseBranch);
     }
+    if (resolvedPrompt) {
+      resolvedPrompt = appendArtifactSkillInstruction(resolvedPrompt, interactionMode);
+    }
 
     const checkpointContext = buildCheckpointContextFromStartMeta({
       sessionId: id,
@@ -4946,6 +4994,7 @@ export class SessionService {
       startMeta,
     });
 
+    const invocation = await this.prepareArtifactInvocation(id, session.organizationId);
     const command = {
       type: "run" as const,
       sessionId: id,
@@ -4965,6 +5014,7 @@ export class SessionService {
       imageUrls: imageKeys?.length
         ? await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)))
         : undefined,
+      runtimeEnv: invocation.runtimeEnv,
     };
 
     const deliveryResult = sessionRouter.send(id, command, {
@@ -4973,6 +5023,7 @@ export class SessionService {
     });
 
     if (deliveryResult !== "delivered") {
+      await this.clearArtifactInvocation(id, invocation.invocationId);
       await this.storePendingCommand(id, {
         type: "run",
         prompt: resolvedPrompt ?? null,
@@ -5322,6 +5373,10 @@ export class SessionService {
         ...(newSessionStatus !== current.sessionStatus ? { sessionStatus: newSessionStatus } : {}),
       },
       include: SESSION_INCLUDE,
+    });
+    await prisma.session.updateMany({
+      where: { id, activeInvocationId: { not: null } },
+      data: { activeInvocationId: null },
     });
     const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
 
@@ -6056,7 +6111,7 @@ export class SessionService {
     const newSessionStatus: SessionStatus =
       current.sessionStatus === "merged"
         ? "merged"
-        : hasPendingPlan || hasQuestion
+        : current.sessionStatus === "needs_input" || hasPendingPlan || hasQuestion
           ? "needs_input"
           : current.sessionStatus === "in_review"
             ? "in_review"
@@ -6064,8 +6119,15 @@ export class SessionService {
 
     const session = await prisma.session.update({
       where: { id },
-      data: { agentStatus: newAgentStatus, sessionStatus: newSessionStatus },
+      data: {
+        agentStatus: newAgentStatus,
+        sessionStatus: newSessionStatus,
+      },
       select: { organizationId: true, createdById: true, name: true },
+    });
+    await prisma.session.updateMany({
+      where: { id, activeInvocationId: { not: null } },
+      data: { activeInvocationId: null },
     });
     const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
 
@@ -6447,6 +6509,7 @@ export class SessionService {
       hasRepo: !!session.repoId,
       sessionGroupKind: session.sessionGroup?.kind,
     });
+    prompt = appendArtifactSkillInstruction(prompt, interactionMode);
 
     const checkpointContext =
       session.sessionGroup?.kind !== "design_system" && session.repoId && session.sessionGroupId
@@ -6472,6 +6535,7 @@ export class SessionService {
     // runtime prevents silent bridge hijack when the home is offline and a
     // different bridge (e.g. Laptop B) is now the only connected runtime.
     const expectedRuntimeId = runtimeBinding.runtimeId ?? conn.runtimeInstanceId;
+    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
     const deliveryCommand = {
       type: "send" as const,
       sessionId,
@@ -6489,6 +6553,7 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext,
       imageUrls,
+      runtimeEnv: invocation.runtimeEnv,
     };
     const deliveryResult: DeliveryResult =
       session.hosting === "cloud" && !expectedRuntimeId
@@ -6499,6 +6564,7 @@ export class SessionService {
           });
 
     if (deliveryResult !== "delivered") {
+      await this.clearArtifactInvocation(sessionId, invocation.invocationId);
       await this.storePendingCommand(
         sessionId,
         {
@@ -7907,6 +7973,7 @@ export class SessionService {
       hasRepo: !!session.repoId,
       sessionGroupKind: session.sessionGroup?.kind,
     });
+    prompt = appendArtifactSkillInstruction(prompt, options.interactionMode);
 
     const promptEvent = await prisma.event.findFirst({
       where: {
@@ -7935,6 +8002,7 @@ export class SessionService {
       data: { toolSessionId: null },
     });
 
+    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
     const deliveryResult = sessionRouter.send(
       sessionId,
       {
@@ -7953,11 +8021,13 @@ export class SessionService {
         cwd: session.workdir ?? undefined,
         checkpointContext,
         imageUrls: options.imageUrls,
+        runtimeEnv: invocation.runtimeEnv,
       },
       { expectedHomeRuntimeId: conn.runtimeInstanceId, organizationId: session.organizationId },
     );
 
     if (deliveryResult !== "delivered") {
+      await this.clearArtifactInvocation(sessionId, invocation.invocationId);
       await this.persistConnectionFailure(
         sessionId,
         session.organizationId,
@@ -10957,6 +11027,7 @@ export class SessionService {
         hasRepo: !!session.repoId,
         sessionGroupKind: session.sessionGroup?.kind,
       });
+      prompt = appendArtifactSkillInstruction(prompt, pending.interactionMode);
     }
 
     const fallbackCheckpointContext =
@@ -10989,6 +11060,7 @@ export class SessionService {
       .filter((instruction): instruction is string => !!instruction)
       .join("\n\n");
 
+    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
     const command = {
       type: pending.type,
       sessionId,
@@ -11003,6 +11075,7 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext: checkpointContext ?? undefined,
       imageUrls,
+      runtimeEnv: invocation.runtimeEnv,
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -11017,6 +11090,7 @@ export class SessionService {
       toolSessionId?: string;
       checkpointContext?: GitCheckpointContext;
       imageUrls?: string[];
+      runtimeEnv?: Record<string, string>;
     };
 
     // Materialize any attached designs into the freshly-provisioned workspace
@@ -11069,6 +11143,7 @@ export class SessionService {
       organizationId: session.organizationId,
     });
     if (deliveryResult !== "delivered") {
+      await this.clearArtifactInvocation(sessionId, invocation.invocationId);
       return deliveryResult;
     }
 

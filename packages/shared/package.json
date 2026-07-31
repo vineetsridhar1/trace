@@ -27,6 +27,11 @@
       "types": "./dist/adapters.d.ts",
       "import": "./dist/adapters.js",
       "require": "./dist/cjs/adapters.js"
+    },
+    "./trace-runtime": {
+      "types": "./dist/trace-runtime.d.ts",
+      "import": "./dist/trace-runtime.js",
+      "require": "./dist/cjs/trace-runtime.js"
     }
   },
   "typesVersions": {
@@ -39,11 +44,14 @@
       ],
       "adapters": [
         "dist/adapters.d.ts"
+      ],
+      "trace-runtime": [
+        "dist/trace-runtime.d.ts"
       ]
     }
   },
   "scripts": {
-    "build": "tsc -b && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
+    "build": "node scripts/generate-trace-runtime.mjs && tsc -b && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
     "dev": "pnpm build && (tsc -b --watch & tsc -p tsconfig.cjs.json --watch & wait)",
     "lint": "tsc -b",
     "test": "vitest run"

@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -n "${TRACE_NODE_BINARY:-}" ]; then
+  if [ "${TRACE_ELECTRON_RUN_AS_NODE:-0}" = "1" ]; then
+    ELECTRON_RUN_AS_NODE=1 exec "$TRACE_NODE_BINARY" "$SCRIPT_DIR/trace.mjs" "$@"
+  fi
+  exec "$TRACE_NODE_BINARY" "$SCRIPT_DIR/trace.mjs" "$@"
+fi
+exec node "$SCRIPT_DIR/trace.mjs" "$@"

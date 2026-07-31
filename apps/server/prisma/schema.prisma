@@ -276,6 +276,8 @@ enum EventType {
   design_system_updated
   design_system_publish_updated
   design_system_archived
+  artifact_created
+  artifact_approved
 }
 
 enum SessionApplicationProcessStatus {
@@ -338,6 +340,7 @@ model Organization {
   slackInstalls               SlackInstall[]
   slackChannelBindings        SlackChannelBinding[]
   designSystems               DesignSystem[]
+  artifacts                   Artifact[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -422,6 +425,7 @@ model User {
   createdDesignSystems         DesignSystem[]               @relation("DesignSystemCreator")
   createdDesignSystemArtifacts DesignSystemCommitArtifact[] @relation("DesignSystemArtifactCreator")
   createdDesignSystemVersions  DesignSystemVersion[]        @relation("DesignSystemVersionCreator")
+  createdArtifacts             Artifact[]                    @relation("ArtifactCreator")
   pushTokens                   PushToken[]
   queuedMessages               QueuedMessage[]              @relation("QueuedMessageCreator")
   slackInstalls                SlackInstall[]               @relation("SlackInstallInstaller")
@@ -762,6 +766,7 @@ model Session {
   prUrl             String?
   worktreeDeleted   Boolean       @default(false)
   readOnlyWorkspace Boolean       @default(false)
+  activeInvocationId String?
 
   inputTokens         BigInt @default(0)
   outputTokens        BigInt @default(0)
@@ -772,6 +777,7 @@ model Session {
   projects       SessionProject[]
   queuedMessages QueuedMessage[]
   slackThread    SlackThreadSession?
+  artifacts      Artifact[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -779,6 +785,28 @@ model Session {
   @@index([sessionGroupId, updatedAt])
   @@index([organizationId, agentStatus])
   @@index([channelId, updatedAt])
+}
+
+model Artifact {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionId      String
+  session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type           String
+  key            String
+  bundleDigest   String
+  manifest       Json
+  storageKey     String
+  byteSize       Int
+  createdById    String
+  createdBy      User         @relation("ArtifactCreator", fields: [createdById], references: [id])
+  idempotencyKey String       @unique
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([sessionId, type, key, createdAt])
+  @@index([bundleDigest])
 }
 
 model SessionSetupScriptRun {

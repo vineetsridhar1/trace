@@ -46,6 +46,7 @@ describe("buildChildProcessEnv", () => {
       PATH: "/usr/bin",
       OPENAI_API_KEY: "sk-test",
       ANTHROPIC_API_KEY: "sk-ant-test",
+      TRACE_INVOCATION_TOKEN: "trace-token",
       LARGE_ONE: "a".repeat(15 * 1024),
       LARGE_TWO: "b".repeat(15 * 1024),
       LARGE_THREE: "c".repeat(15 * 1024),
@@ -55,5 +56,6 @@ describe("buildChildProcessEnv", () => {
 
     expect(env.OPENAI_API_KEY).toBe("sk-test");
     expect(env.ANTHROPIC_API_KEY).toBe("sk-ant-test");
+    expect(env.TRACE_INVOCATION_TOKEN).toBe("trace-token");
   });
 });

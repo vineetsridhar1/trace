@@ -9,14 +9,23 @@ import { alpha, useTheme } from "@/theme";
 import { PendingInputShell, pendingInputStyles } from "./PendingInputShell";
 import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
 import { styles as composerStyles } from "./session-input-composer/styles";
+import { gql } from "@urql/core";
 
 interface PendingInputPlanProps {
   sessionId: string;
   planContent: string;
+  artifactId?: string;
   keyboardVisible?: boolean;
 }
 
 const APPROVE_TEXT = "Approved. Implement this plan.";
+const APPROVE_ARTIFACT_MUTATION = gql`
+  mutation MobileApproveArtifact($artifactId: ID!) {
+    approveArtifact(artifactId: $artifactId) {
+      id
+    }
+  }
+`;
 
 type PlanAction = "new-session" | "same-session";
 
@@ -41,6 +50,7 @@ const PLAN_OPTIONS: Array<{
 export function PendingInputPlan({
   sessionId,
   planContent,
+  artifactId,
   keyboardVisible = false,
 }: PendingInputPlanProps) {
   const theme = useTheme();
@@ -52,6 +62,13 @@ export function PendingInputPlan({
   const trimmed = feedback.trim();
   const isTypingMore = trimmed.length > 0;
   const hasAnswer = isTypingMore || selectedAction !== null;
+  const approveArtifact = useCallback(async () => {
+    if (!artifactId) return;
+    const result = await getClient()
+      .mutation(APPROVE_ARTIFACT_MUTATION, { artifactId })
+      .toPromise();
+    if (result.error) throw result.error;
+  }, [artifactId]);
 
   useEffect(() => {
     if (!isTypingMore) return;
@@ -63,6 +80,7 @@ export function PendingInputPlan({
     if (sending) return;
     setSending(true);
     try {
+      await approveArtifact();
       const started = await startPlanImplementationSession(sessionId, planContent);
       if (started) {
         setFeedback("");
@@ -71,13 +89,14 @@ export function PendingInputPlan({
     } finally {
       setSending(false);
     }
-  }, [planContent, sending, sessionId]);
+  }, [approveArtifact, planContent, sending, sessionId]);
 
   const handleKeepContext = useCallback(async () => {
     if (sending) return;
     setSending(true);
     void haptic.success();
     try {
+      await approveArtifact();
       await getClient()
         .mutation(SEND_SESSION_MESSAGE_MUTATION, {
           sessionId,
@@ -89,7 +108,7 @@ export function PendingInputPlan({
     } finally {
       setSending(false);
     }
-  }, [sending, sessionId]);
+  }, [approveArtifact, sending, sessionId]);
 
   const handleRevise = useCallback(async () => {
     if (sending || !trimmed) return;

@@ -178,6 +178,8 @@ export interface RunOptions {
   enableClaudeInChrome?: boolean;
   /** Tool-specific session ID for resuming (e.g. Claude Code's --resume flag) */
   toolSessionId?: string;
+  /** Invocation-scoped Trace capabilities supplied by the runtime bridge. */
+  runtimeEnv?: Record<string, string>;
 }
 
 /**

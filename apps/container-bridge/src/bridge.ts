@@ -37,6 +37,7 @@ import {
   inspectSessionGitSyncStatus,
   BridgeOutbox,
 } from "@trace/shared";
+import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
 import type { GitExecFn } from "@trace/shared";
 import {
   AntigravityAdapter,
@@ -138,6 +139,7 @@ export class ContainerBridge implements IBridgeClient {
   private outbox = new BridgeOutbox();
   private terminalManager: TerminalManager;
   private managedProcessManager: ManagedProcessManager;
+  private traceRuntime = ensureTraceRuntime(process.env.TRACE_RUNTIME_DIR ?? "/trace/runtime");
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
       execFile("git", args, { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
@@ -361,6 +363,7 @@ export class ContainerBridge implements IBridgeClient {
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           imageUrls: cmd.imageUrls,
+          runtimeEnv: cmd.runtimeEnv,
         }).catch((err) => {
           console.error(`[container-bridge] runPrompt failed for ${cmd.sessionId}:`, err);
           this.send({
@@ -1035,6 +1038,7 @@ export class ContainerBridge implements IBridgeClient {
     interactionMode,
     toolSessionId,
     imageUrls,
+    runtimeEnv,
   }: {
     sessionId: string;
     prompt: string;
@@ -1047,9 +1051,24 @@ export class ContainerBridge implements IBridgeClient {
     interactionMode?: string;
     toolSessionId?: string;
     imageUrls?: string[];
+    runtimeEnv?: Record<string, string>;
   }): Promise<void> {
     const resolvedTool = tool ?? this.defaultTool;
     await ensureToolReady(resolvedTool);
+    const traceRuntime = await this.traceRuntime;
+    const traceApiUrl = new URL(this.serverUrl);
+    if (traceApiUrl.protocol === "wss:") traceApiUrl.protocol = "https:";
+    if (traceApiUrl.protocol === "ws:") traceApiUrl.protocol = "http:";
+    traceApiUrl.pathname = "/";
+    traceApiUrl.search = "";
+    traceApiUrl.hash = "";
+    const invocationEnv = {
+      ...runtimeEnv,
+      TRACE_API_URL: traceApiUrl.toString(),
+      TRACE_SKILLS_DIR: traceRuntime.skillsDir,
+      TRACE_NODE_BINARY: process.execPath,
+      PATH: `${traceRuntime.binDir}${path.delimiter}${process.env.PATH ?? ""}`,
+    };
 
     // If tool changed, abort old adapter and create a fresh one
     const prevTool = this.sessionTools.get(sessionId);
@@ -1237,6 +1256,7 @@ export class ContainerBridge implements IBridgeClient {
       reasoningEffort,
       enableClaudeInChrome,
       toolSessionId,
+      runtimeEnv: invocationEnv,
     });
   }
 }

@@ -689,7 +689,7 @@ describe("coding tool adapter process exit fallback", () => {
     });
   });
 
-  it("wraps Antigravity output as a plan block in plan mode", () => {
+  it("leaves Antigravity plan-mode output as text because plans publish as artifacts", () => {
     const adapter = new AntigravityAdapter();
     const onOutput = vi.fn();
     const onComplete = vi.fn();
@@ -707,7 +707,7 @@ describe("coding tool adapter process exit fallback", () => {
 
     expect(onOutput).toHaveBeenCalledWith({
       type: "assistant",
-      message: { content: [{ type: "plan", content: "Step 1. Step 2." }] },
+      message: { content: [{ type: "text", text: "Step 1. Step 2." }] },
     });
   });
 
