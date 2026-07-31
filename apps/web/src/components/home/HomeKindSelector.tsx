@@ -38,19 +38,19 @@ export function HomeKindSelector({
           );
         })}
       </div>
-      <p className="mt-2.5 min-h-4 text-center text-xs text-[var(--th-muted)]">
-        {!hasPrompt ? (
-          "Code is the default — select another kind to override"
-        ) : !activeKind ? (
+      {hasPrompt && (
+        <p className="mt-2.5 min-h-4 text-center text-xs text-[var(--th-muted)]">
+          {!activeKind ? (
           "Select a kind to route this session"
-        ) : (
-          <>
-            {manuallySelected ? "Manually routed" : "Routed automatically"} — this opens a{" "}
-            <span className="text-[var(--th-accent-light)]">{homeKindLabel(activeKind)}</span>{" "}
-            session
-          </>
-        )}
-      </p>
+          ) : (
+            <>
+              {manuallySelected ? "Manually routed" : "Routed automatically"} — this opens a{" "}
+              <span className="text-[var(--th-accent-light)]">{homeKindLabel(activeKind)}</span>{" "}
+              session
+            </>
+          )}
+        </p>
+      )}
     </>
   );
 }
