@@ -638,7 +638,7 @@ export function SessionInputOptions({
           >
             <SelectTrigger
               size="sm"
-              className="w-auto border-transparent bg-transparent hover:border-transparent hover:bg-white/10"
+              className="w-auto border-transparent bg-transparent hover:border-transparent hover:bg-white/10 data-popup-open:border-transparent"
             >
               <SelectValue>
                 <span className="flex items-center gap-2">
