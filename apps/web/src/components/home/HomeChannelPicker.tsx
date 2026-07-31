@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronDown, FolderKanban, Hash, Search } from "lucide-react";
+import { ChevronDown, Folder, Search } from "lucide-react";
 import type { Channel, Project } from "@trace/gql";
 import { cn } from "../../lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -10,6 +10,7 @@ export interface HomeChannelTarget {
   projectId: string | null;
   repoId: string | null;
   label: string;
+  context: string;
 }
 
 const MAX_VISIBLE_TARGETS = 50;
@@ -27,6 +28,7 @@ export function buildHomeChannelTargets(
       projectId: null,
       repoId: channel.repo?.id ?? null,
       label: channel.name,
+      context: channel.repo?.name ? `Coding channel · ${channel.repo.name}` : "Coding channel",
     });
   }
   for (const project of projects) {
@@ -37,6 +39,7 @@ export function buildHomeChannelTargets(
       projectId: project.id,
       repoId: project.repo?.id ?? null,
       label: project.name,
+      context: project.repo?.name ? `Project · ${project.repo.name}` : "Project",
     });
   }
   return targets.sort((a, b) => a.label.localeCompare(b.label));
@@ -73,54 +76,87 @@ export function HomeChannelPicker({
       <PopoverTrigger
         aria-label="Choose channel or project"
         className={cn(
-          "flex h-7 max-w-48 items-center gap-1.5 rounded-lg bg-transparent px-2 text-[11px]",
-          "text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground",
+          "flex h-8 max-w-52 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] leading-none",
+          selected
+            ? "border-[var(--th-edge-strong)] text-[var(--th-heading)]"
+            : "border-dashed border-[var(--th-edge-strong)] text-[var(--th-muted)]",
+          "transition-colors hover:border-[var(--th-edge-hover)] hover:bg-[var(--th-surface-mid)]",
           "focus-visible:ring-3 focus-visible:ring-ring/50",
         )}
       >
-        <FolderKanban className="size-3.5 shrink-0" />
-        <span className="truncate">{selected?.label ?? "Channel / project"}</span>
-        <ChevronDown className="size-3.5 shrink-0" />
+        <span className="text-[var(--th-muted)]">Project</span>
+        <span className="truncate font-medium">{selected?.label ?? "Select…"}</span>
+        <ChevronDown className="size-3 shrink-0 text-[var(--th-muted)]" />
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 overflow-hidden p-0">
-        <label className="flex h-10 items-center gap-2 border-b border-border px-3">
-          <Search className="size-3.5 text-muted-foreground" />
-          <input
-            aria-label="Find a channel or project"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find a channel or project…"
-            className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
-          />
-        </label>
+      <PopoverContent
+        align="start"
+        className="w-[340px] gap-0 overflow-hidden rounded-xl border border-[var(--th-edge-strong)] bg-[var(--th-raised)] p-0 shadow-[0_20px_64px_rgb(0_0_0/0.34)] ring-0"
+      >
+        <div className="border-b border-[var(--th-edge-strong)] p-2">
+          <label className="flex h-9 items-center gap-2 rounded-lg bg-[var(--th-surface-mid)] px-3 text-[var(--th-muted)]">
+            <Search className="size-3.5 shrink-0" />
+            <input
+              autoFocus
+              aria-label="Find a project"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Find a project…"
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-[var(--th-heading)] outline-none placeholder:text-[var(--th-muted)]"
+            />
+          </label>
+        </div>
         <div
           role="listbox"
-          aria-label="Channel or project"
-          className="max-h-64 overflow-y-auto p-1.5"
+          aria-label="Choose a project"
+          className="max-h-72 overflow-y-auto p-1.5"
         >
+          <p className="px-2 pb-1 pt-1.5 text-[11px] font-medium text-[var(--th-muted)]">Recent</p>
           {visibleTargets.map((target) => (
             <button
               key={target.key}
               type="button"
               role="option"
               aria-selected={target.key === selectedKey}
-              onClick={() => onSelect(target.key === selectedKey ? null : target)}
+              onClick={() => onSelect(target)}
               className={cn(
-                "flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm",
-                "text-muted-foreground outline-none hover:bg-white/10 hover:text-foreground",
-                target.key === selectedKey && "bg-white/10 text-foreground",
+                "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
+                "outline-none hover:bg-[var(--th-surface-mid)] focus-visible:bg-[var(--th-surface-mid)]",
+                target.key === selectedKey && "bg-[var(--th-surface-mid)]",
               )}
             >
-              <Hash className="size-3.5 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{target.label}</span>
-              {target.key === selectedKey ? <Check className="size-3.5 shrink-0" /> : null}
+              <span className="grid size-7 shrink-0 place-items-center rounded-md bg-[var(--th-surface-mid)] text-[var(--th-muted)]">
+                <Folder className="size-3.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-medium text-[var(--th-heading)]">
+                  {target.label}
+                </span>
+                <span className="block truncate text-[11.5px] text-[var(--th-muted)]">
+                  {target.context}
+                </span>
+              </span>
+              {target.key === selectedKey ? (
+                <kbd className="rounded border border-[var(--th-edge-strong)] px-1 text-[10px] text-[var(--th-muted)]">
+                  ↵
+                </kbd>
+              ) : null}
             </button>
           ))}
           {visibleTargets.length === 0 ? (
-            <p className="px-2 py-5 text-center text-xs text-muted-foreground">
+            <p className="px-2 py-5 text-center text-xs text-[var(--th-muted)]">
               No coding channels or projects found
             </p>
           ) : null}
+        </div>
+        <div className="flex h-10 items-center justify-between border-t border-[var(--th-edge-strong)] px-3">
+          <span className="flex items-center gap-1.5 text-[11px] text-[var(--th-muted)]">
+            <kbd className="rounded border border-[var(--th-edge-strong)] px-1 text-[10px]">↑</kbd>
+            <kbd className="rounded border border-[var(--th-edge-strong)] px-1 text-[10px]">↓</kbd>
+            to navigate
+          </span>
+          <span className="text-[12px] font-medium text-[var(--th-heading)]">
+            Browse all projects
+          </span>
         </div>
       </PopoverContent>
     </Popover>
