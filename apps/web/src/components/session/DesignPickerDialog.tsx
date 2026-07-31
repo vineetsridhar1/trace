@@ -115,8 +115,8 @@ export function DesignPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-2xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Implement a design</DialogTitle>
           <DialogDescription>
             Pick a design to copy into this session. The agent gets the full source and builds from
@@ -129,7 +129,7 @@ export function DesignPickerDialog({
             <span>No designs yet. Create a design session first.</span>
           </div>
         ) : (
-          <div className="grid max-h-[60vh] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
             {designs.map((group) => (
               <DesignPickerCard
                 key={group.id}
