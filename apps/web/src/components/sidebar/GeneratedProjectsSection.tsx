@@ -318,7 +318,7 @@ export function GeneratedProjectsSection({ activeOrgId }: { activeOrgId: string 
       type="button"
       onClick={openCreate}
       className={cn(
-        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
+        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors",
         sidebarRootLeftEdgeRowClass,
         "pl-4",
         activePage === "create"
@@ -327,12 +327,7 @@ export function GeneratedProjectsSection({ activeOrgId }: { activeOrgId: string 
       )}
     >
       <Sparkles size={16} className="shrink-0" />
-      <span className="min-w-0">
-        <span className="block text-sm font-medium">Create</span>
-        <span className="block truncate text-[10px] font-normal text-muted-foreground">
-          Apps, designs, documents & animations
-        </span>
-      </span>
+      <span>Creations</span>
     </button>
   );
 }
