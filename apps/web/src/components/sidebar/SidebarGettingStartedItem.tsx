@@ -1,5 +1,6 @@
 import { ChevronDown, CircleDashed } from "lucide-react";
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useOnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { OnboardingChecklist } from "../onboarding/OnboardingChecklist";
 
@@ -32,11 +33,22 @@ export function SidebarGettingStartedItem() {
           }`}
         />
       </button>
-      {expanded && (
-        <div id="sidebar-getting-started-tasks" className="mt-1">
-          <OnboardingChecklist status={status} variant="sidebar" />
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            id="sidebar-getting-started-tasks"
+            initial={{ height: 0, opacity: 0, y: 4 }}
+            animate={{ height: "auto", opacity: 1, y: 0 }}
+            exit={{ height: 0, opacity: 0, y: 4 }}
+            transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="mt-1">
+              <OnboardingChecklist status={status} variant="sidebar" />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
