@@ -29,7 +29,7 @@ export function buildHomeStartInput(input: CreateHomeSessionInput) {
     tool: input.tool,
     model: input.model,
     reasoningEffort: input.reasoningEffort,
-    interactionMode: input.interactionMode,
+    interactionMode: input.kind === "coding" ? input.interactionMode : "code",
     prompt: input.prompt.trim(),
     ...(linkedRepoId ? { repoId: linkedRepoId } : {}),
     ...(codingChannel ? { channelId: codingChannel.id } : {}),

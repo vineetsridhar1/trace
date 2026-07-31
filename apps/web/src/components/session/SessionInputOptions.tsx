@@ -152,7 +152,6 @@ interface ComposerInputOptionsProps {
   compact?: boolean;
   showMode?: boolean;
   alwaysExpandToolModel?: boolean;
-  betweenModeAndTool?: ReactNode;
   afterTool?: ReactNode;
   afterEffort?: ReactNode;
   onModeChange: (mode: InteractionMode) => void;
@@ -171,7 +170,6 @@ export function ComposerInputOptions({
   compact = false,
   showMode = true,
   alwaysExpandToolModel = false,
-  betweenModeAndTool,
   afterTool,
   afterEffort,
   onModeChange,
@@ -212,7 +210,6 @@ export function ComposerInputOptions({
           </AnimatePresence>
         </button>
       ) : null}
-      {showMode ? betweenModeAndTool : null}
       <ToolModelPicker
         tool={tool}
         model={model}

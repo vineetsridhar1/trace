@@ -46,7 +46,7 @@ describe("buildHomeStartInput", () => {
         tool: "claude_code",
         model: null,
         reasoningEffort: null,
-        interactionMode: "code",
+        interactionMode: "plan",
         channel: null,
         projectId: null,
         repoId: null,

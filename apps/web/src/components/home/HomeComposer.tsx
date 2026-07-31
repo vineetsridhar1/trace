@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-import type { Channel, Project } from "@trace/gql";
 import { useHomeComposerStore } from "../../stores/home-composer";
 import type { ChatEditorHandle } from "../chat/ChatEditor";
 import { SessionComposer } from "../session/SessionComposer";
@@ -18,8 +17,6 @@ import type { HomeCreatableKind } from "./home-kinds";
 export function HomeComposer({
   prompt,
   kind,
-  channels,
-  projects,
   channelTargetKey,
   selectedChannelRepoId,
   bridgeId,
@@ -43,8 +40,6 @@ export function HomeComposer({
 }: {
   prompt: string;
   kind: HomeCreatableKind;
-  channels: Channel[];
-  projects: Project[];
   channelTargetKey: string | null;
   selectedChannelRepoId: string | null;
   bridgeId: string | null;
@@ -112,7 +107,7 @@ export function HomeComposer({
           textSyncRef.current.recordEditorText(text);
           onPromptChange(text);
         }}
-        onShiftTab={() => onModeChange(mode)}
+        onShiftTab={kind === "coding" ? () => onModeChange(mode) : undefined}
         onAttachClick={() =>
           toast.info("Start the session first, then add attachments in its composer.")
         }
@@ -120,22 +115,13 @@ export function HomeComposer({
           kind === "coding" ? (
             <>
               <span className="shrink-0 text-[12px] text-muted-foreground">Run in</span>
-              <>
-                <HomeChannelPicker
-                  channels={channels}
-                  projects={projects}
-                  selectedKey={channelTargetKey}
-                  disabled={false}
-                  onSelect={onChannelTargetChange}
-                />
-                <HomeBridgePicker
-                  selectedBridgeId={bridgeId}
-                  repoId={selectedChannelRepoId}
-                  tool={tool}
-                  disabled={false}
-                  onSelect={onBridgeChange}
-                />
-              </>
+              <HomeChannelPicker selectedKey={channelTargetKey} onSelect={onChannelTargetChange} />
+              <HomeBridgePicker
+                selectedBridgeId={bridgeId}
+                repoId={selectedChannelRepoId}
+                tool={tool}
+                onSelect={onBridgeChange}
+              />
               <ComposerInputOptions
                 mode={mode}
                 tool={tool}

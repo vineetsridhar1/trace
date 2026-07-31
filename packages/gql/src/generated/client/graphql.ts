@@ -4406,15 +4406,6 @@ export type DesignSessionGroupsQuery = {
   }>;
 };
 
-export type ArchiveDesignSystemFromGalleryMutationVariables = Exact<{
-  id: Scalars["ID"]["input"];
-}>;
-
-export type ArchiveDesignSystemFromGalleryMutation = {
-  __typename?: "Mutation";
-  archiveDesignSystem: { __typename?: "DesignSystem"; id: string; archivedAt?: string | null };
-};
-
 export type GeneratedProjectsQueryVariables = Exact<{
   organizationId: Scalars["ID"]["input"];
 }>;
@@ -10510,52 +10501,6 @@ export const DesignSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<DesignSessionGroupsQuery, DesignSessionGroupsQueryVariables>;
-export const ArchiveDesignSystemFromGalleryDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "ArchiveDesignSystemFromGallery" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "archiveDesignSystem" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "id" },
-                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  ArchiveDesignSystemFromGalleryMutation,
-  ArchiveDesignSystemFromGalleryMutationVariables
->;
 export const GeneratedProjectsDocument = {
   kind: "Document",
   definitions: [

@@ -35,6 +35,7 @@ export function HomeDesignPicker({
   const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const groups = useEntityStore((state) => state.sessionGroups);
   const upsertMany = useEntityStore((state) => state.upsertMany);
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const designs = useMemo(
     () =>
@@ -81,7 +82,7 @@ export function HomeDesignPicker({
   if (disabled) return null;
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         aria-label="Attach a design"
         className={cn(
@@ -119,7 +120,10 @@ export function HomeDesignPicker({
               type="button"
               role="option"
               aria-selected={design.id === selectedDesignId}
-              onClick={() => onSelect(design.id)}
+              onClick={() => {
+                onSelect(design.id);
+                setOpen(false);
+              }}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
                 "outline-none hover:bg-[var(--th-surface-mid)] focus-visible:bg-[var(--th-surface-mid)]",

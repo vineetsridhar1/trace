@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, Folder, Search } from "lucide-react";
 import type { Channel, Project } from "@trace/gql";
+import { useEntityStore } from "@trace/client-core";
 import { cn } from "../../lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 
@@ -46,19 +47,18 @@ export function buildHomeChannelTargets(
 }
 
 export function HomeChannelPicker({
-  channels,
-  projects,
   selectedKey,
-  disabled,
   onSelect,
 }: {
-  channels: Channel[];
-  projects: Project[];
   selectedKey: string | null;
-  disabled: boolean;
   onSelect: (target: HomeChannelTarget | null) => void;
 }) {
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const channelsTable = useEntityStore((state) => state.channels);
+  const projectsTable = useEntityStore((state) => state.projects);
+  const channels = useMemo(() => Object.values(channelsTable), [channelsTable]);
+  const projects = useMemo(() => Object.values(projectsTable), [projectsTable]);
   const targets = useMemo(() => buildHomeChannelTargets(channels, projects), [channels, projects]);
   const selected = targets.find((target) => target.key === selectedKey) ?? null;
   const visibleTargets = useMemo(() => {
@@ -69,10 +69,8 @@ export function HomeChannelPicker({
     return filtered.slice(0, MAX_VISIBLE_TARGETS);
   }, [query, targets]);
 
-  if (disabled) return null;
-
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         aria-label="Choose channel or project"
         className={cn(
@@ -117,7 +115,10 @@ export function HomeChannelPicker({
               type="button"
               role="option"
               aria-selected={target.key === selectedKey}
-              onClick={() => onSelect(target)}
+              onClick={() => {
+                onSelect(target);
+                setOpen(false);
+              }}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
                 "outline-none hover:bg-[var(--th-surface-mid)] focus-visible:bg-[var(--th-surface-mid)]",

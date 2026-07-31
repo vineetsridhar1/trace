@@ -85,6 +85,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
     setManualKind(null);
     setSelectedChannelTargetKey(null);
     setSelectedBridgeId(null);
+    setInteractionMode("code");
     setSelectedDesignSystemVersionId(null);
     setSelectedDesignSessionGroupId(null);
     manualPromptRef.current = "";
@@ -97,6 +98,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
     }
     setSelectedChannelTargetKey(null);
     setSelectedBridgeId(null);
+    setInteractionMode("code");
     if (activeKind === "design") {
       setSelectedDesignSessionGroupId(null);
     } else {
@@ -189,8 +191,6 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
             <HomeComposer
               prompt={prompt}
               kind={activeKind}
-              channels={channels}
-              projects={projects}
               channelTargetKey={selectedChannelTargetKey}
               selectedChannelRepoId={selectedChannelRepoId}
               bridgeId={selectedBridgeId}
@@ -224,6 +224,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
           </div>
 
           {isCreateMode &&
+          prompt.trim().length > 0 &&
           (activeKind !== "coding" || (!!selectedChannelTarget && !!selectedBridgeId)) ? (
             <p className="mt-5 flex items-center justify-center gap-2 text-[13px] text-[var(--th-muted)]">
               <span className="size-1.5 rounded-full bg-[var(--th-success)]" />

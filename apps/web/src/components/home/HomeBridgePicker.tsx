@@ -11,22 +11,20 @@ export function HomeBridgePicker({
   selectedBridgeId,
   repoId,
   tool,
-  disabled,
   onSelect,
 }: {
   selectedBridgeId: string | null;
   repoId: string | null;
   tool: string;
-  disabled: boolean;
   onSelect: (bridgeId: string | null) => void;
 }) {
+  const [open, setOpen] = useState(false);
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [loading, setLoading] = useState(false);
   const connectedBridges = useMemo(() => runtimes.filter(isAccessibleLocalRuntime), [runtimes]);
   const selected = connectedBridges.find((bridge) => bridge.id === selectedBridgeId) ?? null;
 
   useEffect(() => {
-    if (disabled) return;
     let active = true;
     setLoading(true);
     void client
@@ -46,7 +44,7 @@ export function HomeBridgePicker({
     return () => {
       active = false;
     };
-  }, [disabled, tool]);
+  }, [tool]);
 
   useEffect(() => {
     if (!selectedBridgeId || loading) return;
@@ -56,10 +54,8 @@ export function HomeBridgePicker({
     }
   }, [connectedBridges, loading, onSelect, repoId, selectedBridgeId]);
 
-  if (disabled) return null;
-
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         aria-label="Choose bridge"
         className={cn(
@@ -86,7 +82,10 @@ export function HomeBridgePicker({
                 aria-selected={bridge.id === selectedBridgeId}
                 disabled={lacksRepo}
                 title={lacksRepo ? "This bridge does not have the project repository linked" : ""}
-                onClick={() => onSelect(bridge.id === selectedBridgeId ? null : bridge.id)}
+                onClick={() => {
+                  onSelect(bridge.id === selectedBridgeId ? null : bridge.id);
+                  setOpen(false);
+                }}
                 className={cn(
                   "flex min-h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm",
                   "text-muted-foreground outline-none hover:bg-white/10 hover:text-foreground",
