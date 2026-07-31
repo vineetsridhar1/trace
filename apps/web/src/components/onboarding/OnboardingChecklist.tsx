@@ -34,7 +34,7 @@ export function OnboardingChecklist({ status, variant = "popover" }: Props) {
 
   const content =
     variant === "sidebar" ? (
-      <div className="space-y-0.5 border-l border-[var(--th-edge)] py-1.5 pl-3">
+      <div className="space-y-px border-l border-[var(--th-edge)] py-1 pl-2.5">
         <SidebarRow
           done={status.hasRepo}
           title="Create or connect a repository"
@@ -223,14 +223,14 @@ function SidebarRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--th-accent-light)]"
+      className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--th-accent-light)]"
     >
       <SidebarStatusIcon done={done} />
       <span
         className={
           done
-            ? "text-sm text-[var(--th-muted)] line-through"
-            : "text-sm font-medium text-[var(--th-heading)]"
+            ? "text-xs text-[var(--th-muted)] line-through"
+            : "text-xs font-medium text-[var(--th-heading)]"
         }
       >
         {title}
@@ -244,14 +244,14 @@ function SidebarChannelRow({ done, onClick }: { done: boolean; onClick: () => vo
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--th-accent-light)]"
+      className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--th-accent-light)]"
     >
       <SidebarStatusIcon done={done} />
       <span
         className={
           done
-            ? "min-w-0 flex-1 text-sm text-[var(--th-muted)] line-through"
-            : "min-w-0 flex-1 text-sm font-medium text-[var(--th-heading)]"
+            ? "min-w-0 flex-1 text-xs text-[var(--th-muted)] line-through"
+            : "min-w-0 flex-1 text-xs font-medium text-[var(--th-heading)]"
         }
       >
         Join or create a channel
@@ -262,8 +262,8 @@ function SidebarChannelRow({ done, onClick }: { done: boolean; onClick: () => vo
 
 function SidebarStatusIcon({ done }: { done: boolean }) {
   return done ? (
-    <Check className="size-4 shrink-0 text-emerald-400" />
+    <Check className="size-3.5 shrink-0 text-emerald-400" />
   ) : (
-    <Circle className="size-4 shrink-0 text-[var(--th-muted)]" />
+    <Circle className="size-3.5 shrink-0 text-[var(--th-muted)]" />
   );
 }
