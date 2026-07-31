@@ -31,6 +31,7 @@ interface ToolModelPickerProps {
   reasoningEffortOptions?: readonly ReasoningEffortOption[];
   disabled?: boolean;
   compact?: boolean;
+  alwaysExpanded?: boolean;
   onToolChange: (tool: ToolOptionValue) => Promise<void> | void;
   onModelChange: (model: string) => Promise<void> | void;
   onReasoningEffortChange?: (effort: string) => Promise<void> | void;
@@ -43,6 +44,7 @@ export function ToolModelPicker({
   reasoningEffortOptions = [],
   disabled,
   compact = false,
+  alwaysExpanded = false,
   onToolChange,
   onModelChange,
   onReasoningEffortChange,
@@ -159,14 +161,17 @@ export function ToolModelPicker({
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <ActionTooltip label={compactLabel} className={compact ? undefined : "@lg:hidden"}>
+      <ActionTooltip
+        label={compactLabel}
+        className={compact ? undefined : alwaysExpanded ? "hidden" : "@lg:hidden"}
+      >
         <PopoverTrigger
           disabled={disabled}
           aria-label={compactLabel}
           onClick={() => {
             compactSelectionRef.current = true;
           }}
-          className={`${compact ? "flex" : "flex @lg:hidden"} size-7 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50`}
+          className={`${compact ? "flex" : alwaysExpanded ? "hidden" : "flex @lg:hidden"} size-7 cursor-pointer items-center justify-center rounded-lg border-none bg-transparent text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50`}
         >
           <ToolIcon tool={tool} className="size-3.5 shrink-0" />
         </PopoverTrigger>
@@ -176,7 +181,7 @@ export function ToolModelPicker({
         onClick={() => {
           compactSelectionRef.current = false;
         }}
-        className={`${compact ? "hidden" : "hidden @lg:flex"} h-7 w-auto max-w-[260px] cursor-pointer items-center gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50`}
+        className={`${compact ? "hidden" : alwaysExpanded ? "flex" : "hidden @lg:flex"} h-7 w-auto max-w-[260px] cursor-pointer items-center gap-1.5 rounded-lg border-none bg-transparent px-2 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50`}
       >
         <ToolIcon tool={tool} className="size-3.5 shrink-0" />
         <span className="truncate">{getToolLabel(tool)}</span>

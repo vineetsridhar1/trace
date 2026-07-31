@@ -151,6 +151,7 @@ interface ComposerInputOptionsProps {
   disabled?: boolean;
   compact?: boolean;
   showMode?: boolean;
+  alwaysExpandToolModel?: boolean;
   betweenModeAndTool?: ReactNode;
   afterTool?: ReactNode;
   afterEffort?: ReactNode;
@@ -169,6 +170,7 @@ export function ComposerInputOptions({
   disabled,
   compact = false,
   showMode = true,
+  alwaysExpandToolModel = false,
   betweenModeAndTool,
   afterTool,
   afterEffort,
@@ -218,6 +220,7 @@ export function ComposerInputOptions({
         reasoningEffortOptions={reasoningEffortOptions}
         disabled={disabled}
         compact={compact}
+        alwaysExpanded={alwaysExpandToolModel}
         onToolChange={onToolChange}
         onModelChange={onModelChange}
         onReasoningEffortChange={onReasoningEffortChange}

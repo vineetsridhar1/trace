@@ -117,11 +117,9 @@ export function HomeComposer({
           toast.info("Start the session first, then add attachments in its composer.")
         }
         contextControls={
-          <>
-            <span className="shrink-0 text-[12px] text-muted-foreground">
-              {kind === "coding" ? "Run in" : "Using"}
-            </span>
-            {kind === "coding" ? (
+          kind === "coding" ? (
+            <>
+              <span className="shrink-0 text-[12px] text-muted-foreground">Run in</span>
               <>
                 <HomeChannelPicker
                   channels={channels}
@@ -138,36 +136,54 @@ export function HomeComposer({
                   onSelect={onBridgeChange}
                 />
               </>
-            ) : kind === "design" ? (
+              <ComposerInputOptions
+                mode={mode}
+                tool={tool}
+                model={model}
+                reasoningEffort={reasoningEffort}
+                reasoningEffortOptions={effortOptions}
+                disabled={submitting}
+                compact={false}
+                showMode
+                alwaysExpandToolModel
+                onModeChange={onModeChange}
+                onToolChange={onToolChange}
+                onModelChange={onModelChange}
+                onReasoningEffortChange={onReasoningEffortChange}
+              />
+            </>
+          ) : undefined
+        }
+        controls={
+          <>
+            {kind === "design" ? (
               <HomeDesignSystemPicker
                 selectedVersionId={designSystemVersionId}
                 disabled={submitting}
                 onSelect={onDesignSystemChange}
               />
-            ) : null}
-            <ComposerInputOptions
-              mode={mode}
-              tool={tool}
-              model={model}
-              reasoningEffort={reasoningEffort}
-              reasoningEffortOptions={effortOptions}
-              disabled={submitting}
-              compact={false}
-              showMode={kind === "coding"}
-              onModeChange={onModeChange}
-              onToolChange={onToolChange}
-              onModelChange={onModelChange}
-              onReasoningEffortChange={onReasoningEffortChange}
-            />
-          </>
-        }
-        controls={
-          <>
-            {kind !== "design" ? (
+            ) : (
               <HomeDesignPicker
                 selectedDesignId={designSessionGroupId}
                 disabled={submitting}
                 onSelect={onDesignChange}
+              />
+            )}
+            {kind !== "coding" ? (
+              <ComposerInputOptions
+                mode={mode}
+                tool={tool}
+                model={model}
+                reasoningEffort={reasoningEffort}
+                reasoningEffortOptions={effortOptions}
+                disabled={submitting}
+                compact={false}
+                showMode={false}
+                alwaysExpandToolModel
+                onModeChange={onModeChange}
+                onToolChange={onToolChange}
+                onModelChange={onModelChange}
+                onReasoningEffortChange={onReasoningEffortChange}
               />
             ) : null}
           </>
