@@ -23,21 +23,6 @@
       "import": "./dist/git-hooks.js",
       "require": "./dist/cjs/git-hooks.js"
     },
-    "./plan-file": {
-      "types": "./dist/plan-file.d.ts",
-      "import": "./dist/plan-file.js",
-      "require": "./dist/cjs/plan-file.js"
-    },
-    "./visual-plan-skill": {
-      "types": "./dist/visual-plan-skill.d.ts",
-      "import": "./dist/visual-plan-skill.js",
-      "require": "./dist/cjs/visual-plan-skill.js"
-    },
-    "./trace-cli": {
-      "types": "./dist/trace-cli.d.ts",
-      "import": "./dist/trace-cli.js",
-      "require": "./dist/cjs/trace-cli.js"
-    },
     "./adapters": {
       "types": "./dist/adapters.d.ts",
       "import": "./dist/adapters.js",
@@ -52,27 +37,16 @@
       "git-hooks": [
         "dist/git-hooks.d.ts"
       ],
-      "plan-file": [
-        "dist/plan-file.d.ts"
-      ],
-      "visual-plan-skill": [
-        "dist/visual-plan-skill.d.ts"
-      ],
-      "trace-cli": [
-        "dist/trace-cli.d.ts"
-      ],
       "adapters": [
         "dist/adapters.d.ts"
       ]
     }
   },
   "scripts": {
-    "generate:visual-plan-skill": "node scripts/generate-visual-plan-skill.mjs",
-    "generate:trace-cli": "node scripts/generate-trace-cli.mjs",
-    "build": "pnpm generate:visual-plan-skill && pnpm generate:trace-cli && tsc -b && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
+    "build": "tsc -b && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
     "dev": "pnpm build && (tsc -b --watch & tsc -p tsconfig.cjs.json --watch & wait)",
     "lint": "tsc -b",
-    "test": "pnpm generate:visual-plan-skill && pnpm generate:trace-cli && vitest run"
+    "test": "vitest run"
   },
   "peerDependencies": {
     "node-pty": "^1.1.0"
@@ -81,11 +55,6 @@
     "node-pty": {
       "optional": true
     }
-  },
-  "dependencies": {
-    "remark-mdx": "3.1.1",
-    "remark-parse": "11.0.0",
-    "unified": "11.0.5"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",

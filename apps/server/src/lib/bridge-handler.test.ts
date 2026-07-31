@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   getLinkedCheckoutStatus: vi.fn(() => Promise.resolve()),
   restoreSessionsForRuntime: vi.fn(() => Promise.resolve()),
   recordOutput: vi.fn(() => Promise.resolve()),
-  recordPlanFileUpdate: vi.fn(() => Promise.resolve()),
   complete: vi.fn(() => Promise.resolve()),
   authorizeRuntimeLease: vi.fn(() => Promise.resolve({ authorized: true as const })),
   listIdleActiveRunSessionIds: vi.fn(() => Promise.resolve([])),
@@ -57,7 +56,6 @@ vi.mock("../services/session.js", () => ({
   sessionService: {
     restoreSessionsForRuntime: mocks.restoreSessionsForRuntime,
     recordOutput: mocks.recordOutput,
-    recordPlanFileUpdate: mocks.recordPlanFileUpdate,
     complete: mocks.complete,
     authorizeRuntimeLease: mocks.authorizeRuntimeLease,
     listIdleActiveRunSessionIds: mocks.listIdleActiveRunSessionIds,
@@ -792,46 +790,6 @@ describe("bridge handler auth", () => {
       });
     });
     expect(mocks.registerRuntime).toHaveBeenCalled();
-  });
-
-  it("records plan file updates from the runtime bound to the session", async () => {
-    const ws = createMockWs();
-    mocks.sessionFindFirst.mockResolvedValue({
-      id: "session-1",
-      connection: { state: "connected", runtimeInstanceId: "runtime_owned" },
-    });
-
-    handleBridgeConnection(ws as never, {
-      bridgeAuth: {
-        kind: "cloud",
-        instanceId: "runtime_owned",
-        organizationId: "org-1",
-        userId: "user-1",
-      },
-    });
-    ws.emitMessage({
-      type: "runtime_hello",
-      instanceId: "runtime_owned",
-      hostingMode: "cloud",
-    });
-    await Promise.resolve();
-    ws.emitMessage({
-      type: "plan_file_updated",
-      sessionId: "session-1",
-      content: "# Plan",
-      contentHash: "bridge-hash",
-      filePath: "/tmp/trace-plans/session-1/plan.mdx",
-      validationErrors: ["Invalid MDX"],
-    });
-
-    await vi.waitFor(() => {
-      expect(mocks.recordPlanFileUpdate).toHaveBeenCalledWith("session-1", {
-        content: "# Plan",
-        contentHash: "bridge-hash",
-        filePath: "/tmp/trace-plans/session-1/plan.mdx",
-        validationErrors: ["Invalid MDX"],
-      });
-    });
   });
 
   it("processes reconnect-flushed session output after local runtime registration", async () => {

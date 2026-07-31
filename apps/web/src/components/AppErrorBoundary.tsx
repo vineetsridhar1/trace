@@ -1,21 +1,7 @@
 import React from "react";
 
 interface AppErrorBoundaryState {
-  hasError: boolean;
-  error: unknown;
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.stack || error.message || error.name;
-  }
-  if (typeof error === "string") return error;
-
-  try {
-    return JSON.stringify(error) ?? String(error);
-  } catch {
-    return String(error);
-  }
+  error: Error | null;
 }
 
 export class AppErrorBoundary extends React.Component<
@@ -23,18 +9,18 @@ export class AppErrorBoundary extends React.Component<
   AppErrorBoundaryState
 > {
   declare props: Readonly<React.PropsWithChildren>;
-  state: AppErrorBoundaryState = { hasError: false, error: null };
+  state: AppErrorBoundaryState = { error: null };
 
-  static getDerivedStateFromError(error: unknown): AppErrorBoundaryState {
-    return { hasError: true, error };
+  static getDerivedStateFromError(error: Error): AppErrorBoundaryState {
+    return { error };
   }
 
-  componentDidCatch(error: unknown, errorInfo: React.ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("Trace app crashed during render", error, errorInfo);
   }
 
   render() {
-    if (!this.state.hasError) {
+    if (!this.state.error) {
       return this.props.children;
     }
 
@@ -46,7 +32,7 @@ export class AppErrorBoundary extends React.Component<
             A client-side error occurred during startup.
           </p>
           <pre className="mt-4 overflow-x-auto rounded-md bg-surface px-3 py-2 text-xs text-destructive">
-            {errorMessage(this.state.error)}
+            {this.state.error.stack ?? this.state.error.message}
           </pre>
         </div>
       </div>

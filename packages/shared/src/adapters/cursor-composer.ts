@@ -56,7 +56,6 @@ export class CursorComposerAdapter implements CodingToolAdapter {
     model,
     reasoningEffort,
     toolSessionId,
-    env,
   }: RunOptions) {
     this.resultEmitted = false;
 
@@ -82,7 +81,7 @@ export class CursorComposerAdapter implements CodingToolAdapter {
     const child = spawn("cursor-agent", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv({ ...process.env, ...env }),
+      env: buildChildProcessEnv(),
       detached: true,
     });
     child.stdin?.on("error", () => {});

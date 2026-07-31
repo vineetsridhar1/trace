@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Event } from "@trace/gql";
-import { buildSessionNodes, getLatestPlanFile } from "../src/session/nodes.js";
+import { buildSessionNodes } from "../src/session/nodes.js";
 
 function makeEvent(overrides: Partial<Event> = {}): Event {
   return {
@@ -102,69 +102,5 @@ describe("buildSessionNodes", () => {
     const result = buildSessionNodes([event.id], { [event.id]: event });
 
     expect(result.nodes).toEqual([{ kind: "event", id: event.id }]);
-  });
-
-  it("keeps plan file transport events out of chat and exposes the latest snapshot", () => {
-    const updated = makeEvent({
-      id: "plan-updated",
-      eventType: "session_output",
-      payload: {
-        type: "plan_file_updated",
-        planContent: "# Draft",
-        planFilePath: "/tmp/plan.mdx",
-        contentHash: "draft-hash",
-      },
-    });
-    const ready = makeEvent({
-      id: "plan-ready",
-      eventType: "session_output",
-      timestamp: "2026-01-01T00:00:01.000Z",
-      payload: {
-        type: "plan_file_ready",
-        planContent: "# Ready",
-        planFilePath: "/tmp/plan.mdx",
-        contentHash: "ready-hash",
-        planValidationErrors: [],
-      },
-    });
-    const events = { [updated.id]: updated, [ready.id]: ready };
-    const ids = [updated.id, ready.id];
-
-    expect(buildSessionNodes(ids, events).nodes).toEqual([]);
-    expect(getLatestPlanFile(ids, events)).toEqual({
-      id: "plan-ready",
-      content: "# Ready",
-      contentHash: "ready-hash",
-      filePath: "/tmp/plan.mdx",
-      timestamp: "2026-01-01T00:00:01.000Z",
-      eventIndex: 1,
-      ready: true,
-      validationErrors: [],
-    });
-  });
-
-  it("exposes invalid draft state so the plan sidecar opens before readiness", () => {
-    const draft = makeEvent({
-      id: "plan-invalid",
-      eventType: "session_output",
-      payload: {
-        type: "plan_file_updated",
-        planContent: '<AnnotatedCode code={"const score = 3;" />',
-        planFilePath: "/tmp/plan.mdx",
-        contentHash: "invalid-hash",
-        planValidationErrors: ["Invalid MDX at line 1, column 42"],
-      },
-    });
-
-    expect(getLatestPlanFile([draft.id], { [draft.id]: draft })).toEqual({
-      id: draft.id,
-      content: '<AnnotatedCode code={"const score = 3;" />',
-      contentHash: "invalid-hash",
-      filePath: "/tmp/plan.mdx",
-      timestamp: draft.timestamp,
-      eventIndex: 0,
-      ready: false,
-      validationErrors: ["Invalid MDX at line 1, column 42"],
-    });
   });
 });

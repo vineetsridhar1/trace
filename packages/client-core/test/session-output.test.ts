@@ -42,12 +42,6 @@ describe("sessionPatchFromOutput", () => {
     });
   });
 
-  it("returns needs_input for a ready plan file", () => {
-    expect(sessionPatchFromOutput({ type: "plan_file_ready" })).toEqual({
-      sessionStatus: "needs_input",
-    });
-  });
-
   it("returns connection patch for connection events", () => {
     const patch = sessionPatchFromOutput({
       type: "connection_lost",
@@ -107,10 +101,9 @@ describe("sessionPatchFromOutput", () => {
 });
 
 describe("shouldBumpSortTimestampForOutput", () => {
-  it("returns true for pending input and ready plan files", () => {
+  it("returns true for question_pending and plan_pending", () => {
     expect(shouldBumpSortTimestampForOutput({ type: "question_pending" })).toBe(true);
     expect(shouldBumpSortTimestampForOutput({ type: "plan_pending" })).toBe(true);
-    expect(shouldBumpSortTimestampForOutput({ type: "plan_file_ready" })).toBe(true);
   });
   it("returns false otherwise", () => {
     expect(shouldBumpSortTimestampForOutput({ type: "assistant" })).toBe(false);

@@ -49,7 +49,6 @@ export type {
   BridgeRuntimeHeartbeat,
   BridgeRegisterSession,
   BridgeSessionOutput,
-  BridgePlanFileUpdated,
   BridgeSessionComplete,
   BridgeWorkspaceReady,
   BridgeWorkspaceWarning,

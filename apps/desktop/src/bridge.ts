@@ -40,10 +40,6 @@ import {
   BridgeOutbox,
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
-import {
-  buildTraceVisualPlanInstruction,
-  materializeTracePlanRuntime,
-} from "@trace/shared/trace-cli";
 import { getUsedSlugs } from "@trace/shared/animal-names";
 import {
   AntigravityAdapter,
@@ -359,7 +355,6 @@ export class BridgeClient implements IBridgeClient {
   private connectAttempt = 0;
   /** Maps sessionId → workdir so terminals can spawn in the correct directory */
   private sessionWorkdirs = new Map<string, string>();
-  private planRuntimeRoots = new Map<string, string>();
   private sessionGroupIds = new Map<string, string | null>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
   private pendingWorktrees = new Map<
@@ -564,7 +559,6 @@ export class BridgeClient implements IBridgeClient {
       adapter.abort();
     }
     this.adapters.clear();
-    for (const sessionId of this.planRuntimeRoots.keys()) this.removePlanRuntime(sessionId);
     this.outbox.clear();
     this.ws?.close();
     this.ws = null;
@@ -901,13 +895,6 @@ export class BridgeClient implements IBridgeClient {
     }
   }
 
-  private removePlanRuntime(sessionId: string, expectedRoot?: string): void {
-    const rootDir = this.planRuntimeRoots.get(sessionId);
-    if (!rootDir || (expectedRoot && rootDir !== expectedRoot)) return;
-    this.planRuntimeRoots.delete(sessionId);
-    void fs.promises.rm(rootDir, { recursive: true, force: true });
-  }
-
   private async runPrompt({
     sessionId,
     prompt,
@@ -920,8 +907,6 @@ export class BridgeClient implements IBridgeClient {
     toolSessionId,
     checkpointContext,
     imageUrls,
-    traceRunId,
-    traceRunToken,
   }: {
     sessionId: string;
     prompt: string;
@@ -934,8 +919,6 @@ export class BridgeClient implements IBridgeClient {
     toolSessionId?: string;
     checkpointContext?: GitCheckpointContext | null;
     imageUrls?: string[];
-    traceRunId?: string;
-    traceRunToken?: string;
   }) {
     if (!cwd) {
       console.warn(
@@ -974,23 +957,6 @@ export class BridgeClient implements IBridgeClient {
     let hasForwardedOutput = false;
     let endedOnPending = false;
     let recoveringMissingToolSession = false;
-    const tracePlanRuntime =
-      interactionMode === "plan" && traceRunId && traceRunToken
-        ? materializeTracePlanRuntime({
-            sessionId,
-            runId: traceRunId,
-            runToken: traceRunToken,
-            serverUrl: this.serverUrl,
-            inheritedPath: process.env.PATH,
-          })
-        : null;
-    if (interactionMode === "plan" && !tracePlanRuntime) {
-      console.warn(`[bridge] plan run ${sessionId} is missing Trace CLI credentials`);
-    }
-    if (tracePlanRuntime) {
-      this.removePlanRuntime(sessionId);
-      this.planRuntimeRoots.set(sessionId, tracePlanRuntime.rootDir);
-    }
 
     // Download attached files to temp files
     let imagePaths: string[] | undefined;
@@ -1015,9 +981,6 @@ export class BridgeClient implements IBridgeClient {
       const refs = imagePaths.map((p) => `[Attached file: ${p}]`).join("\n");
       finalPrompt = `${refs}\n\n${prompt}`;
     }
-    if (tracePlanRuntime) {
-      finalPrompt = `${finalPrompt}\n\n${buildTraceVisualPlanInstruction(tracePlanRuntime.skillPath)}`;
-    }
 
     // Single owner of temp-image lifetime so we don't leak files when the
     // adapter ends via the pending-input branch (which doesn't always fire
@@ -1028,12 +991,6 @@ export class BridgeClient implements IBridgeClient {
         imagesCleanedUp = true;
         cleanupTempAttachments(imagePaths, fs);
       }
-    };
-    let planRuntimeCleanedUp = false;
-    const cleanupPlanRuntime = () => {
-      if (!tracePlanRuntime || planRuntimeCleanedUp) return;
-      planRuntimeCleanedUp = true;
-      this.removePlanRuntime(sessionId, tracePlanRuntime.rootDir);
     };
 
     const runId = this.startRun(sessionId);
@@ -1046,7 +1003,6 @@ export class BridgeClient implements IBridgeClient {
       if (!isMissingToolSessionError(message)) return false;
 
       recoveringMissingToolSession = true;
-      cleanupPlanRuntime();
       this.finishRun(sessionId, runId);
       activeAdapter.abort();
       this.adapters.delete(sessionId);
@@ -1134,8 +1090,7 @@ export class BridgeClient implements IBridgeClient {
             this.pendingInputToolUseIds.delete(sessionId);
           }
           this.finishRun(sessionId, runId);
-          cleanupPlanRuntime();
-          this.send({ type: "session_complete", sessionId, interactionMode });
+          this.send({ type: "session_complete", sessionId });
           activeAdapter.abort();
           cleanupImages();
         }
@@ -1147,8 +1102,7 @@ export class BridgeClient implements IBridgeClient {
           this.pendingInputToolUseIds.delete(sessionId);
         }
         this.finishRun(sessionId, runId);
-        cleanupPlanRuntime();
-        this.send({ type: "session_complete", sessionId, interactionMode });
+        this.send({ type: "session_complete", sessionId });
         cleanupImages();
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
@@ -1156,7 +1110,6 @@ export class BridgeClient implements IBridgeClient {
       reasoningEffort,
       enableClaudeInChrome,
       toolSessionId,
-      env: tracePlanRuntime?.env,
     });
   }
 
@@ -1175,8 +1128,6 @@ export class BridgeClient implements IBridgeClient {
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
           imageUrls: cmd.imageUrls,
-          traceRunId: cmd.traceRunId,
-          traceRunToken: cmd.traceRunToken,
         });
         break;
       }
@@ -1193,8 +1144,6 @@ export class BridgeClient implements IBridgeClient {
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
           imageUrls: cmd.imageUrls,
-          traceRunId: cmd.traceRunId,
-          traceRunToken: cmd.traceRunToken,
         });
         break;
       }
@@ -1413,7 +1362,6 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "terminate": {
-        this.removePlanRuntime(cmd.sessionId);
         const adapter = this.adapters.get(cmd.sessionId);
         if (adapter) {
           // Abort the running process but keep the adapter so it retains
@@ -1436,7 +1384,6 @@ export class BridgeClient implements IBridgeClient {
         break;
       }
       case "delete": {
-        this.removePlanRuntime(cmd.sessionId);
         const deleteAdapter = this.adapters.get(cmd.sessionId);
         if (deleteAdapter) {
           this.cancelRun(cmd.sessionId);

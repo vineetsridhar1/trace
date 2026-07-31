@@ -23,8 +23,8 @@ export type PendingInputData =
     };
 
 /**
- * Walk events backwards to find the most recent assistant question, legacy
- * plan block, or canonical `plan_file_ready` artifact. If a `message_sent` event appears
+ * Walk events backwards to find the most recent assistant event that
+ * carries a question or plan block. If a `message_sent` event appears
  * before any pending block, the user has already answered — return null
  * so the bar dismisses without waiting on a server-side `sessionStatus`
  * flip (which can lag the question event by a tick on cold-open).
@@ -55,21 +55,7 @@ export function findMostRecentPendingInput(
     }
     if (ev.eventType !== "session_output") continue;
     const payload = asJsonObject(ev.payload);
-    if (!payload) continue;
-    if (
-      payload.type === "plan_file_ready" &&
-      !latestPlan &&
-      typeof payload.planContent === "string" &&
-      payload.planContent.trim()
-    ) {
-      latestPlan = {
-        eventId: ev.id,
-        planContent: payload.planContent,
-        timestamp: ev.timestamp,
-      };
-      continue;
-    }
-    if (payload.type !== "assistant") continue;
+    if (!payload || payload.type !== "assistant") continue;
     const message = asJsonObject(payload.message);
     const blocks = message?.content;
     if (!Array.isArray(blocks)) continue;

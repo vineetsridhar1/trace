@@ -1,4 +1,6 @@
 import { spawn, type ChildProcess } from "child_process";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import { createInterface } from "readline";
 import type {
   CodingToolAdapter,
@@ -46,8 +48,10 @@ function parseClaudeUsage(raw: unknown): TokenUsage | undefined {
 export class ClaudeCodeAdapter implements CodingToolAdapter {
   private process: ChildProcess | null = null;
   private claudeSessionId: string | null = null;
+  private cwd: string | null = null;
   private resultEmitted = false;
   private emittedIncrementalUsage = false;
+  private lastPlanFilePath: string | null = null;
   private processGeneration = 0;
 
   run({
@@ -55,14 +59,16 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     cwd,
     onOutput,
     onComplete,
+    interactionMode,
     model,
     reasoningEffort,
     enableClaudeInChrome,
     toolSessionId,
-    env,
   }: RunOptions) {
+    this.cwd = cwd;
     this.resultEmitted = false;
     this.emittedIncrementalUsage = false;
+    this.lastPlanFilePath = null;
 
     // Use provided toolSessionId to restore resume capability after bridge restart
     if (toolSessionId && !this.claudeSessionId) {
@@ -86,10 +92,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     if (enableClaudeInChrome) {
       args.push("--chrome");
     }
-    // Trace interaction modes are prompt-driven. Claude's native plan mode
-    // restricts writes to its own designated plan file, which prevents it from
-    // writing Trace's watched sidecar artifact.
-    args.push("--dangerously-skip-permissions");
+    if (interactionMode === "plan") {
+      args.push("--permission-mode", "plan");
+    } else {
+      args.push("--dangerously-skip-permissions");
+    }
     if (this.claudeSessionId) {
       args.push("--resume", this.claudeSessionId);
     }
@@ -98,7 +105,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     const child = spawn("claude", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv({ ...process.env, ...env }),
+      env: buildChildProcessEnv(),
       detached: true,
     });
     child.stdin?.on("error", () => {});
@@ -237,7 +244,51 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
         const usage = parseClaudeUsage(message?.usage);
         if (usage) this.emittedIncrementalUsage = true;
 
+        // Track plan file writes and detect ExitPlanMode before normalizing
+        let hasExitPlanMode = false;
+        let exitPlanModeToolUseId: string | undefined;
+        for (const block of content as Record<string, unknown>[]) {
+          if (block.type === "tool_use") {
+            const name = String(block.name ?? "");
+            if ((name === "Write" || name === "Edit") && block.input) {
+              const input = block.input as Record<string, unknown>;
+              const fp = String(input.file_path ?? "");
+              if (fp.includes(".claude/plans/") && fp.endsWith(".md")) {
+                this.lastPlanFilePath = fp;
+              }
+            }
+            if (name === "ExitPlanMode") {
+              hasExitPlanMode = true;
+              if (typeof block.id === "string") {
+                exitPlanModeToolUseId = block.id;
+              }
+            }
+          }
+        }
+
         const normalized: MessageBlock[] = [];
+
+        // If ExitPlanMode found, emit a PlanBlock instead of the raw tool_use.
+        // Read the plan file from disk to get the full current content —
+        // Edit tool_use only carries the diff, not the complete file.
+        if (hasExitPlanMode && this.lastPlanFilePath) {
+          let planContent = "";
+          try {
+            const abs = this.lastPlanFilePath.startsWith("/")
+              ? this.lastPlanFilePath
+              : resolve(this.cwd ?? "", this.lastPlanFilePath);
+            planContent = readFileSync(abs, "utf-8");
+          } catch {
+            // File may not exist if the write failed — emit with empty content
+          }
+          normalized.push({
+            type: "plan" as const,
+            content: planContent,
+            filePath: this.lastPlanFilePath,
+            ...(exitPlanModeToolUseId ? { toolUseId: exitPlanModeToolUseId } : {}),
+          });
+          this.lastPlanFilePath = null;
+        }
 
         for (const block of content as Record<string, unknown>[]) {
           if (block.type === "tool_use" && block.name === "AskUserQuestion") {
@@ -248,6 +299,10 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
               questions: questions.map(parseQuestion),
               ...(typeof block.id === "string" ? { toolUseId: block.id } : {}),
             });
+            continue;
+          }
+          // Skip ExitPlanMode tool_use — already emitted as PlanBlock above
+          if (block.type === "tool_use" && block.name === "ExitPlanMode") {
             continue;
           }
           // Narrow known block types from the Claude Code JSON stream

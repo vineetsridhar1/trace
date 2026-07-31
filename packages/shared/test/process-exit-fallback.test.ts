@@ -373,22 +373,6 @@ describe("coding tool adapter process exit fallback", () => {
     });
   });
 
-  it("keeps Trace plan runs out of Claude's native plan permission mode", () => {
-    const adapter = new ClaudeCodeAdapter();
-
-    adapter.run({
-      prompt: "create a plan",
-      cwd: "/tmp",
-      interactionMode: "plan",
-      onOutput: vi.fn(),
-      onComplete: vi.fn(),
-    });
-
-    const args = vi.mocked(spawn).mock.calls[0]?.[1];
-    expect(args).toContain("--dangerously-skip-permissions");
-    expect(args).not.toContain("--permission-mode");
-  });
-
   it("completes a Pi run when the process exits but stdio never closes", () => {
     const adapter = new PiAdapter();
     const onOutput = vi.fn();
@@ -705,7 +689,7 @@ describe("coding tool adapter process exit fallback", () => {
     });
   });
 
-  it("keeps Antigravity plan-mode output as ordinary text", () => {
+  it("wraps Antigravity output as a plan block in plan mode", () => {
     const adapter = new AntigravityAdapter();
     const onOutput = vi.fn();
     const onComplete = vi.fn();
@@ -723,7 +707,7 @@ describe("coding tool adapter process exit fallback", () => {
 
     expect(onOutput).toHaveBeenCalledWith({
       type: "assistant",
-      message: { content: [{ type: "text", text: "Step 1. Step 2." }] },
+      message: { content: [{ type: "plan", content: "Step 1. Step 2." }] },
     });
   });
 

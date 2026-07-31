@@ -7,7 +7,7 @@ import type {
 import type { AgentStatus, SessionStatus, CodingTool, SessionGroupKind } from "@prisma/client";
 import type { EventType } from "@trace/gql";
 import { Prisma } from "@prisma/client";
-import { createHash, randomUUID } from "crypto";
+import { randomUUID } from "crypto";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
@@ -22,8 +22,6 @@ import {
   type BridgeWorkspaceWarning,
   type BridgeRepoWorktree,
 } from "@trace/shared";
-import { PLAN_FILE_MAX_BYTES } from "@trace/shared/plan-file";
-import { validateTraceVisualPlan } from "@trace/shared/visual-plan-skill";
 import { generateAnimalSlug } from "@trace/shared/animal-names";
 import { prisma } from "../lib/db.js";
 import {
@@ -86,7 +84,6 @@ import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 import { gitStorage } from "../lib/git-storage/index.js";
 import { parseGitTreeArchive } from "../lib/design-system-archive.js";
 import { isGeneratedProjectKind } from "../lib/generated-project.js";
-import { createAgentRunToken } from "../lib/agent-run-auth.js";
 import {
   designSourceHash,
   readStaticDesignElementText,
@@ -402,23 +399,6 @@ type PendingSessionCommandQueue = {
   type: "queue";
   commands: PendingSessionCommand[];
 };
-
-function createTracePlanRunCredential(input: {
-  interactionMode: string | null | undefined;
-  organizationId: string;
-  sessionId: string;
-}): { runId: string; token: string } | null {
-  if (input.interactionMode !== "plan") return null;
-  const runId = randomUUID();
-  return {
-    runId,
-    token: createAgentRunToken({
-      organizationId: input.organizationId,
-      runId,
-      sessionId: input.sessionId,
-    }),
-  };
-}
 
 export type InternalMessageQueueResult = "queued" | "session_unavailable" | "runtime_unavailable";
 
@@ -4965,11 +4945,6 @@ export class SessionService {
       repoId: session.repoId,
       startMeta,
     });
-    const tracePlanRun = createTracePlanRunCredential({
-      interactionMode,
-      organizationId: session.organizationId,
-      sessionId: id,
-    });
 
     const command = {
       type: "run" as const,
@@ -4990,10 +4965,6 @@ export class SessionService {
       imageUrls: imageKeys?.length
         ? await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)))
         : undefined,
-      ...(tracePlanRun && {
-        traceRunId: tracePlanRun.runId,
-        traceRunToken: tracePlanRun.token,
-      }),
     };
 
     const deliveryResult = sessionRouter.send(id, command, {
@@ -5049,7 +5020,6 @@ export class SessionService {
         agentStatus: "active",
         sessionStatus: "in_progress",
         clientSource: normalizeClientSource(access?.clientSource),
-        ...(tracePlanRun ? { agentRunId: tracePlanRun.runId } : {}),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "user",
@@ -5747,195 +5717,6 @@ export class SessionService {
     return tool === "claude_code" && (createdBy?.enableClaudeInChrome ?? false);
   }
 
-  async recordPlanFileUpdate(
-    sessionId: string,
-    snapshot: {
-      content: string;
-      contentHash: string;
-      filePath: string;
-      validationErrors?: string[];
-    },
-  ) {
-    const content = snapshot.content;
-    const normalizedFilePath = snapshot.filePath.replaceAll("\\", "/");
-    if (!content.trim() || Buffer.byteLength(content, "utf8") > PLAN_FILE_MAX_BYTES) return;
-    if (!normalizedFilePath.endsWith(`/trace-plans/${sessionId}/plan.mdx`)) return;
-    const validationErrors = validateTraceVisualPlan(content);
-
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: { organizationId: true, agentStatus: true },
-    });
-    if (!session || session.agentStatus !== "active") return;
-
-    await eventService.create({
-      organizationId: session.organizationId,
-      scopeType: "session",
-      scopeId: sessionId,
-      eventType: "session_output",
-      payload: {
-        type: "plan_file_updated",
-        planContent: content,
-        planFilePath: snapshot.filePath,
-        contentHash: createHash("sha256").update(content).digest("hex"),
-        planValidationErrors: validationErrors,
-      },
-      actorType: "system",
-      actorId: "system",
-    });
-  }
-
-  async submitVisualPlanOutput(
-    sessionId: string,
-    runId: string,
-    organizationId: string,
-    input: {
-      content: string;
-      filename: string;
-      sourcePath: string;
-      state: "draft" | "final";
-    },
-  ): Promise<{ contentHash: string; validationErrors: string[]; ready: boolean }> {
-    const content = input.content;
-    if (!content.trim()) throw new ValidationError("Visual plan file is empty");
-    if (Buffer.byteLength(content, "utf8") > PLAN_FILE_MAX_BYTES) {
-      throw new ValidationError(`Visual plan file exceeds ${PLAN_FILE_MAX_BYTES} bytes`);
-    }
-    if (
-      !input.filename ||
-      input.filename.length > 255 ||
-      input.filename.includes("/") ||
-      input.filename.includes("\\")
-    ) {
-      throw new ValidationError("Invalid visual plan filename");
-    }
-    if (!input.sourcePath || input.sourcePath.length > 2_048) {
-      throw new ValidationError("Invalid visual plan source path");
-    }
-
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      select: {
-        organizationId: true,
-        agentStatus: true,
-        sessionStatus: true,
-        sessionGroupId: true,
-        createdById: true,
-        name: true,
-      },
-    });
-    if (!session) throw new ValidationError("Session not found");
-    if (session.organizationId !== organizationId) {
-      throw new AuthorizationError("Run token does not belong to this organization");
-    }
-
-    const latestResume = await prisma.event.findFirst({
-      where: {
-        scopeId: sessionId,
-        scopeType: "session",
-        eventType: "session_resumed",
-      },
-      orderBy: [{ timestamp: "desc" }, { id: "desc" }],
-      select: { payload: true, timestamp: true },
-    });
-    const resumePayload = latestResume?.payload as Record<string, unknown> | undefined;
-    if (resumePayload?.agentRunId !== runId) {
-      throw new ValidationError("Trace plan run is not active yet");
-    }
-
-    const contentHash = createHash("sha256").update(content).digest("hex");
-    const validationErrors = validateTraceVisualPlan(content);
-    const existingReady =
-      input.state === "final"
-        ? await prisma.event.findFirst({
-            where: {
-              scopeId: sessionId,
-              scopeType: "session",
-              eventType: "session_output",
-              ...(latestResume && { timestamp: { gte: latestResume.timestamp } }),
-              payload: {
-                path: ["contentHash"],
-                equals: contentHash,
-              },
-            },
-            orderBy: { timestamp: "desc" },
-            select: { payload: true },
-          })
-        : null;
-    const existingReadyPayload = existingReady?.payload as Record<string, unknown> | undefined;
-    if (existingReadyPayload?.type === "plan_file_ready") {
-      return { contentHash, validationErrors: [], ready: true };
-    }
-
-    if (session.agentStatus !== "active" || session.sessionStatus === "needs_input") {
-      throw new ValidationError("Trace plan run is no longer accepting output");
-    }
-
-    await eventService.create({
-      organizationId: session.organizationId,
-      scopeType: "session",
-      scopeId: sessionId,
-      eventType: "session_output",
-      payload: {
-        type: "plan_file_updated",
-        planContent: content,
-        planFilePath: input.sourcePath,
-        planFilename: input.filename,
-        planSubmissionState: input.state,
-        contentHash,
-        planValidationErrors: validationErrors,
-      },
-      actorType: "agent",
-      actorId: sessionId,
-    });
-
-    if (input.state === "draft" || validationErrors.length > 0) {
-      return { contentHash, validationErrors, ready: false };
-    }
-
-    const updated = await prisma.session.updateMany({
-      where: {
-        id: sessionId,
-        agentStatus: "active",
-        sessionStatus: { not: "needs_input" },
-      },
-      data: { sessionStatus: "needs_input" },
-    });
-    const sessionGroup = await this.loadSessionGroupSnapshot(session.sessionGroupId);
-    const readyPayload = {
-      type: "plan_file_ready",
-      planContent: content,
-      planFilePath: input.sourcePath,
-      planFilename: input.filename,
-      planSubmissionState: "final",
-      contentHash,
-      planValidationErrors: [],
-      sessionStatus: "needs_input",
-      ...(sessionGroup ? { sessionGroup } : {}),
-    };
-    await eventService.create({
-      organizationId: session.organizationId,
-      scopeType: "session",
-      scopeId: sessionId,
-      eventType: "session_output",
-      payload: readyPayload,
-      actorType: "agent",
-      actorId: sessionId,
-    });
-
-    if (updated.count > 0) {
-      await this.createInboxItemFromOutput({
-        orgId: session.organizationId,
-        userId: session.createdById,
-        sessionName: session.name,
-        sessionId,
-        data: readyPayload,
-      });
-    }
-
-    return { contentHash, validationErrors: [], ready: true };
-  }
-
   async recordOutput(sessionId: string, data: Record<string, unknown>) {
     // Extract and strip <trace-title> and <trace-branch> tags from assistant text before persisting
     const extractedTitle = this.extractAndStripTitle(data);
@@ -6228,14 +6009,7 @@ export class SessionService {
     });
   }
 
-  async complete(
-    id: string,
-    interactionModeOrOptions?: string | { drainPending?: boolean },
-  ) {
-    const interactionMode =
-      typeof interactionModeOrOptions === "string" ? interactionModeOrOptions : undefined;
-    const options =
-      typeof interactionModeOrOptions === "object" ? interactionModeOrOptions : undefined;
+  async complete(id: string, options?: { drainPending?: boolean }) {
     // Only transition from active — don't overwrite explicit user actions
     const current = await prisma.session.findUnique({
       where: { id },
@@ -6262,44 +6036,12 @@ export class SessionService {
         ...(lastResume && { timestamp: { gte: lastResume.timestamp } }),
       },
       orderBy: { timestamp: "desc" },
-      take: 100,
+      take: 10,
     });
 
-    const legacyPendingPlan = recentEvents.some((evt: { payload: Prisma.JsonValue }) => {
+    const hasPendingPlan = recentEvents.some((evt: { payload: Prisma.JsonValue }) => {
       return hasPlanBlock(evt.payload as Record<string, unknown>);
     });
-    const latestPlanFileEvent = recentEvents.find((evt: { payload: Prisma.JsonValue }) => {
-      const payload = evt.payload as Record<string, unknown>;
-      return (
-        payload.type === "plan_file_updated" &&
-        typeof payload.planContent === "string" &&
-        payload.planContent.trim().length > 0
-      );
-    });
-    const resumePayload = lastResume?.payload as Record<string, unknown> | undefined;
-    const completedPlanRun =
-      interactionMode === "plan" ||
-      (interactionMode == null && resumePayload?.interactionMode === "plan");
-    const latestPlanPayload = latestPlanFileEvent?.payload as Record<string, unknown> | undefined;
-    const latestPlanContent =
-      typeof latestPlanPayload?.planContent === "string" ? latestPlanPayload.planContent : "";
-    const latestPlanValidationErrors = latestPlanPayload
-      ? validateTraceVisualPlan(latestPlanContent)
-      : [];
-    const latestPlanWasDraft = latestPlanPayload?.planSubmissionState === "draft";
-    const hasValidPlanFile =
-      completedPlanRun &&
-      !!latestPlanFileEvent &&
-      !latestPlanWasDraft &&
-      latestPlanValidationErrors.length === 0;
-    const hasInvalidPlanFile =
-      completedPlanRun &&
-      !!latestPlanFileEvent &&
-      !latestPlanWasDraft &&
-      latestPlanValidationErrors.length > 0;
-    const hasUnsubmittedPlanFile = completedPlanRun && !!latestPlanFileEvent && latestPlanWasDraft;
-    const hasPendingPlan =
-      legacyPendingPlan || hasValidPlanFile || hasInvalidPlanFile || hasUnsubmittedPlanFile;
 
     // Safety net for adapters that exit cleanly after emitting a question
     // (Claude Code hangs on stdin so recordOutput handles it first, but other
@@ -6327,72 +6069,6 @@ export class SessionService {
     });
     const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
 
-    if (hasValidPlanFile && latestPlanPayload && current.sessionStatus !== "needs_input") {
-      const planFilePath =
-        typeof latestPlanPayload.planFilePath === "string" ? latestPlanPayload.planFilePath : "";
-      const contentHash =
-        typeof latestPlanPayload.contentHash === "string" ? latestPlanPayload.contentHash : "";
-      await eventService.create({
-        organizationId: session.organizationId,
-        scopeType: "session",
-        scopeId: id,
-        eventType: "session_output",
-        payload: {
-          type: "plan_file_ready",
-          planContent: latestPlanContent,
-          planFilePath,
-          contentHash,
-          planValidationErrors: [],
-          sessionStatus: newSessionStatus,
-          ...(sessionGroup ? { sessionGroup } : {}),
-        },
-        actorType: "system",
-        actorId: "system",
-      });
-    }
-
-    if (hasUnsubmittedPlanFile) {
-      await eventService.create({
-        organizationId: session.organizationId,
-        scopeType: "session",
-        scopeId: id,
-        eventType: "session_output",
-        payload: {
-          type: "error",
-          message:
-            "Plan mode finished after uploading a draft but before running `trace output push --type visual-plan --file <path> --final`.",
-        },
-        actorType: "system",
-        actorId: "system",
-      });
-    } else if (hasInvalidPlanFile) {
-      await eventService.create({
-        organizationId: session.organizationId,
-        scopeType: "session",
-        scopeId: id,
-        eventType: "session_output",
-        payload: {
-          type: "error",
-          message: `Plan mode finished with invalid visual MDX: ${latestPlanValidationErrors.join(" ")}`,
-        },
-        actorType: "system",
-        actorId: "system",
-      });
-    } else if (completedPlanRun && !latestPlanFileEvent && !legacyPendingPlan) {
-      await eventService.create({
-        organizationId: session.organizationId,
-        scopeType: "session",
-        scopeId: id,
-        eventType: "session_output",
-        payload: {
-          type: "error",
-          message: "Plan mode finished without submitting a Trace visual plan.",
-        },
-        actorType: "system",
-        actorId: "system",
-      });
-    }
-
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
@@ -6416,7 +6092,7 @@ export class SessionService {
     if (hasPendingInput && current.sessionStatus !== "needs_input") {
       const triggerEvent = recentEvents.find((evt: { payload: Prisma.JsonValue }) => {
         const p = evt.payload as Record<string, unknown>;
-        return hasQuestionBlock(p) || hasPlanBlock(p) || p.type === "plan_file_updated";
+        return hasQuestionBlock(p) || hasPlanBlock(p);
       });
       const triggerPayload = triggerEvent?.payload as Record<string, unknown> | undefined;
 
@@ -6791,11 +6467,6 @@ export class SessionService {
       imageUrls = await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)));
       runtimeDebug(`Generated ${imageUrls.length} attachment URLs for ${sessionId}`);
     }
-    const tracePlanRun = createTracePlanRunCredential({
-      interactionMode,
-      organizationId: session.organizationId,
-      sessionId,
-    });
 
     // Attempt delivery before marking active. Pinning to the session's home
     // runtime prevents silent bridge hijack when the home is offline and a
@@ -6818,10 +6489,6 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext,
       imageUrls,
-      ...(tracePlanRun && {
-        traceRunId: tracePlanRun.runId,
-        traceRunToken: tracePlanRun.token,
-      }),
     };
     const deliveryResult: DeliveryResult =
       session.hosting === "cloud" && !expectedRuntimeId
@@ -6922,7 +6589,6 @@ export class SessionService {
         agentStatus: "active",
         sessionStatus: resumedSessionStatus,
         clientSource: normalizeClientSource(clientSource),
-        ...(tracePlanRun ? { agentRunId: tracePlanRun.runId } : {}),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType,
@@ -10692,7 +10358,6 @@ export class SessionService {
       | undefined;
 
     const isQuestion = hasQuestionBlock(data);
-    const isPlanFile = data.type === "plan_file_updated" || data.type === "plan_file_ready";
 
     const questionBlock = isQuestion
       ? (messageContent?.find((b) => b.type === "question") as
@@ -10703,7 +10368,7 @@ export class SessionService {
     const planBlock = !isQuestion
       ? (messageContent?.find((b) => b.type === "plan") as { content?: string } | undefined)
       : undefined;
-    const planText = isPlanFile ? (data.planContent as string | undefined) : planBlock?.content;
+    const planText = planBlock?.content;
 
     const summary = isQuestion
       ? (questionBlock?.questions?.[0]?.question as string | undefined)
@@ -11310,11 +10975,6 @@ export class SessionService {
     if (pending.imageKeys?.length) {
       imageUrls = await Promise.all(pending.imageKeys.map((key) => storage.getGetUrl(key)));
     }
-    const tracePlanRun = createTracePlanRunCredential({
-      interactionMode: pending.interactionMode,
-      organizationId: session.organizationId,
-      sessionId,
-    });
 
     const generatedInstruction = generatedProjectInstruction(
       session.sessionGroup?.kind,
@@ -11343,10 +11003,6 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext: checkpointContext ?? undefined,
       imageUrls,
-      ...(tracePlanRun && {
-        traceRunId: tracePlanRun.runId,
-        traceRunToken: tracePlanRun.token,
-      }),
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -11361,8 +11017,6 @@ export class SessionService {
       toolSessionId?: string;
       checkpointContext?: GitCheckpointContext;
       imageUrls?: string[];
-      traceRunId?: string;
-      traceRunToken?: string;
     };
 
     // Materialize any attached designs into the freshly-provisioned workspace
@@ -11452,7 +11106,6 @@ export class SessionService {
       payload: {
         sessionId,
         clientSource: normalizeClientSource(pending.clientSource),
-        ...(tracePlanRun ? { agentRunId: tracePlanRun.runId } : {}),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",

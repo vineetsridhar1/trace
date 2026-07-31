@@ -21,8 +21,6 @@ export interface BridgeRunCommand {
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
-  traceRunId?: string;
-  traceRunToken?: string;
 }
 
 export interface BridgeSendCommand {
@@ -39,8 +37,6 @@ export interface BridgeSendCommand {
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
-  traceRunId?: string;
-  traceRunToken?: string;
 }
 
 export interface BridgePrepareCommand {
@@ -558,19 +554,9 @@ export interface BridgeSessionOutput {
   data: unknown;
 }
 
-export interface BridgePlanFileUpdated {
-  type: "plan_file_updated";
-  sessionId: string;
-  content: string;
-  contentHash: string;
-  filePath: string;
-  validationErrors: string[];
-}
-
 export interface BridgeSessionComplete {
   type: "session_complete";
   sessionId: string;
-  interactionMode?: string;
 }
 
 export interface BridgeWorkspaceReady {
@@ -981,7 +967,6 @@ export type BridgeMessage =
   | BridgeRuntimeHeartbeat
   | BridgeRegisterSession
   | BridgeSessionOutput
-  | BridgePlanFileUpdated
   | BridgeSessionComplete
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed

@@ -39,10 +39,6 @@ import {
 } from "@trace/shared";
 import type { GitExecFn } from "@trace/shared";
 import {
-  buildTraceVisualPlanInstruction,
-  materializeTracePlanRuntime,
-} from "@trace/shared/trace-cli";
-import {
   AntigravityAdapter,
   ClaudeCodeAdapter,
   CodexAdapter,
@@ -124,7 +120,6 @@ export class ContainerBridge implements IBridgeClient {
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
   private sessionWorkdirs = new Map<string, string>();
-  private planRuntimeRoots = new Map<string, string>();
   /** Coalesces concurrent createWorktree calls for the same worktree key (sessionGroupId or sessionId) */
   private pendingWorktrees = new Map<
     string,
@@ -238,7 +233,6 @@ export class ContainerBridge implements IBridgeClient {
       adapter.abort();
     }
     this.adapters.clear();
-    for (const sessionId of this.planRuntimeRoots.keys()) this.removePlanRuntime(sessionId);
     this.outbox.clear();
     this.ws?.close();
     this.ws = null;
@@ -367,8 +361,6 @@ export class ContainerBridge implements IBridgeClient {
           interactionMode: cmd.interactionMode,
           toolSessionId: cmd.toolSessionId,
           imageUrls: cmd.imageUrls,
-          traceRunId: cmd.traceRunId,
-          traceRunToken: cmd.traceRunToken,
         }).catch((err) => {
           console.error(`[container-bridge] runPrompt failed for ${cmd.sessionId}:`, err);
           this.send({
@@ -376,11 +368,7 @@ export class ContainerBridge implements IBridgeClient {
             sessionId: cmd.sessionId,
             data: { type: "error", message: err instanceof Error ? err.message : String(err) },
           });
-          this.send({
-            type: "session_complete",
-            sessionId: cmd.sessionId,
-            interactionMode: cmd.interactionMode,
-          });
+          this.send({ type: "session_complete", sessionId: cmd.sessionId });
         });
         break;
       }
@@ -589,7 +577,6 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "terminate": {
-        this.removePlanRuntime(cmd.sessionId);
         const adapter = this.adapters.get(cmd.sessionId);
         if (adapter) {
           this.cancelRun(cmd.sessionId);
@@ -613,7 +600,6 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "delete": {
-        this.removePlanRuntime(cmd.sessionId);
         const adapter = this.adapters.get(cmd.sessionId);
         if (adapter) {
           this.cancelRun(cmd.sessionId);
@@ -1037,13 +1023,6 @@ export class ContainerBridge implements IBridgeClient {
     }
   }
 
-  private removePlanRuntime(sessionId: string, expectedRoot?: string): void {
-    const rootDir = this.planRuntimeRoots.get(sessionId);
-    if (!rootDir || (expectedRoot && rootDir !== expectedRoot)) return;
-    this.planRuntimeRoots.delete(sessionId);
-    void fs.promises.rm(rootDir, { recursive: true, force: true });
-  }
-
   private async runPrompt({
     sessionId,
     prompt,
@@ -1056,8 +1035,6 @@ export class ContainerBridge implements IBridgeClient {
     interactionMode,
     toolSessionId,
     imageUrls,
-    traceRunId,
-    traceRunToken,
   }: {
     sessionId: string;
     prompt: string;
@@ -1070,8 +1047,6 @@ export class ContainerBridge implements IBridgeClient {
     interactionMode?: string;
     toolSessionId?: string;
     imageUrls?: string[];
-    traceRunId?: string;
-    traceRunToken?: string;
   }): Promise<void> {
     const resolvedTool = tool ?? this.defaultTool;
     await ensureToolReady(resolvedTool);
@@ -1097,23 +1072,6 @@ export class ContainerBridge implements IBridgeClient {
     let hasForwardedOutput = false;
     let endedOnPending = false;
     let recoveringMissingToolSession = false;
-    const tracePlanRuntime =
-      interactionMode === "plan" && traceRunId && traceRunToken
-        ? materializeTracePlanRuntime({
-            sessionId,
-            runId: traceRunId,
-            runToken: traceRunToken,
-            serverUrl: this.serverUrl,
-            inheritedPath: process.env.PATH,
-          })
-        : null;
-    if (interactionMode === "plan" && !tracePlanRuntime) {
-      console.warn(`[container-bridge] plan run ${sessionId} is missing Trace CLI credentials`);
-    }
-    if (tracePlanRuntime) {
-      this.removePlanRuntime(sessionId);
-      this.planRuntimeRoots.set(sessionId, tracePlanRuntime.rootDir);
-    }
 
     // Download attached files to temp files
     let imagePaths: string[] | undefined;
@@ -1140,9 +1098,6 @@ export class ContainerBridge implements IBridgeClient {
       finalPrompt = `${refs}\n\n${finalPrompt}`;
     }
     if (appendSystemPrompt) finalPrompt = `${finalPrompt}\n\n${appendSystemPrompt}`;
-    if (tracePlanRuntime) {
-      finalPrompt = `${finalPrompt}\n\n${buildTraceVisualPlanInstruction(tracePlanRuntime.skillPath)}`;
-    }
 
     // Single owner of temp-image lifetime so we don't leak files when the
     // adapter ends via the pending-input branch (which doesn't always fire
@@ -1154,32 +1109,20 @@ export class ContainerBridge implements IBridgeClient {
         cleanupTempAttachments(imagePaths, fs);
       }
     };
-    let planRuntimeCleanedUp = false;
-    const cleanupPlanRuntime = () => {
-      if (!tracePlanRuntime || planRuntimeCleanedUp) return;
-      planRuntimeCleanedUp = true;
-      this.removePlanRuntime(sessionId, tracePlanRuntime.rootDir);
-    };
 
     const runId = this.startRun(sessionId);
     adapter.abort();
 
     const completeRun = () => {
-      const complete = () => {
-        cleanupPlanRuntime();
-        this.send({ type: "session_complete", sessionId, interactionMode });
-      };
+      const complete = () => this.send({ type: "session_complete", sessionId });
       if (resolvedTool !== "codex") {
         complete();
         return;
       }
-      void syncCodexAuthFile().then(
-        () => complete(),
-        (error: unknown) => {
-          console.warn("[container-bridge] failed to persist Codex session credential:", error);
-          return complete();
-        },
-      );
+      void syncCodexAuthFile().then(complete, (error: unknown) => {
+        console.warn("[container-bridge] failed to persist Codex session credential:", error);
+        complete();
+      });
     };
 
     const activeAdapter = adapter;
@@ -1188,7 +1131,6 @@ export class ContainerBridge implements IBridgeClient {
       if (!isMissingToolSessionError(message)) return false;
 
       recoveringMissingToolSession = true;
-      cleanupPlanRuntime();
       this.finishRun(sessionId, runId);
       activeAdapter.abort();
       this.adapters.delete(sessionId);
@@ -1295,7 +1237,6 @@ export class ContainerBridge implements IBridgeClient {
       reasoningEffort,
       enableClaudeInChrome,
       toolSessionId,
-      env: tracePlanRuntime?.env,
     });
   }
 }

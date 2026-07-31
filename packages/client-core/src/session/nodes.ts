@@ -10,7 +10,6 @@ import { HIDDEN_SESSION_PAYLOAD_TYPE_SET } from "./event-filters.js";
 
 const READ_GLOB_NAMES = new Set(["read", "glob", "grep"]);
 const AGENT_NAMES = new Set(["agent", "task"]);
-const PLAN_FILE_PAYLOAD_TYPES = new Set(["plan_file_updated", "plan_file_ready"]);
 
 /** A single Read/Glob/Grep item collected into a collapsed group node. */
 export interface ReadGlobItem {
@@ -28,45 +27,6 @@ export interface BuildSessionNodesResult {
   nodes: SessionNode[];
   completedAgentTools: Map<string, AgentToolResult>;
   toolResultByUseId: Map<string, unknown>;
-}
-
-export interface PlanFileState {
-  id: string;
-  content: string;
-  contentHash: string;
-  filePath: string;
-  timestamp: string;
-  eventIndex: number;
-  ready: boolean;
-  validationErrors: string[];
-}
-
-export function getLatestPlanFile(
-  eventIds: string[],
-  events: Record<string, Event>,
-): PlanFileState | null {
-  for (let index = eventIds.length - 1; index >= 0; index--) {
-    const id = eventIds[index];
-    const event = events[id];
-    if (!event || event.eventType !== "session_output") continue;
-    const payload = asJsonObject(event.payload);
-    if (!payload || !PLAN_FILE_PAYLOAD_TYPES.has(String(payload.type ?? ""))) continue;
-    if (typeof payload.planContent !== "string" || !payload.planContent.trim()) continue;
-    const validationErrors = Array.isArray(payload.planValidationErrors)
-      ? payload.planValidationErrors.filter((error): error is string => typeof error === "string")
-      : [];
-    return {
-      id,
-      content: payload.planContent,
-      contentHash: typeof payload.contentHash === "string" ? payload.contentHash : "",
-      filePath: typeof payload.planFilePath === "string" ? payload.planFilePath : "",
-      timestamp: event.timestamp,
-      eventIndex: index,
-      ready: payload.type === "plan_file_ready" && validationErrors.length === 0,
-      validationErrors,
-    };
-  }
-  return null;
 }
 
 /** Payload types that render content but should not break a Read/Glob bucket */
@@ -316,9 +276,6 @@ export function buildSessionNodes(
 
     if (event.eventType === "session_output") {
       const payload = asJsonObject(event.payload);
-      if (PLAN_FILE_PAYLOAD_TYPES.has(String(payload?.type ?? ""))) {
-        continue;
-      }
 
       if (isEmptySessionOutput(payload)) {
         continue;
