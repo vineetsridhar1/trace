@@ -636,7 +636,10 @@ export function SessionInputOptions({
             }}
             disabled={isOptimistic}
           >
-            <SelectTrigger size="sm" className="w-auto">
+            <SelectTrigger
+              size="sm"
+              className="w-auto border-transparent bg-transparent hover:border-transparent hover:bg-white/10"
+            >
               <SelectValue>
                 <span className="flex items-center gap-2">
                   {currentRuntimeValue === CLOUD_RUNTIME_ID ? (
