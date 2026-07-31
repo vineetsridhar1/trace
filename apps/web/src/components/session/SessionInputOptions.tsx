@@ -638,18 +638,18 @@ export function SessionInputOptions({
           >
             <SelectTrigger size="sm" className="w-auto">
               <SelectValue>
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-2">
                   {currentRuntimeValue === CLOUD_RUNTIME_ID ? (
                     <>
-                      <Cloud size={12} className="text-sky-400" /> Cloud
+                      <Cloud /> Cloud
                     </>
                   ) : !runtimeInstanceId ? (
                     <>
-                      <AlertTriangle size={12} className="text-amber-500" /> Choose runtime
+                      <AlertTriangle /> Choose runtime
                     </>
                   ) : (
                     <>
-                      <Monitor size={12} className="text-green-400" /> {runtimeLabel ?? "Local"}
+                      <Monitor /> {runtimeLabel ?? "Local"}
                     </>
                   )}
                 </span>
@@ -661,8 +661,8 @@ export function SessionInputOptions({
                   value={CLOUD_RUNTIME_ID}
                   disabled={!cloudEnvironmentAvailable || !!cloudDisabledReason}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <Cloud size={12} className="text-sky-400" /> Cloud
+                  <span className="flex items-center gap-2">
+                    <Cloud /> Cloud
                     {cloudDisabledReason && (
                       <DisabledReasonHint message={cloudDisabledReason}>
                         remote required
@@ -674,8 +674,8 @@ export function SessionInputOptions({
               {(currentRuntimeValue === UNBOUND_LOCAL_RUNTIME_ID ||
                 connectedLocalRuntimes.length === 0) && (
                 <SelectItem value={UNBOUND_LOCAL_RUNTIME_ID} disabled>
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <AlertTriangle size={12} className="text-amber-500" /> Choose runtime
+                  <span className="flex items-center gap-2 text-muted-foreground">
+                    <AlertTriangle /> Choose runtime
                   </span>
                 </SelectItem>
               )}
@@ -683,8 +683,8 @@ export function SessionInputOptions({
                 const lacksRepo = !!channelRepoId && !r.registeredRepoIds.includes(channelRepoId);
                 return (
                   <SelectItem key={r.id} value={r.id} disabled={lacksRepo}>
-                    <span className="flex items-center gap-1.5">
-                      <Monitor size={12} className="text-green-400" /> {r.label}
+                    <span className="flex items-center gap-2">
+                      <Monitor /> {r.label}
                       {lacksRepo && (
                         <DisabledReasonHint message="This local runtime does not have this repo linked.">
                           repo not linked

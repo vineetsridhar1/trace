@@ -20,7 +20,10 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
-      className={cn("flex min-w-0 flex-1 truncate text-left", className)}
+      className={cn(
+        "flex min-w-0 flex-1 items-center gap-2 truncate text-left [&>span]:gap-2 [&_svg]:size-4 [&_svg]:text-muted-foreground",
+        className,
+      )}
       {...props}
     />
   );
@@ -125,7 +128,7 @@ function SelectItem({
     >
       <SelectPrimitive.ItemText
         className={cn(
-          "flex min-w-0 flex-1 items-center gap-2 truncate [&_svg]:text-muted-foreground",
+          "flex min-w-0 flex-1 items-center gap-2 truncate [&>span]:gap-2 [&_svg]:text-muted-foreground",
           variant === "destructive" && "[&_svg]:text-destructive",
         )}
       >
