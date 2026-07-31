@@ -15,7 +15,7 @@ export function DesignEditorSelectField({
     <label className="block min-w-0 space-y-1 text-[11px] text-muted-foreground">
       <span>{label}</span>
       <Select value={value} onValueChange={(next) => next && onChange(next)}>
-        <SelectTrigger className="h-8 w-full bg-muted/35 px-2.5 text-xs">
+        <SelectTrigger size="sm" className="w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

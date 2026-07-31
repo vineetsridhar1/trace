@@ -335,10 +335,10 @@ function PortsEditor({
                   })
                 }
               >
-                <SelectTrigger className="h-9 border-border bg-background px-2 text-xs focus-visible:ring-2 focus-visible:ring-primary/25">
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="border border-[#27272d] bg-[#161619] text-[#fafafa] shadow-[0_12px_32px_rgba(0,0,0,0.4)] ring-0 [--border:#27272d] [--muted-foreground:#9d9da8] [--popover-foreground:#fafafa] [--popover:#161619]">
+                <SelectContent>
                   <SelectItem value="http">http</SelectItem>
                 </SelectContent>
               </Select>

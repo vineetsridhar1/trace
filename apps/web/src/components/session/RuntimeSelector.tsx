@@ -108,7 +108,7 @@ export function RuntimeSelector({
             !rt.registeredRepoIds.includes(channelRepoId);
           return (
             <SelectItem key={rt.id} value={rt.id} disabled={lacksRepo}>
-              <span className="flex items-center gap-1.5">
+              <span className="flex items-center gap-2">
                 <RuntimeIcon hostingMode={rt.hostingMode} />
                 {rt.label}
                 <span className="text-xs text-muted-foreground">
@@ -125,8 +125,8 @@ export function RuntimeSelector({
         })}
         {connectedRuntimes.length === 0 && (
           <SelectItem value="__no_local_runtime__" disabled>
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <Monitor size={12} className="shrink-0 text-amber-500" />
+            <span className="flex items-center gap-2 text-muted-foreground">
+              <Monitor className="shrink-0" />
               No local runtime connected
             </span>
           </SelectItem>
@@ -137,12 +137,12 @@ export function RuntimeSelector({
 }
 
 function RuntimeIcon({ hostingMode: _hostingMode }: { hostingMode: string }) {
-  return <Monitor size={12} className="shrink-0 text-green-400" />;
+  return <Monitor className="shrink-0" />;
 }
 
 function RuntimeLabel({ runtime }: { runtime: SessionRuntimeInstance }) {
   return (
-    <span className="flex items-center gap-1.5">
+    <span className="flex items-center gap-2">
       <RuntimeIcon hostingMode={runtime.hostingMode} />
       {runtime.label}
     </span>
