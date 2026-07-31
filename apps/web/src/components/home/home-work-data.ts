@@ -69,7 +69,7 @@ export function buildHomeWorkData({
       const session = sessions[id];
       if (!session) continue;
       groupSessions.push(session);
-      if (session.createdBy?.id === currentUserId) participates = true;
+      if ((session.createdById ?? session.createdBy?.id) === currentUserId) participates = true;
       if (!inboxItem) inboxItem = activeInboxBySourceId.get(session.id) ?? null;
       const sessionActivity = sessionActivityTime(session);
       if (

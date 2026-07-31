@@ -870,6 +870,7 @@ function serializeSession(session: {
   model: string | null;
   reasoningEffort: string | null;
   hosting: string;
+  createdById: string;
   createdBy: unknown;
   repo: unknown;
   repoId?: string | null;
@@ -898,6 +899,7 @@ function serializeSession(session: {
     model: session.model,
     reasoningEffort: session.reasoningEffort,
     hosting: session.hosting,
+    createdById: session.createdById,
     createdBy: session.createdBy,
     repo: session.repo ?? null,
     repoId: session.repoId ?? null,

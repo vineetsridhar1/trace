@@ -2287,6 +2287,7 @@ export type Session = {
   costUsd: Scalars["Float"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  createdById: Scalars["ID"]["output"];
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;

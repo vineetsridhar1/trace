@@ -119,7 +119,7 @@ function session(
     id,
     name: id,
     sessionGroupId: groupId,
-    createdBy: { id: creatorId, name: creatorId },
+    createdById: creatorId,
     agentStatus,
     sessionStatus,
     createdAt: "2026-07-30T13:00:00.000Z",

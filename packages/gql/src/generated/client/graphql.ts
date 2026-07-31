@@ -2289,6 +2289,7 @@ export type Session = {
   costUsd: Scalars["Float"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  createdById: Scalars["ID"]["output"];
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
@@ -4409,6 +4410,7 @@ export type GeneratedProjectsQuery = {
       __typename?: "Session";
       id: string;
       sessionGroupId?: string | null;
+      createdById: string;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
       prUrl?: string | null;
@@ -4417,7 +4419,6 @@ export type GeneratedProjectsQuery = {
       lastUserMessageAt?: string | null;
       updatedAt: string;
       createdAt: string;
-      createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     }>;
   }>;
   designSessionGroups: Array<{
@@ -4444,6 +4445,7 @@ export type GeneratedProjectsQuery = {
       __typename?: "Session";
       id: string;
       sessionGroupId?: string | null;
+      createdById: string;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
       prUrl?: string | null;
@@ -4452,7 +4454,6 @@ export type GeneratedProjectsQuery = {
       lastUserMessageAt?: string | null;
       updatedAt: string;
       createdAt: string;
-      createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     }>;
   }>;
   pdfSessionGroups: Array<{
@@ -4487,6 +4488,7 @@ export type GeneratedProjectsQuery = {
       __typename?: "Session";
       id: string;
       sessionGroupId?: string | null;
+      createdById: string;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
       prUrl?: string | null;
@@ -4495,7 +4497,6 @@ export type GeneratedProjectsQuery = {
       lastUserMessageAt?: string | null;
       updatedAt: string;
       createdAt: string;
-      createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     }>;
   }>;
   animationSessionGroups: Array<{
@@ -4523,6 +4524,7 @@ export type GeneratedProjectsQuery = {
       __typename?: "Session";
       id: string;
       sessionGroupId?: string | null;
+      createdById: string;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
       prUrl?: string | null;
@@ -4531,7 +4533,6 @@ export type GeneratedProjectsQuery = {
       lastUserMessageAt?: string | null;
       updatedAt: string;
       createdAt: string;
-      createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     }>;
   }>;
   designSystems: Array<{
@@ -4565,6 +4566,7 @@ export type GeneratedProjectsQuery = {
         __typename?: "Session";
         id: string;
         sessionGroupId?: string | null;
+        createdById: string;
         agentStatus: AgentStatus;
         sessionStatus: SessionStatus;
         prUrl?: string | null;
@@ -4573,7 +4575,6 @@ export type GeneratedProjectsQuery = {
         lastUserMessageAt?: string | null;
         updatedAt: string;
         createdAt: string;
-        createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
       }>;
     };
   }>;
@@ -10472,18 +10473,7 @@ export const GeneratedProjectsDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "createdBy" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "name" } },
-                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                          ],
-                        },
-                      },
+                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
@@ -10561,18 +10551,7 @@ export const GeneratedProjectsDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "createdBy" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "name" } },
-                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                          ],
-                        },
-                      },
+                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
@@ -10658,18 +10637,7 @@ export const GeneratedProjectsDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "createdBy" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "name" } },
-                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                          ],
-                        },
-                      },
+                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
@@ -10748,18 +10716,7 @@ export const GeneratedProjectsDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "createdBy" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "name" } },
-                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                          ],
-                        },
-                      },
+                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
@@ -10848,18 +10805,7 @@ export const GeneratedProjectsDocument = {
                           selections: [
                             { kind: "Field", name: { kind: "Name", value: "id" } },
                             { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                            {
-                              kind: "Field",
-                              name: { kind: "Name", value: "createdBy" },
-                              selectionSet: {
-                                kind: "SelectionSet",
-                                selections: [
-                                  { kind: "Field", name: { kind: "Name", value: "id" } },
-                                  { kind: "Field", name: { kind: "Name", value: "name" } },
-                                  { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                                ],
-                              },
-                            },
+                            { kind: "Field", name: { kind: "Name", value: "createdById" } },
                             { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                             { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                             { kind: "Field", name: { kind: "Name", value: "prUrl" } },

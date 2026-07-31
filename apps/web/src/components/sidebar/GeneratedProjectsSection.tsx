@@ -44,11 +44,7 @@ const GENERATED_PROJECTS_QUERY = gql`
       sessions {
         id
         sessionGroupId
-        createdBy {
-          id
-          name
-          avatarUrl
-        }
+        createdById
         agentStatus
         sessionStatus
         prUrl
@@ -86,11 +82,7 @@ const GENERATED_PROJECTS_QUERY = gql`
       sessions {
         id
         sessionGroupId
-        createdBy {
-          id
-          name
-          avatarUrl
-        }
+        createdById
         agentStatus
         sessionStatus
         prUrl
@@ -136,11 +128,7 @@ const GENERATED_PROJECTS_QUERY = gql`
       sessions {
         id
         sessionGroupId
-        createdBy {
-          id
-          name
-          avatarUrl
-        }
+        createdById
         agentStatus
         sessionStatus
         prUrl
@@ -179,11 +167,7 @@ const GENERATED_PROJECTS_QUERY = gql`
       sessions {
         id
         sessionGroupId
-        createdBy {
-          id
-          name
-          avatarUrl
-        }
+        createdById
         agentStatus
         sessionStatus
         prUrl
@@ -227,11 +211,7 @@ const GENERATED_PROJECTS_QUERY = gql`
         sessions {
           id
           sessionGroupId
-          createdBy {
-            id
-            name
-            avatarUrl
-          }
+          createdById
           agentStatus
           sessionStatus
           prUrl

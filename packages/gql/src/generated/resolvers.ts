@@ -2290,6 +2290,7 @@ export type Session = {
   costUsd: Scalars["Float"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  createdById: Scalars["ID"]["output"];
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
@@ -5330,6 +5331,7 @@ export type SessionResolvers<
   costUsd?: Resolver<ResolversTypes["Float"], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   createdBy?: Resolver<ResolversTypes["User"], ParentType, ContextType>;
+  createdById?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   endpoints?: Resolver<Maybe<ResolversTypes["SessionEndpoints"]>, ParentType, ContextType>;
   gitCheckpoints?: Resolver<Array<ResolversTypes["GitCheckpoint"]>, ParentType, ContextType>;
   hosting?: Resolver<ResolversTypes["HostingMode"], ParentType, ContextType>;
