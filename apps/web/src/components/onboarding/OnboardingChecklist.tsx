@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { Check, ChevronRight, Circle, GitBranch, Hash, Play, SlidersHorizontal } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  Circle,
+  GitBranch,
+  Hash,
+  Play,
+  SlidersHorizontal,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import type { OnboardingStatus } from "../../hooks/useOnboardingStatus";
 import { useOnboardingStore } from "../../stores/onboarding";
@@ -13,9 +21,10 @@ type IconComponent = typeof GitBranch;
 
 interface Props {
   status: OnboardingStatus;
+  variant?: "popover" | "sidebar";
 }
 
-export function OnboardingChecklist({ status }: Props) {
+export function OnboardingChecklist({ status, variant = "popover" }: Props) {
   const invalidateRepos = useOnboardingStore((s) => s.invalidateRepos);
   const setActivePage = useUIStore((s) => s.setActivePage);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
@@ -23,46 +32,30 @@ export function OnboardingChecklist({ status }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [browseOpen, setBrowseOpen] = useState(false);
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-foreground">Get set up</h2>
-        <span className="text-xs text-muted-foreground">
-          {status.completedCount} of {status.totalCount} complete
-        </span>
-      </div>
-
-      <div className="space-y-2">
-        <SimpleRow
+  const content =
+    variant === "sidebar" ? (
+      <div className="space-y-0.5 border-l border-[var(--th-edge)] py-1.5 pl-3">
+        <SidebarRow
           done={status.hasRepo}
-          icon={GitBranch}
           title="Create or connect a repository"
-          description="Start a new local project or link a codebase."
           onClick={() => setRepoOpen(true)}
         />
-
-        <ChannelRow
+        <SidebarChannelRow
           done={status.hasChannel}
           onBrowseClick={() => setBrowseOpen(true)}
           onCreateClick={() => setCreateOpen(true)}
         />
-
-        <SimpleRow
+        <SidebarRow
           done={status.hasSessionDefaults}
-          icon={SlidersHorizontal}
           title="Choose session defaults"
-          description="Pick the coding tool, model, and effort new sessions should use."
           onClick={() => {
             setSettingsInitialTab("session-defaults");
             setActivePage("settings");
           }}
         />
-
-        <SimpleRow
+        <SidebarRow
           done={status.hasSession}
-          icon={Play}
           title="Create your first session"
-          description="Start a local coding session from a channel."
           onClick={() => {
             if (status.firstCodingChannelId) {
               void createQuickSession(status.firstCodingChannelId);
@@ -72,6 +65,61 @@ export function OnboardingChecklist({ status }: Props) {
           }}
         />
       </div>
+    ) : (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-foreground">Get set up</h2>
+          <span className="text-xs text-muted-foreground">
+            {status.completedCount} of {status.totalCount} complete
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          <SimpleRow
+            done={status.hasRepo}
+            icon={GitBranch}
+            title="Create or connect a repository"
+            description="Start a new local project or link a codebase."
+            onClick={() => setRepoOpen(true)}
+          />
+
+          <ChannelRow
+            done={status.hasChannel}
+            onBrowseClick={() => setBrowseOpen(true)}
+            onCreateClick={() => setCreateOpen(true)}
+          />
+
+          <SimpleRow
+            done={status.hasSessionDefaults}
+            icon={SlidersHorizontal}
+            title="Choose session defaults"
+            description="Pick the coding tool, model, and effort new sessions should use."
+            onClick={() => {
+              setSettingsInitialTab("session-defaults");
+              setActivePage("settings");
+            }}
+          />
+
+          <SimpleRow
+            done={status.hasSession}
+            icon={Play}
+            title="Create your first session"
+            description="Start a local coding session from a channel."
+            onClick={() => {
+              if (status.firstCodingChannelId) {
+                void createQuickSession(status.firstCodingChannelId);
+                return;
+              }
+              setCreateOpen(true);
+            }}
+          />
+        </div>
+      </div>
+    );
+
+  return (
+    <>
+      {content}
 
       <CreateRepoDialog
         open={repoOpen}
@@ -81,7 +129,7 @@ export function OnboardingChecklist({ status }: Props) {
       />
       <CreateChannelDialog open={createOpen} onOpenChange={setCreateOpen} />
       <BrowseChannelsDialog open={browseOpen} onOpenChange={setBrowseOpen} hideTrigger />
-    </div>
+    </>
   );
 }
 
@@ -163,5 +211,85 @@ function StatusIcon({ done }: { done: boolean }) {
         <Circle size={18} className="text-muted-foreground" />
       )}
     </span>
+  );
+}
+
+function SidebarRow({
+  done,
+  title,
+  onClick,
+}: {
+  done: boolean;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--th-accent-light)]"
+    >
+      <SidebarStatusIcon done={done} />
+      <span
+        className={
+          done
+            ? "text-sm text-[var(--th-muted)] line-through"
+            : "text-sm font-medium text-[var(--th-heading)]"
+        }
+      >
+        {title}
+      </span>
+    </button>
+  );
+}
+
+function SidebarChannelRow({
+  done,
+  onBrowseClick,
+  onCreateClick,
+}: {
+  done: boolean;
+  onBrowseClick: () => void;
+  onCreateClick: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-md px-1 py-1.5">
+      <SidebarStatusIcon done={done} />
+      <span
+        className={
+          done
+            ? "min-w-0 flex-1 text-sm text-[var(--th-muted)] line-through"
+            : "min-w-0 flex-1 text-sm font-medium text-[var(--th-heading)]"
+        }
+      >
+        Join or create a channel
+      </span>
+      {!done && (
+        <span className="flex shrink-0 gap-1">
+          <SidebarActionButton label="Join" onClick={onBrowseClick} />
+          <SidebarActionButton label="Create" onClick={onCreateClick} />
+        </span>
+      )}
+    </div>
+  );
+}
+
+function SidebarActionButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded px-1.5 py-0.5 text-[11px] font-medium text-[var(--th-muted)] transition-colors hover:bg-white/10 hover:text-[var(--th-heading)] focus-visible:outline-2 focus-visible:outline-[var(--th-accent-light)]"
+    >
+      {label}
+    </button>
+  );
+}
+
+function SidebarStatusIcon({ done }: { done: boolean }) {
+  return done ? (
+    <Check className="size-4 shrink-0 text-emerald-400" />
+  ) : (
+    <Circle className="size-4 shrink-0 text-[var(--th-muted)]" />
   );
 }
