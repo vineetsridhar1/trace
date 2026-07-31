@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
-import type { Channel, ChannelGroup, Chat, Repo, InboxItem, SessionGroup } from "@trace/gql";
+import type {
+  Channel,
+  ChannelGroup,
+  Chat,
+  Repo,
+  Project,
+  InboxItem,
+  SessionGroup,
+} from "@trace/gql";
 import { useAuthStore } from "@trace/client-core";
 import { useEntityStore, useEntityIds } from "@trace/client-core";
 import type { EntityTableMap } from "@trace/client-core";
@@ -24,6 +32,10 @@ const CHANNELS_QUERY = gql`
       runScripts
       viewerIsMember
       repo {
+        id
+        name
+      }
+      projects {
         id
         name
       }
@@ -90,6 +102,22 @@ const REPOS_QUERY = gql`
             }
           }
         }
+      }
+    }
+  }
+`;
+
+const PROJECTS_QUERY = gql`
+  query Projects($organizationId: ID!) {
+    projects(organizationId: $organizationId) {
+      id
+      name
+      repo {
+        id
+        name
+      }
+      channels {
+        id
       }
     }
   }
@@ -301,6 +329,14 @@ export function useSidebarData() {
     }
   }, [activeOrgId, upsertMany]);
 
+  const fetchProjects = useCallback(async () => {
+    if (!activeOrgId) return;
+    const result = await client.query(PROJECTS_QUERY, { organizationId: activeOrgId }).toPromise();
+    if (result.data?.projects) {
+      upsertMany("projects", result.data.projects as Array<Project & { id: string }>);
+    }
+  }, [activeOrgId, upsertMany]);
+
   const fetchChats = useCallback(async () => {
     const result = await client.query(CHATS_QUERY, {}).toPromise();
     if (result.data?.chats) {
@@ -389,7 +425,16 @@ export function useSidebarData() {
       void fetchChats();
     }
     void fetchRepos();
-  }, [activeOrgId, fetchChannels, fetchChannelGroups, fetchChats, fetchRepos, homeRetryRequest]);
+    void fetchProjects();
+  }, [
+    activeOrgId,
+    fetchChannels,
+    fetchChannelGroups,
+    fetchChats,
+    fetchProjects,
+    fetchRepos,
+    homeRetryRequest,
+  ]);
 
   useEffect(() => {
     if (features.messaging) return;

@@ -3536,6 +3536,12 @@ export class SessionService {
     if (input.designSystemVersionId && resolvedKind !== "design") {
       throw new ValidationError("Design-system versions may only be selected for Design sessions");
     }
+    if (
+      input.designSessionGroupId &&
+      (resolvedKind === "design" || resolvedKind === "design_system")
+    ) {
+      throw new ValidationError("Designs cannot be attached to Design or Design System sessions");
+    }
     const selectedDesignSystemVersion = input.designSystemVersionId
       ? await prisma.designSystemVersion.findFirst({
           where: {
@@ -3552,6 +3558,13 @@ export class SessionService {
     if (input.designSystemVersionId && !selectedDesignSystemVersion) {
       throw new ValidationError("Selected design-system version is unavailable");
     }
+    const selectedDesignAttachment = input.designSessionGroupId
+      ? await this.resolveDesignArtifact(
+          input.designSessionGroupId,
+          input.organizationId,
+          input.createdById,
+        )
+      : null;
     if (
       existingGroup &&
       input.designSystemVersionId &&
@@ -3602,9 +3615,27 @@ export class SessionService {
     if (resolvedChannel && resolvedChannel.organizationId !== input.organizationId) {
       throw new Error("Channel does not belong to this organization");
     }
+    const resolvedProject = input.projectId
+      ? await prisma.project.findFirst({
+          where: {
+            id: input.projectId,
+            organizationId: input.organizationId,
+            ...(resolvedChannelId ? { channels: { some: { channelId: resolvedChannelId } } } : {}),
+          },
+          select: { id: true, repoId: true },
+        })
+      : null;
+    if (input.projectId && !resolvedProject) {
+      throw new ValidationError(
+        resolvedChannelId
+          ? "Project is not linked to the selected channel"
+          : "Project does not belong to this organization",
+      );
+    }
 
     const authoritativeChannelRepoId =
       resolvedChannel?.type === "coding" ? (resolvedChannel.repoId ?? null) : null;
+    const authoritativeProjectRepoId = resolvedProject?.repoId ?? null;
     if (isGeneratedProjectKind(resolvedKind) && authoritativeChannelRepoId && !existingGroup) {
       const label = resolvedKind === "design" ? "Design" : "App";
       throw new ValidationError(`${label} sessions cannot start in a repo-linked coding channel`);
@@ -3612,6 +3643,14 @@ export class SessionService {
 
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
       throw new Error("Coding channel sessions must use the channel's linked repo");
+    }
+    if (
+      !authoritativeChannelRepoId &&
+      authoritativeProjectRepoId &&
+      input.repoId &&
+      input.repoId !== authoritativeProjectRepoId
+    ) {
+      throw new Error("Project sessions must use the project's linked repo");
     }
     if (
       authoritativeChannelRepoId &&
@@ -3636,6 +3675,7 @@ export class SessionService {
 
     let resolvedRepoId =
       authoritativeChannelRepoId ??
+      authoritativeProjectRepoId ??
       input.repoId ??
       seedGroup?.repoId ??
       sourceSession?.repoId ??
@@ -4173,6 +4213,17 @@ export class SessionService {
                     clientSource: normalizeClientSource(input.clientSource),
                     checkpointContext: null,
                     ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
+                    ...(selectedDesignAttachment
+                      ? {
+                          designAttachments: [
+                            {
+                              designSessionGroupId: selectedDesignAttachment.id,
+                              slug: selectedDesignAttachment.slug,
+                              designName: selectedDesignAttachment.name,
+                            },
+                          ],
+                        }
+                      : {}),
                   },
                 ])
               : undefined,
@@ -10906,14 +10957,24 @@ export class SessionService {
       imageUrls = await Promise.all(pending.imageKeys.map((key) => storage.getGetUrl(key)));
     }
 
+    const generatedInstruction = generatedProjectInstruction(
+      session.sessionGroup?.kind,
+      session.sessionGroup?.designSystemVersion,
+    );
+    const attachedDesignInstruction = pending.designAttachments
+      ?.map((ref) =>
+        this.buildDesignImplementationPrompt(ref.designName, `.trace/designs/${ref.slug}`),
+      )
+      .join("\n\n");
+    const appendSystemPrompt = [generatedInstruction, attachedDesignInstruction]
+      .filter((instruction): instruction is string => !!instruction)
+      .join("\n\n");
+
     const command = {
       type: pending.type,
       sessionId,
       prompt: prompt ?? undefined,
-      appendSystemPrompt: generatedProjectInstruction(
-        session.sessionGroup?.kind,
-        session.sessionGroup?.designSystemVersion,
-      ),
+      appendSystemPrompt: appendSystemPrompt || undefined,
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,

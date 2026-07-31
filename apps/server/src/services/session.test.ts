@@ -799,6 +799,20 @@ describe("SessionService", () => {
   });
 
   describe("start", () => {
+    it("rejects a project outside the session organization", async () => {
+      prismaMock.project.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "coding",
+          projectId: "project-1",
+          prompt: "Build checkout",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Project does not belong to this organization");
+    });
+
     it("rejects app sessions linked to a user repo", async () => {
       await expect(
         service.start({
@@ -919,6 +933,57 @@ describe("SessionService", () => {
       });
     });
 
+    it("queues a selected design with the initial session run", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "design-1",
+        name: "Checkout",
+        slug: "checkout",
+        repoId: "design-repo-1",
+        branch: "main",
+        designPreviewCommitSha: "design-commit-1",
+        visibility: "public",
+        ownerUserId: "user-2",
+      });
+      const repo = await managedGitServiceMock.createManagedRepo({
+        organizationId: "org-1",
+        name: "App source",
+        actorType: "user",
+        actorId: "user-1",
+      });
+      managedGitServiceMock.createManagedRepo.mockClear();
+      const sessionGroup = makeSessionGroup({ kind: "app", repoId: repo.id, repo });
+      const session = makeSession({ hosting: "cloud", repoId: repo.id, repo, sessionGroup });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        kind: "app",
+        hosting: "cloud",
+        prompt: "Build checkout",
+        designSessionGroupId: "design-1",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: "Build checkout",
+              designAttachments: [
+                {
+                  designSessionGroupId: "design-1",
+                  slug: "checkout",
+                  designName: "Checkout",
+                },
+              ],
+            }),
+          }),
+        }),
+      );
+    });
+
     it("validates design sessions as repo-less, cloud sessions", async () => {
       await expect(
         service.start({
@@ -953,6 +1018,19 @@ describe("SessionService", () => {
         } as unknown as StartSessionServiceInput),
       ).rejects.toThrow("only be selected for Design sessions");
       expect(prismaMock.designSystemVersion.findFirst).not.toHaveBeenCalled();
+    });
+
+    it("rejects design attachments for Design sessions", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "design",
+          hosting: "cloud",
+          designSessionGroupId: "design-1",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Designs cannot be attached");
+      expect(prismaMock.sessionGroup.findFirst).not.toHaveBeenCalled();
     });
 
     it("rejects unavailable or archived design-system versions", async () => {

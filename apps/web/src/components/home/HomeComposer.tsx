@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
-import type { Repo } from "@trace/gql";
+import type { Channel, Project } from "@trace/gql";
 import { useHomeComposerStore } from "../../stores/home-composer";
 import type { ChatEditorHandle } from "../chat/ChatEditor";
 import { SessionComposer } from "../session/SessionComposer";
@@ -8,22 +8,33 @@ import { ComposerInputOptions } from "../session/SessionInputOptions";
 import type { InteractionMode } from "../session/interactionModes";
 import { getReasoningEffortsForTool } from "../session/modelOptions";
 import type { ToolOptionValue } from "../session/picker/pickerShared";
-import { HomeRepoPicker } from "./HomeRepoPicker";
+import { HomeBridgePicker } from "./HomeBridgePicker";
+import { HomeChannelPicker, type HomeChannelTarget } from "./HomeChannelPicker";
 import { HomeComposerTextSync } from "./home-composer-sync";
+import { HomeDesignPicker } from "./HomeDesignPicker";
+import { HomeDesignSystemPicker } from "./HomeDesignSystemPicker";
 import type { HomeCreatableKind } from "./home-kinds";
 
 export function HomeComposer({
   prompt,
   kind,
-  repos,
-  repoId,
+  channels,
+  projects,
+  channelTargetKey,
+  selectedChannelRepoId,
+  bridgeId,
+  designSystemVersionId,
+  designSessionGroupId,
   tool,
   model,
   reasoningEffort,
   mode,
   submitting,
   onPromptChange,
-  onRepoChange,
+  onChannelTargetChange,
+  onBridgeChange,
+  onDesignSystemChange,
+  onDesignChange,
   onToolChange,
   onModelChange,
   onReasoningEffortChange,
@@ -32,15 +43,23 @@ export function HomeComposer({
 }: {
   prompt: string;
   kind: HomeCreatableKind;
-  repos: Repo[];
-  repoId: string | null;
+  channels: Channel[];
+  projects: Project[];
+  channelTargetKey: string | null;
+  selectedChannelRepoId: string | null;
+  bridgeId: string | null;
+  designSystemVersionId: string | null;
+  designSessionGroupId: string | null;
   tool: ToolOptionValue;
   model: string | null;
   reasoningEffort: string | null;
   mode: InteractionMode;
   submitting: boolean;
   onPromptChange: (prompt: string) => void;
-  onRepoChange: (repoId: string | null) => void;
+  onChannelTargetChange: (target: HomeChannelTarget | null) => void;
+  onBridgeChange: (bridgeId: string | null) => void;
+  onDesignSystemChange: (versionId: string | null) => void;
+  onDesignChange: (designId: string | null) => void;
   onToolChange: (tool: ToolOptionValue) => void;
   onModelChange: (model: string) => void;
   onReasoningEffortChange: (effort: string) => void;
@@ -52,7 +71,8 @@ export function HomeComposer({
   const focusRequest = useHomeComposerStore((state) => state.focusRequest);
   const prefill = useHomeComposerStore((state) => state.prefill);
   const consumePrefill = useHomeComposerStore((state) => state.consumePrefill);
-  const canSubmit = prompt.trim().length > 0 && !submitting;
+  const codingSetupComplete = kind !== "coding" || (!!channelTargetKey && !!bridgeId);
+  const canSubmit = prompt.trim().length > 0 && codingSetupComplete && !submitting;
   const effortOptions = getReasoningEffortsForTool(tool);
 
   useEffect(() => {
@@ -102,13 +122,39 @@ export function HomeComposer({
             reasoningEffort={reasoningEffort}
             reasoningEffortOptions={effortOptions}
             disabled={submitting}
+            compact
             betweenModeAndTool={
-              <HomeRepoPicker
-                repos={repos}
-                selectedRepoId={repoId}
-                disabled={kind !== "coding"}
-                onSelect={onRepoChange}
-              />
+              <>
+                <HomeChannelPicker
+                  channels={channels}
+                  projects={projects}
+                  selectedKey={channelTargetKey}
+                  disabled={kind !== "coding"}
+                  onSelect={onChannelTargetChange}
+                />
+                <HomeBridgePicker
+                  selectedBridgeId={bridgeId}
+                  repoId={selectedChannelRepoId}
+                  tool={tool}
+                  disabled={kind !== "coding"}
+                  onSelect={onBridgeChange}
+                />
+              </>
+            }
+            afterTool={
+              kind === "design" ? (
+                <HomeDesignSystemPicker
+                  selectedVersionId={designSystemVersionId}
+                  disabled={submitting}
+                  onSelect={onDesignSystemChange}
+                />
+              ) : (
+                <HomeDesignPicker
+                  selectedDesignId={designSessionGroupId}
+                  disabled={submitting}
+                  onSelect={onDesignChange}
+                />
+              )
             }
             onModeChange={onModeChange}
             onToolChange={onToolChange}

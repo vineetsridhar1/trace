@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import type { Channel, CodingTool, Repo } from "@trace/gql";
+import type { Channel, CodingTool } from "@trace/gql";
 import { START_SESSION_MUTATION } from "@trace/client-core";
 import { client } from "./urql";
 import { navigateToSession } from "../stores/ui";
@@ -13,15 +13,17 @@ interface CreateHomeSessionInput {
   model: string | null;
   reasoningEffort: string | null;
   interactionMode: InteractionMode;
-  repo: Repo | null;
-  channels: Channel[];
+  channel: Channel | null;
+  projectId: string | null;
+  repoId: string | null;
+  runtimeInstanceId: string | null;
+  designSystemVersionId: string | null;
+  designSessionGroupId: string | null;
 }
 
-export function buildHomeStartInput(
-  input: Omit<CreateHomeSessionInput, "channels">,
-  channel: Channel | null,
-) {
-  const linkedRepo = input.kind === "coding" ? input.repo : null;
+export function buildHomeStartInput(input: CreateHomeSessionInput) {
+  const codingChannel = input.kind === "coding" ? input.channel : null;
+  const linkedRepoId = input.kind === "coding" ? input.repoId : null;
   return {
     kind: input.kind,
     tool: input.tool,
@@ -29,21 +31,22 @@ export function buildHomeStartInput(
     reasoningEffort: input.reasoningEffort,
     interactionMode: input.interactionMode,
     prompt: input.prompt.trim(),
-    ...(linkedRepo ? { repoId: linkedRepo.id } : {}),
-    ...(channel ? { channelId: channel.id } : {}),
-    ...(input.kind !== "coding" ? { hosting: "cloud" as const } : {}),
+    ...(linkedRepoId ? { repoId: linkedRepoId } : {}),
+    ...(codingChannel ? { channelId: codingChannel.id } : {}),
+    ...(input.kind === "coding" && input.projectId ? { projectId: input.projectId } : {}),
+    ...(input.kind === "coding"
+      ? {
+          hosting: "local" as const,
+          ...(input.runtimeInstanceId ? { runtimeInstanceId: input.runtimeInstanceId } : {}),
+        }
+      : { hosting: "cloud" as const }),
+    ...(input.kind === "design" && input.designSystemVersionId
+      ? { designSystemVersionId: input.designSystemVersionId }
+      : {}),
+    ...(input.kind !== "design" && input.designSessionGroupId
+      ? { designSessionGroupId: input.designSessionGroupId }
+      : {}),
   };
-}
-
-export function resolveHomeCodingChannel(
-  kind: HomeCreatableKind,
-  repo: Repo | null,
-  channels: Channel[],
-): Channel | null {
-  if (kind !== "coding" || !repo) return null;
-  return (
-    channels.find((channel) => channel.type === "coding" && channel.repo?.id === repo.id) ?? null
-  );
 }
 
 export async function createHomeSession({
@@ -53,30 +56,33 @@ export async function createHomeSession({
   model,
   reasoningEffort,
   interactionMode,
-  repo,
-  channels,
+  channel,
+  projectId,
+  repoId,
+  runtimeInstanceId,
+  designSystemVersionId,
+  designSessionGroupId,
 }: CreateHomeSessionInput): Promise<boolean> {
   const normalizedPrompt = prompt.trim();
   if (!normalizedPrompt) return false;
 
-  const linkedRepo = kind === "coding" ? repo : null;
-  const channel = resolveHomeCodingChannel(kind, linkedRepo, channels);
-
   try {
     const result = await client
       .mutation(START_SESSION_MUTATION, {
-        input: buildHomeStartInput(
-          {
-            prompt: normalizedPrompt,
-            kind,
-            tool,
-            model,
-            reasoningEffort,
-            interactionMode,
-            repo: linkedRepo,
-          },
+        input: buildHomeStartInput({
+          prompt: normalizedPrompt,
+          kind,
+          tool,
+          model,
+          reasoningEffort,
+          interactionMode,
           channel,
-        ),
+          projectId,
+          repoId,
+          runtimeInstanceId,
+          designSystemVersionId,
+          designSessionGroupId,
+        }),
       })
       .toPromise();
 

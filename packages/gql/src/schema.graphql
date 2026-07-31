@@ -1428,6 +1428,7 @@ input StartSessionInput {
   deferRuntimeSelection: Boolean
   repoId: ID
   designSystemVersionId: ID
+  designSessionGroupId: ID
   branch: String
   ticketId: ID
   channelId: ID

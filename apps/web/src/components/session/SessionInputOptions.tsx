@@ -149,6 +149,7 @@ interface ComposerInputOptionsProps {
   reasoningEffort: string | null | undefined;
   reasoningEffortOptions: readonly ReasoningEffortOption[];
   disabled?: boolean;
+  compact?: boolean;
   betweenModeAndTool?: ReactNode;
   afterTool?: ReactNode;
   afterEffort?: ReactNode;
@@ -165,6 +166,7 @@ export function ComposerInputOptions({
   reasoningEffort,
   reasoningEffortOptions,
   disabled,
+  compact = false,
   betweenModeAndTool,
   afterTool,
   afterEffort,
@@ -182,8 +184,11 @@ export function ComposerInputOptions({
         type="button"
         onClick={() => onModeChange(mode)}
         disabled={disabled}
+        aria-label={`${modeConfig.label} mode`}
+        title={`${modeConfig.label} mode`}
         className={cn(
-          "relative flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border px-2 text-[11px] font-medium transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          "relative flex h-7 cursor-pointer items-center gap-1.5 overflow-hidden rounded-lg border text-[11px] font-medium transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          compact ? "w-7 justify-center px-0" : "px-2",
           modeConfig.style,
         )}
       >
@@ -197,7 +202,7 @@ export function ComposerInputOptions({
             className="flex items-center gap-1.5"
           >
             <ModeIcon size={14} className="shrink-0" />
-            {modeConfig.label}
+            {compact ? null : modeConfig.label}
           </motion.span>
         </AnimatePresence>
       </button>
@@ -208,12 +213,13 @@ export function ComposerInputOptions({
         reasoningEffort={reasoningEffort}
         reasoningEffortOptions={reasoningEffortOptions}
         disabled={disabled}
+        compact={compact}
         onToolChange={onToolChange}
         onModelChange={onModelChange}
         onReasoningEffortChange={onReasoningEffortChange}
       />
       {afterTool}
-      {reasoningEffortOptions.length > 0 && (
+      {!compact && reasoningEffortOptions.length > 0 && (
         <div className="hidden @lg:block">
           <EffortCycleButton
             key={tool}

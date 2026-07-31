@@ -8,18 +8,20 @@ const channel = { id: "channel-1", name: "Trace", type: "coding", repo } as Chan
 describe("buildHomeStartInput", () => {
   it("preserves the shared composer model, effort, and interaction settings", () => {
     expect(
-      buildHomeStartInput(
-        {
-          prompt: "  Fix the composer  ",
-          kind: "coding",
-          tool: "codex",
-          model: "gpt-5.3-codex",
-          reasoningEffort: "high",
-          interactionMode: "plan",
-          repo,
-        },
+      buildHomeStartInput({
+        prompt: "  Fix the composer  ",
+        kind: "coding",
+        tool: "codex",
+        model: "gpt-5.3-codex",
+        reasoningEffort: "high",
+        interactionMode: "plan",
         channel,
-      ),
+        projectId: "project-1",
+        repoId: "repo-1",
+        runtimeInstanceId: "bridge-1",
+        designSystemVersionId: null,
+        designSessionGroupId: "design-1",
+      }),
     ).toEqual({
       kind: "coding",
       tool: "codex",
@@ -29,23 +31,29 @@ describe("buildHomeStartInput", () => {
       prompt: "Fix the composer",
       repoId: "repo-1",
       channelId: "channel-1",
+      projectId: "project-1",
+      hosting: "local",
+      runtimeInstanceId: "bridge-1",
+      designSessionGroupId: "design-1",
     });
   });
 
   it("keeps generated work repo-free and cloud-hosted", () => {
     expect(
-      buildHomeStartInput(
-        {
-          prompt: "Create a product animation",
-          kind: "animation",
-          tool: "claude_code",
-          model: null,
-          reasoningEffort: null,
-          interactionMode: "code",
-          repo,
-        },
-        null,
-      ),
+      buildHomeStartInput({
+        prompt: "Create a product animation",
+        kind: "animation",
+        tool: "claude_code",
+        model: null,
+        reasoningEffort: null,
+        interactionMode: "code",
+        channel: null,
+        projectId: null,
+        repoId: null,
+        runtimeInstanceId: null,
+        designSystemVersionId: null,
+        designSessionGroupId: "design-1",
+      }),
     ).toEqual({
       kind: "animation",
       tool: "claude_code",
@@ -54,6 +62,35 @@ describe("buildHomeStartInput", () => {
       interactionMode: "code",
       prompt: "Create a product animation",
       hosting: "cloud",
+      designSessionGroupId: "design-1",
+    });
+  });
+
+  it("pins a Design session to the selected design system without attaching a design", () => {
+    expect(
+      buildHomeStartInput({
+        prompt: "Explore checkout",
+        kind: "design",
+        tool: "codex",
+        model: "gpt-5.3-codex",
+        reasoningEffort: "medium",
+        interactionMode: "code",
+        channel: null,
+        projectId: null,
+        repoId: null,
+        runtimeInstanceId: null,
+        designSystemVersionId: "version-2",
+        designSessionGroupId: "ignored-design",
+      }),
+    ).toEqual({
+      kind: "design",
+      tool: "codex",
+      model: "gpt-5.3-codex",
+      reasoningEffort: "medium",
+      interactionMode: "code",
+      prompt: "Explore checkout",
+      hosting: "cloud",
+      designSystemVersionId: "version-2",
     });
   });
 });

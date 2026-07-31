@@ -2,14 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { normalizeTool } from "../session/picker/pickerShared";
 import { createHomeSession } from "../../lib/create-home-session";
-import {
-  detectHomeSessionKind,
-  detectPromptRepo,
-  isSubstantialPromptEdit,
-} from "../home/home-kind-routing";
+import { detectHomeSessionKind, isSubstantialPromptEdit } from "../home/home-kind-routing";
 import { homeComposerDraftScope, useHomeComposerStore } from "../../stores/home-composer";
 import { useHomeDataStore } from "../../stores/home-data";
 import { HomeComposer } from "../home/HomeComposer";
+import { buildHomeChannelTargets } from "../home/HomeChannelPicker";
 import { HomeFirstRunSparks } from "../home/HomeFirstRunSparks";
 import { HomeHeader } from "../home/HomeHeader";
 import { DEFAULT_HOME_KIND } from "../home/HomeKindIcon";
@@ -33,16 +30,24 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   const setDraft = useHomeComposerStore((state) => state.setDraft);
   const clearDraft = useHomeComposerStore((state) => state.clearDraft);
   const retryHomeData = useHomeDataStore((state) => state.requestRetry);
-  const reposTable = useEntityStore((state) => state.repos);
   const channelsTable = useEntityStore((state) => state.channels);
-  const repos = useMemo(
-    () => Object.values(reposTable).sort((a, b) => a.name.localeCompare(b.name)),
-    [reposTable],
-  );
+  const projectsTable = useEntityStore((state) => state.projects);
   const channels = useMemo(() => Object.values(channelsTable), [channelsTable]);
+  const projects = useMemo(() => Object.values(projectsTable), [projectsTable]);
+  const channelTargets = useMemo(
+    () => buildHomeChannelTargets(channels, projects),
+    [channels, projects],
+  );
   const work = useHomeWorkData();
   const [manualKind, setManualKind] = useState<HomeCreatableKind | null>(null);
-  const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
+  const [selectedChannelTargetKey, setSelectedChannelTargetKey] = useState<string | null>(null);
+  const [selectedBridgeId, setSelectedBridgeId] = useState<string | null>(null);
+  const [selectedDesignSystemVersionId, setSelectedDesignSystemVersionId] = useState<string | null>(
+    null,
+  );
+  const [selectedDesignSessionGroupId, setSelectedDesignSessionGroupId] = useState<string | null>(
+    null,
+  );
   const [tool, setTool] = useState<ToolOptionValue>(() =>
     normalizeTool(defaultTool ?? "claude_code"),
   );
@@ -66,10 +71,9 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   );
   const detectedKind = detectHomeSessionKind(prompt) ?? DEFAULT_HOME_KIND;
   const activeKind = manualKind ?? detectedKind;
-  const detectedRepo = useMemo(() => detectPromptRepo(prompt, repos), [prompt, repos]);
-  const effectiveRepoId =
-    activeKind === "coding" ? (selectedRepoId ?? detectedRepo?.id ?? null) : null;
-  const effectiveRepo = repos.find((repo) => repo.id === effectiveRepoId) ?? null;
+  const selectedChannelTarget =
+    channelTargets.find((target) => target.key === selectedChannelTargetKey) ?? null;
+  const selectedChannelRepoId = selectedChannelTarget?.repoId ?? null;
   const isCreateMode = mode === "create";
 
   useEffect(() => {
@@ -80,9 +84,26 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
 
   useEffect(() => {
     setManualKind(null);
-    setSelectedRepoId(null);
+    setSelectedChannelTargetKey(null);
+    setSelectedBridgeId(null);
+    setSelectedDesignSystemVersionId(null);
+    setSelectedDesignSessionGroupId(null);
     manualPromptRef.current = "";
   }, [draftScope]);
+
+  useEffect(() => {
+    if (activeKind === "coding") {
+      setSelectedDesignSystemVersionId(null);
+      return;
+    }
+    setSelectedChannelTargetKey(null);
+    setSelectedBridgeId(null);
+    if (activeKind === "design") {
+      setSelectedDesignSessionGroupId(null);
+    } else {
+      setSelectedDesignSystemVersionId(null);
+    }
+  }, [activeKind]);
 
   const updatePrompt = (nextPrompt: string) => {
     setDraft(draftScope, nextPrompt);
@@ -94,11 +115,11 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   const selectKind = (kind: HomeCreatableKind) => {
     setManualKind(kind);
     manualPromptRef.current = prompt;
-    if (kind !== "coding") setSelectedRepoId(null);
   };
 
   const selectTool = (nextTool: ToolOptionValue) => {
     setTool(nextTool);
+    setSelectedBridgeId(null);
     setModel(getDefaultModel(nextTool) ?? null);
     setReasoningEffort(getDefaultReasoningEffort(nextTool) ?? null);
   };
@@ -122,13 +143,20 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
         model,
         reasoningEffort,
         interactionMode: submittedInteractionMode,
-        repo: effectiveRepo,
-        channels,
+        channel: selectedChannelTarget?.channel ?? null,
+        projectId: selectedChannelTarget?.projectId ?? null,
+        repoId: selectedChannelTarget?.repoId ?? null,
+        runtimeInstanceId: activeKind === "coding" ? selectedBridgeId : null,
+        designSystemVersionId: activeKind === "design" ? selectedDesignSystemVersionId : null,
+        designSessionGroupId: activeKind !== "design" ? selectedDesignSessionGroupId : null,
       });
       if (created) {
         clearDraft(draftScope);
         setManualKind(null);
-        setSelectedRepoId(null);
+        setSelectedChannelTargetKey(null);
+        setSelectedBridgeId(null);
+        setSelectedDesignSystemVersionId(null);
+        setSelectedDesignSessionGroupId(null);
       }
       return created;
     } finally {
@@ -162,15 +190,26 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
             <HomeComposer
               prompt={prompt}
               kind={activeKind}
-              repos={repos}
-              repoId={effectiveRepoId}
+              channels={channels}
+              projects={projects}
+              channelTargetKey={selectedChannelTargetKey}
+              selectedChannelRepoId={selectedChannelRepoId}
+              bridgeId={selectedBridgeId}
+              designSystemVersionId={selectedDesignSystemVersionId}
+              designSessionGroupId={selectedDesignSessionGroupId}
               tool={tool}
               model={model}
               reasoningEffort={reasoningEffort}
               mode={interactionMode}
               submitting={submitting}
               onPromptChange={updatePrompt}
-              onRepoChange={setSelectedRepoId}
+              onChannelTargetChange={(target) => {
+                setSelectedChannelTargetKey(target?.key ?? null);
+                setSelectedBridgeId(null);
+              }}
+              onBridgeChange={setSelectedBridgeId}
+              onDesignSystemChange={setSelectedDesignSystemVersionId}
+              onDesignChange={setSelectedDesignSessionGroupId}
               onToolChange={selectTool}
               onModelChange={setModel}
               onReasoningEffortChange={setReasoningEffort}
