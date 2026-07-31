@@ -59,7 +59,11 @@ export function HomeBridgePicker({
         if (bridgeId) onSelect(bridgeId);
       }}
     >
-      <SelectTrigger size="sm" className="max-w-40" aria-label="Choose bridge">
+      <SelectTrigger
+        size="sm"
+        className="max-w-40 border-transparent bg-transparent hover:bg-surface-hover"
+        aria-label="Choose bridge"
+      >
         <SelectValue placeholder={loading ? "Loading bridges…" : "Choose bridge"}>
           {selected ? (
             <>
