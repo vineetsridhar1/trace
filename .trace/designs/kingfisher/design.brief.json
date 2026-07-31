@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "artifactType": "Desktop product flow",
+  "audience": "Developers and designers starting a session in Trace",
+  "platform": "Desktop web",
+  "fidelity": "High-fidelity product concept",
+  "primaryJob": "Start a correctly configured session without evaluating every advanced option",
+  "coreFlow": [
+    "Describe the task",
+    "Pick or confirm the session type (Code, Design, App, PDF, Animation)",
+    "Adjust only the options that session type needs",
+    "Review the compact ready summary",
+    "Start the session"
+  ],
+  "requiredStates": [
+    "default",
+    "project picker open",
+    "configured and ready",
+    "design-specific options",
+    "app-specific options"
+  ],
+  "direction": {
+    "name": "Focused dark workspace",
+    "principles": [
+      "Progressive disclosure over equal-weight controls",
+      "Task prompt as the primary focal point",
+      "Prompt and execution context grouped as one submitted object",
+      "Options adapt to the selected session type instead of one universal toolbar",
+      "Command-style pickers with useful project context",
+      "Restrained semantic color and comfortable desktop density"
+    ]
+  },
+  "references": [
+    {
+      "source": "/tmp/trace-files/229db43b-7283-48e2-a237-ee366e142f8b.png",
+      "preserve": ["Dark workspace atmosphere", "Prompt-led entry point", "Orange Trace spark accent"],
+      "reinterpret": ["Inline option toolbar as grouped essentials and collapsed settings"],
+      "avoidCopying": ["Exact layout and copy"],
+      "evidence": ["Near-black background", "Large centered prompt composer", "Pill-based session types"]
+    },
+    {
+      "source": "/tmp/trace-files/7551b9e0-526d-4956-a902-5e7c98d6ab6f.png",
+      "preserve": ["Search-first project selection"],
+      "reinterpret": ["Unstructured dropdown as contextual recent-project picker"],
+      "avoidCopying": ["Exact menu geometry"],
+      "evidence": ["Search input above project results", "Menu anchored to project trigger"]
+    },
+    {
+      "source": "/tmp/trace-files/a1008e0e-e16d-439b-9e4c-0068adfb8a3b.png",
+      "preserve": ["Prompt and launch controls presented as a single creation action"],
+      "reinterpret": ["Loose inline controls as a clearly labelled execution-context group"],
+      "avoidCopying": ["Exact application shell and project content"],
+      "evidence": ["Prompt, attachments, context selectors, and send action share one bordered composer"]
+    },
+    {
+      "source": "/tmp/trace-files/14b0ac96-a51b-437e-8891-e8bd124fe4c2.png",
+      "preserve": [
+        "“What are you making?” prompt-first entry with routing subtitle",
+        "Session-type pills below the composer (Code, Design, App, PDF, Animation)",
+        "Design sessions expose a design-system picker (Trace Default) in the composer"
+      ],
+      "reinterpret": ["Blue selected-pill accent as the workspace's restrained foreground highlight"],
+      "avoidCopying": ["Exact pill geometry and blue selection color"],
+      "evidence": [
+        "Design pill selected shows palette icon with ‘Trace Default’ dropdown in composer options",
+        "Composer options row: attach, sketch, spark, design-system picker",
+        "Centered heading ‘What are you making?’ with routing subtitle"
+      ]
+    },
+    {
+      "source": "/tmp/trace-files/cc75e527-f053-4899-8418-0e010114f765.png",
+      "preserve": [
+        "App sessions expose ‘Attach design’ in the composer instead of design-system or bridge options"
+      ],
+      "reinterpret": ["Per-type option swap rendered through the shared context row and footer"],
+      "avoidCopying": ["Exact pill geometry and blue selection color"],
+      "evidence": [
+        "App pill selected shows ‘Attach design’ dropdown in composer options",
+        "No project, bridge, or mode controls for App sessions"
+      ]
+    }
+  ],
+  "assumptions": [
+    "Project, bridge, and model are required only for Code sessions.",
+    "Design sessions need a design system and model; they run on a canvas without project, bridge, or permission setup.",
+    "App sessions run hosted in Trace and can optionally start from an attached design.",
+    "Mode, permissions, and other advanced options use safe defaults and remain editable after launch.",
+    "The desktop workspace keeps a persistent sidebar for orientation."
+  ]
+}

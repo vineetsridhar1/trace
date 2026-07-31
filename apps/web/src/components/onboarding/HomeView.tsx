@@ -18,7 +18,6 @@ import { useHomeWorkData } from "../home/useHomeWorkData";
 import { MODE_CYCLE, type InteractionMode } from "../session/interactionModes";
 import { getDefaultModel, getDefaultReasoningEffort } from "../session/modelOptions";
 import type { ToolOptionValue } from "../session/picker/pickerShared";
-import { GeneratedProjectsGallery } from "../sidebar/GeneratedProjectsGallery";
 import type { HomeCreatableKind } from "../home/home-kinds";
 
 export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
@@ -170,12 +169,12 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--th-surface-mid)]">
-      <HomeHeader people={people} title={isCreateMode ? "Create" : "Home"} />
+      <HomeHeader people={people} title={isCreateMode ? "New session" : "Home"} />
       <div className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="pointer-events-none absolute left-1/2 top-[-70px] h-[420px] w-[min(900px,100vw)] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,color-mix(in_srgb,var(--th-accent)_8%,transparent),transparent_70%)]" />
         <main
           className={`relative mx-auto flex min-h-full w-full flex-col px-4 pb-7 sm:px-6 ${
-            showIntro ? "pt-16 sm:pt-24" : "pt-8 sm:pt-11"
+            showIntro ? "pt-16 sm:pt-[68px]" : "pt-8 sm:pt-11"
           }`}
         >
           <h1 className="text-center text-[22px] font-semibold tracking-[-0.01em] text-[var(--th-heading)] sm:text-2xl">
@@ -186,7 +185,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
               Describe it — Trace routes it to the right kind of session.
             </p>
           )}
-          <div className="mt-[18px]">
+          <div className="mt-7">
             <HomeComposer
               prompt={prompt}
               kind={activeKind}
@@ -224,9 +223,25 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
             />
           </div>
 
-          {isCreateMode ? (
-            <GeneratedProjectsGallery />
-          ) : !homeDataReady ? (
+          {isCreateMode &&
+          (activeKind !== "coding" || (!!selectedChannelTarget && !!selectedBridgeId)) ? (
+            <p className="mt-5 flex items-center justify-center gap-2 text-[13px] text-[var(--th-muted)]">
+              <span className="size-1.5 rounded-full bg-[var(--th-success)]" />
+              {activeKind === "coding" ? (
+                <span>
+                  Ready —{" "}
+                  <span className="font-medium text-[var(--th-heading)]">
+                    {selectedChannelTarget?.label}
+                  </span>{" "}
+                  on a <span className="font-medium text-[var(--th-heading)]">local bridge</span>
+                </span>
+              ) : activeKind === "design" ? (
+                <span>Ready — a new canvas with your selected design system</span>
+              ) : (
+                <span>Ready — a hosted {activeKind} workspace</span>
+              )}
+            </p>
+          ) : !isCreateMode && !homeDataReady ? (
             homeDataFailed ? (
               <>
                 <HomeLedgerError onRetry={retryHomeData} />
@@ -235,13 +250,13 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
             ) : (
               <HomeLedgerSkeleton />
             )
-          ) : firstRun ? (
+          ) : !isCreateMode && firstRun ? (
             <HomeFirstRunSparks
               onUsePrompt={(starter) => useHomeComposerStore.getState().requestFocus(starter)}
             />
-          ) : (
+          ) : !isCreateMode ? (
             <HomeWorkLedger items={work.items} />
-          )}
+          ) : null}
 
           <p className="mt-auto pt-8 text-center text-[11px] text-[var(--th-faint)]">
             <span className="hidden sm:inline">⌘N New session · </span>⌘K Search · ⌘J Latest session

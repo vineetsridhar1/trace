@@ -97,6 +97,7 @@ export function HomeComposer({
   return (
     <div className="mx-auto w-full max-w-[720px]">
       <SessionComposer
+        className="home-session-composer"
         editorRef={editorRef}
         mode={mode}
         placeholder="Describe what you want to make…"
@@ -122,7 +123,7 @@ export function HomeComposer({
             reasoningEffort={reasoningEffort}
             reasoningEffortOptions={effortOptions}
             disabled={submitting}
-            compact
+            compact={false}
             betweenModeAndTool={
               <>
                 <HomeChannelPicker

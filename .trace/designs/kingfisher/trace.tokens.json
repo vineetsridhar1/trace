@@ -1,0 +1,41 @@
+{
+  "direction": {
+    "name": "Focused dark workspace",
+    "rationale": "Derived from the supplied dark Trace session composer, with clearer tonal separation, compact desktop density, and semantic orange reserved for the Trace routing cue."
+  },
+  "color": {
+    "background": "#0d0e10",
+    "surface": "#15171a",
+    "foreground": "#f4f4f5",
+    "muted": "#90939b",
+    "border": "#2a2d32",
+    "primary": "#f4f4f5",
+    "primaryForeground": "#101114",
+    "secondary": "#5f646d",
+    "success": "#45c486",
+    "warning": "#ed7a45",
+    "danger": "#ef4444",
+    "dangerForeground": "#ffffff"
+  },
+  "typography": {
+    "display": "InterVariable, Inter, ui-sans-serif, system-ui, sans-serif",
+    "body": "InterVariable, Inter, ui-sans-serif, system-ui, sans-serif",
+    "mono": "ui-monospace, SFMono-Regular, monospace",
+    "scale": "1.25"
+  },
+  "spacing": {
+    "base": 4,
+    "density": "compact"
+  },
+  "radius": {
+    "control": 8,
+    "surface": 14
+  },
+  "elevation": {
+    "surface": "0 20px 64px rgb(0 0 0 / 0.34)"
+  },
+  "motion": {
+    "duration": 180,
+    "easing": "cubic-bezier(0.2, 0.8, 0.2, 1)"
+  }
+}

@@ -35,6 +35,7 @@ interface SessionComposerProps {
   onOpenAttachment?: (attachment: FileAttachment) => void;
   onStop?: () => void;
   onSend?: () => void;
+  className?: string;
 }
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
@@ -63,6 +64,7 @@ export function SessionComposer({
   onOpenAttachment,
   onStop,
   onSend,
+  className,
 }: SessionComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -75,6 +77,7 @@ export function SessionComposer({
       className={cn(
         "relative rounded-2xl border bg-surface-mid px-2 pt-2 shadow-sm transition-colors focus-within:ring-1 focus-within:ring-border",
         MODE_CONFIG[mode].inputBorder,
+        className,
       )}
     >
       {emptyHint}
