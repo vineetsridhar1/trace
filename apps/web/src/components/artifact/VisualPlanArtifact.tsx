@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
+import { getAuthHeaders } from "@trace/client-core";
 import type { Artifact } from "@trace/gql";
 import { Markdown } from "../ui/Markdown";
 import { TraceLoader } from "../ui/trace-loader";
-
-function artifactFileUrl(artifactId: string, filePath: string): string {
-  const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-  return `/artifacts/${encodeURIComponent(artifactId)}/files/${encodedPath}`;
-}
+import { artifactFileUrl } from "./artifact-file-url";
 
 export function VisualPlanArtifact({
   artifact,
@@ -32,6 +29,7 @@ export function VisualPlanArtifact({
     setError(null);
     fetch(artifactFileUrl(artifact.id, selectedPath), {
       credentials: "include",
+      headers: getAuthHeaders(),
       signal: controller.signal,
     })
       .then((response) => {

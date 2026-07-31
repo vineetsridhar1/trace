@@ -1,9 +1,5 @@
 import type { Artifact } from "@trace/gql";
-
-function artifactFileUrl(artifactId: string, filePath: string): string {
-  const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
-  return `/artifacts/${encodeURIComponent(artifactId)}/files/${encodedPath}`;
-}
+import { artifactFileUrl } from "./artifact-file-url";
 
 export function MediaArtifact({ artifact }: { artifact: Artifact }) {
   const file = artifact.manifest.files.find((candidate) =>
