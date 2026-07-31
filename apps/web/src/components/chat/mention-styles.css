@@ -97,6 +97,46 @@
   transform: none !important;
 }
 
+/* New-session composer: prompt and execution context share one surface while
+   the in-session composer retains its compact chat treatment. */
+.home-session-composer {
+  border-color: var(--th-edge-strong);
+  border-radius: 14px;
+  background: var(--th-raised);
+  box-shadow: 0 20px 64px rgb(0 0 0 / 0.22);
+  padding: 0;
+}
+
+.home-session-composer .session-editor .chat-editor .ql-editor {
+  min-height: 116px;
+  max-height: 220px;
+  padding: 14px 16px 10px;
+  color: var(--th-heading);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.home-session-composer .session-editor .chat-editor .ql-editor.ql-blank::before {
+  left: 16px !important;
+  top: 14px !important;
+}
+
+.home-session-composer .\@container {
+  min-height: 52px;
+  border-top: 1px solid var(--th-edge-strong);
+  padding: 9px 12px;
+}
+
+.home-session-composer .session-composer-context {
+  border-color: var(--th-edge-strong);
+  padding: 9px 12px;
+}
+
+.home-session-composer .\@container > button,
+.home-session-composer .\@container [data-slot="popover-trigger"] {
+  border-radius: 8px;
+}
+
 .pending-rich-text-input .chat-editor .ql-editor {
   min-height: 38px;
   max-height: 110px;

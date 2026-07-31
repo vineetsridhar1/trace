@@ -148,11 +148,8 @@ export function isGeneratedProjectKind(kind: string | null | undefined): boolean
   return isCreatableGeneratedProjectKind(kind);
 }
 
-// Whether a session of this kind can implement a design — derived from the
-// empty-state config so the empty-state box and the composer button stay in
-// sync (coding and app sessions; not design/design-system/pdf).
+// Every artifact kind can use a saved design as input except Design and
+// Design System, which use a design library instead.
 export function kindSupportsDesignImplementation(kind: string | null | undefined): boolean {
-  return getSessionEmptyStateContent(kind).starterPrompts.some(
-    (starter) => starter.action === "pick-design",
-  );
+  return kind !== "design" && kind !== "design_system";
 }

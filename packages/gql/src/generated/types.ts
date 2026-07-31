@@ -2287,6 +2287,7 @@ export type Session = {
   costUsd: Scalars["Float"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  createdById: Scalars["ID"]["output"];
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
@@ -2616,6 +2617,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  designSessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   designSystemVersionId?: InputMaybe<Scalars["ID"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;

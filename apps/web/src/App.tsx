@@ -1,5 +1,5 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
-import { useAuthStore, useEntityField, type AuthState } from "@trace/client-core";
+import { useAuthStore, useEntityField, useEntityStore, type AuthState } from "@trace/client-core";
 import { useUIStore, type UIState } from "./stores/ui";
 import { AppSidebar } from "./components/AppSidebar";
 import { AppTitleBar } from "./components/AppTitleBar";
@@ -9,7 +9,6 @@ import { ChatView } from "./components/chat/ChatView";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { NoOrgWelcome } from "./components/onboarding/NoOrgWelcome";
 import { HomeView } from "./components/onboarding/HomeView";
-import { GeneratedProjectsGallery } from "./components/sidebar/GeneratedProjectsGallery";
 import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { SearchResultsView } from "./components/search/SearchResultsView";
@@ -27,8 +26,9 @@ import { Toaster } from "./components/ui/sonner";
 import { TraceLoader } from "./components/ui/trace-loader";
 import { LoginPage } from "./components/auth/LoginPage";
 import { features } from "./lib/features";
-import { createQuickSession } from "./lib/create-quick-session";
 import { ManualEditNavigationGuard } from "./components/session/applications/ManualEditNavigationGuard";
+import { useHomeComposerStore } from "./stores/home-composer";
+import { navigateToSessionGroup } from "./stores/ui";
 
 export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
@@ -110,15 +110,26 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   const activeSessionGroupId = useUIStore((s: UIState) => s.activeSessionGroupId);
   const activeChannelType = useEntityField("channels", activeChannelId ?? "", "type");
 
-  // Cmd+N / Ctrl+N creates a public session; adding Shift creates a private one.
+  // Cmd+N / Ctrl+N opens Home and focuses the universal composer.
+  // Cmd+J / Ctrl+J opens the most recently active session.
   // Cmd+, / Ctrl+, opens the settings page.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "n") {
         e.preventDefault();
-        const channelId = useUIStore.getState().activeChannelId;
-        if (!channelId) return;
-        createQuickSession(channelId, { visibility: e.shiftKey ? "private" : "public" });
+        useUIStore.getState().setActiveChannelId(null);
+        useHomeComposerStore.getState().requestFocus();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "j") {
+        e.preventDefault();
+        const groups = Object.values(useEntityStore.getState().sessionGroups).sort((a, b) => {
+          const aTime = a._sortTimestamp ?? a.updatedAt ?? a.createdAt;
+          const bTime = b._sortTimestamp ?? b.updatedAt ?? b.createdAt;
+          return new Date(bTime).getTime() - new Date(aTime).getTime();
+        });
+        const latest = groups[0];
+        if (latest) navigateToSessionGroup(latest.channel?.id ?? null, latest.id);
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
@@ -166,7 +177,7 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
             {activePage === "settings" ? (
               <SettingsPage />
             ) : activePage === "create" ? (
-              <GeneratedProjectsGallery />
+              <HomeView mode="create" />
             ) : activePage === "inbox" ? (
               <InboxView />
             ) : activePage === "search" ? (

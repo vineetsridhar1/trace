@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "sections": [
+    {
+      "id": "new-coding-session",
+      "name": "New session · Code setup flow",
+      "screenIds": ["session-default", "session-project-picker", "session-ready"]
+    },
+    {
+      "id": "session-types",
+      "name": "Session types · options adapt per type",
+      "screenIds": ["session-design-options", "session-app-options"]
+    }
+  ],
+  "screens": [
+    {
+      "id": "session-default",
+      "name": "New session",
+      "component": "./screens/NewSessionScreen.tsx",
+      "variation": "Code",
+      "state": "Default",
+      "viewport": { "width": 1366, "height": 860 }
+    },
+    {
+      "id": "session-project-picker",
+      "name": "Choose a project",
+      "component": "./screens/ProjectPickerScreen.tsx",
+      "variation": "Code",
+      "state": "Project picker open",
+      "viewport": { "width": 1366, "height": 860 }
+    },
+    {
+      "id": "session-ready",
+      "name": "Configured session",
+      "component": "./screens/SessionReadyScreen.tsx",
+      "variation": "Code",
+      "state": "Configured and ready",
+      "viewport": { "width": 1366, "height": 860 }
+    },
+    {
+      "id": "session-design-options",
+      "name": "Design session",
+      "component": "./screens/DesignSessionScreen.tsx",
+      "variation": "Design",
+      "state": "Design-specific options",
+      "viewport": { "width": 1366, "height": 860 }
+    },
+    {
+      "id": "session-app-options",
+      "name": "App session",
+      "component": "./screens/AppSessionScreen.tsx",
+      "variation": "App",
+      "state": "App-specific options",
+      "viewport": { "width": 1366, "height": 860 }
+    }
+  ]
+}

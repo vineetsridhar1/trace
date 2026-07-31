@@ -2289,6 +2289,7 @@ export type Session = {
   costUsd: Scalars["Float"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  createdById: Scalars["ID"]["output"];
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
@@ -2618,6 +2619,7 @@ export type StartSessionInput = {
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  designSessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   designSystemVersionId?: InputMaybe<Scalars["ID"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;
@@ -3086,6 +3088,40 @@ export type CreateDesignSystemMutationVariables = Exact<{
 export type CreateDesignSystemMutation = {
   __typename?: "Mutation";
   createDesignSystem: { __typename?: "DesignSystem"; id: string; authoringSessionGroupId: string };
+};
+
+export type HomeComposerDesignsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type HomeComposerDesignsQuery = {
+  __typename?: "Query";
+  designSessionGroups: Array<{
+    __typename?: "SessionGroup";
+    id: string;
+    name: string;
+    kind: SessionGroupKind;
+    archivedAt?: string | null;
+    designPreviewCommitSha?: string | null;
+  }>;
+};
+
+export type HomeComposerDesignSystemsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type HomeComposerDesignSystemsQuery = {
+  __typename?: "Query";
+  designSystems: Array<{
+    __typename?: "DesignSystem";
+    id: string;
+    name: string;
+    status: DesignSystemStatus;
+    archivedAt?: string | null;
+    activeVersionId?: string | null;
+    activeVersion?: { __typename?: "DesignSystemVersion"; id: string; version: number } | null;
+    sourceRepo?: { __typename?: "Repo"; id: string; name: string } | null;
+  }>;
 };
 
 export type SessionGroupBranchDiffQueryVariables = Exact<{
@@ -3855,6 +3891,11 @@ export type AppPreviewStateQuery = {
     exitCode?: number | null;
     lastError?: string | null;
   }>;
+  sessionGroup?: {
+    __typename?: "SessionGroup";
+    id: string;
+    designPreviewUrl?: string | null;
+  } | null;
 };
 
 export type SessionGroupFileTreeQueryVariables = Exact<{
@@ -4365,31 +4406,6 @@ export type DesignSessionGroupsQuery = {
   }>;
 };
 
-export type ArchiveDesignSystemFromGalleryMutationVariables = Exact<{
-  id: Scalars["ID"]["input"];
-}>;
-
-export type ArchiveDesignSystemFromGalleryMutation = {
-  __typename?: "Mutation";
-  archiveDesignSystem: { __typename?: "DesignSystem"; id: string; archivedAt?: string | null };
-};
-
-export type GalleryDesignSystemsQueryVariables = Exact<{
-  organizationId: Scalars["ID"]["input"];
-}>;
-
-export type GalleryDesignSystemsQuery = {
-  __typename?: "Query";
-  designSystems: Array<{
-    __typename?: "DesignSystem";
-    id: string;
-    authoringSessionGroupId: string;
-    archivedAt?: string | null;
-    name: string;
-    status: DesignSystemStatus;
-  }>;
-};
-
 export type GeneratedProjectsQueryVariables = Exact<{
   organizationId: Scalars["ID"]["input"];
 }>;
@@ -4407,7 +4423,7 @@ export type GeneratedProjectsQuery = {
     designPreviewUrl?: string | null;
     archivedAt?: string | null;
     updatedAt: string;
-    owner: { __typename?: "User"; id: string };
+    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     gitCheckpoints: Array<{
       __typename?: "GitCheckpoint";
       id: string;
@@ -4420,6 +4436,7 @@ export type GeneratedProjectsQuery = {
       __typename?: "Session";
       id: string;
       sessionGroupId?: string | null;
+      createdById: string;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
       prUrl?: string | null;
@@ -4441,7 +4458,7 @@ export type GeneratedProjectsQuery = {
     designPreviewUrl?: string | null;
     archivedAt?: string | null;
     updatedAt: string;
-    owner: { __typename?: "User"; id: string };
+    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     gitCheckpoints: Array<{
       __typename?: "GitCheckpoint";
       id: string;
@@ -4454,6 +4471,7 @@ export type GeneratedProjectsQuery = {
       __typename?: "Session";
       id: string;
       sessionGroupId?: string | null;
+      createdById: string;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
       prUrl?: string | null;
@@ -4483,7 +4501,7 @@ export type GeneratedProjectsQuery = {
     pdfPageHeight: number;
     pdfPageUnit: string;
     pdfFormatVersion: number;
-    owner: { __typename?: "User"; id: string };
+    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     gitCheckpoints: Array<{
       __typename?: "GitCheckpoint";
       id: string;
@@ -4496,6 +4514,7 @@ export type GeneratedProjectsQuery = {
       __typename?: "Session";
       id: string;
       sessionGroupId?: string | null;
+      createdById: string;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
       prUrl?: string | null;
@@ -4518,7 +4537,7 @@ export type GeneratedProjectsQuery = {
     animationPreviewStatus?: string | null;
     archivedAt?: string | null;
     updatedAt: string;
-    owner: { __typename?: "User"; id: string };
+    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     gitCheckpoints: Array<{
       __typename?: "GitCheckpoint";
       id: string;
@@ -4531,6 +4550,7 @@ export type GeneratedProjectsQuery = {
       __typename?: "Session";
       id: string;
       sessionGroupId?: string | null;
+      createdById: string;
       agentStatus: AgentStatus;
       sessionStatus: SessionStatus;
       prUrl?: string | null;
@@ -4540,6 +4560,49 @@ export type GeneratedProjectsQuery = {
       updatedAt: string;
       createdAt: string;
     }>;
+  }>;
+  designSystems: Array<{
+    __typename?: "DesignSystem";
+    id: string;
+    authoringSessionGroupId: string;
+    archivedAt?: string | null;
+    name: string;
+    status: DesignSystemStatus;
+    authoringSessionGroup: {
+      __typename?: "SessionGroup";
+      id: string;
+      name: string;
+      slug?: string | null;
+      kind: SessionGroupKind;
+      status: SessionGroupStatus;
+      visibility: SessionGroupVisibility;
+      designPreviewUrl?: string | null;
+      archivedAt?: string | null;
+      updatedAt: string;
+      owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+      gitCheckpoints: Array<{
+        __typename?: "GitCheckpoint";
+        id: string;
+        committedAt: string;
+        previewStatus?: GitCheckpointCaptureStatus | null;
+        previewUrl?: string | null;
+      }>;
+      connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+      sessions: Array<{
+        __typename?: "Session";
+        id: string;
+        sessionGroupId?: string | null;
+        createdById: string;
+        agentStatus: AgentStatus;
+        sessionStatus: SessionStatus;
+        prUrl?: string | null;
+        worktreeDeleted: boolean;
+        lastMessageAt?: string | null;
+        lastUserMessageAt?: string | null;
+        updatedAt: string;
+        createdAt: string;
+      }>;
+    };
   }>;
 };
 
@@ -5039,6 +5102,20 @@ export type ReposQuery = {
         }>;
       }>;
     };
+  }>;
+};
+
+export type ProjectsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type ProjectsQuery = {
+  __typename?: "Query";
+  projects: Array<{
+    __typename?: "Project";
+    id: string;
+    name: string;
+    repo?: { __typename?: "Repo"; id: string; name: string } | null;
   }>;
 };
 
@@ -6150,6 +6227,123 @@ export const CreateDesignSystemDocument = {
     },
   ],
 } as unknown as DocumentNode<CreateDesignSystemMutation, CreateDesignSystemMutationVariables>;
+export const HomeComposerDesignsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "HomeComposerDesigns" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "designPreviewCommitSha" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<HomeComposerDesignsQuery, HomeComposerDesignsQueryVariables>;
+export const HomeComposerDesignSystemsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "HomeComposerDesignSystems" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designSystems" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "activeVersionId" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "activeVersion" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "version" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "sourceRepo" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  HomeComposerDesignSystemsQuery,
+  HomeComposerDesignSystemsQueryVariables
+>;
 export const SessionGroupBranchDiffDocument = {
   kind: "Document",
   definitions: [
@@ -8568,6 +8762,24 @@ export const AppPreviewStateDocument = {
               },
             ],
           },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessionGroup" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+              ],
+            },
+          },
         ],
       },
     },
@@ -10289,98 +10501,6 @@ export const DesignSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<DesignSessionGroupsQuery, DesignSessionGroupsQueryVariables>;
-export const ArchiveDesignSystemFromGalleryDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "ArchiveDesignSystemFromGallery" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "archiveDesignSystem" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "id" },
-                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<
-  ArchiveDesignSystemFromGalleryMutation,
-  ArchiveDesignSystemFromGalleryMutationVariables
->;
-export const GalleryDesignSystemsDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "GalleryDesignSystems" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "designSystems" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "authoringSessionGroupId" } },
-                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<GalleryDesignSystemsQuery, GalleryDesignSystemsQueryVariables>;
 export const GeneratedProjectsDocument = {
   kind: "Document",
   definitions: [
@@ -10425,7 +10545,11 @@ export const GeneratedProjectsDocument = {
                   name: { kind: "Name", value: "owner" },
                   selectionSet: {
                     kind: "SelectionSet",
-                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
                   },
                 },
                 { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
@@ -10460,6 +10584,7 @@ export const GeneratedProjectsDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
@@ -10498,7 +10623,11 @@ export const GeneratedProjectsDocument = {
                   name: { kind: "Name", value: "owner" },
                   selectionSet: {
                     kind: "SelectionSet",
-                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
                   },
                 },
                 { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
@@ -10533,6 +10662,7 @@ export const GeneratedProjectsDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
@@ -10571,7 +10701,11 @@ export const GeneratedProjectsDocument = {
                   name: { kind: "Name", value: "owner" },
                   selectionSet: {
                     kind: "SelectionSet",
-                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
                   },
                 },
                 { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
@@ -10614,6 +10748,7 @@ export const GeneratedProjectsDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
@@ -10652,7 +10787,11 @@ export const GeneratedProjectsDocument = {
                   name: { kind: "Name", value: "owner" },
                   selectionSet: {
                     kind: "SelectionSet",
-                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                    ],
                   },
                 },
                 { kind: "Field", name: { kind: "Name", value: "animationPreviewUrl" } },
@@ -10688,6 +10827,7 @@ export const GeneratedProjectsDocument = {
                     selections: [
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
                       { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
                       { kind: "Field", name: { kind: "Name", value: "prUrl" } },
@@ -10696,6 +10836,98 @@ export const GeneratedProjectsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
                       { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designSystems" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "authoringSessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "authoringSessionGroup" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "slug" } },
+                      { kind: "Field", name: { kind: "Name", value: "kind" } },
+                      { kind: "Field", name: { kind: "Name", value: "status" } },
+                      { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "owner" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "gitCheckpoints" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "committedAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
+                            { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
+                          ],
+                        },
+                      },
+                      { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "connection" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "sessions" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                            { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                            { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                            { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                            { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                            { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                            { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                            { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                          ],
+                        },
+                      },
                     ],
                   },
                 },
@@ -12297,6 +12529,60 @@ export const ReposDocument = {
     },
   ],
 } as unknown as DocumentNode<ReposQuery, ReposQueryVariables>;
+export const ProjectsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "Projects" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "projects" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "repo" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ProjectsQuery, ProjectsQueryVariables>;
 export const ChatsDocument = {
   kind: "Document",
   definitions: [

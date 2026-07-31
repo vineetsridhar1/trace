@@ -1,6 +1,14 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
-import type { Channel, ChannelGroup, Chat, Repo, InboxItem, SessionGroup } from "@trace/gql";
+import type {
+  Channel,
+  ChannelGroup,
+  Chat,
+  Repo,
+  Project,
+  InboxItem,
+  SessionGroup,
+} from "@trace/gql";
 import { useAuthStore } from "@trace/client-core";
 import { useEntityStore, useEntityIds } from "@trace/client-core";
 import type { EntityTableMap } from "@trace/client-core";
@@ -8,6 +16,7 @@ import { useUIStore } from "../stores/ui";
 import { client } from "../lib/urql";
 import { features } from "../lib/features";
 import { gql } from "@urql/core";
+import { useHomeDataStore } from "../stores/home-data";
 
 const CHANNELS_QUERY = gql`
   query Channels($organizationId: ID!, $memberOnly: Boolean) {
@@ -89,6 +98,19 @@ const REPOS_QUERY = gql`
             }
           }
         }
+      }
+    }
+  }
+`;
+
+const PROJECTS_QUERY = gql`
+  query Projects($organizationId: ID!) {
+    projects(organizationId: $organizationId) {
+      id
+      name
+      repo {
+        id
+        name
       }
     }
   }
@@ -242,25 +264,41 @@ export function useSidebarData() {
     (s: { remove: (entityType: keyof EntityTableMap, id: string) => void }) => s.remove,
   );
   const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
+  const homeRetryRequest = useHomeDataStore((state) => state.retryRequest);
   const [channelsLoading, setChannelsLoading] = useState(true);
+  const [channelsLoadFailed, setChannelsLoadFailed] = useState(false);
   const [chatsLoading, setChatsLoading] = useState(features.messaging);
+  const channelsRequestRef = useRef(0);
 
   const fetchChannels = useCallback(async () => {
-    if (!activeOrgId) return;
-    const result = await client
-      .query(CHANNELS_QUERY, { organizationId: activeOrgId, memberOnly: true })
-      .toPromise();
-    if (result.data?.channels) {
-      const memberChannels = result.data.channels as Array<Channel & { id: string }>;
-      const memberChannelIds = new Set(memberChannels.map((channel) => channel.id));
-      upsertMany("channels", memberChannels);
-      for (const channelId of Object.keys(useEntityStore.getState().channels)) {
-        if (!memberChannelIds.has(channelId)) {
-          removeEntity("channels", channelId);
+    const request = ++channelsRequestRef.current;
+    if (!activeOrgId) {
+      setChannelsLoading(false);
+      return;
+    }
+    setChannelsLoading(true);
+    setChannelsLoadFailed(false);
+    try {
+      const result = await client
+        .query(CHANNELS_QUERY, { organizationId: activeOrgId, memberOnly: true })
+        .toPromise();
+      if (request !== channelsRequestRef.current) return;
+      if (result.data?.channels) {
+        const memberChannels = result.data.channels as Array<Channel & { id: string }>;
+        const memberChannelIds = new Set(memberChannels.map((channel) => channel.id));
+        upsertMany("channels", memberChannels);
+        for (const channelId of Object.keys(useEntityStore.getState().channels)) {
+          if (!memberChannelIds.has(channelId)) {
+            removeEntity("channels", channelId);
+          }
         }
       }
+      setChannelsLoadFailed(Boolean(result.error));
+    } catch {
+      if (request === channelsRequestRef.current) setChannelsLoadFailed(true);
+    } finally {
+      if (request === channelsRequestRef.current) setChannelsLoading(false);
     }
-    setChannelsLoading(false);
   }, [activeOrgId, removeEntity, upsertMany]);
 
   const fetchChannelGroups = useCallback(async () => {
@@ -284,6 +322,14 @@ export function useSidebarData() {
     }
   }, [activeOrgId, upsertMany]);
 
+  const fetchProjects = useCallback(async () => {
+    if (!activeOrgId) return;
+    const result = await client.query(PROJECTS_QUERY, { organizationId: activeOrgId }).toPromise();
+    if (result.data?.projects) {
+      upsertMany("projects", result.data.projects as Array<Project & { id: string }>);
+    }
+  }, [activeOrgId, upsertMany]);
+
   const fetchChats = useCallback(async () => {
     const result = await client.query(CHATS_QUERY, {}).toPromise();
     if (result.data?.chats) {
@@ -304,58 +350,84 @@ export function useSidebarData() {
 
   const fetchSidebarSessionGroups = useCallback(
     async (channelIds: string[]) => {
-      if (!activeOrgId || channelIds.length === 0) return;
-      const results = await Promise.all(
-        channelIds.map((channelId) =>
-          client
-            .query(SIDEBAR_SESSION_GROUPS_QUERY, {
-              channelId,
-              archived: false,
-              includeActiveMerged: true,
-            })
-            .toPromise(),
-        ),
-      );
+      if (!activeOrgId) return;
+      useHomeDataStore.getState().markCodingStatus(activeOrgId, "loading");
+      if (channelIds.length === 0) {
+        useHomeDataStore.getState().markCodingStatus(activeOrgId, "ready");
+        return;
+      }
+      try {
+        const results = await Promise.all(
+          channelIds.map((channelId) =>
+            client
+              .query(SIDEBAR_SESSION_GROUPS_QUERY, {
+                channelId,
+                archived: false,
+                includeActiveMerged: true,
+              })
+              .toPromise(),
+          ),
+        );
+        if (useAuthStore.getState().activeOrgId !== activeOrgId) return;
 
-      const groups = results.flatMap((result) =>
-        result.data?.sessionGroups
-          ? (result.data.sessionGroups as Array<SessionGroup & { id: string }>)
-          : [],
-      );
-      if (groups.length === 0) return;
+        const groups = results.flatMap((result) =>
+          result.data?.sessionGroups
+            ? (result.data.sessionGroups as Array<SessionGroup & { id: string }>)
+            : [],
+        );
+        if (groups.length) {
+          const entityState = useEntityStore.getState();
+          const sessions = groups.flatMap((group) => group.sessions ?? []);
+          const sessionGroups = groups.map((group) => ({
+            ...(entityState.sessionGroups[group.id] ?? {}),
+            ...group,
+            sessions: entityState.sessionGroups[group.id]?.sessions ?? [],
+            _sortTimestamp:
+              group.sessions?.[0]?.lastMessageAt ??
+              group.sessions?.[0]?.lastUserMessageAt ??
+              group.sessions?.[0]?.updatedAt ??
+              group.updatedAt,
+          }));
 
-      const entityState = useEntityStore.getState();
-      const sessions = groups.flatMap((group) => group.sessions ?? []);
-      const sessionGroups = groups.map((group) => ({
-        ...(entityState.sessionGroups[group.id] ?? {}),
-        ...group,
-        sessions: entityState.sessionGroups[group.id]?.sessions ?? [],
-        _sortTimestamp:
-          group.sessions?.[0]?.lastMessageAt ??
-          group.sessions?.[0]?.lastUserMessageAt ??
-          group.sessions?.[0]?.updatedAt ??
-          group.updatedAt,
-      }));
-
-      upsertMany("sessions", sessions as Array<EntityTableMap["sessions"] & { id: string }>);
-      upsertMany(
-        "sessionGroups",
-        sessionGroups as Array<EntityTableMap["sessionGroups"] & { id: string }>,
-      );
+          upsertMany("sessions", sessions as Array<EntityTableMap["sessions"] & { id: string }>);
+          upsertMany(
+            "sessionGroups",
+            sessionGroups as Array<EntityTableMap["sessionGroups"] & { id: string }>,
+          );
+        }
+        useHomeDataStore
+          .getState()
+          .markCodingStatus(
+            activeOrgId,
+            results.some((result) => result.error) ? "error" : "ready",
+          );
+      } catch {
+        useHomeDataStore.getState().markCodingStatus(activeOrgId, "error");
+      }
     },
     [activeOrgId, upsertMany],
   );
 
-  // Initial fetch — channels, channelGroups, and chats are kept fresh by useOrgEvents,
-  // so they don't need to refetch on refreshTick. Only inbox items need periodic refresh.
+  // Initial fetches stay fresh through useOrgEvents. homeRetryRequest is only
+  // incremented by the explicit Home error-state retry button.
   useEffect(() => {
-    fetchChannels();
-    fetchChannelGroups();
+    if (activeOrgId) useHomeDataStore.getState().ensureOrganization(activeOrgId);
+    void fetchChannels();
+    void fetchChannelGroups();
     if (features.messaging) {
-      fetchChats();
+      void fetchChats();
     }
-    fetchRepos();
-  }, [fetchChannels, fetchChannelGroups, fetchChats, fetchRepos]);
+    void fetchRepos();
+    void fetchProjects();
+  }, [
+    activeOrgId,
+    fetchChannels,
+    fetchChannelGroups,
+    fetchChats,
+    fetchProjects,
+    fetchRepos,
+    homeRetryRequest,
+  ]);
 
   useEffect(() => {
     if (features.messaging) return;
@@ -473,8 +545,19 @@ export function useSidebarData() {
 
   useEffect(() => {
     if (channelsLoading) return;
-    fetchSidebarSessionGroups(codingChannelIds);
-  }, [channelsLoading, codingChannelIds, fetchSidebarSessionGroups, refreshTick]);
+    if (channelsLoadFailed) {
+      if (activeOrgId) useHomeDataStore.getState().markCodingStatus(activeOrgId, "error");
+      return;
+    }
+    void fetchSidebarSessionGroups(codingChannelIds);
+  }, [
+    activeOrgId,
+    channelsLoadFailed,
+    channelsLoading,
+    codingChannelIds,
+    fetchSidebarSessionGroups,
+    refreshTick,
+  ]);
 
   return {
     activeOrgId,

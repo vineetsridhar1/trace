@@ -689,6 +689,7 @@ type Session {
   model: String
   reasoningEffort: String
   hosting: HostingMode!
+  createdById: ID!
   createdBy: User!
   repo: Repo
   branch: String
@@ -1427,6 +1428,7 @@ input StartSessionInput {
   deferRuntimeSelection: Boolean
   repoId: ID
   designSystemVersionId: ID
+  designSessionGroupId: ID
   branch: String
   ticketId: ID
   channelId: ID

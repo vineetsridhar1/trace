@@ -193,6 +193,7 @@ export function createPrismaMock() {
     project: {
       count: vi.fn(),
       create: vi.fn(),
+      findFirst: vi.fn(),
       findMany: vi.fn(),
       findFirstOrThrow: vi.fn(),
       findUnique: vi.fn(),
