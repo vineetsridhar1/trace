@@ -1,8 +1,0 @@
-/* Local design typeface: Inter variable (latin), bundled offline for export. */
-@font-face {
-  font-family: "InterVariable";
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url("./assets/fonts/inter-latin.woff2") format("woff2-variations");
-}
