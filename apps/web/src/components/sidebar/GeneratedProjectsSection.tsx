@@ -14,7 +14,6 @@ import { useHomeComposerStore } from "../../stores/home-composer";
 import { useUIStore } from "../../stores/ui";
 import { useHomeDataStore } from "../../stores/home-data";
 import { useSidebar } from "../ui/sidebar";
-import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 
 const GENERATED_PROJECTS_QUERY = gql`
   query GeneratedProjects($organizationId: ID!) {
@@ -319,7 +318,6 @@ export function GeneratedProjectsSection({ activeOrgId }: { activeOrgId: string 
       onClick={openCreate}
       className={cn(
         "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors",
-        sidebarRootLeftEdgeRowClass,
         "pl-4",
         activePage === "create"
           ? "bg-white/10 text-foreground"
