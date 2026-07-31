@@ -3,38 +3,38 @@ import type { Channel, Project } from "@trace/gql";
 import { buildHomeChannelTargets } from "./HomeChannelPicker";
 
 describe("buildHomeChannelTargets", () => {
-  it("labels coding channels with their projects and excludes text channels", () => {
+  it("includes coding channels and excludes text channels", () => {
     const targets = buildHomeChannelTargets(
       [
         {
           id: "coding-1",
           name: "frontend",
           type: "coding",
-          projects: [
-            { id: "project-2", name: "Website" },
-            { id: "project-1", name: "Product" },
-          ],
-        },
-        {
-          id: "coding-2",
-          name: "standalone",
-          type: "coding",
-          projects: [],
+          repo: { id: "repo-1", name: "web" },
         },
         {
           id: "text-1",
           name: "general",
           type: "text",
-          projects: [],
         },
       ] as Channel[],
       [],
     );
 
-    expect(targets.map(({ key, label, projectId }) => ({ key, label, projectId }))).toEqual([
-      { key: "coding-1:project-1", label: "Product / frontend", projectId: "project-1" },
-      { key: "coding-2", label: "standalone", projectId: null },
-      { key: "coding-1:project-2", label: "Website / frontend", projectId: "project-2" },
+    expect(
+      targets.map(({ key, label, projectId, repoId }) => ({
+        key,
+        label,
+        projectId,
+        repoId,
+      })),
+    ).toEqual([
+      {
+        key: "channel:coding-1",
+        label: "frontend",
+        projectId: null,
+        repoId: "repo-1",
+      },
     ]);
   });
 

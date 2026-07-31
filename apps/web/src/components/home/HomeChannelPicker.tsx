@@ -21,28 +21,16 @@ export function buildHomeChannelTargets(
   const targets: HomeChannelTarget[] = [];
   for (const channel of channels) {
     if (channel.type !== "coding") continue;
-    const projects = channel.projects ?? [];
-    if (projects.length === 0) {
-      targets.push({
-        key: channel.id,
-        channel,
-        projectId: null,
-        repoId: channel.repo?.id ?? null,
-        label: channel.name,
-      });
-      continue;
-    }
-    for (const project of projects) {
-      targets.push({
-        key: `${channel.id}:${project.id}`,
-        channel,
-        projectId: project.id,
-        repoId: channel.repo?.id ?? project.repo?.id ?? null,
-        label: `${project.name} / ${channel.name}`,
-      });
-    }
+    targets.push({
+      key: `channel:${channel.id}`,
+      channel,
+      projectId: null,
+      repoId: channel.repo?.id ?? null,
+      label: channel.name,
+    });
   }
   for (const project of projects) {
+    if (!project.repo) continue;
     targets.push({
       key: `project:${project.id}`,
       channel: null,

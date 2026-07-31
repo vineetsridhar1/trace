@@ -35,10 +35,6 @@ const CHANNELS_QUERY = gql`
         id
         name
       }
-      projects {
-        id
-        name
-      }
     }
   }
 `;
@@ -115,9 +111,6 @@ const PROJECTS_QUERY = gql`
       repo {
         id
         name
-      }
-      channels {
-        id
       }
     }
   }

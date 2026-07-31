@@ -5039,7 +5039,6 @@ export type ChannelsQuery = {
     runScripts?: JsonValue | null;
     viewerIsMember: boolean;
     repo?: { __typename?: "Repo"; id: string; name: string } | null;
-    projects: Array<{ __typename?: "Project"; id: string; name: string }>;
   }>;
 };
 
@@ -5126,7 +5125,6 @@ export type ProjectsQuery = {
     id: string;
     name: string;
     repo?: { __typename?: "Repo"; id: string; name: string } | null;
-    channels: Array<{ __typename?: "Channel"; id: string }>;
   }>;
 };
 
@@ -12375,17 +12373,6 @@ export const ChannelsDocument = {
                     ],
                   },
                 },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "projects" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
-                    ],
-                  },
-                },
               ],
             },
           },
@@ -12641,14 +12628,6 @@ export const ProjectsDocument = {
                       { kind: "Field", name: { kind: "Name", value: "id" } },
                       { kind: "Field", name: { kind: "Name", value: "name" } },
                     ],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "channels" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
                   },
                 },
               ],
