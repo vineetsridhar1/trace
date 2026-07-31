@@ -37,6 +37,7 @@ export function HomeDesignPicker({
   const upsertMany = useEntityStore((state) => state.upsertMany);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const designs = useMemo(
     () =>
       Object.values(groups)
@@ -105,8 +106,29 @@ export function HomeDesignPicker({
             <input
               autoFocus
               aria-label="Find a design"
+              aria-activedescendant={visibleDesigns[activeIndex]?.id}
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setActiveIndex(0);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setActiveIndex((index) =>
+                    Math.min(index + 1, Math.max(visibleDesigns.length - 1, 0)),
+                  );
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setActiveIndex((index) => Math.max(index - 1, 0));
+                } else if (event.key === "Enter") {
+                  const design = visibleDesigns[activeIndex];
+                  if (!design) return;
+                  event.preventDefault();
+                  onSelect(design.id);
+                  setOpen(false);
+                }
+              }}
               placeholder="Find a design…"
               className="min-w-0 flex-1 bg-transparent text-[13px] text-[var(--th-heading)] outline-none placeholder:text-[var(--th-muted)]"
             />
@@ -114,9 +136,10 @@ export function HomeDesignPicker({
         </div>
         <div role="listbox" aria-label="Design" className="max-h-72 overflow-y-auto p-1.5">
           <p className="px-2 pb-1 pt-1.5 text-[11px] font-medium text-[var(--th-muted)]">Recent</p>
-          {visibleDesigns.map((design) => (
+          {visibleDesigns.map((design, index) => (
             <button
               key={design.id}
+              id={design.id}
               type="button"
               role="option"
               aria-selected={design.id === selectedDesignId}
@@ -124,10 +147,12 @@ export function HomeDesignPicker({
                 onSelect(design.id);
                 setOpen(false);
               }}
+              onMouseEnter={() => setActiveIndex(index)}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
                 "outline-none hover:bg-[var(--th-surface-mid)] focus-visible:bg-[var(--th-surface-mid)]",
-                design.id === selectedDesignId && "bg-[var(--th-surface-mid)]",
+                (design.id === selectedDesignId || index === activeIndex) &&
+                  "bg-[var(--th-surface-mid)]",
               )}
             >
               <span className="grid size-7 shrink-0 place-items-center rounded-md bg-[var(--th-surface-mid)] text-[var(--th-muted)]">

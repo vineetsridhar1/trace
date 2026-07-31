@@ -55,6 +55,7 @@ export function HomeChannelPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const channelsTable = useEntityStore((state) => state.channels);
   const projectsTable = useEntityStore((state) => state.projects);
   const channels = useMemo(() => Object.values(channelsTable), [channelsTable]);
@@ -96,8 +97,29 @@ export function HomeChannelPicker({
             <input
               autoFocus
               aria-label="Find a project"
+              aria-activedescendant={visibleTargets[activeIndex]?.key}
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setActiveIndex(0);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setActiveIndex((index) =>
+                    Math.min(index + 1, Math.max(visibleTargets.length - 1, 0)),
+                  );
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setActiveIndex((index) => Math.max(index - 1, 0));
+                } else if (event.key === "Enter") {
+                  const target = visibleTargets[activeIndex];
+                  if (!target) return;
+                  event.preventDefault();
+                  onSelect(target);
+                  setOpen(false);
+                }
+              }}
               placeholder="Find a project…"
               className="min-w-0 flex-1 bg-transparent text-[13px] text-[var(--th-heading)] outline-none placeholder:text-[var(--th-muted)]"
             />
@@ -109,9 +131,10 @@ export function HomeChannelPicker({
           className="max-h-72 overflow-y-auto p-1.5"
         >
           <p className="px-2 pb-1 pt-1.5 text-[11px] font-medium text-[var(--th-muted)]">Recent</p>
-          {visibleTargets.map((target) => (
+          {visibleTargets.map((target, index) => (
             <button
               key={target.key}
+              id={target.key}
               type="button"
               role="option"
               aria-selected={target.key === selectedKey}
@@ -119,10 +142,12 @@ export function HomeChannelPicker({
                 onSelect(target);
                 setOpen(false);
               }}
+              onMouseEnter={() => setActiveIndex(index)}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
                 "outline-none hover:bg-[var(--th-surface-mid)] focus-visible:bg-[var(--th-surface-mid)]",
-                target.key === selectedKey && "bg-[var(--th-surface-mid)]",
+                (target.key === selectedKey || index === activeIndex) &&
+                  "bg-[var(--th-surface-mid)]",
               )}
             >
               <span className="grid size-7 shrink-0 place-items-center rounded-md bg-[var(--th-surface-mid)] text-[var(--th-muted)]">
