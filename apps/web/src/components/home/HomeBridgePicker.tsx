@@ -63,6 +63,7 @@ export function HomeBridgePicker({
         size="sm"
         className="max-w-40 border-transparent bg-transparent hover:border-transparent hover:bg-white/10 data-popup-open:border-transparent"
         aria-label="Choose bridge"
+        title={selected?.label}
       >
         <SelectValue placeholder={loading ? "Loading bridges…" : "Choose bridge"}>
           {selected ? (
@@ -73,7 +74,7 @@ export function HomeBridgePicker({
           ) : undefined}
         </SelectValue>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="min-w-56">
         {connectedBridges.map((bridge) => {
           const lacksRepo = !!repoId && !bridge.registeredRepoIds.includes(repoId);
           return (
@@ -81,7 +82,7 @@ export function HomeBridgePicker({
               key={bridge.id}
               value={bridge.id}
               disabled={lacksRepo}
-              title={lacksRepo ? "This bridge does not have the project repository linked" : ""}
+              title={lacksRepo ? "This bridge does not have the project repository linked" : bridge.label}
             >
               <Monitor />
               <span className="min-w-0 flex-1 truncate">{bridge.label}</span>
