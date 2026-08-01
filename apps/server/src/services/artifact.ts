@@ -192,6 +192,36 @@ export class ArtifactService {
     });
   }
 
+  async listForOrganization(input: {
+    organizationId: string;
+    userId: string;
+    type?: string;
+    key?: string;
+    limit?: number;
+  }): Promise<Artifact[]> {
+    const artifacts = await prisma.artifact.findMany({
+      where: {
+        organizationId: input.organizationId,
+        ...(input.type ? { type: normalizeType(input.type) } : {}),
+        ...(input.key ? { key: input.key } : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: Math.min(Math.max(input.limit ?? 200, 1), 500),
+      include: {
+        session: {
+          include: {
+            sessionGroup: { select: { visibility: true, ownerUserId: true } },
+          },
+        },
+      },
+    });
+    return artifacts.filter(
+      (artifact) =>
+        !artifact.session.sessionGroup ||
+        canViewSessionGroup(artifact.session.sessionGroup, input.userId),
+    );
+  }
+
   async approve(input: {
     artifactId: string;
     organizationId: string;

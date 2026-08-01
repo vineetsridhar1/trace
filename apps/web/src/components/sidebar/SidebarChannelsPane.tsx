@@ -8,6 +8,7 @@ import { BrowseChannelsDialog } from "./BrowseChannelsDialog";
 import { CreateChannelDialog } from "./CreateChannelDialog";
 import { GeneratedProjectsSection } from "./GeneratedProjectsSection";
 import { HomeButton } from "./HomeButton";
+import { ArtifactsButton } from "./ArtifactsButton";
 import { InboxButton } from "./InboxButton";
 import { TicketsButton } from "./TicketsButton";
 import { SidebarChannelTree } from "./SidebarChannelTree";
@@ -78,6 +79,7 @@ export function SidebarChannelsPane({
         <div className="space-y-0.5 pb-1">
           <HomeButton />
           <InboxButton />
+          <ArtifactsButton />
           {features.tickets && <TicketsButton />}
           <GeneratedProjectsSection />
         </div>

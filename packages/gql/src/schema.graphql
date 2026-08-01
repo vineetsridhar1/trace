@@ -742,6 +742,7 @@ type Artifact {
   manifest: ArtifactManifest!
   byteSize: Int!
   createdBy: User!
+  session: Session!
   createdAt: DateTime!
 }
 
@@ -1699,7 +1700,8 @@ type Query {
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
-  artifacts(sessionId: ID!, type: String, key: String): [Artifact!]!
+  # Omit sessionId to list every artifact the viewer can see in the organization.
+  artifacts(sessionId: ID, type: String, key: String, limit: Int): [Artifact!]!
   mySessions(
     organizationId: ID!
     agentStatus: AgentStatus

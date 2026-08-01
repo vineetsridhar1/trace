@@ -94,6 +94,7 @@ export type Artifact = {
   key: Scalars["String"]["output"];
   manifest: ArtifactManifest;
   organizationId: Scalars["ID"]["output"];
+  session: Session;
   sessionId: Scalars["ID"]["output"];
   type: Scalars["String"]["output"];
 };
@@ -1835,7 +1836,8 @@ export type QueryAppSessionGroupsArgs = {
 
 export type QueryArtifactsArgs = {
   key?: InputMaybe<Scalars["String"]["input"]>;
-  sessionId: Scalars["ID"]["input"];
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  sessionId?: InputMaybe<Scalars["ID"]["input"]>;
   type?: InputMaybe<Scalars["String"]["input"]>;
 };
 
@@ -3318,6 +3320,7 @@ export type ArtifactResolvers<
   key?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   manifest?: Resolver<ResolversTypes["ArtifactManifest"], ParentType, ContextType>;
   organizationId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  session?: Resolver<ResolversTypes["Session"], ParentType, ContextType>;
   sessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   type?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
@@ -4897,7 +4900,7 @@ export type QueryResolvers<
     Array<ResolversTypes["Artifact"]>,
     ParentType,
     ContextType,
-    RequireFields<QueryArtifactsArgs, "sessionId">
+    Partial<QueryArtifactsArgs>
   >;
   availableRuntimes?: Resolver<
     Array<ResolversTypes["SessionRuntimeInstance"]>,

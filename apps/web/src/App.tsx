@@ -9,6 +9,7 @@ import { ChatView } from "./components/chat/ChatView";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { NoOrgWelcome } from "./components/onboarding/NoOrgWelcome";
 import { HomeView } from "./components/onboarding/HomeView";
+import { ArtifactsGallery } from "./components/artifact/ArtifactsGallery";
 import { InboxView } from "./components/inbox/InboxView";
 import { TicketsView } from "./components/tickets/TicketsView";
 import { SearchResultsView } from "./components/search/SearchResultsView";
@@ -178,6 +179,8 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
               <SettingsPage />
             ) : activePage === "create" ? (
               <HomeView mode="create" />
+            ) : activePage === "artifacts" ? (
+              <ArtifactsGallery />
             ) : activePage === "inbox" ? (
               <InboxView />
             ) : activePage === "search" ? (

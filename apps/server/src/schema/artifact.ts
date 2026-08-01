@@ -1,4 +1,5 @@
 import type { Context } from "../context.js";
+import { prisma } from "../lib/db.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import { toGraphQLError } from "../lib/errors.js";
 import { artifactService } from "../services/artifact.js";
@@ -7,10 +8,19 @@ import { sessionService } from "../services/session.js";
 export const artifactQueries = {
   artifacts: async (
     _: unknown,
-    args: { sessionId: string; type?: string | null; key?: string | null },
+    args: { sessionId?: string | null; type?: string | null; key?: string | null; limit?: number },
     ctx: Context,
   ) => {
     const organizationId = requireOrgContext(ctx);
+    if (!args.sessionId) {
+      return artifactService.listForOrganization({
+        organizationId,
+        userId: ctx.userId,
+        type: args.type ?? undefined,
+        key: args.key ?? undefined,
+        limit: args.limit ?? undefined,
+      });
+    }
     await sessionService.get(args.sessionId, organizationId, ctx.userId);
     return artifactService.list({
       organizationId,
@@ -42,5 +52,7 @@ export const artifactTypeResolvers = {
       _args: unknown,
       ctx: Context,
     ) => artifact.createdBy ?? ctx.userLoader.load(artifact.createdById),
+    session: (artifact: { session?: unknown; sessionId: string }) =>
+      artifact.session ?? prisma.session.findUniqueOrThrow({ where: { id: artifact.sessionId } }),
   },
 };

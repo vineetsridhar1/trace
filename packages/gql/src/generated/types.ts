@@ -91,6 +91,7 @@ export type Artifact = {
   key: Scalars["String"]["output"];
   manifest: ArtifactManifest;
   organizationId: Scalars["ID"]["output"];
+  session: Session;
   sessionId: Scalars["ID"]["output"];
   type: Scalars["String"]["output"];
 };
@@ -1832,7 +1833,8 @@ export type QueryAppSessionGroupsArgs = {
 
 export type QueryArtifactsArgs = {
   key?: InputMaybe<Scalars["String"]["input"]>;
-  sessionId: Scalars["ID"]["input"];
+  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  sessionId?: InputMaybe<Scalars["ID"]["input"]>;
   type?: InputMaybe<Scalars["String"]["input"]>;
 };
 

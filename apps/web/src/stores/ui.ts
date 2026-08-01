@@ -15,7 +15,14 @@ import {
   resolveSessionGroupIdForSession,
 } from "./ui-navigation";
 
-export type ActivePage = "main" | "create" | "settings" | "inbox" | "tickets" | "search";
+export type ActivePage =
+  | "main"
+  | "create"
+  | "artifacts"
+  | "settings"
+  | "inbox"
+  | "tickets"
+  | "search";
 export type ChannelSubPage = "sessions" | "merged-archived" | null;
 export interface NavigationState {
   channelId: string | null;
