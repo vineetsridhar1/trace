@@ -1833,7 +1833,7 @@ export type QueryAppSessionGroupsArgs = {
 
 export type QueryArtifactsArgs = {
   key?: InputMaybe<Scalars["String"]["input"]>;
-  limit?: InputMaybe<Scalars["Int"]["input"]>;
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionId?: InputMaybe<Scalars["ID"]["input"]>;
   type?: InputMaybe<Scalars["String"]["input"]>;
 };

@@ -9,43 +9,48 @@ import { prisma } from "../lib/db.js";
 import { asMock } from "../../test/helpers.js";
 import { artifactService } from "./artifact.js";
 
-function artifactRow(id: string, sessionGroup: unknown) {
-  return { id, organizationId: "org-1", sessionId: `session-${id}`, session: { sessionGroup } };
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("ArtifactService.listForOrganization", () => {
-  it("hides artifacts from private session groups the viewer does not own", async () => {
-    asMock(prisma.artifact.findMany).mockResolvedValue([
-      artifactRow("public", { visibility: "public", ownerUserId: "user-2" }),
-      artifactRow("own-private", { visibility: "private", ownerUserId: "user-1" }),
-      artifactRow("other-private", { visibility: "private", ownerUserId: "user-2" }),
-      artifactRow("no-group", null),
-    ]);
-
-    const artifacts = await artifactService.listForOrganization({
-      organizationId: "org-1",
-      userId: "user-1",
+describe("ArtifactService.listForSessionGroup", () => {
+  it("rejects a private group the viewer does not own", async () => {
+    asMock(prisma.sessionGroup.findFirst).mockResolvedValue({
+      visibility: "private",
+      ownerUserId: "user-2",
     });
 
-    expect(artifacts.map((artifact) => artifact.id)).toEqual(["public", "own-private", "no-group"]);
+    await expect(
+      artifactService.listForSessionGroup({
+        organizationId: "org-1",
+        sessionGroupId: "group-1",
+        userId: "user-1",
+      }),
+    ).rejects.toThrow("Session group is not accessible");
+    expect(prisma.artifact.findMany).not.toHaveBeenCalled();
   });
 
-  it("normalizes the type alias and caps the page size", async () => {
-    asMock(prisma.artifact.findMany).mockResolvedValue([]);
+  it("returns the group's artifacts newest-first once access is allowed", async () => {
+    asMock(prisma.sessionGroup.findFirst).mockResolvedValue({
+      visibility: "public",
+      ownerUserId: "user-2",
+    });
+    asMock(prisma.artifact.findMany).mockResolvedValue([{ id: "artifact-1" }]);
 
-    await artifactService.listForOrganization({
+    const artifacts = await artifactService.listForSessionGroup({
       organizationId: "org-1",
+      sessionGroupId: "group-1",
       userId: "user-1",
       type: "visual-plan",
-      limit: 10_000,
     });
 
+    expect(artifacts.map((artifact) => artifact.id)).toEqual(["artifact-1"]);
     const args = asMock(prisma.artifact.findMany).mock.calls[0][0];
-    expect(args.where.type).toBe("trace.visual-plan.v1");
-    expect(args.take).toBe(500);
+    expect(args.where).toMatchObject({
+      organizationId: "org-1",
+      session: { sessionGroupId: "group-1" },
+      type: "trace.visual-plan.v1",
+    });
+    expect(args.orderBy).toEqual([{ createdAt: "desc" }, { id: "desc" }]);
   });
 });

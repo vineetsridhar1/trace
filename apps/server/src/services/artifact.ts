@@ -192,34 +192,29 @@ export class ArtifactService {
     });
   }
 
-  async listForOrganization(input: {
+  async listForSessionGroup(input: {
     organizationId: string;
+    sessionGroupId: string;
     userId: string;
     type?: string;
     key?: string;
-    limit?: number;
   }): Promise<Artifact[]> {
-    const artifacts = await prisma.artifact.findMany({
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: input.sessionGroupId, organizationId: input.organizationId },
+      select: { visibility: true, ownerUserId: true },
+    });
+    if (!group || !canViewSessionGroup(group, input.userId)) {
+      throw new ValidationError("Session group is not accessible");
+    }
+    return prisma.artifact.findMany({
       where: {
         organizationId: input.organizationId,
+        session: { sessionGroupId: input.sessionGroupId },
         ...(input.type ? { type: normalizeType(input.type) } : {}),
         ...(input.key ? { key: input.key } : {}),
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: Math.min(Math.max(input.limit ?? 200, 1), 500),
-      include: {
-        session: {
-          include: {
-            sessionGroup: { select: { visibility: true, ownerUserId: true } },
-          },
-        },
-      },
     });
-    return artifacts.filter(
-      (artifact) =>
-        !artifact.session.sessionGroup ||
-        canViewSessionGroup(artifact.session.sessionGroup, input.userId),
-    );
   }
 
   async approve(input: {

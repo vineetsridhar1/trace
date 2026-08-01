@@ -1,3 +1,4 @@
+import { GraphQLError } from "graphql";
 import type { Context } from "../context.js";
 import { prisma } from "../lib/db.js";
 import { requireOrgContext } from "../lib/require-org.js";
@@ -8,19 +9,29 @@ import { sessionService } from "../services/session.js";
 export const artifactQueries = {
   artifacts: async (
     _: unknown,
-    args: { sessionId?: string | null; type?: string | null; key?: string | null; limit?: number },
+    args: {
+      sessionId?: string | null;
+      sessionGroupId?: string | null;
+      type?: string | null;
+      key?: string | null;
+    },
     ctx: Context,
   ) => {
     const organizationId = requireOrgContext(ctx);
-    if (!args.sessionId) {
-      return artifactService.listForOrganization({
-        organizationId,
-        userId: ctx.userId,
-        type: args.type ?? undefined,
-        key: args.key ?? undefined,
-        limit: args.limit ?? undefined,
-      });
+    if (args.sessionGroupId) {
+      try {
+        return await artifactService.listForSessionGroup({
+          organizationId,
+          sessionGroupId: args.sessionGroupId,
+          userId: ctx.userId,
+          type: args.type ?? undefined,
+          key: args.key ?? undefined,
+        });
+      } catch (error) {
+        throw toGraphQLError(error);
+      }
     }
+    if (!args.sessionId) throw new GraphQLError("sessionId or sessionGroupId is required");
     await sessionService.get(args.sessionId, organizationId, ctx.userId);
     return artifactService.list({
       organizationId,

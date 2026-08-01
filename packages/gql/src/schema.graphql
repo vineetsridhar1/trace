@@ -1700,8 +1700,8 @@ type Query {
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
-  # Omit sessionId to list every artifact the viewer can see in the organization.
-  artifacts(sessionId: ID, type: String, key: String, limit: Int): [Artifact!]!
+  # Pass sessionId for one session, or sessionGroupId for every session in a group.
+  artifacts(sessionId: ID, sessionGroupId: ID, type: String, key: String): [Artifact!]!
   mySessions(
     organizationId: ID!
     agentStatus: AgentStatus
