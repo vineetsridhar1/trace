@@ -121,6 +121,7 @@ async function initializeLocalModeEnv() {
     ...process.env,
     TRACE_PORT: String(portOffset),
     TRACE_LOCAL_MODE: "1",
+    TRACE_USE_EXTERNAL_LOCAL_RUNTIME: "1",
     JWT_SECRET: jwtSecret,
     TOKEN_ENCRYPTION_KEY: tokenEncryptionKey,
     TRACE_SERVER_PUBLIC_URL: serverUrl,

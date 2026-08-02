@@ -10,7 +10,7 @@ import {
 } from "electron";
 import path from "path";
 import crypto from "crypto";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
@@ -86,6 +86,11 @@ let currentWebUrl = onlineWebUrl;
 let localRuntime: LocalRuntime | null = null;
 
 app.setName(appName);
+const localAppDataPath = process.env.TRACE_LOCAL_APP_DATA_PATH?.trim();
+if (localAppDataPath) {
+  mkdirSync(localAppDataPath, { recursive: true });
+  app.setPath("userData", localAppDataPath);
+}
 hydrateLoginShellPath();
 if (app.isPackaged) {
   try {
@@ -292,6 +297,9 @@ function getModeStatus(): TraceModeStatus {
 
 async function resolveModeTarget(mode: TraceMode): Promise<{ serverUrl: string; webUrl: string }> {
   if (mode === "online") return { serverUrl: onlineServerUrl, webUrl: onlineWebUrl };
+  if (!app.isPackaged && process.env.TRACE_USE_EXTERNAL_LOCAL_RUNTIME === "1") {
+    return { serverUrl: onlineServerUrl, webUrl: onlineWebUrl };
+  }
   if (!localRuntime) {
     localRuntime = new LocalRuntime({
       appDataPath: app.getPath("userData"),
@@ -445,11 +453,9 @@ ipcMain.handle("get-github-auth-token", async () => {
 ipcMain.handle("login-codex-with-chatgpt", async () => {
   const codexHome = await mkdtemp(path.join(tmpdir(), "trace-codex-login-"));
   try {
-    await writeFile(
-      path.join(codexHome, "config.toml"),
-      'cli_auth_credentials_store = "file"\n',
-      { mode: 0o600 },
-    );
+    await writeFile(path.join(codexHome, "config.toml"), 'cli_auth_credentials_store = "file"\n', {
+      mode: 0o600,
+    });
     const exitCode = await new Promise<number | null>((resolve, reject) => {
       const child = spawn("codex", ["login"], {
         env: { ...process.env, CODEX_HOME: codexHome },
