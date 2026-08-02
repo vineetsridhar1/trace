@@ -11,7 +11,7 @@ import {
 import path from "path";
 import crypto from "crypto";
 import { readFileSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { setTimeout } from "node:timers";
@@ -44,6 +44,7 @@ import {
   movePackagedMacAppToApplicationsFolder,
   shouldMovePackagedMacAppToApplicationsFolder,
 } from "./mac-install-location.js";
+import { LocalRuntime } from "./local-runtime.js";
 
 let mainWindow: BrowserWindow | null = null;
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
@@ -73,9 +74,16 @@ const defaultServerUrl =
   app.isPackaged && buildConfig.productionUrl ? buildConfig.productionUrl : localServerUrl;
 const defaultWebUrl =
   app.isPackaged && buildConfig.productionUrl ? buildConfig.productionUrl : localWebUrl;
-const serverUrl = process.env.TRACE_SERVER_URL ?? defaultServerUrl;
+const onlineServerUrl = process.env.TRACE_SERVER_URL ?? defaultServerUrl;
+const onlineWebUrl = process.env.TRACE_WEB_URL ?? defaultWebUrl;
 const appName = "Trace";
 const appIconPath = path.join(__dirname, "../assets/icon.png");
+type TraceMode = "local" | "online";
+type TraceModeStatus = { mode: TraceMode; hasExplicitPreference: boolean };
+let activeMode: TraceMode = process.env.TRACE_LOCAL_MODE === "1" ? "local" : "online";
+let hasExplicitModePreference = false;
+let currentWebUrl = onlineWebUrl;
+let localRuntime: LocalRuntime | null = null;
 
 app.setName(appName);
 hydrateLoginShellPath();
@@ -96,7 +104,7 @@ async function getSessionCookieHeader(targetUrl: string): Promise<string | null>
   return cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
 }
 
-const bridge = new BridgeClient(serverUrl, getSessionCookieHeader);
+const bridge = new BridgeClient(onlineServerUrl, getSessionCookieHeader);
 
 function publishBridgeStatus(status: BridgeConnectionStatus) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -152,7 +160,7 @@ function configureApplicationIdentity() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
 }
 
-function createWindow() {
+function createWindow(webUrl: string) {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -179,7 +187,7 @@ function createWindow() {
     },
   });
 
-  const webUrl = process.env.TRACE_WEB_URL ?? defaultWebUrl;
+  currentWebUrl = webUrl;
   mainWindow.loadURL(webUrl);
 
   // Open external links in the user's default browser.
@@ -192,7 +200,7 @@ function createWindow() {
 
   mainWindow.webContents.on("will-navigate", (event, url) => {
     // Allow navigation within the app, open everything else externally
-    if (!url.startsWith(webUrl)) {
+    if (!url.startsWith(currentWebUrl)) {
       event.preventDefault();
       shell.openExternal(url);
     }
@@ -251,6 +259,64 @@ function createWindow() {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+}
+
+function modePreferencePath(): string {
+  return path.join(app.getPath("userData"), "trace-mode.json");
+}
+
+async function loadModePreference(): Promise<void> {
+  try {
+    const parsed = JSON.parse(await readFile(modePreferencePath(), "utf8")) as {
+      mode?: unknown;
+    };
+    if (parsed.mode === "local" || parsed.mode === "online") {
+      activeMode = parsed.mode;
+      hasExplicitModePreference = true;
+    }
+  } catch {
+    // A missing preference means an authenticated online session gets first chance.
+  }
+}
+
+async function persistModePreference(mode: TraceMode): Promise<void> {
+  await mkdir(path.dirname(modePreferencePath()), { recursive: true });
+  await writeFile(modePreferencePath(), `${JSON.stringify({ mode }, null, 2)}\n`, {
+    mode: 0o600,
+  });
+}
+
+function getModeStatus(): TraceModeStatus {
+  return { mode: activeMode, hasExplicitPreference: hasExplicitModePreference };
+}
+
+async function resolveModeTarget(mode: TraceMode): Promise<{ serverUrl: string; webUrl: string }> {
+  if (mode === "online") return { serverUrl: onlineServerUrl, webUrl: onlineWebUrl };
+  if (!localRuntime) {
+    localRuntime = new LocalRuntime({
+      appDataPath: app.getPath("userData"),
+      packaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      electronPath: process.execPath,
+      developmentRoot: path.resolve(__dirname, "../../.."),
+    });
+  }
+  const webUrl = await localRuntime.start();
+  return { serverUrl: webUrl, webUrl };
+}
+
+async function switchTraceMode(mode: TraceMode, explicit: boolean): Promise<TraceModeStatus> {
+  const target = await resolveModeTarget(mode);
+  activeMode = mode;
+  if (explicit) {
+    hasExplicitModePreference = true;
+    await persistModePreference(mode);
+  }
+  bridge.setAuthContext(null);
+  bridge.setServerUrl(target.serverUrl);
+  currentWebUrl = target.webUrl;
+  if (mainWindow && !mainWindow.isDestroyed()) await mainWindow.loadURL(target.webUrl);
+  return getModeStatus();
 }
 
 function configureMacAutoUpdates() {
@@ -401,6 +467,11 @@ ipcMain.handle("login-codex-with-chatgpt", async () => {
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());
 ipcMain.handle("get-bridge-info", () => bridge.getInfo());
+ipcMain.handle("get-trace-mode", () => getModeStatus());
+ipcMain.handle("switch-trace-mode", async (_event, mode: unknown) => {
+  if (mode !== "local" && mode !== "online") throw new Error("Invalid Trace mode");
+  return switchTraceMode(mode, true);
+});
 ipcMain.handle("set-bridge-label", async (_event, label: string) => {
   await setBridgeLabel(label);
   bridge.updateLabel();
@@ -413,7 +484,7 @@ ipcMain.handle("set-bridge-auth-context", (_event, organizationId: string | null
 // Cmd+W with no in-app tab to close falls back to closing the window.
 ipcMain.on("close-window", () => mainWindow?.close());
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (shouldMovePackagedMacAppToApplicationsFolder(app, process.execPath)) {
     const response = dialog.showMessageBoxSync({
       type: "info",
@@ -440,8 +511,23 @@ app.whenReady().then(() => {
   bridge.onStatusChange((status) => {
     publishBridgeStatus(status);
   });
+
+  await loadModePreference();
+  let startupTarget: { serverUrl: string; webUrl: string };
+  try {
+    startupTarget = await resolveModeTarget(activeMode);
+  } catch (error) {
+    console.error("[main] failed to start local Trace; falling back online", error);
+    dialog.showErrorBox(
+      "Local Trace could not start",
+      error instanceof Error ? error.message : String(error),
+    );
+    activeMode = "online";
+    startupTarget = await resolveModeTarget("online");
+  }
+  bridge.setServerUrl(startupTarget.serverUrl);
   bridge.connect();
-  createWindow();
+  createWindow(startupTarget.webUrl);
 
   // After sleep/wake the WebSocket is often dead but no close event fires.
   // Force an immediate reconnect so the user doesn't have to restart the app.
@@ -460,6 +546,17 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   if (mainWindow === null) {
-    createWindow();
+    void resolveModeTarget(activeMode).then((target) => createWindow(target.webUrl));
   }
+});
+
+let localRuntimeShutdownComplete = false;
+app.on("before-quit", (event) => {
+  if (localRuntimeShutdownComplete || !localRuntime) return;
+  event.preventDefault();
+  void localRuntime.stop().finally(() => {
+    localRuntimeShutdownComplete = true;
+    bridge.disconnect();
+    app.quit();
+  });
 });

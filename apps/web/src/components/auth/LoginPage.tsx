@@ -4,6 +4,7 @@ import { LOCAL_LOGIN_NAME_KEY, useAuthStore, type AuthState } from "@trace/clien
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { isLocalMode } from "../../lib/runtime-mode";
+import { switchDesktopTraceMode } from "../../lib/trace-mode";
 
 type GitHubDeviceLogin = {
   deviceAuthId: string;
@@ -28,6 +29,19 @@ export function LoginPage() {
   const [deviceLogin, setDeviceLogin] = useState<GitHubDeviceLogin | null>(null);
   const [deviceStatus, setDeviceStatus] = useState<"idle" | "pending" | "success">("idle");
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (isLocalMode || !window.trace?.getTraceMode) return;
+    let canceled = false;
+    void window.trace.getTraceMode().then((status) => {
+      if (!canceled && status.mode === "online" && !status.hasExplicitPreference) {
+        switchDesktopTraceMode("local");
+      }
+    });
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (isLocalMode || !deviceLogin) return;
@@ -135,7 +149,8 @@ export function LoginPage() {
       return;
     }
 
-    void loginWithLocalName("", { allowEmpty: true, silent: true });
+    setName("Local User");
+    void loginWithLocalName("Local User", { silent: true });
   }, [autoLoginAttempted, loginWithLocalName]);
 
   async function handleLocalLogin(event: FormEvent<HTMLFormElement>) {
@@ -201,7 +216,7 @@ export function LoginPage() {
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-foreground">Trace</h1>
             <p className="text-sm text-muted-foreground">
-              Start local Trace with a name. No GitHub login or Redis required.
+              Your private workspace runs only on this device.
             </p>
           </div>
 
@@ -228,6 +243,16 @@ export function LoginPage() {
           >
             {submitting ? "Signing in..." : "Enter Trace"}
           </Button>
+          {window.trace?.switchTraceMode ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="mt-2 w-full"
+              onClick={() => switchDesktopTraceMode("online")}
+            >
+              Switch to Online Trace
+            </Button>
+          ) : null}
         </form>
       </div>
     );
@@ -308,6 +333,15 @@ export function LoginPage() {
               GitHub is only used to verify your identity. Trace requests no
               GitHub permissions and cannot access your repositories.
             </p>
+            {window.trace?.switchTraceMode ? (
+              <Button
+                variant="ghost"
+                className="mt-2 w-full"
+                onClick={() => switchDesktopTraceMode("local")}
+              >
+                Continue locally instead
+              </Button>
+            ) : null}
           </div>
         )}
         {error ? <p className="text-center text-sm text-destructive">{error}</p> : null}

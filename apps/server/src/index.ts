@@ -6,6 +6,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import { readFileSync } from "fs";
+import path from "path";
 import { createRequire } from "module";
 import { WebSocketServer, type WebSocket } from "ws";
 import { useServer } from "graphql-ws/lib/use/ws";
@@ -637,8 +638,22 @@ async function main() {
   await apollo.start();
   app.use("/graphql", expressMiddleware(apollo, { context: buildContext }));
 
+  const webDistDir = process.env.TRACE_WEB_DIST_DIR?.trim();
+  if (localMode && webDistDir) {
+    const indexPath = path.join(webDistDir, "index.html");
+    app.use(express.static(webDistDir, { index: false }));
+    app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+      if (req.method !== "GET" || !req.accepts("html")) {
+        next();
+        return;
+      }
+      res.sendFile(indexPath);
+    });
+  }
+
+  const serverHost = process.env.TRACE_SERVER_HOST?.trim() || "0.0.0.0";
   await new Promise<void>((resolve) => {
-    httpServer.listen(PORT, "0.0.0.0", () => {
+    httpServer.listen(PORT, serverHost, () => {
       console.log(`Server ready at http://localhost:${PORT}/graphql`);
       console.log(`Subscriptions ready at ws://localhost:${PORT}/ws`);
       console.log(`Bridge ready at ws://localhost:${PORT}/bridge`);

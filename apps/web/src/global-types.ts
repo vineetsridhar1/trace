@@ -43,6 +43,13 @@ declare global {
     status: DesktopBridgeConnectionStatus;
   };
 
+  type DesktopTraceMode = "local" | "online";
+
+  type DesktopTraceModeStatus = {
+    mode: DesktopTraceMode;
+    hasExplicitPreference: boolean;
+  };
+
   type DesktopGithubCliStatus = {
     installed: boolean;
     authenticated: boolean;
@@ -162,6 +169,8 @@ declare global {
     repairRepoGitHooks: (repoId: string) => Promise<DesktopRepoGitHookStatus | null>;
     getBridgeStatus: () => Promise<DesktopBridgeConnectionStatus>;
     getBridgeInfo: () => Promise<DesktopBridgeInfo>;
+    getTraceMode: () => Promise<DesktopTraceModeStatus>;
+    switchTraceMode: (mode: DesktopTraceMode) => Promise<DesktopTraceModeStatus>;
     setBridgeLabel: (label: string) => Promise<DesktopBridgeInfo>;
     setBridgeAuthContext: (organizationId: string | null) => Promise<boolean>;
     onBridgeStatus: (callback: (status: DesktopBridgeConnectionStatus) => void) => () => void;

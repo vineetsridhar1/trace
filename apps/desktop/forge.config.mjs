@@ -5,6 +5,7 @@ const configDir = path.dirname(fileURLToPath(import.meta.url));
 const signingIdentity = process.env.TRACE_MACOS_SIGN_IDENTITY;
 const skipSigning = process.env.TRACE_MACOS_SKIP_SIGN === "1";
 const updateRepo = process.env.TRACE_DESKTOP_UPDATE_REPO;
+const localRuntimeDir = process.env.TRACE_LOCAL_RUNTIME_DIR;
 
 function parseRepoSlug(slug) {
   if (!slug) return null;
@@ -56,6 +57,15 @@ const packagerConfig = {
     unpack: "**/node_modules/node-pty/**/spawn-helper",
   },
   icon: path.join(configDir, "assets", "icon"),
+  ...(localRuntimeDir
+    ? {
+        extraResource: [
+          path.join(localRuntimeDir, "local-server"),
+          path.join(localRuntimeDir, "local-web"),
+          path.join(localRuntimeDir, "local-postgres"),
+        ],
+      }
+    : {}),
 };
 
 if (!skipSigning) {

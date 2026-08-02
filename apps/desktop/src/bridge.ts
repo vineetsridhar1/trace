@@ -418,6 +418,14 @@ export class BridgeClient implements IBridgeClient {
     void this.openSocket(attempt);
   }
 
+  setServerUrl(serverUrl: string) {
+    if (this.serverUrl === serverUrl) return;
+    this.disconnect();
+    this.serverUrl = serverUrl;
+    this.bridgeAuthToken = null;
+    this.connect();
+  }
+
   setAuthContext(organizationId: string | null) {
     const nextContext = organizationId ? { organizationId } : null;
     const changed = this.authContext?.organizationId !== nextContext?.organizationId;

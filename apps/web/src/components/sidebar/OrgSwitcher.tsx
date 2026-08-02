@@ -1,9 +1,12 @@
-import { ChevronDown, Check, Plus } from "lucide-react";
+import { ChevronDown, Check, Cloud, HardDrive, Plus } from "lucide-react";
+import type { ReactNode } from "react";
 import { useAuthStore, type OrgMembership } from "@trace/client-core";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { getInitials } from "../../lib/utils";
 import { CreateOrganizationDialog } from "./CreateOrganizationDialog";
 import { switchActiveOrganization } from "../../lib/org-switch";
+import { isLocalMode } from "../../lib/runtime-mode";
+import { switchDesktopTraceMode } from "../../lib/trace-mode";
 
 export function OrgSwitcher({ compact, large }: { compact?: boolean; large?: boolean }) {
   const orgMemberships = useAuthStore((s: { orgMemberships: OrgMembership[] }) => s.orgMemberships);
@@ -68,22 +71,77 @@ export function OrgSwitcher({ compact, large }: { compact?: boolean; large?: boo
             </span>
           </button>
         ))}
-        <div className="mx-2 my-1.5 h-px bg-border" />
-        <CreateOrganizationDialog
-          trigger={
-            <button
-              type="button"
-              className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-foreground transition-colors hover:bg-white/10"
-            >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-foreground">
-                <Plus size={13} />
-              </div>
-              <span className="flex-1 truncate text-left font-medium">Create organization</span>
-              <span className="h-5 w-5 shrink-0" />
-            </button>
-          }
-        />
+        {!isLocalMode ? (
+          <>
+            <div className="mx-2 my-1.5 h-px bg-border" />
+            <CreateOrganizationDialog
+              trigger={
+                <button
+                  type="button"
+                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-foreground transition-colors hover:bg-white/10"
+                >
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-foreground">
+                    <Plus size={13} />
+                  </div>
+                  <span className="flex-1 truncate text-left font-medium">Create organization</span>
+                  <span className="h-5 w-5 shrink-0" />
+                </button>
+              }
+            />
+          </>
+        ) : null}
+        {window.trace?.switchTraceMode ? (
+          <>
+            <div className="mx-2 my-1.5 h-px bg-border" />
+            <div className="px-2.5 pb-1.5 pt-1">
+              <p className="text-[11px] font-medium uppercase text-foreground">Trace environments</p>
+            </div>
+            <TraceModeOption
+              active={isLocalMode}
+              icon={<HardDrive size={14} />}
+              label="Local Trace"
+              onClick={() => switchDesktopTraceMode("local")}
+            />
+            <TraceModeOption
+              active={!isLocalMode}
+              icon={<Cloud size={14} />}
+              label="Online Trace"
+              onClick={() => switchDesktopTraceMode("online")}
+            />
+          </>
+        ) : null}
       </PopoverContent>
     </Popover>
+  );
+}
+
+function TraceModeOption({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={active}
+      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors hover:bg-white/10 ${
+        active ? "bg-white/10" : "cursor-pointer"
+      }`}
+    >
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-surface-deep text-foreground">
+        {icon}
+      </div>
+      <span className="flex-1 text-left font-medium text-foreground">{label}</span>
+      <span className="flex h-5 w-5 items-center justify-center">
+        {active ? <Check size={14} className="text-accent" /> : null}
+      </span>
+    </button>
   );
 }

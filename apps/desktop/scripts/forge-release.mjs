@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -9,9 +9,10 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const desktopDir = path.resolve(scriptDir, "..");
 const repoRoot = path.resolve(desktopDir, "../..");
 const releaseDir = path.join(repoRoot, "out", "desktop-release");
+const localRuntimeDir = path.join(repoRoot, "out", "desktop-local-runtime");
 const buildConfigPath = path.join(desktopDir, "dist", "build-config.json");
 const command = process.argv[2];
-const forgeArgs = process.argv.slice(3);
+const forgeArgs = process.argv.slice(3).filter((arg) => arg !== "--");
 
 const forgeCommands = new Set(["package", "make", "publish"]);
 const fromDryRun =
@@ -40,11 +41,11 @@ if (!updateRepo || !updateRepo.includes("/")) {
   process.exit(1);
 }
 
-function run(cmd, args) {
+function run(cmd, args, options = {}) {
   const result = spawnSync(cmd, args, {
-    cwd: repoRoot,
+    cwd: options.cwd ?? repoRoot,
     stdio: "inherit",
-    env: process.env,
+    env: { ...process.env, ...options.env },
   });
 
   if (result.error) {
@@ -65,6 +66,42 @@ if (fromDryRun) {
   }
 } else {
   await rm(releaseDir, { recursive: true, force: true });
+  await rm(localRuntimeDir, { recursive: true, force: true });
+  await mkdir(localRuntimeDir, { recursive: true });
+
+  run("node", [
+    path.join(desktopDir, "scripts", "download-local-postgres.mjs"),
+    path.join(localRuntimeDir, "local-postgres"),
+  ]);
+  run("node", [
+    path.join(desktopDir, "scripts", "repair-local-postgres-macos.mjs"),
+    path.join(localRuntimeDir, "local-postgres"),
+  ]);
+  run("pnpm", ["codegen"]);
+  run("pnpm", ["--filter", "@trace/server", "build"]);
+  run("pnpm", ["--filter", "@trace/web", "build"], {
+    env: { VITE_API_URL: "", VITE_WS_URL: "", VITE_TRACE_LOCAL_MODE: "1" },
+  });
+  run("pnpm", [
+    "--filter",
+    "@trace/server",
+    "deploy",
+    "--prod",
+    "--legacy",
+    path.join(localRuntimeDir, "local-server"),
+  ]);
+  run(
+    "node",
+    ["node_modules/prisma/build/index.js", "generate", "--schema", "prisma/schema.prisma"],
+    { cwd: path.join(localRuntimeDir, "local-server") },
+  );
+  run("node", [
+    path.join(desktopDir, "scripts", "prune-local-server.mjs"),
+    path.join(localRuntimeDir, "local-server"),
+  ]);
+  await cp(path.join(repoRoot, "apps", "web", "dist"), path.join(localRuntimeDir, "local-web"), {
+    recursive: true,
+  });
 
   run("pnpm", ["--filter", "@trace/desktop", "build"]);
   await writeFile(
@@ -75,5 +112,7 @@ if (fromDryRun) {
 }
 
 await repairNodePtySpawnHelpers(releaseDir);
-run("pnpm", ["exec", "electron-forge", command, ...forgeArgs, releaseDir]);
+run("pnpm", ["exec", "electron-forge", command, ...forgeArgs, releaseDir], {
+  env: { TRACE_LOCAL_RUNTIME_DIR: localRuntimeDir },
+});
 await repairNodePtySpawnHelpers(releaseDir);
