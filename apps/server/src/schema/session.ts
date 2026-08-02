@@ -45,21 +45,53 @@ export const sessionQueries = {
       includeActiveMerged: args.includeActiveMerged ?? undefined,
     });
   },
-  appSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+  appSessionGroups: (
+    _: unknown,
+    args: { organizationId: string; includeArchived?: boolean | null },
+    ctx: Context,
+  ) => {
     assertOrgAccess(ctx, args.organizationId);
-    return sessionService.listAppGroups(args.organizationId, ctx.userId);
+    return sessionService.listAppGroups(
+      args.organizationId,
+      ctx.userId,
+      args.includeArchived ?? false,
+    );
   },
-  designSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+  designSessionGroups: (
+    _: unknown,
+    args: { organizationId: string; includeArchived?: boolean | null },
+    ctx: Context,
+  ) => {
     assertOrgAccess(ctx, args.organizationId);
-    return sessionService.listDesignGroups(args.organizationId, ctx.userId);
+    return sessionService.listDesignGroups(
+      args.organizationId,
+      ctx.userId,
+      args.includeArchived ?? false,
+    );
   },
-  pdfSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+  pdfSessionGroups: (
+    _: unknown,
+    args: { organizationId: string; includeArchived?: boolean | null },
+    ctx: Context,
+  ) => {
     assertOrgAccess(ctx, args.organizationId);
-    return sessionService.listPdfGroups(args.organizationId, ctx.userId);
+    return sessionService.listPdfGroups(
+      args.organizationId,
+      ctx.userId,
+      args.includeArchived ?? false,
+    );
   },
-  animationSessionGroups: (_: unknown, args: { organizationId: string }, ctx: Context) => {
+  animationSessionGroups: (
+    _: unknown,
+    args: { organizationId: string; includeArchived?: boolean | null },
+    ctx: Context,
+  ) => {
     assertOrgAccess(ctx, args.organizationId);
-    return sessionService.listAnimationGroups(args.organizationId, ctx.userId);
+    return sessionService.listAnimationGroups(
+      args.organizationId,
+      ctx.userId,
+      args.includeArchived ?? false,
+    );
   },
   sessionGroup: (_: unknown, args: { id: string }, ctx: Context) => {
     return sessionService.getGroup(args.id, requireOrgContext(ctx), ctx.userId);

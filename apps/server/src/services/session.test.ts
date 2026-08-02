@@ -592,6 +592,22 @@ describe("SessionService", () => {
       });
       expect(result.map((group) => group.id)).toEqual(["group-app"]);
     });
+
+    it("includes archived apps when requested for creation history", async () => {
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
+
+      await service.listAppGroups("org-1", "user-1", true);
+
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            organizationId: "org-1",
+            kind: "app",
+            AND: [{ OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] }],
+          },
+        }),
+      );
+    });
   });
 
   describe("listDesignGroups", () => {

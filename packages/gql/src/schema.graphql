@@ -1655,19 +1655,19 @@ type Query {
   App-kind session groups for the org. Apps have no channel, so this is their
   listing surface (the sidebar Apps section).
   """
-  appSessionGroups(organizationId: ID!): [SessionGroup!]!
+  appSessionGroups(organizationId: ID!, includeArchived: Boolean): [SessionGroup!]!
   """
   Design-kind session groups for the org (the sidebar Designs section).
   """
-  designSessionGroups(organizationId: ID!): [SessionGroup!]!
+  designSessionGroups(organizationId: ID!, includeArchived: Boolean): [SessionGroup!]!
   """
   PDF-kind session groups for the org (the sidebar PDFs section).
   """
-  pdfSessionGroups(organizationId: ID!): [SessionGroup!]!
+  pdfSessionGroups(organizationId: ID!, includeArchived: Boolean): [SessionGroup!]!
   """
   Animation-kind session groups for the org (the sidebar Animations section).
   """
-  animationSessionGroups(organizationId: ID!): [SessionGroup!]!
+  animationSessionGroups(organizationId: ID!, includeArchived: Boolean): [SessionGroup!]!
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session

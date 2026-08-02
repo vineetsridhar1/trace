@@ -2914,40 +2914,45 @@ export class SessionService {
   }
 
   /** Channel-less generated project groups for the Apps and Designs sidebar sections. */
-  async listAppGroups(organizationId: string, userId: string) {
-    return this.listGeneratedProjectGroups("app", organizationId, userId);
+  async listAppGroups(organizationId: string, userId: string, includeArchived = false) {
+    return this.listGeneratedProjectGroups("app", organizationId, userId, includeArchived);
   }
 
-  async listDesignGroups(organizationId: string, userId: string) {
-    return this.listGeneratedProjectGroups(["design", "design_system"], organizationId, userId);
+  async listDesignGroups(organizationId: string, userId: string, includeArchived = false) {
+    return this.listGeneratedProjectGroups(
+      ["design", "design_system"],
+      organizationId,
+      userId,
+      includeArchived,
+    );
   }
 
-  async listPdfGroups(organizationId: string, userId: string) {
-    return this.listGeneratedProjectGroups("pdf", organizationId, userId);
+  async listPdfGroups(organizationId: string, userId: string, includeArchived = false) {
+    return this.listGeneratedProjectGroups("pdf", organizationId, userId, includeArchived);
   }
 
-  async listAnimationGroups(organizationId: string, userId: string) {
-    return this.listGeneratedProjectGroups("animation", organizationId, userId);
+  async listAnimationGroups(organizationId: string, userId: string, includeArchived = false) {
+    return this.listGeneratedProjectGroups("animation", organizationId, userId, includeArchived);
   }
 
   private async listGeneratedProjectGroups(
     kind: "app" | "design" | "pdf" | "animation" | readonly ["design", "design_system"],
     organizationId: string,
     userId: string,
+    includeArchived: boolean,
   ) {
     const groups = await prisma.sessionGroup.findMany({
       where: {
         organizationId,
         kind: typeof kind === "string" ? kind : { in: [...kind] },
-        archivedAt: null,
+        ...(includeArchived ? {} : { archivedAt: null }),
         AND: [visibleSessionGroupWhere(userId)],
       },
       include: SESSION_GROUP_INCLUDE,
-      // Bound this org-wide listing so it can't grow without limit as an org
-      // accumulates apps. The sidebar shows the most recent apps; the tail is
-      // reachable via search/dedicated views when those land.
+      // Sidebar listings stay bounded. The creation-history view explicitly
+      // requests archived groups and needs the full history for local search.
       orderBy: { updatedAt: "desc" },
-      take: GENERATED_PROJECT_GROUP_LIST_LIMIT,
+      ...(includeArchived ? {} : { take: GENERATED_PROJECT_GROUP_LIST_LIMIT }),
     });
 
     type SessionGroupWithSessions = SessionGroupSummary & {
