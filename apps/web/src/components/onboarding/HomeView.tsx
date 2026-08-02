@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
+import { toast } from "sonner";
 import { normalizeTool } from "../session/picker/pickerShared";
 import { createHomeSession } from "../../lib/create-home-session";
 import { detectHomeSessionKind, isSubstantialPromptEdit } from "../home/home-kind-routing";
 import { homeComposerDraftScope, useHomeComposerStore } from "../../stores/home-composer";
 import { useHomeDataStore } from "../../stores/home-data";
 import { HomeComposer } from "../home/HomeComposer";
+import { useHomeComposerAttachments } from "../home/useHomeComposerAttachments";
+import { uploadFile } from "../../lib/upload";
 import { buildHomeChannelTargets } from "../home/HomeChannelPicker";
 import { HomeFirstRunSparks } from "../home/HomeFirstRunSparks";
 import { HomeHeader } from "../home/HomeHeader";
@@ -56,6 +59,13 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   );
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("code");
   const [submitting, setSubmitting] = useState(false);
+  const {
+    attachments,
+    addAttachments,
+    removeAttachment,
+    setUploading,
+    clearAttachments,
+  } = useHomeComposerAttachments();
   const manualPromptRef = useRef("");
   const homeDataReady = useHomeDataStore(
     (state) =>
@@ -137,8 +147,24 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
     if (!submittedPrompt.trim() || submitting) return false;
     setSubmitting(true);
     try {
+      const savedAttachments = [...attachments];
+      const attachmentIds = new Set(savedAttachments.map((attachment) => attachment.id));
+      let attachmentKeys: string[] = [];
+      if (savedAttachments.length > 0) {
+        setUploading(attachmentIds, true);
+        try {
+          attachmentKeys = await Promise.all(
+            savedAttachments.map((attachment) => uploadFile(attachment.file, activeOrgId ?? undefined)),
+          );
+        } catch (error) {
+          setUploading(attachmentIds, false);
+          toast.error(error instanceof Error ? error.message : "Failed to upload file");
+          return false;
+        }
+      }
       const created = await createHomeSession({
         prompt: submittedPrompt,
+        attachmentKeys,
         kind: activeKind,
         tool,
         model,
@@ -152,12 +178,15 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
         designSessionGroupId: activeKind !== "design" ? selectedDesignSessionGroupId : null,
       });
       if (created) {
+        clearAttachments();
         clearDraft(draftScope);
         setManualKind(null);
         setSelectedChannelTargetKey(null);
         setSelectedBridgeId(null);
         setSelectedDesignSystemVersionId(null);
         setSelectedDesignSessionGroupId(null);
+      } else if (attachmentIds.size > 0) {
+        setUploading(attachmentIds, false);
       }
       return created;
     } finally {
@@ -201,7 +230,11 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
               reasoningEffort={reasoningEffort}
               mode={interactionMode}
               submitting={submitting}
+              attachments={attachments}
               onPromptChange={updatePrompt}
+              onPasteFiles={addAttachments}
+              onFilesSelected={addAttachments}
+              onRemoveAttachment={removeAttachment}
               onChannelTargetChange={(target) => {
                 setSelectedChannelTargetKey(target?.key ?? null);
                 setSelectedBridgeId(null);

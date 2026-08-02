@@ -373,6 +373,7 @@ export const sessionMutations = {
     const orgId = requireOrgContext(ctx);
     return sessionService.start({
       ...args.input,
+      imageKeys: args.input.attachmentKeys ?? undefined,
       organizationId: orgId,
       createdById: ctx.userId,
       actorType: ctx.actorType,

@@ -8,6 +8,7 @@ import type { HomeCreatableKind } from "../components/home/home-kinds";
 
 interface CreateHomeSessionInput {
   prompt: string;
+  attachmentKeys?: string[];
   kind: HomeCreatableKind;
   tool: CodingTool;
   model: string | null;
@@ -31,6 +32,7 @@ export function buildHomeStartInput(input: CreateHomeSessionInput) {
     reasoningEffort: input.reasoningEffort,
     interactionMode: input.kind === "coding" ? input.interactionMode : "code",
     prompt: input.prompt.trim(),
+    ...(input.attachmentKeys?.length ? { attachmentKeys: input.attachmentKeys } : {}),
     ...(linkedRepoId ? { repoId: linkedRepoId } : {}),
     ...(codingChannel ? { channelId: codingChannel.id } : {}),
     ...(input.kind === "coding" && input.projectId ? { projectId: input.projectId } : {}),
@@ -51,6 +53,7 @@ export function buildHomeStartInput(input: CreateHomeSessionInput) {
 
 export async function createHomeSession({
   prompt,
+  attachmentKeys,
   kind,
   tool,
   model,
@@ -71,6 +74,7 @@ export async function createHomeSession({
       .mutation(START_SESSION_MUTATION, {
         input: buildHomeStartInput({
           prompt: normalizedPrompt,
+          attachmentKeys,
           kind,
           tool,
           model,

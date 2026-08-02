@@ -10,6 +10,7 @@ describe("buildHomeStartInput", () => {
     expect(
       buildHomeStartInput({
         prompt: "  Fix the composer  ",
+        attachmentKeys: ["uploads/org-1/reference.png"],
         kind: "coding",
         tool: "codex",
         model: "gpt-5.3-codex",
@@ -29,6 +30,7 @@ describe("buildHomeStartInput", () => {
       reasoningEffort: "high",
       interactionMode: "plan",
       prompt: "Fix the composer",
+      attachmentKeys: ["uploads/org-1/reference.png"],
       repoId: "repo-1",
       channelId: "channel-1",
       projectId: "project-1",
@@ -42,6 +44,7 @@ describe("buildHomeStartInput", () => {
     expect(
       buildHomeStartInput({
         prompt: "Create a product animation",
+        attachmentKeys: undefined,
         kind: "animation",
         tool: "claude_code",
         model: null,
@@ -70,6 +73,7 @@ describe("buildHomeStartInput", () => {
     expect(
       buildHomeStartInput({
         prompt: "Explore checkout",
+        attachmentKeys: undefined,
         kind: "design",
         tool: "codex",
         model: "gpt-5.3-codex",

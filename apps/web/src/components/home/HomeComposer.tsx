@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
 import { useHomeComposerStore } from "../../stores/home-composer";
 import type { ChatEditorHandle } from "../chat/ChatEditor";
 import { SessionComposer } from "../session/SessionComposer";
@@ -7,6 +6,9 @@ import { ComposerInputOptions } from "../session/SessionInputOptions";
 import type { InteractionMode } from "../session/interactionModes";
 import { getReasoningEffortsForTool } from "../session/modelOptions";
 import type { ToolOptionValue } from "../session/picker/pickerShared";
+import type { FileAttachment } from "../session/ImageAttachmentBar";
+import { MAX_ATTACHMENTS } from "../session/useAddAttachments";
+import type { ChatEditorPasteFilesOptions } from "../chat/ChatEditor";
 import { HomeBridgePicker } from "./HomeBridgePicker";
 import { HomeChannelPicker, type HomeChannelTarget } from "./HomeChannelPicker";
 import { HomeComposerTextSync } from "./home-composer-sync";
@@ -27,7 +29,11 @@ export function HomeComposer({
   reasoningEffort,
   mode,
   submitting,
+  attachments,
   onPromptChange,
+  onPasteFiles,
+  onFilesSelected,
+  onRemoveAttachment,
   onChannelTargetChange,
   onBridgeChange,
   onDesignSystemChange,
@@ -50,7 +56,11 @@ export function HomeComposer({
   reasoningEffort: string | null;
   mode: InteractionMode;
   submitting: boolean;
+  attachments: FileAttachment[];
   onPromptChange: (prompt: string) => void;
+  onPasteFiles: (files: File[], options?: ChatEditorPasteFilesOptions) => boolean;
+  onFilesSelected: (files: File[]) => void;
+  onRemoveAttachment: (id: string) => void;
   onChannelTargetChange: (target: HomeChannelTarget | null) => void;
   onBridgeChange: (bridgeId: string | null) => void;
   onDesignSystemChange: (versionId: string | null) => void;
@@ -99,6 +109,8 @@ export function HomeComposer({
         placeholder="Describe what you want to make…"
         disabled={submitting}
         submitDisabled={!canSubmit}
+        attachments={attachments}
+        attachmentDisabled={attachments.length >= MAX_ATTACHMENTS}
         onSubmit={async (_html, text) => {
           const created = await onSubmit(text, mode);
           if (!created) throw new Error("Session creation failed");
@@ -108,9 +120,9 @@ export function HomeComposer({
           onPromptChange(text);
         }}
         onShiftTab={kind === "coding" ? () => onModeChange(mode) : undefined}
-        onAttachClick={() =>
-          toast.info("Start the session first, then add attachments in its composer.")
-        }
+        onPasteFiles={onPasteFiles}
+        onFilesSelected={onFilesSelected}
+        onRemoveAttachment={onRemoveAttachment}
         contextControls={
           kind === "coding" ? (
             <>
