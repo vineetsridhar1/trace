@@ -28,12 +28,7 @@ export function ArtifactUploadedCard({
 
   if (type === "trace.visual-plan.v1") {
     return (
-      <PlanArtifactUploadedCard
-        artifactId={artifactId}
-        filePath={filePath}
-        byteSize={byteSize}
-        timestamp={timestamp}
-      />
+      <PlanArtifactUploadedCard artifactId={artifactId} filePath={filePath} timestamp={timestamp} />
     );
   }
 

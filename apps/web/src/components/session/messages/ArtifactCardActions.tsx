@@ -17,9 +17,9 @@ export function ArtifactCardActions({
     <button
       type="button"
       onClick={handleOpen}
-      className="flex min-h-10 shrink-0 items-center gap-2 rounded-[9px] bg-accent px-4 text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-elevated"
+      className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 text-[11px] font-semibold text-accent-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-elevated"
     >
-      {openLabel} <ArrowRight className="size-4" />
+      {openLabel} <ArrowRight className="size-3.5" />
     </button>
   );
 }

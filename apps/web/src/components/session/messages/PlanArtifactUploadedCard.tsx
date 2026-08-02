@@ -4,25 +4,22 @@ import { artifactFileUrl } from "../../artifact/artifact-file-url";
 import { sandboxedPlanHtml } from "../../artifact/plan-html";
 import { useVisualPlanDocument } from "../../artifact/useVisualPlanDocument";
 import { ArtifactCardActions } from "./ArtifactCardActions";
-import { artifactFileName, formatArtifactBytes } from "./artifact-card-utils";
+import { artifactFileName } from "./artifact-card-utils";
 import { PlanPreviewModal } from "./PlanPreviewModal";
 import { formatTime } from "./utils";
 
 export function PlanArtifactUploadedCard({
   artifactId,
   filePath,
-  byteSize,
   timestamp,
 }: {
   artifactId: string;
   filePath?: string;
-  byteSize?: number;
   timestamp: string;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const isHtml = filePath !== "plan.mdx";
   const displayName = artifactFileName(filePath, "visual-plan.html");
-  const size = formatArtifactBytes(byteSize);
   const preferredPath =
     filePath === "plan.html" ? "plan.html" : filePath === "plan.mdx" ? "plan.mdx" : undefined;
   const { html } = useVisualPlanDocument(artifactId, preferredPath);
@@ -43,7 +40,7 @@ export function PlanArtifactUploadedCard({
         <article className="group relative w-full overflow-hidden rounded-[14px] border border-[#2d3138] bg-[#171a1f] shadow-[0_18px_48px_rgb(0_0_0/0.28)] transition-colors hover:border-[#69717d]">
           <div className="flex items-center gap-4 p-4">
             <Boxes className="size-6 shrink-0 text-accent" strokeWidth={1.8} />
-            <PlanArtifactIdentity displayName={displayName} size={size} timestamp={timestamp} />
+            <PlanArtifactIdentity timestamp={timestamp} />
             {downloadUrl ? (
               <a
                 href={downloadUrl}
@@ -102,9 +99,9 @@ export function PlanArtifactUploadedCard({
           )}
         </div>
       </div>
-      <div className="flex items-center gap-3 p-4">
-        <Boxes className="size-[22px] shrink-0 text-accent" strokeWidth={1.8} />
-        <PlanArtifactIdentity displayName={displayName} size={size} timestamp={timestamp} />
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        <Boxes className="size-[18px] shrink-0 text-accent" strokeWidth={1.8} />
+        <PlanArtifactIdentity timestamp={timestamp} />
         <ArtifactCardActions
           artifactId={artifactId}
           openLabel="Open plan"
@@ -116,15 +113,7 @@ export function PlanArtifactUploadedCard({
   );
 }
 
-function PlanArtifactIdentity({
-  displayName,
-  size,
-  timestamp,
-}: {
-  displayName: string;
-  size: string;
-  timestamp: string;
-}) {
+function PlanArtifactIdentity({ timestamp }: { timestamp: string }) {
   return (
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-2">
@@ -136,10 +125,6 @@ function PlanArtifactIdentity({
       <h3 className="mt-1 truncate text-[15px] font-semibold tracking-[-0.01em] text-[#f1f3f5]">
         Implementation plan
       </h3>
-      <p className="mt-1 text-[11px] text-[#9ba1aa]">
-        {displayName}
-        {size ? ` · ${size}` : ""}
-      </p>
     </div>
   );
 }
