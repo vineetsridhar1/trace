@@ -20,6 +20,8 @@ interface MarkdownProps {
   comments?: MarkdownSteerCommentsByBlock;
   onAddComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemoveComment?: (blockId: string, commentId: string) => void;
+  /** Rewrites link and image URLs — used when the source is not on the page's own origin. */
+  resolveUrl?: (url: string) => string;
 }
 
 interface SteerableDivProps extends ComponentPropsWithoutRef<"div"> {
@@ -66,6 +68,7 @@ export function Markdown({
   comments,
   onAddComment,
   onRemoveComment,
+  resolveUrl,
 }: MarkdownProps) {
   const fileOpen = useFileOpen();
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
@@ -149,6 +152,7 @@ export function Markdown({
         remarkPlugins={[remarkGfm]}
         rehypePlugins={rehypePlugins}
         components={components}
+        urlTransform={resolveUrl}
       >
         {children}
       </ReactMarkdown>

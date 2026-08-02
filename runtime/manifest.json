@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": 1,
+  "version": 2,
   "protocolVersion": 1,
   "files": [
     "bin/trace",

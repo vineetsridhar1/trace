@@ -1,24 +1,28 @@
 ---
 name: visual-plan
-description: Create a rich, reviewable implementation plan as a multi-file MDX artifact.
+description: Create a rich, reviewable implementation plan as a single MDX artifact.
 ---
 
 # Visual plan
 
-Create a directory for the plan outside application source. It must contain `plan.mdx` at its
-root. It may also contain `canvas.mdx`, `prototype.mdx`, and referenced files under `assets/`.
+Create a directory for the plan outside application source. It must contain exactly one document,
+`plan.mdx`, at its root. Images the plan displays go under `assets/` and must be referenced from
+`plan.mdx` with a relative path such as `![Data flow](assets/data-flow.png)`. Nothing else belongs
+in the bundle — no second document, no source files, no unreferenced assets. A bundle that breaks
+these rules is rejected on upload.
 
-The plan must be implementation-ready and easy to scan. Include:
+`plan.mdx` is the whole plan. A reviewer reads it top to bottom and decides. Include:
 
 - Objective, scope, assumptions, and explicit non-goals.
-- Current-state findings grounded in the repository.
-- Architecture and data-flow diagrams where relationships matter.
+- Current-state findings grounded in the repository, citing real file paths.
+- Architecture and data flow where relationships matter.
 - Concrete service, schema, event, runtime, and client changes.
 - A phased file map and verification criteria.
 - Risks, migration strategy, and deferred work.
 
-Use Markdown for prose and Mermaid fenced blocks for diagrams. MDX must not import code or execute
-JavaScript. Keep all asset references relative to the plan directory.
+Write prose, tables, and lists. Name the functions and files you will change and describe each
+change; do not paste the implementation you intend to write. MDX must not import code or execute
+JavaScript.
 
 When the complete plan is ready for review, publish it exactly once:
 

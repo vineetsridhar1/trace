@@ -30,11 +30,22 @@ function normalizeType(input: string): string {
   return type;
 }
 
-function validateType(type: string, manifest: ArtifactBundleManifest): void {
+export function validateType(type: string, manifest: ArtifactBundleManifest): void {
   if (type === "trace.visual-plan.v1") {
     const plan = manifest.files.find((file) => file.path === "plan.mdx");
     if (!plan) throw new ValidationError("Visual plan artifacts require plan.mdx at the root");
     if (plan.mediaType !== "text/mdx") throw new ValidationError("plan.mdx must be MDX");
+    // A plan is one document. Everything else in the bundle is an image it displays.
+    const stray = manifest.files.find(
+      (file) =>
+        file.path !== "plan.mdx" &&
+        !(file.path.startsWith("assets/") && file.mediaType.startsWith("image/")),
+    );
+    if (stray) {
+      throw new ValidationError(
+        `Visual plans contain only plan.mdx and images under assets/. Remove ${stray.path}`,
+      );
+    }
   }
   if (
     type === "trace.image.v1" &&
