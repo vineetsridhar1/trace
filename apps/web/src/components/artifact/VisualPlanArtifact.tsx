@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
-import { getAuthHeaders } from "@trace/client-core";
+import { useEffect } from "react";
 import type { Artifact } from "@trace/gql";
 import { TraceLoader } from "../ui/trace-loader";
-import { artifactFileUrl } from "./artifact-file-url";
-import { escapeHtml, planMarkupForImplementation } from "./plan-html";
+import { useVisualPlanDocument } from "./useVisualPlanDocument";
 
 export function VisualPlanArtifact({
   artifact,
@@ -12,36 +10,14 @@ export function VisualPlanArtifact({
   artifact: Artifact;
   onContent?: (content: string) => void;
 }) {
-  const [html, setHtml] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const planPath = artifact.manifest.files.some((file) => file.path === "plan.html")
     ? "plan.html"
     : "plan.mdx";
+  const { html, implementationContent, error } = useVisualPlanDocument(artifact.id, planPath);
 
   useEffect(() => {
-    const controller = new AbortController();
-    setHtml(null);
-    setError(null);
-    fetch(artifactFileUrl(artifact.id, planPath), {
-      credentials: "include",
-      headers: getAuthHeaders(),
-      signal: controller.signal,
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Could not load ${planPath}`);
-        return response.text();
-      })
-      .then((value) => {
-        // Plans published before the HTML format are Markdown; show them as legible plain text.
-        setHtml(planPath === "plan.html" ? value : `<pre>${escapeHtml(value)}</pre>`);
-        onContent?.(planPath === "plan.html" ? planMarkupForImplementation(value) : value);
-      })
-      .catch((fetchError: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(fetchError instanceof Error ? fetchError.message : "Could not load plan");
-      });
-    return () => controller.abort();
-  }, [artifact.id, onContent, planPath]);
+    if (implementationContent) onContent?.(implementationContent);
+  }, [implementationContent, onContent]);
 
   if (error) return <p className="p-5 text-sm text-destructive">{error}</p>;
   if (html === null) {

@@ -29,6 +29,8 @@ import { features } from "./lib/features";
 import { ManualEditNavigationGuard } from "./components/session/applications/ManualEditNavigationGuard";
 import { useHomeComposerStore } from "./stores/home-composer";
 import { navigateToSessionGroup } from "./stores/ui";
+import { PlanArtifactPage } from "./components/artifact/PlanArtifactPage";
+import { planArtifactIdFromPath } from "./components/artifact/plan-artifact-route";
 
 export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
@@ -38,6 +40,7 @@ export function App() {
   const fetchMe = useAuthStore((s: AuthState) => s.fetchMe);
   const activeChannelId = useUIStore((s: UIState) => s.activeChannelId);
   const isDesktopShell = typeof window.trace !== "undefined";
+  const planArtifactId = planArtifactIdFromPath(window.location.pathname);
 
   useEffect(() => {
     document.documentElement.classList.toggle("trace-desktop-shell", isDesktopShell);
@@ -87,6 +90,10 @@ export function App() {
         <Toaster position="top-right" />
       </>
     );
+  }
+
+  if (planArtifactId) {
+    return <PlanArtifactPage artifactId={planArtifactId} />;
   }
 
   return (

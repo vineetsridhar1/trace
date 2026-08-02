@@ -103,4 +103,20 @@ describe("buildSessionNodes", () => {
 
     expect(result.nodes).toEqual([{ kind: "event", id: event.id }]);
   });
+
+  it("keeps visual plan artifact events in the session timeline", () => {
+    const event = makeEvent({
+      eventType: "artifact_created",
+      payload: {
+        artifact: {
+          id: "artifact-1",
+          type: "trace.visual-plan.v1",
+        },
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([{ kind: "event", id: event.id }]);
+  });
 });

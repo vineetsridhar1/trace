@@ -269,9 +269,7 @@ describe("SessionTimelineService", () => {
           OR: expect.arrayContaining([
             expect.objectContaining({
               eventType: "session_output",
-              OR: expect.arrayContaining([
-                { payload: { path: ["type"], equals: "error" } },
-              ]),
+              OR: expect.arrayContaining([{ payload: { path: ["type"], equals: "error" } }]),
             }),
           ]),
         }),
@@ -691,6 +689,50 @@ describe("SessionTimelineService", () => {
       "user-1",
       "collapsed:user-1:pr-opened",
       "pr-opened",
+      "assistant-final",
+    ]);
+  });
+
+  it("keeps visual plan uploads visible in compact timelines", async () => {
+    const userEvent = event({
+      id: "user-1",
+      eventType: "session_started",
+      actorType: "user",
+      payload: { prompt: "Plan this change" },
+      timestamp: new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const artifactEvent = event({
+      id: "artifact-created",
+      eventType: "artifact_created",
+      payload: {
+        artifact: { id: "artifact-1", type: "trace.visual-plan.v1" },
+      },
+      timestamp: new Date("2026-05-14T10:03:00.000Z"),
+    });
+    const finalEvent = event({
+      id: "assistant-final",
+      payload: {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "The plan is ready for review." }] },
+      },
+      timestamp: new Date("2026-05-14T10:05:00.000Z"),
+    });
+    prismaMock.session.findUnique.mockResolvedValueOnce({
+      organizationId: "org-1",
+      agentStatus: "done",
+      sessionStatus: "in_progress",
+    });
+    prismaMock.event.findMany.mockResolvedValueOnce([finalEvent, artifactEvent, userEvent]);
+
+    const page = await new SessionTimelineService().query({
+      organizationId: "org-1",
+      sessionId: "session-1",
+    });
+
+    expect(page.mode).toBe("compact");
+    expect(page.items.map((item) => item.id)).toEqual([
+      "user-1",
+      "artifact-created",
       "assistant-final",
     ]);
   });

@@ -10,6 +10,7 @@ import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
 import { GitCheckpointChips } from "./messages/GitCheckpointChips";
+import { ArtifactUploadedCard } from "./messages/ArtifactUploadedCard";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
 
@@ -292,6 +293,13 @@ export const SessionMessage = memo(function SessionMessage({
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );
+
+    case "artifact_created": {
+      const artifact = asJsonObject(payload?.artifact);
+      return artifact?.type === "trace.visual-plan.v1" && typeof artifact.id === "string" ? (
+        <ArtifactUploadedCard artifactId={artifact.id} timestamp={timestamp} />
+      ) : null;
+    }
 
     case "session_terminated": {
       if (payload?.reason === "bridge_complete") return null;

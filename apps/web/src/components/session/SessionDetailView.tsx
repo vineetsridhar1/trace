@@ -33,7 +33,7 @@ import { Skeleton } from "../ui/skeleton";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
-import { ArtifactSidecar } from "../artifact/ArtifactSidecar";
+import { useVisualPlanDocument } from "../artifact/useVisualPlanDocument";
 import { findMessageActionsEventIds } from "./messageActions";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
@@ -300,10 +300,15 @@ export function SessionDetailView({
     return latest;
   });
   const visiblePlanArtifact = sessionStatus === "needs_input" ? latestPlanArtifact : null;
-  const [artifactPlanContent, setArtifactPlanContent] = useState("");
-  useEffect(() => {
-    setArtifactPlanContent("");
-  }, [visiblePlanArtifact?.id]);
+  const visiblePlanPath = visiblePlanArtifact?.manifest.files.some(
+    (file) => file.path === "plan.html",
+  )
+    ? "plan.html"
+    : "plan.mdx";
+  const { implementationContent: artifactPlanContent } = useVisualPlanDocument(
+    visiblePlanArtifact?.id ?? null,
+    visiblePlanArtifact ? visiblePlanPath : undefined,
+  );
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
@@ -665,12 +670,7 @@ export function SessionDetailView({
           onFileDropped={addAttachments}
           disabled={!composerActive}
         >
-          <div
-            className={cn(
-              "flex flex-1 flex-col overflow-hidden",
-              visiblePlanArtifact && "mr-[min(46rem,45vw)]",
-            )}
-          >
+          <div className="flex flex-1 flex-col overflow-hidden">
             <div className="relative flex-1 overflow-hidden">
               {error ? (
                 <div className="flex h-full items-center justify-center">
@@ -761,20 +761,7 @@ export function SessionDetailView({
               />
             )}
           </div>
-          {visiblePlanArtifact && (
-            <ArtifactSidecar
-              artifact={visiblePlanArtifact}
-              onPlanContent={setArtifactPlanContent}
-            />
-          )}
-
-          <div
-            ref={bottomBarRef}
-            className={cn(
-              "absolute inset-x-0 bottom-0 z-10",
-              visiblePlanArtifact && "right-[min(46rem,45vw)]",
-            )}
-          >
+          <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
             {runtimeLifecycleState ? (
               <RuntimeLifecycleNotice
                 sessionId={sessionId}
