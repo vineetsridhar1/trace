@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getAuthHeaders } from "@trace/client-core";
 import { artifactFileUrl } from "./artifact-file-url";
-import { escapeHtml, planMarkupForImplementation } from "./plan-html";
+import { escapeHtml, planMarkdownForImplementation } from "./plan-html";
 
 interface VisualPlanDocument {
   html: string | null;
@@ -42,7 +42,8 @@ export function useVisualPlanDocument(
         if (controller.signal.aborted) return;
         setDocument({
           html: path === "plan.html" ? value : `<pre>${escapeHtml(value)}</pre>`,
-          implementationContent: path === "plan.html" ? planMarkupForImplementation(value) : value,
+          implementationContent:
+            path === "plan.html" ? planMarkdownForImplementation(value) : value,
           error: null,
         });
         return;
