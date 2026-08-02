@@ -7645,11 +7645,12 @@ export class SessionService {
       return;
     }
 
-    // A lost runtime means Trace can no longer observe or control active agent
-    // work. Do not leave the session claiming that it is still in progress.
+    // A lost runtime means Trace can no longer observe or control agent work.
+    // Do not leave any non-terminal session claiming that it is still in
+    // progress.
     // The user can explicitly retry or move the failed session once a runtime
     // is available again.
-    const agentStatus = session.agentStatus === "active" ? "failed" : session.agentStatus;
+    const agentStatus = session.agentStatus === "done" ? "done" : "failed";
     await prisma.session.update({
       where: { id: sessionId },
       data: {

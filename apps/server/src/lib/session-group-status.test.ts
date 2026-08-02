@@ -12,7 +12,7 @@ describe("deriveSessionGroupStatus", () => {
     ).toBe("archived");
   });
 
-  it("prioritizes needs_input over review and in_progress", () => {
+  it("keeps a group in progress while another agent is active", () => {
     expect(
       deriveSessionGroupStatus(
         [
@@ -21,16 +21,16 @@ describe("deriveSessionGroupStatus", () => {
         ],
         "https://github.com/trace/trace/pull/123",
       ),
-    ).toBe("needs_input");
+    ).toBe("in_progress");
   });
 
-  it("prioritizes in_review over in_progress when no session needs input", () => {
+  it("keeps a group in progress while another agent is active and a PR exists", () => {
     expect(
       deriveSessionGroupStatus(
         [{ agentStatus: "active", sessionStatus: "in_progress" }],
         "https://github.com/trace/trace/pull/123",
       ),
-    ).toBe("in_review");
+    ).toBe("in_progress");
   });
 
   it("reports failed before a stale in_progress session status", () => {
@@ -46,15 +46,14 @@ describe("deriveSessionGroupStatus", () => {
     ).toBe("failed");
   });
 
-  it("keeps a group in progress while another agent is active", () => {
+  it("reports failed before stale needs_input and review lifecycle states", () => {
     expect(
       deriveSessionGroupStatus(
         [
-          { agentStatus: "active", sessionStatus: "in_progress" },
-          { agentStatus: "failed", sessionStatus: "in_progress" },
+          { agentStatus: "failed", sessionStatus: "needs_input" },
         ],
-        null,
+        "https://github.com/trace/trace/pull/123",
       ),
-    ).toBe("in_progress");
+    ).toBe("failed");
   });
 });
