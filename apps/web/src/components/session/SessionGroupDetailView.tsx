@@ -48,6 +48,7 @@ import { toast } from "sonner";
 import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
 import { useRegisterCommands } from "../../hooks/useRegisterCommands";
 import type { RegisteredCommand } from "../../stores/command-registry";
+import { ArtifactOpenContext } from "../artifact/ArtifactOpenContext";
 
 const SESSION_SIDEBAR_WIDTH_KEY = "trace:session-sidebar-width";
 const DEFAULT_SESSION_SIDEBAR_WIDTH = 300;
@@ -294,6 +295,8 @@ export function SessionGroupDetailView({
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [trafficEndpointId, setTrafficEndpointId] = useState<string | null>(null);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<"session" | "traffic">("session");
+  const [openArtifactIds, setOpenArtifactIds] = useState<string[]>([]);
+  const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
   const [highlightCheckpointId, setHighlightCheckpointId] = useState<string | null>(null);
   const [scrollToEventId, setScrollToEventId] = useState<string | null>(null);
   const [forkDialogOpen, setForkDialogOpen] = useState(false);
@@ -347,6 +350,21 @@ export function SessionGroupDetailView({
     handleSelectFile,
     handleCloseFile,
   } = useFileActions();
+
+  const handleCloseArtifact = useCallback((artifactId: string) => {
+    setOpenArtifactIds((current) => current.filter((id) => id !== artifactId));
+    setActiveArtifactId((current) => (current === artifactId ? null : current));
+  }, []);
+
+  useEffect(() => {
+    if (activeFilePath || activeTerminalId || activeWorkflowTab === "traffic") {
+      setActiveArtifactId(null);
+    }
+  }, [activeFilePath, activeTerminalId, activeWorkflowTab]);
+
+  useEffect(() => {
+    setActiveArtifactId(null);
+  }, [activeSessionId]);
 
   // Fetch full group detail and merge into store
   useEffect(() => {
@@ -596,6 +614,7 @@ export function SessionGroupDetailView({
       setActiveWorkflowTab("traffic");
       setActiveTerminalId(null);
       setActiveFilePath(null);
+      setActiveArtifactId(null);
     },
     [setActiveFilePath, setActiveTerminalId],
   );
@@ -605,6 +624,7 @@ export function SessionGroupDetailView({
     setActiveWorkflowTab("traffic");
     setActiveTerminalId(null);
     setActiveFilePath(null);
+    setActiveArtifactId(null);
   }, [setActiveFilePath, setActiveTerminalId, trafficEndpointId]);
 
   const handleCloseTrafficTab = useCallback(() => {
@@ -615,6 +635,7 @@ export function SessionGroupDetailView({
   const handleSelectTerminalTab = useCallback(
     (sessionId: string | null, terminalId: string) => {
       setActiveWorkflowTab("session");
+      setActiveArtifactId(null);
       selectTerminal(sessionId, terminalId);
     },
     [selectTerminal],
@@ -623,6 +644,7 @@ export function SessionGroupDetailView({
   const handleSelectFileTab = useCallback(
     (filePath: string) => {
       setActiveWorkflowTab("session");
+      setActiveArtifactId(null);
       handleSelectFile(filePath);
     },
     [handleSelectFile],
@@ -767,6 +789,7 @@ export function SessionGroupDetailView({
     });
     openSessionTab(sessionGroupId, newSessionId);
     setActiveSessionId(newSessionId);
+    setActiveArtifactId(null);
     return newSessionId;
   }, [
     groupSessions,
@@ -782,6 +805,10 @@ export function SessionGroupDetailView({
   // Close whatever tab is currently shown. Files/terminals/traffic reveal the
   // session beneath them; closing the last session tab returns to the table.
   const handleCloseCurrentTab = useCallback(() => {
+    if (activeArtifactId) {
+      handleCloseArtifact(activeArtifactId);
+      return;
+    }
     if (activeWorkflowTab === "traffic" && trafficEndpointId) {
       handleCloseTrafficTab();
       return;
@@ -801,12 +828,14 @@ export function SessionGroupDetailView({
     setActiveSessionGroupId(null);
   }, [
     activeWorkflowTab,
+    activeArtifactId,
     trafficEndpointId,
     activeFilePath,
     activeTerminalId,
     activeSessionId,
     openTabIds,
     handleCloseTrafficTab,
+    handleCloseArtifact,
     handleCloseFile,
     handleCloseTerminal,
     closeSessionTab,
@@ -919,6 +948,7 @@ export function SessionGroupDetailView({
       setActiveSessionId(sessionId);
       setActiveTerminalId(null);
       setActiveFilePath(null);
+      setActiveArtifactId(null);
     },
     [setActiveSessionId, setActiveTerminalId, setActiveFilePath],
   );
@@ -926,6 +956,29 @@ export function SessionGroupDetailView({
   const handleCloseSession = useCallback(
     (sessionId: string) => closeSessionTab(sessionGroupId, sessionId),
     [closeSessionTab, sessionGroupId],
+  );
+
+  const handleOpenArtifact = useCallback(
+    (artifactId: string) => {
+      setOpenArtifactIds((current) =>
+        current.includes(artifactId) ? current : [...current, artifactId],
+      );
+      setActiveArtifactId(artifactId);
+      setActiveWorkflowTab("session");
+      setActiveTerminalId(null);
+      setActiveFilePath(null);
+    },
+    [setActiveFilePath, setActiveTerminalId],
+  );
+
+  const handleSelectArtifact = useCallback(
+    (artifactId: string) => {
+      setActiveArtifactId(artifactId);
+      setActiveWorkflowTab("session");
+      setActiveTerminalId(null);
+      setActiveFilePath(null);
+    },
+    [setActiveFilePath, setActiveTerminalId],
   );
 
   return (
@@ -977,6 +1030,8 @@ export function SessionGroupDetailView({
                   activeTerminalId={activeTerminalId}
                   openFiles={openFiles}
                   activeFilePath={activeFilePath}
+                  openArtifactIds={openArtifactIds}
+                  activeArtifactId={activeArtifactId}
                   trafficTabOpen={trafficEndpointId !== null}
                   trafficTabActive={activeWorkflowTab === "traffic" && trafficEndpointId !== null}
                   onSelectSession={handleSelectSession}
@@ -987,6 +1042,8 @@ export function SessionGroupDetailView({
                   onRenameTerminal={renameTerminal}
                   onSelectFile={handleSelectFileTab}
                   onCloseFile={handleCloseFile}
+                  onSelectArtifact={handleSelectArtifact}
+                  onCloseArtifact={handleCloseArtifact}
                   onSelectTraffic={handleSelectTrafficTab}
                   onCloseTraffic={handleCloseTrafficTab}
                   onNewChat={handleNewChat}
@@ -1083,7 +1140,8 @@ export function SessionGroupDetailView({
                       canvasKey="generated-project-canvas"
                       manualSessionGroupId={sessionGroupId}
                       showCanvasWhileLoading={
-                        projectWorkspaceKind === "design" || projectWorkspaceKind === "design_system"
+                        projectWorkspaceKind === "design" ||
+                        projectWorkspaceKind === "design_system"
                       }
                       canvas={
                         <SessionGroupContentArea
@@ -1115,30 +1173,33 @@ export function SessionGroupDetailView({
                       }
                     />
                   ) : (
-                    <SessionGroupContentArea
-                      sessionGroupId={sessionGroupId}
-                      activeFilePath={activeFilePath}
-                      openFiles={openFiles}
-                      activeTerminalId={activeTerminal?.id ?? null}
-                      activeTrafficEndpointId={
-                        activeWorkflowTab === "traffic" ? trafficEndpointId : null
-                      }
-                      selectedSession={selectedSession}
-                      sessionsByRecency={sessionsByRecency}
-                      canStartNewChat={
-                        !!selectedSession &&
-                        !selectedSessionIsOptimistic &&
-                        bridgeInteractionAllowed
-                      }
-                      onStartNewChat={handleNewChat}
-                      defaultBranch={groupRepo?.defaultBranch ?? "main"}
-                      getFileBuffer={getFileBuffer}
-                      setFileBuffer={setFileBuffer}
-                      scrollToEventId={scrollToEventId}
-                      onScrollComplete={handleScrollComplete}
-                      onForkSession={handleOpenForkDialog}
-                      canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
-                    />
+                    <ArtifactOpenContext.Provider value={handleOpenArtifact}>
+                      <SessionGroupContentArea
+                        sessionGroupId={sessionGroupId}
+                        activeFilePath={activeFilePath}
+                        openFiles={openFiles}
+                        activeTerminalId={activeTerminal?.id ?? null}
+                        activeTrafficEndpointId={
+                          activeWorkflowTab === "traffic" ? trafficEndpointId : null
+                        }
+                        activeArtifactId={activeArtifactId}
+                        selectedSession={selectedSession}
+                        sessionsByRecency={sessionsByRecency}
+                        canStartNewChat={
+                          !!selectedSession &&
+                          !selectedSessionIsOptimistic &&
+                          bridgeInteractionAllowed
+                        }
+                        onStartNewChat={handleNewChat}
+                        defaultBranch={groupRepo?.defaultBranch ?? "main"}
+                        getFileBuffer={getFileBuffer}
+                        setFileBuffer={setFileBuffer}
+                        scrollToEventId={scrollToEventId}
+                        onScrollComplete={handleScrollComplete}
+                        onForkSession={handleOpenForkDialog}
+                        canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
+                      />
+                    </ArtifactOpenContext.Provider>
                   )}
                 </div>
                 {(showSidebar || showApplicationsSidebar) && !selectedSessionIsOptimistic && (
