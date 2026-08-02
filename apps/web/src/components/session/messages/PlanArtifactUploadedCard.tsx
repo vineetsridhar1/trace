@@ -69,39 +69,37 @@ export function PlanArtifactUploadedCard({
 
   return (
     <article className="w-full overflow-hidden rounded-[14px] border border-[#2d3138] bg-[#171a1f] shadow-[0_18px_48px_rgb(0_0_0/0.28)]">
-      <div className="border-b border-[#2d3138] bg-[#0d0f12] p-3">
-        <div className="overflow-hidden rounded-[10px] border border-[#2d3138] bg-[#171a1f]">
-          <div className="flex h-8 items-center gap-1.5 border-b border-[#2d3138] bg-[#0d0f12]/70 px-3">
-            <span className="size-1.5 rounded-full bg-red-500" />
-            <span className="size-1.5 rounded-full bg-amber-500" />
-            <span className="size-1.5 rounded-full bg-green-500" />
-            <span className="ml-3 font-mono text-[9px] text-[#9ba1aa]">{displayName}</span>
-          </div>
-          <div
-            role="button"
-            tabIndex={0}
-            aria-label="Open plan preview"
-            onClick={() => setPreviewOpen(true)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                setPreviewOpen(true);
-              }
-            }}
-            className="relative h-[226px] cursor-pointer overflow-hidden bg-[#0d0f12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            {html ? (
-              <iframe
-                title="Implementation plan preview"
-                srcDoc={sandboxedPlanHtml(html)}
-                sandbox=""
-                tabIndex={-1}
-                className="pointer-events-none size-full border-0 bg-[#0d0f12]"
-              />
-            ) : (
-              <PlanPreviewSkeleton />
-            )}
-          </div>
+      <div className="border-b border-[#2d3138] bg-[#0d0f12]">
+        <div className="flex h-8 items-center gap-1.5 border-b border-[#2d3138] bg-[#0d0f12]/70 px-3">
+          <span className="size-1.5 rounded-full bg-red-500" />
+          <span className="size-1.5 rounded-full bg-amber-500" />
+          <span className="size-1.5 rounded-full bg-green-500" />
+          <span className="ml-3 font-mono text-[9px] text-[#9ba1aa]">{displayName}</span>
+        </div>
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label="Open plan preview"
+          onClick={() => setPreviewOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setPreviewOpen(true);
+            }
+          }}
+          className="relative h-[226px] cursor-pointer overflow-hidden bg-[#0d0f12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          {html ? (
+            <iframe
+              title="Implementation plan preview"
+              srcDoc={sandboxedPlanHtml(html)}
+              sandbox=""
+              tabIndex={-1}
+              className="pointer-events-none size-full border-0 bg-[#0d0f12]"
+            />
+          ) : (
+            <PlanPreviewSkeleton />
+          )}
         </div>
       </div>
       <div className="flex items-center gap-3 p-4">
