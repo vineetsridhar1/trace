@@ -198,7 +198,7 @@ export function SessionHeader({
         </span>
       </ActionTooltip>
 
-      {disconnected ? (
+      {disconnected && displayAgentStatus !== "failed" ? (
         pastGracePeriod ? (
           <span className="flex shrink-0 items-center gap-1.5 text-xs text-destructive">
             <WifiOff size={12} />

@@ -7621,6 +7621,8 @@ export class SessionService {
         hosting: true,
         connection: true,
         sessionGroupId: true,
+        lastUserMessageAt: true,
+        lastMessageAt: true,
       },
     });
     if (!session) return;
@@ -7650,13 +7652,25 @@ export class SessionService {
       return;
     }
 
-    // Preserve agent/session status — the session may still be running on the
-    // local machine even though the bridge WebSocket dropped. Only the
-    // connection state changes; the agent's actual work status is unknown.
+    // A lost runtime means Trace can no longer observe or control work that is
+    // in flight. An idle, never-started session may still be bound to the same
+    // local runtime, so only fail startup when its initial user message has not
+    // been answered.
+    // The user can explicitly retry or move the failed session once a runtime
+    // is available again.
+    const hasUnansweredUserMessage =
+      session.lastUserMessageAt !== null &&
+      (session.lastMessageAt === null || session.lastUserMessageAt >= session.lastMessageAt);
+    const agentStatus =
+      session.agentStatus === "active" ||
+      (session.agentStatus === "not_started" && hasUnansweredUserMessage)
+        ? "failed"
+        : session.agentStatus;
     await prisma.session.update({
       where: { id: sessionId },
       data: {
         connection: connJson(updated),
+        agentStatus,
       },
     });
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
@@ -7673,7 +7687,7 @@ export class SessionService {
         reason,
         runtimeInstanceId,
         connection: connJson(updated),
-        agentStatus: session.agentStatus,
+        agentStatus,
         sessionStatus: session.sessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
