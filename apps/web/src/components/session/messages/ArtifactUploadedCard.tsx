@@ -1,4 +1,3 @@
-import { useEntityField } from "@trace/client-core";
 import { MediaArtifactUploadedCard } from "./MediaArtifactUploadedCard";
 import { PlanArtifactUploadedCard } from "./PlanArtifactUploadedCard";
 
@@ -11,43 +10,40 @@ const SUPPORTED_ARTIFACT_TYPES = new Set([
 export function ArtifactUploadedCard({
   artifactId,
   artifactType,
+  filePath,
+  mediaType,
+  byteSize,
   timestamp,
 }: {
   artifactId: string;
   artifactType?: string;
+  filePath?: string;
+  mediaType?: string;
+  byteSize?: number;
   timestamp: string;
 }) {
-  const storedType = useEntityField("artifacts", artifactId, "type");
-  const manifest = useEntityField("artifacts", artifactId, "manifest");
-  const byteSize = useEntityField("artifacts", artifactId, "byteSize");
-  const type = storedType ?? artifactType ?? "trace.visual-plan.v1";
+  const type = artifactType ?? "trace.visual-plan.v1";
 
   if (!SUPPORTED_ARTIFACT_TYPES.has(type)) return null;
 
   if (type === "trace.visual-plan.v1") {
-    const file = manifest?.files.find(
-      (candidate) => candidate.path === "plan.html" || candidate.path === "plan.mdx",
-    );
     return (
       <PlanArtifactUploadedCard
         artifactId={artifactId}
-        filePath={file?.path}
-        byteSize={byteSize ?? file?.size}
+        filePath={filePath}
+        byteSize={byteSize}
         timestamp={timestamp}
       />
     );
   }
 
   const isImage = type === "trace.image.v1";
-  const file = manifest?.files.find((candidate) =>
-    candidate.mediaType.startsWith(isImage ? "image/" : "video/"),
-  );
   return (
     <MediaArtifactUploadedCard
       artifactId={artifactId}
-      filePath={file?.path}
-      mediaType={file?.mediaType}
-      byteSize={byteSize ?? file?.size}
+      filePath={filePath}
+      mediaType={mediaType}
+      byteSize={byteSize}
       kind={isImage ? "image" : "video"}
     />
   );
