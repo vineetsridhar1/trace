@@ -48,6 +48,7 @@ export function PlanArtifactUploadedCard({
             artifactId={artifactId}
             filePath={filePath}
             title="Implementation plan"
+            openLabel="Open plan"
           />
         </div>
         <div className="h-px bg-gradient-to-r from-accent/60 via-accent/15 to-transparent" />
@@ -64,9 +65,6 @@ export function PlanArtifactUploadedCard({
             <span className="size-1.5 rounded-full bg-amber-500" />
             <span className="size-1.5 rounded-full bg-green-500" />
             <span className="ml-3 font-mono text-[9px] text-[#9ba1aa]">{displayName}</span>
-            <span className="ml-auto rounded border border-[#2d3138] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-[#9ba1aa]">
-              Interactive preview
-            </span>
           </div>
           <div className="relative h-[226px] overflow-hidden bg-[#0d0f12]">
             {html ? (
@@ -92,6 +90,7 @@ export function PlanArtifactUploadedCard({
           artifactId={artifactId}
           filePath={filePath}
           title="Implementation plan"
+          openLabel="Open plan"
         />
       </div>
     </article>
@@ -111,7 +110,7 @@ function PlanArtifactIdentity({
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">
-          HTML artifact
+          Plan
         </span>
         <span className="text-[10px] text-[#9ba1aa]">· {formatTime(timestamp)}</span>
       </div>
@@ -128,7 +127,7 @@ function PlanArtifactIdentity({
 
 function PlanPreviewSkeleton() {
   return (
-    <div className="mx-auto max-w-[600px] px-9 py-7" aria-label="Loading artifact preview">
+    <div className="mx-auto max-w-[600px] px-9 py-7" aria-label="Loading plan preview">
       <div className="h-2 w-24 rounded-full bg-[#2d3138]" />
       <div className="mt-4 h-5 w-72 rounded-full bg-[#f1f3f5]/70" />
       <div className="mt-4 h-2 w-4/5 rounded-full bg-[#2d3138]" />

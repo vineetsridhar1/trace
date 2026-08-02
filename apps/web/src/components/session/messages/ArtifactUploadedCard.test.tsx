@@ -4,7 +4,7 @@ import { ArtifactUploadedCard } from "./ArtifactUploadedCard";
 import { ArtifactOpenContext } from "../../artifact/ArtifactOpenContext";
 
 describe("ArtifactUploadedCard", () => {
-  it("renders the rich HTML artifact preview and in-app open action", () => {
+  it("renders the uploaded plan preview and in-app open action", () => {
     const markup = renderToStaticMarkup(
       <ArtifactOpenContext.Provider value={() => {}}>
         <ArtifactUploadedCard
@@ -15,11 +15,12 @@ describe("ArtifactUploadedCard", () => {
       </ArtifactOpenContext.Provider>,
     );
 
-    expect(markup).toContain("Interactive preview");
-    expect(markup).toContain("HTML artifact");
+    expect(markup).toContain(">Plan<");
     expect(markup).toContain("Implementation plan");
     expect(markup).toContain("<button");
-    expect(markup).toContain("Open artifact");
+    expect(markup).toContain("Open plan");
+    expect(markup).not.toContain("HTML artifact");
+    expect(markup).not.toContain("Interactive preview");
     expect(markup).not.toContain('target="_blank"');
   });
 });

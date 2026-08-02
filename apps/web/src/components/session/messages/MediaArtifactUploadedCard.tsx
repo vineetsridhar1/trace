@@ -18,7 +18,7 @@ export function MediaArtifactUploadedCard({
   kind: "image" | "video";
 }) {
   const openArtifact = useOpenArtifact();
-  const displayName = artifactFileName(filePath, "artifact");
+  const displayName = artifactFileName(filePath, "Media");
   const size = formatArtifactBytes(byteSize);
   const mediaUrl = filePath ? artifactFileUrl(artifactId, filePath) : undefined;
   const isImage = kind === "image";
