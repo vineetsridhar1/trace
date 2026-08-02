@@ -16,6 +16,15 @@ outside this repository, so the remediation belongs there.
 
 ## Immediate incident response
 
+### Temporary production mitigation
+
+The production launcher originally rejected a combined `bootstrapEnv` larger
+than 6,000 bytes. On 2026-08-02, its deployed limit was raised to 32,768 bytes
+to allow a Codex session credential and an SSH private key to coexist. This is
+an operational mitigation only: the launcher source is maintained outside this
+repository, so the corresponding source change must be made there before the
+next infrastructure deployment.
+
 1. Rotate every credential present in the task overrides observed during the
    investigation: provider API keys, GitHub token, SSH key, and Codex session
    credential. Revoke the old values first where the provider supports it.
