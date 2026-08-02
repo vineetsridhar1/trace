@@ -1437,6 +1437,7 @@ input StartSessionInput {
   restoreCheckpointId: ID
   projectId: ID
   prompt: String
+  attachmentKeys: [String!]
   interactionMode: String
   """
   Absolute path to an existing local worktree to adopt instead of creating one. Local hosting only.
