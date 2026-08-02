@@ -1,4 +1,4 @@
-import { access, mkdir } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
@@ -6,11 +6,13 @@ import { spawnSync } from "node:child_process";
 const repoRoot = process.cwd();
 const runtimeRoot = path.join(repoRoot, "out", "desktop-local-runtime");
 const postgresRoot = path.join(runtimeRoot, "local-postgres");
+const appDataRoot = path.join(repoRoot, "out", "desktop-local-user-data");
 const postgresBinary = path.join(
   postgresRoot,
   "bin",
   process.platform === "win32" ? "postgres.exe" : "postgres",
 );
+const startOnline = process.argv.slice(2).includes("--online");
 
 function run(command, args, env = process.env) {
   const result = spawnSync(command, args, {
@@ -49,10 +51,16 @@ run("pnpm", ["--filter", "@trace/web", "build"], {
 });
 
 console.log("[trace-local] opening Electron with the embedded runtime");
+if (startOnline) {
+  await mkdir(appDataRoot, { recursive: true });
+  await writeFile(path.join(appDataRoot, "trace-mode.json"), '{\n  "mode": "online"\n}\n', {
+    mode: 0o600,
+  });
+}
 run("pnpm", ["--filter", "@trace/desktop", "dev"], {
   ...process.env,
   TRACE_LOCAL_MODE: "1",
-  TRACE_LOCAL_APP_DATA_PATH: path.join(repoRoot, "out", "desktop-local-user-data"),
+  TRACE_LOCAL_APP_DATA_PATH: appDataRoot,
   TRACE_SERVER_URL: process.env.TRACE_ONLINE_SERVER_URL ?? "https://app.gettrace.org",
   TRACE_WEB_URL: process.env.TRACE_ONLINE_WEB_URL ?? "https://app.gettrace.org",
 });
