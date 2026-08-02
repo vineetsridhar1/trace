@@ -3,6 +3,7 @@ import {
   createEndpointPreviewToken,
   endpointPreviewCookieHeader,
   endpointPreviewTokenFromCookie,
+  safeEndpointRedirectPath,
   verifyEndpointPreviewToken,
 } from "./endpoint-preview-auth.js";
 
@@ -30,6 +31,13 @@ describe("endpoint preview auth", () => {
 
   it("rejects malformed credentials", () => {
     expect(verifyEndpointPreviewToken("not-a-token")).toBeNull();
+  });
+
+  it("keeps app access redirects same-origin", () => {
+    expect(safeEndpointRedirectPath("/reports?period=month")).toBe("/reports?period=month");
+    expect(safeEndpointRedirectPath("//evil.example")).toBe("/");
+    expect(safeEndpointRedirectPath("/\\evil.example")).toBe("/");
+    expect(safeEndpointRedirectPath("https://evil.example")).toBe("/");
   });
 
   it("allows the preview cookie in a local cross-site iframe", () => {

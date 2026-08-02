@@ -30,6 +30,7 @@ import {
 } from "../services/mobile-auth.js";
 import { pushTokenService } from "../services/pushTokenService.js";
 import { resolveJwtSecret } from "../lib/jwt-secret.js";
+import { sessionApplicationService } from "../services/session-applications.js";
 
 const router: RouterType = Router();
 
@@ -132,7 +133,10 @@ function rateLimitClientKey(req: Request): string {
   return forwardedClient || req.ip || req.socket.remoteAddress || "unknown";
 }
 
-function applyLocalRateLimit(key: string, config: RateLimitConfig): { limited: boolean; retryAfter: number } {
+function applyLocalRateLimit(
+  key: string,
+  config: RateLimitConfig,
+): { limited: boolean; retryAfter: number } {
   const now = Date.now();
   const existing = localRateLimitBuckets.get(key);
   const bucket =
@@ -724,6 +728,30 @@ router.get("/auth/me", async (req: Request, res: Response) => {
     });
   } catch {
     return res.status(401).json({ error: "Invalid token" });
+  }
+});
+
+router.get("/auth/app-access", async (req: Request, res: Response) => {
+  preventAuthResponseCaching(req, res);
+  const authenticated = await resolveAuthenticatedUser(req);
+  if (rejectExternalLocalModeRequest(req, res, authenticated)) return;
+  if (!authenticated) {
+    return res.status(401).json({ error: "Sign in to access this application" });
+  }
+  const endpointId = typeof req.query.endpointId === "string" ? req.query.endpointId : "";
+  const nextPath = typeof req.query.next === "string" ? req.query.next : "/";
+  if (!endpointId) {
+    return res.status(400).json({ error: "Application endpoint is required" });
+  }
+  try {
+    const preview = await sessionApplicationService.createEndpointPreviewForUser(
+      endpointId,
+      authenticated.auth.userId,
+      nextPath,
+    );
+    return res.redirect(302, preview.url);
+  } catch {
+    return res.status(403).json({ error: "Not authorized for this application" });
   }
 });
 

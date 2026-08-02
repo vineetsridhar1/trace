@@ -14,7 +14,7 @@ import { orgSecretService } from "./org-secret.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
 import { buildEndpointUrl, generateEndpointKey } from "./endpoint-utils.js";
 import { isGeneratedProjectKind } from "../lib/generated-project.js";
-import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
+import { createEndpointPreviewToken, safeEndpointRedirectPath } from "./endpoint-preview-auth.js";
 
 import type { RepoEnvVar } from "@trace/gql";
 
@@ -720,7 +720,12 @@ export class SessionApplicationService {
     return true;
   }
 
-  async createEndpointPreview(endpointId: string, organizationId: string, userId: string) {
+  async createEndpointPreview(
+    endpointId: string,
+    organizationId: string,
+    userId: string,
+    nextPath = "/",
+  ) {
     const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
       where: { id: endpointId, organizationId },
       select: { id: true, sessionGroupId: true, status: true, revokedAt: true, key: true },
@@ -733,8 +738,17 @@ export class SessionApplicationService {
     const url = new URL(buildEndpointUrl(endpoint.key));
     url.pathname = "/__trace_preview_auth";
     url.searchParams.set("token", credential.token);
-    url.searchParams.set("next", "/");
+    url.searchParams.set("next", safeEndpointRedirectPath(nextPath));
     return { url: url.toString(), expiresAt: credential.expiresAt };
+  }
+
+  async createEndpointPreviewForUser(endpointId: string, userId: string, nextPath = "/") {
+    const endpoint = await prisma.sessionEndpoint.findUnique({
+      where: { id: endpointId },
+      select: { organizationId: true },
+    });
+    if (!endpoint) throw new ValidationError("Application endpoint not found");
+    return this.createEndpointPreview(endpointId, endpoint.organizationId, userId, nextPath);
   }
 
   async publishAppSession(

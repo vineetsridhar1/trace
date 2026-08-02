@@ -47,3 +47,8 @@ request through Nango Proxy. Nango credentials and connection IDs are never retu
 
 Published app endpoints default to private. Public app endpoints can render public content, but
 their integration route still requires an authenticated organization member.
+
+Copied private-app links are stable endpoint URLs and contain no preview credential. A signed-in
+viewer who follows one is sent through `/auth/app-access`; Trace checks their current membership and
+app access before issuing a five-minute endpoint-scoped cookie for that viewer. The sender's
+identity is never transferred through the shared URL.
