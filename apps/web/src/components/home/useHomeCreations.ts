@@ -34,6 +34,8 @@ const HOME_CREATIONS_QUERY = gql`
     status
     visibility
     archivedAt
+    designPreviewUrl
+    animationPreviewUrl
     createdAt
     updatedAt
     owner {

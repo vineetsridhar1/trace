@@ -7,6 +7,7 @@ import { cn, timeAgo } from "../../lib/utils";
 import { navigateToSessionGroup } from "../../stores/ui";
 import { HomeKindIcon, homeKindLabel } from "./HomeKindIcon";
 import type { GeneratedProjectKind } from "../sidebar/generated-project-types";
+import { designPreviewModeUrl } from "../session/applications/saved-design-preview";
 
 const CREATION_TYPES: Array<{ id: "all" | GeneratedProjectKind; label: string }> = [
   { id: "all", label: "All" },
@@ -108,20 +109,38 @@ export function HomeCreationsGrid() {
 
 function CreationCard({ group }: { group: SessionGroupEntity }) {
   const title = group.name || group.slug || "Untitled creation";
+  const designPreviewUrl = group.designPreviewUrl as string | null | undefined;
+  const animationPreviewUrl = group.animationPreviewUrl as string | null | undefined;
+  const previewUrl = designPreviewUrl
+    ? designPreviewModeUrl(designPreviewUrl)
+    : (animationPreviewUrl ?? null);
   return (
     <button
       type="button"
       onClick={() => navigateToSessionGroup(group.channel?.id ?? null, group.id)}
-      className="flex min-h-24 flex-col rounded-[10px] border border-[var(--th-edge)] bg-[var(--th-surface)] p-4 text-left transition-colors hover:border-[var(--th-edge-hover)] hover:bg-white/[0.025] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--th-accent-light)]"
+      className="flex min-h-24 flex-col overflow-hidden rounded-[10px] border border-[var(--th-edge)] bg-[var(--th-surface)] text-left transition-colors hover:border-[var(--th-edge-hover)] hover:bg-white/[0.025] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--th-accent-light)]"
     >
-      <div className="flex items-center gap-2 text-xs text-[var(--th-muted)]">
-        <HomeKindIcon kind={group.kind} className="size-4" />
-        <span>{homeKindLabel(group.kind)}</span>
+      {previewUrl ? (
+        <div className="h-28 overflow-hidden border-b border-[var(--th-edge-faint)] bg-[var(--th-surface-mid)]">
+          <iframe
+            src={previewUrl}
+            title={`${title} preview`}
+            tabIndex={-1}
+            sandbox={designPreviewUrl ? "allow-forms allow-modals allow-popups allow-scripts" : "allow-scripts"}
+            className="pointer-events-none size-full border-0"
+          />
+        </div>
+      ) : null}
+      <div className="flex min-h-24 flex-col p-4">
+        <div className="flex items-center gap-2 text-xs text-[var(--th-muted)]">
+          <HomeKindIcon kind={group.kind} className="size-4" />
+          <span>{homeKindLabel(group.kind)}</span>
+        </div>
+        <span className="mt-3 truncate text-sm font-medium text-[var(--th-heading)]">{title}</span>
+        <span className="mt-auto pt-2 text-[11px] text-[var(--th-muted)]">
+          Updated {timeAgo(group.updatedAt)}
+        </span>
       </div>
-      <span className="mt-3 truncate text-sm font-medium text-[var(--th-heading)]">{title}</span>
-      <span className="mt-auto pt-2 text-[11px] text-[var(--th-muted)]">
-        Updated {timeAgo(group.updatedAt)}
-      </span>
     </button>
   );
 }
