@@ -59,7 +59,7 @@ instead of pasting its body. A plan that contains the implementation is not revi
 ## 3. Publish
 
 ```bash
-trace artifact push visual-plan .trace-work/plan
+trace artifact push visual-plan .trace-work/plan --key primary
 ```
 
 The upload is rejected unless the directory holds exactly one file, `plan.html`, with no external

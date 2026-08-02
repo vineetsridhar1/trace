@@ -5,6 +5,7 @@ import { useSidebar } from "../ui/sidebar";
 import { SessionDetailView } from "./SessionDetailView";
 import { DesignManualEditPanel } from "./applications/DesignManualEditPanel";
 import { useDesignEditorStore } from "../../stores/design-editor";
+import { ArtifactOpenContext, type OpenArtifact } from "../artifact/ArtifactOpenContext";
 
 export function ProjectPreviewWorkspace({
   sessionId,
@@ -17,6 +18,7 @@ export function ProjectPreviewWorkspace({
   canvas,
   showCanvasWhileLoading = false,
   manualSessionGroupId,
+  onOpenArtifact,
 }: {
   sessionId: string | null;
   scrollToEventId: string | null;
@@ -28,6 +30,7 @@ export function ProjectPreviewWorkspace({
   canvas: ReactNode;
   showCanvasWhileLoading?: boolean;
   manualSessionGroupId?: string;
+  onOpenArtifact: OpenArtifact;
 }) {
   const [canvasRevealed, setCanvasRevealed] = useState(canvasReady || showCanvasWhileLoading);
   const hasCollapsedRef = useRef(false);
@@ -95,15 +98,17 @@ export function ProjectPreviewWorkspace({
         {manualEditing && manualSessionGroupId ? (
           <DesignManualEditPanel />
         ) : sessionId ? (
-          <SessionDetailView
-            key={sessionId}
-            sessionId={sessionId}
-            hideHeader
-            scrollToEventId={scrollToEventId}
-            onScrollComplete={onScrollComplete}
-            onForkSession={onForkSession}
-            canForkSession={canForkSession}
-          />
+          <ArtifactOpenContext.Provider value={onOpenArtifact}>
+            <SessionDetailView
+              key={sessionId}
+              sessionId={sessionId}
+              hideHeader
+              scrollToEventId={scrollToEventId}
+              onScrollComplete={onScrollComplete}
+              onForkSession={onForkSession}
+              canForkSession={canForkSession}
+            />
+          </ArtifactOpenContext.Provider>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Loading messages…

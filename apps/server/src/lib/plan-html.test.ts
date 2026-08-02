@@ -35,10 +35,23 @@ describe("validatePlanHtml", () => {
     expect(() => validatePlanHtml('<style>@import "https://fonts.example/x.css";</style>')).toThrow(
       "@import",
     );
+    expect(() => validatePlanHtml(page("<img src=https://tracker.example/pixel>"))).toThrow(
+      "tracker.example",
+    );
+    expect(() =>
+      validatePlanHtml(page('<video poster="https://tracker.example/pixel"></video>')),
+    ).toThrow("tracker.example");
+    expect(() => validatePlanHtml(page('<img srcset="https://tracker.example/pixel 1x">'))).toThrow(
+      "srcset",
+    );
+    expect(() =>
+      validatePlanHtml('<meta http-equiv="refresh" content="0;url=https://tracker.example/">'),
+    ).toThrow("meta refresh");
   });
 
   it("allows in-page anchors", () => {
     expect(() => validatePlanHtml(page('<a href="#risks">Risks</a>'))).not.toThrow();
+    expect(() => validatePlanHtml("<style>.x{mask:url(#shape)}</style>")).not.toThrow();
   });
 
   it("ignores comments, which neither render nor load", () => {

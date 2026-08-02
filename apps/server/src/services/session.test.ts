@@ -93,6 +93,7 @@ vi.mock("../lib/runtime-debug.js", () => ({
 vi.mock("../lib/storage/index.js", () => ({
   storage: {
     getGetUrl: vi.fn(async (key: string) => `https://example.test/${key}`),
+    deleteObject: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -366,6 +367,7 @@ describe("SessionService", () => {
     // Default: a group has no sibling sessions to relocate during a move. Tests
     // exercising multi-session groups override this with mockResolvedValueOnce.
     prismaMock.session.findMany.mockResolvedValue([]);
+    prismaMock.artifact.findMany.mockResolvedValue([]);
     sessionRouterMock.send.mockReturnValue("delivered");
     sessionRouterMock.transitionRuntime.mockResolvedValue("delivered");
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
@@ -8507,6 +8509,18 @@ describe("SessionService", () => {
           }),
         }),
       );
+    });
+
+    it("deletes stored artifact bundles after the database cascade succeeds", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(makeSession());
+      prismaMock.session.count.mockResolvedValueOnce(0);
+      prismaMock.artifact.findMany.mockResolvedValueOnce([
+        { storageKey: "artifacts/org-1/artifact-1.tar.gz" },
+      ]);
+
+      await service.delete("session-1");
+
+      expect(storageMock.deleteObject).toHaveBeenCalledWith("artifacts/org-1/artifact-1.tar.gz");
     });
   });
 

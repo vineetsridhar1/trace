@@ -19,3 +19,18 @@ export function planMarkupForImplementation(html: string): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+
+const PLAN_CSP =
+  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
+
+/** Defense in depth: the upload validator rejects network references, and the frame also forbids them. */
+export function sandboxedPlanHtml(html: string): string {
+  const policy = `<meta http-equiv="Content-Security-Policy" content="${PLAN_CSP}">`;
+  if (/<head\b[^>]*>/i.test(html)) {
+    return html.replace(/<head\b[^>]*>/i, (head) => `${head}${policy}`);
+  }
+  if (/<html\b[^>]*>/i.test(html)) {
+    return html.replace(/<html\b[^>]*>/i, (root) => `${root}<head>${policy}</head>`);
+  }
+  return `<!doctype html><html><head>${policy}</head><body>${html}</body></html>`;
+}

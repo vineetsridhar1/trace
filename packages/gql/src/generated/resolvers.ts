@@ -99,6 +99,14 @@ export type Artifact = {
   type: Scalars["String"]["output"];
 };
 
+export type ArtifactApprovalAction = "KEEP_CONTEXT" | "NEW_SESSION";
+
+export type ArtifactApprovalResult = {
+  __typename?: "ArtifactApprovalResult";
+  artifact: Artifact;
+  implementationSession: Session;
+};
+
 export type ArtifactFile = {
   __typename?: "ArtifactFile";
   digest: Scalars["String"]["output"];
@@ -932,7 +940,7 @@ export type Mutation = {
   addChannelMember: Channel;
   addChatMember: Chat;
   addOrgMember: OrgMember;
-  approveArtifact: Artifact;
+  approveArtifact: ArtifactApprovalResult;
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveDesignSystem: DesignSystem;
   archiveSessionGroup?: Maybe<SessionGroup>;
@@ -1076,7 +1084,9 @@ export type MutationAddOrgMemberArgs = {
 };
 
 export type MutationApproveArtifactArgs = {
+  action: ArtifactApprovalAction;
   artifactId: Scalars["ID"]["input"];
+  prompt: Scalars["String"]["input"];
 };
 
 export type MutationApproveBridgeAccessRequestArgs = {
@@ -2962,6 +2972,8 @@ export type ResolversTypes = ResolversObject<{
   ApiTokenStatus: ResolverTypeWrapper<ApiTokenStatus>;
   ApplicationProcessStatus: ApplicationProcessStatus;
   Artifact: ResolverTypeWrapper<Artifact>;
+  ArtifactApprovalAction: ArtifactApprovalAction;
+  ArtifactApprovalResult: ResolverTypeWrapper<ArtifactApprovalResult>;
   ArtifactFile: ResolverTypeWrapper<ArtifactFile>;
   ArtifactManifest: ResolverTypeWrapper<ArtifactManifest>;
   Boolean: ResolverTypeWrapper<Scalars["Boolean"]["output"]>;
@@ -3135,6 +3147,7 @@ export type ResolversParentTypes = ResolversObject<{
   AgentEnvironmentTestResult: AgentEnvironmentTestResult;
   ApiTokenStatus: ApiTokenStatus;
   Artifact: Artifact;
+  ArtifactApprovalResult: ArtifactApprovalResult;
   ArtifactFile: ArtifactFile;
   ArtifactManifest: ArtifactManifest;
   Boolean: Scalars["Boolean"]["output"];
@@ -3323,6 +3336,16 @@ export type ArtifactResolvers<
   session?: Resolver<ResolversTypes["Session"], ParentType, ContextType>;
   sessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   type?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ArtifactApprovalResultResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["ArtifactApprovalResult"] =
+    ResolversParentTypes["ArtifactApprovalResult"],
+> = ResolversObject<{
+  artifact?: Resolver<ResolversTypes["Artifact"], ParentType, ContextType>;
+  implementationSession?: Resolver<ResolversTypes["Session"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -4052,10 +4075,10 @@ export type MutationResolvers<
     RequireFields<MutationAddOrgMemberArgs, "organizationId" | "userId">
   >;
   approveArtifact?: Resolver<
-    ResolversTypes["Artifact"],
+    ResolversTypes["ArtifactApprovalResult"],
     ParentType,
     ContextType,
-    RequireFields<MutationApproveArtifactArgs, "artifactId">
+    RequireFields<MutationApproveArtifactArgs, "action" | "artifactId" | "prompt">
   >;
   approveBridgeAccessRequest?: Resolver<
     ResolversTypes["BridgeAccessGrant"],
@@ -5926,6 +5949,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   AgentEnvironmentTestResult?: AgentEnvironmentTestResultResolvers<ContextType>;
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
   Artifact?: ArtifactResolvers<ContextType>;
+  ArtifactApprovalResult?: ArtifactApprovalResultResolvers<ContextType>;
   ArtifactFile?: ArtifactFileResolvers<ContextType>;
   ArtifactManifest?: ArtifactManifestResolvers<ContextType>;
   BranchDiffFile?: BranchDiffFileResolvers<ContextType>;

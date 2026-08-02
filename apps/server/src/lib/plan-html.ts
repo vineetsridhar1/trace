@@ -1,8 +1,39 @@
+import { load } from "cheerio";
 import { ValidationError } from "./errors.js";
 
-const ASSET_TAG =
-  /<(?:script|link|img|source|video|audio|use|image|iframe|embed|object)\b[^>]*(?:src|href|data)=["']([^"']+)["'][^>]*>/gi;
-const CSS_URL = /url\(\s*["']?(?!data:)([^)'"\s]+)["']?\s*\)/gi;
+const FORBIDDEN_TAGS = new Set(["script", "iframe", "embed", "object", "form"]);
+const URL_ATTRIBUTES = new Set([
+  "action",
+  "background",
+  "cite",
+  "data",
+  "formaction",
+  "href",
+  "longdesc",
+  "manifest",
+  "ping",
+  "poster",
+  "src",
+  "srcset",
+]);
+
+function isInlineReference(reference: string): boolean {
+  const normalized = reference.trim().toLowerCase();
+  return normalized.startsWith("data:") || normalized.startsWith("#");
+}
+
+function validateCss(source: string): void {
+  for (const match of source.matchAll(/url\(\s*["']?([^)'"\s]+)["']?\s*\)/gi)) {
+    if (!isInlineReference(match[1])) {
+      throw new ValidationError(
+        `plan.html must be self-contained; remove the external CSS asset ${match[1]}`,
+      );
+    }
+  }
+  if (/@import\s+(?:url\s*\(|["'])/i.test(source)) {
+    throw new ValidationError("plan.html must be self-contained; remove the CSS @import");
+  }
+}
 
 /**
  * A plan renders in a sandboxed frame with scripting disabled and no sibling files, so anything
@@ -10,28 +41,28 @@ const CSS_URL = /url\(\s*["']?(?!data:)([^)'"\s]+)["']?\s*\)/gi;
  * where the agent still gets a structured error it can act on.
  */
 export function validatePlanHtml(source: string): void {
-  // Comments never render or load anything, and plans legitimately describe these rules in prose.
-  const html = source.replace(/<!--[\s\S]*?-->/g, "");
-  if (/<script\b/i.test(html)) {
-    throw new ValidationError(
-      "plan.html must not contain <script>; plans render without scripting",
-    );
-  }
-  for (const match of html.matchAll(ASSET_TAG)) {
-    const reference = match[1];
-    if (!reference.startsWith("data:") && !reference.startsWith("#")) {
-      throw new ValidationError(
-        `plan.html must be self-contained; remove the external reference to ${reference}`,
-      );
+  const $ = load(source);
+  $("*").each((_index, element) => {
+    if (!("tagName" in element)) return;
+    const tag = element.tagName.toLowerCase();
+    if (FORBIDDEN_TAGS.has(tag)) {
+      throw new ValidationError(`plan.html must not contain <${tag}>`);
     }
-  }
-  const cssUrl = CSS_URL.exec(html);
-  if (cssUrl) {
-    throw new ValidationError(
-      `plan.html must be self-contained; remove the external CSS asset ${cssUrl[1]}`,
-    );
-  }
-  if (/@import\s+(?:url\s*\(|["'])/i.test(html)) {
-    throw new ValidationError("plan.html must be self-contained; remove the CSS @import");
-  }
+    if (tag === "meta" && $(element).attr("http-equiv")?.trim().toLowerCase() === "refresh") {
+      throw new ValidationError("plan.html must not contain meta refresh navigation");
+    }
+    for (const [rawName, value] of Object.entries(element.attribs)) {
+      const name = rawName.toLowerCase();
+      if (name === "style") validateCss(value);
+      if (name === "srcset") {
+        throw new ValidationError("plan.html must not contain srcset; inline one image with src");
+      }
+      if ((URL_ATTRIBUTES.has(name) || name.endsWith(":href")) && !isInlineReference(value)) {
+        throw new ValidationError(
+          `plan.html must be self-contained; remove the external reference to ${value}`,
+        );
+      }
+    }
+  });
+  $("style").each((_index, element) => validateCss($(element).html() ?? ""));
 }

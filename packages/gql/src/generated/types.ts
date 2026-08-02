@@ -96,6 +96,14 @@ export type Artifact = {
   type: Scalars["String"]["output"];
 };
 
+export type ArtifactApprovalAction = "KEEP_CONTEXT" | "NEW_SESSION";
+
+export type ArtifactApprovalResult = {
+  __typename?: "ArtifactApprovalResult";
+  artifact: Artifact;
+  implementationSession: Session;
+};
+
 export type ArtifactFile = {
   __typename?: "ArtifactFile";
   digest: Scalars["String"]["output"];
@@ -929,7 +937,7 @@ export type Mutation = {
   addChannelMember: Channel;
   addChatMember: Chat;
   addOrgMember: OrgMember;
-  approveArtifact: Artifact;
+  approveArtifact: ArtifactApprovalResult;
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveDesignSystem: DesignSystem;
   archiveSessionGroup?: Maybe<SessionGroup>;
@@ -1073,7 +1081,9 @@ export type MutationAddOrgMemberArgs = {
 };
 
 export type MutationApproveArtifactArgs = {
+  action: ArtifactApprovalAction;
   artifactId: Scalars["ID"]["input"];
+  prompt: Scalars["String"]["input"];
 };
 
 export type MutationApproveBridgeAccessRequestArgs = {

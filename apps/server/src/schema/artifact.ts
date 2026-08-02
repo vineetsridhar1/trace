@@ -43,12 +43,23 @@ export const artifactQueries = {
 };
 
 export const artifactMutations = {
-  approveArtifact: async (_: unknown, args: { artifactId: string }, ctx: Context) => {
+  approveArtifact: async (
+    _: unknown,
+    args: {
+      artifactId: string;
+      action: "NEW_SESSION" | "KEEP_CONTEXT";
+      prompt: string;
+    },
+    ctx: Context,
+  ) => {
     try {
       return await artifactService.approve({
         artifactId: args.artifactId,
         organizationId: requireOrgContext(ctx),
         actorId: ctx.userId,
+        action: args.action,
+        prompt: args.prompt,
+        clientSource: ctx.clientSource,
       });
     } catch (error) {
       throw toGraphQLError(error);

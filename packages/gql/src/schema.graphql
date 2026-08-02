@@ -746,6 +746,16 @@ type Artifact {
   createdAt: DateTime!
 }
 
+enum ArtifactApprovalAction {
+  NEW_SESSION
+  KEEP_CONTEXT
+}
+
+type ArtifactApprovalResult {
+  artifact: Artifact!
+  implementationSession: Session!
+}
+
 type QueuedMessage {
   id: ID!
   sessionId: ID!
@@ -1922,7 +1932,11 @@ type Mutation {
     interactionMode: String
     clientMutationId: String
   ): Event!
-  approveArtifact(artifactId: ID!): Artifact!
+  approveArtifact(
+    artifactId: ID!
+    action: ArtifactApprovalAction!
+    prompt: String!
+  ): ArtifactApprovalResult!
   """
   Copy the source of a design-kind session group into the target session's
   workspace (under .trace/designs/<slug>/) and message the agent to implement

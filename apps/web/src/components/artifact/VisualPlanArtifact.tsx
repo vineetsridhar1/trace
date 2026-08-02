@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { Artifact } from "@trace/gql";
 import { TraceLoader } from "../ui/trace-loader";
 import { useVisualPlanDocument } from "./useVisualPlanDocument";
+import { sandboxedPlanHtml } from "./plan-html";
 
 export function VisualPlanArtifact({
   artifact,
@@ -28,12 +29,12 @@ export function VisualPlanArtifact({
     );
   }
   return (
-    // The plan is agent-authored markup. An empty sandbox gives it an opaque origin with no
-    // scripting, no network, and no reach back into the app.
+    // The plan is agent-authored markup. The sandbox removes scripting and app access; the
+    // injected CSP independently blocks network, navigation, frames, and form submission.
     <iframe
       key={artifact.id}
       title="Implementation plan"
-      srcDoc={html}
+      srcDoc={sandboxedPlanHtml(html)}
       sandbox=""
       className="size-full min-h-full border-0 bg-background"
     />

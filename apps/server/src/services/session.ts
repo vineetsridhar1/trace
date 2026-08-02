@@ -5181,6 +5181,10 @@ export class SessionService {
       include: SESSION_INCLUDE,
     });
     if (!session) throw new Error("Session not found or already deleted");
+    const artifactObjects = await prisma.artifact.findMany({
+      where: { sessionId: id },
+      select: { storageKey: true },
+    });
 
     // Resolve any pending inbox items (plans/questions awaiting input)
     await inboxService.resolveBySource({
@@ -5236,6 +5240,17 @@ export class SessionService {
         deletedSessionGroupId = session.sessionGroupId;
       }
     });
+
+    await Promise.all(
+      artifactObjects.map(({ storageKey }) =>
+        storage.deleteObject(storageKey).catch((error: unknown) => {
+          console.warn("[session] failed to delete artifact object with session", {
+            storageKey,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }),
+      ),
+    );
 
     // Broadcast the deletion event (events are kept for audit trail)
     await eventService.create({

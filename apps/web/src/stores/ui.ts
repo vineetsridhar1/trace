@@ -56,6 +56,11 @@ export interface UIState {
   openSessionTab: (groupId: string, sessionId: string) => void;
   closeSessionTab: (groupId: string, sessionId: string) => void;
   initSessionTabs: (groupId: string, sessionIds: string[]) => void;
+  openArtifactTabsByGroup: Record<string, string[]>;
+  activeArtifactIdsByGroup: Record<string, string | null>;
+  openArtifactTab: (groupId: string, artifactId: string) => void;
+  closeArtifactTab: (groupId: string, artifactId: string) => void;
+  setActiveArtifactId: (groupId: string, artifactId: string | null) => void;
   restoreLastVisited: (tab: "dm" | "main") => void;
   channelSubPage: ChannelSubPage;
   setChannelSubPage: (subPage: ChannelSubPage) => void;
@@ -108,6 +113,8 @@ const initialNavigationState = {
   activeThreadId: null as string | null,
   lastSelectedSessionIdsByGroup: {} as Record<string, string>,
   openSessionTabsByGroup: {} as Record<string, string[]>,
+  openArtifactTabsByGroup: {} as Record<string, string[]>,
+  activeArtifactIdsByGroup: {} as Record<string, string | null>,
   channelSubPage: null as ChannelSubPage,
   settingsInitialTab: null as string | null,
   showTerminalPanel: false,
@@ -198,6 +205,56 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
         },
       };
     });
+  },
+
+  openArtifactTab: (groupId: string, artifactId: string) => {
+    set((s: UIState) => {
+      const existing = s.openArtifactTabsByGroup[groupId] ?? [];
+      return {
+        openArtifactTabsByGroup: existing.includes(artifactId)
+          ? s.openArtifactTabsByGroup
+          : {
+              ...s.openArtifactTabsByGroup,
+              [groupId]: [...existing, artifactId],
+            },
+        activeArtifactIdsByGroup: {
+          ...s.activeArtifactIdsByGroup,
+          [groupId]: artifactId,
+        },
+      };
+    });
+  },
+
+  closeArtifactTab: (groupId: string, artifactId: string) => {
+    set((s: UIState) => {
+      const existing = s.openArtifactTabsByGroup[groupId] ?? [];
+      const index = existing.indexOf(artifactId);
+      if (index === -1) return {};
+      const next = existing.filter((id) => id !== artifactId);
+      const activeArtifactId = s.activeArtifactIdsByGroup[groupId];
+      return {
+        openArtifactTabsByGroup: {
+          ...s.openArtifactTabsByGroup,
+          [groupId]: next,
+        },
+        activeArtifactIdsByGroup:
+          activeArtifactId === artifactId
+            ? {
+                ...s.activeArtifactIdsByGroup,
+                [groupId]: next[Math.min(index, next.length - 1)] ?? null,
+              }
+            : s.activeArtifactIdsByGroup,
+      };
+    });
+  },
+
+  setActiveArtifactId: (groupId: string, artifactId: string | null) => {
+    set((s: UIState) => ({
+      activeArtifactIdsByGroup: {
+        ...s.activeArtifactIdsByGroup,
+        [groupId]: artifactId,
+      },
+    }));
   },
 
   setActivePage: (page: ActivePage) => {

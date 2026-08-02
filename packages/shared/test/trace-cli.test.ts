@@ -38,14 +38,7 @@ describe("trace artifact push", () => {
     try {
       const child = spawn(
         resolve(repositoryRoot, "runtime/bin/trace"),
-        [
-          "artifact",
-          "push",
-          "visual-plan",
-          resolve(repositoryRoot, "runtime/skills/visual-plan"),
-          "--key",
-          "primary",
-        ],
+        ["artifact", "push", "visual-plan", resolve(repositoryRoot, "runtime/skills/visual-plan")],
         {
           env: {
             ...process.env,

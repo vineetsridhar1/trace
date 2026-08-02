@@ -788,25 +788,31 @@ model Session {
 }
 
 model Artifact {
-  id             String       @id @default(uuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sessionId      String
-  session        Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  type           String
-  key            String
-  bundleDigest   String
-  manifest       Json
-  storageKey     String
-  byteSize       Int
-  createdById    String
-  createdBy      User         @relation("ArtifactCreator", fields: [createdById], references: [id])
-  idempotencyKey String       @unique
-  createdAt      DateTime     @default(now())
+  id                      String       @id @default(uuid())
+  organizationId          String
+  organization            Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionId               String
+  session                 Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type                    String
+  key                     String
+  bundleDigest            String
+  manifest                Json
+  storageKey              String
+  byteSize                Int
+  createdById             String
+  createdBy               User         @relation("ArtifactCreator", fields: [createdById], references: [id])
+  idempotencyKey          String       @unique
+  approvalStatus          String       @default("pending")
+  approvalAction          String?
+  approvedAt              DateTime?
+  approvedById            String?
+  implementationSessionId String?
+  createdAt               DateTime     @default(now())
 
   @@index([organizationId, createdAt])
   @@index([sessionId, type, key, createdAt])
   @@index([bundleDigest])
+  @@index([approvalStatus])
 }
 
 model SessionSetupScriptRun {

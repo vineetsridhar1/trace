@@ -18,11 +18,16 @@ interface PendingInputPlanProps {
   keyboardVisible?: boolean;
 }
 
-const APPROVE_TEXT = "Approved. Implement this plan.";
 const APPROVE_ARTIFACT_MUTATION = gql`
-  mutation MobileApproveArtifact($artifactId: ID!) {
-    approveArtifact(artifactId: $artifactId) {
-      id
+  mutation MobileApproveArtifact(
+    $artifactId: ID!
+    $action: ArtifactApprovalAction!
+    $prompt: String!
+  ) {
+    approveArtifact(artifactId: $artifactId, action: $action, prompt: $prompt) {
+      implementationSession {
+        id
+      }
     }
   }
 `;
@@ -62,13 +67,16 @@ export function PendingInputPlan({
   const trimmed = feedback.trim();
   const isTypingMore = trimmed.length > 0;
   const hasAnswer = isTypingMore || selectedAction !== null;
-  const approveArtifact = useCallback(async () => {
-    if (!artifactId) return;
-    const result = await getClient()
-      .mutation(APPROVE_ARTIFACT_MUTATION, { artifactId })
-      .toPromise();
-    if (result.error) throw result.error;
-  }, [artifactId]);
+  const approveArtifact = useCallback(
+    async (action: "KEEP_CONTEXT", prompt: string) => {
+      if (!artifactId) throw new Error("The plan artifact is unavailable");
+      const result = await getClient()
+        .mutation(APPROVE_ARTIFACT_MUTATION, { artifactId, action, prompt })
+        .toPromise();
+      if (result.error) throw result.error;
+    },
+    [artifactId],
+  );
 
   useEffect(() => {
     if (!isTypingMore) return;
@@ -80,8 +88,8 @@ export function PendingInputPlan({
     if (sending) return;
     setSending(true);
     try {
-      await approveArtifact();
-      const started = await startPlanImplementationSession(sessionId, planContent);
+      if (!artifactId) throw new Error("The plan artifact is unavailable");
+      const started = await startPlanImplementationSession(artifactId, planContent);
       if (started) {
         setFeedback("");
         setSelectedAction("new-session");
@@ -89,26 +97,20 @@ export function PendingInputPlan({
     } finally {
       setSending(false);
     }
-  }, [approveArtifact, planContent, sending, sessionId]);
+  }, [artifactId, planContent, sending]);
 
   const handleKeepContext = useCallback(async () => {
     if (sending) return;
     setSending(true);
     void haptic.success();
     try {
-      await approveArtifact();
-      await getClient()
-        .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-          sessionId,
-          text: APPROVE_TEXT,
-        })
-        .toPromise();
+      await approveArtifact("KEEP_CONTEXT", "Approved. Implement this plan.");
       setFeedback("");
       setSelectedAction("new-session");
     } finally {
       setSending(false);
     }
-  }, [approveArtifact, sending, sessionId]);
+  }, [approveArtifact, sending]);
 
   const handleRevise = useCallback(async () => {
     if (sending || !trimmed) return;

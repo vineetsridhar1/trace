@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { escapeHtml, planMarkupForImplementation } from "./plan-html";
+import { escapeHtml, planMarkupForImplementation, sandboxedPlanHtml } from "./plan-html";
 
 describe("planMarkupForImplementation", () => {
   it("keeps the semantic markup and drops the presentation", () => {
@@ -17,6 +17,23 @@ describe("planMarkupForImplementation", () => {
 
   it("falls back to the whole document when there is no body", () => {
     expect(planMarkupForImplementation("<h1>Plan</h1>")).toBe("<h1>Plan</h1>");
+  });
+});
+
+describe("sandboxedPlanHtml", () => {
+  it("injects a network-denying CSP into an existing head", () => {
+    const html = sandboxedPlanHtml(
+      "<html><head><title>Plan</title></head><body>Body</body></html>",
+    );
+    expect(html).toContain('http-equiv="Content-Security-Policy"');
+    expect(html).toContain("default-src 'none'");
+    expect(html.indexOf("Content-Security-Policy")).toBeLessThan(html.indexOf("</head>"));
+  });
+
+  it("wraps fragments so the CSP remains in the document head", () => {
+    const html = sandboxedPlanHtml("<main>Plan</main>");
+    expect(html).toContain("<head><meta");
+    expect(html).toContain("<body><main>Plan</main></body>");
   });
 });
 

@@ -17,7 +17,7 @@ if (args[0] !== "artifact" || args[1] !== "push" || !args[2] || !args[3]) {
 
 const type = args[2];
 const source = resolve(args[3]);
-let key = "default";
+let key = type === "visual-plan" || type === "trace.visual-plan.v1" ? "primary" : "default";
 for (let index = 4; index < args.length; index += 1) {
   if (args[index] !== "--key" || !args[index + 1]) fail("invalid arguments");
   key = args[index + 1];
