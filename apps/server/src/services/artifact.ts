@@ -6,7 +6,12 @@ import { eventService } from "./event.js";
 import { TRACE_AI_USER_ID } from "../lib/ai-user.js";
 import { ValidationError } from "../lib/errors.js";
 import { canViewSessionGroup } from "./access.js";
-import { parseArtifactArchive, type ArtifactBundleManifest } from "../lib/artifact-bundle.js";
+import {
+  parseArtifactArchive,
+  readArtifactFile,
+  type ArtifactBundleManifest,
+} from "../lib/artifact-bundle.js";
+import { validatePlanHtml } from "../lib/plan-html.js";
 
 const TYPE_ALIASES: Record<string, string> = {
   "visual-plan": "trace.visual-plan.v1",
@@ -32,18 +37,14 @@ function normalizeType(input: string): string {
 
 export function validateType(type: string, manifest: ArtifactBundleManifest): void {
   if (type === "trace.visual-plan.v1") {
-    const plan = manifest.files.find((file) => file.path === "plan.mdx");
-    if (!plan) throw new ValidationError("Visual plan artifacts require plan.mdx at the root");
-    if (plan.mediaType !== "text/mdx") throw new ValidationError("plan.mdx must be MDX");
-    // A plan is one document. Everything else in the bundle is an image it displays.
-    const stray = manifest.files.find(
-      (file) =>
-        file.path !== "plan.mdx" &&
-        !(file.path.startsWith("assets/") && file.mediaType.startsWith("image/")),
-    );
+    // A plan is one self-contained page: no sibling stylesheet, script, or image to go missing.
+    if (!manifest.files.some((file) => file.path === "plan.html")) {
+      throw new ValidationError("Visual plan artifacts require plan.html at the root");
+    }
+    const stray = manifest.files.find((file) => file.path !== "plan.html");
     if (stray) {
       throw new ValidationError(
-        `Visual plans contain only plan.mdx and images under assets/. Remove ${stray.path}`,
+        `Visual plans contain only plan.html, with everything inlined. Remove ${stray.path}`,
       );
     }
   }
@@ -104,6 +105,11 @@ export class ArtifactService {
 
     const parsed = await parseArtifactArchive(input.archive);
     validateType(type, parsed.manifest);
+    if (type === "trace.visual-plan.v1") {
+      const plan = await readArtifactFile(input.archive, "plan.html");
+      if (!plan) throw new ValidationError("plan.html could not be read from the bundle");
+      validatePlanHtml(plan.toString("utf8"));
+    }
     const artifactId = randomUUID();
     const storageKey = `artifacts/${input.organizationId}/${artifactId}.tar.gz`;
     await storage.putObject(storageKey, input.archive, "application/gzip", { ifAbsent: true });

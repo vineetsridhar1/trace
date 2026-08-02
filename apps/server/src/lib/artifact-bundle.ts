@@ -50,6 +50,8 @@ function normalizePath(input: string): string {
 function mediaType(path: string): string {
   const extension = posix.extname(path).toLowerCase();
   switch (extension) {
+    case ".html":
+      return "text/html";
     case ".md":
       return "text/markdown";
     case ".mdx":

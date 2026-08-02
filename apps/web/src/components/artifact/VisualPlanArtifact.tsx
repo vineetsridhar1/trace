@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { getAuthHeaders } from "@trace/client-core";
 import type { Artifact } from "@trace/gql";
-import { Markdown } from "../ui/Markdown";
 import { TraceLoader } from "../ui/trace-loader";
 import { artifactFileUrl } from "./artifact-file-url";
+import { escapeHtml, planMarkupForImplementation } from "./plan-html";
 
 export function VisualPlanArtifact({
   artifact,
@@ -12,47 +12,39 @@ export function VisualPlanArtifact({
   artifact: Artifact;
   onContent?: (content: string) => void;
 }) {
-  const [content, setContent] = useState<string | null>(null);
+  const [html, setHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const planPath = artifact.manifest.files.some((file) => file.path === "plan.html")
+    ? "plan.html"
+    : "plan.mdx";
 
   useEffect(() => {
     const controller = new AbortController();
-    setContent(null);
+    setHtml(null);
     setError(null);
-    fetch(artifactFileUrl(artifact.id, "plan.mdx"), {
+    fetch(artifactFileUrl(artifact.id, planPath), {
       credentials: "include",
       headers: getAuthHeaders(),
       signal: controller.signal,
     })
       .then((response) => {
-        if (!response.ok) throw new Error("Could not load plan.mdx");
+        if (!response.ok) throw new Error(`Could not load ${planPath}`);
         return response.text();
       })
       .then((value) => {
-        setContent(value);
-        onContent?.(value);
+        // Plans published before the HTML format are Markdown; show them as legible plain text.
+        setHtml(planPath === "plan.html" ? value : `<pre>${escapeHtml(value)}</pre>`);
+        onContent?.(planPath === "plan.html" ? planMarkupForImplementation(value) : value);
       })
       .catch((fetchError: unknown) => {
         if (controller.signal.aborted) return;
         setError(fetchError instanceof Error ? fetchError.message : "Could not load plan");
       });
     return () => controller.abort();
-  }, [artifact.id, onContent]);
-
-  // Plans reference their images relatively (assets/flow.png); resolve those against the
-  // artifact rather than the page the viewer happens to be on. Plan content is agent-authored,
-  // so anything that is not http(s), mailto, or an in-page anchor is dropped.
-  const resolveUrl = useCallback(
-    (url: string) => {
-      if (url.startsWith("#") || /^(https?:|mailto:)/i.test(url)) return url;
-      if (url.startsWith("//") || /^[a-z][a-z0-9+.-]*:/i.test(url)) return "";
-      return artifactFileUrl(artifact.id, url);
-    },
-    [artifact.id],
-  );
+  }, [artifact.id, onContent, planPath]);
 
   if (error) return <p className="p-5 text-sm text-destructive">{error}</p>;
-  if (content === null) {
+  if (html === null) {
     return (
       <div className="flex h-40 items-center justify-center">
         <TraceLoader size={18} showLabel={false} />
@@ -60,8 +52,14 @@ export function VisualPlanArtifact({
     );
   }
   return (
-    <div className="mx-auto max-w-4xl px-6 py-5">
-      <Markdown resolveUrl={resolveUrl}>{content}</Markdown>
-    </div>
+    // The plan is agent-authored markup. An empty sandbox gives it an opaque origin with no
+    // scripting, no network, and no reach back into the app.
+    <iframe
+      key={artifact.id}
+      title="Implementation plan"
+      srcDoc={html}
+      sandbox=""
+      className="size-full min-h-full border-0 bg-background"
+    />
   );
 }

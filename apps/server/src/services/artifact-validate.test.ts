@@ -10,43 +10,31 @@ function manifest(files: Array<{ path: string; mediaType: string }>): ArtifactBu
   };
 }
 
-const PLAN = { path: "plan.mdx", mediaType: "text/mdx" };
+const PLAN = { path: "plan.html", mediaType: "text/html" };
 
 describe("validateType for visual plans", () => {
-  it("accepts plan.mdx alone and with images under assets/", () => {
+  it("accepts a bundle holding only plan.html", () => {
     expect(() => validateType("trace.visual-plan.v1", manifest([PLAN]))).not.toThrow();
+  });
+
+  it("rejects sibling files, which the single-page render cannot load", () => {
     expect(() =>
       validateType(
         "trace.visual-plan.v1",
         manifest([PLAN, { path: "assets/flow.png", mediaType: "image/png" }]),
       ),
-    ).not.toThrow();
-  });
-
-  it("rejects a second document so plans stay one reviewable file", () => {
+    ).toThrow("Remove assets/flow.png");
     expect(() =>
       validateType(
         "trace.visual-plan.v1",
-        manifest([PLAN, { path: "canvas.mdx", mediaType: "text/mdx" }]),
+        manifest([PLAN, { path: "plan.css", mediaType: "text/css" }]),
       ),
-    ).toThrow("Remove canvas.mdx");
+    ).toThrow("Remove plan.css");
   });
 
-  it("rejects non-image files under assets/", () => {
+  it("requires plan.html at the root", () => {
     expect(() =>
-      validateType(
-        "trace.visual-plan.v1",
-        manifest([PLAN, { path: "assets/flow.md", mediaType: "text/markdown" }]),
-      ),
-    ).toThrow("Remove assets/flow.md");
-  });
-
-  it("still requires plan.mdx at the root", () => {
-    expect(() =>
-      validateType(
-        "trace.visual-plan.v1",
-        manifest([{ path: "notes.mdx", mediaType: "text/mdx" }]),
-      ),
-    ).toThrow("require plan.mdx at the root");
+      validateType("trace.visual-plan.v1", manifest([{ path: "plan.mdx", mediaType: "text/mdx" }])),
+    ).toThrow("require plan.html at the root");
   });
 });

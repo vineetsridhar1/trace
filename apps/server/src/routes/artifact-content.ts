@@ -58,10 +58,17 @@ router.get("/artifacts/:artifactId/files/*path", async (req: Request, res: Respo
     const archive = await storage.getObject(artifact.storageKey);
     const body = await readArtifactFile(archive, requestedPath);
     if (!body) return res.status(404).end();
+    // Artifact HTML is agent-authored. The viewer reads it as text and renders it in a sandboxed
+    // frame, so this route never needs to serve it as a live document — and must not, since
+    // navigating here directly would execute it on the API origin with the caller's session.
+    const isHtml = file.mediaType === "text/html";
     res.set({
       "Cache-Control": "private, max-age=3600",
-      "Content-Type": file.mediaType ?? "application/octet-stream",
+      "Content-Type": isHtml
+        ? "text/plain; charset=utf-8"
+        : (file.mediaType ?? "application/octet-stream"),
       "X-Content-Type-Options": "nosniff",
+      ...(isHtml ? { "Content-Security-Policy": "sandbox" } : {}),
     });
     return res.send(body);
   } catch {
