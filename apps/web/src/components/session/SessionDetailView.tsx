@@ -19,6 +19,7 @@ import { SessionInput } from "./SessionInput";
 import { SessionDropzone } from "./SessionDropzone";
 import { useAddAttachments } from "./useAddAttachments";
 import { PlanResponseBar } from "./PlanResponseBar";
+import { PlanReviewPendingBar } from "./PlanReviewPendingBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
@@ -305,10 +306,11 @@ export function SessionDetailView({
   )
     ? "plan.html"
     : "plan.mdx";
-  const { implementationContent: artifactPlanContent } = useVisualPlanDocument(
-    visiblePlanArtifact?.id ?? null,
-    visiblePlanArtifact ? visiblePlanPath : undefined,
-  );
+  const { implementationContent: artifactPlanContent, error: artifactPlanError } =
+    useVisualPlanDocument(
+      visiblePlanArtifact?.id ?? null,
+      visiblePlanArtifact ? visiblePlanPath : undefined,
+    );
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
@@ -539,6 +541,9 @@ export function SessionDetailView({
     }
     return null;
   }, [nodes, sessionStatus]);
+  const planReviewContent = visiblePlanArtifact
+    ? artifactPlanContent
+    : (activePlan?.node.planContent ?? "");
 
   const activeQuestion = useMemo(() => {
     if (sessionStatus !== "needs_input") return null;
@@ -553,7 +558,7 @@ export function SessionDetailView({
 
   useEffect(() => {
     setPlanComments({});
-  }, [activePlan?.node.id]);
+  }, [activePlan?.node.id, visiblePlanArtifact?.id]);
 
   const handleAddPlanComment = useCallback((block: MarkdownSteerBlock, text: string) => {
     setPlanComments((current) => ({
@@ -633,6 +638,7 @@ export function SessionDetailView({
     bridgeInteractionAllowed &&
     !showQuestion &&
     !activePlan &&
+    !visiblePlanArtifact &&
     !worktreeDeleted &&
     !(isDisconnected(connection) && !isNotStarted);
 
@@ -762,7 +768,20 @@ export function SessionDetailView({
             )}
           </div>
           <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
-            {runtimeLifecycleState ? (
+            {activePlan || visiblePlanArtifact ? (
+              planReviewContent ? (
+                <PlanResponseBar
+                  sessionId={sessionId}
+                  planContent={planReviewContent}
+                  artifactId={visiblePlanArtifact?.id}
+                  planComments={planComments}
+                  onClearPlanComments={handleClearPlanComments}
+                  onDismiss={handleDismissPlan}
+                />
+              ) : (
+                <PlanReviewPendingBar error={artifactPlanError} onDismiss={handleDismissPlan} />
+              )
+            ) : runtimeLifecycleState ? (
               <RuntimeLifecycleNotice
                 sessionId={sessionId}
                 connection={connection}
@@ -791,15 +810,6 @@ export function SessionDetailView({
                 onDismiss={() => {
                   setDismissedQuestionId(showQuestion.id);
                 }}
-              />
-            ) : activePlan || (visiblePlanArtifact && artifactPlanContent) ? (
-              <PlanResponseBar
-                sessionId={sessionId}
-                planContent={activePlan?.node.planContent ?? artifactPlanContent}
-                artifactId={visiblePlanArtifact?.id}
-                planComments={planComments}
-                onClearPlanComments={handleClearPlanComments}
-                onDismiss={handleDismissPlan}
               />
             ) : (
               <>
