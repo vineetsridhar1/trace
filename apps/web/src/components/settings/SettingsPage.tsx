@@ -165,9 +165,12 @@ export function SettingsPage() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 md:flex">
+      <div className="flex min-h-0 flex-1">
         <div
-          className={cn("h-full overflow-y-auto px-4 py-6 md:hidden", mobileDetailOpen && "hidden")}
+          className={cn(
+            "h-full w-full overflow-y-auto px-4 py-6 md:hidden",
+            mobileDetailOpen && "hidden",
+          )}
         >
           <div className="mx-auto max-w-lg">
             <h1 className="text-2xl font-semibold tracking-[-0.02em] text-zinc-50">Settings</h1>
@@ -277,7 +280,7 @@ export function SettingsPage() {
 
         <main
           className={cn(
-            "min-h-0 flex-1 overflow-y-auto",
+            "min-h-0 w-full flex-1 overflow-y-auto",
             mobileDetailOpen ? "block" : "hidden",
             "md:block",
           )}
