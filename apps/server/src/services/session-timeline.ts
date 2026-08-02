@@ -208,10 +208,15 @@ function isPrLifecycleEvent(event: PrismaEvent): boolean {
   );
 }
 
-function isVisualPlanArtifactEvent(event: PrismaEvent): boolean {
+function isSupportedArtifactEvent(event: PrismaEvent): boolean {
   const payload = asObject(event.payload);
   const artifact = asObject(payload?.artifact);
-  return event.eventType === "artifact_created" && artifact?.type === "trace.visual-plan.v1";
+  return (
+    event.eventType === "artifact_created" &&
+    (artifact?.type === "trace.visual-plan.v1" ||
+      artifact?.type === "trace.image.v1" ||
+      artifact?.type === "trace.video.v1")
+  );
 }
 
 function isThinkingCandidate(event: PrismaEvent): boolean {
@@ -245,7 +250,7 @@ function compactVisibleEvents(candidates: PrismaEvent[]): PrismaEvent[] {
       continue;
     }
 
-    if (isVisualPlanArtifactEvent(event)) {
+    if (isSupportedArtifactEvent(event)) {
       flushAssistant();
       visibleIds.add(event.id);
       continue;

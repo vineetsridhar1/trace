@@ -255,7 +255,10 @@ function isRenderableCompactEvent(event: Event | undefined): event is Event & { 
   }
   if (isPrLifecycleEvent(event)) return true;
   if (event.eventType === "artifact_created") {
-    return asRecord(payloadRecord(event)?.artifact)?.type === "trace.visual-plan.v1";
+    const type = asRecord(payloadRecord(event)?.artifact)?.type;
+    return (
+      type === "trace.visual-plan.v1" || type === "trace.image.v1" || type === "trace.video.v1"
+    );
   }
   if (event.eventType !== "session_output") return false;
 

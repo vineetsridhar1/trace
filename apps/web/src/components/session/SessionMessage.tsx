@@ -296,8 +296,12 @@ export const SessionMessage = memo(function SessionMessage({
 
     case "artifact_created": {
       const artifact = asJsonObject(payload?.artifact);
-      return artifact?.type === "trace.visual-plan.v1" && typeof artifact.id === "string" ? (
-        <ArtifactUploadedCard artifactId={artifact.id} timestamp={timestamp} />
+      return typeof artifact?.type === "string" && typeof artifact.id === "string" ? (
+        <ArtifactUploadedCard
+          artifactId={artifact.id}
+          artifactType={artifact.type}
+          timestamp={timestamp}
+        />
       ) : null;
     }
 
