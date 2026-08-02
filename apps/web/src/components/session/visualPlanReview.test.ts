@@ -1,6 +1,6 @@
 import type { Event } from "@trace/gql";
 import { describe, expect, it } from "vitest";
-import { findLatestVisualPlanArtifact } from "./visualPlanReview";
+import { findLatestTimelineInputRequest } from "./visualPlanReview";
 
 function artifactEvent(id: string, type = "trace.visual-plan.v1"): Event {
   return {
@@ -28,19 +28,46 @@ function artifactEvent(id: string, type = "trace.visual-plan.v1"): Event {
   };
 }
 
-describe("findLatestVisualPlanArtifact", () => {
+function questionEvent(id: string): Event {
+  return {
+    ...artifactEvent(id),
+    id: `question-${id}`,
+    eventType: "session_output",
+    payload: {
+      type: "assistant",
+      message: { content: [{ type: "question", questions: [] }] },
+    },
+  };
+}
+
+describe("findLatestTimelineInputRequest", () => {
   it("finds the newest plan directly from timeline events", () => {
     const first = artifactEvent("1");
     const image = artifactEvent("2", "trace.image.v1");
     const latest = artifactEvent("3");
     const events = { [first.id]: first, [image.id]: image, [latest.id]: latest };
 
-    expect(findLatestVisualPlanArtifact([first.id, image.id, latest.id], events)?.id).toBe("3");
+    expect(findLatestTimelineInputRequest([first.id, image.id, latest.id], events)).toMatchObject({
+      kind: "visual-plan",
+      artifact: { id: "3" },
+    });
   });
 
-  it("returns null when the timeline has no plan", () => {
+  it("returns the newer question instead of a historical plan", () => {
+    const plan = artifactEvent("1");
+    const question = questionEvent("2");
+
+    expect(
+      findLatestTimelineInputRequest([plan.id, question.id], {
+        [plan.id]: plan,
+        [question.id]: question,
+      }),
+    ).toEqual({ kind: "question" });
+  });
+
+  it("returns null when the timeline has no input request", () => {
     const image = artifactEvent("1", "trace.image.v1");
 
-    expect(findLatestVisualPlanArtifact([image.id], { [image.id]: image })).toBeNull();
+    expect(findLatestTimelineInputRequest([image.id], { [image.id]: image })).toBeNull();
   });
 });

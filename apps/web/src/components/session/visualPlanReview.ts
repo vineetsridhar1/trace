@@ -1,22 +1,36 @@
 import type { Artifact, Event } from "@trace/gql";
-import { asJsonObject } from "@trace/shared";
+import { asJsonObject, hasPlanBlock, hasQuestionBlock } from "@trace/shared";
 
-export function findLatestVisualPlanArtifact(
+export type TimelineInputRequest =
+  | { kind: "visual-plan"; artifact: Artifact }
+  | { kind: "native-plan" }
+  | { kind: "question" };
+
+export function findLatestTimelineInputRequest(
   eventIds: string[],
   events: Record<string, Event | undefined>,
-): Artifact | null {
+): TimelineInputRequest | null {
   for (let index = eventIds.length - 1; index >= 0; index -= 1) {
     const event = events[eventIds[index]];
-    if (event?.eventType !== "artifact_created") continue;
+    if (!event) continue;
 
-    const artifact = asJsonObject(asJsonObject(event.payload)?.artifact);
+    const payload = asJsonObject(event.payload);
+    if (event.eventType === "session_output" && payload) {
+      if (hasQuestionBlock(payload)) return { kind: "question" };
+      if (hasPlanBlock(payload)) return { kind: "native-plan" };
+      continue;
+    }
+
+    if (event.eventType !== "artifact_created") continue;
+
+    const artifact = asJsonObject(payload?.artifact);
     const manifest = asJsonObject(artifact?.manifest);
     if (
       artifact?.type === "trace.visual-plan.v1" &&
       typeof artifact.id === "string" &&
       Array.isArray(manifest?.files)
     ) {
-      return artifact as unknown as Artifact;
+      return { kind: "visual-plan", artifact: artifact as unknown as Artifact };
     }
   }
 

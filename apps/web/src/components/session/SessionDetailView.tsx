@@ -48,7 +48,7 @@ import {
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
 import { cn } from "../../lib/utils";
-import { findLatestVisualPlanArtifact } from "./visualPlanReview";
+import { findLatestTimelineInputRequest } from "./visualPlanReview";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -300,12 +300,18 @@ export function SessionDetailView({
     }
     return latest;
   });
-  const timelinePlanArtifact = useMemo(
-    () => findLatestVisualPlanArtifact(eventIds, events),
+  const timelineInputRequest = useMemo(
+    () => findLatestTimelineInputRequest(eventIds, events),
     [eventIds, events],
   );
   const visiblePlanArtifact =
-    sessionStatus === "needs_input" ? (timelinePlanArtifact ?? latestPlanArtifact) : null;
+    sessionStatus !== "needs_input"
+      ? null
+      : timelineInputRequest?.kind === "visual-plan"
+        ? timelineInputRequest.artifact
+        : timelineInputRequest
+          ? null
+          : latestPlanArtifact;
   const visiblePlanPath = visiblePlanArtifact?.manifest.files.some(
     (file) => file.path === "plan.html",
   )
@@ -601,6 +607,7 @@ export function SessionDetailView({
   const showQuestion = (() => {
     if (!activeQuestion) return null;
     if (activeQuestion.node.id === dismissedQuestionId) return null;
+    if (timelineInputRequest?.kind === "visual-plan") return null;
     if (activePlan && activePlan.index > activeQuestion.index) return null;
     return activeQuestion.node;
   })();
@@ -773,7 +780,23 @@ export function SessionDetailView({
             )}
           </div>
           <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
-            {activePlan || visiblePlanArtifact ? (
+            {showQuestion ? (
+              <AskUserQuestionBar
+                node={showQuestion}
+                onResponse={(text) => {
+                  client
+                    .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+                      sessionId,
+                      text,
+                      interactionMode: activePlan ? "plan" : undefined,
+                    })
+                    .toPromise();
+                }}
+                onDismiss={() => {
+                  setDismissedQuestionId(showQuestion.id);
+                }}
+              />
+            ) : activePlan || visiblePlanArtifact ? (
               planReviewContent ? (
                 <PlanResponseBar
                   sessionId={sessionId}
@@ -800,22 +823,6 @@ export function SessionDetailView({
                   onRequested={refreshBridgeAccess}
                 />
               </div>
-            ) : showQuestion ? (
-              <AskUserQuestionBar
-                node={showQuestion}
-                onResponse={(text) => {
-                  client
-                    .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-                      sessionId,
-                      text,
-                      interactionMode: activePlan ? "plan" : undefined,
-                    })
-                    .toPromise();
-                }}
-                onDismiss={() => {
-                  setDismissedQuestionId(showQuestion.id);
-                }}
-              />
             ) : (
               <>
                 {agentStatus === "active" && latestTodos && <StickyTodoList todos={latestTodos} />}
