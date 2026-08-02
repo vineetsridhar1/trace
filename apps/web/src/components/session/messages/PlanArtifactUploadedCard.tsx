@@ -34,23 +34,17 @@ export function PlanArtifactUploadedCard({
   );
 
   if (!isHtml) {
-    const downloadUrl = filePath ? artifactFileUrl(artifactId, filePath) : undefined;
     return (
       <>
         <article className="group relative w-full overflow-hidden rounded-[14px] border border-[#2d3138] bg-[#171a1f] shadow-[0_18px_48px_rgb(0_0_0/0.28)] transition-colors hover:border-[#69717d]">
           <div className="flex items-center gap-4 p-4">
             <Boxes className="size-6 shrink-0 text-accent" strokeWidth={1.8} />
             <PlanArtifactIdentity timestamp={timestamp} />
-            {downloadUrl ? (
-              <a
-                href={downloadUrl}
-                download={displayName}
-                aria-label="Download plan"
-                className="flex size-10 shrink-0 items-center justify-center rounded-[9px] text-[#9ba1aa] hover:bg-[#0d0f12] hover:text-[#f1f3f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Download className="size-[18px]" />
-              </a>
-            ) : null}
+            <PlanDownloadButton
+              artifactId={artifactId}
+              filePath={filePath}
+              displayName={displayName}
+            />
             <ArtifactCardActions
               artifactId={artifactId}
               openLabel="Open plan"
@@ -102,6 +96,7 @@ export function PlanArtifactUploadedCard({
       <div className="flex items-center gap-3 px-4 py-2.5">
         <Boxes className="size-[18px] shrink-0 text-accent" strokeWidth={1.8} />
         <PlanArtifactIdentity timestamp={timestamp} />
+        <PlanDownloadButton artifactId={artifactId} filePath={filePath} displayName={displayName} />
         <ArtifactCardActions
           artifactId={artifactId}
           openLabel="Open plan"
@@ -110,6 +105,30 @@ export function PlanArtifactUploadedCard({
       </div>
       {previewModal}
     </article>
+  );
+}
+
+function PlanDownloadButton({
+  artifactId,
+  filePath,
+  displayName,
+}: {
+  artifactId: string;
+  filePath?: string;
+  displayName: string;
+}) {
+  if (!filePath) return null;
+
+  return (
+    <a
+      href={artifactFileUrl(artifactId, filePath)}
+      download={displayName}
+      aria-label="Download plan"
+      title="Download plan"
+      className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#2d3138] text-[#9ba1aa] transition-colors hover:bg-[#0d0f12] hover:text-[#f1f3f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Download className="size-3.5" />
+    </a>
   );
 }
 
