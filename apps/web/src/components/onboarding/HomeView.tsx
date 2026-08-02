@@ -17,6 +17,8 @@ import { HomeKindSelector } from "../home/HomeKindSelector";
 import { HomeLedgerError } from "../home/HomeLedgerError";
 import { HomeLedgerSkeleton } from "../home/HomeLedgerSkeleton";
 import { HomeWorkLedger } from "../home/HomeWorkLedger";
+import { HomeCreationsGrid } from "../home/HomeCreationsGrid";
+import { useHomeCreations } from "../home/useHomeCreations";
 import { useHomeWorkData } from "../home/useHomeWorkData";
 import { MODE_CYCLE, type InteractionMode } from "../session/interactionModes";
 import { getDefaultModel, getDefaultReasoningEffort } from "../session/modelOptions";
@@ -41,6 +43,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
     [channels, projects],
   );
   const work = useHomeWorkData();
+  useHomeCreations(activeOrgId);
   const [manualKind, setManualKind] = useState<HomeCreatableKind | null>(null);
   const [selectedChannelTargetKey, setSelectedChannelTargetKey] = useState<string | null>(null);
   const [selectedBridgeId, setSelectedBridgeId] = useState<string | null>(null);
@@ -291,6 +294,8 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
           ) : !isCreateMode ? (
             <HomeWorkLedger items={work.items} />
           ) : null}
+
+          {isCreateMode ? <HomeCreationsGrid /> : null}
 
           <p className="mt-auto pt-8 text-center text-[11px] text-[var(--th-faint)]">
             <span className="hidden sm:inline">⌘N New session · </span>⌘K Search · ⌘J Latest session
