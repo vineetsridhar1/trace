@@ -60,7 +60,10 @@ async function installFiles(
 }
 
 async function installFallback(root: string): Promise<void> {
-  if ((await installedVersion(root)) > 0) return;
+  // The bundled copy ships with the bridge build, so a newer one means the runtime on disk is
+  // stale. Only skipping when nothing is installed would pin every existing machine to whatever
+  // version it first received, even as the skills it depends on change.
+  if ((await installedVersion(root)) >= BUNDLED_TRACE_RUNTIME_MANIFEST.version) return;
   await installFiles(
     root,
     BUNDLED_TRACE_RUNTIME_MANIFEST,
