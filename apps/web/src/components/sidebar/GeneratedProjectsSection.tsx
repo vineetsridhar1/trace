@@ -1,5 +1,6 @@
-import { useEffect } from "react";
-import { Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronRight, Sparkles } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { gql } from "@urql/core";
 import type { DesignSystem, Session, SessionGroup } from "@trace/gql";
 import {
@@ -9,11 +10,10 @@ import {
   type SessionGroupEntity,
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import { cn } from "../../lib/utils";
-import { useHomeComposerStore } from "../../stores/home-composer";
-import { useUIStore } from "../../stores/ui";
 import { useHomeDataStore } from "../../stores/home-data";
-import { useSidebar } from "../ui/sidebar";
+import { useUIStore } from "../../stores/ui";
+import { cn } from "../../lib/utils";
+import { GeneratedProjectTypeSection } from "./GeneratedProjectTypeSection";
 
 const GENERATED_PROJECTS_QUERY = gql`
   query GeneratedProjects($organizationId: ID!) {
@@ -229,13 +229,14 @@ const GENERATED_PROJECTS_QUERY = gql`
 type ProjectGroup = SessionGroup & { id: string; sessions?: Array<Session & { id: string }> };
 type LoadedDesignSystem = DesignSystem & { authoringSessionGroup: ProjectGroup };
 
+const PROJECT_KINDS = ["app", "design", "design_system", "pdf", "animation"] as const;
+
 export function GeneratedProjectsSection({ activeOrgId }: { activeOrgId: string | null }) {
   const upsertMany = useEntityStore((state) => state.upsertMany);
-  const activePage = useUIStore((state) => state.activePage);
-  const setActivePage = useUIStore((state) => state.setActivePage);
+  const sessionGroups = useEntityStore((state) => state.sessionGroups);
+  const activeSessionGroupId = useUIStore((state) => state.activeSessionGroupId);
   const homeRetryRequest = useHomeDataStore((state) => state.retryRequest);
-  const requestComposerFocus = useHomeComposerStore((state) => state.requestFocus);
-  const { isMobile, setOpenMobile } = useSidebar();
+  const [open, setOpen] = useState(true);
 
   useEffect(() => {
     if (!activeOrgId) return;
@@ -286,26 +287,59 @@ export function GeneratedProjectsSection({ activeOrgId }: { activeOrgId: string 
     };
   }, [activeOrgId, homeRetryRequest, upsertMany]);
 
-  const openCreate = () => {
-    setActivePage("create");
-    requestComposerFocus();
-    if (isMobile) setOpenMobile(false);
-  };
+  const groupsByKind = useMemo(
+    () =>
+      PROJECT_KINDS.reduce<Record<(typeof PROJECT_KINDS)[number], SessionGroupEntity[]>>(
+        (groups, kind) => {
+          groups[kind] = Object.values(sessionGroups)
+            .filter((group) => group.kind === kind && !group.archivedAt)
+            .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+          return groups;
+        },
+        { app: [], design: [], design_system: [], pdf: [], animation: [] },
+      ),
+    [sessionGroups],
+  );
 
   return (
-    <button
-      type="button"
-      onClick={openCreate}
-      className={cn(
-        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium transition-colors",
-        "pl-4",
-        activePage === "create"
-          ? "bg-white/10 text-foreground"
-          : "text-foreground hover:bg-white/10",
-      )}
-    >
-      <Sparkles size={16} className="shrink-0" />
-      <span>Creations</span>
-    </button>
+    <section className="pt-2">
+      <button
+        type="button"
+        aria-controls="sidebar-creations-list"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 pl-4 text-left text-sm font-medium text-foreground transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Sparkles size={16} className="shrink-0" />
+        <span className="flex-1">Creations</span>
+        <ChevronRight
+          size={14}
+          className={cn("shrink-0 transition-transform duration-200", open && "rotate-90")}
+        />
+      </button>
+      <AnimatePresence initial={false}>
+        {open ? (
+          <motion.div
+            id="sidebar-creations-list"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="pt-1">
+              {PROJECT_KINDS.map((kind) => (
+                <GeneratedProjectTypeSection
+                  key={kind}
+                  activeSessionGroupId={activeSessionGroupId}
+                  groups={groupsByKind[kind]}
+                  kind={kind}
+                />
+              ))}
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </section>
   );
 }
