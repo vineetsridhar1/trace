@@ -48,6 +48,7 @@ import {
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
 import { cn } from "../../lib/utils";
+import { findLatestVisualPlanArtifact } from "./visualPlanReview";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -292,7 +293,6 @@ export function SessionDetailView({
       if (
         artifact.sessionId === sessionId &&
         artifact.type === "trace.visual-plan.v1" &&
-        artifact.key === "primary" &&
         (!latest || artifact.createdAt > latest.createdAt)
       ) {
         latest = artifact;
@@ -300,7 +300,12 @@ export function SessionDetailView({
     }
     return latest;
   });
-  const visiblePlanArtifact = sessionStatus === "needs_input" ? latestPlanArtifact : null;
+  const timelinePlanArtifact = useMemo(
+    () => findLatestVisualPlanArtifact(eventIds, events),
+    [eventIds, events],
+  );
+  const visiblePlanArtifact =
+    sessionStatus === "needs_input" ? (timelinePlanArtifact ?? latestPlanArtifact) : null;
   const visiblePlanPath = visiblePlanArtifact?.manifest.files.some(
     (file) => file.path === "plan.html",
   )
