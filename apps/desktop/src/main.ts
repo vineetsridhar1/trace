@@ -180,24 +180,10 @@ function createWindow() {
   });
 
   const webUrl = process.env.TRACE_WEB_URL ?? defaultWebUrl;
-  const webOrigin = new URL(webUrl).origin;
   mainWindow.loadURL(webUrl);
 
   // Open external links in the user's default browser.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(`blob:${webOrigin}/`)) {
-      return {
-        action: "allow",
-        overrideBrowserWindowOptions: {
-          backgroundColor: "#0d0f12",
-          webPreferences: {
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: true,
-          },
-        },
-      };
-    }
     if (url.startsWith("http://") || url.startsWith("https://")) {
       shell.openExternal(url);
     }

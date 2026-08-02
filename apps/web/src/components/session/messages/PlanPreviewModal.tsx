@@ -1,24 +1,25 @@
 import { ExternalLink } from "lucide-react";
+import { useOpenArtifact } from "../../artifact/ArtifactOpenContext";
 import { sandboxedPlanHtml } from "../../artifact/plan-html";
 import { Button } from "../../ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../../ui/dialog";
 
 export function PlanPreviewModal({
+  artifactId,
   html,
   open,
   onOpenChange,
 }: {
+  artifactId: string;
   html: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  function openInNewTab() {
-    if (!html) return;
-    const url = URL.createObjectURL(
-      new Blob([sandboxedPlanHtml(html)], { type: "text/html;charset=utf-8" }),
-    );
-    window.open(url, "_blank", "noopener,noreferrer");
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  const openArtifact = useOpenArtifact();
+
+  function openInWorkspaceTab() {
+    onOpenChange(false);
+    openArtifact(artifactId);
   }
 
   return (
@@ -37,9 +38,9 @@ export function PlanPreviewModal({
             variant="ghost"
             size="icon-sm"
             disabled={!html}
-            onClick={openInNewTab}
-            aria-label="Open plan in new tab"
-            title="Open in new tab"
+            onClick={openInWorkspaceTab}
+            aria-label="Open plan in workspace tab"
+            title="Open in workspace tab"
             className="absolute right-12 top-2.5 text-[#9ba1aa] hover:text-[#f1f3f5]"
           >
             <ExternalLink className="size-4" />

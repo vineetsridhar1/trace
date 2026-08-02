@@ -28,7 +28,12 @@ export function PlanArtifactUploadedCard({
   const { html } = useVisualPlanDocument(artifactId, preferredPath);
 
   const previewModal = (
-    <PlanPreviewModal html={html} open={previewOpen} onOpenChange={setPreviewOpen} />
+    <PlanPreviewModal
+      artifactId={artifactId}
+      html={html}
+      open={previewOpen}
+      onOpenChange={setPreviewOpen}
+    />
   );
 
   if (!isHtml) {
