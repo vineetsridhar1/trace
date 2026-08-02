@@ -26,7 +26,7 @@ export function PlanPreviewModal({
       <DialogContent
         showCloseButton
         overlayClassName="bg-black/60 backdrop-blur-sm"
-        className="inset-0 left-0 top-0 h-dvh max-h-dvh w-screen max-w-none translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-none bg-[#0d0f12] p-0 sm:max-w-none"
+        className="h-[calc(100dvh-1.5rem)] max-h-none max-w-[calc(100%-1.5rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-xl bg-[#0d0f12] p-0 shadow-2xl sm:h-[calc(100dvh-3rem)] sm:max-w-[calc(100%-3rem)]"
       >
         <header className="flex h-12 shrink-0 items-center border-b border-[#2d3138] bg-[#171a1f] px-4 pr-24">
           <DialogTitle className="truncate text-sm font-semibold text-[#f1f3f5]">
