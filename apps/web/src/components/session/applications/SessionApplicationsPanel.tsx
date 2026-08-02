@@ -3,6 +3,7 @@ import { Button } from "../../ui/button";
 import { ApplicationProcessCard } from "./ApplicationProcessCard";
 import { SetupScriptCard } from "./SetupScriptCard";
 import { useSessionApplicationsPanel } from "./useSessionApplicationsPanel";
+import { AppIntegrationBindingsCard } from "./AppIntegrationBindingsCard";
 
 export function SessionApplicationsPanel({
   sessionGroupId,
@@ -46,6 +47,9 @@ export function SessionApplicationsPanel({
           >
             {state.error}
           </p>
+        ) : null}
+        {state.groupKind === "app" ? (
+          <AppIntegrationBindingsCard sessionGroupId={sessionGroupId} />
         ) : null}
         {config.setupScripts.length > 0 ? (
           <section className="space-y-1.5">

@@ -737,7 +737,12 @@ export class SessionApplicationService {
     return { url: url.toString(), expiresAt: credential.expiresAt };
   }
 
-  async publishAppSession(sessionGroupId: string, organizationId: string, userId: string) {
+  async publishAppSession(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+    accessMode: SessionEndpointAccessMode = "private",
+  ) {
     const group = await prisma.sessionGroup.findFirstOrThrow({
       where: { id: sessionGroupId, organizationId },
       select: {
@@ -759,7 +764,7 @@ export class SessionApplicationService {
     const updated = await prisma.sessionEndpoint.update({
       where: { id: endpoint.id },
       data: {
-        accessMode: "public",
+        accessMode,
         enabledByUserId: userId,
         enabledAt: endpoint.enabledAt ?? new Date(),
       },

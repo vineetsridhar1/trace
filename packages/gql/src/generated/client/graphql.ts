@@ -75,6 +75,22 @@ export type ApiTokenStatus = {
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type AppIntegrationBinding = {
+  __typename?: "AppIntegrationBinding";
+  allowedMethods: Array<Scalars["String"]["output"]>;
+  allowedPathPrefixes: Array<Scalars["String"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  executionIdentity: IntegrationExecutionIdentity;
+  id: Scalars["ID"]["output"];
+  label: Scalars["String"]["output"];
+  provider: Scalars["String"]["output"];
+  providerConfigKey: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sharedConnection?: Maybe<IntegrationConnection>;
+  sharedConnectionId?: Maybe<Scalars["ID"]["output"]>;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type ApplicationProcessStatus =
   | "exited"
   | "failed"
@@ -353,6 +369,12 @@ export type CreateDesignSystemInput = {
   name: Scalars["String"]["input"];
   repoId: Scalars["ID"]["input"];
   sourcePath?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type CreateNangoConnectSessionInput = {
+  displayName: Scalars["String"]["input"];
+  kind?: InputMaybe<IntegrationConnectionKind>;
+  providerConfigKey: Scalars["String"]["input"];
 };
 
 export type CreateOrganizationInput = {
@@ -681,6 +703,8 @@ export type EventType =
   | "agent_environment_deleted"
   | "agent_environment_updated"
   | "animation_preview_updated"
+  | "app_integration_binding_updated"
+  | "app_integration_request_executed"
   | "application_config_updated"
   | "artifact_approved"
   | "artifact_created"
@@ -713,6 +737,9 @@ export type EventType =
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
+  | "integration_connection_created"
+  | "integration_connection_deleted"
+  | "integration_connection_updated"
   | "managed_git_token_minted"
   | "manual_element_saved"
   | "member_joined"
@@ -825,6 +852,26 @@ export type InboxItem = {
 export type InboxItemStatus = "active" | "dismissed" | "expired" | "resolved";
 
 export type InboxItemType = "plan" | "question";
+
+export type IntegrationConnection = {
+  __typename?: "IntegrationConnection";
+  createdAt: Scalars["DateTime"]["output"];
+  displayName: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  kind: IntegrationConnectionKind;
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  ownerUserId: Scalars["ID"]["output"];
+  provider: Scalars["String"]["output"];
+  providerConfigKey: Scalars["String"]["output"];
+  status: IntegrationConnectionStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type IntegrationConnectionKind = "personal" | "service";
+
+export type IntegrationConnectionStatus = "active" | "error" | "revoked";
+
+export type IntegrationExecutionIdentity = "service" | "shared" | "viewer";
 
 export type LinkedCheckoutActionResult = {
   __typename?: "LinkedCheckoutActionResult";
@@ -963,6 +1010,7 @@ export type Mutation = {
   createChannelTerminal: Terminal;
   createChat: Chat;
   createDesignSystem: DesignSystem;
+  createNangoConnectSession: NangoConnectSession;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -971,11 +1019,13 @@ export type Mutation = {
   createTicket: Ticket;
   deleteAgentEnvironment: Scalars["Boolean"]["output"];
   deleteApiToken: Scalars["Boolean"]["output"];
+  deleteAppIntegrationBinding: Scalars["Boolean"]["output"];
   deleteChannel: Scalars["Boolean"]["output"];
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
   deleteCodexCredential: Scalars["Boolean"]["output"];
+  deleteIntegrationConnection: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
@@ -1067,6 +1117,7 @@ export type Mutation = {
   updateSessionEndpointTrafficCapture: SessionEndpoint;
   updateSessionGroupVisibility: SessionGroup;
   updateTicket: Ticket;
+  upsertAppIntegrationBinding: AppIntegrationBinding;
 };
 
 export type MutationAddChannelMemberArgs = {
@@ -1167,6 +1218,10 @@ export type MutationCreateDesignSystemArgs = {
   input: CreateDesignSystemInput;
 };
 
+export type MutationCreateNangoConnectSessionArgs = {
+  input: CreateNangoConnectSessionInput;
+};
+
 export type MutationCreateOrganizationArgs = {
   input: CreateOrganizationInput;
 };
@@ -1201,6 +1256,10 @@ export type MutationDeleteApiTokenArgs = {
   provider: ApiTokenProvider;
 };
 
+export type MutationDeleteAppIntegrationBindingArgs = {
+  id: Scalars["ID"]["input"];
+};
+
 export type MutationDeleteChannelArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -1215,6 +1274,10 @@ export type MutationDeleteChannelMessageArgs = {
 
 export type MutationDeleteChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationDeleteIntegrationConnectionArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteOrgSecretArgs = {
@@ -1325,6 +1388,7 @@ export type MutationMuteScopeArgs = {
 };
 
 export type MutationPublishAppSessionArgs = {
+  accessMode?: InputMaybe<SessionEndpointAccessMode>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1679,6 +1743,16 @@ export type MutationUpdateTicketArgs = {
   input: UpdateTicketInput;
 };
 
+export type MutationUpsertAppIntegrationBindingArgs = {
+  input: UpsertAppIntegrationBindingInput;
+};
+
+export type NangoConnectSession = {
+  __typename?: "NangoConnectSession";
+  connectLink: Scalars["String"]["output"];
+  expiresAt: Scalars["DateTime"]["output"];
+};
+
 export type Notification = {
   __typename?: "Notification";
   id: Scalars["ID"]["output"];
@@ -1752,6 +1826,7 @@ export type Query = {
   agentEnvironments: Array<AgentEnvironment>;
   /** Animation-kind session groups for the org (the sidebar Animations section). */
   animationSessionGroups: Array<SessionGroup>;
+  appIntegrationBindings: Array<AppIntegrationBinding>;
   /**
    * App-kind session groups for the org. Apps have no channel, so this is their
    * listing surface (the sidebar Apps section).
@@ -1780,6 +1855,7 @@ export type Query = {
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
+  integrationConnections: Array<IntegrationConnection>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
@@ -1788,6 +1864,7 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  nangoIntegrationConfigured: Scalars["Boolean"]["output"];
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
@@ -1839,6 +1916,10 @@ export type QueryAgentEnvironmentsArgs = {
 export type QueryAnimationSessionGroupsArgs = {
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryAppIntegrationBindingsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryAppSessionGroupsArgs = {
@@ -2853,6 +2934,18 @@ export type UpdateTicketInput = {
   priority?: InputMaybe<Priority>;
   status?: InputMaybe<TicketStatus>;
   title?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpsertAppIntegrationBindingInput = {
+  allowedMethods: Array<Scalars["String"]["input"]>;
+  allowedPathPrefixes: Array<Scalars["String"]["input"]>;
+  executionIdentity: IntegrationExecutionIdentity;
+  id?: InputMaybe<Scalars["ID"]["input"]>;
+  label: Scalars["String"]["input"];
+  provider: Scalars["String"]["input"];
+  providerConfigKey: Scalars["String"]["input"];
+  sessionGroupId: Scalars["ID"]["input"];
+  sharedConnectionId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type User = {
@@ -3998,6 +4091,7 @@ export type DisableSessionEndpointForwardingMutation = {
 
 export type PublishAppSessionMutationVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
+  accessMode?: InputMaybe<SessionEndpointAccessMode>;
 }>;
 
 export type PublishAppSessionMutation = {
@@ -4016,6 +4110,72 @@ export type CreateSessionEndpointPreviewMutation = {
     url: string;
     expiresAt: string;
   };
+};
+
+export type AppIntegrationsQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type AppIntegrationsQuery = {
+  __typename?: "Query";
+  integrationConnections: Array<{
+    __typename?: "IntegrationConnection";
+    id: string;
+    ownerUserId: string;
+    provider: string;
+    providerConfigKey: string;
+    displayName: string;
+    kind: IntegrationConnectionKind;
+    status: IntegrationConnectionStatus;
+    lastError?: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  appIntegrationBindings: Array<{
+    __typename?: "AppIntegrationBinding";
+    id: string;
+    sessionGroupId: string;
+    label: string;
+    provider: string;
+    providerConfigKey: string;
+    executionIdentity: IntegrationExecutionIdentity;
+    sharedConnectionId?: string | null;
+    allowedMethods: Array<string>;
+    allowedPathPrefixes: Array<string>;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+};
+
+export type UpsertAppIntegrationBindingMutationVariables = Exact<{
+  input: UpsertAppIntegrationBindingInput;
+}>;
+
+export type UpsertAppIntegrationBindingMutation = {
+  __typename?: "Mutation";
+  upsertAppIntegrationBinding: {
+    __typename?: "AppIntegrationBinding";
+    id: string;
+    sessionGroupId: string;
+    label: string;
+    provider: string;
+    providerConfigKey: string;
+    executionIdentity: IntegrationExecutionIdentity;
+    sharedConnectionId?: string | null;
+    allowedMethods: Array<string>;
+    allowedPathPrefixes: Array<string>;
+    createdAt: string;
+    updatedAt: string;
+  };
+};
+
+export type DeleteAppIntegrationBindingMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type DeleteAppIntegrationBindingMutation = {
+  __typename?: "Mutation";
+  deleteAppIntegrationBinding: boolean;
 };
 
 export type UpdatePdfFormatMutationVariables = Exact<{
@@ -4446,6 +4606,48 @@ export type DeleteOrgSecretMutationVariables = Exact<{
 }>;
 
 export type DeleteOrgSecretMutation = { __typename?: "Mutation"; deleteOrgSecret: boolean };
+
+export type IntegrationConnectionsQueryVariables = Exact<{ [key: string]: never }>;
+
+export type IntegrationConnectionsQuery = {
+  __typename?: "Query";
+  nangoIntegrationConfigured: boolean;
+  integrationConnections: Array<{
+    __typename?: "IntegrationConnection";
+    id: string;
+    ownerUserId: string;
+    provider: string;
+    providerConfigKey: string;
+    displayName: string;
+    kind: IntegrationConnectionKind;
+    status: IntegrationConnectionStatus;
+    lastError?: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+};
+
+export type CreateNangoConnectSessionMutationVariables = Exact<{
+  input: CreateNangoConnectSessionInput;
+}>;
+
+export type CreateNangoConnectSessionMutation = {
+  __typename?: "Mutation";
+  createNangoConnectSession: {
+    __typename?: "NangoConnectSession";
+    connectLink: string;
+    expiresAt: string;
+  };
+};
+
+export type DeleteIntegrationConnectionMutationVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type DeleteIntegrationConnectionMutation = {
+  __typename?: "Mutation";
+  deleteIntegrationConnection: boolean;
+};
 
 export type CreateRepoMutationVariables = Exact<{
   input: CreateRepoInput;
@@ -8869,6 +9071,12 @@ export const PublishAppSessionDocument = {
             type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
           },
         },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "accessMode" } },
+          type: { kind: "NamedType", name: { kind: "Name", value: "SessionEndpointAccessMode" } },
+          defaultValue: { kind: "EnumValue", value: "private" },
+        },
       ],
       selectionSet: {
         kind: "SelectionSet",
@@ -8881,6 +9089,11 @@ export const PublishAppSessionDocument = {
                 kind: "Argument",
                 name: { kind: "Name", value: "sessionGroupId" },
                 value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "accessMode" },
+                value: { kind: "Variable", name: { kind: "Name", value: "accessMode" } },
               },
             ],
             selectionSet: {
@@ -8938,6 +9151,174 @@ export const CreateSessionEndpointPreviewDocument = {
 } as unknown as DocumentNode<
   CreateSessionEndpointPreviewMutation,
   CreateSessionEndpointPreviewMutationVariables
+>;
+export const AppIntegrationsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "AppIntegrations" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "integrationConnections" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "ownerUserId" } },
+                { kind: "Field", name: { kind: "Name", value: "provider" } },
+                { kind: "Field", name: { kind: "Name", value: "providerConfigKey" } },
+                { kind: "Field", name: { kind: "Name", value: "displayName" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "appIntegrationBindings" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "provider" } },
+                { kind: "Field", name: { kind: "Name", value: "providerConfigKey" } },
+                { kind: "Field", name: { kind: "Name", value: "executionIdentity" } },
+                { kind: "Field", name: { kind: "Name", value: "sharedConnectionId" } },
+                { kind: "Field", name: { kind: "Name", value: "allowedMethods" } },
+                { kind: "Field", name: { kind: "Name", value: "allowedPathPrefixes" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<AppIntegrationsQuery, AppIntegrationsQueryVariables>;
+export const UpsertAppIntegrationBindingDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "UpsertAppIntegrationBinding" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "UpsertAppIntegrationBindingInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "upsertAppIntegrationBinding" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "label" } },
+                { kind: "Field", name: { kind: "Name", value: "provider" } },
+                { kind: "Field", name: { kind: "Name", value: "providerConfigKey" } },
+                { kind: "Field", name: { kind: "Name", value: "executionIdentity" } },
+                { kind: "Field", name: { kind: "Name", value: "sharedConnectionId" } },
+                { kind: "Field", name: { kind: "Name", value: "allowedMethods" } },
+                { kind: "Field", name: { kind: "Name", value: "allowedPathPrefixes" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  UpsertAppIntegrationBindingMutation,
+  UpsertAppIntegrationBindingMutationVariables
+>;
+export const DeleteAppIntegrationBindingDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "DeleteAppIntegrationBinding" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "deleteAppIntegrationBinding" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  DeleteAppIntegrationBindingMutation,
+  DeleteAppIntegrationBindingMutationVariables
 >;
 export const UpdatePdfFormatDocument = {
   kind: "Document",
@@ -10426,6 +10807,129 @@ export const DeleteOrgSecretDocument = {
     },
   ],
 } as unknown as DocumentNode<DeleteOrgSecretMutation, DeleteOrgSecretMutationVariables>;
+export const IntegrationConnectionsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "IntegrationConnections" },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "nangoIntegrationConfigured" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "integrationConnections" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "ownerUserId" } },
+                { kind: "Field", name: { kind: "Name", value: "provider" } },
+                { kind: "Field", name: { kind: "Name", value: "providerConfigKey" } },
+                { kind: "Field", name: { kind: "Name", value: "displayName" } },
+                { kind: "Field", name: { kind: "Name", value: "kind" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "lastError" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<IntegrationConnectionsQuery, IntegrationConnectionsQueryVariables>;
+export const CreateNangoConnectSessionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "CreateNangoConnectSession" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: {
+              kind: "NamedType",
+              name: { kind: "Name", value: "CreateNangoConnectSessionInput" },
+            },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "createNangoConnectSession" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "connectLink" } },
+                { kind: "Field", name: { kind: "Name", value: "expiresAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  CreateNangoConnectSessionMutation,
+  CreateNangoConnectSessionMutationVariables
+>;
+export const DeleteIntegrationConnectionDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "DeleteIntegrationConnection" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "deleteIntegrationConnection" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<
+  DeleteIntegrationConnectionMutation,
+  DeleteIntegrationConnectionMutationVariables
+>;
 export const CreateRepoDocument = {
   kind: "Document",
   definitions: [

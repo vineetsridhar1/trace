@@ -6,6 +6,13 @@ import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { parseCookieToken, verifyToken } from "../lib/auth.js";
 import { canViewSessionGroup } from "./access.js";
+import { appIntegrationService } from "./app-integrations.js";
+import {
+  AuthorizationError,
+  AuthenticationError,
+  NotFoundError,
+  ValidationError,
+} from "../lib/errors.js";
 import {
   endpointPreviewCookieHeader,
   endpointPreviewTokenFromCookie,
@@ -498,6 +505,60 @@ export class EndpointProxyService {
         res.writeHead(403).end("Forbidden");
         return;
       }
+    }
+    const integrationMatch = url.pathname.match(/^\/__trace\/integrations\/([^/]+)(\/.*)$/);
+    if (integrationMatch) {
+      if (!isAllowedPreviewRequestOrigin(req.headers.origin, endpointKey)) {
+        res.writeHead(403).end("Cross-origin request forbidden");
+        return;
+      }
+      const userId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
+      if (!userId) {
+        res.writeHead(401).end("Authentication required");
+        return;
+      }
+      if (!(await authorizePrivateAccess(req, endpoint))) {
+        res.writeHead(403).end("Forbidden");
+        return;
+      }
+      try {
+        const body = await readRequestBody(req, endpointProxyMaxRequestBodyBytes());
+        const response = await appIntegrationService.execute({
+          endpoint,
+          userId,
+          bindingId: decodeURIComponent(integrationMatch[1]!),
+          method: req.method ?? "GET",
+          path: integrationMatch[2]!,
+          query: url.search ? url.search.slice(1) : null,
+          contentType:
+            typeof req.headers["content-type"] === "string" ? req.headers["content-type"] : null,
+          body,
+        });
+        res.writeHead(response.status, {
+          ...(response.contentType ? { "Content-Type": response.contentType } : {}),
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+        });
+        res.end(response.body);
+      } catch (error: unknown) {
+        const status =
+          error instanceof AuthenticationError
+            ? 401
+            : error instanceof AuthorizationError
+              ? 403
+              : error instanceof NotFoundError
+                ? 404
+                : error instanceof ValidationError
+                  ? 400
+                  : 502;
+        res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : "Integration request failed",
+          }),
+        );
+      }
+      return;
     }
     // A signed preview credential is issued only after Trace authorizes the user
     // for this endpoint. It opts authenticated in-product previews into the
