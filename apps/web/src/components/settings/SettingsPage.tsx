@@ -146,8 +146,8 @@ export function SettingsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#0a0a0c] text-foreground [--background:#0a0a0c] [--border:#27272d] [--card:#161619] [--foreground:#fafafa] [--input:#27272d] [--muted-foreground:#9d9da8] [--popover:#161619] [--primary-foreground:#0a0a0c] [--primary:#fafafa]">
-      <header className="app-region-drag flex h-[52px] shrink-0 items-center justify-between border-b border-[#27272d] px-4">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <header className="app-region-drag flex h-[52px] shrink-0 items-center justify-end border-b border-[#27272d] px-4 md:justify-between">
+        <div className="hidden min-w-0 items-center gap-2.5 md:flex">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-[11px] font-bold text-zinc-950">
             T
           </span>
