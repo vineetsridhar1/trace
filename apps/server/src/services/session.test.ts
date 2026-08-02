@@ -8547,6 +8547,34 @@ describe("SessionService", () => {
   });
 
   describe("markConnectionLost", () => {
+    it("fails an active agent and publishes the terminal status", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+          worktreeDeleted: false,
+          connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+        }),
+      );
+
+      await service.markConnectionLost("session-1", "runtime_heartbeat_timeout", "runtime-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: expect.objectContaining({ agentStatus: "failed" }),
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "connection_lost",
+            agentStatus: "failed",
+          }),
+        }),
+      );
+    });
+
     it("does not rewrite already-disconnected done cloud sessions for the same runtime", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce(
         makeSession({

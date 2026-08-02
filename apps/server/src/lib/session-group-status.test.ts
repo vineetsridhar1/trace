@@ -33,13 +33,25 @@ describe("deriveSessionGroupStatus", () => {
     ).toBe("in_review");
   });
 
-  it("falls back to in_progress before failed and stopped", () => {
+  it("reports failed before a stale in_progress session status", () => {
     expect(
       deriveSessionGroupStatus(
         [
           { agentStatus: "done", sessionStatus: "in_progress" },
           { agentStatus: "failed", sessionStatus: "in_progress" },
           { agentStatus: "stopped", sessionStatus: "in_progress" },
+        ],
+        null,
+      ),
+    ).toBe("failed");
+  });
+
+  it("keeps a group in progress while another agent is active", () => {
+    expect(
+      deriveSessionGroupStatus(
+        [
+          { agentStatus: "active", sessionStatus: "in_progress" },
+          { agentStatus: "failed", sessionStatus: "in_progress" },
         ],
         null,
       ),

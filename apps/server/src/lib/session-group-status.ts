@@ -27,14 +27,9 @@ export function deriveSessionGroupStatus(
     return "needs_input";
   }
   if (prUrl) return "in_review";
-  if (
-    sessions.some(
-      (session) => session?.agentStatus === "active" || session?.sessionStatus === "in_progress",
-    )
-  ) {
-    return "in_progress";
-  }
+  if (sessions.some((session) => session?.agentStatus === "active")) return "in_progress";
   if (sessions.some((session) => session?.agentStatus === "failed")) return "failed";
   if (sessions.some((session) => session?.agentStatus === "stopped")) return "stopped";
+  if (sessions.some((session) => session?.sessionStatus === "in_progress")) return "in_progress";
   return "in_progress";
 }

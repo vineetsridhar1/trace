@@ -168,14 +168,10 @@ export function getSessionGroupDisplayStatus(
   if (sessions?.some(isSessionPreparing) && !agentStatuses.some((s) => s === "active")) {
     return "preparing";
   }
-  if (
-    agentStatuses.some((s) => s === "active") ||
-    sessionStatuses.some((s) => s === "in_progress")
-  ) {
-    return "in_progress";
-  }
+  if (agentStatuses.some((s) => s === "active")) return "in_progress";
   if (agentStatuses.some((s) => s === "failed")) return "failed";
   if (agentStatuses.some((s) => s === "stopped")) return "stopped";
+  if (sessionStatuses.some((s) => s === "in_progress")) return "in_progress";
   return "in_progress";
 }
 
