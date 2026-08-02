@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
   ChevronRight,
   Cloud,
   GitBranch,
@@ -111,6 +112,7 @@ export function SettingsPage() {
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const memberships = useAuthStore((s: AuthState) => s.orgMemberships);
   const [activeTab, setActiveTab] = useState<SettingsTab>("repositories");
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [query, setQuery] = useState("");
   const visibleTabs = useMemo(
     () => TABS.filter((tab) => tab.id !== "api-keys" || !isLocalMode),
@@ -131,8 +133,10 @@ export function SettingsPage() {
     if (
       isSettingsTab(settingsInitialTab) &&
       visibleTabs.some((tab) => tab.id === settingsInitialTab)
-    )
+    ) {
       setActiveTab(settingsInitialTab);
+      setMobileDetailOpen(true);
+    }
     setSettingsInitialTab(null);
   }, [settingsInitialTab, setSettingsInitialTab, visibleTabs]);
 
@@ -142,8 +146,8 @@ export function SettingsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#0a0a0c] text-foreground [--background:#0a0a0c] [--border:#27272d] [--card:#161619] [--foreground:#fafafa] [--input:#27272d] [--muted-foreground:#9d9da8] [--popover:#161619] [--primary-foreground:#0a0a0c] [--primary:#fafafa]">
-      <header className="app-region-drag flex h-[52px] shrink-0 items-center justify-between border-b border-[#27272d] px-4">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <header className="app-region-drag flex h-[52px] shrink-0 items-center justify-end border-b border-[#27272d] px-4 md:justify-between">
+        <div className="hidden min-w-0 items-center gap-2.5 md:flex">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-[11px] font-bold text-zinc-950">
             T
           </span>
@@ -161,8 +165,13 @@ export function SettingsPage() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 md:flex">
-        <div className="h-full overflow-y-auto px-4 py-6 md:hidden">
+      <div className="flex min-h-0 flex-1">
+        <div
+          className={cn(
+            "h-full w-full overflow-y-auto px-4 py-6 md:hidden",
+            mobileDetailOpen && "hidden",
+          )}
+        >
           <div className="mx-auto max-w-lg">
             <h1 className="text-2xl font-semibold tracking-[-0.02em] text-zinc-50">Settings</h1>
             <p className="mt-1 text-[13px] leading-5 text-zinc-400">
@@ -183,7 +192,10 @@ export function SettingsPage() {
                           <button
                             key={tab.id}
                             type="button"
-                            onClick={() => setActiveTab(tab.id)}
+                            onClick={() => {
+                              setActiveTab(tab.id);
+                              setMobileDetailOpen(true);
+                            }}
                             className="flex w-full items-center gap-3 border-b border-[#27272d] px-4 py-3.5 text-left last:border-b-0 active:bg-zinc-800"
                           >
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#27272d] bg-[#0a0a0c] text-zinc-400">
@@ -266,13 +278,27 @@ export function SettingsPage() {
           </div>
         </nav>
 
-        <main className="hidden min-h-0 flex-1 overflow-y-auto md:block">
+        <main
+          className={cn(
+            "min-h-0 w-full flex-1 overflow-y-auto",
+            mobileDetailOpen ? "block" : "hidden",
+            "md:block",
+          )}
+        >
           <div
             className={cn(
               "mx-auto px-5 py-7 sm:px-8 md:px-10 md:py-8",
               detail.wide ? "max-w-[1000px]" : "max-w-[760px]",
             )}
           >
+            <button
+              type="button"
+              onClick={() => setMobileDetailOpen(false)}
+              className="mb-5 inline-flex items-center gap-2 text-[13px] font-medium text-zinc-400 transition-colors hover:text-zinc-100 md:hidden"
+            >
+              <ArrowLeft size={16} />
+              Settings
+            </button>
             <div className="settings-redesign-content">
               {activeTab === "repositories" && <RepositoriesSection />}
               {activeTab === "members" && <MembersSection />}
