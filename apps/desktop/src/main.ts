@@ -180,10 +180,24 @@ function createWindow() {
   });
 
   const webUrl = process.env.TRACE_WEB_URL ?? defaultWebUrl;
+  const webOrigin = new URL(webUrl).origin;
   mainWindow.loadURL(webUrl);
 
   // Open external links in the user's default browser.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith(`blob:${webOrigin}/`)) {
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: {
+          backgroundColor: "#0d0f12",
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
+          },
+        },
+      };
+    }
     if (url.startsWith("http://") || url.startsWith("https://")) {
       shell.openExternal(url);
     }
@@ -379,11 +393,9 @@ ipcMain.handle("get-github-auth-token", async () => {
 ipcMain.handle("login-codex-with-chatgpt", async () => {
   const codexHome = await mkdtemp(path.join(tmpdir(), "trace-codex-login-"));
   try {
-    await writeFile(
-      path.join(codexHome, "config.toml"),
-      'cli_auth_credentials_store = "file"\n',
-      { mode: 0o600 },
-    );
+    await writeFile(path.join(codexHome, "config.toml"), 'cli_auth_credentials_store = "file"\n', {
+      mode: 0o600,
+    });
     const exitCode = await new Promise<number | null>((resolve, reject) => {
       const child = spawn("codex", ["login"], {
         env: { ...process.env, CODEX_HOME: codexHome },
