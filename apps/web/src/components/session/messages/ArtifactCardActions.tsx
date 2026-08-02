@@ -13,14 +13,17 @@ export function ArtifactCardActions({
   filePath,
   title,
   openLabel = "Open",
+  onOpen,
 }: {
   artifactId: string;
   filePath?: string;
   title: string;
   openLabel?: string;
+  onOpen?: () => void;
 }) {
   const openArtifact = useOpenArtifact();
   const downloadUrl = filePath ? artifactFileUrl(artifactId, filePath) : undefined;
+  const handleOpen = onOpen ?? (() => openArtifact(artifactId));
 
   return (
     <>
@@ -32,7 +35,7 @@ export function ArtifactCardActions({
           <MoreHorizontal className="size-[18px]" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuItem onClick={() => openArtifact(artifactId)}>
+          <DropdownMenuItem onClick={handleOpen}>
             <ArrowRight /> {openLabel}
           </DropdownMenuItem>
           {downloadUrl ? (
@@ -44,7 +47,7 @@ export function ArtifactCardActions({
       </DropdownMenu>
       <button
         type="button"
-        onClick={() => openArtifact(artifactId)}
+        onClick={handleOpen}
         className="ml-1 flex min-h-10 shrink-0 items-center gap-2 rounded-[9px] bg-accent px-4 text-xs font-semibold text-accent-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface-elevated"
       >
         {openLabel} <ArrowRight className="size-4" />

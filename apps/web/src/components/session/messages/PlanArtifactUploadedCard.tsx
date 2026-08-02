@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Download, FileText } from "lucide-react";
 import { artifactFileUrl } from "../../artifact/artifact-file-url";
 import { sandboxedPlanHtml } from "../../artifact/plan-html";
 import { useVisualPlanDocument } from "../../artifact/useVisualPlanDocument";
 import { ArtifactCardActions } from "./ArtifactCardActions";
 import { artifactFileName, formatArtifactBytes } from "./artifact-card-utils";
+import { PlanPreviewModal } from "./PlanPreviewModal";
 import { formatTime } from "./utils";
 
 export function PlanArtifactUploadedCard({
@@ -17,42 +19,50 @@ export function PlanArtifactUploadedCard({
   byteSize?: number;
   timestamp: string;
 }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
   const isHtml = filePath !== "plan.mdx";
   const displayName = artifactFileName(filePath, "visual-plan.html");
   const size = formatArtifactBytes(byteSize);
-  const { html } = useVisualPlanDocument(
-    isHtml ? artifactId : null,
-    filePath === "plan.html" ? "plan.html" : undefined,
+  const preferredPath =
+    filePath === "plan.html" ? "plan.html" : filePath === "plan.mdx" ? "plan.mdx" : undefined;
+  const { html } = useVisualPlanDocument(artifactId, preferredPath);
+
+  const previewModal = (
+    <PlanPreviewModal html={html} open={previewOpen} onOpenChange={setPreviewOpen} />
   );
 
   if (!isHtml) {
     const downloadUrl = filePath ? artifactFileUrl(artifactId, filePath) : undefined;
     return (
-      <article className="group relative w-full overflow-hidden rounded-[14px] border border-[#2d3138] bg-[#171a1f] shadow-[0_18px_48px_rgb(0_0_0/0.28)] transition-colors hover:border-[#69717d]">
-        <div className="flex items-center gap-4 p-4">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-[10px] border border-accent/25 bg-accent/10 text-accent">
-            <FileText className="size-6" strokeWidth={1.8} />
+      <>
+        <article className="group relative w-full overflow-hidden rounded-[14px] border border-[#2d3138] bg-[#171a1f] shadow-[0_18px_48px_rgb(0_0_0/0.28)] transition-colors hover:border-[#69717d]">
+          <div className="flex items-center gap-4 p-4">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-[10px] border border-accent/25 bg-accent/10 text-accent">
+              <FileText className="size-6" strokeWidth={1.8} />
+            </div>
+            <PlanArtifactIdentity displayName={displayName} size={size} timestamp={timestamp} />
+            {downloadUrl ? (
+              <a
+                href={downloadUrl}
+                download={displayName}
+                aria-label="Download plan"
+                className="flex size-10 shrink-0 items-center justify-center rounded-[9px] text-[#9ba1aa] hover:bg-[#0d0f12] hover:text-[#f1f3f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Download className="size-[18px]" />
+              </a>
+            ) : null}
+            <ArtifactCardActions
+              artifactId={artifactId}
+              filePath={filePath}
+              title="Implementation plan"
+              openLabel="Open plan"
+              onOpen={() => setPreviewOpen(true)}
+            />
           </div>
-          <PlanArtifactIdentity displayName={displayName} size={size} timestamp={timestamp} />
-          {downloadUrl ? (
-            <a
-              href={downloadUrl}
-              download={displayName}
-              aria-label="Download plan"
-              className="flex size-10 shrink-0 items-center justify-center rounded-[9px] text-[#9ba1aa] hover:bg-[#0d0f12] hover:text-[#f1f3f5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Download className="size-[18px]" />
-            </a>
-          ) : null}
-          <ArtifactCardActions
-            artifactId={artifactId}
-            filePath={filePath}
-            title="Implementation plan"
-            openLabel="Open plan"
-          />
-        </div>
-        <div className="h-px bg-gradient-to-r from-accent/60 via-accent/15 to-transparent" />
-      </article>
+          <div className="h-px bg-gradient-to-r from-accent/60 via-accent/15 to-transparent" />
+        </article>
+        {previewModal}
+      </>
     );
   }
 
@@ -66,7 +76,19 @@ export function PlanArtifactUploadedCard({
             <span className="size-1.5 rounded-full bg-green-500" />
             <span className="ml-3 font-mono text-[9px] text-[#9ba1aa]">{displayName}</span>
           </div>
-          <div className="relative h-[226px] overflow-hidden bg-[#0d0f12]">
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="Open plan preview"
+            onClick={() => setPreviewOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setPreviewOpen(true);
+              }
+            }}
+            className="relative h-[226px] cursor-pointer overflow-hidden bg-[#0d0f12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
             {html ? (
               <iframe
                 title="Implementation plan preview"
@@ -91,8 +113,10 @@ export function PlanArtifactUploadedCard({
           filePath={filePath}
           title="Implementation plan"
           openLabel="Open plan"
+          onOpen={() => setPreviewOpen(true)}
         />
       </div>
+      {previewModal}
     </article>
   );
 }

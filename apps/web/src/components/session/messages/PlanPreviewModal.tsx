@@ -1,0 +1,65 @@
+import { ExternalLink } from "lucide-react";
+import { sandboxedPlanHtml } from "../../artifact/plan-html";
+import { Button } from "../../ui/button";
+import { Dialog, DialogContent, DialogTitle } from "../../ui/dialog";
+
+export function PlanPreviewModal({
+  html,
+  open,
+  onOpenChange,
+}: {
+  html: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  function openInNewTab() {
+    if (!html) return;
+    const url = URL.createObjectURL(
+      new Blob([sandboxedPlanHtml(html)], { type: "text/html;charset=utf-8" }),
+    );
+    window.open(url, "_blank", "noopener,noreferrer");
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton
+        overlayClassName="bg-black/60 backdrop-blur-sm"
+        className="inset-0 left-0 top-0 h-dvh max-h-dvh w-screen max-w-none translate-x-0 translate-y-0 grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-none bg-[#0d0f12] p-0 sm:max-w-none"
+      >
+        <header className="flex h-12 shrink-0 items-center border-b border-[#2d3138] bg-[#171a1f] px-4 pr-24">
+          <DialogTitle className="truncate text-sm font-semibold text-[#f1f3f5]">
+            Implementation plan
+          </DialogTitle>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            disabled={!html}
+            onClick={openInNewTab}
+            aria-label="Open plan in new tab"
+            title="Open in new tab"
+            className="absolute right-12 top-2.5 text-[#9ba1aa] hover:text-[#f1f3f5]"
+          >
+            <ExternalLink className="size-4" />
+          </Button>
+        </header>
+        <div className="min-h-0 flex-1">
+          {html ? (
+            <iframe
+              title="Implementation plan"
+              srcDoc={sandboxedPlanHtml(html)}
+              sandbox=""
+              className="size-full border-0 bg-[#0d0f12]"
+            />
+          ) : (
+            <div className="flex size-full items-center justify-center text-sm text-[#9ba1aa]">
+              Loading plan…
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
