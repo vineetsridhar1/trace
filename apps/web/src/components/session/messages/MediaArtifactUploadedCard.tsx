@@ -59,7 +59,7 @@ export function MediaArtifactUploadedCard({
             {size ? ` · ${size}` : ""}
           </p>
         </div>
-        <ArtifactCardActions artifactId={artifactId} filePath={filePath} title={displayName} />
+        <ArtifactCardActions artifactId={artifactId} />
       </div>
     </article>
   );

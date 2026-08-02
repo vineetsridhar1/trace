@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, FileText } from "lucide-react";
+import { Boxes, Download } from "lucide-react";
 import { artifactFileUrl } from "../../artifact/artifact-file-url";
 import { sandboxedPlanHtml } from "../../artifact/plan-html";
 import { useVisualPlanDocument } from "../../artifact/useVisualPlanDocument";
@@ -37,9 +37,7 @@ export function PlanArtifactUploadedCard({
       <>
         <article className="group relative w-full overflow-hidden rounded-[14px] border border-[#2d3138] bg-[#171a1f] shadow-[0_18px_48px_rgb(0_0_0/0.28)] transition-colors hover:border-[#69717d]">
           <div className="flex items-center gap-4 p-4">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-[10px] border border-accent/25 bg-accent/10 text-accent">
-              <FileText className="size-6" strokeWidth={1.8} />
-            </div>
+            <Boxes className="size-6 shrink-0 text-accent" strokeWidth={1.8} />
             <PlanArtifactIdentity displayName={displayName} size={size} timestamp={timestamp} />
             {downloadUrl ? (
               <a
@@ -53,8 +51,6 @@ export function PlanArtifactUploadedCard({
             ) : null}
             <ArtifactCardActions
               artifactId={artifactId}
-              filePath={filePath}
-              title="Implementation plan"
               openLabel="Open plan"
               onOpen={() => setPreviewOpen(true)}
             />
@@ -104,14 +100,10 @@ export function PlanArtifactUploadedCard({
         </div>
       </div>
       <div className="flex items-center gap-3 p-4">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-accent/10 text-accent">
-          <FileText className="size-[22px]" strokeWidth={1.8} />
-        </div>
+        <Boxes className="size-[22px] shrink-0 text-accent" strokeWidth={1.8} />
         <PlanArtifactIdentity displayName={displayName} size={size} timestamp={timestamp} />
         <ArtifactCardActions
           artifactId={artifactId}
-          filePath={filePath}
-          title="Implementation plan"
           openLabel="Open plan"
           onOpen={() => setPreviewOpen(true)}
         />
