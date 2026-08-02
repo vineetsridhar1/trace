@@ -174,11 +174,16 @@ export const sessionApplicationMutations = {
       requireOrgContext(ctx),
       requireUser(ctx),
     ),
-  publishAppSession: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>
+  publishAppSession: (
+    _parent: unknown,
+    args: { sessionGroupId: string; accessMode?: SessionEndpointAccessMode | null },
+    ctx: Context,
+  ) =>
     sessionApplicationService.publishAppSession(
       args.sessionGroupId,
       requireOrgContext(ctx),
       requireUser(ctx),
+      args.accessMode ?? "private",
     ),
 };
 

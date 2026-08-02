@@ -86,9 +86,7 @@ const DESIGN_SYSTEM_APP_SESSION_CONFIG = createGeneratedProjectConfig(
 );
 
 function generatedProjectConfig(kind: string) {
-  return kind === "design_system"
-    ? DESIGN_SYSTEM_APP_SESSION_CONFIG
-    : DEFAULT_APP_SESSION_CONFIG;
+  return kind === "design_system" ? DESIGN_SYSTEM_APP_SESSION_CONFIG : DEFAULT_APP_SESSION_CONFIG;
 }
 
 function connectionRecord(connection: Prisma.JsonValue): Record<string, unknown> {
@@ -283,10 +281,9 @@ export class SessionApplicationService {
       organizationId,
       userId,
     );
-    const config =
-      isGeneratedProjectKind(group.kind)
-        ? generatedProjectConfig(group.kind)
-        : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const config = isGeneratedProjectKind(group.kind)
+      ? generatedProjectConfig(group.kind)
+      : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const script = config.setupScripts.find((candidate) => candidate.id === scriptId);
     if (!script) throw new ValidationError("Setup script not found");
     const run = await prisma.sessionSetupScriptRun.create({
@@ -736,7 +733,12 @@ export class SessionApplicationService {
     return { url: url.toString(), expiresAt: credential.expiresAt };
   }
 
-  async publishAppSession(sessionGroupId: string, organizationId: string, userId: string) {
+  async publishAppSession(
+    sessionGroupId: string,
+    organizationId: string,
+    userId: string,
+    accessMode: SessionEndpointAccessMode = "private",
+  ) {
     const group = await prisma.sessionGroup.findFirstOrThrow({
       where: { id: sessionGroupId, organizationId },
       select: {
@@ -758,7 +760,7 @@ export class SessionApplicationService {
     const updated = await prisma.sessionEndpoint.update({
       where: { id: endpoint.id },
       data: {
-        accessMode: "public",
+        accessMode,
         enabledByUserId: userId,
         enabledAt: endpoint.enabledAt ?? new Date(),
       },
@@ -1177,10 +1179,9 @@ export class SessionApplicationService {
   }
 
   private getApplication(group: ManagedSessionGroup, appConfigId: string) {
-    const config =
-      isGeneratedProjectKind(group.kind)
-        ? generatedProjectConfig(group.kind)
-        : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const config = isGeneratedProjectKind(group.kind)
+      ? generatedProjectConfig(group.kind)
+      : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const app = config.applications.find((candidate) => candidate.id === appConfigId);
     if (!app) throw new ValidationError("Application not found");
     return app;

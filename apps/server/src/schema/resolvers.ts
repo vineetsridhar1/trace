@@ -58,6 +58,7 @@ import { threadQueries } from "./thread.js";
 import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
 import { designSystemMutations, designSystemQueries } from "./design-system.js";
+import { appIntegrationMutations, appIntegrationQueries } from "./app-integrations.js";
 
 export const resolvers = {
   DateTime: DateTimeScalar,
@@ -109,6 +110,7 @@ export const resolvers = {
     ...participantQueries,
     ...threadQueries,
     ...designSystemQueries,
+    ...appIntegrationQueries,
   },
 
   Mutation: {
@@ -129,6 +131,7 @@ export const resolvers = {
     ...chatMutations,
     ...participantMutations,
     ...designSystemMutations,
+    ...appIntegrationMutations,
   },
 
   Subscription: {
