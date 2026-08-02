@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../lib/db.js", async () => {
   const { createPrismaMock } = await import("../../test/helpers.js");
@@ -22,6 +22,8 @@ const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").c
 const integrationMock = appIntegrationService as unknown as { execute: ReturnType<typeof vi.fn> };
 
 describe("EndpointProxyService application integrations", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.sessionEndpoint.findUnique.mockResolvedValue({
@@ -56,5 +58,40 @@ describe("EndpointProxyService application integrations", () => {
     expect(response.writeHead).toHaveBeenCalledWith(401);
     expect(response.end).toHaveBeenCalledWith("Authentication required");
     expect(integrationMock.execute).not.toHaveBeenCalled();
+  });
+
+  it("bootstraps private app links through Trace without putting a user token in the link", async () => {
+    vi.stubEnv("TRACE_WEB_URL", "https://trace.example.test");
+    prismaMock.sessionEndpoint.findUnique.mockResolvedValueOnce({
+      id: "endpoint-1",
+      key: "endpoint-key",
+      organizationId: "org-1",
+      sessionGroupId: "app-1",
+      status: "enabled",
+      accessMode: "private",
+      expiresAt: null,
+    });
+    const request = {
+      url: "/reports?period=month",
+      method: "GET",
+      headers: { accept: "text/html" },
+    } as IncomingMessage;
+    const response = { writeHead: vi.fn(), end: vi.fn() };
+    response.writeHead.mockReturnValue(response as unknown as ServerResponse);
+
+    await new EndpointProxyService().handleHttpRequest(
+      request,
+      response as unknown as ServerResponse,
+      "endpoint-key",
+    );
+
+    const expected = new URL("https://trace.example.test/auth/app-access");
+    expected.searchParams.set("endpointId", "endpoint-1");
+    expected.searchParams.set("next", "/reports?period=month");
+    expect(response.writeHead).toHaveBeenCalledWith(302, {
+      Location: expected.toString(),
+      "Cache-Control": "no-store",
+    });
+    expect(expected.searchParams.has("token")).toBe(false);
   });
 });

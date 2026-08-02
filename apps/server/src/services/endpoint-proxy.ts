@@ -16,6 +16,7 @@ import {
 import {
   endpointPreviewCookieHeader,
   endpointPreviewTokenFromCookie,
+  safeEndpointRedirectPath,
   verifyEndpointPreviewToken,
 } from "./endpoint-preview-auth.js";
 import {
@@ -105,12 +106,17 @@ function requestUrl(req: IncomingMessage): URL {
   return new URL(req.url ?? "/", "http://trace-endpoint.local");
 }
 
-function safeRedirectPath(value: string | null): string {
-  // Must be a same-origin absolute path. Reject protocol-relative (`//host`) and
-  // backslash variants (`/\host`, which browsers normalize to `//host`).
-  if (!value || !value.startsWith("/")) return "/";
-  if (value[1] === "/" || value[1] === "\\") return "/";
-  return value;
+function endpointAccessUrl(endpointId: string, nextPath: string): string | null {
+  const traceWebUrl = process.env.TRACE_WEB_URL?.trim();
+  if (!traceWebUrl) return null;
+  try {
+    const url = new URL("/auth/app-access", traceWebUrl);
+    url.searchParams.set("endpointId", endpointId);
+    url.searchParams.set("next", safeEndpointRedirectPath(nextPath));
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 export function injectAuthoringOverlay(
@@ -494,6 +500,16 @@ export class EndpointProxyService {
         return;
       }
       if (!(await authorizePrivateAccess(req, endpoint))) {
+        const acceptsHtml = String(req.headers.accept ?? "").includes("text/html");
+        const isNavigation = req.headers["sec-fetch-mode"] === "navigate" || acceptsHtml;
+        const redirect =
+          req.method === "GET" && isNavigation
+            ? endpointAccessUrl(endpoint.id, `${url.pathname}${url.search}`)
+            : null;
+        if (redirect) {
+          res.writeHead(302, { Location: redirect, "Cache-Control": "no-store" }).end();
+          return;
+        }
         res.writeHead(403).end("Forbidden");
         return;
       }
@@ -901,7 +917,7 @@ export class EndpointProxyService {
     const expiresAt = payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 60_000);
     res.writeHead(302, {
       "Set-Cookie": endpointPreviewCookieHeader(token ?? "", expiresAt),
-      Location: safeRedirectPath(url.searchParams.get("next")),
+      Location: safeEndpointRedirectPath(url.searchParams.get("next")),
       "Cache-Control": "no-store",
     });
     res.end();
