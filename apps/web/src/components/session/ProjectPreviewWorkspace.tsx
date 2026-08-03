@@ -75,23 +75,25 @@ export function ProjectPreviewWorkspace({
     };
   }, []);
 
-  const sessionContent = sessionId ? (
-    <ArtifactOpenContext.Provider value={onOpenArtifact}>
-      <SessionDetailView
-        key={sessionId}
-        sessionId={sessionId}
-        hideHeader
-        scrollToEventId={scrollToEventId}
-        onScrollComplete={onScrollComplete}
-        onForkSession={onForkSession}
-        canForkSession={canForkSession}
-      />
-    </ArtifactOpenContext.Provider>
-  ) : (
-    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-      Loading messages…
-    </div>
-  );
+  const renderSessionContent = (condensed: boolean) =>
+    sessionId ? (
+      <ArtifactOpenContext.Provider value={onOpenArtifact}>
+        <SessionDetailView
+          key={sessionId}
+          sessionId={sessionId}
+          hideHeader
+          scrollToEventId={scrollToEventId}
+          onScrollComplete={onScrollComplete}
+          onForkSession={onForkSession}
+          canForkSession={canForkSession}
+          condensed={condensed}
+        />
+      </ArtifactOpenContext.Provider>
+    ) : (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Loading messages…
+      </div>
+    );
 
   if (!isMobile && canvasRevealed && !manualEditing) {
     return (
@@ -107,7 +109,9 @@ export function ProjectPreviewWorkspace({
         >
           {canvas}
         </motion.main>
-        <FloatingSessionChat>{sessionContent}</FloatingSessionChat>
+        <FloatingSessionChat>
+          {(chatState) => renderSessionContent(chatState === "compact")}
+        </FloatingSessionChat>
       </div>
     );
   }
@@ -136,7 +140,7 @@ export function ProjectPreviewWorkspace({
         {manualEditing && manualSessionGroupId ? (
           <DesignManualEditPanel />
         ) : (
-          sessionContent
+          renderSessionContent(false)
         )}
       </motion.aside>
       <AnimatePresence initial={false}>

@@ -6,7 +6,11 @@ import { Button } from "../ui/button";
 
 type FloatingChatState = "hidden" | "compact" | "expanded";
 
-export function FloatingSessionChat({ children }: { children: ReactNode }) {
+export function FloatingSessionChat({
+  children,
+}: {
+  children: (state: Exclude<FloatingChatState, "hidden">) => ReactNode;
+}) {
   const [state, setState] = useState<FloatingChatState>("compact");
   const reduceMotion = useReducedMotion();
   const transition = reduceMotion
@@ -79,7 +83,7 @@ export function FloatingSessionChat({ children }: { children: ReactNode }) {
               </Button>
             </div>
 
-            <div className="h-full">{children}</div>
+            <div className="h-full">{children(state)}</div>
           </motion.aside>
         )}
       </AnimatePresence>
