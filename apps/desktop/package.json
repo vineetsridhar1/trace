@@ -22,17 +22,20 @@
   "dependencies": {
     "@trace/shared": "workspace:*",
     "node-pty": "^1.1.0",
+    "pg": "^8.16.3",
     "update-electron-app": "^3.1.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@boomship/postgres-vector-embedded": "0.2.2",
+    "@embedded-postgres/darwin-arm64": "17.10.0-beta.17",
+    "@embedded-postgres/darwin-x64": "17.10.0-beta.17",
     "@electron-forge/cli": "^7.11.1",
     "@electron-forge/maker-dmg": "^7.11.1",
     "@electron-forge/maker-zip": "^7.11.1",
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
     "@electron-forge/publisher-github": "^7.11.1",
     "@types/node": "^24.5.2",
+    "@types/pg": "^8.15.5",
     "@types/ws": "^8.5.13",
     "electron": "41.3.0",
     "typescript": "^5.7.0",

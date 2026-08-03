@@ -1,4 +1,4 @@
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
@@ -12,6 +12,7 @@ const postgresBinary = path.join(
   "bin",
   process.platform === "win32" ? "postgres.exe" : "postgres",
 );
+const postgresVersionPath = path.join(postgresRoot, ".trace-postgres-version");
 const startOnline = process.argv.slice(2).includes("--online");
 
 function run(command, args, env = process.env) {
@@ -33,9 +34,16 @@ async function exists(filePath) {
   }
 }
 
+async function hasCurrentPostgres() {
+  if (!(await exists(postgresBinary))) return false;
+  return readFile(postgresVersionPath, "utf8")
+    .then((version) => version.trim() === "17.10.0")
+    .catch(() => false);
+}
+
 await mkdir(runtimeRoot, { recursive: true });
-if (!(await exists(postgresBinary))) {
-  console.log("[trace-local] downloading embedded PostgreSQL with pgvector");
+if (!(await hasCurrentPostgres())) {
+  console.log("[trace-local] staging embedded PostgreSQL");
   run("node", ["apps/desktop/scripts/download-local-postgres.mjs", postgresRoot]);
   run("node", ["apps/desktop/scripts/repair-local-postgres-macos.mjs", postgresRoot]);
 }

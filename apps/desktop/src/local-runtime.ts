@@ -4,6 +4,7 @@ import { access, chmod, mkdir, readFile, readdir, rm, writeFile } from "node:fs/
 import net from "node:net";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { Client } from "pg";
 
 type RuntimeSecrets = {
   databasePassword: string;
@@ -22,7 +23,6 @@ type LocalRuntimeOptions = {
 type PostgresBinaryPaths = {
   initdb: string;
   postgres: string;
-  psql: string;
 };
 
 function randomHex(bytes: number): string {
@@ -90,39 +90,9 @@ async function runProcess(
   });
 }
 
-async function runProcessWithOutput(
-  executable: string,
-  args: string[],
-  env: NodeJS.ProcessEnv,
-  label: string,
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { env, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    child.stdout?.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
-    });
-    child.stderr?.on("data", (chunk: Buffer) => {
-      stderr = `${stderr}${chunk.toString("utf8")}`.slice(-16_000);
-    });
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      if (code === 0) {
-        resolve(stdout);
-        return;
-      }
-      reject(
-        new Error(
-          `${label} failed (${code ?? signal ?? "unknown"})${stderr ? `: ${stderr.trim()}` : ""}`,
-        ),
-      );
-    });
-  });
-}
-
-function sqlString(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
+function localMigrationSql(name: string, sql: string): string {
+  if (name !== "20260403120000_ambient_agent_memory_system") return sql;
+  return sql.replace(/\n-- Phase 4A: pgvector extension[\s\S]*$/, "\n");
 }
 
 export class LocalRuntime {
@@ -217,7 +187,7 @@ export class LocalRuntime {
       TRACE_WEB_DIST_DIR: webRoot,
     };
 
-    await this.runMigrations(serverRoot, serverEnv, binaries);
+    await this.runMigrations(serverRoot, databaseUrl);
     await this.startServer(serverRoot, serverEnv, webUrl);
     this.webUrl = webUrl;
     return webUrl;
@@ -226,7 +196,9 @@ export class LocalRuntime {
   private async loadSecrets(): Promise<RuntimeSecrets> {
     await mkdir(this.stateRoot, { recursive: true });
     try {
-      const parsed = JSON.parse(await readFile(this.secretsPath, "utf8")) as Partial<RuntimeSecrets>;
+      const parsed = JSON.parse(
+        await readFile(this.secretsPath, "utf8"),
+      ) as Partial<RuntimeSecrets>;
       if (parsed.databasePassword && parsed.jwtSecret && parsed.tokenEncryptionKey) {
         return parsed as RuntimeSecrets;
       }
@@ -252,7 +224,6 @@ export class LocalRuntime {
     return {
       initdb: executable("initdb"),
       postgres: executable("postgres"),
-      psql: executable("psql"),
     };
   }
 
@@ -283,10 +254,7 @@ export class LocalRuntime {
     }
   }
 
-  private async startPostgres(
-    binaries: PostgresBinaryPaths,
-    databasePort: number,
-  ): Promise<void> {
+  private async startPostgres(binaries: PostgresBinaryPaths, databasePort: number): Promise<void> {
     await chmod(binaries.postgres, 0o755);
     await new Promise<void>((resolve, reject) => {
       const child = spawn(
@@ -328,70 +296,51 @@ export class LocalRuntime {
     });
   }
 
-  private async runMigrations(
-    serverRoot: string,
-    env: NodeJS.ProcessEnv,
-    binaries: PostgresBinaryPaths,
-  ): Promise<void> {
-    const databaseUrl = env.DATABASE_URL;
-    if (!databaseUrl) throw new Error("Local database URL is missing");
-    await chmod(binaries.psql, 0o755);
-    const psqlArgs = ["--dbname", databaseUrl, "--set", "ON_ERROR_STOP=1"];
-    await runProcess(
-      binaries.psql,
-      [
-        ...psqlArgs,
-        "--command",
+  private async runMigrations(serverRoot: string, databaseUrl: string): Promise<void> {
+    const client = new Client({ connectionString: databaseUrl });
+    await client.connect();
+    try {
+      await client.query(
         'CREATE TABLE IF NOT EXISTS "_trace_local_migrations" ("name" TEXT PRIMARY KEY, "checksum" TEXT NOT NULL, "applied_at" TIMESTAMPTZ NOT NULL DEFAULT NOW())',
-      ],
-      env,
-      "Local migration table setup",
-    );
-
-    const migrationsRoot = path.join(serverRoot, "prisma", "migrations");
-    const entries = (await readdir(migrationsRoot, { withFileTypes: true }))
-      .filter((entry) => entry.isDirectory())
-      .sort((left, right) => left.name.localeCompare(right.name));
-    for (const entry of entries) {
-      const migrationPath = path.join(migrationsRoot, entry.name, "migration.sql");
-      if (!(await pathExists(migrationPath))) continue;
-      const migrationSql = await readFile(migrationPath);
-      const checksum = createHash("sha256").update(migrationSql).digest("hex");
-      const appliedChecksum = (
-        await runProcessWithOutput(
-          binaries.psql,
-          [
-            ...psqlArgs,
-            "--tuples-only",
-            "--no-align",
-            "--command",
-            `SELECT "checksum" FROM "_trace_local_migrations" WHERE "name" = ${sqlString(entry.name)}`,
-          ],
-          env,
-          `Checking local migration ${entry.name}`,
-        )
-      ).trim();
-      if (appliedChecksum) {
-        if (appliedChecksum !== checksum) {
-          throw new Error(`Local migration ${entry.name} changed after it was applied`);
-        }
-        continue;
-      }
-      await runProcess(
-        binaries.psql,
-        [
-          ...psqlArgs,
-          ...(!/^\s*(BEGIN|COMMIT);/im.test(migrationSql.toString("utf8"))
-            ? ["--single-transaction"]
-            : []),
-          "--file",
-          migrationPath,
-          "--command",
-          `INSERT INTO "_trace_local_migrations" ("name", "checksum") VALUES (${sqlString(entry.name)}, ${sqlString(checksum)})`,
-        ],
-        env,
-        `Applying local migration ${entry.name}`,
       );
+      const migrationsRoot = path.join(serverRoot, "prisma", "migrations");
+      const entries = (await readdir(migrationsRoot, { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
+        .sort((left, right) => left.name.localeCompare(right.name));
+      for (const entry of entries) {
+        const migrationPath = path.join(migrationsRoot, entry.name, "migration.sql");
+        if (!(await pathExists(migrationPath))) continue;
+        const migrationSql = await readFile(migrationPath);
+        const executableSql = localMigrationSql(entry.name, migrationSql.toString("utf8"));
+        const checksum = createHash("sha256").update(migrationSql).digest("hex");
+        const applied = await client.query<{ checksum: string }>(
+          'SELECT "checksum" FROM "_trace_local_migrations" WHERE "name" = $1',
+          [entry.name],
+        );
+        const appliedChecksum = applied.rows[0]?.checksum;
+        if (appliedChecksum) {
+          if (appliedChecksum !== checksum) {
+            throw new Error(`Local migration ${entry.name} changed after it was applied`);
+          }
+          continue;
+        }
+
+        const ownsTransaction = !/^\s*(BEGIN|COMMIT);/im.test(executableSql);
+        if (ownsTransaction) await client.query("BEGIN");
+        try {
+          await client.query(executableSql);
+          await client.query(
+            'INSERT INTO "_trace_local_migrations" ("name", "checksum") VALUES ($1, $2)',
+            [entry.name, checksum],
+          );
+          if (ownsTransaction) await client.query("COMMIT");
+        } catch (error) {
+          if (ownsTransaction) await client.query("ROLLBACK").catch(() => undefined);
+          throw new Error(`Applying local migration ${entry.name} failed`, { cause: error });
+        }
+      }
+    } finally {
+      await client.end();
     }
   }
 

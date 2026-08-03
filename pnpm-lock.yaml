@@ -116,6 +116,9 @@ importers:
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
+      pg:
+        specifier: ^8.16.3
+        version: 8.22.0
       update-electron-app:
         specifier: ^3.1.2
         version: 3.1.2
@@ -123,9 +126,6 @@ importers:
         specifier: ^8.18.0
         version: 8.19.0
     devDependencies:
-      '@boomship/postgres-vector-embedded':
-        specifier: 0.2.2
-        version: 0.2.2
       '@electron-forge/cli':
         specifier: ^7.11.1
         version: 7.11.1(encoding@0.1.13)(esbuild@0.27.4)
@@ -141,9 +141,18 @@ importers:
       '@electron-forge/publisher-github':
         specifier: ^7.11.1
         version: 7.11.1
+      '@embedded-postgres/darwin-arm64':
+        specifier: 17.10.0-beta.17
+        version: 17.10.0-beta.17
+      '@embedded-postgres/darwin-x64':
+        specifier: 17.10.0-beta.17
+        version: 17.10.0-beta.17
       '@types/node':
         specifier: ^24.5.2
         version: 24.12.0
+      '@types/pg':
+        specifier: ^8.15.5
+        version: 8.20.0
       '@types/ws':
         specifier: ^8.5.13
         version: 8.18.1
@@ -1728,12 +1737,6 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@boomship/postgres-vector-embedded@0.2.2':
-    resolution: {integrity: sha512-j+gQI1dkpYhewPTCT8fR+UuXIQ93zk8DP6P4O+/116QfbJZ2p10kQyBVHdaegXyfDshb4g5kiTxigpvEJMNBzw==}
-    engines: {node: '>=18.0.0'}
-    cpu: [x64, arm64]
-    os: [darwin, linux, win32]
-
   '@bottom-tabs/react-navigation@1.2.0':
     resolution: {integrity: sha512-gEnLP7q9Iai0KlVxHDIdlrDgkvJ5vwPzL2+2ucz5BdPWd++Cf5GO1jPq92R4/85PrioviCZnlAD91Wx8WxPOjA==}
     peerDependencies:
@@ -1905,6 +1908,18 @@ packages:
     resolution: {integrity: sha512-dfZeox66AvdPtb2lD8OsIIQh12Tp0GNCRUDfBHIKGpbmopZto2/A8nSpYYLoedPIHpqkeblZ/k8OV0Gy7PYuyQ==}
     engines: {node: '>=14.14'}
     hasBin: true
+
+  '@embedded-postgres/darwin-arm64@17.10.0-beta.17':
+    resolution: {integrity: sha512-E2dxhSllrcyAJBHuvgTrBTx2BaPlX2vvjXClPKHxfwBezk+nTZ01uAEraKiRJMpzHSCyN8J1dTjKh4q/uTsBLQ==}
+    engines: {node: '>=16'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@embedded-postgres/darwin-x64@17.10.0-beta.17':
+    resolution: {integrity: sha512-gXk65MIyttD/PWo6NDSmu/n4vzPcqZQmxVWjEKuecwlyGmWO984AZ3Ljb7F0bwPvXhqcovH4FGN4ydr0fGeJxg==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [darwin]
 
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
@@ -4175,6 +4190,9 @@ packages:
 
   '@types/node@25.5.0':
     resolution: {integrity: sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw==}
+
+  '@types/pg@8.20.0':
+    resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}
 
   '@types/qrcode@1.5.6':
     resolution: {integrity: sha512-te7NQcV2BOvdj2b1hCAHzAoMNuj65kNBMz0KBaxM6c3VGBOhU0dURQKOtH8CFNI/dsKkwlv32p26qYQTWoB5bw==}
@@ -12189,13 +12207,6 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@boomship/postgres-vector-embedded@0.2.2':
-    dependencies:
-      pg: 8.22.0
-      tar: 7.5.13
-    transitivePeerDependencies:
-      - pg-native
-
   '@bottom-tabs/react-navigation@1.2.0(@react-navigation/native@7.2.2(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-bottom-tabs@1.2.0(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)':
     dependencies:
       '@react-navigation/native': 7.2.2(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -12633,6 +12644,10 @@ snapshots:
       postject: 1.0.0-alpha.6
     transitivePeerDependencies:
       - supports-color
+
+  '@embedded-postgres/darwin-arm64@17.10.0-beta.17': {}
+
+  '@embedded-postgres/darwin-x64@17.10.0-beta.17': {}
 
   '@emnapi/core@1.10.0':
     dependencies:
@@ -15569,6 +15584,12 @@ snapshots:
     dependencies:
       undici-types: 7.18.2
     optional: true
+
+  '@types/pg@8.20.0':
+    dependencies:
+      '@types/node': 24.12.0
+      pg-protocol: 1.15.0
+      pg-types: 2.2.0
 
   '@types/qrcode@1.5.6':
     dependencies:
