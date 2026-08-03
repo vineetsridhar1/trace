@@ -621,7 +621,11 @@ export class ContainerBridge implements IBridgeClient {
           command: cmd.command,
           cwd: cmd.cwd,
           env: cmd.env,
-          ports: cmd.ports.map((port) => port.port),
+          ports: cmd.ports.map((port) => ({
+            port: port.port,
+            healthPath: port.healthPath,
+            healthHost: port.healthHost,
+          })),
         });
         break;
       }

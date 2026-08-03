@@ -237,6 +237,15 @@ describe("SessionApplicationService", () => {
         env: expect.objectContaining({
           TRACE_ENDPOINT_URL_WEB: "http://endpointkey1.preview.localhost",
         }),
+        ports: [
+          {
+            portConfigId: "web",
+            port: 3000,
+            protocol: "http",
+            healthPath: null,
+            healthHost: null,
+          },
+        ],
       }),
       "org-1",
     );
@@ -275,6 +284,15 @@ describe("SessionApplicationService", () => {
           TRACE_ENDPOINT_URL_WEB: "http://www--endpointkey1.preview.localhost",
           TRACE_ENDPOINT_HOST_PATTERN_WEB: "http://{sub}--endpointkey1.preview.localhost",
         }),
+        ports: [
+          {
+            portConfigId: "web",
+            port: 80,
+            protocol: "http",
+            healthPath: "/",
+            healthHost: "www.5000.localhost",
+          },
+        ],
       }),
       "org-1",
     );
@@ -322,7 +340,15 @@ describe("SessionApplicationService", () => {
       expect.objectContaining({
         type: "app_process_start",
         command: "pnpm install --prefer-offline && pnpm dev",
-        ports: [{ portConfigId: "web", port: 3000, protocol: "http" }],
+        ports: [
+          {
+            portConfigId: "web",
+            port: 3000,
+            protocol: "http",
+            healthPath: "/",
+            healthHost: null,
+          },
+        ],
       }),
       "org-1",
     );
@@ -385,11 +411,7 @@ describe("SessionApplicationService", () => {
       updatedAt: new Date("2026-07-11T00:00:01.000Z"),
     }));
 
-    await new SessionApplicationService().markProcessRunning(
-      "process-1",
-      "org-1",
-      "bridge-1",
-    );
+    await new SessionApplicationService().markProcessRunning("process-1", "org-1", "bridge-1");
 
     expect(prismaMock.sessionEndpoint.update).toHaveBeenCalledWith({
       where: { id: "endpoint-1" },

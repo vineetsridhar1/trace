@@ -16,6 +16,7 @@ import { sessionApplicationWorkflowService } from "./session-application-workflo
 import {
   buildEndpointHostPattern,
   buildEndpointPublicUrl,
+  ENDPOINT_DEFAULT_SUB,
   generateEndpointKey,
 } from "./endpoint-utils.js";
 import {
@@ -512,6 +513,8 @@ export class SessionApplicationService {
           portConfigId: port.id,
           port: port.port,
           protocol: "http",
+          healthPath: port.healthPath,
+          healthHost: port.internalHostTemplate?.replaceAll("{sub}", ENDPOINT_DEFAULT_SUB) ?? null,
         })),
       },
       organizationId,

@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
+import http from "http";
 import path from "path";
 import net from "net";
 import type { BridgeMessage } from "@trace/shared";
@@ -11,9 +12,15 @@ type ManagedProcess = {
   sessionGroupId: string;
   child: ChildProcessWithoutNullStreams;
   bridgeProcessId: string;
-  ports: number[];
+  ports: ManagedProcessPort[];
   ready: boolean;
   childExited: boolean;
+};
+
+type ManagedProcessPort = {
+  port: number;
+  healthPath?: string | null;
+  healthHost?: string | null;
 };
 
 const MAX_LOG_CHUNK_BYTES = 16 * 1024;
@@ -21,6 +28,7 @@ const MAX_SETUP_OUTPUT_BYTES = 64 * 1024;
 // A hung setup script (interactive prompt, network stall) must not block session
 // setup forever with no result. Kill the tree and report failure past this.
 const SETUP_SCRIPT_TIMEOUT_MS = 10 * 60_000;
+const PROCESS_START_TIMEOUT_MS = 5 * 60_000;
 
 function safeRelativeCwd(baseWorkdir: string, cwd: string): string {
   const relative = cwd.trim() || ".";
@@ -105,71 +113,73 @@ function terminateChild(child: ChildProcessWithoutNullStreams): Promise<void> {
   });
 }
 
-function waitForListeningPort(
+function hasListeningPort(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host: "127.0.0.1", port });
+    socket.once("connect", () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once("error", () => resolve(false));
+  });
+}
+
+function hasHealthyHttpEndpoint(port: ManagedProcessPort): Promise<boolean> {
+  return new Promise((resolve) => {
+    const request = http.get(
+      {
+        host: "127.0.0.1",
+        port: port.port,
+        path: port.healthPath ?? "/",
+        headers: port.healthHost ? { host: port.healthHost } : undefined,
+      },
+      (response) => {
+        response.resume();
+        resolve(
+          response.statusCode !== undefined &&
+            response.statusCode >= 200 &&
+            response.statusCode < 400,
+        );
+      },
+    );
+    request.once("error", () => resolve(false));
+    request.setTimeout(1_000, () => {
+      request.destroy();
+      resolve(false);
+    });
+  });
+}
+
+function isPortReady(port: ManagedProcessPort): Promise<boolean> {
+  return port.healthPath ? hasHealthyHttpEndpoint(port) : hasListeningPort(port.port);
+}
+
+async function waitForProcessReady(
   child: ChildProcessWithoutNullStreams,
-  ports: number[],
-  timeoutMs = 5 * 60_000,
+  ports: ManagedProcessPort[],
+  timeoutMs = PROCESS_START_TIMEOUT_MS,
 ): Promise<void> {
   if (ports.length === 0) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const deadline = Date.now() + timeoutMs;
-    const probe = () => {
-      if (child.exitCode !== null || child.killed) {
-        reject(new Error("App process exited before opening its configured port"));
-        return;
-      }
-      let pending = ports.length;
-      let settled = false;
-      for (const port of ports) {
-        const socket = net.createConnection({ host: "127.0.0.1", port });
-        socket.once("connect", () => {
-          if (settled) return;
-          settled = true;
-          socket.destroy();
-          resolve();
-        });
-        socket.once("error", () => {
-          pending -= 1;
-          if (!settled && pending === 0) {
-            if (Date.now() >= deadline) reject(new Error("Timed out waiting for app port"));
-            else setTimeout(probe, 250).unref();
-          }
-        });
-      }
-    };
-    probe();
-  });
-}
-
-function hasListeningPort(ports: number[]): Promise<boolean> {
-  if (ports.length === 0) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    let pending = ports.length;
-    let settled = false;
-    const sockets: net.Socket[] = [];
-    const settle = (listening: boolean) => {
-      if (settled) return;
-      settled = true;
-      for (const socket of sockets) socket.destroy();
-      resolve(listening);
-    };
-    const unavailable = () => {
-      pending -= 1;
-      if (pending === 0) settle(false);
-    };
-    for (const port of ports) {
-      const socket = net.createConnection({ host: "127.0.0.1", port });
-      sockets.push(socket);
-      socket.once("connect", () => settle(true));
-      socket.once("error", unavailable);
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    if (child.exitCode !== null || child.killed) {
+      throw new Error("App process exited before its configured ports became ready");
     }
-  });
+    if ((await Promise.all(ports.map(isPortReady))).every(Boolean)) return;
+    if (Date.now() >= deadline) {
+      throw new Error("Timed out waiting for app health checks");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
 }
 
-async function waitForBackgroundHandoff(ports: number[], timeoutMs = 1_000): Promise<boolean> {
+async function waitForBackgroundHandoff(
+  ports: ManagedProcessPort[],
+  timeoutMs = PROCESS_START_TIMEOUT_MS,
+): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   do {
-    if (await hasListeningPort(ports)) return true;
+    if ((await Promise.all(ports.map(isPortReady))).every(Boolean)) return true;
     await new Promise((resolve) => setTimeout(resolve, 50));
   } while (Date.now() < deadline);
   return false;
@@ -216,7 +226,7 @@ export class ManagedProcessManager {
     command: string;
     cwd: string;
     env?: Record<string, string>;
-    ports?: number[];
+    ports?: ManagedProcessPort[];
   }) {
     this.enqueue(options.processInstanceId, () => this.startReplacing(options));
   }
@@ -236,7 +246,7 @@ export class ManagedProcessManager {
     command: string;
     cwd: string;
     env?: Record<string, string>;
-    ports?: number[];
+    ports?: ManagedProcessPort[];
   }): Promise<void> {
     const baseWorkdir = this.sessionWorkdirs.get(options.sessionId);
     if (!baseWorkdir) {
@@ -339,7 +349,7 @@ export class ManagedProcessManager {
           });
         });
       });
-      void waitForListeningPort(child, options.ports ?? [])
+      void waitForProcessReady(child, options.ports ?? [])
         .then(() => {
           const managed = this.processes.get(options.processInstanceId);
           if (managed?.child !== child || managed.ready) return;

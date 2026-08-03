@@ -339,7 +339,13 @@ export interface BridgeAppProcessStartCommand {
   command: string;
   cwd: string;
   env?: Record<string, string>;
-  ports: Array<{ portConfigId: string; port: number; protocol: "http" }>;
+  ports: Array<{
+    portConfigId: string;
+    port: number;
+    protocol: "http";
+    healthPath?: string | null;
+    healthHost?: string | null;
+  }>;
 }
 
 export interface BridgeAppProcessStopCommand {
@@ -918,8 +924,7 @@ export function parseWorktreeListPorcelain(
   const flush = () => {
     if (typeof current.path !== "string") return;
     const isTraceManaged =
-      current.path === traceManagedPrefix ||
-      current.path.startsWith(traceManagedPrefix + pathSep);
+      current.path === traceManagedPrefix || current.path.startsWith(traceManagedPrefix + pathSep);
     worktrees.push({
       path: current.path,
       branch: current.branch ?? null,

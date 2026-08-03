@@ -163,7 +163,7 @@ describe("ManagedProcessManager", () => {
       sessionId: "session-1",
       command: `'${process.execPath}' -e "eval(Buffer.from('${Buffer.from(launcherSource).toString("base64")}','base64').toString())"`,
       cwd: ".",
-      ports: [port],
+      ports: [{ port }],
     });
 
     await waitFor(messages, (message) => message.type === "app_process_started");
@@ -213,7 +213,7 @@ describe("ManagedProcessManager", () => {
       sessionId: "session-1",
       command: `node -e "require('http').createServer((req,res)=>res.end('ok')).listen(${port}, '127.0.0.1')"`,
       cwd: ".",
-      ports: [port],
+      ports: [{ port }],
     });
 
     await waitFor(messages, (message) => message.type === "app_process_started");
@@ -237,7 +237,7 @@ describe("ManagedProcessManager", () => {
         sessionId: "session-1",
         command: `node -e "require('http').createServer((req,res)=>res.end('ok')).listen(${port}, '127.0.0.1')"`,
         cwd: ".",
-        ports: [port],
+        ports: [{ port }],
       });
 
     startProcess();
@@ -256,6 +256,56 @@ describe("ManagedProcessManager", () => {
     manager.stop("process-1");
     await waitFor(messages, (message) => message.type === "app_process_exited");
     await waitForPortAvailable(port);
+  });
+
+  it("waits for background HTTP health checks after the launcher exits", async () => {
+    const messages: BridgeMessage[] = [];
+    const manager = new ManagedProcessManager(new Map([["session-1", process.cwd()]]), (message) =>
+      messages.push(message),
+    );
+    let healthy = false;
+    const healthRequests: Array<{ host: string | undefined; path: string | undefined }> = [];
+    const readyServer = http.createServer((_req, res) => res.end("ready"));
+    const gatedServer = http.createServer((req, res) => {
+      healthRequests.push({ host: req.headers.host, path: req.url });
+      res.writeHead(healthy ? 204 : 503).end();
+    });
+    servers.push(readyServer, gatedServer);
+    await Promise.all(
+      [readyServer, gatedServer].map(
+        (server) => new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve())),
+      ),
+    );
+    const readyAddress = readyServer.address();
+    const gatedAddress = gatedServer.address();
+    if (
+      !readyAddress ||
+      typeof readyAddress === "string" ||
+      !gatedAddress ||
+      typeof gatedAddress === "string"
+    ) {
+      throw new Error("Missing health server port");
+    }
+
+    manager.start({
+      requestId: "start-health",
+      processInstanceId: "process-health",
+      sessionGroupId: "group-1",
+      sessionId: "session-1",
+      command: `node -e ""`,
+      cwd: ".",
+      ports: [
+        { port: readyAddress.port, healthPath: "/" },
+        { port: gatedAddress.port, healthPath: "/up", healthHost: "www.5000.localhost" },
+      ],
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1_250));
+    expect(messages.some((message) => message.type === "app_process_started")).toBe(false);
+
+    healthy = true;
+    await waitFor(messages, (message) => message.type === "app_process_started");
+    expect(healthRequests).toContainEqual({ host: "www.5000.localhost", path: "/up" });
   });
 
   it("proxies HTTP requests to localhost ports", async () => {
