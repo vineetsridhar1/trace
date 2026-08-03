@@ -6,6 +6,7 @@ import { SessionDetailView } from "./SessionDetailView";
 import { DesignManualEditPanel } from "./applications/DesignManualEditPanel";
 import { useDesignEditorStore } from "../../stores/design-editor";
 import { ArtifactOpenContext, type OpenArtifact } from "../artifact/ArtifactOpenContext";
+import { FloatingSessionChat } from "./FloatingSessionChat";
 
 export function ProjectPreviewWorkspace({
   sessionId,
@@ -74,6 +75,43 @@ export function ProjectPreviewWorkspace({
     };
   }, []);
 
+  const sessionContent = sessionId ? (
+    <ArtifactOpenContext.Provider value={onOpenArtifact}>
+      <SessionDetailView
+        key={sessionId}
+        sessionId={sessionId}
+        hideHeader
+        scrollToEventId={scrollToEventId}
+        onScrollComplete={onScrollComplete}
+        onForkSession={onForkSession}
+        canForkSession={canForkSession}
+      />
+    </ArtifactOpenContext.Provider>
+  ) : (
+    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      Loading messages…
+    </div>
+  );
+
+  if (!isMobile && canvasRevealed && !manualEditing) {
+    return (
+      <div className="relative h-full min-h-0 overflow-hidden">
+        <motion.main
+          key={canvasKey}
+          initial={reduceMotion ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.99 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={
+            reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 30 }
+          }
+          className="h-full min-w-0 bg-surface-deep"
+        >
+          {canvas}
+        </motion.main>
+        <FloatingSessionChat>{sessionContent}</FloatingSessionChat>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -97,22 +135,8 @@ export function ProjectPreviewWorkspace({
       >
         {manualEditing && manualSessionGroupId ? (
           <DesignManualEditPanel />
-        ) : sessionId ? (
-          <ArtifactOpenContext.Provider value={onOpenArtifact}>
-            <SessionDetailView
-              key={sessionId}
-              sessionId={sessionId}
-              hideHeader
-              scrollToEventId={scrollToEventId}
-              onScrollComplete={onScrollComplete}
-              onForkSession={onForkSession}
-              canForkSession={canForkSession}
-            />
-          </ArtifactOpenContext.Provider>
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Loading messages…
-          </div>
+          sessionContent
         )}
       </motion.aside>
       <AnimatePresence initial={false}>
