@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { gql } from "@urql/core";
-import type { GitCheckpoint, QueuedMessage } from "@trace/gql";
+import type { Artifact, GitCheckpoint, QueuedMessage } from "@trace/gql";
 import { toast } from "sonner";
 import { useSessionEvents } from "../../hooks/useSessionEvents";
 import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
@@ -19,6 +19,7 @@ import { SessionInput } from "./SessionInput";
 import { SessionDropzone } from "./SessionDropzone";
 import { useAddAttachments } from "./useAddAttachments";
 import { PlanResponseBar } from "./PlanResponseBar";
+import { PlanReviewPendingBar } from "./PlanReviewPendingBar";
 import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
@@ -33,6 +34,7 @@ import { Skeleton } from "../ui/skeleton";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
+import { useVisualPlanDocument } from "../artifact/useVisualPlanDocument";
 import { findMessageActionsEventIds } from "./messageActions";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
@@ -45,6 +47,8 @@ import {
 } from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
+import { cn } from "../../lib/utils";
+import { findLatestTimelineInputRequest } from "./visualPlanReview";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -214,6 +218,30 @@ const SESSION_DETAIL_QUERY = gql`
         position
         createdAt
       }
+      artifacts {
+        id
+        organizationId
+        sessionId
+        type
+        key
+        bundleDigest
+        byteSize
+        manifest {
+          schemaVersion
+          files {
+            path
+            mediaType
+            size
+            digest
+          }
+        }
+        createdBy {
+          id
+          name
+          avatarUrl
+        }
+        createdAt
+      }
       createdAt
       updatedAt
     }
@@ -259,6 +287,41 @@ export function SessionDetailView({
   const sessionStatus = useEntityField("sessions", sessionId, "sessionStatus") as
     | string
     | undefined;
+  const latestPlanArtifact = useEntityStore((state) => {
+    let latest: Artifact | null = null;
+    for (const artifact of Object.values(state.artifacts)) {
+      if (
+        artifact.sessionId === sessionId &&
+        artifact.type === "trace.visual-plan.v1" &&
+        (!latest || artifact.createdAt > latest.createdAt)
+      ) {
+        latest = artifact;
+      }
+    }
+    return latest;
+  });
+  const timelineInputRequest = useMemo(
+    () => findLatestTimelineInputRequest(eventIds, events),
+    [eventIds, events],
+  );
+  const visiblePlanArtifact =
+    sessionStatus !== "needs_input"
+      ? null
+      : timelineInputRequest?.kind === "visual-plan"
+        ? timelineInputRequest.artifact
+        : timelineInputRequest
+          ? null
+          : latestPlanArtifact;
+  const visiblePlanPath = visiblePlanArtifact?.manifest.files.some(
+    (file) => file.path === "plan.html",
+  )
+    ? "plan.html"
+    : "plan.mdx";
+  const { implementationContent: artifactPlanContent, error: artifactPlanError } =
+    useVisualPlanDocument(
+      visiblePlanArtifact?.id ?? null,
+      visiblePlanArtifact ? visiblePlanPath : undefined,
+    );
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
@@ -402,6 +465,15 @@ export function SessionDetailView({
             update._queuedMessageIdsBySession = idx;
           }
 
+          const artifacts = (fetchedSession as Record<string, unknown>).artifacts as
+            | Artifact[]
+            | undefined;
+          if (artifacts?.length) {
+            const artifactTable = { ...state.artifacts };
+            for (const artifact of artifacts) artifactTable[artifact.id] = artifact;
+            update.artifacts = artifactTable;
+          }
+
           useEntityStore.setState(update);
         }
       });
@@ -480,6 +552,9 @@ export function SessionDetailView({
     }
     return null;
   }, [nodes, sessionStatus]);
+  const planReviewContent = visiblePlanArtifact
+    ? artifactPlanContent
+    : (activePlan?.node.planContent ?? "");
 
   const activeQuestion = useMemo(() => {
     if (sessionStatus !== "needs_input") return null;
@@ -494,7 +569,7 @@ export function SessionDetailView({
 
   useEffect(() => {
     setPlanComments({});
-  }, [activePlan?.node.id]);
+  }, [activePlan?.node.id, visiblePlanArtifact?.id]);
 
   const handleAddPlanComment = useCallback((block: MarkdownSteerBlock, text: string) => {
     setPlanComments((current) => ({
@@ -532,6 +607,7 @@ export function SessionDetailView({
   const showQuestion = (() => {
     if (!activeQuestion) return null;
     if (activeQuestion.node.id === dismissedQuestionId) return null;
+    if (timelineInputRequest?.kind === "visual-plan") return null;
     if (activePlan && activePlan.index > activeQuestion.index) return null;
     return activeQuestion.node;
   })();
@@ -574,6 +650,7 @@ export function SessionDetailView({
     bridgeInteractionAllowed &&
     !showQuestion &&
     !activePlan &&
+    !visiblePlanArtifact &&
     !worktreeDeleted &&
     !(isDisconnected(connection) && !isNotStarted);
 
@@ -702,59 +779,63 @@ export function SessionDetailView({
               />
             )}
           </div>
-
           <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
-          {runtimeLifecycleState ? (
-            <RuntimeLifecycleNotice
-              sessionId={sessionId}
-              connection={connection}
-              connectionState={runtimeLifecycleState}
-            />
-          ) : !bridgeInteractionAllowed ? (
-            <div className="border-t bg-background p-4">
-              <BridgeAccessNotice
-                access={bridgeAccess}
-                sessionGroupId={sessionGroupId ?? null}
-                onRequested={refreshBridgeAccess}
+            {showQuestion ? (
+              <AskUserQuestionBar
+                node={showQuestion}
+                onResponse={(text) => {
+                  client
+                    .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+                      sessionId,
+                      text,
+                      interactionMode: activePlan ? "plan" : undefined,
+                    })
+                    .toPromise();
+                }}
+                onDismiss={() => {
+                  setDismissedQuestionId(showQuestion.id);
+                }}
               />
-            </div>
-          ) : showQuestion ? (
-            <AskUserQuestionBar
-              node={showQuestion}
-              onResponse={(text) => {
-                client
-                  .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-                    sessionId,
-                    text,
-                    interactionMode: activePlan ? "plan" : undefined,
-                  })
-                  .toPromise();
-              }}
-              onDismiss={() => {
-                setDismissedQuestionId(showQuestion.id);
-              }}
-            />
-          ) : activePlan ? (
-            <PlanResponseBar
-              sessionId={sessionId}
-              planContent={activePlan.node.planContent}
-              planComments={planComments}
-              onClearPlanComments={handleClearPlanComments}
-              onDismiss={handleDismissPlan}
-            />
-          ) : (
-            <>
-              {agentStatus === "active" && latestTodos && <StickyTodoList todos={latestTodos} />}
-              <QueuedMessagesList sessionId={sessionId} />
-              <SessionInput
+            ) : activePlan || visiblePlanArtifact ? (
+              planReviewContent ? (
+                <PlanResponseBar
+                  sessionId={sessionId}
+                  planContent={planReviewContent}
+                  artifactId={visiblePlanArtifact?.id}
+                  planComments={planComments}
+                  onClearPlanComments={handleClearPlanComments}
+                  onDismiss={handleDismissPlan}
+                />
+              ) : (
+                <PlanReviewPendingBar error={artifactPlanError} onDismiss={handleDismissPlan} />
+              )
+            ) : runtimeLifecycleState ? (
+              <RuntimeLifecycleNotice
                 sessionId={sessionId}
-                onStop={handleStop}
-                bridgeAccess={bridgeAccess}
-                sessionGroupId={sessionGroupId ?? null}
-                onAccessRequested={refreshBridgeAccess}
+                connection={connection}
+                connectionState={runtimeLifecycleState}
               />
-            </>
-          )}
+            ) : !bridgeInteractionAllowed ? (
+              <div className="border-t bg-background p-4">
+                <BridgeAccessNotice
+                  access={bridgeAccess}
+                  sessionGroupId={sessionGroupId ?? null}
+                  onRequested={refreshBridgeAccess}
+                />
+              </div>
+            ) : (
+              <>
+                {agentStatus === "active" && latestTodos && <StickyTodoList todos={latestTodos} />}
+                <QueuedMessagesList sessionId={sessionId} />
+                <SessionInput
+                  sessionId={sessionId}
+                  onStop={handleStop}
+                  bridgeAccess={bridgeAccess}
+                  sessionGroupId={sessionGroupId ?? null}
+                  onAccessRequested={refreshBridgeAccess}
+                />
+              </>
+            )}
           </div>
         </SessionDropzone>
       </div>

@@ -23,6 +23,7 @@ import type {
   DesignSystem,
   DesignSystemCommitArtifact,
   DesignSystemVersion,
+  Artifact,
 } from "@trace/gql";
 
 /** Client-side session entity with extra fields not in the GQL schema */
@@ -60,6 +61,7 @@ export type EntityTableMap = {
   designSystems: DesignSystem;
   designSystemCommitArtifacts: DesignSystemCommitArtifact;
   designSystemVersions: DesignSystemVersion;
+  artifacts: Artifact;
 };
 
 export type EntityType = keyof EntityTableMap;
@@ -145,6 +147,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
   designSystems: {},
   designSystemCommitArtifacts: {},
   designSystemVersions: {},
+  artifacts: {},
   eventsByScope: {},
   _eventIdsByScope: {},
   _sessionIdsByGroup: {},
@@ -391,6 +394,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
       designSystems: {},
       designSystemCommitArtifacts: {},
       designSystemVersions: {},
+      artifacts: {},
       eventsByScope: {},
       _eventIdsByScope: {},
       _sessionIdsByGroup: {},
@@ -732,6 +736,7 @@ const ENTITY_KEYS: EntityType[] = [
   "designSystems",
   "designSystemCommitArtifacts",
   "designSystemVersions",
+  "artifacts",
 ];
 
 function getMessageEntityScopeKey(

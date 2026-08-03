@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { gql } from "@urql/core";
 import { useEntityStore, type SessionEntity, type SessionGroupEntity } from "@trace/client-core";
-import type { QueuedMessage, Session } from "@trace/gql";
+import type { Artifact, QueuedMessage, Session } from "@trace/gql";
 import { getClient } from "@/lib/urql";
 import { fetchSessionGroupDetail } from "@/hooks/useSessionGroupDetail";
 
@@ -75,6 +75,30 @@ const SESSION_DETAIL_QUERY = gql`
         position
         createdAt
       }
+      artifacts {
+        id
+        organizationId
+        sessionId
+        type
+        key
+        bundleDigest
+        byteSize
+        manifest {
+          schemaVersion
+          files {
+            path
+            mediaType
+            size
+            digest
+          }
+        }
+        createdBy {
+          id
+          name
+          avatarUrl
+        }
+        createdAt
+      }
       sessionGroupId
       sessionGroup {
         id
@@ -103,6 +127,7 @@ const SESSION_DETAIL_QUERY = gql`
 type FetchedSession = Session & {
   id: string;
   queuedMessages?: QueuedMessage[];
+  artifacts?: Artifact[];
   sessionGroup?: SessionGroupEntity;
 };
 
@@ -152,6 +177,10 @@ async function doFetchSessionDetail(sessionId: string): Promise<void> {
       },
     };
   });
+
+  for (const artifact of fetched.artifacts ?? []) {
+    state.upsert("artifacts", artifact.id, artifact);
+  }
 
   // Entry points like deep links and push-notification taps hit this fetcher
   // before the session's parent group is in the store. Chain the group

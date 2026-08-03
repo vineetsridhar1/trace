@@ -1041,6 +1041,12 @@ export const sessionTypeResolvers = {
         orderBy: { position: "asc" },
       });
     },
+    artifacts: async (session: { id: string }) => {
+      return prisma.artifact.findMany({
+        where: { sessionId: session.id },
+        orderBy: { createdAt: "asc" },
+      });
+    },
   },
   QueuedMessage: {
     attachmentKeys: (message: { imageKeys: string[] }) => message.imageKeys,

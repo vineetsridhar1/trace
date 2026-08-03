@@ -375,6 +375,8 @@ enum EventType {
   design_system_updated
   design_system_publish_updated
   design_system_archived
+  artifact_created
+  artifact_approved
 }
 
 # --- Core Types ---
@@ -713,8 +715,45 @@ type Session {
   cacheCreationTokens: Float!
   costUsd: Float!
   queuedMessages: [QueuedMessage!]!
+  artifacts: [Artifact!]!
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+type ArtifactFile {
+  path: String!
+  mediaType: String!
+  size: Int!
+  digest: String!
+}
+
+type ArtifactManifest {
+  schemaVersion: Int!
+  files: [ArtifactFile!]!
+}
+
+type Artifact {
+  id: ID!
+  organizationId: ID!
+  sessionId: ID!
+  type: String!
+  key: String!
+  bundleDigest: String!
+  manifest: ArtifactManifest!
+  byteSize: Int!
+  createdBy: User!
+  session: Session!
+  createdAt: DateTime!
+}
+
+enum ArtifactApprovalAction {
+  NEW_SESSION
+  KEEP_CONTEXT
+}
+
+type ArtifactApprovalResult {
+  artifact: Artifact!
+  implementationSession: Session!
 }
 
 type QueuedMessage {
@@ -1671,6 +1710,8 @@ type Query {
   sessionGroup(id: ID!): SessionGroup
   sessions(organizationId: ID!, filters: SessionFilters): [Session!]!
   session(id: ID!): Session
+  # Pass sessionId for one session, or sessionGroupId for every session in a group.
+  artifacts(sessionId: ID, sessionGroupId: ID, type: String, key: String): [Artifact!]!
   mySessions(
     organizationId: ID!
     agentStatus: AgentStatus
@@ -1891,6 +1932,11 @@ type Mutation {
     interactionMode: String
     clientMutationId: String
   ): Event!
+  approveArtifact(
+    artifactId: ID!
+    action: ArtifactApprovalAction!
+    prompt: String!
+  ): ArtifactApprovalResult!
   """
   Copy the source of a design-kind session group into the target session's
   workspace (under .trace/designs/<slug>/) and message the agent to implement

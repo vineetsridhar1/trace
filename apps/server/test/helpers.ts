@@ -180,6 +180,15 @@ export function createPrismaMock() {
       update: vi.fn(),
       count: vi.fn(),
     },
+    artifact: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findFirstOrThrow: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
     repo: {
       create: vi.fn(),
       delete: vi.fn(),

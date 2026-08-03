@@ -276,7 +276,6 @@ describe("createApplication", () => {
     });
     expect(replaceMock).toHaveBeenCalledWith("/sessions/group_design/session_design");
   });
-
 });
 
 describe("startPlanImplementationSession", () => {
@@ -297,68 +296,46 @@ describe("startPlanImplementationSession", () => {
     closeSessionPlayerMock.mockReset();
   });
 
-  it("starts, runs, navigates, and terminates the source session", async () => {
-    mutationMock.mockImplementation((document: string) => {
-      if (document === START_SESSION_MUTATION) {
-        return {
-          toPromise: async () => ({
-            data: { startSession: { id: "session_new", sessionGroupId: "group_1" } },
-          }),
-        };
-      }
-      if (document === RUN_SESSION_MUTATION) {
-        return { toPromise: async () => ({ data: { runSession: { id: "session_new" } } }) };
-      }
-      if (document === TERMINATE_SESSION_MUTATION) {
-        return {
-          toPromise: async () => ({ data: { terminateSession: { id: "source_session" } } }),
-        };
-      }
-      throw new Error(`Unexpected mutation ${document}`);
+  it("approves once, navigates, and lets the server own the transition", async () => {
+    mutationMock.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          approveArtifact: {
+            implementationSession: { id: "session_new", sessionGroupId: "group_1" },
+          },
+        },
+      }),
     });
-    fetchSessionGroupDetailMock.mockResolvedValue(true);
+    fetchSessionGroupDetailMock.mockResolvedValue({ ok: true, error: null });
 
     const { startPlanImplementationSession } = await import("./createQuickSession");
-    const ok = await startPlanImplementationSession("source_session", "Ship it");
+    const ok = await startPlanImplementationSession("artifact_1", "Ship it");
 
     expect(ok).toBe(true);
     expect(fetchSessionGroupDetailMock).toHaveBeenCalledWith("group_1");
     expect(setOverlaySessionIdMock).toHaveBeenCalledWith("session_new");
     expect(replaceMock).toHaveBeenCalledWith("/sessions/group_1/session_new");
-    expect(mutationMock).toHaveBeenCalledTimes(3);
-    expect(mutationMock).toHaveBeenNthCalledWith(1, START_SESSION_MUTATION, {
-      input: expect.not.objectContaining({ hosting: expect.anything() }),
-    });
-    expect(mutationMock).toHaveBeenNthCalledWith(3, TERMINATE_SESSION_MUTATION, {
-      id: "source_session",
+    expect(mutationMock).toHaveBeenCalledTimes(1);
+    expect(mutationMock).toHaveBeenCalledWith(expect.anything(), {
+      artifactId: "artifact_1",
+      action: "NEW_SESSION",
+      prompt: "Implement the following plan:\n\nShip it",
     });
   });
 
-  it("returns false and does not navigate when the run step fails", async () => {
-    mutationMock.mockImplementation((document: string) => {
-      if (document === START_SESSION_MUTATION) {
-        return {
-          toPromise: async () => ({
-            data: { startSession: { id: "session_new", sessionGroupId: "group_1" } },
-          }),
-        };
-      }
-      if (document === RUN_SESSION_MUTATION) {
-        return {
-          toPromise: async () => ({
-            error: new Error("run failed"),
-          }),
-        };
-      }
-      throw new Error(`Unexpected mutation ${document}`);
+  it("returns false and does not navigate when approval fails", async () => {
+    mutationMock.mockReturnValue({
+      toPromise: async () => ({
+        error: new Error("approval failed"),
+      }),
     });
 
     const { startPlanImplementationSession } = await import("./createQuickSession");
-    const ok = await startPlanImplementationSession("source_session", "Ship it");
+    const ok = await startPlanImplementationSession("artifact_1", "Ship it");
 
     expect(ok).toBe(false);
     expect(replaceMock).not.toHaveBeenCalled();
     expect(setOverlaySessionIdMock).not.toHaveBeenCalled();
-    expect(alertMock).toHaveBeenCalledWith("Couldn't start implementation", "run failed");
+    expect(alertMock).toHaveBeenCalledWith("Couldn't start implementation", "approval failed");
   });
 });

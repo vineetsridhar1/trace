@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "artifactType": "Desktop chat artifact cards",
+  "audience": "People collaborating with an AI coding assistant in a desktop workspace",
+  "platform": "Desktop",
+  "fidelity": "High-fidelity comparative concepts",
+  "primaryJob": "Recognize, preview, and open uploaded artifacts without implying their HTML content has been parsed into native chat UI",
+  "coreFlow": [
+    "Read the assistant response",
+    "Scan host-known artifact identity and file metadata",
+    "Preview the rendered artifact when available",
+    "Open, save, download, or play the artifact"
+  ],
+  "requiredStates": ["default"],
+  "direction": {
+    "name": "Quietly premium workspace",
+    "principles": [
+      "Let artifact content—not chrome—carry the hierarchy",
+      "Use a single cool-blue interaction cue against a restrained dark workspace",
+      "Keep artifact content visibly contained inside its rendered preview"
+    ]
+  },
+  "references": [
+    {
+      "source": "/tmp/trace-files/367876b4-8e58-4eae-a1a8-3e8bb8c9dda3.png",
+      "preserve": ["Dark chat surface", "Artifact appears inline after an assistant response", "Direct open action"],
+      "reinterpret": ["Turn the generic uploaded-file row into a recognizable artifact object", "Group title, type, timestamp, metadata, and action into a coherent hierarchy"],
+      "avoidCopying": ["Exact product chrome", "Exact response copy", "Command shown above the artifact"],
+      "evidence": ["Artifact row uses a charcoal surface with a blue document icon", "Current action is a right-aligned View button", "The card spans most of the conversation width"]
+    },
+    {
+      "source": "/tmp/trace-files/10769839-828e-4c36-86da-b80a7b605213.png",
+      "preserve": ["Plan title and concise outcome statement", "Phase count, file count, and scope cues", "Dark, high-density developer-tool atmosphere"],
+      "reinterpret": ["Summarize the full plan as a three-step inline preview", "Promote plan-specific metadata without reproducing the full document"],
+      "avoidCopying": ["Exact workspace toolbar", "Full plan document layout", "Source-specific plan wording beyond the supplied example"],
+      "evidence": ["Plan uses three phases and two affected files", "Blue is reserved for active navigation and the focal step", "Content is organized with thin borders, uppercase section labels, and code-like detail"]
+    }
+  ],
+  "assumptions": [
+    "The primary surface is a desktop chat embedded in a coding workspace.",
+    "Artifact cards should support plan, image, and video content through a shared system.",
+    "The preferred visual prominence is quietly premium: integrated with the chat but clearly actionable.",
+    "The chat host does not parse plan sections, phases, risk, or affected files from the uploaded HTML."
+  ]
+}

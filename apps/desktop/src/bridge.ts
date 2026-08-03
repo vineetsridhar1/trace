@@ -39,6 +39,7 @@ import {
   inspectSessionGitSyncStatus,
   BridgeOutbox,
 } from "@trace/shared";
+import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
 import type { GitExecFn } from "@trace/shared";
 import { getUsedSlugs } from "@trace/shared/animal-names";
 import {
@@ -375,6 +376,7 @@ export class BridgeClient implements IBridgeClient {
   private terminalManager: TerminalManager;
   private autoSyncManager: LinkedCheckoutAutoSyncManager;
   private getSessionCookieHeader: (url: string) => Promise<string | null>;
+  private traceRuntime = ensureTraceRuntime(path.join(os.homedir(), ".trace", "runtime"));
 
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
@@ -907,6 +909,7 @@ export class BridgeClient implements IBridgeClient {
     toolSessionId,
     checkpointContext,
     imageUrls,
+    runtimeEnv,
   }: {
     sessionId: string;
     prompt: string;
@@ -919,6 +922,7 @@ export class BridgeClient implements IBridgeClient {
     toolSessionId?: string;
     checkpointContext?: GitCheckpointContext | null;
     imageUrls?: string[];
+    runtimeEnv?: Record<string, string>;
   }) {
     if (!cwd) {
       console.warn(
@@ -926,6 +930,21 @@ export class BridgeClient implements IBridgeClient {
       );
     }
     const workdir = cwd ?? os.homedir();
+    const traceRuntime = await this.traceRuntime;
+    const traceApiUrl = new URL(this.serverUrl);
+    if (traceApiUrl.protocol === "wss:") traceApiUrl.protocol = "https:";
+    if (traceApiUrl.protocol === "ws:") traceApiUrl.protocol = "http:";
+    traceApiUrl.pathname = "/";
+    traceApiUrl.search = "";
+    traceApiUrl.hash = "";
+    const invocationEnv = {
+      ...runtimeEnv,
+      TRACE_API_URL: traceApiUrl.toString(),
+      TRACE_SKILLS_DIR: traceRuntime.skillsDir,
+      TRACE_NODE_BINARY: process.execPath,
+      TRACE_ELECTRON_RUN_AS_NODE: "1",
+      PATH: `${traceRuntime.binDir}${path.delimiter}${process.env.PATH ?? ""}`,
+    };
 
     if (checkpointContext && cwd) {
       try {
@@ -1110,6 +1129,7 @@ export class BridgeClient implements IBridgeClient {
       reasoningEffort,
       enableClaudeInChrome,
       toolSessionId,
+      runtimeEnv: invocationEnv,
     });
   }
 
@@ -1128,6 +1148,7 @@ export class BridgeClient implements IBridgeClient {
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
           imageUrls: cmd.imageUrls,
+          runtimeEnv: cmd.runtimeEnv,
         });
         break;
       }
@@ -1144,6 +1165,7 @@ export class BridgeClient implements IBridgeClient {
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
           imageUrls: cmd.imageUrls,
+          runtimeEnv: cmd.runtimeEnv,
         });
         break;
       }

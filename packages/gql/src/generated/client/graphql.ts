@@ -83,6 +83,43 @@ export type ApplicationProcessStatus =
   | "stopped"
   | "stopping";
 
+export type Artifact = {
+  __typename?: "Artifact";
+  bundleDigest: Scalars["String"]["output"];
+  byteSize: Scalars["Int"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdBy: User;
+  id: Scalars["ID"]["output"];
+  key: Scalars["String"]["output"];
+  manifest: ArtifactManifest;
+  organizationId: Scalars["ID"]["output"];
+  session: Session;
+  sessionId: Scalars["ID"]["output"];
+  type: Scalars["String"]["output"];
+};
+
+export type ArtifactApprovalAction = "KEEP_CONTEXT" | "NEW_SESSION";
+
+export type ArtifactApprovalResult = {
+  __typename?: "ArtifactApprovalResult";
+  artifact: Artifact;
+  implementationSession: Session;
+};
+
+export type ArtifactFile = {
+  __typename?: "ArtifactFile";
+  digest: Scalars["String"]["output"];
+  mediaType: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+  size: Scalars["Int"]["output"];
+};
+
+export type ArtifactManifest = {
+  __typename?: "ArtifactManifest";
+  files: Array<ArtifactFile>;
+  schemaVersion: Scalars["Int"]["output"];
+};
+
 export type BranchDiffFile = {
   __typename?: "BranchDiffFile";
   additions: Scalars["Int"]["output"];
@@ -644,6 +681,8 @@ export type EventType =
   | "agent_environment_updated"
   | "animation_preview_updated"
   | "application_config_updated"
+  | "artifact_approved"
+  | "artifact_created"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
   | "bridge_access_revoked"
@@ -900,6 +939,7 @@ export type Mutation = {
   addChannelMember: Channel;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  approveArtifact: ArtifactApprovalResult;
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveDesignSystem: DesignSystem;
   archiveSessionGroup?: Maybe<SessionGroup>;
@@ -1040,6 +1080,12 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars["ID"]["input"];
   role?: InputMaybe<UserRole>;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationApproveArtifactArgs = {
+  action: ArtifactApprovalAction;
+  artifactId: Scalars["ID"]["input"];
+  prompt: Scalars["String"]["input"];
 };
 
 export type MutationApproveBridgeAccessRequestArgs = {
@@ -1710,6 +1756,7 @@ export type Query = {
    * listing surface (the sidebar Apps section).
    */
   appSessionGroups: Array<SessionGroup>;
+  artifacts: Array<Artifact>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   bridgeRuntimeAccess: BridgeRuntimeAccess;
@@ -1794,6 +1841,13 @@ export type QueryAnimationSessionGroupsArgs = {
 
 export type QueryAppSessionGroupsArgs = {
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryArtifactsArgs = {
+  key?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  type?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type QueryAvailableRuntimesArgs = {
@@ -2281,6 +2335,7 @@ export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
 export type Session = {
   __typename?: "Session";
   agentStatus: AgentStatus;
+  artifacts: Array<Artifact>;
   branch?: Maybe<Scalars["String"]["output"]>;
   cacheCreationTokens: Scalars["Float"]["output"];
   cacheReadTokens: Scalars["Float"]["output"];
@@ -2817,6 +2872,37 @@ export type WorktreeChangesResult = {
   truncated: Scalars["Boolean"]["output"];
 };
 
+export type SessionGroupArtifactsQueryVariables = Exact<{
+  sessionGroupId: Scalars["ID"]["input"];
+}>;
+
+export type SessionGroupArtifactsQuery = {
+  __typename?: "Query";
+  artifacts: Array<{
+    __typename?: "Artifact";
+    id: string;
+    organizationId: string;
+    sessionId: string;
+    type: string;
+    key: string;
+    bundleDigest: string;
+    byteSize: number;
+    createdAt: string;
+    manifest: {
+      __typename?: "ArtifactManifest";
+      schemaVersion: number;
+      files: Array<{
+        __typename?: "ArtifactFile";
+        path: string;
+        mediaType: string;
+        size: number;
+        digest: string;
+      }>;
+    };
+    session: { __typename?: "Session"; id: string; name: string; sessionGroupId?: string | null };
+  }>;
+};
+
 export type SendChannelMessageMutationVariables = Exact<{
   channelId: Scalars["ID"]["input"];
   html?: InputMaybe<Scalars["String"]["input"]>;
@@ -3272,6 +3358,25 @@ export type SessionGroupWorktreeChangesForCommitButtonQuery = {
   sessionGroupWorktreeChanges: { __typename?: "WorktreeChangesResult"; totalCount: number };
 };
 
+export type ApproveArtifactMutationVariables = Exact<{
+  artifactId: Scalars["ID"]["input"];
+  action: ArtifactApprovalAction;
+  prompt: Scalars["String"]["input"];
+}>;
+
+export type ApproveArtifactMutation = {
+  __typename?: "Mutation";
+  approveArtifact: {
+    __typename?: "ArtifactApprovalResult";
+    implementationSession: {
+      __typename?: "Session";
+      id: string;
+      sessionGroupId?: string | null;
+      channel?: { __typename?: "Channel"; id: string } | null;
+    };
+  };
+};
+
 export type SessionDetailQueryVariables = Exact<{
   id: Scalars["ID"]["input"];
 }>;
@@ -3426,6 +3531,29 @@ export type SessionDetailQuery = {
       position: number;
       createdAt: string;
       imageKeys: Array<string>;
+    }>;
+    artifacts: Array<{
+      __typename?: "Artifact";
+      id: string;
+      organizationId: string;
+      sessionId: string;
+      type: string;
+      key: string;
+      bundleDigest: string;
+      byteSize: number;
+      createdAt: string;
+      manifest: {
+        __typename?: "ArtifactManifest";
+        schemaVersion: number;
+        files: Array<{
+          __typename?: "ArtifactFile";
+          path: string;
+          mediaType: string;
+          size: number;
+          digest: string;
+        }>;
+      };
+      createdBy: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
     }>;
   } | null;
 };
@@ -5364,6 +5492,90 @@ export type OnboardingSessionsQuery = {
   sessions: Array<{ __typename?: "Session"; id: string }>;
 };
 
+export const SessionGroupArtifactsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SessionGroupArtifacts" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "artifacts" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                { kind: "Field", name: { kind: "Name", value: "type" } },
+                { kind: "Field", name: { kind: "Name", value: "key" } },
+                { kind: "Field", name: { kind: "Name", value: "bundleDigest" } },
+                { kind: "Field", name: { kind: "Name", value: "byteSize" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "manifest" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "schemaVersion" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "files" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "path" } },
+                            { kind: "Field", name: { kind: "Name", value: "mediaType" } },
+                            { kind: "Field", name: { kind: "Name", value: "size" } },
+                            { kind: "Field", name: { kind: "Name", value: "digest" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "session" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SessionGroupArtifactsQuery, SessionGroupArtifactsQueryVariables>;
 export const SendChannelMessageDocument = {
   kind: "Document",
   definitions: [
@@ -6944,6 +7156,92 @@ export const SessionGroupWorktreeChangesForCommitButtonDocument = {
   SessionGroupWorktreeChangesForCommitButtonQuery,
   SessionGroupWorktreeChangesForCommitButtonQueryVariables
 >;
+export const ApproveArtifactDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "ApproveArtifact" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "action" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ArtifactApprovalAction" } },
+          },
+        },
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "prompt" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "String" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "approveArtifact" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "artifactId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "artifactId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "action" },
+                value: { kind: "Variable", name: { kind: "Name", value: "action" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "prompt" },
+                value: { kind: "Variable", name: { kind: "Name", value: "prompt" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "implementationSession" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "channel" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ApproveArtifactMutation, ApproveArtifactMutationVariables>;
 export const SessionDetailDocument = {
   kind: "Document",
   definitions: [
@@ -7301,6 +7599,58 @@ export const SessionDetailDocument = {
                       },
                       { kind: "Field", name: { kind: "Name", value: "interactionMode" } },
                       { kind: "Field", name: { kind: "Name", value: "position" } },
+                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                    ],
+                  },
+                },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "artifacts" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "organizationId" } },
+                      { kind: "Field", name: { kind: "Name", value: "sessionId" } },
+                      { kind: "Field", name: { kind: "Name", value: "type" } },
+                      { kind: "Field", name: { kind: "Name", value: "key" } },
+                      { kind: "Field", name: { kind: "Name", value: "bundleDigest" } },
+                      { kind: "Field", name: { kind: "Name", value: "byteSize" } },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "manifest" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "schemaVersion" } },
+                            {
+                              kind: "Field",
+                              name: { kind: "Name", value: "files" },
+                              selectionSet: {
+                                kind: "SelectionSet",
+                                selections: [
+                                  { kind: "Field", name: { kind: "Name", value: "path" } },
+                                  { kind: "Field", name: { kind: "Name", value: "mediaType" } },
+                                  { kind: "Field", name: { kind: "Name", value: "size" } },
+                                  { kind: "Field", name: { kind: "Name", value: "digest" } },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "createdBy" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
                       { kind: "Field", name: { kind: "Name", value: "createdAt" } },
                     ],
                   },

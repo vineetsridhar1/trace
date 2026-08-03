@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   AppWindow,
+  Boxes,
   Circle,
   Cloud,
   Monitor,
   PanelRight,
-  History,
   Maximize2,
   Minimize2,
   Play,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { sessionStatusColor, sessionStatusLabel } from "./sessionStatus";
-import { SessionHistory } from "./SessionHistory";
+import { SessionGroupArtifactsDialog } from "../artifact/SessionGroupArtifactsDialog";
 import { useRunScripts } from "../../hooks/useRunScripts";
 import { useLinkedCheckoutHeaderState } from "./useLinkedCheckoutHeaderState";
 import { LinkedCheckoutSubtitle } from "./LinkedCheckoutSubtitle";
@@ -82,8 +82,7 @@ export function GroupHeader({
   onToggleSidebar,
   onToggleApplicationsSidebar,
 }: GroupHeaderProps) {
-  const [showHistory, setShowHistory] = useState(false);
-  const historyRef = useRef<HTMLDivElement>(null);
+  const [showArtifacts, setShowArtifacts] = useState(false);
   const { hasRunScripts, canRun, handleRun } = useRunScripts(sessionGroupId, selectedSessionId);
   const linkedCheckout = useLinkedCheckoutHeaderState({
     repoId,
@@ -93,29 +92,6 @@ export function GroupHeader({
     sessionGroupId,
     enabled: canManageLinkedCheckout,
   });
-
-  useEffect(() => {
-    if (!showHistory) return;
-
-    function handleClick(event: MouseEvent) {
-      if (historyRef.current && !historyRef.current.contains(event.target as Node)) {
-        setShowHistory(false);
-      }
-    }
-
-    function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setShowHistory(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [showHistory]);
 
   const label = sessionStatusLabel[selectedSessionStatus] ?? selectedSessionStatus;
   const isCloud = selectedHosting === "cloud";
@@ -192,22 +168,22 @@ export function GroupHeader({
       ) : null}
 
       {!compactAppMode ? (
-        <div className="relative" ref={historyRef}>
-          <ActionTooltip label="Group history">
+        <>
+          <ActionTooltip label="Artifacts">
             <button
-              onClick={() => setShowHistory((value: boolean) => !value)}
+              onClick={() => setShowArtifacts(true)}
               className={headerIconButtonClass}
-              aria-label="Group history"
+              aria-label="Artifacts"
             >
-              <History size={13} />
+              <Boxes size={13} />
             </button>
           </ActionTooltip>
-          {showHistory && selectedSessionId ? (
-            <div className="app-region-no-drag absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
-              <SessionHistory sessionId={selectedSessionId} />
-            </div>
-          ) : null}
-        </div>
+          <SessionGroupArtifactsDialog
+            sessionGroupId={sessionGroupId}
+            open={showArtifacts}
+            onOpenChange={setShowArtifacts}
+          />
+        </>
       ) : null}
 
       {panelMode && (

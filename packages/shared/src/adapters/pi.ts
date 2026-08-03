@@ -86,6 +86,7 @@ export class PiAdapter implements CodingToolAdapter {
     model,
     reasoningEffort,
     toolSessionId,
+    runtimeEnv,
   }: RunOptions) {
     this.resultEmitted = false;
     this.sawErrorEvent = false;
@@ -112,7 +113,7 @@ export class PiAdapter implements CodingToolAdapter {
     const child = spawn("pi", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv(),
+      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
       detached: true,
     });
     child.stdin?.on("error", () => {});
@@ -215,7 +216,8 @@ export class PiAdapter implements CodingToolAdapter {
       if (message?.role === "assistant") {
         const captured = this.captureUsage(message);
         if (captured.usage) this.emittedIncrementalUsage = true;
-        const errorMessage = this.extractPiErrorMessage(message) ?? this.extractPiErrorMessage(data);
+        const errorMessage =
+          this.extractPiErrorMessage(message) ?? this.extractPiErrorMessage(data);
         if (errorMessage) {
           this.emitError(errorMessage, onOutput);
         }

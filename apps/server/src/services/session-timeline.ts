@@ -69,6 +69,7 @@ const COMPACT_CANDIDATE_EVENT_TYPES = [
   "session_pr_opened",
   "session_pr_merged",
   "session_pr_closed",
+  "artifact_created",
 ] as const;
 
 function compareEvents(
@@ -207,6 +208,17 @@ function isPrLifecycleEvent(event: PrismaEvent): boolean {
   );
 }
 
+function isSupportedArtifactEvent(event: PrismaEvent): boolean {
+  const payload = asObject(event.payload);
+  const artifact = asObject(payload?.artifact);
+  return (
+    event.eventType === "artifact_created" &&
+    (artifact?.type === "trace.visual-plan.v1" ||
+      artifact?.type === "trace.image.v1" ||
+      artifact?.type === "trace.video.v1")
+  );
+}
+
 function isThinkingCandidate(event: PrismaEvent): boolean {
   return (
     event.eventType === "session_output" &&
@@ -233,6 +245,12 @@ function compactVisibleEvents(candidates: PrismaEvent[]): PrismaEvent[] {
     }
 
     if (isPrLifecycleEvent(event)) {
+      flushAssistant();
+      visibleIds.add(event.id);
+      continue;
+    }
+
+    if (isSupportedArtifactEvent(event)) {
       flushAssistant();
       visibleIds.add(event.id);
       continue;
