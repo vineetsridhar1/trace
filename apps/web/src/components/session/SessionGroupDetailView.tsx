@@ -508,6 +508,7 @@ export function SessionGroupDetailView({
     projectWorkspaceKind === "design" ||
     projectWorkspaceKind === "design_system" ||
     projectWorkspaceKind === "pdf";
+  const isCanvasWorkspace = projectWorkspaceKind !== null;
   const selectedConnection = selectedSession?.connection as
     | Record<string, unknown>
     | null
@@ -1042,15 +1043,14 @@ export function SessionGroupDetailView({
                 showSidebar={showSidebar}
                 showApplicationsSidebar={showApplicationsSidebar}
                 canShowApplications={showApplicationsSidebarTab}
-                compactAppMode={isAppGroup || isAnimationGroup || isGeneratedProjectGroup}
+                compactCanvasMode={isCanvasWorkspace}
                 onToggleFullscreen={toggleFullscreen}
                 onToggleSidebar={selectedSessionIsOptimistic ? () => {} : handleToggleSidebar}
                 onToggleApplicationsSidebar={
                   selectedSessionIsOptimistic ? () => {} : handleToggleApplicationsSidebar
                 }
               />
-              {(!isAppGroup && !isAnimationGroup && !isGeneratedProjectGroup) ||
-              openArtifactIds.length > 0 ? (
+              {!isCanvasWorkspace || openArtifactIds.length > 0 ? (
                 <GroupTabStrip
                   sessionTabs={sessionTabs}
                   terminals={terminals}
