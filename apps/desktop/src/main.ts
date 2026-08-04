@@ -313,6 +313,10 @@ async function resolveModeTarget(mode: TraceMode): Promise<{ serverUrl: string; 
   return { serverUrl: webUrl, webUrl };
 }
 
+function isNavigationAborted(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ERR_ABORTED";
+}
+
 async function switchTraceMode(mode: TraceMode, explicit: boolean): Promise<TraceModeStatus> {
   const target = await resolveModeTarget(mode);
   activeMode = mode;
@@ -323,7 +327,14 @@ async function switchTraceMode(mode: TraceMode, explicit: boolean): Promise<Trac
   bridge.setAuthContext(null);
   bridge.setServerUrl(target.serverUrl);
   currentWebUrl = target.webUrl;
-  if (mainWindow && !mainWindow.isDestroyed()) await mainWindow.loadURL(target.webUrl);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      await mainWindow.loadURL(target.webUrl);
+    } catch (error: unknown) {
+      // A startup redirect supersedes loadURL after the target has loaded successfully.
+      if (!isNavigationAborted(error)) throw error;
+    }
+  }
   return getModeStatus();
 }
 

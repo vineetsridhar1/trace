@@ -329,19 +329,20 @@ export function LoginPage() {
               </svg>
               {submitting ? "Starting..." : "Sign in with GitHub"}
             </Button>
+            {window.trace?.switchTraceMode ? (
+              <Button
+                variant="outline"
+                size="lg"
+                className="mt-2 w-full"
+                onClick={() => switchDesktopTraceMode("local")}
+              >
+                Start locally
+              </Button>
+            ) : null}
             <p className="mt-4 text-center text-sm leading-5 text-muted-foreground">
               GitHub is only used to verify your identity. Trace requests no
               GitHub permissions and cannot access your repositories.
             </p>
-            {window.trace?.switchTraceMode ? (
-              <Button
-                variant="ghost"
-                className="mt-2 w-full"
-                onClick={() => switchDesktopTraceMode("local")}
-              >
-                Continue locally instead
-              </Button>
-            ) : null}
           </div>
         )}
         {error ? <p className="text-center text-sm text-destructive">{error}</p> : null}
