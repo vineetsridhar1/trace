@@ -68,4 +68,57 @@ describe("buildCompactChatSummary", () => {
       actionCount: 2,
     });
   });
+
+  it("uses collapsed timeline action counts", () => {
+    const nodes = [
+      {
+        kind: "collapsed-events" as const,
+        id: "collapsed:user1:answer1",
+        collapsedRanges: [
+          {
+            id: "collapsed:user1:answer1",
+            startEventId: "user1",
+            startTimestamp: "2026-08-03T00:00:00.000Z",
+            endEventId: "answer1",
+            endTimestamp: "2026-08-03T00:01:00.000Z",
+            actionCount: 3,
+          },
+        ],
+      },
+    ];
+
+    expect(buildCompactChatSummary(nodes, {})).toEqual({
+      userText: null,
+      assistantText: null,
+      actionCount: 3,
+    });
+  });
+
+  it("treats attachment-only messages as a new user turn", () => {
+    const events: Record<string, Event> = {
+      user1: sessionEvent("user1", "message_sent", { text: "First request" }),
+      work1: sessionEvent("work1", "session_output", {
+        type: "assistant",
+        message: { content: [{ type: "tool_use", name: "Read" }] },
+      }),
+      answer1: sessionEvent("answer1", "session_output", {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "First answer" }] },
+      }),
+      user2: sessionEvent("user2", "message_sent", {
+        text: "",
+        attachmentKeys: ["uploads/org-1/reference.png"],
+      }),
+    };
+    const nodes: SessionNode[] = ["user1", "work1", "answer1", "user2"].map((id) => ({
+      kind: "event",
+      id,
+    }));
+
+    expect(buildCompactChatSummary(nodes, events)).toEqual({
+      userText: "Image prompt",
+      assistantText: null,
+      actionCount: 0,
+    });
+  });
 });

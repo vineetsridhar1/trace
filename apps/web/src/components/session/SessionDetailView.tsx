@@ -527,8 +527,8 @@ export function SessionDetailView({
     return compactNodes;
   }, [events, nodes, timelineItems, timelineMode]);
   const compactSummary = useMemo(
-    () => buildCompactChatSummary(nodes, events),
-    [events, nodes],
+    () => buildCompactChatSummary(listNodes, events),
+    [events, listNodes],
   );
   const messageActionsEventIds = useMemo(
     () => findMessageActionsEventIds(eventIds, events),
@@ -842,7 +842,7 @@ export function SessionDetailView({
                 {!condensed && agentStatus === "active" && latestTodos && (
                   <StickyTodoList todos={latestTodos} />
                 )}
-                {!condensed && <QueuedMessagesList sessionId={sessionId} />}
+                <QueuedMessagesList sessionId={sessionId} condensed={condensed} />
                 <SessionInput
                   sessionId={sessionId}
                   onStop={handleStop}

@@ -72,6 +72,7 @@ describe("mergeCompactTailEventItems", () => {
           startTimestamp: user.timestamp,
           endEventId: finalAssistant.id,
           endTimestamp: finalAssistant.timestamp,
+          actionCount: 1,
         },
       },
       { kind: "event", id: finalAssistant.id },

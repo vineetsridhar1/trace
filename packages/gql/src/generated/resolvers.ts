@@ -291,6 +291,7 @@ export type CodingTool =
 
 export type CollapsedSessionEvents = {
   __typename?: "CollapsedSessionEvents";
+  actionCount: Scalars["Int"]["output"];
   endEventId: Scalars["ID"]["output"];
   endTimestamp: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
@@ -3561,6 +3562,7 @@ export type CollapsedSessionEventsResolvers<
   ParentType extends ResolversParentTypes["CollapsedSessionEvents"] =
     ResolversParentTypes["CollapsedSessionEvents"],
 > = ResolversObject<{
+  actionCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   endEventId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   endTimestamp?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;

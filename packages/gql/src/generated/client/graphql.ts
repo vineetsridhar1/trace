@@ -290,6 +290,7 @@ export type CodingTool =
 
 export type CollapsedSessionEvents = {
   __typename?: "CollapsedSessionEvents";
+  actionCount: Scalars["Int"]["output"];
   endEventId: Scalars["ID"]["output"];
   endTimestamp: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
@@ -5021,6 +5022,7 @@ export type SessionTimelineQuery = {
         startTimestamp: string;
         endEventId: string;
         endTimestamp: string;
+        actionCount: number;
       } | null;
     }>;
   };
@@ -12193,6 +12195,7 @@ export const SessionTimelineDocument = {
                             { kind: "Field", name: { kind: "Name", value: "startTimestamp" } },
                             { kind: "Field", name: { kind: "Name", value: "endEventId" } },
                             { kind: "Field", name: { kind: "Name", value: "endTimestamp" } },
+                            { kind: "Field", name: { kind: "Name", value: "actionCount" } },
                           ],
                         },
                       },

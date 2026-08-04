@@ -288,6 +288,7 @@ export type CodingTool =
 
 export type CollapsedSessionEvents = {
   __typename?: "CollapsedSessionEvents";
+  actionCount: Scalars["Int"]["output"];
   endEventId: Scalars["ID"]["output"];
   endTimestamp: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];

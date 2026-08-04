@@ -1,6 +1,6 @@
 import type { Event } from "@trace/gql";
-import { asJsonObject } from "@trace/shared";
-import type { SessionNode } from "./groupReadGlob";
+import { asJsonObject, attachmentKeysFromPayload } from "@trace/shared";
+import type { SessionListNode } from "./SessionMessageList";
 
 export interface CompactChatSummary {
   userText: string | null;
@@ -8,15 +8,26 @@ export interface CompactChatSummary {
   actionCount: number;
 }
 
-function userText(event: Event | undefined): string | null {
+function userTurn(event: Event | undefined): { present: boolean; text: string | null } {
   const payload = asJsonObject(event?.payload);
-  if (event?.eventType === "message_sent" && typeof payload?.text === "string") {
-    return payload.text.trim() || null;
+  if (event?.eventType !== "message_sent" && event?.eventType !== "session_started") {
+    return { present: false, text: null };
   }
-  if (event?.eventType === "session_started" && typeof payload?.prompt === "string") {
-    return payload.prompt.trim() || null;
-  }
-  return null;
+
+  const rawText = event.eventType === "message_sent" ? payload?.text : payload?.prompt;
+  const text = typeof rawText === "string" ? rawText.trim() : "";
+  if (text) return { present: true, text };
+
+  const attachmentCount = attachmentKeysFromPayload(payload).length;
+  return {
+    present: true,
+    text:
+      attachmentCount === 0
+        ? null
+        : attachmentCount === 1
+          ? "Image prompt"
+          : `${attachmentCount} image prompt`,
+  };
 }
 
 function assistantContent(event: Event | undefined): { text: string | null; actions: number } {
@@ -40,7 +51,7 @@ function assistantContent(event: Event | undefined): { text: string | null; acti
 }
 
 export function buildCompactChatSummary(
-  nodes: SessionNode[],
+  nodes: SessionListNode[],
   events: Record<string, Event>,
 ): CompactChatSummary {
   const summary: CompactChatSummary = {
@@ -51,9 +62,9 @@ export function buildCompactChatSummary(
 
   for (const node of nodes) {
     if (node.kind === "event") {
-      const nextUserText = userText(events[node.id]);
-      if (nextUserText) {
-        summary.userText = nextUserText;
+      const nextUserTurn = userTurn(events[node.id]);
+      if (nextUserTurn.present) {
+        summary.userText = nextUserTurn.text;
         summary.assistantText = null;
         summary.actionCount = 0;
         continue;
@@ -67,6 +78,11 @@ export function buildCompactChatSummary(
 
     if (node.kind === "readglob-group") {
       summary.actionCount += node.items.length;
+    } else if (node.kind === "collapsed-events") {
+      summary.actionCount += node.collapsedRanges.reduce(
+        (count, range) => count + range.actionCount,
+        0,
+      );
     } else {
       summary.actionCount += 1;
     }

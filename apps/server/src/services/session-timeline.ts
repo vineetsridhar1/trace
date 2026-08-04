@@ -14,6 +14,7 @@ export interface CollapsedSessionEventRange {
   startTimestamp: Date;
   endEventId: string;
   endTimestamp: Date;
+  actionCount: number;
 }
 
 export type SessionTimelineServiceItem =
@@ -140,6 +141,12 @@ function hasThinkingBlock(payload: unknown): boolean {
       block.type === "question"
     );
   });
+}
+
+function actionBlockCount(payload: unknown): number {
+  return messageContentBlocks(payload).filter(
+    (block) => block.type === "tool_use" || block.type === "plan" || block.type === "question",
+  ).length;
 }
 
 function hasUserContent(event: Pick<PrismaEvent, "eventType" | "payload">): boolean {
@@ -344,11 +351,11 @@ async function fetchCompactCandidates(opts: SessionTimelineQueryOpts, limit: num
   return candidatesDesc.reverse();
 }
 
-function collapsedRangeIdsWithThinking(
+function collapsedRangeActionCounts(
   candidates: PrismaEvent[],
   endpoints: PrismaEvent[],
-): Set<string> {
-  const ranges = new Set<string>();
+): Map<string, number> {
+  const ranges = new Map<string, number>();
   if (endpoints.length < 2) return ranges;
 
   const endpointIds = new Set(endpoints.map((event) => event.id));
@@ -366,7 +373,8 @@ function collapsedRangeIdsWithThinking(
     if (endpointIds.has(candidate.id)) continue;
     if (!isThinkingCandidate(candidate)) continue;
 
-    ranges.add(collapsedRangeId(endpoints[gapIndex], endpoints[gapIndex + 1]));
+    const id = collapsedRangeId(endpoints[gapIndex], endpoints[gapIndex + 1]);
+    ranges.set(id, (ranges.get(id) ?? 0) + actionBlockCount(candidate.payload));
   }
 
   return ranges;
@@ -550,13 +558,14 @@ export class SessionTimelineService {
       : trailingBoundary
         ? [...pageEvents, trailingBoundary]
         : pageEvents;
-    const rangesWithThinking = collapsedRangeIdsWithThinking(candidates, rangeEndpoints);
+    const collapsedRangeCounts = collapsedRangeActionCounts(candidates, rangeEndpoints);
     const items: SessionTimelineServiceItem[] = [];
     let previous: PrismaEvent | null = null;
 
     const pushCollapsedRange = (rangeStart: PrismaEvent, rangeEnd: PrismaEvent) => {
       const id = collapsedRangeId(rangeStart, rangeEnd);
-      if (!rangesWithThinking.has(id)) return;
+      const actionCount = collapsedRangeCounts.get(id);
+      if (actionCount === undefined) return;
       items.push({
         id,
         kind: "collapsed_events",
@@ -567,6 +576,7 @@ export class SessionTimelineService {
           startTimestamp: rangeStart.timestamp,
           endEventId: rangeEnd.id,
           endTimestamp: rangeEnd.timestamp,
+          actionCount,
         },
       });
     };
