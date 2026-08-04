@@ -147,11 +147,43 @@ export interface UsageEvent {
 export interface ErrorEvent {
   type: "error";
   message: string;
+  failure?: ToolFailureClassification;
 }
 
 export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | UsageEvent | ErrorEvent;
 
 export type OutputCallback = (data: ToolOutput) => void;
+
+export type ToolFailureKind =
+  | "conversation_missing"
+  | "authentication_required"
+  | "permission_denied"
+  | "rate_limited"
+  | "quota_exceeded"
+  | "tool_missing"
+  | "context_too_large"
+  | "network_failure"
+  | "service_unavailable"
+  | "unknown";
+
+export interface ToolFailureEvidence {
+  provider: string;
+  operation: "run" | "resume";
+  source: "provider_event" | "stderr" | "process";
+  message: string;
+  providerCode?: string;
+  httpStatus?: number;
+  processCode?: string;
+  exitCode?: number;
+}
+
+export interface ToolFailureClassification {
+  kind: ToolFailureKind;
+  confidence: "exact" | "strong" | "unknown";
+  retryable: boolean;
+  matchedRule?: string;
+  evidence: ToolFailureEvidence;
+}
 
 const MISSING_TOOL_SESSION_PATTERNS = [
   /\bno\s+(conversation|session|thread|chat)\s+found\b/i,
@@ -162,8 +194,117 @@ const MISSING_TOOL_SESSION_PATTERNS = [
   /\bno\s+rollout\s+found\s+for\s+thread\s+id\b/i,
 ];
 
+const PROVIDER_CODE_KINDS: Readonly<Record<string, ToolFailureKind>> = {
+  conversation_not_found: "conversation_missing",
+  session_not_found: "conversation_missing",
+  thread_not_found: "conversation_missing",
+  unauthenticated: "authentication_required",
+  authentication_required: "authentication_required",
+  permission_denied: "permission_denied",
+  rate_limited: "rate_limited",
+  rate_limit_exceeded: "rate_limited",
+  quota_exceeded: "quota_exceeded",
+  context_length_exceeded: "context_too_large",
+};
+
+const PROCESS_CODE_KINDS: Readonly<Record<string, ToolFailureKind>> = {
+  enoent: "tool_missing",
+  econnrefused: "network_failure",
+  econnreset: "network_failure",
+  enetunreach: "network_failure",
+  etimedout: "network_failure",
+};
+
+const HTTP_STATUS_KINDS: Readonly<Record<number, ToolFailureKind>> = {
+  401: "authentication_required",
+  403: "permission_denied",
+  429: "rate_limited",
+};
+
+function retryableFailureKind(kind: ToolFailureKind): boolean {
+  return kind === "rate_limited" || kind === "network_failure" || kind === "service_unavailable";
+}
+
+function classifiedFailure(
+  evidence: ToolFailureEvidence,
+  kind: ToolFailureKind,
+  confidence: ToolFailureClassification["confidence"],
+  matchedRule?: string,
+): ToolFailureClassification {
+  return {
+    kind,
+    confidence,
+    retryable: retryableFailureKind(kind),
+    ...(matchedRule ? { matchedRule } : {}),
+    evidence,
+  };
+}
+
+export function classifyToolFailure(evidence: ToolFailureEvidence): ToolFailureClassification {
+  const providerCode = evidence.providerCode?.trim().toLowerCase();
+  const providerCodeKind = providerCode ? PROVIDER_CODE_KINDS[providerCode] : undefined;
+  if (providerCodeKind) {
+    return classifiedFailure(evidence, providerCodeKind, "exact", `provider_code.${providerCode}`);
+  }
+
+  const httpStatusKind =
+    evidence.httpStatus != null ? HTTP_STATUS_KINDS[evidence.httpStatus] : undefined;
+  if (httpStatusKind) {
+    return classifiedFailure(
+      evidence,
+      httpStatusKind,
+      "exact",
+      `http_status.${evidence.httpStatus}`,
+    );
+  }
+  if (evidence.httpStatus != null && evidence.httpStatus >= 500) {
+    return classifiedFailure(evidence, "service_unavailable", "exact", "http_status.5xx");
+  }
+
+  const processCode = evidence.processCode?.trim().toLowerCase();
+  const processCodeKind = processCode ? PROCESS_CODE_KINDS[processCode] : undefined;
+  if (processCodeKind) {
+    return classifiedFailure(evidence, processCodeKind, "exact", `process_code.${processCode}`);
+  }
+
+  if (
+    evidence.operation === "resume" &&
+    MISSING_TOOL_SESSION_PATTERNS.some((pattern) => pattern.test(evidence.message))
+  ) {
+    return classifiedFailure(
+      evidence,
+      "conversation_missing",
+      "strong",
+      `${evidence.provider}.resume.conversation_missing`,
+    );
+  }
+
+  return classifiedFailure(evidence, "unknown", "unknown");
+}
+
+export function isMeaningfulToolOutput(output: ToolOutput): boolean {
+  if (output.type === "assistant" || output.type === "user") {
+    return output.message.content.length > 0;
+  }
+  return output.type === "result" && output.subtype !== "error";
+}
+
+export function canAutoRecoverToolFailure(
+  failure: ToolFailureClassification,
+  hasMeaningfulOutput: boolean,
+): boolean {
+  return !hasMeaningfulOutput && failure.kind === "conversation_missing";
+}
+
 export function isMissingToolSessionError(message: string): boolean {
-  return MISSING_TOOL_SESSION_PATTERNS.some((pattern) => pattern.test(message));
+  return (
+    classifyToolFailure({
+      provider: "unknown",
+      operation: "resume",
+      source: "stderr",
+      message,
+    }).kind === "conversation_missing"
+  );
 }
 
 export interface RunOptions {

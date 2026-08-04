@@ -6,6 +6,9 @@ export type {
   AssistantEvent,
   ResultEvent,
   ErrorEvent,
+  ToolFailureKind,
+  ToolFailureEvidence,
+  ToolFailureClassification,
   MessageBlock,
   ContentBlock,
   ToolUseBlock,
@@ -27,6 +30,9 @@ export type { DesignSystemManifest, DesignSystemValidation } from "./design-syst
 export {
   hasPlanBlock,
   hasQuestionBlock,
+  classifyToolFailure,
+  canAutoRecoverToolFailure,
+  isMeaningfulToolOutput,
   isMissingToolSessionError,
   parseQuestion,
 } from "./adapters/coding-tool.js";

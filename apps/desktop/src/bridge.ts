@@ -33,7 +33,9 @@ import {
   cleanupTempAttachments,
   GIT_SHOW_ARGS,
   GIT_DIFF_TREE_ARGS,
-  isMissingToolSessionError,
+  classifyToolFailure,
+  canAutoRecoverToolFailure,
+  isMeaningfulToolOutput,
   parseGitShowOutput,
   inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
@@ -974,6 +976,7 @@ export class BridgeClient implements IBridgeClient {
 
     const priorPendingToolUseId = this.pendingInputToolUseIds.get(sessionId) ?? null;
     let hasForwardedOutput = false;
+    let hasMeaningfulOutput = false;
     let endedOnPending = false;
     let recoveringMissingToolSession = false;
 
@@ -1017,9 +1020,11 @@ export class BridgeClient implements IBridgeClient {
 
     // Capture adapter/run identity so callbacks from older runs are dropped.
     const activeAdapter = adapter;
-    const recoverMissingToolSession = (message: string) => {
-      if (!toolSessionId || hasForwardedOutput || recoveringMissingToolSession) return false;
-      if (!isMissingToolSessionError(message)) return false;
+    const recoverMissingToolSession = (
+      failure: NonNullable<Extract<ToolOutput, { type: "error" }>["failure"]>,
+    ) => {
+      if (!toolSessionId || recoveringMissingToolSession) return false;
+      if (!canAutoRecoverToolFailure(failure, hasMeaningfulOutput)) return false;
 
       recoveringMissingToolSession = true;
       this.finishRun(sessionId, runId);
@@ -1032,7 +1037,7 @@ export class BridgeClient implements IBridgeClient {
         type: "tool_session_missing",
         sessionId,
         toolSessionId,
-        message,
+        message: failure.evidence.message,
         interactionMode,
         checkpointContext,
         imageUrls,
@@ -1046,8 +1051,21 @@ export class BridgeClient implements IBridgeClient {
       onOutput: (output) => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
 
-        if (output.type === "error" && recoverMissingToolSession(output.message)) {
-          return;
+        const normalizedOutput: ToolOutput =
+          output.type === "error" && !output.failure
+            ? {
+                ...output,
+                failure: classifyToolFailure({
+                  provider: tool ?? "unknown",
+                  operation: toolSessionId ? "resume" : "run",
+                  source: "provider_event",
+                  message: output.message,
+                }),
+              }
+            : output;
+
+        if (normalizedOutput.type === "error" && normalizedOutput.failure) {
+          if (recoverMissingToolSession(normalizedOutput.failure)) return;
         }
 
         const maybeReportToolSessionId = () => {
@@ -1060,7 +1078,7 @@ export class BridgeClient implements IBridgeClient {
           }
         };
 
-        const pendingToolUseId = getPendingInputToolUseId(output);
+        const pendingToolUseId = getPendingInputToolUseId(normalizedOutput);
         const isReplayOfPriorPending =
           !hasForwardedOutput &&
           priorPendingToolUseId !== null &&
@@ -1072,10 +1090,11 @@ export class BridgeClient implements IBridgeClient {
         }
 
         hasForwardedOutput = true;
-        this.send({ type: "session_output", sessionId, data: output });
+        if (isMeaningfulToolOutput(normalizedOutput)) hasMeaningfulOutput = true;
+        this.send({ type: "session_output", sessionId, data: normalizedOutput });
 
         // Phase 1: collect tool_use blocks whose command is a git commit/push
-        const newPending = extractGitToolUsePending(output);
+        const newPending = extractGitToolUsePending(normalizedOutput);
         if (newPending.size > 0) {
           const sessionPending = this.pendingGitToolUses.get(sessionId) ?? new Map();
           for (const [id, val] of newPending) sessionPending.set(id, val);
@@ -1084,7 +1103,7 @@ export class BridgeClient implements IBridgeClient {
 
         // Phase 2: fire checkpoint when the matching tool_result arrives
         const sessionPending = this.pendingGitToolUses.get(sessionId) ?? new Map();
-        const gitTrigger = extractGitToolResultTrigger(output, sessionPending);
+        const gitTrigger = extractGitToolResultTrigger(normalizedOutput, sessionPending);
         if (gitTrigger) {
           if (gitTrigger.toolUseId) sessionPending.delete(gitTrigger.toolUseId);
           inspectGitCheckpoint(workdir, gitTrigger.trigger, gitTrigger.command)
@@ -1101,7 +1120,7 @@ export class BridgeClient implements IBridgeClient {
         }
         maybeReportToolSessionId();
 
-        if (isPendingInputOutput(output)) {
+        if (isPendingInputOutput(normalizedOutput)) {
           endedOnPending = true;
           if (pendingToolUseId) {
             this.pendingInputToolUseIds.set(sessionId, pendingToolUseId);

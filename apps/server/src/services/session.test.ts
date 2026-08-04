@@ -97,8 +97,10 @@ vi.mock("../lib/storage/index.js", () => ({
   },
 }));
 
-vi.mock("@trace/shared", () => {
+vi.mock("@trace/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@trace/shared")>();
   return {
+    ...actual,
     getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
     getDefaultReasoningEffort: vi.fn().mockReturnValue("auto"),
     isSupportedModel: vi.fn().mockReturnValue(true),
@@ -6149,7 +6151,14 @@ describe("SessionService", () => {
       expect(sendCommand).not.toHaveProperty("toolSessionId");
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          payload: expect.objectContaining({ type: "tool_session_recovered" }),
+          payload: expect.objectContaining({
+            type: "tool_session_recovered",
+            failure: expect.objectContaining({
+              kind: "conversation_missing",
+              confidence: "strong",
+              matchedRule: "claude_code.resume.conversation_missing",
+            }),
+          }),
         }),
       );
     });

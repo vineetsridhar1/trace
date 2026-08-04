@@ -13,6 +13,7 @@ import {
   getDefaultReasoningEffort,
   hasQuestionBlock,
   hasPlanBlock,
+  classifyToolFailure,
   isSupportedModel,
   isSupportedReasoningEffort,
   MAX_WORKSPACE_NAME_LENGTH,
@@ -7982,6 +7983,15 @@ export class SessionService {
     if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted))
       return;
 
+    const failureMessage = options.message ?? "Local tool session was unavailable";
+    const failure = classifyToolFailure({
+      provider: session.tool,
+      operation: "resume",
+      source: "provider_event",
+      message: failureMessage,
+      ...(!options.message ? { providerCode: "conversation_not_found" } : {}),
+    });
+
     const context = await buildConversationContext(sessionId);
     let prompt = buildToolSessionRecoveryPrompt(context);
     prompt = appendPromptInstructions(prompt, {
@@ -8057,7 +8067,8 @@ export class SessionService {
         payload: {
           type: "recovery_failed",
           reason: "tool_session_missing",
-          message: options.message ?? "Local tool session was unavailable",
+          message: failureMessage,
+          failure: eventJson(failure),
         },
         actorType: "system",
         actorId: "system",
@@ -8073,6 +8084,7 @@ export class SessionService {
       payload: {
         type: "tool_session_recovered",
         oldToolSessionId: options.toolSessionId,
+        failure: eventJson(failure),
       },
       actorType: "system",
       actorId: "system",
