@@ -2,7 +2,12 @@ import { useEffect, useMemo } from "react";
 import { AppWindow, Plus } from "lucide-react";
 import { gql } from "@urql/core";
 import type { Session, SessionGroup } from "@trace/gql";
-import { useEntityStore, type SessionEntity, type SessionGroupEntity } from "@trace/client-core";
+import {
+  mergeSessionGroupEntity,
+  useEntityStore,
+  type SessionEntity,
+  type SessionGroupEntity,
+} from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { cn } from "../../lib/utils";
 import { useCommandPaletteStore } from "../../stores/command-palette";
@@ -62,7 +67,13 @@ export function AppsSection({
           SessionGroup & { id: string; sessions?: Array<Session & { id: string }> }
         >;
         if (!groups?.length) return;
-        upsertMany("sessionGroups", groups as SessionGroupEntity[]);
+        const existingGroups = useEntityStore.getState().sessionGroups;
+        upsertMany(
+          "sessionGroups",
+          groups.map((group) =>
+            mergeSessionGroupEntity(existingGroups[group.id], group as SessionGroupEntity),
+          ),
+        );
         // Upsert member sessions so the sidebar's AI status indicator reflects
         // live agent status (the store links them to the group by sessionGroupId).
         const sessions = groups.flatMap((group) => group.sessions ?? []);

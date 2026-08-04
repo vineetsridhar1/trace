@@ -4,7 +4,7 @@ import { gql } from "@urql/core";
 import type { CellContextMenuEvent } from "ag-grid-community";
 import type { SessionGroup } from "@trace/gql";
 import { client } from "../../lib/urql";
-import { useEntityStore, type EntityState } from "@trace/client-core";
+import { mergeSessionGroupEntity, useEntityStore, type EntityState } from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { Button } from "../ui/button";
@@ -148,11 +148,12 @@ function TabTable({ channelId, tab, active }: { channelId: string; tab: Tab; act
     if (result.data?.sessionGroups) {
       const groups = result.data.sessionGroups as Array<SessionGroup & { id: string }>;
       const flattenedSessions = groups.flatMap((group) => group.sessions ?? []);
+      const existingGroups = useEntityStore.getState().sessionGroups;
 
       upsertMany(
         "sessionGroups",
         groups.map((group) => ({
-          ...group,
+          ...mergeSessionGroupEntity(existingGroups[group.id], group as SessionGroupEntity),
           _sortTimestamp:
             group.sessions?.[0]?.lastMessageAt ??
             group.sessions?.[0]?.lastUserMessageAt ??

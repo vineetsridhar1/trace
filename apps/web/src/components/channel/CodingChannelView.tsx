@@ -2,7 +2,13 @@ import { useEffect, useCallback, useState } from "react";
 import { GitBranch, Archive } from "lucide-react";
 import { gql } from "@urql/core";
 import type { SessionGroup } from "@trace/gql";
-import { useAuthStore, useEntityStore, useEntityField, type EntityState } from "@trace/client-core";
+import {
+  mergeSessionGroupEntity,
+  useAuthStore,
+  useEntityStore,
+  useEntityField,
+  type EntityState,
+} from "@trace/client-core";
 import type { SessionEntity, SessionGroupEntity } from "@trace/client-core";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { client } from "../../lib/urql";
@@ -119,11 +125,12 @@ export function CodingChannelView({ channelId }: { channelId: string }) {
     if (result.data?.sessionGroups) {
       const groups = result.data.sessionGroups as Array<SessionGroup & { id: string }>;
       const flattenedSessions = groups.flatMap((group) => group.sessions ?? []);
+      const existingGroups = useEntityStore.getState().sessionGroups;
 
       upsertMany(
         "sessionGroups",
         groups.map((group) => ({
-          ...group,
+          ...mergeSessionGroupEntity(existingGroups[group.id], group as SessionGroupEntity),
           // Cold-start approximation: seed sort order from the newest known
           // conversational message and only fall back to generic timestamps.
           _sortTimestamp:
