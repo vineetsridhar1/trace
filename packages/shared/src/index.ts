@@ -33,7 +33,6 @@ export {
   classifyToolFailure,
   canAutoRecoverToolFailure,
   isMeaningfulToolOutput,
-  isMissingToolSessionError,
   parseQuestion,
 } from "./adapters/coding-tool.js";
 export type {

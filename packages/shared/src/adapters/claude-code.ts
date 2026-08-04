@@ -9,7 +9,7 @@ import type {
   MessageBlock,
   TokenUsage,
 } from "./coding-tool.js";
-import { parseQuestion } from "./coding-tool.js";
+import { parseQuestion, toolFailureError } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 /** Types we drop entirely — not relevant to the frontend */
@@ -91,6 +91,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     if (this.claudeSessionId) {
       args.push("--resume", this.claudeSessionId);
     }
+    const operation: "run" | "resume" = this.claudeSessionId ? "resume" : "run";
 
     const processGeneration = ++this.processGeneration;
     const child = spawn("claude", args, {
@@ -125,7 +126,15 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       if (stderrEmitted) return;
       stderrEmitted = true;
       if (exitCode !== 0 && exitCode !== null && stderrChunks.length > 0) {
-        onOutput({ type: "error", message: stderrChunks.join("\n") });
+        onOutput(
+          toolFailureError({
+            provider: "claude_code",
+            operation,
+            source: "stderr",
+            message: stderrChunks.join("\n"),
+            exitCode,
+          }),
+        );
       }
     };
 
@@ -206,12 +215,20 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       exitFallbackTimer = setTimeout(finish, EXIT_CLOSE_GRACE_MS);
     });
 
-    child.on("error", (err: Error) => {
+    child.on("error", (err: Error & { code?: string }) => {
       if (finished) return;
       clearExitFallbackTimer();
       finished = true;
       if (!isCurrentProcess()) return;
-      onOutput({ type: "error", message: err.message });
+      onOutput(
+        toolFailureError({
+          provider: "claude_code",
+          operation,
+          source: "process",
+          message: err.message,
+          ...(err.code ? { processCode: err.code } : {}),
+        }),
+      );
       onComplete();
       this.process = null;
     });

@@ -6157,7 +6157,58 @@ describe("SessionService", () => {
               kind: "conversation_missing",
               confidence: "strong",
               matchedRule: "claude_code.resume.conversation_missing",
+              evidence: expect.objectContaining({ source: "bridge" }),
             }),
+          }),
+        }),
+      );
+    });
+
+    it("persists the bridge-provided failure classification verbatim", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "active",
+          workdir: "/tmp/worktree",
+          toolSessionId: "stale-tool-session",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-a",
+            runtimeLabel: "Laptop A",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
+        }),
+      );
+      prismaMock.event.findMany.mockResolvedValue([]);
+      prismaMock.event.findFirst.mockResolvedValueOnce(null);
+      sessionRouterMock.send.mockReturnValueOnce("delivered");
+
+      const bridgeFailure = {
+        kind: "conversation_missing" as const,
+        confidence: "strong" as const,
+        matchedRule: "claude_code.resume.conversation_missing",
+        evidence: {
+          provider: "claude_code",
+          operation: "resume" as const,
+          source: "stderr" as const,
+          message: "No conversation found with session ID stale-tool-session",
+          exitCode: 1,
+        },
+      };
+
+      await service.recoverMissingToolSession("session-1", {
+        toolSessionId: "stale-tool-session",
+        message: bridgeFailure.evidence.message,
+        failure: bridgeFailure,
+        interactionMode: "code",
+      });
+
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            type: "tool_session_recovered",
+            failure: bridgeFailure,
           }),
         }),
       );

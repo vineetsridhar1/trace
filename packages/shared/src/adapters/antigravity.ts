@@ -4,6 +4,7 @@ import { homedir } from "os";
 import { join } from "path";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
+import { toolFailureError } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
@@ -117,6 +118,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
     if (this.conversationId) {
       args.push("--conversation", this.conversationId);
     }
+    const operation: "run" | "resume" = this.conversationId ? "resume" : "run";
 
     const processGeneration = ++this.processGeneration;
     const child = spawn("agy", args, {
@@ -180,7 +182,15 @@ export class AntigravityAdapter implements CodingToolAdapter {
         onOutput({ type: "assistant", message: { content: [{ type: "text", text }] } });
       }
       if (isError && stderrChunks.length > 0) {
-        onOutput({ type: "error", message: stderrChunks.join("\n") });
+        onOutput(
+          toolFailureError({
+            provider: "antigravity",
+            operation,
+            source: "stderr",
+            message: stderrChunks.join("\n"),
+            ...(typeof code === "number" ? { exitCode: code } : {}),
+          }),
+        );
       }
       onOutput({
         type: "result",
@@ -199,12 +209,20 @@ export class AntigravityAdapter implements CodingToolAdapter {
       exitFallbackTimer = setTimeout(() => finish(code), EXIT_CLOSE_GRACE_MS);
     });
     child.on("close", finish);
-    child.on("error", (err: Error) => {
+    child.on("error", (err: Error & { code?: string }) => {
       if (finished) return;
       clearExitFallbackTimer();
       finished = true;
       if (!isCurrentProcess()) return;
-      onOutput({ type: "error", message: err.message });
+      onOutput(
+        toolFailureError({
+          provider: "antigravity",
+          operation,
+          source: "process",
+          message: err.message,
+          ...(err.code ? { processCode: err.code } : {}),
+        }),
+      );
       onComplete();
       this.process = null;
     });

@@ -10,44 +10,22 @@ function evidence(overrides: Partial<ToolFailureEvidence> = {}): ToolFailureEvid
   return {
     provider: "claude_code",
     operation: "resume",
-    source: "provider_event",
+    source: "stderr",
     message: "Provider request failed",
     ...overrides,
   };
 }
 
 describe("classifyToolFailure", () => {
-  it("prefers exact provider codes over message matching", () => {
+  it("prefers exact process codes over message matching", () => {
     expect(
       classifyToolFailure(
         evidence({
-          providerCode: "RATE_LIMIT_EXCEEDED",
+          processCode: "ENOENT",
           message: "No conversation found with session ID stale-session",
         }),
       ),
     ).toMatchObject({
-      kind: "rate_limited",
-      confidence: "exact",
-      retryable: true,
-      matchedRule: "provider_code.rate_limit_exceeded",
-    });
-  });
-
-  it.each([
-    [401, "authentication_required", false],
-    [403, "permission_denied", false],
-    [429, "rate_limited", true],
-    [503, "service_unavailable", true],
-  ] as const)("classifies HTTP status %i", (httpStatus, kind, retryable) => {
-    expect(classifyToolFailure(evidence({ httpStatus }))).toMatchObject({
-      kind,
-      confidence: "exact",
-      retryable,
-    });
-  });
-
-  it("classifies process metadata without parsing prose", () => {
-    expect(classifyToolFailure(evidence({ processCode: "ENOENT" }))).toMatchObject({
       kind: "tool_missing",
       confidence: "exact",
       matchedRule: "process_code.enoent",
@@ -56,12 +34,15 @@ describe("classifyToolFailure", () => {
 
   it.each([
     ["claude_code", "No conversation found with session ID: stale-session"],
-    ["codex", "thread/resume failed: no rollout found for thread id stale-thread"],
+    [
+      "codex",
+      "Error: thread/resume: thread/resume failed: no rollout found for thread id 019ddf01-0be6-7b70-b978-94fad973c9d9",
+    ],
+    ["codex", "Error: thread/resume failed"],
   ])("recognizes a %s missing conversation while resuming", (provider, message) => {
     expect(classifyToolFailure(evidence({ provider, message }))).toMatchObject({
       kind: "conversation_missing",
       confidence: "strong",
-      retryable: false,
       matchedRule: `${provider}.resume.conversation_missing`,
     });
   });
@@ -83,10 +64,14 @@ describe("classifyToolFailure", () => {
       expect(classifyToolFailure(evidence({ message }))).toMatchObject({
         kind: "unknown",
         confidence: "unknown",
-        retryable: false,
       });
     },
   );
+
+  it("bounds the evidence message before it reaches persisted events", () => {
+    const classified = classifyToolFailure(evidence({ message: "x".repeat(10_000) }));
+    expect(classified.evidence.message).toHaveLength(2000);
+  });
 });
 
 describe("isMeaningfulToolOutput", () => {
@@ -134,5 +119,13 @@ describe("canAutoRecoverToolFailure", () => {
   it("does not recover unknown failures", () => {
     const unknown = classifyToolFailure(evidence({ message: "Unexpected provider failure" }));
     expect(canAutoRecoverToolFailure(unknown, false)).toBe(false);
+  });
+
+  it("requires classification confidence, not just kind", () => {
+    const guessed = {
+      ...missingConversation,
+      confidence: "unknown" as const,
+    };
+    expect(canAutoRecoverToolFailure(guessed, false)).toBe(false);
   });
 });

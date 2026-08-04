@@ -19,6 +19,7 @@ import {
   MAX_WORKSPACE_NAME_LENGTH,
   type GitCheckpointBridgePayload,
   type GitCheckpointContext,
+  type ToolFailureClassification,
   type BridgeSessionGitSyncStatus,
   type BridgeWorkspaceWarning,
   type BridgeRepoWorktree,
@@ -7943,6 +7944,7 @@ export class SessionService {
     options: {
       toolSessionId: string;
       message?: string;
+      failure?: ToolFailureClassification;
       interactionMode?: string;
       checkpointContext?: GitCheckpointContext | null;
       imageUrls?: string[];
@@ -7984,13 +7986,16 @@ export class SessionService {
       return;
 
     const failureMessage = options.message ?? "Local tool session was unavailable";
-    const failure = classifyToolFailure({
-      provider: session.tool,
-      operation: "resume",
-      source: "provider_event",
-      message: failureMessage,
-      ...(!options.message ? { providerCode: "conversation_not_found" } : {}),
-    });
+    // Bridges send the adapter's classification along with the report; only
+    // classify here for older bridges that report a bare message.
+    const failure =
+      options.failure ??
+      classifyToolFailure({
+        provider: session.tool,
+        operation: "resume",
+        source: "bridge",
+        message: failureMessage,
+      });
 
     const context = await buildConversationContext(sessionId);
     let prompt = buildToolSessionRecoveryPrompt(context);

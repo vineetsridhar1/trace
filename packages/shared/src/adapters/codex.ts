@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
+import { toolFailureError } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
@@ -105,6 +106,7 @@ export class CodexAdapter implements CodingToolAdapter {
   private sawErrorEvent = false;
   private lastErrorMessage: string | null = null;
   private emittedIncrementalUsage = false;
+  private operation: "run" | "resume" = "run";
 
   run({
     prompt,
@@ -125,6 +127,7 @@ export class CodexAdapter implements CodingToolAdapter {
     if (toolSessionId && !this.threadId) {
       this.threadId = toolSessionId;
     }
+    this.operation = this.threadId ? "resume" : "run";
 
     const args = this.threadId
       ? ["exec", "resume", "--json", "--dangerously-bypass-approvals-and-sandbox"]
@@ -198,7 +201,15 @@ export class CodexAdapter implements CodingToolAdapter {
       const exitError = code !== 0 && code !== null;
       const isError = exitError || this.sawErrorEvent;
       if (exitError && stderrChunks.length > 0) {
-        onOutput({ type: "error", message: stderrChunks.join("\n") });
+        onOutput(
+          toolFailureError({
+            provider: "codex",
+            operation: this.operation,
+            source: "stderr",
+            message: stderrChunks.join("\n"),
+            exitCode: code,
+          }),
+        );
       }
       onOutput({ type: "result", subtype: isError ? "error" : "success" });
       onComplete();
@@ -213,12 +224,20 @@ export class CodexAdapter implements CodingToolAdapter {
 
     child.on("close", finish);
 
-    child.on("error", (err: Error) => {
+    child.on("error", (err: Error & { code?: string }) => {
       if (finished) return;
       clearExitFallbackTimer();
       finished = true;
       if (!isCurrentProcess()) return;
-      onOutput({ type: "error", message: err.message });
+      onOutput(
+        toolFailureError({
+          provider: "codex",
+          operation: this.operation,
+          source: "process",
+          message: err.message,
+          ...(err.code ? { processCode: err.code } : {}),
+        }),
+      );
       onComplete();
       this.process = null;
     });
@@ -250,7 +269,14 @@ export class CodexAdapter implements CodingToolAdapter {
     // as ErrorEvents so the UI renders the message instead of a bare "Run ended".
     if (eventType === "error") {
       const message = typeof data.message === "string" ? data.message : "Codex error";
-      onOutput({ type: "error", message });
+      onOutput(
+        toolFailureError({
+          provider: "codex",
+          operation: this.operation,
+          source: "provider_event",
+          message,
+        }),
+      );
       this.sawErrorEvent = true;
       this.lastErrorMessage = message;
       return;
@@ -260,7 +286,14 @@ export class CodexAdapter implements CodingToolAdapter {
       const error = data.error as Record<string, unknown> | undefined;
       const message = typeof error?.message === "string" ? error.message : "Turn failed";
       if (this.lastErrorMessage !== message) {
-        onOutput({ type: "error", message });
+        onOutput(
+          toolFailureError({
+            provider: "codex",
+            operation: this.operation,
+            source: "provider_event",
+            message,
+          }),
+        );
         this.lastErrorMessage = message;
       }
       this.sawErrorEvent = true;

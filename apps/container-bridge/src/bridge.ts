@@ -13,6 +13,7 @@ import type {
   GitCheckpointBridgePayload,
   GitCheckpointTrigger,
   ToolOutput,
+  ToolFailureClassification,
 } from "@trace/shared";
 import {
   extractGitToolUsePending,
@@ -31,7 +32,6 @@ import {
   cleanupTempAttachments,
   GIT_SHOW_ARGS,
   GIT_DIFF_TREE_ARGS,
-  classifyToolFailure,
   canAutoRecoverToolFailure,
   isMeaningfulToolOutput,
   parseGitShowOutput,
@@ -1148,9 +1148,7 @@ export class ContainerBridge implements IBridgeClient {
     };
 
     const activeAdapter = adapter;
-    const recoverMissingToolSession = (
-      failure: NonNullable<Extract<ToolOutput, { type: "error" }>["failure"]>,
-    ) => {
+    const recoverMissingToolSession = (failure: ToolFailureClassification) => {
       if (!toolSessionId || recoveringMissingToolSession) return false;
       if (!canAutoRecoverToolFailure(failure, hasMeaningfulOutput)) return false;
 
@@ -1166,6 +1164,7 @@ export class ContainerBridge implements IBridgeClient {
         sessionId,
         toolSessionId,
         message: failure.evidence.message,
+        failure,
         interactionMode,
         imageUrls,
       });
@@ -1178,21 +1177,8 @@ export class ContainerBridge implements IBridgeClient {
       onOutput: (output) => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
 
-        const normalizedOutput: ToolOutput =
-          output.type === "error" && !output.failure
-            ? {
-                ...output,
-                failure: classifyToolFailure({
-                  provider: tool ?? "unknown",
-                  operation: toolSessionId ? "resume" : "run",
-                  source: "provider_event",
-                  message: output.message,
-                }),
-              }
-            : output;
-
-        if (normalizedOutput.type === "error" && normalizedOutput.failure) {
-          if (recoverMissingToolSession(normalizedOutput.failure)) return;
+        if (output.type === "error" && output.failure) {
+          if (recoverMissingToolSession(output.failure)) return;
         }
 
         const maybeReportToolSessionId = () => {
@@ -1205,7 +1191,7 @@ export class ContainerBridge implements IBridgeClient {
           }
         };
 
-        const pendingToolUseId = getPendingInputToolUseId(normalizedOutput);
+        const pendingToolUseId = getPendingInputToolUseId(output);
         const isReplayOfPriorPending =
           !hasForwardedOutput &&
           priorPendingToolUseId !== null &&
@@ -1217,11 +1203,11 @@ export class ContainerBridge implements IBridgeClient {
         }
 
         hasForwardedOutput = true;
-        if (isMeaningfulToolOutput(normalizedOutput)) hasMeaningfulOutput = true;
-        this.send({ type: "session_output", sessionId, data: normalizedOutput });
+        if (isMeaningfulToolOutput(output)) hasMeaningfulOutput = true;
+        this.send({ type: "session_output", sessionId, data: output });
 
         // Phase 1: collect tool_use blocks whose command is a git commit/push
-        const newPending = extractGitToolUsePending(normalizedOutput);
+        const newPending = extractGitToolUsePending(output);
         if (newPending.size > 0) {
           const sessionPending = this.pendingGitToolUses.get(sessionId) ?? new Map();
           for (const [id, val] of newPending) sessionPending.set(id, val);
@@ -1230,7 +1216,7 @@ export class ContainerBridge implements IBridgeClient {
 
         // Phase 2: fire checkpoint when the matching tool_result arrives
         const sessionPending = this.pendingGitToolUses.get(sessionId) ?? new Map();
-        const gitTrigger = extractGitToolResultTrigger(normalizedOutput, sessionPending);
+        const gitTrigger = extractGitToolResultTrigger(output, sessionPending);
         if (gitTrigger) {
           if (gitTrigger.toolUseId) sessionPending.delete(gitTrigger.toolUseId);
           inspectGitCheckpoint(cwd, gitTrigger.trigger, gitTrigger.command)
@@ -1247,7 +1233,7 @@ export class ContainerBridge implements IBridgeClient {
         }
         maybeReportToolSessionId();
 
-        if (isPendingInputOutput(normalizedOutput)) {
+        if (isPendingInputOutput(output)) {
           endedOnPending = true;
           if (pendingToolUseId) {
             this.pendingInputToolUseIds.set(sessionId, pendingToolUseId);

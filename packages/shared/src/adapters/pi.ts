@@ -8,6 +8,7 @@ import type {
   ToolOutput,
   ToolResultBlock,
 } from "./coding-tool.js";
+import { toolFailureError } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
@@ -77,6 +78,7 @@ export class PiAdapter implements CodingToolAdapter {
   private lastErrorMessage: string | null = null;
   private lastUsage: TokenUsage | undefined;
   private emittedIncrementalUsage = false;
+  private operation: "run" | "resume" = "run";
 
   run({
     prompt,
@@ -97,6 +99,7 @@ export class PiAdapter implements CodingToolAdapter {
     if (toolSessionId && !this.sessionId) {
       this.sessionId = toolSessionId;
     }
+    this.operation = this.sessionId ? "resume" : "run";
 
     const args = ["--mode", "json"];
     if (this.sessionId) {
@@ -144,7 +147,15 @@ export class PiAdapter implements CodingToolAdapter {
         const exitError = code !== 0 && code !== null;
         const isError = exitError || this.sawErrorEvent;
         if (exitError && stderrChunks.length > 0) {
-          onOutput({ type: "error", message: stderrChunks.join("\n") });
+          onOutput(
+            toolFailureError({
+              provider: "pi",
+              operation: this.operation,
+              source: "stderr",
+              message: stderrChunks.join("\n"),
+              exitCode: code,
+            }),
+          );
         }
         onOutput({ type: "result", subtype: isError ? "error" : "success" });
       }
@@ -196,7 +207,15 @@ export class PiAdapter implements CodingToolAdapter {
         err.code === "ENOENT"
           ? "Pi is not installed or not on PATH. Install it with: npm install -g @earendil-works/pi-coding-agent"
           : err.message;
-      onOutput({ type: "error", message });
+      onOutput(
+        toolFailureError({
+          provider: "pi",
+          operation: this.operation,
+          source: "process",
+          message,
+          ...(err.code ? { processCode: err.code } : {}),
+        }),
+      );
       onComplete();
       this.process = null;
     });
@@ -297,7 +316,14 @@ export class PiAdapter implements CodingToolAdapter {
     this.sawErrorEvent = true;
     if (this.lastErrorMessage === message) return;
     this.lastErrorMessage = message;
-    onOutput({ type: "error", message });
+    onOutput(
+      toolFailureError({
+        provider: "pi",
+        operation: this.operation,
+        source: "provider_event",
+        message,
+      }),
+    );
   }
 
   private captureUsage(data: Record<string, unknown>): {
