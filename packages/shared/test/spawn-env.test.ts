@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import { buildChildProcessEnv } from "../src/adapters/spawn-env.js";
 
 describe("buildChildProcessEnv", () => {
-  it("drops oversized non-essential values", () => {
+  it("drops variables that were not explicitly exposed to the agent", () => {
     const env = buildChildProcessEnv({
       HOME: "/home/coder",
       PATH: "/usr/bin",
       OPENAI_API_KEY: "sk-test",
       HUGE_PAYLOAD: "x".repeat(20 * 1024),
+      DATABASE_URL: "postgres://server-secret",
+      TRACE_RUNTIME_TOKEN: "bridge-control-token",
     });
 
     expect(env.HOME).toBe("/home/coder");
@@ -17,45 +19,45 @@ describe("buildChildProcessEnv", () => {
     expect(env.PATH?.split(":")).toContain("/home/coder/.local/bin");
     expect(env.OPENAI_API_KEY).toBe("sk-test");
     expect(env.HUGE_PAYLOAD).toBeUndefined();
+    expect(env.DATABASE_URL).toBeUndefined();
+    expect(env.TRACE_RUNTIME_TOKEN).toBeUndefined();
   });
 
-  it("trims largest non-essential values until the environment is bounded", () => {
+  it("includes runtime-configured variables named by TRACE_AGENT_ENV_KEYS", () => {
     const env = buildChildProcessEnv({
       HOME: "/home/coder",
       PATH: "/usr/bin",
-      OPENAI_API_KEY: "sk-test",
-      KEEP_ME: "short",
-      LARGE_ONE: "a".repeat(15 * 1024),
-      LARGE_TWO: "b".repeat(15 * 1024),
-      LARGE_THREE: "c".repeat(15 * 1024),
-      LARGE_FOUR: "d".repeat(15 * 1024),
-      LARGE_FIVE: "e".repeat(15 * 1024),
+      TRACE_AGENT_ENV_KEYS: JSON.stringify(["DATABASE_URL", "CUSTOM_SETTING"]),
+      DATABASE_URL: "postgres://agent-db",
+      CUSTOM_SETTING: "enabled",
+      SERVER_ONLY_SECRET: "hidden",
     });
 
-    expect(env.HOME).toBe("/home/coder");
-    expect(env.PATH?.split(":")).toContain("/usr/bin");
-    expect(env.OPENAI_API_KEY).toBe("sk-test");
-    expect(env.KEEP_ME).toBe("short");
-    expect(Object.keys(env).some((key) => key.startsWith("LARGE_"))).toBe(true);
-    expect(Object.values(env).join("").length).toBeLessThan(64 * 1024);
+    expect(env.DATABASE_URL).toBe("postgres://agent-db");
+    expect(env.CUSTOM_SETTING).toBe("enabled");
+    expect(env.SERVER_ONLY_SECRET).toBeUndefined();
+    expect(env.TRACE_AGENT_ENV_KEYS).toBeUndefined();
   });
 
-  it("keeps tool credentials even before dropping larger non-essential values", () => {
-    const env = buildChildProcessEnv({
-      HOME: "/home/coder",
-      PATH: "/usr/bin",
-      OPENAI_API_KEY: "sk-test",
-      ANTHROPIC_API_KEY: "sk-ant-test",
-      TRACE_INVOCATION_TOKEN: "trace-token",
-      LARGE_ONE: "a".repeat(15 * 1024),
-      LARGE_TWO: "b".repeat(15 * 1024),
-      LARGE_THREE: "c".repeat(15 * 1024),
-      LARGE_FOUR: "d".repeat(15 * 1024),
-      LARGE_FIVE: "e".repeat(15 * 1024),
-    });
+  it("keeps tool credentials and invocation-scoped capabilities", () => {
+    const env = buildChildProcessEnv(
+      {
+        HOME: "/home/coder",
+        PATH: "/usr/bin",
+        OPENAI_API_KEY: "sk-test",
+        ANTHROPIC_API_KEY: "sk-ant-test",
+        TRACE_RUNTIME_TOKEN: "bridge-token",
+      },
+      {
+        TRACE_INVOCATION_TOKEN: "invocation-token",
+        TRACE_API_URL: "https://trace.example",
+      },
+    );
 
     expect(env.OPENAI_API_KEY).toBe("sk-test");
     expect(env.ANTHROPIC_API_KEY).toBe("sk-ant-test");
-    expect(env.TRACE_INVOCATION_TOKEN).toBe("trace-token");
+    expect(env.TRACE_INVOCATION_TOKEN).toBe("invocation-token");
+    expect(env.TRACE_API_URL).toBe("https://trace.example");
+    expect(env.TRACE_RUNTIME_TOKEN).toBeUndefined();
   });
 });

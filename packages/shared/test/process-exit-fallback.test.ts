@@ -6,6 +6,7 @@ import { AntigravityAdapter } from "../src/adapters/antigravity.js";
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code.js";
 import { CodexAdapter } from "../src/adapters/codex.js";
 import { PiAdapter } from "../src/adapters/pi.js";
+import { BoundedTextBuffer, superviseProcess } from "../src/adapters/process-control.js";
 
 class FakeChildProcess extends EventEmitter {
   stdin = new PassThrough();
@@ -25,14 +26,67 @@ vi.mock("child_process", () => ({
 }));
 
 describe("coding tool adapter process exit fallback", () => {
+  let processKill: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     vi.useFakeTimers();
+    processKill = vi.spyOn(process, "kill").mockReturnValue(true);
     spawnedChildren.length = 0;
     vi.mocked(spawn).mockClear();
   });
 
   afterEach(() => {
+    processKill.mockRestore();
     vi.useRealTimers();
+  });
+
+  it("times out a run and escalates process-tree termination", () => {
+    const adapter = new CodexAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "hang forever",
+      cwd: "/tmp",
+      timeoutMs: 1_000,
+      onOutput,
+      onComplete,
+    });
+
+    vi.advanceTimersByTime(1_000);
+    expect(onOutput).toHaveBeenCalledWith({ type: "error", message: "Codex run timed out." });
+    expect(processKill).toHaveBeenCalledWith(-12345, "SIGTERM");
+
+    vi.advanceTimersByTime(2_000);
+    expect(processKill).toHaveBeenCalledWith(-12345, "SIGKILL");
+
+    spawnedChildren[0].emit("close", null);
+    expect(onOutput).toHaveBeenLastCalledWith({ type: "result", subtype: "error" });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("bounds retained process output", () => {
+    const output = new BoundedTextBuffer(16);
+    output.append("1234567890");
+    output.append("abcdefghij");
+    output.append("ignored");
+
+    expect(output.toString()).toContain("1234567890\nabcde");
+    expect(output.toString()).toContain("[process output truncated by Trace]");
+    expect(output.toString()).not.toContain("ignored");
+  });
+
+  it("disarms the run timeout when termination is requested manually", () => {
+    const child = new FakeChildProcess();
+    const onTimeout = vi.fn();
+    const supervisor = superviseProcess(child, { timeoutMs: 1_000, onTimeout });
+
+    supervisor.terminate();
+    vi.advanceTimersByTime(1_000);
+
+    expect(onTimeout).not.toHaveBeenCalled();
+    expect(processKill).toHaveBeenCalledWith(-12345, "SIGTERM");
+    child.emit("close", null);
   });
 
   it("completes a Codex run when the process exits but stdio never closes", () => {

@@ -9,6 +9,12 @@ import type {
   ToolResultBlock,
 } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
+import {
+  resolveRunTimeoutMs,
+  superviseProcess,
+  BoundedTextBuffer,
+  type ProcessSupervisor,
+} from "./process-control.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
@@ -77,6 +83,7 @@ export class PiAdapter implements CodingToolAdapter {
   private lastErrorMessage: string | null = null;
   private lastUsage: TokenUsage | undefined;
   private emittedIncrementalUsage = false;
+  private processSupervisor: ProcessSupervisor | null = null;
 
   run({
     prompt,
@@ -87,6 +94,7 @@ export class PiAdapter implements CodingToolAdapter {
     reasoningEffort,
     toolSessionId,
     runtimeEnv,
+    timeoutMs,
   }: RunOptions) {
     this.resultEmitted = false;
     this.sawErrorEvent = false;
@@ -113,19 +121,28 @@ export class PiAdapter implements CodingToolAdapter {
     const child = spawn("pi", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
+      env: buildChildProcessEnv(process.env, runtimeEnv),
       detached: true,
     });
     child.stdin?.on("error", () => {});
     child.stdin?.end(prompt);
     this.process = child;
+    let timedOut = false;
+    this.processSupervisor = superviseProcess(child, {
+      timeoutMs: resolveRunTimeoutMs(timeoutMs),
+      onTimeout: () => {
+        timedOut = true;
+        this.sawErrorEvent = true;
+        onOutput({ type: "error", message: "Pi run timed out." });
+      },
+    });
 
     const isCurrentProcess = () =>
       this.processGeneration === processGeneration && this.process === child;
 
     let finished = false;
     let exitFallbackTimer: ReturnType<typeof setTimeout> | null = null;
-    const stderrChunks: string[] = [];
+    const stderrChunks = new BoundedTextBuffer();
 
     const clearExitFallbackTimer = () => {
       if (exitFallbackTimer) {
@@ -142,14 +159,16 @@ export class PiAdapter implements CodingToolAdapter {
 
       if (!this.resultEmitted) {
         const exitError = code !== 0 && code !== null;
-        const isError = exitError || this.sawErrorEvent;
+        const isError = timedOut || exitError || this.sawErrorEvent;
         if (exitError && stderrChunks.length > 0) {
-          onOutput({ type: "error", message: stderrChunks.join("\n") });
+          onOutput({ type: "error", message: stderrChunks.toString() });
         }
         onOutput({ type: "result", subtype: isError ? "error" : "success" });
       }
 
       onComplete();
+      this.processSupervisor?.clear();
+      this.processSupervisor = null;
       this.process = null;
     };
 
@@ -175,7 +194,7 @@ export class PiAdapter implements CodingToolAdapter {
       const rl = createInterface({ input: child.stderr });
       rl.on("line", (line) => {
         if (!isCurrentProcess()) return;
-        stderrChunks.push(line);
+        stderrChunks.append(line);
       });
     }
 
@@ -198,6 +217,8 @@ export class PiAdapter implements CodingToolAdapter {
           : err.message;
       onOutput({ type: "error", message });
       onComplete();
+      this.processSupervisor?.clear();
+      this.processSupervisor = null;
       this.process = null;
     });
   }
@@ -340,13 +361,8 @@ export class PiAdapter implements CodingToolAdapter {
   }
 
   abort() {
-    if (this.process) {
-      try {
-        process.kill(-this.process.pid!, "SIGTERM");
-      } catch {
-        /* already dead */
-      }
-      this.process = null;
-    }
+    this.processSupervisor?.terminate();
+    this.processSupervisor = null;
+    this.process = null;
   }
 }

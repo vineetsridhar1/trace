@@ -180,6 +180,8 @@ export interface RunOptions {
   toolSessionId?: string;
   /** Invocation-scoped Trace capabilities supplied by the runtime bridge. */
   runtimeEnv?: Record<string, string>;
+  /** Wall-clock limit for one run. Defaults to six hours. */
+  timeoutMs?: number;
 }
 
 /**

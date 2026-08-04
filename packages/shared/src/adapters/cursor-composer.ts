@@ -3,6 +3,12 @@ import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, MessageBlock } from "./coding-tool.js";
 import { resolveCursorComposerModel } from "../models.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
+import {
+  resolveRunTimeoutMs,
+  superviseProcess,
+  BoundedTextBuffer,
+  type ProcessSupervisor,
+} from "./process-control.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
@@ -46,6 +52,7 @@ export class CursorComposerAdapter implements CodingToolAdapter {
   private chatId: string | null = null;
   private resultEmitted = false;
   private processGeneration = 0;
+  private processSupervisor: ProcessSupervisor | null = null;
 
   run({
     prompt,
@@ -57,6 +64,7 @@ export class CursorComposerAdapter implements CodingToolAdapter {
     reasoningEffort,
     toolSessionId,
     runtimeEnv,
+    timeoutMs,
   }: RunOptions) {
     this.resultEmitted = false;
 
@@ -82,12 +90,20 @@ export class CursorComposerAdapter implements CodingToolAdapter {
     const child = spawn("cursor-agent", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
+      env: buildChildProcessEnv(process.env, runtimeEnv),
       detached: true,
     });
     child.stdin?.on("error", () => {});
     child.stdin?.end(prompt);
     this.process = child;
+    let timedOut = false;
+    this.processSupervisor = superviseProcess(child, {
+      timeoutMs: resolveRunTimeoutMs(timeoutMs),
+      onTimeout: () => {
+        timedOut = true;
+        onOutput({ type: "error", message: "Cursor Composer run timed out." });
+      },
+    });
 
     let exitCode: number | null = null;
     let rlClosed = false;
@@ -95,7 +111,7 @@ export class CursorComposerAdapter implements CodingToolAdapter {
     let finished = false;
     let stderrEmitted = false;
     let exitFallbackTimer: ReturnType<typeof setTimeout> | null = null;
-    const stderrChunks: string[] = [];
+    const stderrChunks = new BoundedTextBuffer();
 
     const isCurrentProcess = () =>
       this.processGeneration === processGeneration && this.process === child;
@@ -110,8 +126,8 @@ export class CursorComposerAdapter implements CodingToolAdapter {
     const emitStderrIfNeeded = () => {
       if (stderrEmitted) return;
       stderrEmitted = true;
-      if (exitCode !== 0 && exitCode !== null && stderrChunks.length > 0) {
-        onOutput({ type: "error", message: stderrChunks.join("\n") });
+      if ((timedOut || (exitCode !== 0 && exitCode !== null)) && stderrChunks.length > 0) {
+        onOutput({ type: "error", message: stderrChunks.toString() });
       }
     };
 
@@ -124,10 +140,12 @@ export class CursorComposerAdapter implements CodingToolAdapter {
       if (!this.resultEmitted) {
         onOutput({
           type: "result",
-          subtype: exitCode === 0 || exitCode === null ? "success" : "error",
+          subtype: !timedOut && (exitCode === 0 || exitCode === null) ? "success" : "error",
         });
       }
       onComplete();
+      this.processSupervisor?.clear();
+      this.processSupervisor = null;
       this.process = null;
     };
 
@@ -161,7 +179,7 @@ export class CursorComposerAdapter implements CodingToolAdapter {
       const rl = createInterface({ input: child.stderr });
       rl.on("line", (line) => {
         if (!isCurrentProcess()) return;
-        stderrChunks.push(line);
+        stderrChunks.append(line);
       });
     }
 
@@ -187,6 +205,8 @@ export class CursorComposerAdapter implements CodingToolAdapter {
       if (!isCurrentProcess()) return;
       onOutput({ type: "error", message: err.message });
       onComplete();
+      this.processSupervisor?.clear();
+      this.processSupervisor = null;
       this.process = null;
     });
   }
@@ -275,14 +295,8 @@ export class CursorComposerAdapter implements CodingToolAdapter {
   }
 
   abort() {
-    if (this.process) {
-      // Kill the entire process group (negative PID) since we spawn detached
-      try {
-        process.kill(-this.process.pid!, "SIGTERM");
-      } catch {
-        /* already dead */
-      }
-      this.process = null;
-    }
+    this.processSupervisor?.terminate();
+    this.processSupervisor = null;
+    this.process = null;
   }
 }

@@ -2,6 +2,12 @@ import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
+import {
+  resolveRunTimeoutMs,
+  superviseProcess,
+  BoundedTextBuffer,
+  type ProcessSupervisor,
+} from "./process-control.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
@@ -105,6 +111,7 @@ export class CodexAdapter implements CodingToolAdapter {
   private sawErrorEvent = false;
   private lastErrorMessage: string | null = null;
   private emittedIncrementalUsage = false;
+  private processSupervisor: ProcessSupervisor | null = null;
 
   run({
     prompt,
@@ -115,6 +122,7 @@ export class CodexAdapter implements CodingToolAdapter {
     reasoningEffort,
     toolSessionId,
     runtimeEnv,
+    timeoutMs,
   }: RunOptions) {
     this.cwd = cwd;
     this.lastTextContent = null;
@@ -144,12 +152,21 @@ export class CodexAdapter implements CodingToolAdapter {
     const child = spawn("codex", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
+      env: buildChildProcessEnv(process.env, runtimeEnv),
       detached: true,
     });
     child.stdin?.on("error", () => {});
     child.stdin?.end(prompt);
     this.process = child;
+    let timedOut = false;
+    this.processSupervisor = superviseProcess(child, {
+      timeoutMs: resolveRunTimeoutMs(timeoutMs),
+      onTimeout: () => {
+        timedOut = true;
+        this.sawErrorEvent = true;
+        onOutput({ type: "error", message: "Codex run timed out." });
+      },
+    });
 
     const isCurrentProcess = () =>
       this.processGeneration === processGeneration && this.process === child;
@@ -180,13 +197,13 @@ export class CodexAdapter implements CodingToolAdapter {
       });
     }
 
-    const stderrChunks: string[] = [];
+    const stderrChunks = new BoundedTextBuffer();
     if (child.stderr) {
       child.stderr.on("error", () => {});
       const rl = createInterface({ input: child.stderr });
       rl.on("line", (line) => {
         if (!isCurrentProcess()) return;
-        stderrChunks.push(line);
+        stderrChunks.append(line);
       });
     }
 
@@ -196,12 +213,14 @@ export class CodexAdapter implements CodingToolAdapter {
       finished = true;
       clearExitFallbackTimer();
       const exitError = code !== 0 && code !== null;
-      const isError = exitError || this.sawErrorEvent;
+      const isError = timedOut || exitError || this.sawErrorEvent;
       if (exitError && stderrChunks.length > 0) {
-        onOutput({ type: "error", message: stderrChunks.join("\n") });
+        onOutput({ type: "error", message: stderrChunks.toString() });
       }
       onOutput({ type: "result", subtype: isError ? "error" : "success" });
       onComplete();
+      this.processSupervisor?.clear();
+      this.processSupervisor = null;
       this.process = null;
     };
 
@@ -220,6 +239,8 @@ export class CodexAdapter implements CodingToolAdapter {
       if (!isCurrentProcess()) return;
       onOutput({ type: "error", message: err.message });
       onComplete();
+      this.processSupervisor?.clear();
+      this.processSupervisor = null;
       this.process = null;
     });
   }
@@ -336,14 +357,8 @@ export class CodexAdapter implements CodingToolAdapter {
   }
 
   abort() {
-    if (this.process) {
-      // Kill the entire process group (negative PID) since we spawn detached
-      try {
-        process.kill(-this.process.pid!, "SIGTERM");
-      } catch {
-        /* already dead */
-      }
-      this.process = null;
-    }
+    this.processSupervisor?.terminate();
+    this.processSupervisor = null;
+    this.process = null;
   }
 }

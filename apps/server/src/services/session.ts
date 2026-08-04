@@ -83,6 +83,7 @@ import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 import { gitStorage } from "../lib/git-storage/index.js";
 import { createAgentInvocationToken } from "../lib/agent-invocation-auth.js";
+import { sanitizeSessionOutput } from "../lib/session-output-safety.js";
 import { parseGitTreeArchive } from "../lib/design-system-archive.js";
 import { isGeneratedProjectKind } from "../lib/generated-project.js";
 import {
@@ -5791,6 +5792,7 @@ export class SessionService {
     // Extract and strip <trace-title> and <trace-branch> tags from assistant text before persisting
     const extractedTitle = this.extractAndStripTitle(data);
     const extractedBranch = this.extractAndStripBranch(data);
+    data = sanitizeSessionOutput(data);
     const pendingInfo = extractPendingInputInfo(data);
 
     const session = await prisma.session.findUnique({
