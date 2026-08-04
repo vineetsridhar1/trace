@@ -756,6 +756,7 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
       bootstrapEnv: {
         ...runtimeEnv,
         ...userApiTokenEnv,
+        TRACE_AGENT_ENV_KEYS: JSON.stringify(Object.keys(runtimeEnv)),
         TRACE_SESSION_ID: input.sessionId,
         TRACE_ORG_ID: input.organizationId,
         TRACE_SERVER_PUBLIC_URL: process.env.TRACE_SERVER_PUBLIC_URL?.trim() ?? "",

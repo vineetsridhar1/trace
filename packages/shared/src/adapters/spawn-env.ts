@@ -4,6 +4,8 @@ import { delimiter, join } from "path";
 const MAX_CHILD_ENV_BYTES = 64 * 1024;
 const MAX_CHILD_ENV_VALUE_BYTES = 16 * 1024;
 
+const EXPLICIT_AGENT_ENV_KEYS_VAR = "TRACE_AGENT_ENV_KEYS";
+
 /**
  * Bin directories that GUI-launched processes (e.g. the Electron bridge) often
  * miss from PATH even though an interactive shell has them. Coding-tool CLIs
@@ -60,7 +62,7 @@ export function resolveExecutable(
   return null;
 }
 
-const ESSENTIAL_ENV_KEYS = new Set([
+const AGENT_ENV_KEYS = new Set([
   "ANTHROPIC_API_KEY",
   "ANTHROPIC_AUTH_TOKEN",
   "ANTHROPIC_BASE_URL",
@@ -70,7 +72,18 @@ const ESSENTIAL_ENV_KEYS = new Set([
   "CODEX_AUTH_JSON",
   "CODEX_AUTH_METHOD",
   "CODEX_HOME",
+  "GEMINI_API_KEY",
+  "ANTIGRAVITY_API_KEY",
+  "GITHUB_TOKEN",
+  "GH_TOKEN",
+  "GIT_ASKPASS",
   "HOME",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "no_proxy",
   "LANG",
   "LC_ALL",
   "LOGNAME",
@@ -81,6 +94,11 @@ const ESSENTIAL_ENV_KEYS = new Set([
   "PATH",
   "PWD",
   "SHELL",
+  "SSH_ASKPASS",
+  "SSH_AUTH_SOCK",
+  "SSL_CERT_DIR",
+  "SSL_CERT_FILE",
+  "NODE_EXTRA_CA_CERTS",
   "TERM",
   "TMPDIR",
   "USER",
@@ -97,24 +115,48 @@ function envEntryBytes(key: string, value: string): number {
   return Buffer.byteLength(`${key}=${value}\0`, "utf8");
 }
 
-function isEssentialEnvKey(key: string): boolean {
-  return ESSENTIAL_ENV_KEYS.has(key) || key.startsWith("LC_") || key.startsWith("TRACE_");
+function parseExplicitAgentEnvKeys(source: NodeJS.ProcessEnv): Set<string> {
+  const raw = source[EXPLICIT_AGENT_ENV_KEYS_VAR];
+  if (!raw) return new Set();
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(
+      parsed.filter(
+        (key): key is string => typeof key === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(key),
+      ),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function isAgentEnvKey(key: string, explicitKeys: Set<string>): boolean {
+  return AGENT_ENV_KEYS.has(key) || key.startsWith("LC_") || explicitKeys.has(key);
+}
+
+function isRequiredAgentEnvKey(key: string, invocationKeys: Set<string>): boolean {
+  return AGENT_ENV_KEYS.has(key) || key.startsWith("LC_") || invocationKeys.has(key);
 }
 
 export function buildChildProcessEnv(
   source: NodeJS.ProcessEnv = process.env,
+  invocationEnv: Record<string, string> = {},
 ): Record<string, string> {
   // Ensure common CLI install dirs are on PATH so spawned tools resolve even
   // when the launching process (e.g. a GUI-launched Electron app) has a
   // narrower PATH than the user's interactive shell.
-  source = { ...source, PATH: augmentedPath(source) };
+  source = { ...source, PATH: augmentedPath(source), ...invocationEnv };
+  const explicitKeys = parseExplicitAgentEnvKeys(source);
+  const invocationKeys = new Set(Object.keys(invocationEnv));
   const entries: EnvEntry[] = [];
 
   for (const [key, value] of Object.entries(source)) {
     if (typeof value !== "string") continue;
+    if (!isAgentEnvKey(key, explicitKeys) && !invocationKeys.has(key)) continue;
 
     const bytes = envEntryBytes(key, value);
-    const essential = isEssentialEnvKey(key);
+    const essential = isRequiredAgentEnvKey(key, invocationKeys);
     if (!essential && bytes > MAX_CHILD_ENV_VALUE_BYTES) continue;
 
     entries.push({ key, value, bytes, essential });

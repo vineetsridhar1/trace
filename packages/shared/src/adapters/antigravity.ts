@@ -5,6 +5,12 @@ import { join } from "path";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
+import {
+  resolveRunTimeoutMs,
+  superviseProcess,
+  BoundedTextBuffer,
+  type ProcessSupervisor,
+} from "./process-control.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 /** Generous cap so long agent runs aren't cut short by agy's default 5m print timeout. */
@@ -100,8 +106,9 @@ export class AntigravityAdapter implements CodingToolAdapter {
   private conversationId: string | null = null;
   private processGeneration = 0;
   private lastUsage: TokenUsage | undefined;
+  private processSupervisor: ProcessSupervisor | null = null;
 
-  run({ prompt, cwd, onOutput, onComplete, toolSessionId, runtimeEnv }: RunOptions) {
+  run({ prompt, cwd, onOutput, onComplete, toolSessionId, runtimeEnv, timeoutMs }: RunOptions) {
     this.lastUsage = undefined;
 
     // Restore resume capability after a bridge restart.
@@ -122,16 +129,24 @@ export class AntigravityAdapter implements CodingToolAdapter {
     const child = spawn("agy", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
+      env: buildChildProcessEnv(process.env, runtimeEnv),
       detached: true,
     });
     this.process = child;
+    let timedOut = false;
+    this.processSupervisor = superviseProcess(child, {
+      timeoutMs: resolveRunTimeoutMs(timeoutMs),
+      onTimeout: () => {
+        timedOut = true;
+        onOutput({ type: "error", message: "Antigravity run timed out." });
+      },
+    });
 
     const isCurrentProcess = () =>
       this.processGeneration === processGeneration && this.process === child;
 
-    const stdoutChunks: string[] = [];
-    const stderrChunks: string[] = [];
+    const stdoutChunks = new BoundedTextBuffer();
+    const stderrChunks = new BoundedTextBuffer();
     let finished = false;
     let exitFallbackTimer: ReturnType<typeof setTimeout> | null = null;
     const clearExitFallbackTimer = () => {
@@ -150,7 +165,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
         if (!isCurrentProcess()) return;
         if (NOT_FOUND_WARNING.test(line.trim())) return;
         if (this.captureUsageLine(line)) return;
-        stdoutChunks.push(line);
+        stdoutChunks.append(line);
       });
     }
 
@@ -160,7 +175,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
       rl.on("line", (line) => {
         if (!isCurrentProcess()) return;
         if (this.captureUsageLine(line)) return;
-        stderrChunks.push(line);
+        stderrChunks.append(line);
       });
     }
 
@@ -174,13 +189,13 @@ export class AntigravityAdapter implements CodingToolAdapter {
       const captured = this.captureConversationId(before);
       if (captured) this.conversationId = captured;
 
-      const isError = code !== 0 && code !== null;
-      const text = stdoutChunks.join("\n").trim();
+      const isError = timedOut || (code !== 0 && code !== null);
+      const text = stdoutChunks.toString().trim();
       if (text) {
         onOutput({ type: "assistant", message: { content: [{ type: "text", text }] } });
       }
       if (isError && stderrChunks.length > 0) {
-        onOutput({ type: "error", message: stderrChunks.join("\n") });
+        onOutput({ type: "error", message: stderrChunks.toString() });
       }
       onOutput({
         type: "result",
@@ -188,6 +203,8 @@ export class AntigravityAdapter implements CodingToolAdapter {
         ...(this.lastUsage ? { usage: this.lastUsage } : {}),
       });
       onComplete();
+      this.processSupervisor?.clear();
+      this.processSupervisor = null;
       this.process = null;
     };
 
@@ -206,6 +223,8 @@ export class AntigravityAdapter implements CodingToolAdapter {
       if (!isCurrentProcess()) return;
       onOutput({ type: "error", message: err.message });
       onComplete();
+      this.processSupervisor?.clear();
+      this.processSupervisor = null;
       this.process = null;
     });
   }
@@ -273,14 +292,8 @@ export class AntigravityAdapter implements CodingToolAdapter {
   }
 
   abort() {
-    if (this.process) {
-      // Kill the entire process group (negative PID) since we spawn detached.
-      try {
-        process.kill(-this.process.pid!, "SIGTERM");
-      } catch {
-        /* already dead */
-      }
-      this.process = null;
-    }
+    this.processSupervisor?.terminate();
+    this.processSupervisor = null;
+    this.process = null;
   }
 }

@@ -11,6 +11,12 @@ import type {
 } from "./coding-tool.js";
 import { parseQuestion } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
+import {
+  resolveRunTimeoutMs,
+  superviseProcess,
+  BoundedTextBuffer,
+  type ProcessSupervisor,
+} from "./process-control.js";
 
 /** Types we drop entirely — not relevant to the frontend */
 const SKIP_TYPES = new Set(["system", "rate_limit_event", "stderr"]);
@@ -53,6 +59,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   private emittedIncrementalUsage = false;
   private lastPlanFilePath: string | null = null;
   private processGeneration = 0;
+  private processSupervisor: ProcessSupervisor | null = null;
 
   run({
     prompt,
@@ -64,6 +71,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     enableClaudeInChrome,
     toolSessionId,
     runtimeEnv,
+    timeoutMs,
   }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
@@ -96,12 +104,20 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     const child = spawn("claude", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
+      env: buildChildProcessEnv(process.env, runtimeEnv),
       detached: true,
     });
     child.stdin?.on("error", () => {});
     child.stdin?.end(prompt);
     this.process = child;
+    let timedOut = false;
+    this.processSupervisor = superviseProcess(child, {
+      timeoutMs: resolveRunTimeoutMs(timeoutMs),
+      onTimeout: () => {
+        timedOut = true;
+        onOutput({ type: "error", message: "Claude Code run timed out." });
+      },
+    });
 
     // Track process exit code so readline close handler can emit a fallback result
     let exitCode: number | null = null;
@@ -125,7 +141,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       if (stderrEmitted) return;
       stderrEmitted = true;
       if (exitCode !== 0 && exitCode !== null && stderrChunks.length > 0) {
-        onOutput({ type: "error", message: stderrChunks.join("\n") });
+        onOutput({ type: "error", message: stderrChunks.toString() });
       }
     };
 
@@ -138,10 +154,12 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       if (!this.resultEmitted) {
         onOutput({
           type: "result",
-          subtype: exitCode === 0 || exitCode === null ? "success" : "error",
+          subtype: !timedOut && (exitCode === 0 || exitCode === null) ? "success" : "error",
         });
       }
       onComplete();
+      this.processSupervisor?.clear();
+      this.processSupervisor = null;
       this.process = null;
     };
 
@@ -181,13 +199,13 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       rlClosed = true;
     }
 
-    const stderrChunks: string[] = [];
+    const stderrChunks = new BoundedTextBuffer();
     if (child.stderr) {
       child.stderr.on("error", () => {});
       const rl = createInterface({ input: child.stderr });
       rl.on("line", (line) => {
         if (!isCurrentProcess()) return;
-        stderrChunks.push(line);
+        stderrChunks.append(line);
       });
     }
 
@@ -213,6 +231,8 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       if (!isCurrentProcess()) return;
       onOutput({ type: "error", message: err.message });
       onComplete();
+      this.processSupervisor?.clear();
+      this.processSupervisor = null;
       this.process = null;
     });
   }
@@ -388,14 +408,8 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
   }
 
   abort() {
-    if (this.process) {
-      // Kill the entire process group (negative PID) since we spawn detached
-      try {
-        process.kill(-this.process.pid!, "SIGTERM");
-      } catch {
-        /* already dead */
-      }
-      this.process = null;
-    }
+    this.processSupervisor?.terminate();
+    this.processSupervisor = null;
+    this.process = null;
   }
 }
