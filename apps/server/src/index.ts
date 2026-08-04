@@ -50,6 +50,7 @@ import { buildAppleAppSiteAssociation } from "./lib/apple-app-site-association.j
 import { logAgentEnvironmentTelemetry } from "./lib/agent-environment-telemetry.js";
 import { endpointProxyService } from "./services/endpoint-proxy.js";
 import { sessionApplicationService } from "./services/session-applications.js";
+import { decodePathVariables } from "./lib/path-transport-encoding.js";
 import { seedCloudForAllOrgs } from "./services/cloud-bootstrap.js";
 import { managedGitService } from "./services/managed-git.js";
 import { designSystemService } from "./services/design-system.js";
@@ -217,6 +218,13 @@ async function main() {
   app.use(agentArtifactRouter);
 
   app.use(express.json());
+  app.use(
+    "/graphql",
+    (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+      decodePathVariables(req.body);
+      next();
+    },
+  );
   app.use(artifactContentRouter);
   app.post("/runtime/codex-auth", async (req: express.Request, res: express.Response) => {
     const token = readBearerToken(req);
