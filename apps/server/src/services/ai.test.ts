@@ -50,10 +50,10 @@ describe("AIService", () => {
       const adapter = makeAdapter();
       createLLMAdapterMock.mockReturnValueOnce(adapter);
 
-      const result = await aiService.getAdapter("user-1", "claude-sonnet-4-20250514");
+      const result = await aiService.getAdapter("user-1", "claude-sonnet-5");
 
       expect(result).toBe(adapter);
-      expect(providerForModelMock).toHaveBeenCalledWith("claude-sonnet-4-20250514");
+      expect(providerForModelMock).toHaveBeenCalledWith("claude-sonnet-5");
       expect(createLLMAdapterMock).toHaveBeenCalledWith({
         provider: "anthropic",
         apiKey: "sk-test-key",
@@ -68,8 +68,8 @@ describe("AIService", () => {
       const adapter = makeAdapter();
       createLLMAdapterMock.mockReturnValueOnce(adapter);
 
-      const first = await aiService.getAdapter("user-1", "claude-sonnet-4-20250514");
-      const second = await aiService.getAdapter("user-1", "claude-sonnet-4-20250514");
+      const first = await aiService.getAdapter("user-1", "claude-sonnet-5");
+      const second = await aiService.getAdapter("user-1", "claude-sonnet-5");
 
       expect(first).toBe(second);
       expect(createLLMAdapterMock).toHaveBeenCalledTimes(1);
@@ -83,8 +83,8 @@ describe("AIService", () => {
       const adapter2 = makeAdapter();
       createLLMAdapterMock.mockReturnValueOnce(adapter1).mockReturnValueOnce(adapter2);
 
-      const first = await aiService.getAdapter("user-1", "claude-sonnet-4-20250514");
-      const second = await aiService.getAdapter("user-2", "claude-sonnet-4-20250514");
+      const first = await aiService.getAdapter("user-1", "claude-sonnet-5");
+      const second = await aiService.getAdapter("user-2", "claude-sonnet-5");
 
       expect(first).toBe(adapter1);
       expect(second).toBe(adapter2);
@@ -100,7 +100,7 @@ describe("AIService", () => {
       const adapter2 = makeAdapter();
       createLLMAdapterMock.mockReturnValueOnce(adapter1).mockReturnValueOnce(adapter2);
 
-      const first = await aiService.getAdapter("user-1", "claude-sonnet-4-20250514");
+      const first = await aiService.getAdapter("user-1", "claude-sonnet-5");
       const second = await aiService.getAdapter("user-1", "gpt-4");
 
       expect(first).toBe(adapter1);
@@ -111,7 +111,7 @@ describe("AIService", () => {
       providerForModelMock.mockReturnValue("anthropic");
       apiTokenServiceMock.getDecryptedTokens.mockResolvedValueOnce({});
 
-      await expect(aiService.getAdapter("user-1", "claude-sonnet-4-20250514")).rejects.toThrow(
+      await expect(aiService.getAdapter("user-1", "claude-sonnet-5")).rejects.toThrow(
         "No anthropic API key configured",
       );
     });
@@ -123,7 +123,7 @@ describe("AIService", () => {
       for (let i = 0; i < 200; i++) {
         apiTokenServiceMock.getDecryptedTokens.mockResolvedValueOnce({ anthropic: `key-${i}` });
         createLLMAdapterMock.mockReturnValueOnce(makeAdapter());
-        await aiService.getAdapter(`user-${i}`, "claude-sonnet-4-20250514");
+        await aiService.getAdapter(`user-${i}`, "claude-sonnet-5");
       }
 
       expect(getCache().size).toBe(200);
@@ -131,7 +131,7 @@ describe("AIService", () => {
       // Add one more — should evict the oldest
       apiTokenServiceMock.getDecryptedTokens.mockResolvedValueOnce({ anthropic: "key-new" });
       createLLMAdapterMock.mockReturnValueOnce(makeAdapter());
-      await aiService.getAdapter("user-new", "claude-sonnet-4-20250514");
+      await aiService.getAdapter("user-new", "claude-sonnet-5");
 
       expect(getCache().size).toBe(200);
       // The oldest entry (user-0) should have been evicted
@@ -146,7 +146,7 @@ describe("AIService", () => {
       apiTokenServiceMock.getDecryptedTokens.mockResolvedValueOnce({ anthropic: "key" });
       createLLMAdapterMock.mockReturnValueOnce(makeAdapter());
 
-      await aiService.getAdapter("user-1", "claude-sonnet-4-20250514");
+      await aiService.getAdapter("user-1", "claude-sonnet-5");
       expect(getCache().has("user-1:anthropic")).toBe(true);
 
       aiService.invalidateAdapter("user-1", "anthropic" as any);
@@ -173,7 +173,7 @@ describe("AIService", () => {
       const result = await aiService.complete({
         organizationId: "org-1",
         userId: "user-1",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
         messages: [{ role: "user", content: "Hi" }],
         system: "You are helpful",
         maxTokens: 1024,
@@ -185,7 +185,7 @@ describe("AIService", () => {
         stopReason: "end_turn",
       });
       expect(adapter.complete).toHaveBeenCalledWith({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
         messages: [{ role: "user", content: "Hi" }],
         tools: undefined,
         system: "You are helpful",
@@ -205,7 +205,7 @@ describe("AIService", () => {
       await aiService.complete({
         organizationId: "org-1",
         userId: "user-1",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
         messages: [{ role: "user", content: "Weather?" }],
         tools: tools as any,
       });
@@ -235,7 +235,7 @@ describe("AIService", () => {
       for await (const event of aiService.stream({
         organizationId: "org-1",
         userId: "user-1",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
         messages: [{ role: "user", content: "Hi" }],
       })) {
         collected.push(event);
@@ -259,7 +259,7 @@ describe("AIService", () => {
       const result = await aiService.runToolLoop({
         organizationId: "org-1",
         userId: "user-1",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
         messages: [{ role: "user", content: "Do something" }],
         executeToolCall: vi.fn(),
       });
@@ -295,7 +295,7 @@ describe("AIService", () => {
       const result = await aiService.runToolLoop({
         organizationId: "org-1",
         userId: "user-1",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
         messages: [{ role: "user", content: "What's the weather?" }],
         tools: [{ name: "get_weather", description: "Get weather", inputSchema: {} }] as any,
         executeToolCall,
@@ -342,7 +342,7 @@ describe("AIService", () => {
       const result = await aiService.runToolLoop({
         organizationId: "org-1",
         userId: "user-1",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
         messages: [{ role: "user", content: "Do it" }],
         executeToolCall,
       });
@@ -378,7 +378,7 @@ describe("AIService", () => {
       await aiService.runToolLoop({
         organizationId: "org-1",
         userId: "user-1",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
         messages: [{ role: "user", content: "Do it" }],
         executeToolCall,
       });
@@ -427,7 +427,7 @@ describe("AIService", () => {
       const result = await aiService.runToolLoop({
         organizationId: "org-1",
         userId: "user-1",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
         messages: [{ role: "user", content: "Loop" }],
         tools: [{ name: "loop_tool", description: "Loops", inputSchema: {} }] as any,
         executeToolCall,
@@ -472,7 +472,7 @@ describe("AIService", () => {
       const result = await aiService.runToolLoop({
         organizationId: "org-1",
         userId: "user-1",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
         messages: [{ role: "user", content: "Do both" }],
         executeToolCall,
       });

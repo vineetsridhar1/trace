@@ -98,7 +98,7 @@ vi.mock("../lib/storage/index.js", () => ({
 vi.mock("@trace/shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@trace/shared")>();
   return {
-    getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
+    getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-5"),
     getDefaultReasoningEffort: vi.fn().mockReturnValue("auto"),
     isSupportedModel: vi.fn().mockReturnValue(true),
     isSupportedReasoningEffort: vi.fn().mockReturnValue(true),
@@ -249,7 +249,7 @@ function makeSession(overrides: Record<string, unknown> = {}) {
     agentStatus: "not_started",
     sessionStatus: "in_progress",
     tool: "claude_code",
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-5",
     reasoningEffort: "auto",
     hosting: "cloud",
     organizationId: "org-1",
@@ -1070,7 +1070,7 @@ describe("SessionService", () => {
         sessionGroup,
         tool: "codex",
         hosting: "local",
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-5",
       });
 
       prismaMock.user.findUnique.mockResolvedValueOnce({
@@ -4651,7 +4651,7 @@ describe("SessionService", () => {
           agentStatus: "done",
           sessionStatus: "in_progress",
           tool: "pi",
-          model: "openai-codex/gpt-5.5",
+          model: "openai/gpt-5.5",
           workdir: "/Users/laptop-a/worktree",
           connection: {
             state: "connected",
@@ -6455,7 +6455,7 @@ describe("SessionService", () => {
         .mockResolvedValueOnce({
           organizationId: "org-1",
           tool: "claude_code",
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-5",
           workdir: "/tmp/trace/worktree",
           toolSessionId: null,
           repoId: "repo-1",

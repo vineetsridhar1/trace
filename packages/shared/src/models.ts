@@ -18,10 +18,8 @@ export interface ReasoningEffortOption {
 const CLAUDE_CODE_MODELS: readonly ModelOption[] = [
   { value: "claude-fable-5", label: "Fable 5" },
   { value: "claude-sonnet-5", label: "Sonnet 5" },
-  { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
   { value: "claude-opus-5", label: "Opus 5" },
   { value: "claude-opus-5[1m]", label: "Opus 5 (1M)" },
-  { value: "claude-haiku-4-5", label: "Haiku 4.5" },
 ];
 
 const CODEX_MODELS: readonly ModelOption[] = [
@@ -31,19 +29,9 @@ const CODEX_MODELS: readonly ModelOption[] = [
   { value: "gpt-5.5", label: "GPT-5.5" },
 ];
 
-// The OpenAI API (`openai/`) does not expose the Codex `sol/terra/luna` variants
-// — its newest coding model is gpt-5.5 — so only the Codex-backed ChatGPT
-// subscription path (`openai-codex/`) carries the GPT-5.6 trio.
 const PI_MODELS: readonly ModelOption[] = [
   { value: "openai/gpt-5.5", label: "OpenAI GPT-5.5" },
   { value: "openai/gpt-5.4", label: "OpenAI GPT-5.4" },
-  { value: "openai-codex/gpt-5.6-sol", label: "Codex GPT-5.6 Sol (ChatGPT)" },
-  { value: "openai-codex/gpt-5.6-terra", label: "Codex GPT-5.6 Terra (ChatGPT)" },
-  { value: "openai-codex/gpt-5.6-luna", label: "Codex GPT-5.6 Luna (ChatGPT)" },
-  { value: "openai-codex/gpt-5.4", label: "Codex GPT-5.4 (ChatGPT)" },
-  { value: "anthropic/claude-sonnet-5", label: "Claude Sonnet 5" },
-  { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "anthropic/claude-fable-5", label: "Claude Fable 5" },
 ];
 
 const CURSOR_COMPOSER_MODELS: readonly ModelOption[] = [
@@ -69,7 +57,7 @@ const CURSOR_COMPOSER_REASONING_EFFORTS: readonly ReasoningEffortOption[] = [
 
 const CURSOR_GROK_4_5_REASONING_EFFORTS: readonly ReasoningEffortOption[] =
   CURSOR_COMPOSER_REASONING_EFFORTS.filter(
-    (option) => option.value === "medium" || option.value === "high" || option.value === "xhigh",
+    (option) => option.value === "low" || option.value === "medium" || option.value === "high",
   );
 
 /**
@@ -98,8 +86,8 @@ export function resolveCursorComposerModel(
     return `${model}-${level}`;
   }
   if (model === "grok-4.5") {
-    const grokLevel = level === "low" ? "medium" : level === "max" ? "xhigh" : level;
-    return `grok-4.5-${grokLevel}`;
+    const grokLevel = level === "xhigh" || level === "max" ? "high" : level;
+    return `cursor-grok-4.5-${grokLevel}`;
   }
   if (model === "opus-5") return `claude-opus-5-thinking-${level}`;
   if (model === "sonnet-5") return `claude-sonnet-5-thinking-${level}`;
@@ -112,18 +100,6 @@ const PI_MODEL_PROVIDER_GROUPS: readonly ModelProviderGroup[] = [
     label: "OpenAI API",
     description: "Uses an OpenAI API key",
     models: PI_MODELS.slice(0, 2),
-  },
-  {
-    value: "openai-codex",
-    label: "ChatGPT",
-    description: "Uses a ChatGPT Plus or Pro subscription",
-    models: PI_MODELS.slice(2, 6),
-  },
-  {
-    value: "anthropic",
-    label: "Claude",
-    description: "Uses a Claude subscription",
-    models: PI_MODELS.slice(6),
   },
 ];
 

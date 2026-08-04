@@ -11,7 +11,7 @@ describe("llm adapter selection", () => {
   });
 
   it("routes all other models to anthropic", () => {
-    expect(providerForModel("claude-sonnet-4-20250514")).toBe("anthropic");
+    expect(providerForModel("claude-sonnet-5")).toBe("anthropic");
   });
 
   it("creates an anthropic adapter", () => {

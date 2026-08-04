@@ -5,7 +5,7 @@ import { prisma } from "../lib/db.js";
 import { aiService } from "./ai.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 
-const DEFAULT_MODEL = "claude-sonnet-4-6";
+const DEFAULT_MODEL = "claude-sonnet-5";
 
 export class AiTurnService {
   /**
