@@ -211,7 +211,10 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
             showIntro ? "pt-16 sm:pt-[68px]" : "pt-8 sm:pt-11"
           }`}
         >
-          <h1 className="text-center text-[22px] font-semibold tracking-[-0.01em] text-[var(--th-heading)] sm:text-2xl">
+          {isCreateMode ? <HomeCreationsGrid /> : null}
+          <h1
+            className={`${isCreateMode ? "mt-10" : ""} text-center text-[22px] font-semibold tracking-[-0.01em] text-[var(--th-heading)] sm:text-2xl`}
+          >
             What are you making?
           </h1>
           {showIntro && (
@@ -294,8 +297,6 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
           ) : !isCreateMode ? (
             <HomeWorkLedger items={work.items} />
           ) : null}
-
-          {isCreateMode ? <HomeCreationsGrid /> : null}
 
           <p className="mt-auto pt-8 text-center text-[11px] text-[var(--th-faint)]">
             <span className="hidden sm:inline">⌘N New session · </span>⌘K Search · ⌘J Latest session
