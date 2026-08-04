@@ -62,6 +62,7 @@ const SESSION_TIMELINE_QUERY = gql`
           startTimestamp
           endEventId
           endTimestamp
+          actionCount
         }
       }
     }
@@ -167,6 +168,7 @@ export interface CollapsedSessionEventsSummary {
   startTimestamp: string;
   endEventId: string;
   endTimestamp: string;
+  actionCount: number;
 }
 
 interface EventCursor {
@@ -200,7 +202,8 @@ function asCollapsedSummary(value: unknown): CollapsedSessionEventsSummary | nul
     typeof record.startEventId !== "string" ||
     typeof record.startTimestamp !== "string" ||
     typeof record.endEventId !== "string" ||
-    typeof record.endTimestamp !== "string"
+    typeof record.endTimestamp !== "string" ||
+    typeof record.actionCount !== "number"
   ) {
     return null;
   }
@@ -211,6 +214,7 @@ function asCollapsedSummary(value: unknown): CollapsedSessionEventsSummary | nul
     startTimestamp: record.startTimestamp,
     endEventId: record.endEventId,
     endTimestamp: record.endTimestamp,
+    actionCount: record.actionCount,
   };
 }
 

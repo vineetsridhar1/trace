@@ -49,6 +49,8 @@ import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-ac
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
 import { cn } from "../../lib/utils";
 import { findLatestTimelineInputRequest } from "./visualPlanReview";
+import { CondensedSessionMessages } from "./CondensedSessionMessages";
+import { buildCompactChatSummary } from "./compact-chat-summary";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -256,6 +258,7 @@ export function SessionDetailView({
   onScrollComplete,
   onForkSession,
   canForkSession = false,
+  condensed = false,
 }: {
   key?: React.Key;
   sessionId: string;
@@ -265,6 +268,7 @@ export function SessionDetailView({
   onScrollComplete?: () => void;
   onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
+  condensed?: boolean;
 }) {
   const isOptimistic = useEntityField("sessions", sessionId, "_optimistic") as boolean | undefined;
   const {
@@ -522,6 +526,10 @@ export function SessionDetailView({
 
     return compactNodes;
   }, [events, nodes, timelineItems, timelineMode]);
+  const compactSummary = useMemo(
+    () => buildCompactChatSummary(listNodes, events),
+    [events, listNodes],
+  );
   const messageActionsEventIds = useMemo(
     () => findMessageActionsEventIds(eventIds, events),
     [eventIds, events],
@@ -694,6 +702,12 @@ export function SessionDetailView({
                 <div className="flex h-full items-center justify-center">
                   <p className="text-sm text-destructive">Failed to load events</p>
                 </div>
+              ) : condensed ? (
+                <CondensedSessionMessages
+                  summary={compactSummary}
+                  active={agentStatus === "active"}
+                  bottomPadding={bottomBarHeight}
+                />
               ) : (
                 <SessionMessageList
                   key={sessionId}
@@ -825,14 +839,17 @@ export function SessionDetailView({
               </div>
             ) : (
               <>
-                {agentStatus === "active" && latestTodos && <StickyTodoList todos={latestTodos} />}
-                <QueuedMessagesList sessionId={sessionId} />
+                {!condensed && agentStatus === "active" && latestTodos && (
+                  <StickyTodoList todos={latestTodos} />
+                )}
+                <QueuedMessagesList sessionId={sessionId} condensed={condensed} />
                 <SessionInput
                   sessionId={sessionId}
                   onStop={handleStop}
                   bridgeAccess={bridgeAccess}
                   sessionGroupId={sessionGroupId ?? null}
                   onAccessRequested={refreshBridgeAccess}
+                  condensed={condensed}
                 />
               </>
             )}

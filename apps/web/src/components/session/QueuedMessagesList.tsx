@@ -23,6 +23,7 @@ import {
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { toast } from "sonner";
+import { cn } from "../../lib/utils";
 import { stripPromptWrapping, wrapPrompt, type InteractionMode } from "./interactionModes";
 
 function QueuedMessageItem({ id }: { id: string }) {
@@ -222,7 +223,13 @@ function patchQueuedMessagePositions(ids: string[]) {
   };
 }
 
-export function QueuedMessagesList({ sessionId }: { sessionId: string }) {
+export function QueuedMessagesList({
+  sessionId,
+  condensed = false,
+}: {
+  sessionId: string;
+  condensed?: boolean;
+}) {
   const ids = useQueuedMessageIdsForSession(sessionId);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const reorderRequestIdRef = useRef(0);
@@ -272,8 +279,8 @@ export function QueuedMessagesList({ sessionId }: { sessionId: string }) {
   if (ids.length === 0) return null;
 
   return (
-    <div className="bg-background px-4 pb-2">
-      <div className="mx-auto flex w-[90%] flex-col gap-1">
+    <div className={cn("bg-background pb-2", condensed ? "max-h-40 overflow-y-auto px-3" : "px-4")}>
+      <div className={cn("mx-auto flex flex-col gap-1", condensed ? "w-full" : "w-[90%]")}>
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Queued ({ids.length})</span>
           {ids.length > 1 && (

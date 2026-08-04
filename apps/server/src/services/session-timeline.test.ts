@@ -139,6 +139,7 @@ describe("SessionTimelineService", () => {
       startTimestamp: userEvent.timestamp,
       endEventId: finalEvent.id,
       endTimestamp: finalEvent.timestamp,
+      actionCount: 2,
     });
     expect(page.items[2].event?.id).toBe("assistant-final");
     expect(page.items[3].event?.id).toBe("result");
@@ -208,6 +209,7 @@ describe("SessionTimelineService", () => {
       startTimestamp: userEvent.timestamp,
       endEventId: finalEvent.id,
       endTimestamp: finalEvent.timestamp,
+      actionCount: 1,
     });
     expect(prismaMock.event.findMany).toHaveBeenCalledTimes(1);
   });
@@ -387,6 +389,7 @@ describe("SessionTimelineService", () => {
       startTimestamp: assistantText.timestamp,
       endEventId: manualStop.id,
       endTimestamp: manualStop.timestamp,
+      actionCount: 1,
     });
   });
 
@@ -633,6 +636,7 @@ describe("SessionTimelineService", () => {
       startTimestamp: user2.timestamp,
       endEventId: assistant2.id,
       endTimestamp: assistant2.timestamp,
+      actionCount: 1,
     });
     expect(page.items[3].collapsed?.endTimestamp).toEqual(user3.timestamp);
   });
@@ -927,6 +931,7 @@ describe("SessionTimelineService", () => {
       startTimestamp: timestamp,
       endEventId: finalEvent.id,
       endTimestamp: timestamp,
+      actionCount: 1,
     });
   });
 });

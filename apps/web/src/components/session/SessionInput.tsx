@@ -55,12 +55,14 @@ export function SessionInput({
   bridgeAccess,
   sessionGroupId,
   onAccessRequested,
+  condensed = false,
 }: {
   sessionId: string;
   onStop: () => void;
   bridgeAccess: BridgeRuntimeAccessInfo | null;
   sessionGroupId?: string | null;
   onAccessRequested?: () => void | Promise<void>;
+  condensed?: boolean;
 }) {
   const agentStatus = useEntityField("sessions", sessionId, "agentStatus") as string | undefined;
   const model = useEntityField("sessions", sessionId, "model") as string | undefined;
@@ -453,13 +455,17 @@ export function SessionInput({
           : "Send a message...";
 
   return (
-    <div className="shrink-0 bg-background px-4 pb-8">
+    <div
+      className={
+        condensed ? "shrink-0 bg-background px-3 pb-3" : "shrink-0 bg-background px-4 pb-8"
+      }
+    >
       <DesignPickerDialog
         sessionId={sessionId}
         open={showDesignPicker}
         onOpenChange={setShowDesignPicker}
       />
-      <div className="relative mx-auto w-[90%]">
+      <div className={condensed ? "relative mx-auto w-full" : "relative mx-auto w-[90%]"}>
         {preparing && (
           <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
             <TraceLoader size={12} showLabel={false} className="shrink-0" />
@@ -467,7 +473,7 @@ export function SessionInput({
           </div>
         )}
         <AnimatePresence initial={false}>
-          {isActive && (
+          {isActive && !condensed && (
             <AiLoadingIndicator
               key="ai-loading-indicator"
               model={displayModel}

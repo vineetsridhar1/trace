@@ -45,7 +45,7 @@ interface GroupHeaderProps {
   showSidebar: boolean;
   showApplicationsSidebar: boolean;
   canShowApplications: boolean;
-  compactAppMode?: boolean;
+  compactCanvasMode?: boolean;
   onToggleFullscreen: () => void;
   onToggleSidebar: () => void;
   onToggleApplicationsSidebar: () => void;
@@ -77,7 +77,7 @@ export function GroupHeader({
   showSidebar,
   showApplicationsSidebar,
   canShowApplications,
-  compactAppMode = false,
+  compactCanvasMode = false,
   onToggleFullscreen,
   onToggleSidebar,
   onToggleApplicationsSidebar,
@@ -159,7 +159,7 @@ export function GroupHeader({
         </ActionTooltip>
       )}
 
-      {!compactAppMode ? (
+      {!compactCanvasMode ? (
         <SessionMoveButton
           sessionId={selectedSessionId}
           disabled={!canMoveSession}
@@ -167,7 +167,7 @@ export function GroupHeader({
         />
       ) : null}
 
-      {!compactAppMode ? (
+      {!compactCanvasMode ? (
         <>
           <ActionTooltip label="Artifacts">
             <button
@@ -214,7 +214,7 @@ export function GroupHeader({
         </ActionTooltip>
       ) : null}
 
-      {!compactAppMode ? (
+      {!compactCanvasMode ? (
         <ActionTooltip label={showSidebar ? "Hide sidebar" : "Show sidebar"}>
           <button
             onClick={onToggleSidebar}
