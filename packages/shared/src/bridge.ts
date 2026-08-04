@@ -4,6 +4,7 @@
  */
 
 import type { GitCheckpointBridgePayload, GitCheckpointContext } from "./git-checkpoint.js";
+import type { ToolFailureClassification } from "./adapters/coding-tool.js";
 
 // --- Server → Bridge commands ---
 
@@ -597,6 +598,8 @@ export interface BridgeToolSessionMissing {
   sessionId: string;
   toolSessionId: string;
   message?: string;
+  /** Adapter-classified failure that triggered the recovery request. */
+  failure?: ToolFailureClassification;
   interactionMode?: string;
   checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];

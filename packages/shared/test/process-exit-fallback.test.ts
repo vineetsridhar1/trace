@@ -788,10 +788,16 @@ describe("coding tool adapter process exit fallback", () => {
     );
     spawnedChildren[0].stdout.write(`${JSON.stringify({ type: "agent_end" })}\n`);
 
-    expect(onOutput).toHaveBeenCalledWith({
-      type: "error",
-      message: "Model is not available",
-    });
+    expect(onOutput).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "error",
+        message: "Model is not available",
+        failure: expect.objectContaining({
+          kind: "unknown",
+          evidence: expect.objectContaining({ provider: "pi", source: "provider_event" }),
+        }),
+      }),
+    );
     expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "error" });
   });
 });

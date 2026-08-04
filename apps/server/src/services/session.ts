@@ -13,11 +13,13 @@ import {
   getDefaultReasoningEffort,
   hasQuestionBlock,
   hasPlanBlock,
+  classifyToolFailure,
   isSupportedModel,
   isSupportedReasoningEffort,
   MAX_WORKSPACE_NAME_LENGTH,
   type GitCheckpointBridgePayload,
   type GitCheckpointContext,
+  type ToolFailureClassification,
   type BridgeSessionGitSyncStatus,
   type BridgeWorkspaceWarning,
   type BridgeRepoWorktree,
@@ -7942,6 +7944,7 @@ export class SessionService {
     options: {
       toolSessionId: string;
       message?: string;
+      failure?: ToolFailureClassification;
       interactionMode?: string;
       checkpointContext?: GitCheckpointContext | null;
       imageUrls?: string[];
@@ -7981,6 +7984,18 @@ export class SessionService {
     if (session.toolSessionId !== options.toolSessionId) return;
     if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted))
       return;
+
+    const failureMessage = options.message ?? "Local tool session was unavailable";
+    // Bridges send the adapter's classification along with the report; only
+    // classify here for older bridges that report a bare message.
+    const failure =
+      options.failure ??
+      classifyToolFailure({
+        provider: session.tool,
+        operation: "resume",
+        source: "bridge",
+        message: failureMessage,
+      });
 
     const context = await buildConversationContext(sessionId);
     let prompt = buildToolSessionRecoveryPrompt(context);
@@ -8057,7 +8072,8 @@ export class SessionService {
         payload: {
           type: "recovery_failed",
           reason: "tool_session_missing",
-          message: options.message ?? "Local tool session was unavailable",
+          message: failureMessage,
+          failure: eventJson(failure),
         },
         actorType: "system",
         actorId: "system",
@@ -8073,6 +8089,7 @@ export class SessionService {
       payload: {
         type: "tool_session_recovered",
         oldToolSessionId: options.toolSessionId,
+        failure: eventJson(failure),
       },
       actorType: "system",
       actorId: "system",

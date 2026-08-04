@@ -10,6 +10,7 @@ import {
   type BridgeRepoWorktree,
   type BridgeRuntimeLeaseCommand,
   type GitCheckpointContext,
+  type ToolFailureClassification,
 } from "@trace/shared";
 import { runtimeRouterKey, sessionRouter } from "./session-router.js";
 import { sessionService } from "../services/session.js";
@@ -1126,6 +1127,10 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
           await sessionService.recoverMissingToolSession(sessionId, {
             toolSessionId,
             message: typeof msg.message === "string" ? msg.message : undefined,
+            failure:
+              msg.failure && typeof msg.failure === "object" && !Array.isArray(msg.failure)
+                ? (msg.failure as ToolFailureClassification)
+                : undefined,
             interactionMode:
               typeof msg.interactionMode === "string" ? msg.interactionMode : undefined,
             checkpointContext:

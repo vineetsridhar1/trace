@@ -147,11 +147,40 @@ export interface UsageEvent {
 export interface ErrorEvent {
   type: "error";
   message: string;
+  failure?: ToolFailureClassification;
 }
 
 export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | UsageEvent | ErrorEvent;
 
 export type OutputCallback = (data: ToolOutput) => void;
+
+/**
+ * Failure kinds are deliberately limited to what adapters can actually
+ * evidence today. Add a kind only together with the rule that produces it
+ * and the policy that consumes it.
+ */
+export type ToolFailureKind = "conversation_missing" | "tool_missing" | "unknown";
+
+export interface ToolFailureEvidence {
+  provider: string;
+  operation: "run" | "resume";
+  /**
+   * Where the message came from: a structured event on the tool's output
+   * stream, the tool's stderr, a process-level spawn/exit error, or a bridge
+   * report that arrived without adapter-level classification.
+   */
+  source: "provider_event" | "stderr" | "process" | "bridge";
+  message: string;
+  processCode?: string;
+  exitCode?: number;
+}
+
+export interface ToolFailureClassification {
+  kind: ToolFailureKind;
+  confidence: "exact" | "strong" | "unknown";
+  matchedRule?: string;
+  evidence: ToolFailureEvidence;
+}
 
 const MISSING_TOOL_SESSION_PATTERNS = [
   /\bno\s+(conversation|session|thread|chat)\s+found\b/i,
@@ -162,8 +191,76 @@ const MISSING_TOOL_SESSION_PATTERNS = [
   /\bno\s+rollout\s+found\s+for\s+thread\s+id\b/i,
 ];
 
-export function isMissingToolSessionError(message: string): boolean {
-  return MISSING_TOOL_SESSION_PATTERNS.some((pattern) => pattern.test(message));
+const PROCESS_CODE_KINDS: Readonly<Record<string, ToolFailureKind>> = {
+  enoent: "tool_missing",
+};
+
+/** Evidence messages are persisted in events; keep them bounded. */
+const MAX_FAILURE_MESSAGE_LENGTH = 2000;
+
+function classifiedFailure(
+  evidence: ToolFailureEvidence,
+  kind: ToolFailureKind,
+  confidence: ToolFailureClassification["confidence"],
+  matchedRule?: string,
+): ToolFailureClassification {
+  return {
+    kind,
+    confidence,
+    ...(matchedRule ? { matchedRule } : {}),
+    evidence: { ...evidence, message: evidence.message.slice(0, MAX_FAILURE_MESSAGE_LENGTH) },
+  };
+}
+
+/**
+ * Deterministic classification of a coding-tool failure, strongest evidence
+ * first: process-level error codes, then narrowly scoped message rules that
+ * also require the matching operation. Anything ambiguous stays "unknown" —
+ * recovery policy must never act on a guess.
+ */
+export function classifyToolFailure(evidence: ToolFailureEvidence): ToolFailureClassification {
+  const processCode = evidence.processCode?.trim().toLowerCase();
+  const processCodeKind = processCode ? PROCESS_CODE_KINDS[processCode] : undefined;
+  if (processCodeKind) {
+    return classifiedFailure(evidence, processCodeKind, "exact", `process_code.${processCode}`);
+  }
+
+  if (
+    evidence.operation === "resume" &&
+    MISSING_TOOL_SESSION_PATTERNS.some((pattern) => pattern.test(evidence.message))
+  ) {
+    return classifiedFailure(
+      evidence,
+      "conversation_missing",
+      "strong",
+      `${evidence.provider}.resume.conversation_missing`,
+    );
+  }
+
+  return classifiedFailure(evidence, "unknown", "unknown");
+}
+
+/** Build the ErrorEvent an adapter emits, carrying its classified failure. */
+export function toolFailureError(evidence: ToolFailureEvidence): ErrorEvent {
+  return { type: "error", message: evidence.message, failure: classifyToolFailure(evidence) };
+}
+
+export function isMeaningfulToolOutput(output: ToolOutput): boolean {
+  if (output.type === "assistant" || output.type === "user") {
+    return output.message.content.length > 0;
+  }
+  return output.type === "result" && output.subtype !== "error";
+}
+
+export function canAutoRecoverToolFailure(
+  failure: ToolFailureClassification,
+  hasMeaningfulOutput: boolean,
+): boolean {
+  return (
+    !hasMeaningfulOutput &&
+    failure.kind === "conversation_missing" &&
+    failure.confidence !== "unknown"
+  );
 }
 
 export interface RunOptions {

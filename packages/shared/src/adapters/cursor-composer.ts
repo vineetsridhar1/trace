@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, MessageBlock } from "./coding-tool.js";
+import { toolFailureError } from "./coding-tool.js";
 import { resolveCursorComposerModel } from "../models.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
@@ -77,6 +78,7 @@ export class CursorComposerAdapter implements CodingToolAdapter {
     if (this.chatId) {
       args.push("--resume", this.chatId);
     }
+    const operation: "run" | "resume" = this.chatId ? "resume" : "run";
 
     const processGeneration = ++this.processGeneration;
     const child = spawn("cursor-agent", args, {
@@ -111,7 +113,15 @@ export class CursorComposerAdapter implements CodingToolAdapter {
       if (stderrEmitted) return;
       stderrEmitted = true;
       if (exitCode !== 0 && exitCode !== null && stderrChunks.length > 0) {
-        onOutput({ type: "error", message: stderrChunks.join("\n") });
+        onOutput(
+          toolFailureError({
+            provider: "cursor_composer",
+            operation,
+            source: "stderr",
+            message: stderrChunks.join("\n"),
+            exitCode,
+          }),
+        );
       }
     };
 
@@ -180,12 +190,20 @@ export class CursorComposerAdapter implements CodingToolAdapter {
       exitFallbackTimer = setTimeout(finish, EXIT_CLOSE_GRACE_MS);
     });
 
-    child.on("error", (err: Error) => {
+    child.on("error", (err: Error & { code?: string }) => {
       if (finished) return;
       clearExitFallbackTimer();
       finished = true;
       if (!isCurrentProcess()) return;
-      onOutput({ type: "error", message: err.message });
+      onOutput(
+        toolFailureError({
+          provider: "cursor_composer",
+          operation,
+          source: "process",
+          message: err.message,
+          ...(err.code ? { processCode: err.code } : {}),
+        }),
+      );
       onComplete();
       this.process = null;
     });

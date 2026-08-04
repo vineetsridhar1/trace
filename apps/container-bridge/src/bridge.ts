@@ -13,6 +13,7 @@ import type {
   GitCheckpointBridgePayload,
   GitCheckpointTrigger,
   ToolOutput,
+  ToolFailureClassification,
 } from "@trace/shared";
 import {
   extractGitToolUsePending,
@@ -31,7 +32,8 @@ import {
   cleanupTempAttachments,
   GIT_SHOW_ARGS,
   GIT_DIFF_TREE_ARGS,
-  isMissingToolSessionError,
+  canAutoRecoverToolFailure,
+  isMeaningfulToolOutput,
   parseGitShowOutput,
   inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
@@ -1089,6 +1091,7 @@ export class ContainerBridge implements IBridgeClient {
 
     const priorPendingToolUseId = this.pendingInputToolUseIds.get(sessionId) ?? null;
     let hasForwardedOutput = false;
+    let hasMeaningfulOutput = false;
     let endedOnPending = false;
     let recoveringMissingToolSession = false;
 
@@ -1145,9 +1148,9 @@ export class ContainerBridge implements IBridgeClient {
     };
 
     const activeAdapter = adapter;
-    const recoverMissingToolSession = (message: string) => {
-      if (!toolSessionId || hasForwardedOutput || recoveringMissingToolSession) return false;
-      if (!isMissingToolSessionError(message)) return false;
+    const recoverMissingToolSession = (failure: ToolFailureClassification) => {
+      if (!toolSessionId || recoveringMissingToolSession) return false;
+      if (!canAutoRecoverToolFailure(failure, hasMeaningfulOutput)) return false;
 
       recoveringMissingToolSession = true;
       this.finishRun(sessionId, runId);
@@ -1160,7 +1163,8 @@ export class ContainerBridge implements IBridgeClient {
         type: "tool_session_missing",
         sessionId,
         toolSessionId,
-        message,
+        message: failure.evidence.message,
+        failure,
         interactionMode,
         imageUrls,
       });
@@ -1173,8 +1177,8 @@ export class ContainerBridge implements IBridgeClient {
       onOutput: (output) => {
         if (!this.isCurrentRun(sessionId, activeAdapter, runId)) return;
 
-        if (output.type === "error" && recoverMissingToolSession(output.message)) {
-          return;
+        if (output.type === "error" && output.failure) {
+          if (recoverMissingToolSession(output.failure)) return;
         }
 
         const maybeReportToolSessionId = () => {
@@ -1199,6 +1203,7 @@ export class ContainerBridge implements IBridgeClient {
         }
 
         hasForwardedOutput = true;
+        if (isMeaningfulToolOutput(output)) hasMeaningfulOutput = true;
         this.send({ type: "session_output", sessionId, data: output });
 
         // Phase 1: collect tool_use blocks whose command is a git commit/push
