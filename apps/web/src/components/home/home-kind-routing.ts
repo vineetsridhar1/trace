@@ -96,11 +96,6 @@ export function detectPromptRepo(prompt: string, repos: Repo[]): Repo | null {
   );
 }
 
-export function isSubstantialPromptEdit(original: string, next: string): boolean {
-  const difference = Math.abs(original.trim().length - next.trim().length);
-  return difference >= Math.max(12, Math.round(original.trim().length * 0.35));
-}
-
 function normalizeSearchText(value: string): string {
   return value
     .toLowerCase()

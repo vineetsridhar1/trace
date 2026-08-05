@@ -16,12 +16,14 @@ export function DeleteSessionGroupDialog({
   groupId,
   groupName,
   sessionCount,
+  entityLabel = "workspace",
   open,
   onOpenChange,
 }: {
   groupId: string;
   groupName: string;
   sessionCount: number;
+  entityLabel?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -56,10 +58,10 @@ export function DeleteSessionGroupDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>Delete workspace</DialogTitle>
+          <DialogTitle>Delete {entityLabel}</DialogTitle>
           <DialogDescription>
             Are you sure you want to delete <strong>{groupName}</strong>? This will delete{" "}
-            {sessionCount === 1 ? "1 session" : `all ${sessionCount} sessions`} in this workspace
+            {sessionCount === 1 ? "1 session" : `all ${sessionCount} sessions`} in this {entityLabel}
             and cannot be undone.
           </DialogDescription>
         </DialogHeader>
