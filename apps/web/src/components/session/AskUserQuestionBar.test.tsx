@@ -31,6 +31,10 @@ describe("AskUserQuestionBar", () => {
 
     expect(markup).not.toContain("Before I continue");
     expect(markup).not.toContain("Question 1 of 1");
+    expect(markup).not.toContain("trace:request-input");
+    expect(markup).not.toContain("single-select");
+    expect(markup).toContain("Needs your input");
+    expect(markup).toContain('aria-label="Exit to chat"');
     expect(markup).toContain("flex flex-wrap justify-end gap-2");
     expect(markup.indexOf("number keys pick")).toBeLessThan(markup.indexOf("You decide"));
     expect(markup.indexOf("You decide")).toBeLessThan(markup.indexOf("Review 1 answer"));

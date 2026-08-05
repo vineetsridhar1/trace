@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 import { useQuestionState } from "@trace/client-core";
 import type { Question } from "@trace/shared";
 import { cn } from "@/lib/utils";
@@ -76,8 +77,7 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
       >
         {hasQuestionSet ? (
           <aside className="hidden border-r border-border bg-surface-deep/55 p-4 sm:block">
-            <QuestionEyebrow />
-            <p className="mt-3 text-[13px] font-semibold leading-4">Before I continue</p>
+            <p className="text-[13px] font-semibold leading-4">Before I continue</p>
             <ol className="mt-4 grid gap-1">
               {node.questions.map((item, index) => {
                 const answer = state.answers[index];
@@ -112,15 +112,15 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
 
         <div className="flex min-h-0 flex-col">
           <header className="flex items-center gap-2 border-b border-border px-5 py-3">
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              trace:request-input
-            </span>
+            <QuestionEyebrow />
             <button
               type="button"
+              aria-label="Exit to chat"
+              title="Exit to chat (Esc)"
               onClick={onDismiss}
-              className="ml-auto flex min-h-8 items-center gap-2 rounded-lg border border-border px-2.5 text-xs font-medium text-muted-foreground"
+              className="ml-auto grid h-8 w-8 place-items-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-foreground"
             >
-              Exit to chat <span className="font-mono text-[10px]">esc</span>
+              <X size={15} aria-hidden="true" />
             </button>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -143,11 +143,15 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
                   />
                 ) : null}
                 <div className={hasQuestionSet ? "mt-4" : undefined}>
-                  <QuestionEyebrow type={type} />
                   {question.context ? (
-                    <p className="mt-3 text-[13px] text-muted-foreground">{question.context}</p>
+                    <p className="text-[13px] text-muted-foreground">{question.context}</p>
                   ) : null}
-                  <h2 className="mt-1.5 text-[22px] font-semibold leading-7 tracking-tight">
+                  <h2
+                    className={cn(
+                      "text-[22px] font-semibold leading-7 tracking-tight",
+                      question.context ? "mt-1.5" : undefined,
+                    )}
+                  >
                     {question.question}
                   </h2>
                 </div>
