@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   MAX_CANVAS_ZOOM,
+  MAX_LABEL_CANVAS_FONT_SIZE,
   MIN_CANVAS_ZOOM,
   acceleratedGestureScale,
+  isCanvasLabelVisible,
   panCanvasViewport,
   pinchCanvasViewport,
   wheelDeltaPixels,
@@ -68,6 +70,14 @@ test("uses responsive zoom for trackpad pinch gestures", () => {
   assert.ok(acceleratedGestureScale(1.1) > 1.25);
   assert.ok(acceleratedGestureScale(0.9) < 0.9);
   assert.equal(acceleratedGestureScale(1), 1);
+});
+
+test("hides canvas labels once their canvas-space size passes the threshold", () => {
+  assert.equal(isCanvasLabelVisible(24, 1), true);
+  assert.equal(isCanvasLabelVisible(24, 24 / MAX_LABEL_CANVAS_FONT_SIZE), true);
+  assert.equal(isCanvasLabelVisible(24, 24 / MAX_LABEL_CANVAS_FONT_SIZE - 0.01), false);
+  assert.equal(isCanvasLabelVisible(24, MIN_CANVAS_ZOOM), false);
+  assert.equal(isCanvasLabelVisible(24, 0), false);
 });
 
 test("normalizes line and page wheel deltas", () => {

@@ -23,3 +23,12 @@ test("keeps the screen label constant-sized and on one line", () => {
   assert.equal((html.match(/truncate/g) ?? []).length, 2);
   assert.match(html, /Screen content/);
 });
+
+test("hides the screen label once it would dwarf the artboard", () => {
+  const html = renderToStaticMarkup(
+    <DesignArtboard screen={screen} component={() => <div>Screen content</div>} zoom={0.15} />,
+  );
+
+  assert.doesNotMatch(html, /Welcome/);
+  assert.match(html, /Screen content/);
+});
