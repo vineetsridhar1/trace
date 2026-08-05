@@ -467,11 +467,13 @@ export class BridgeClient implements IBridgeClient {
 
     const bridgeUrl = new URL(`${this.serverUrl}/bridge`);
     bridgeUrl.searchParams.set("bridgeAuthToken", bridgeAuthToken);
-    this.ws = new WebSocket(bridgeUrl.toString(), {
+    const socket = new WebSocket(bridgeUrl.toString(), {
       headers: { "User-Agent": BRIDGE_USER_AGENT },
     });
+    this.ws = socket;
 
-    this.ws.on("open", () => {
+    socket.on("open", () => {
+      if (this.ws !== socket) return;
       console.log("[bridge] connected to server");
       runtimeDebug("desktop bridge websocket open", { instanceId: this.instanceId });
       this.setStatus("connected");
@@ -485,7 +487,8 @@ export class BridgeClient implements IBridgeClient {
       void this.pollLocalPrStatuses();
     });
 
-    this.ws.on("message", (data) => {
+    socket.on("message", (data) => {
+      if (this.ws !== socket) return;
       try {
         const msg = JSON.parse(data.toString()) as BridgeCommand;
         this.handleCommand(msg);
@@ -494,7 +497,9 @@ export class BridgeClient implements IBridgeClient {
       }
     });
 
-    this.ws.on("close", (code, reason) => {
+    socket.on("close", (code, reason) => {
+      if (this.ws !== socket) return;
+      this.ws = null;
       const reasonText = reason.toString();
       console.log(
         `[bridge] disconnected, reconnecting in 3s... code=${code}${
@@ -516,7 +521,14 @@ export class BridgeClient implements IBridgeClient {
       }
     });
 
-    this.ws.on("error", (err) => {
+    socket.on("error", (err) => {
+      if (this.ws !== socket) {
+        runtimeDebug("desktop bridge stale websocket error", {
+          instanceId: this.instanceId,
+          error: err.message,
+        });
+        return;
+      }
       console.error("[bridge] error:", err.message);
       runtimeDebug("desktop bridge websocket error", {
         instanceId: this.instanceId,
@@ -580,11 +592,12 @@ export class BridgeClient implements IBridgeClient {
     this.stopHookQueueDrain();
     this.stopLocalPrPolling();
     this.autoSyncManager.stop();
-    // Tear down the old socket without triggering the close handler's reconnect
+    // Detach the old socket before closing it so its handlers can safely consume
+    // teardown errors without changing the new connection's state.
     if (this.ws) {
-      this.ws.removeAllListeners();
-      this.ws.close();
+      const socket = this.ws;
       this.ws = null;
+      socket.close();
     }
     this.setStatus("disconnected");
     this.connect();
