@@ -29,7 +29,6 @@ import { features } from "./lib/features";
 import { ManualEditNavigationGuard } from "./components/session/applications/ManualEditNavigationGuard";
 import { useHomeComposerStore } from "./stores/home-composer";
 import { navigateToSessionGroup } from "./stores/ui";
-import { CodingToolUpdatesDialog } from "./components/desktop/CodingToolUpdatesDialog";
 
 export function App() {
   const user = useAuthStore((s: AuthState) => s.user);
@@ -163,7 +162,6 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
   return (
     <TooltipProvider>
       <BridgeSyncHydrator />
-      <CodingToolUpdatesDialog />
       <GlobalCommandPalette />
       <KeyboardShortcutsDialog />
       <ManualEditNavigationGuard />

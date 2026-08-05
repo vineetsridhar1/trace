@@ -68,18 +68,19 @@ function compareVersions(left: string, right: string): number | null {
 export async function getCodingToolStatuses(): Promise<DesktopCodingToolStatus[]> {
   return Promise.all(
     Object.values(CODING_TOOL_CLIS).map(async (tool) => {
+      const npmTool = NPM_TOOLS[tool.tool];
       if (!resolveExecutable(tool.command)) {
+        const latestVersion = npmTool ? await getLatestNpmVersion(npmTool.packageName) : null;
         return {
           tool: tool.tool,
           label: tool.label,
           status: "missing",
           installedVersion: null,
-          latestVersion: null,
+          latestVersion,
         };
       }
 
       const installedVersion = await getInstalledVersion(tool.command);
-      const npmTool = NPM_TOOLS[tool.tool];
       const latestVersion = npmTool ? await getLatestNpmVersion(npmTool.packageName) : null;
       const comparison =
         installedVersion && latestVersion ? compareVersions(installedVersion, latestVersion) : null;
@@ -107,16 +108,19 @@ export async function installOrUpdateCodingTool(toolId: string): Promise<Desktop
     child.once("error", reject);
     child.once("close", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`${tool.label} install failed${code === null ? "" : ` (exit ${code})`}.`));
+      else
+        reject(new Error(`${tool.label} install failed${code === null ? "" : ` (exit ${code})`}.`));
     });
   });
 
   const statuses = await getCodingToolStatuses();
-  return statuses.find((status) => status.tool === toolId) ?? {
-    tool: tool.tool,
-    label: tool.label,
-    status: "unknown",
-    installedVersion: null,
-    latestVersion: null,
-  };
+  return (
+    statuses.find((status) => status.tool === toolId) ?? {
+      tool: tool.tool,
+      label: tool.label,
+      status: "unknown",
+      installedVersion: null,
+      latestVersion: null,
+    }
+  );
 }
