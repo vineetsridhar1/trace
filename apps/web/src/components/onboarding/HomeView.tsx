@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { toast } from "sonner";
 import { normalizeTool } from "../session/picker/pickerShared";
 import { createHomeSession } from "../../lib/create-home-session";
-import { detectHomeSessionKind, isSubstantialPromptEdit } from "../home/home-kind-routing";
+import { detectHomeSessionKind } from "../home/home-kind-routing";
 import { homeComposerDraftScope, useHomeComposerStore } from "../../stores/home-composer";
 import { useHomeDataStore } from "../../stores/home-data";
 import { HomeComposer } from "../home/HomeComposer";
@@ -69,7 +69,6 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
     setUploading,
     clearAttachments,
   } = useHomeComposerAttachments();
-  const manualPromptRef = useRef("");
   const homeDataReady = useHomeDataStore(
     (state) =>
       state.organizationId === activeOrgId &&
@@ -101,7 +100,6 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
     setInteractionMode("code");
     setSelectedDesignSystemVersionId(null);
     setSelectedDesignSessionGroupId(null);
-    manualPromptRef.current = "";
   }, [draftScope]);
 
   useEffect(() => {
@@ -121,14 +119,10 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
 
   const updatePrompt = (nextPrompt: string) => {
     setDraft(draftScope, nextPrompt);
-    if (manualKind && isSubstantialPromptEdit(manualPromptRef.current, nextPrompt)) {
-      setManualKind(null);
-    }
   };
 
   const selectKind = (kind: HomeCreatableKind) => {
     setManualKind(kind);
-    manualPromptRef.current = prompt;
   };
 
   const selectTool = (nextTool: ToolOptionValue) => {

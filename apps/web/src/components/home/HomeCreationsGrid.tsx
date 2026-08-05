@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Search } from "lucide-react";
+import { MoreHorizontal, Search, Trash2 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import { Input } from "../ui/input";
@@ -8,6 +8,14 @@ import { navigateToSessionGroup } from "../../stores/ui";
 import { HomeKindIcon, homeKindLabel } from "./HomeKindIcon";
 import type { GeneratedProjectKind } from "../sidebar/generated-project-types";
 import { designPreviewModeUrl } from "../session/applications/saved-design-preview";
+import { DeleteSessionGroupDialog } from "../session/DeleteSessionGroupDialog";
+import { Button } from "../ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 const CREATION_TYPES: Array<{ id: "all" | GeneratedProjectKind; label: string }> = [
   { id: "all", label: "All" },
@@ -23,6 +31,7 @@ export function HomeCreationsGrid() {
   const [search, setSearch] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const sessionGroups = useEntityStore((state) => state.sessionGroups);
+  const sessions = useEntityStore((state) => state.sessions);
   const creations = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
     return Object.values(sessionGroups)
@@ -41,6 +50,15 @@ export function HomeCreationsGrid() {
     estimateSize: () => 112,
     overscan: 4,
   });
+  const sessionCountByGroup = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const session of Object.values(sessions)) {
+      if (session.sessionGroupId) {
+        counts[session.sessionGroupId] = (counts[session.sessionGroupId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [sessions]);
 
   return (
     <section className="mx-auto mt-10 w-full max-w-[720px]">
@@ -95,7 +113,11 @@ export function HomeCreationsGrid() {
                   style={{ transform: `translateY(${virtualRow.start}px)` }}
                 >
                   {rowItems.map((group) => (
-                    <CreationCard key={group.id} group={group} />
+                    <CreationCard
+                      key={group.id}
+                      group={group}
+                      sessionCount={sessionCountByGroup[group.id] ?? 0}
+                    />
                   ))}
                 </div>
               );
@@ -107,7 +129,8 @@ export function HomeCreationsGrid() {
   );
 }
 
-function CreationCard({ group }: { group: SessionGroupEntity }) {
+function CreationCard({ group, sessionCount }: { group: SessionGroupEntity; sessionCount: number }) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const title = group.name || group.slug || "Untitled creation";
   const designPreviewUrl = group.designPreviewUrl as string | null | undefined;
   const animationPreviewUrl = group.animationPreviewUrl as string | null | undefined;
@@ -115,33 +138,65 @@ function CreationCard({ group }: { group: SessionGroupEntity }) {
     ? designPreviewModeUrl(designPreviewUrl)
     : (animationPreviewUrl ?? null);
   return (
-    <button
-      type="button"
-      onClick={() => navigateToSessionGroup(group.channel?.id ?? null, group.id)}
-      className="flex min-h-24 flex-col overflow-hidden rounded-[10px] border border-[var(--th-edge)] bg-[var(--th-surface)] text-left transition-colors hover:border-[var(--th-edge-hover)] hover:bg-white/[0.025] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--th-accent-light)]"
-    >
-      {previewUrl ? (
-        <div className="h-28 overflow-hidden border-b border-[var(--th-edge-faint)] bg-[var(--th-surface-mid)]">
-          <iframe
-            src={previewUrl}
-            title={`${title} preview`}
-            tabIndex={-1}
-            sandbox={designPreviewUrl ? "allow-forms allow-modals allow-popups allow-scripts" : "allow-scripts"}
-            className="pointer-events-none size-full border-0"
-          />
-        </div>
-      ) : null}
-      <div className="flex min-h-24 flex-col p-4">
-        <div className="flex items-center gap-2 text-xs text-[var(--th-muted)]">
-          <HomeKindIcon kind={group.kind} className="size-4" />
-          <span>{homeKindLabel(group.kind)}</span>
-        </div>
-        <span className="mt-3 truncate text-sm font-medium text-[var(--th-heading)]">{title}</span>
-        <span className="mt-auto pt-2 text-[11px] text-[var(--th-muted)]">
-          Updated {timeAgo(group.updatedAt)}
-        </span>
+    <>
+      <div className="group relative min-h-24 overflow-hidden rounded-[10px] border border-[var(--th-edge)] bg-[var(--th-surface)] transition-colors hover:border-[var(--th-edge-hover)] hover:bg-white/[0.025]">
+        <button
+          type="button"
+          onClick={() => navigateToSessionGroup(group.channel?.id ?? null, group.id)}
+          className="flex size-full min-h-24 flex-col text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--th-accent-light)]"
+        >
+          {previewUrl ? (
+            <div className="h-28 overflow-hidden border-b border-[var(--th-edge-faint)] bg-[var(--th-surface-mid)]">
+              <iframe
+                src={previewUrl}
+                title={`${title} preview`}
+                tabIndex={-1}
+                sandbox={designPreviewUrl ? "allow-forms allow-modals allow-popups allow-scripts" : "allow-scripts"}
+                className="pointer-events-none size-full border-0"
+              />
+            </div>
+          ) : null}
+          <div className="flex min-h-24 flex-col p-4 pr-10">
+            <div className="flex items-center gap-2 text-xs text-[var(--th-muted)]">
+              <HomeKindIcon kind={group.kind} className="size-4" />
+              <span>{homeKindLabel(group.kind)}</span>
+            </div>
+            <span className="mt-3 truncate text-sm font-medium text-[var(--th-heading)]">{title}</span>
+            <span className="mt-auto pt-2 text-[11px] text-[var(--th-muted)]">
+              Updated {timeAgo(group.updatedAt)}
+            </span>
+          </div>
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-2 top-2 size-7 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                aria-label={`More actions for ${title}`}
+              />
+            }
+          >
+            <MoreHorizontal className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
+              <Trash2 />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-    </button>
+      <DeleteSessionGroupDialog
+        groupId={group.id}
+        groupName={title}
+        sessionCount={sessionCount}
+        entityLabel="creation"
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+      />
+    </>
   );
 }
 
