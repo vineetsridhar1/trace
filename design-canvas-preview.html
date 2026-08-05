@@ -43,7 +43,7 @@
       .label {
         --inverse-zoom: 1;
         --label-width: 390px;
-        bottom: calc(844px + 12px * var(--inverse-zoom));
+        bottom: calc(844px + 8px * var(--inverse-zoom));
         left: 0;
         position: absolute;
         transform: scale(var(--inverse-zoom));
@@ -63,9 +63,9 @@
         transform: scale(var(--inverse-zoom));
         transform-origin: bottom left;
         color: #71717a;
-        font-size: 24px;
+        font-size: 20px;
         font-weight: 600;
-        line-height: 32px;
+        line-height: 28px;
         letter-spacing: 0.18em;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -83,9 +83,9 @@
         min-width: 0;
       }
       .screen-title {
-        font-size: 20px;
+        font-size: 18px;
         font-weight: 500;
-        line-height: 28px;
+        line-height: 24px;
         margin: 0;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -93,9 +93,9 @@
       }
       .screen-meta {
         color: #71717a;
-        font-size: 16px;
-        line-height: 24px;
-        margin: 6px 0 0;
+        font-size: 14px;
+        line-height: 20px;
+        margin: 4px 0 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -316,11 +316,11 @@
       // Mirrors src/canvas/viewport.ts — labels counter-scale with zoom, so their
       // canvas-space size is fontSize / zoom, and the room above them shrinks with zoom.
       const MAX_LABEL_CANVAS_FONT_SIZE = 96;
-      const SCREEN_LABEL_FONT_SIZE = 20;
-      const SCREEN_LABEL_BLOCK = 70; // 12px gap + 58px of text
-      const SECTION_LABEL_FONT_SIZE = 24;
-      const SECTION_LABEL_GAP = 94;
-      const SECTION_LABEL_BLOCK = SECTION_LABEL_GAP + 32;
+      const SCREEN_LABEL_FONT_SIZE = 18;
+      const SCREEN_LABEL_BLOCK = 56; // 8px gap + 48px of text
+      const SECTION_LABEL_FONT_SIZE = 20;
+      const SECTION_LABEL_GAP = 72;
+      const SECTION_LABEL_BLOCK = SECTION_LABEL_GAP + 28;
       const isCanvasLabelVisible = (fontSize, blockHeight, clearanceAbove, zoom) => {
         if (zoom <= 0) return false;
         if (fontSize / zoom > MAX_LABEL_CANVAS_FONT_SIZE) return false;

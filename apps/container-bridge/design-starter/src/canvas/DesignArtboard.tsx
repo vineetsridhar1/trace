@@ -4,10 +4,10 @@ import { ArtboardErrorBoundary } from "./ArtboardErrorBoundary";
 import { isCanvasLabelVisible } from "./viewport";
 
 // Keep in sync with the screen name font size below.
-const SCREEN_LABEL_FONT_SIZE = 20;
-const SCREEN_LABEL_GAP = 12;
-// Screen-space height of the label: name (28) + margin (6) + variation line (24).
-const SCREEN_LABEL_HEIGHT = 58;
+const SCREEN_LABEL_FONT_SIZE = 18;
+const SCREEN_LABEL_GAP = 8;
+// Screen-space height of the label: name (24) + margin (4) + variation line (20).
+const SCREEN_LABEL_HEIGHT = 48;
 
 export function DesignArtboard({
   screen,
@@ -46,8 +46,8 @@ export function DesignArtboard({
         >
           <header className="flex items-end justify-between gap-3 text-zinc-200">
             <div className="min-w-0 flex-1">
-              <h2 className="truncate text-[20px] font-medium leading-7">{screen.name}</h2>
-              <p className="mt-1.5 truncate text-[16px] leading-6 text-zinc-500">
+              <h2 className="truncate text-[18px] font-medium leading-6">{screen.name}</h2>
+              <p className="mt-1 truncate text-[14px] leading-5 text-zinc-500">
                 {[screen.variation, screen.state].filter(Boolean).join(" · ") || "Default"}
               </p>
             </div>
