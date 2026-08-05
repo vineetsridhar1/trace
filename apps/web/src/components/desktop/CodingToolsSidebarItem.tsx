@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, CircleAlert, Grid2X2Plus, LoaderCircle, Plus, Upload } from "lucide-react";
+import { Grid2X2Plus } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { getCodingToolsSummary, useCodingToolsStore } from "../../stores/coding-tools";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -23,15 +23,14 @@ export function CodingToolsSidebarItem() {
 
   const copy =
     summary === "updates"
-      ? { label: `${updateCount} updates available`, icon: Upload, tone: "text-amber-400" }
+      ? { label: `${updateCount} updates available`, glyph: "↑", tone: "text-[#f59e0b]" }
       : summary === "updating" || summary === "checking"
-        ? { label: "Updating tools", icon: LoaderCircle, tone: "text-blue-400" }
+        ? { label: "Updating tools", glyph: "◐", tone: "text-[#3b82f6]" }
         : summary === "failed"
-          ? { label: `${failureCount} update failed`, icon: CircleAlert, tone: "text-destructive" }
+          ? { label: `${failureCount} update failed`, glyph: "!", tone: "text-[#ef4444]" }
           : summary === "missing"
-            ? { label: "Primary tool missing", icon: Plus, tone: "text-amber-400" }
-            : { label: "All tools ready", icon: Check, tone: "text-emerald-400" };
-  const StatusIcon = copy.icon;
+            ? { label: "Primary tool missing", glyph: "+", tone: "text-[#f59e0b]" }
+            : { label: "All tools ready", glyph: "✓", tone: "text-[#22c55e]" };
   const badgeCount = state.showSidebarCount
     ? summary === "updates"
       ? updateCount
@@ -49,34 +48,36 @@ export function CodingToolsSidebarItem() {
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
         className={cn(
-          "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/10",
-          open && "bg-white/10",
+          "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors duration-150 hover:bg-[#09090b] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#3b82f6]",
+          open && "bg-[#09090b]",
         )}
       >
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface-deep text-foreground">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-[6px] border border-[#3f3f46] bg-[#09090b] text-[#fafafa]">
           <Grid2X2Plus className="size-3.5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-semibold text-foreground">
+          <span className="block truncate text-[13px] font-semibold text-[#fafafa]">
             Coding tools
           </span>
           <span className={cn("mt-px flex items-center gap-1 text-[11px] font-medium", copy.tone)}>
-            <StatusIcon
-              className={cn(
-                "size-3",
-                (summary === "updating" || summary === "checking") && "animate-spin",
-              )}
-            />
+            <span aria-hidden="true" className="leading-none">
+              {copy.glyph}
+            </span>
             {copy.label}
           </span>
         </span>
         {badgeCount > 0 ? (
-          <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[11px] font-semibold text-foreground">
+          <span className="rounded-full bg-[#f59e0b]/20 px-1.5 py-0.5 text-[11px] font-semibold text-[#fafafa]">
             {badgeCount}
           </span>
         ) : null}
       </PopoverTrigger>
-      <PopoverContent side="top" align="start" sideOffset={6} className="w-[296px] gap-0 p-0">
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={6}
+        className="w-[296px] gap-0 bg-transparent p-0 shadow-none ring-0"
+      >
         <CodingToolsPopover onClose={() => setOpen(false)} />
       </PopoverContent>
     </Popover>

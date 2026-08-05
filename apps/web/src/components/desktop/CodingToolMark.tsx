@@ -25,9 +25,9 @@ export function CodingToolMark({
       role="img"
       aria-label={label}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center border border-border bg-surface-deep",
+        "inline-flex shrink-0 items-center justify-center border border-[#3f3f46] bg-[#09090b]",
         small ? "size-5 rounded-[5px]" : "size-9 rounded-lg",
-        dimmed ? "text-muted-foreground" : "text-foreground",
+        dimmed ? "text-[#a1a1aa]" : "text-[#fafafa]",
       )}
     >
       <svg
