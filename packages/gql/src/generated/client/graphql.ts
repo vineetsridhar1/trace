@@ -2565,12 +2565,10 @@ export type SessionGroupKind = "animation" | "app" | "coding" | "design" | "desi
 
 export type SessionGroupStatus =
   | "archived"
-  | "failed"
   | "in_progress"
   | "in_review"
   | "merged"
-  | "needs_input"
-  | "stopped";
+  | "needs_input";
 
 export type SessionGroupVisibility = "private" | "public";
 

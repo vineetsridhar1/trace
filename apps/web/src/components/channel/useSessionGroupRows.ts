@@ -142,12 +142,7 @@ export function useSessionGroupRows(
         const archivedAt = group.archivedAt as string | null | undefined;
         const displaySessionStatus =
           groupSessions.length > 0
-            ? getSessionGroupDisplayStatus(
-                sessionStatuses,
-                agentStatuses,
-                archivedAt,
-                groupSessions,
-              )
+            ? getSessionGroupDisplayStatus(sessionStatuses, archivedAt)
             : ((group.status as string | undefined) ?? "in_progress");
         const displayAgentStatus = archivedAt
           ? "stopped"

@@ -24,25 +24,17 @@ export const agentStatusLabel: Record<string, string> = {
 // ─── Session Status (where the session is in its lifecycle) ───
 
 export const sessionStatusColor: Record<string, string> = {
-  preparing: "text-amber-400",
-  not_started: "text-muted-foreground",
   in_progress: "text-blue-400",
   needs_input: "text-amber-400",
   in_review: "text-violet-400",
-  failed: "text-destructive",
-  stopped: "text-muted-foreground",
   merged: "text-emerald-400",
   archived: "text-muted-foreground",
 };
 
 export const sessionStatusLabel: Record<string, string> = {
-  preparing: "Preparing...",
-  not_started: "Creating...",
   in_progress: "In Progress",
   needs_input: "Needs Input",
   in_review: "In Review",
-  failed: "Failed",
-  stopped: "Stopped",
   merged: "Merged",
   archived: "Archived",
 };
@@ -104,15 +96,12 @@ export const connectionLabel: Record<string, string> = {
  */
 export function getDisplaySessionStatus(
   sessionStatus: string | undefined,
-  agentStatus?: string | undefined,
   archivedAt?: string | null | undefined,
-  preparation?: SessionPreparationFields,
 ): string {
   if (archivedAt) return "archived";
   if (sessionStatus === "merged") return "merged";
   if (sessionStatus === "needs_input") return "needs_input";
   if (sessionStatus === "in_review") return "in_review";
-  if (isSessionPreparing({ agentStatus, sessionStatus, ...preparation })) return "preparing";
   return "in_progress";
 }
 
@@ -125,17 +114,8 @@ export function getDisplayAgentStatus(
   archivedAt?: string | null | undefined,
   preparation?: SessionPreparationFields,
 ): string {
-  const displaySessionStatus = getDisplaySessionStatus(
-    sessionStatus,
-    agentStatus,
-    archivedAt,
-    preparation,
-  );
-
-  if (displaySessionStatus === "archived") return "stopped";
-  if (displaySessionStatus === "failed") return "failed";
-  if (displaySessionStatus === "stopped") return "stopped";
-  if (displaySessionStatus === "preparing") return "preparing";
+  if (archivedAt) return "stopped";
+  if (isSessionPreparing({ agentStatus, sessionStatus, ...preparation })) return "preparing";
   if (agentStatus === "not_started") return "not_started";
   if (agentStatus === "active") return "active";
 
@@ -147,16 +127,13 @@ export function getDisplayAgentStatus(
  */
 export function getSessionGroupDisplayStatus(
   sessionStatuses: Array<string | null | undefined>,
-  agentStatuses: Array<string | null | undefined>,
   archivedAt?: string | null | undefined,
-  sessions?: Array<SessionPreparationFields | null | undefined>,
 ): string {
   if (archivedAt) return "archived";
   // Merged is terminal and takes priority over all other pipeline states.
   if (sessionStatuses.some((s) => s === "merged")) return "merged";
   if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
   if (sessionStatuses.some((s) => s === "in_review")) return "in_review";
-  if (sessions?.some(isSessionPreparing)) return "preparing";
   if (sessionStatuses.some((s) => s === "in_progress")) return "in_progress";
   return "in_progress";
 }

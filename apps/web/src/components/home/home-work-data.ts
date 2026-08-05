@@ -150,10 +150,10 @@ function resolveStatus(group: SessionGroupEntity, sessions: SessionEntity[]): st
   ) {
     return "in_review";
   }
-  if (group.status === "failed" || sessions.some((session) => session.agentStatus === "failed")) {
+  if (sessions.some((session) => session.agentStatus === "failed")) {
     return "failed";
   }
-  if (group.status === "stopped" || sessions.some((session) => session.agentStatus === "stopped")) {
+  if (sessions.some((session) => session.agentStatus === "stopped")) {
     return "stopped";
   }
   return "in_progress";

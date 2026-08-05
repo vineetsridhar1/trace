@@ -4,8 +4,6 @@ export type SessionGroupStatus =
   | "in_progress"
   | "needs_input"
   | "in_review"
-  | "failed"
-  | "stopped"
   | "merged"
   | "archived";
 

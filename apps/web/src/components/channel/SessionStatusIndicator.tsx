@@ -1,4 +1,4 @@
-import { sessionStatusColor } from "../session/sessionStatus";
+import { agentStatusColor } from "../session/sessionStatus";
 import { AgentStatusIcon } from "../session/AgentStatusIcon";
 import { useUIStore, type UIState } from "../../stores/ui";
 import type { SessionGroupRow } from "./sessions-table-types";
@@ -12,7 +12,7 @@ export function SessionStatusIndicator({
   size?: number;
   showDonePulse?: boolean;
 }) {
-  const color = sessionStatusColor[row.displaySessionStatus] ?? "text-muted-foreground";
+  const color = agentStatusColor[row.displayAgentStatus] ?? "text-muted-foreground";
   const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionGroupDoneBadges[row.id]);
 
   return (

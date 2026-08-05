@@ -17,10 +17,10 @@ export function appSessionSubtitle({
   status: string | null | undefined;
 }): string {
   if (status === "needs_input") return "Needs your input";
-  if (status === "failed" || agentStatus === "failed") return "Build failed";
+  if (agentStatus === "failed") return "Build failed";
   if (agentStatus === "active") return "Building now";
   if (preview?.trim()) return preview.trim();
-  if (status === "stopped" || agentStatus === "stopped") return "Stopped";
+  if (agentStatus === "stopped") return "Stopped";
   return "Ready to continue";
 }
 

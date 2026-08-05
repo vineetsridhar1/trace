@@ -66,7 +66,7 @@ describe("buildAppSessionGroupIds", () => {
         archivedAt: "2026-07-11T12:00:00.000Z",
       },
       archivedStatus: { id: "archivedStatus", kind: "app", status: "archived" },
-      active: { id: "active", kind: "app", status: "stopped" },
+      active: { id: "active", kind: "app", status: "in_progress" },
     });
 
     expect(buildAppSessionGroupIds(state)).toEqual(["active"]);
@@ -114,6 +114,12 @@ describe("appSessionSubtitle", () => {
         status: "in_review",
       }),
     ).toBe("Added the dashboard");
+  });
+
+  it("shows agent failure without requiring a failed pipeline status", () => {
+    expect(appSessionSubtitle({ agentStatus: "failed", preview: null, status: "in_review" })).toBe(
+      "Build failed",
+    );
   });
 });
 

@@ -18,12 +18,8 @@ export function describeSessionStatus(
       return "Needs input";
     case "in_review":
       return "In review";
-    case "failed":
-      return "Failed";
     case "merged":
       return "Merged";
-    case "stopped":
-      return "Stopped";
     case "archived":
       return "Archived";
     default:

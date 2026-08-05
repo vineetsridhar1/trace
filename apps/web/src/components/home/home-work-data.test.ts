@@ -35,7 +35,7 @@ describe("home work ledger data", () => {
 
   it("groups failures with in-progress and actionable sessions under needs-you", () => {
     const groups = {
-      failed: group("failed", "me", "failed"),
+      failed: group("failed", "me", "in_progress"),
       needs: group("needs", "me", "needs_input"),
     };
     const inboxItems = {

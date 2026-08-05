@@ -547,11 +547,7 @@ export function SessionGroupDetailView({
   }, [showApplicationsSidebar, showApplicationsSidebarTab]);
 
   const selectedSessionStatus = selectedSession
-    ? getDisplaySessionStatus(
-        selectedSession.sessionStatus,
-        selectedSession.agentStatus,
-        groupArchivedAt ?? null,
-      )
+    ? getDisplaySessionStatus(selectedSession.sessionStatus, groupArchivedAt ?? null)
     : "in_progress";
   const selectedSessionMergedUnavailable =
     selectedSession?.sessionStatus === "merged" && groupWorktreeDeleted !== false;
