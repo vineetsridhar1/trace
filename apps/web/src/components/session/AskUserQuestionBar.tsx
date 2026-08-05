@@ -167,7 +167,7 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
             )}
           </div>
           <footer className="border-t border-border px-5 py-3">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               {!reviewing && !state.isFirstPage ? (
                 <button
                   type="button"
@@ -177,18 +177,6 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
                   Back
                 </button>
               ) : null}
-              <button
-                type="button"
-                disabled={reviewing ? !state.hasAllAnswers : !state.currentValid}
-                onClick={reviewing ? send : advance}
-                className="min-h-9 rounded-lg bg-foreground px-3 text-xs font-semibold text-background disabled:border disabled:border-border disabled:bg-transparent disabled:text-muted-foreground"
-              >
-                {reviewing
-                  ? `Send ${state.total} answer${state.total === 1 ? "" : "s"}`
-                  : state.isLastPage
-                    ? `Review ${state.total} answer${state.total === 1 ? "" : "s"}`
-                    : "Next question"}
-              </button>
               {!reviewing ? (
                 <button
                   type="button"
@@ -210,6 +198,18 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
                   Back to questions
                 </button>
               )}
+              <button
+                type="button"
+                disabled={reviewing ? !state.hasAllAnswers : !state.currentValid}
+                onClick={reviewing ? send : advance}
+                className="min-h-9 rounded-lg bg-foreground px-3 text-xs font-semibold text-background disabled:border disabled:border-border disabled:bg-transparent disabled:text-muted-foreground"
+              >
+                {reviewing
+                  ? `Send ${state.total} answer${state.total === 1 ? "" : "s"}`
+                  : state.isLastPage
+                    ? `Review ${state.total} answer${state.total === 1 ? "" : "s"}`
+                    : "Next question"}
+              </button>
             </div>
             <p className="mt-2 font-mono text-[10px] text-muted-foreground">
               {reviewing ? "⌘↵ send · esc chat" : "number keys pick · ↵ next · esc chat"}
