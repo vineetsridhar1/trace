@@ -1,123 +1,247 @@
-import { ChevronLeft, ChevronRight, Send, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useQuestionState } from "@trace/client-core";
-import type { Question, QuestionOption } from "@trace/shared";
-import { QuestionOptionPill } from "./messages/QuestionOptionPill";
-import { PendingRichTextInput } from "./PendingRichTextInput";
+import type { Question } from "@trace/shared";
+import { QuestionCard, QuestionEyebrow, QuestionProgress } from "./questions/QuestionChrome";
+import { QuestionControl } from "./questions/QuestionControl";
+import { QuestionReview } from "./questions/QuestionReview";
 
 interface AskUserQuestionBarProps {
-  node: {
-    id: string;
-    questions: Question[];
-  };
+  node: { id: string; questions: Question[] };
   onResponse: (text: string) => void;
   onDismiss: () => void;
 }
 
 export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuestionBarProps) {
-  const {
-    page,
-    total,
-    question,
-    currentSelected,
-    currentCustom,
-    isFirstPage,
-    isLastPage,
-    hasAllAnswers,
-    toggleOption,
-    setCustomText,
-    goNext,
-    goPrev,
-    buildResponse,
-  } = useQuestionState(node);
+  const state = useQuestionState(node);
+  const [reviewing, setReviewing] = useState(false);
+  const question = state.question;
+  const answeredCount = state.answers.filter((answer) => answer.answered).length;
+  const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
 
-  const handleSubmit = (currentText?: string) => {
-    const response = buildResponse(currentText);
+  const send = () => {
+    const response = state.buildResponse();
     if (response) onResponse(response);
   };
 
+  const advance = () => {
+    if (!state.currentValid) return;
+    if (state.isLastPage) setReviewing(true);
+    else state.goNext();
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onDismiss();
+        return;
+      }
+      if (reviewing && event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        send();
+        return;
+      }
+      if (!reviewing && /^[1-9]$/.test(event.key)) {
+        const option = question.options[Number(event.key) - 1];
+        if (option) state.toggleOption(option.id ?? option.label);
+      }
+      if (
+        !reviewing &&
+        type === "confirm" &&
+        (event.key.toLowerCase() === "y" || event.key.toLowerCase() === "n")
+      ) {
+        const index = event.key.toLowerCase() === "y" ? 0 : 1;
+        const option = question.options[index];
+        state.toggleOption(option?.id ?? option?.label ?? (index === 0 ? "yes" : "no"));
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onDismiss, question.options, reviewing, state, type]);
+
   return (
-    <div className="border-t border-accent/30 bg-surface px-3 py-3">
-      {/* Header row */}
-      <div className="mb-2 flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-accent">
-              {question.header}
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-background/85 p-4 backdrop-blur-[2px]">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="Questions from the agent"
+        className="grid max-h-[min(680px,calc(100vh-32px))] w-[min(720px,calc(100vw-32px))] grid-cols-1 overflow-hidden rounded-[14px] border border-foreground/30 bg-surface shadow-2xl sm:grid-cols-[212px_1fr]"
+      >
+        <aside className="hidden border-r border-border bg-surface-deep/55 p-4 sm:block">
+          <QuestionEyebrow />
+          <p className="mt-3 text-[13px] font-semibold leading-4">Before I continue</p>
+          <ol className="mt-4 grid gap-1">
+            {node.questions.map((item, index) => {
+              const answer = state.answers[index];
+              const current = !reviewing && index === state.page;
+              return (
+                <li key={item.id ?? `${index}-${item.header}`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      state.setPage(index);
+                      setReviewing(false);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${current ? "bg-foreground/[0.08]" : ""}`}
+                  >
+                    <span
+                      className={`grid h-4 w-4 place-items-center rounded border font-mono text-[9px] ${answer?.answered ? "border-[color-mix(in_srgb,var(--th-success)_50%,transparent)] text-[var(--th-success)]" : current ? "border-foreground" : "border-border text-muted-foreground"}`}
+                    >
+                      {answer?.answered ? "✓" : index + 1}
+                    </span>
+                    <span
+                      className={`line-clamp-2 text-xs leading-4 ${current ? "font-semibold" : "text-muted-foreground"}`}
+                    >
+                      {item.header || item.question}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </aside>
+
+        <div className="flex min-h-0 flex-col">
+          <header className="flex items-center gap-2 border-b border-border px-5 py-3">
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              trace:request-input
             </span>
-            {total > 1 && (
-              <span className="text-[11px] text-muted-foreground">
-                {page + 1}/{total}
-              </span>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="ml-auto flex min-h-8 items-center gap-2 rounded-lg border border-border px-2.5 text-xs font-medium text-muted-foreground"
+            >
+              Exit to chat <span className="font-mono text-[10px]">esc</span>
+            </button>
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            {reviewing ? (
+              <QuestionReview
+                questions={node.questions}
+                answers={state.answers}
+                onEdit={(index) => {
+                  state.setPage(index);
+                  setReviewing(false);
+                }}
+              />
+            ) : (
+              <>
+                <QuestionProgress
+                  current={state.page}
+                  total={state.total}
+                  answered={answeredCount}
+                />
+                <div className="mt-4">
+                  <QuestionEyebrow type={type} />
+                  {question.context ? (
+                    <p className="mt-3 text-[13px] text-muted-foreground">{question.context}</p>
+                  ) : null}
+                  <h2 className="mt-1.5 text-[22px] font-semibold leading-7 tracking-tight">
+                    {question.question}
+                  </h2>
+                </div>
+                <div className="mt-4">
+                  <QuestionControl
+                    question={question}
+                    selected={state.currentSelected}
+                    customText={state.currentCustom}
+                    ranking={state.currentRanking}
+                    validationMessage={state.validationMessage}
+                    onToggle={state.toggleOption}
+                    onTextChange={state.setCustomText}
+                    onMoveRank={state.moveRankOption}
+                  />
+                </div>
+              </>
             )}
           </div>
-          <div className="mt-0.5 max-h-24 overflow-y-auto text-sm text-foreground">
-            {question.question}
-          </div>
+          <footer className="border-t border-border px-5 py-3">
+            <div className="flex flex-wrap gap-2">
+              {!reviewing && !state.isFirstPage ? (
+                <button
+                  type="button"
+                  onClick={state.goPrev}
+                  className="min-h-9 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground"
+                >
+                  Back
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={reviewing ? !state.hasAllAnswers : !state.currentValid}
+                onClick={reviewing ? send : advance}
+                className="min-h-9 rounded-lg bg-foreground px-3 text-xs font-semibold text-background disabled:border disabled:border-border disabled:bg-transparent disabled:text-muted-foreground"
+              >
+                {reviewing
+                  ? `Send ${state.total} answer${state.total === 1 ? "" : "s"}`
+                  : state.isLastPage
+                    ? `Review ${state.total} answer${state.total === 1 ? "" : "s"}`
+                    : "Next question"}
+              </button>
+              {!reviewing ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    state.decideForMe();
+                    if (state.isLastPage) setReviewing(true);
+                    else state.goNext();
+                  }}
+                  className="min-h-9 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground"
+                >
+                  You decide
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setReviewing(false)}
+                  className="min-h-9 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground"
+                >
+                  Back to questions
+                </button>
+              )}
+            </div>
+            <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+              {reviewing ? "⌘↵ send · esc chat" : "number keys pick · ↵ next · esc chat"}
+            </p>
+          </footer>
         </div>
+      </section>
+    </div>
+  );
+}
+
+export function QuestionWaitingCard({
+  node,
+  onResume,
+  onDecide,
+}: {
+  node: { questions: Question[] };
+  onResume: () => void;
+  onDecide: () => void;
+}) {
+  const next = node.questions[0];
+  return (
+    <QuestionCard className="mx-3 mb-2 px-3 py-2.5 pl-4 shadow-xl">
+      <QuestionEyebrow
+        label={`${node.questions.length} question${node.questions.length === 1 ? "" : "s"} waiting`}
+      />
+      <p className="mt-2 line-clamp-2 text-[13px] font-medium leading-[18px]">{next?.question}</p>
+      <div className="mt-2.5 flex gap-2">
         <button
           type="button"
-          title="Dismiss"
-          onClick={onDismiss}
-          className="flex-shrink-0 cursor-pointer text-muted-foreground hover:text-red-400"
+          onClick={onResume}
+          className="min-h-9 rounded-lg bg-foreground px-3 text-xs font-semibold text-background"
         >
-          <X className="h-4 w-4" aria-hidden="true" />
+          Resume answering
+        </button>
+        <button
+          type="button"
+          onClick={onDecide}
+          className="min-h-9 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground"
+        >
+          You decide
         </button>
       </div>
-
-      {/* Option pills */}
-      <div className="mb-2 flex flex-wrap gap-1.5">
-        {question.options.map((opt: QuestionOption) => (
-          <QuestionOptionPill
-            key={opt.label}
-            label={opt.label}
-            description={opt.description}
-            selected={currentSelected.has(opt.label)}
-            multiSelect={question.multiSelect}
-            onClick={() => toggleOption(opt.label)}
-          />
-        ))}
-      </div>
-
-      {/* Bottom row: custom input, pagination, send */}
-      <div className="flex items-end gap-2">
-        <PendingRichTextInput
-          value={currentCustom}
-          resetKey={page}
-          onChange={setCustomText}
-          onSubmit={(text) => {
-            if (hasAllAnswers) handleSubmit(text);
-          }}
-          placeholder="Other..."
-          submitLabel="Reply"
-          SubmitIcon={Send}
-          submitDisabled={!hasAllAnswers}
-          allowEmptySubmit
-        />
-
-        {total > 1 && (
-          <div className="flex items-center gap-1 pb-0.5">
-            <button
-              type="button"
-              title="Previous question"
-              onClick={goPrev}
-              disabled={isFirstPage}
-              className="cursor-pointer rounded-md border border-border px-2 py-1.5 text-xs text-foreground disabled:opacity-50"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              title="Next question"
-              onClick={goNext}
-              disabled={isLastPage}
-              className="cursor-pointer rounded-md border border-border px-2 py-1.5 text-xs text-foreground disabled:opacity-50"
-            >
-              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </div>
-        )}
-
-      </div>
-    </div>
+    </QuestionCard>
   );
 }

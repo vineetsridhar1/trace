@@ -20,7 +20,7 @@ import { SessionDropzone } from "./SessionDropzone";
 import { useAddAttachments } from "./useAddAttachments";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { PlanReviewPendingBar } from "./PlanReviewPendingBar";
-import { AskUserQuestionBar } from "./AskUserQuestionBar";
+import { AskUserQuestionBar, QuestionWaitingCard } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
@@ -611,6 +611,12 @@ export function SessionDetailView({
     if (activePlan && activePlan.index > activeQuestion.index) return null;
     return activeQuestion.node;
   })();
+  const pinnedQuestion =
+    activeQuestion?.node.id === dismissedQuestionId &&
+    timelineInputRequest?.kind !== "visual-plan" &&
+    !(activePlan && activePlan.index > activeQuestion.index)
+      ? activeQuestion.node
+      : null;
 
   const latestTodos = useMemo(
     () =>
@@ -831,6 +837,24 @@ export function SessionDetailView({
               </div>
             ) : (
               <>
+                {pinnedQuestion ? (
+                  <QuestionWaitingCard
+                    node={pinnedQuestion}
+                    onResume={() => setDismissedQuestionId(null)}
+                    onDecide={() => {
+                      const text = pinnedQuestion.questions
+                        .map((question) =>
+                          question.protocol === "trace"
+                            ? `<trace:input-response id="${question.id ?? "question"}">\n  <assumption>you-decide</assumption>\n</trace:input-response>`
+                            : `${question.header}: You decide`,
+                        )
+                        .join("\n");
+                      client
+                        .mutation(SEND_SESSION_MESSAGE_MUTATION, { sessionId, text })
+                        .toPromise();
+                    }}
+                  />
+                ) : null}
                 {!condensed && agentStatus === "active" && latestTodos && (
                   <StickyTodoList todos={latestTodos} />
                 )}

@@ -119,4 +119,45 @@ describe("buildSessionNodes", () => {
 
     expect(result.nodes).toEqual([{ kind: "event", id: event.id }]);
   });
+
+  it("turns trace request-input text into a structured question node", () => {
+    const event = makeEvent({
+      eventType: "session_output",
+      payload: {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "text",
+              text: `Before I continue:
+                <trace:request-input id="surface" type="single-select">
+                  <context>Density follows the chosen platform.</context>
+                  <question>Which surface should I design?</question>
+                  <option id="web">Responsive web</option>
+                  <option id="mobile">Native mobile</option>
+                </trace:request-input>`,
+            },
+          ],
+        },
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([
+      {
+        kind: "ask-user-question",
+        id: event.id,
+        timestamp: event.timestamp,
+        questions: [
+          expect.objectContaining({
+            id: "surface",
+            type: "single-select",
+            protocol: "trace",
+            question: "Which surface should I design?",
+          }),
+        ],
+      },
+    ]);
+  });
 });

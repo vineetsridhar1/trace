@@ -12,6 +12,7 @@ export type {
   ToolResultBlock,
   QuestionOption,
   Question,
+  QuestionType,
   QuestionBlock,
   PlanBlock,
 } from "./adapters/coding-tool.js";
@@ -29,6 +30,7 @@ export {
   hasQuestionBlock,
   isMissingToolSessionError,
   parseQuestion,
+  parseTraceRequestInputs,
 } from "./adapters/coding-tool.js";
 export type {
   BridgeClient,

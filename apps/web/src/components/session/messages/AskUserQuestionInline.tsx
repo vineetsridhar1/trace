@@ -1,43 +1,43 @@
-import { HelpCircle } from "lucide-react";
-import type { Question, QuestionOption } from "@trace/shared";
+import { Check } from "lucide-react";
+import type { Question } from "@trace/shared";
 import { formatTime } from "./utils";
 
-interface AskUserQuestionInlineProps {
+export function AskUserQuestionInline({
+  questions,
+  timestamp,
+}: {
   questions: Question[];
   timestamp: string;
-}
-
-export function AskUserQuestionInline({ questions, timestamp }: AskUserQuestionInlineProps) {
+}) {
   return (
-    <div className="accent-dashed-container px-4 py-3">
-      <div className="mb-3 flex items-center gap-2">
-        <HelpCircle size={16} className="text-accent" />
-        <span className="text-sm font-medium text-accent">Question</span>
-        <span className="ml-auto text-xs text-muted-foreground">{formatTime(timestamp)}</span>
+    <div className="structured-question relative overflow-hidden rounded-[14px] border border-border bg-surface px-4 py-3 pl-5">
+      <span
+        className="absolute inset-y-0 left-0 w-[3px] bg-muted-foreground/40"
+        aria-hidden="true"
+      />
+      <div className="flex items-center gap-2">
+        <span className="grid h-4 w-4 place-items-center rounded-full border border-muted-foreground/50 text-muted-foreground">
+          <Check size={10} />
+        </span>
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          {questions.length} question{questions.length === 1 ? "" : "s"} asked
+        </span>
+        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+          {formatTime(timestamp)}
+        </span>
       </div>
-
-      <div className="space-y-3">
-        {questions.map((q, i) => (
-          <div key={`${i}-${q.header || q.question}`}>
-            {q.header && (
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-accent">
-                {q.header}
-              </div>
-            )}
-            <div className="mt-0.5 text-sm text-foreground">{q.question}</div>
-            {q.options.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {q.options.map((opt: QuestionOption) => (
-                  <span
-                    key={opt.label}
-                    title={opt.description}
-                    className="rounded-md border border-border bg-surface px-2 py-0.5 text-xs text-foreground"
-                  >
-                    {opt.label}
-                  </span>
-                ))}
-              </div>
-            )}
+      <div className="mt-2.5 grid gap-2">
+        {questions.map((question, index) => (
+          <div
+            key={question.id ?? `${index}-${question.question}`}
+            className="flex items-baseline gap-2"
+          >
+            <span className="w-20 shrink-0 truncate font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+              {question.header || `Question ${index + 1}`}
+            </span>
+            <span className="line-clamp-2 text-xs leading-4 text-foreground">
+              {question.question}
+            </span>
           </div>
         ))}
       </div>
