@@ -1,4 +1,4 @@
-import type { AgentStatus, SessionStatus } from "@prisma/client";
+import type { SessionStatus } from "@prisma/client";
 
 export type SessionGroupStatus =
   | "in_progress"
@@ -10,7 +10,6 @@ export type SessionGroupStatus =
   | "archived";
 
 export type SessionGroupStatusSource = {
-  agentStatus: AgentStatus;
   sessionStatus: SessionStatus;
 };
 
@@ -23,20 +22,12 @@ export function deriveSessionGroupStatus(
   // Merged is terminal and takes priority over all other states,
   // including needs_input and in_review (which depends on prUrl).
   if (sessions.some((session) => session?.sessionStatus === "merged")) return "merged";
-  if (prUrl) {
-    if (sessions.some((session) => session?.agentStatus === "failed")) return "failed";
-    if (sessions.some((session) => session?.agentStatus === "stopped")) return "stopped";
-    if (sessions.some((session) => session?.sessionStatus === "needs_input")) {
-      return "needs_input";
-    }
-    return "in_review";
-  }
-  if (sessions.some((session) => session?.agentStatus === "active")) return "in_progress";
-  if (sessions.some((session) => session?.agentStatus === "failed")) return "failed";
-  if (sessions.some((session) => session?.agentStatus === "stopped")) return "stopped";
   if (sessions.some((session) => session?.sessionStatus === "needs_input")) {
     return "needs_input";
   }
+  if (sessions.some((session) => session?.sessionStatus === "in_review")) return "in_review";
+  // PR URL is a compatibility fallback for groups created before explicit review status.
+  if (prUrl) return "in_review";
   if (sessions.some((session) => session?.sessionStatus === "in_progress")) return "in_progress";
   return "in_progress";
 }

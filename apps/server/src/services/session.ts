@@ -618,12 +618,11 @@ function isRuntimeStartingWithinGrace(conn: SessionConnectionData, now: number):
 }
 
 function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
-  if (sessionStatus === "merged") return "merged";
-  return sessionStatus === "in_review" ? "in_review" : "in_progress";
+  return sessionStatus ?? "in_progress";
 }
 
 function getRunningSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
-  return sessionStatus === "merged" ? "merged" : "in_progress";
+  return sessionStatus ?? "in_progress";
 }
 
 function getIdleAgentStatus(agentStatus?: AgentStatus | null): AgentStatus {
@@ -4767,7 +4766,7 @@ export class SessionService {
         where: { id: session.id },
         data: {
           agentStatus: "active",
-          sessionStatus: "in_progress",
+          sessionStatus: getRunningSessionStatus(session.sessionStatus),
           connection: this.mergeConnection(session.connection, {
             state: "connecting",
             runtimeInstanceId: input.runtimeInstanceId,
@@ -4892,7 +4891,7 @@ export class SessionService {
         data: {
           pendingRun: pendingRunValue([...commands, pendingCommand]),
           agentStatus: "active",
-          sessionStatus: "in_progress",
+          sessionStatus: getRunningSessionStatus(session.sessionStatus),
           ...(markLocalPreparing && {
             connection: this.mergeConnection(session.connection, {
               state: "connecting",
@@ -5069,7 +5068,7 @@ export class SessionService {
       payload: {
         sessionId: id,
         agentStatus: "active",
-        sessionStatus: "in_progress",
+        sessionStatus: updated.sessionStatus,
         clientSource: normalizeClientSource(access?.clientSource),
         ...(sessionGroup ? { sessionGroup } : {}),
       },

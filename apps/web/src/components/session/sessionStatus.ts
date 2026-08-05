@@ -113,9 +113,8 @@ export function getDisplaySessionStatus(
 ): string {
   if (archivedAt) return "archived";
   if (sessionStatus === "merged") return "merged";
-  if (agentStatus === "failed") return "failed";
-  if (agentStatus === "stopped") return "stopped";
   if (sessionStatus === "needs_input") return "needs_input";
+  if (sessionStatus === "in_review") return "in_review";
   if (prUrl) return "in_review";
   if (isSessionPreparing({ agentStatus, sessionStatus, ...preparation })) return "preparing";
   return "in_progress";
@@ -163,18 +162,11 @@ export function getSessionGroupDisplayStatus(
   // Merged is terminal and takes priority over all other states,
   // including needs_input and in_review (which depends on prUrl).
   if (sessionStatuses.some((s) => s === "merged")) return "merged";
-  if (prUrl) {
-    if (agentStatuses.some((s) => s === "failed")) return "failed";
-    if (agentStatuses.some((s) => s === "stopped")) return "stopped";
-    if (sessions?.some(isSessionPreparing)) return "preparing";
-    if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
-    return "in_review";
-  }
-  if (agentStatuses.some((s) => s === "active")) return "in_progress";
-  if (agentStatuses.some((s) => s === "failed")) return "failed";
-  if (agentStatuses.some((s) => s === "stopped")) return "stopped";
-  if (sessions?.some(isSessionPreparing)) return "preparing";
   if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
+  if (sessionStatuses.some((s) => s === "in_review")) return "in_review";
+  // PR URL is a compatibility fallback for groups created before explicit review status.
+  if (prUrl) return "in_review";
+  if (sessions?.some(isSessionPreparing)) return "preparing";
   if (sessionStatuses.some((s) => s === "in_progress")) return "in_progress";
   return "in_progress";
 }
