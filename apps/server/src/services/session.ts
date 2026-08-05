@@ -11651,6 +11651,16 @@ export class SessionService {
       if (isRuntimeStartingWithinGrace(this.parseConnection(cloudSession.connection), now))
         continue;
 
+      // The teardown below targets the runtime recorded on the session GROUP,
+      // not the single session inspected above, so the group connection needs
+      // the same mid-boot protection. Every lifecycle write syncs onto the
+      // group, so a revive anywhere in the group puts a startup state there —
+      // while the sibling session this sweep happened to select can still look
+      // idle, letting all three session-level guards pass and killing a
+      // container seconds into its boot. Checked before completing sessions
+      // below so a protected group is left entirely untouched.
+      if (isRuntimeStartingWithinGrace(groupConnection, now)) continue;
+
       // The bridge no longer reports these runs as complete, so settle their
       // session state before reclaiming the runtime. This prevents a stale
       // `active` row from blocking future cleanup or misleading the UI.
@@ -11717,13 +11727,40 @@ export class SessionService {
       where: { id: cloudSession.id },
       select: { connection: true },
     });
-    if (latest && isRuntimeStartingWithinGrace(this.parseConnection(latest.connection), now)) {
+    // `runtimeSession` carries the group's connection, which is the runtime this
+    // teardown actually destroys, so it gets the same re-check as the session's.
+    // Both were read after the flag landed, so a start that raced the flag is
+    // visible in whichever record it touched.
+    const groupRuntimeConn = this.parseConnection(runtimeSession.connection);
+    if (
+      isRuntimeStartingWithinGrace(groupRuntimeConn, now) ||
+      (latest && isRuntimeStartingWithinGrace(this.parseConnection(latest.connection), now))
+    ) {
       await this.updateConnectionConditional(cloudSession.id, (conn) => {
         if (conn.disconnectOnDeprovision !== true) return null;
         return { ...conn, disconnectOnDeprovision: false, disconnectReason: undefined };
       });
       return false;
     }
+
+    // Record the state each reap was decided on, for both records. Containers
+    // have been observed dying with `idle_session_group_cleanup` seconds into a
+    // boot, and session and group states that disagree are the signature of the
+    // mismatch the guards above now cover.
+    const reapedConn = this.parseConnection(latest?.connection ?? cloudSession.connection);
+    logAgentEnvironmentTelemetry("cloud_idle_cleanup.reaping_runtime", {
+      organizationId: session.organizationId,
+      sessionId: cloudSession.id,
+      sessionGroupId: group.id,
+      connectionState: reapedConn.state ?? null,
+      requestedAt: reapedConn.requestedAt ?? null,
+      provisioningAt: reapedConn.provisioningAt ?? null,
+      connectingAt: reapedConn.connectingAt ?? null,
+      groupConnectionState: groupRuntimeConn.state ?? null,
+      groupRequestedAt: groupRuntimeConn.requestedAt ?? null,
+      groupProvisioningAt: groupRuntimeConn.provisioningAt ?? null,
+      groupConnectingAt: groupRuntimeConn.connectingAt ?? null,
+    });
 
     terminalRelay.destroyAllForSessionGroup(group.id);
     try {
