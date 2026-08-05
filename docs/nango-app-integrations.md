@@ -52,3 +52,25 @@ Copied private-app links are stable endpoint URLs and contain no preview credent
 viewer who follows one is sent through `/auth/app-access`; Trace checks their current membership and
 app access before issuing a five-minute endpoint-scoped cookie for that viewer. The sender's
 identity is never transferred through the shared URL.
+
+## Generated Node application API
+
+New generated applications should call integrations from their Node `/api/*` routes. Trace injects
+a signed, one-minute viewer context only into authorized `/api/*` requests; Trace session cookies
+remain stripped from the untrusted runtime. The starter's server-only `trace` helper forwards that
+context to Trace.
+
+Snowflake queries use:
+
+```ts
+const result = await trace.integrations.snowflake.query(request, bindingId, {
+  sql: "SELECT name FROM analytics.customers WHERE created_at >= ?",
+  parameters: [startDate],
+  warehouse: "REPORTING_WH",
+});
+```
+
+The binding must identify Snowflake and allow `POST /api/v2/statements`. Trace rejects the generic
+proxy path for Snowflake statements, accepts only one `SELECT`/`WITH ... SELECT`, converts values to
+Snowflake SQL API bindings, resolves the configured execution identity, and submits the query via
+Nango. Browser code supplies application parameters to the Node route, never SQL or connection IDs.

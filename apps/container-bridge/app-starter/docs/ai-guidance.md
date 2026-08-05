@@ -19,3 +19,7 @@ product partner, not just their programmer.
 
 Read [trace-apps.md](trace-apps.md) before changing the app. It explains how the preview, server,
 data, source selection, and sharing workflow behave inside Trace.
+
+When the app uses a Trace integration, call it from a Node `/api/*` route with the server-only
+`trace` helper. Keep provider queries in server code and pass only validated parameter values from
+the browser.
