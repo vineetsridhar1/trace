@@ -549,7 +549,6 @@ export function SessionGroupDetailView({
   const selectedSessionStatus = selectedSession
     ? getDisplaySessionStatus(
         selectedSession.sessionStatus,
-        groupPrUrl ?? null,
         selectedSession.agentStatus,
         groupArchivedAt ?? null,
       )

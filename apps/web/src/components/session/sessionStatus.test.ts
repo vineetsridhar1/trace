@@ -7,14 +7,13 @@ describe("getSessionGroupDisplayStatus", () => {
       getSessionGroupDisplayStatus(
         ["needs_input"],
         ["failed"],
-        "https://github.com/trace/trace/pull/123",
       ),
     ).toBe("needs_input");
   });
 
   it("reports the pipeline status independently of agent activity", () => {
     expect(
-      getSessionGroupDisplayStatus(["in_progress"], ["active", "failed"], null),
+      getSessionGroupDisplayStatus(["in_progress"], ["active", "failed"]),
     ).toBe("in_progress");
   });
 
@@ -23,7 +22,6 @@ describe("getSessionGroupDisplayStatus", () => {
       getSessionGroupDisplayStatus(
         ["in_review"],
         ["active"],
-        null,
       ),
     ).toBe("in_review");
   });

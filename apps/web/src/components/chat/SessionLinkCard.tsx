@@ -34,7 +34,6 @@ export function SessionLinkCard({ sessionId, channelId, sessionGroupId }: Sessio
   const preparation = { workdir, lastUserMessageAt, connection };
   const displayStatus = getDisplaySessionStatus(
     sessionStatus,
-    null,
     agentStatus,
     null,
     preparation,
@@ -42,7 +41,6 @@ export function SessionLinkCard({ sessionId, channelId, sessionGroupId }: Sessio
   const displayAgentStatus = getDisplayAgentStatus(
     agentStatus,
     sessionStatus,
-    null,
     null,
     preparation,
   );

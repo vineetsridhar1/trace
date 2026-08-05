@@ -23,8 +23,6 @@ export const agentStatusLabel: Record<string, string> = {
 
 // ─── Session Status (where the session is in its lifecycle) ───
 
-// Includes "failed" and "stopped" because getDisplaySessionStatus() maps terminal
-// agent states into these display keys for group headers and table row groups.
 export const sessionStatusColor: Record<string, string> = {
   preparing: "text-amber-400",
   not_started: "text-muted-foreground",
@@ -106,7 +104,6 @@ export const connectionLabel: Record<string, string> = {
  */
 export function getDisplaySessionStatus(
   sessionStatus: string | undefined,
-  prUrl: string | null | undefined,
   agentStatus?: string | undefined,
   archivedAt?: string | null | undefined,
   preparation?: SessionPreparationFields,
@@ -115,7 +112,6 @@ export function getDisplaySessionStatus(
   if (sessionStatus === "merged") return "merged";
   if (sessionStatus === "needs_input") return "needs_input";
   if (sessionStatus === "in_review") return "in_review";
-  if (prUrl) return "in_review";
   if (isSessionPreparing({ agentStatus, sessionStatus, ...preparation })) return "preparing";
   return "in_progress";
 }
@@ -126,13 +122,11 @@ export function getDisplaySessionStatus(
 export function getDisplayAgentStatus(
   agentStatus: string | undefined,
   sessionStatus?: string | undefined,
-  prUrl?: string | null | undefined,
   archivedAt?: string | null | undefined,
   preparation?: SessionPreparationFields,
 ): string {
   const displaySessionStatus = getDisplaySessionStatus(
     sessionStatus,
-    prUrl,
     agentStatus,
     archivedAt,
     preparation,
@@ -154,18 +148,14 @@ export function getDisplayAgentStatus(
 export function getSessionGroupDisplayStatus(
   sessionStatuses: Array<string | null | undefined>,
   agentStatuses: Array<string | null | undefined>,
-  prUrl: string | null | undefined,
   archivedAt?: string | null | undefined,
   sessions?: Array<SessionPreparationFields | null | undefined>,
 ): string {
   if (archivedAt) return "archived";
-  // Merged is terminal and takes priority over all other states,
-  // including needs_input and in_review (which depends on prUrl).
+  // Merged is terminal and takes priority over all other pipeline states.
   if (sessionStatuses.some((s) => s === "merged")) return "merged";
   if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
   if (sessionStatuses.some((s) => s === "in_review")) return "in_review";
-  // PR URL is a compatibility fallback for groups created before explicit review status.
-  if (prUrl) return "in_review";
   if (sessions?.some(isSessionPreparing)) return "preparing";
   if (sessionStatuses.some((s) => s === "in_progress")) return "in_progress";
   return "in_progress";

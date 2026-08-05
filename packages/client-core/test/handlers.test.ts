@@ -520,6 +520,60 @@ describe("handleOrgEvent", () => {
     expect(sessions["session-2"].worktreeDeleted).toBe(true);
   });
 
+  it("applies explicit pipeline status updates from PR lifecycle events", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          sessionStatus: "in_progress",
+        } as never,
+        "session-2": {
+          id: "session-2",
+          sessionGroupId: "group-1",
+          sessionStatus: "in_progress",
+        } as never,
+      },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1", "session-2"] },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_pr_opened",
+        scopeId: "session-1",
+        payload: {
+          sessionStatusUpdates: [
+            { id: "session-1", sessionStatus: "in_review" },
+            { id: "session-2", sessionStatus: "in_review" },
+          ],
+        },
+      }),
+    );
+
+    const sessions = useEntityStore.getState().sessions;
+    expect(sessions["session-1"].sessionStatus).toBe("in_review");
+    expect(sessions["session-2"].sessionStatus).toBe("in_review");
+  });
+
+  it("keeps the stored pipeline status for legacy session-resumed events", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          sessionStatus: "in_review",
+        } as never,
+      },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+
+    handleOrgEvent(makeEvent({ eventType: "session_resumed", scopeId: "session-1" }));
+
+    expect(useEntityStore.getState().sessions["session-1"].sessionStatus).toBe("in_review");
+  });
+
   it("archives a session group and stops every session in it", () => {
     useEntityStore.setState({
       sessions: {

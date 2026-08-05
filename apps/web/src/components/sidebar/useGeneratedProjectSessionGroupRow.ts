@@ -21,7 +21,6 @@ export function useGeneratedProjectSessionGroupRow(groupId: string): SessionGrou
       .filter((session): session is SessionEntity => Boolean(session));
     const agentStatuses = groupSessions.map((session) => session.agentStatus);
     const sessionStatuses = groupSessions.map((session) => session.sessionStatus);
-    const prUrl = group?.prUrl as string | null | undefined;
     const archivedAt = group?.archivedAt as string | null | undefined;
 
     const displaySessionStatus =
@@ -29,7 +28,6 @@ export function useGeneratedProjectSessionGroupRow(groupId: string): SessionGrou
         ? getSessionGroupDisplayStatus(
             sessionStatuses,
             agentStatuses,
-            prUrl,
             archivedAt,
             groupSessions,
           )

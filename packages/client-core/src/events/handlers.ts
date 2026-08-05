@@ -59,7 +59,7 @@ const SESSION_RUNTIME_EVENTS: Set<EventType> = new Set([
   "session_runtime_reconnected",
 ]);
 
-/** PR lifecycle events update the group PR URL; review state is derived from that. */
+/** PR lifecycle events carry explicit pipeline-status updates for every affected session. */
 const SESSION_PR_EVENTS: Set<EventType> = new Set(["session_pr_opened", "session_pr_closed"]);
 
 const SESSION_ACTIVITY_EVENTS: Set<EventType> = new Set(["session_output", "message_sent"]);
@@ -137,8 +137,6 @@ function sessionStatusFromEvent(
 
   switch (eventType) {
     case "session_started":
-      return "in_progress";
-    case "session_resumed":
       return "in_progress";
     case "session_pr_merged":
       return "merged";
@@ -815,6 +813,21 @@ export function handleOrgEvent(event: Event): void {
     event.scopeType === ("session" satisfies ScopeType)
   ) {
     upsertSessionGroupFromPayload({ batch, payload, timestamp: event.timestamp, bumpSort: true });
+    const sessionStatusUpdates = payload.sessionStatusUpdates;
+    if (Array.isArray(sessionStatusUpdates)) {
+      for (const update of sessionStatusUpdates) {
+        const statusUpdate = asJsonObject(update);
+        if (
+          typeof statusUpdate?.id === "string" &&
+          typeof statusUpdate.sessionStatus === "string"
+        ) {
+          batch.patch("sessions", statusUpdate.id, {
+            sessionStatus: statusUpdate.sessionStatus as SessionStatus,
+            updatedAt: event.timestamp,
+          });
+        }
+      }
+    }
   }
 
   // Handle session_output subtypes that update session fields

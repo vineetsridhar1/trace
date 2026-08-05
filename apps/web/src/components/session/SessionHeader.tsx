@@ -127,7 +127,6 @@ export function SessionHeader({
       : null;
   const displaySessionStatus = getDisplaySessionStatus(
     sessionStatus,
-    prUrl,
     agentStatus,
     groupArchivedAt,
     { workdir, lastUserMessageAt, connection },
@@ -135,7 +134,6 @@ export function SessionHeader({
   const displayAgentStatus = getDisplayAgentStatus(
     agentStatus,
     sessionStatus,
-    prUrl,
     groupArchivedAt,
     { workdir, lastUserMessageAt, connection },
   );

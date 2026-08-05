@@ -6,7 +6,6 @@ describe("deriveSessionGroupStatus", () => {
     expect(
       deriveSessionGroupStatus(
         [{ agentStatus: "active", sessionStatus: "in_progress" }],
-        "https://github.com/trace/trace/pull/123",
         "2024-01-03T00:00:00.000Z",
       ),
     ).toBe("archived");
@@ -19,7 +18,6 @@ describe("deriveSessionGroupStatus", () => {
           { agentStatus: "done", sessionStatus: "needs_input" },
           { agentStatus: "active", sessionStatus: "in_progress" },
         ],
-        null,
       ),
     ).toBe("needs_input");
   });
@@ -28,7 +26,6 @@ describe("deriveSessionGroupStatus", () => {
     expect(
       deriveSessionGroupStatus(
         [{ agentStatus: "active", sessionStatus: "in_review" }],
-        null,
       ),
     ).toBe("in_review");
   });
@@ -41,7 +38,6 @@ describe("deriveSessionGroupStatus", () => {
           { agentStatus: "failed", sessionStatus: "in_progress" },
           { agentStatus: "stopped", sessionStatus: "in_progress" },
         ],
-        null,
       ),
     ).toBe("in_progress");
   });
@@ -52,7 +48,6 @@ describe("deriveSessionGroupStatus", () => {
         [
           { agentStatus: "failed", sessionStatus: "in_review" },
         ],
-        null,
       ),
     ).toBe("in_review");
   });
