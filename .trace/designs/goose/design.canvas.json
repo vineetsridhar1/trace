@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "sections": [
+    {
+      "id": "entry-point",
+      "name": "Entry point — the user opens it, Trace never does",
+      "screenIds": ["home-updates", "home-ready", "home-tools-menu", "new-session-picker"]
+    },
+    {
+      "id": "popover-states",
+      "name": "Popover — the quick path, one action per state",
+      "screenIds": [
+        "popover-updates",
+        "popover-updating",
+        "popover-updated",
+        "popover-failed",
+        "popover-ready",
+        "popover-missing"
+      ]
+    },
+    {
+      "id": "settings-page",
+      "name": "Settings › Coding tools — the full surface",
+      "screenIds": [
+        "settings-tools",
+        "settings-tools-expanded",
+        "settings-tools-updating",
+        "settings-tools-failed",
+        "settings-tools-ready",
+        "settings-tools-pinned-missing"
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "id": "home-updates",
+      "name": "Launch with updates waiting",
+      "component": "./screens/HomeUpdatesScreen.tsx",
+      "variation": "Sidebar signal",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "home-ready",
+      "name": "Launch with nothing to do",
+      "component": "./screens/HomeReadyScreen.tsx",
+      "variation": "Sidebar signal",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "home-tools-menu",
+      "name": "Sidebar row opened",
+      "component": "./screens/HomeToolsMenuScreen.tsx",
+      "variation": "Popover in context",
+      "state": "Open",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "new-session-picker",
+      "name": "Missing tool caught in New session",
+      "component": "./screens/NewSessionPickerScreen.tsx",
+      "variation": "Contextual install",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "popover-updates",
+      "name": "Popover — 2 updates available",
+      "component": "./screens/PopoverUpdatesScreen.tsx",
+      "variation": "Popover",
+      "state": "Default",
+      "viewport": { "width": 312, "height": 480 }
+    },
+    {
+      "id": "popover-updating",
+      "name": "Popover — update all running",
+      "component": "./screens/PopoverUpdatingScreen.tsx",
+      "variation": "Popover",
+      "state": "Loading",
+      "viewport": { "width": 312, "height": 480 }
+    },
+    {
+      "id": "popover-updated",
+      "name": "Popover — updates finished",
+      "component": "./screens/PopoverUpdatedScreen.tsx",
+      "variation": "Popover",
+      "state": "Success",
+      "viewport": { "width": 312, "height": 480 }
+    },
+    {
+      "id": "popover-failed",
+      "name": "Popover — one update failed",
+      "component": "./screens/PopoverFailedScreen.tsx",
+      "variation": "Popover",
+      "state": "Error",
+      "viewport": { "width": 312, "height": 480 }
+    },
+    {
+      "id": "popover-ready",
+      "name": "Popover — everything up to date",
+      "component": "./screens/PopoverReadyScreen.tsx",
+      "variation": "Popover",
+      "state": "Empty",
+      "viewport": { "width": 312, "height": 480 }
+    },
+    {
+      "id": "popover-missing",
+      "name": "Popover — Codex not installed but pinned",
+      "component": "./screens/PopoverMissingScreen.tsx",
+      "variation": "Popover",
+      "state": "Default",
+      "viewport": { "width": 312, "height": 480 }
+    },
+    {
+      "id": "settings-tools",
+      "name": "Settings › Coding tools",
+      "component": "./screens/SettingsToolsScreen.tsx",
+      "variation": "Full page",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-tools-expanded",
+      "name": "Settings — row and available list expanded",
+      "component": "./screens/SettingsToolsExpandedScreen.tsx",
+      "variation": "Full page",
+      "state": "Open",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-tools-updating",
+      "name": "Settings — update all running",
+      "component": "./screens/SettingsToolsUpdatingScreen.tsx",
+      "variation": "Full page",
+      "state": "Loading",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-tools-failed",
+      "name": "Settings — one update failed",
+      "component": "./screens/SettingsToolsFailedScreen.tsx",
+      "variation": "Full page",
+      "state": "Error",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-tools-ready",
+      "name": "Settings — everything up to date",
+      "component": "./screens/SettingsToolsReadyScreen.tsx",
+      "variation": "Full page",
+      "state": "Empty",
+      "viewport": { "width": 1440, "height": 900 }
+    },
+    {
+      "id": "settings-tools-pinned-missing",
+      "name": "Settings — Codex not installed but pinned",
+      "component": "./screens/SettingsToolsPinnedMissingScreen.tsx",
+      "variation": "Full page",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 }
+    }
+  ]
+}

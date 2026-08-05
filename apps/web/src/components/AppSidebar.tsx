@@ -12,6 +12,7 @@ import { PeekOverlay } from "./sidebar/PeekOverlay";
 import { SidebarTabSwitcher } from "./sidebar/SidebarTabSwitcher";
 import { UserMenu } from "./sidebar/UserMenu";
 import { SidebarGettingStartedItem } from "./sidebar/SidebarGettingStartedItem";
+import { CodingToolsSidebarItem } from "./desktop/CodingToolsSidebarItem";
 import { getPreferredSidebarTab, getTabIndex, type SidebarTab } from "./sidebar/sidebarTabs";
 import { Sidebar, SidebarContent, SidebarFooter, useSidebar } from "./ui/sidebar";
 
@@ -189,6 +190,7 @@ export function AppSidebar() {
                 <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={expandedTabs.selectTab} />
               </div>
             )}
+            <CodingToolsSidebarItem />
             <SidebarGettingStartedItem />
             <div className="border-t border-white/10">
               <UserMenu />

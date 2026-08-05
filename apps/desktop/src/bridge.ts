@@ -617,6 +617,12 @@ export class BridgeClient implements IBridgeClient {
     }
   }
 
+  refreshCapabilities() {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.sendRuntimeHello();
+    }
+  }
+
   private cancelPendingReconnect() {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

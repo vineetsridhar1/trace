@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "artifactType": "Desktop app surface set: coding tool install and update management",
+  "audience": "Developers using Trace on macOS to start Claude Code, Codex, Pi, Antigravity, and Cursor Composer sessions",
+  "platform": "Desktop (macOS, 1440x900 window)",
+  "fidelity": "High-fidelity screen artifacts with local prototype interactions",
+  "primaryJob": "Notice that a session tool is missing or out of date, then install or update it on the user's own initiative instead of being interrupted by an auto-opening dialog at launch",
+  "coreFlow": [
+    "Trace starts with no dialog; the sidebar footer row reports coding tool state",
+    "User opens the popover deliberately from the sidebar row and sees the whole situation in place",
+    "The popover carries exactly one action per state, so most visits resolve without navigating",
+    "Anything per-tool hands off to Settings > Coding tools, the single full surface",
+    "Installed tools sit top level with one action each; Claude Code and Codex stay top level even when not installed",
+    "Tools that are not installed collapse into an Available to install accordion in Settings, and compress to one line in the popover",
+    "User runs Update all or a single install, watches inline progress, and resolves success or failure in whichever surface they started from",
+    "A missing tool is also caught contextually in the New session type picker"
+  ],
+  "requiredStates": ["default", "open", "loading", "success", "error", "empty"],
+  "direction": {
+    "name": "Instrument panel",
+    "principles": [
+      "Version numbers are the data: monospace, aligned, always showing current then target",
+      "Status is a glyph plus a label, never color alone",
+      "One primary action per group so actionable updates outrank absent tools",
+      "Absent tools are collapsed, not deleted, so the list never nags"
+    ]
+  },
+  "references": [
+    {
+      "source": "User-supplied screenshot of the current Trace macOS window with the auto-opening 'Keep your coding tools ready' dialog",
+      "preserve": [
+        "Near-black window background with a slightly lighter raised surface for panels and dialogs",
+        "Left sidebar information architecture: workspace switcher, Home, Inbox, CREATE group with Apps/Designs/Documents/Animations, Projects group, account row pinned to the bottom",
+        "Session list columns: Name, Type, Created by, Last message",
+        "Blue as the active navigation and focus accent",
+        "Tool set and their real state at capture time: Claude Code 2.1.220, Codex 0.144.5, Pi 0.74.0 up to date, Antigravity and Cursor Composer not installed"
+      ],
+      "reinterpret": [
+        "Replace the auto-opening centered modal with a user-initiated sidebar popover backed by a Settings page",
+        "Replace the five identical orange wrench icons with distinct monochrome per-tool marks that actually differentiate rows",
+        "Give the actions a hierarchy instead of five visually equal grey buttons",
+        "Group by installed versus not installed, and collapse the not-installed group",
+        "Show version transitions in monospace rather than proportional body text"
+      ],
+      "avoidCopying": [
+        "Claude, OpenAI, Pi, Antigravity, and Cursor logotypes or brand marks; marks are neutral geometric stand-ins",
+        "Any real user account identity beyond the sample name already visible in the capture",
+        "Exact pixel replication of the macOS title bar chrome"
+      ],
+      "evidence": [
+        "Window background reads as near-black #09090b and the dialog surface as roughly #18181b, matching the Trace Default neutrals already in tokens.css",
+        "Active sidebar item 'In Progress' and the focus ring on the Claude Code Update button are both blue, so secondary is set to #3b82f6",
+        "Dialog and button corners measure roughly 12px and 8px, so radius.surface is tightened from 16 to 12 while radius.control stays 8",
+        "Version strings in the capture already read as current then target ('Version 2.1.220 -> 2.1.222'), which the design promotes to monospace"
+      ]
+    }
+  ],
+  "assumptions": [
+    "Trace performs installs and updates itself, so progress, cancel, and failure are designed inline rather than handing off to a terminal",
+    "Claude Code and Codex are first-class session types and stay top level regardless of install state, per explicit user direction",
+    "No auto-opening dialog and no Home banner: the passive signal is the sidebar row label plus a count badge, so the surface never interrupts",
+    "Two surfaces only, per explicit user direction: the sidebar popover and Settings > Coding tools. The docked side panel explored earlier was cut as redundant with Settings",
+    "The popover exposes exactly one action button per state; per-tool controls, install paths, logs, history, and removal live only in Settings. That division is what keeps the popover small enough to justify existing",
+    "Desktop control height is 32px rather than the 44px mobile touch minimum, keeping list density appropriate to a developer tool"
+  ]
+}
