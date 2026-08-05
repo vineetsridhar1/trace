@@ -5563,7 +5563,7 @@ describe("SessionService", () => {
           },
         }),
       );
-      prismaMock.session.findUnique.mockResolvedValueOnce({
+      prismaMock.session.findUnique.mockResolvedValue({
         agentStatus: "done",
         sessionStatus: "in_progress",
         connection: {
@@ -5603,10 +5603,14 @@ describe("SessionService", () => {
       );
       // persistConnectionFailure must mark this as non-auto-retryable because
       // the home bridge is the cause — only Move/home-return can unblock.
-      const connectionWrites = prismaMock.session.update.mock.calls.filter((call: unknown[]) => {
-        const arg = call[0] as { data?: { connection?: { autoRetryable?: boolean } } } | undefined;
-        return arg?.data?.connection !== undefined;
-      });
+      const connectionWrites = prismaMock.session.updateMany.mock.calls.filter(
+        (call: unknown[]) => {
+          const arg = call[0] as
+            | { data?: { connection?: { autoRetryable?: boolean } } }
+            | undefined;
+          return arg?.data?.connection !== undefined;
+        },
+      );
       expect(connectionWrites.length).toBeGreaterThan(0);
       const lastConn = connectionWrites[connectionWrites.length - 1][0].data.connection as {
         autoRetryable?: boolean;
@@ -5639,7 +5643,7 @@ describe("SessionService", () => {
           },
         }),
       );
-      prismaMock.session.findUnique.mockResolvedValueOnce({
+      prismaMock.session.findUnique.mockResolvedValue({
         agentStatus: "done",
         sessionStatus: "in_progress",
         tool: "pi",
@@ -5664,10 +5668,14 @@ describe("SessionService", () => {
         actorId: "user-1",
       });
 
-      const connectionWrites = prismaMock.session.update.mock.calls.filter((call: unknown[]) => {
-        const arg = call[0] as { data?: { connection?: { autoRetryable?: boolean } } } | undefined;
-        return arg?.data?.connection !== undefined;
-      });
+      const connectionWrites = prismaMock.session.updateMany.mock.calls.filter(
+        (call: unknown[]) => {
+          const arg = call[0] as
+            | { data?: { connection?: { autoRetryable?: boolean } } }
+            | undefined;
+          return arg?.data?.connection !== undefined;
+        },
+      );
       expect(connectionWrites.length).toBeGreaterThan(0);
       const lastConn = connectionWrites[connectionWrites.length - 1][0].data.connection as {
         autoRetryable?: boolean;
@@ -5839,6 +5847,12 @@ describe("SessionService", () => {
         .mockResolvedValueOnce({
           connection: session.connection,
           sessionGroupId: "group-1",
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+          worktreeDeleted: false,
+          hosting: "cloud",
+          lastUserMessageAt: null,
+          lastMessageAt: null,
         });
       prismaMock.session.updateMany
         .mockResolvedValueOnce({ count: 1 })
@@ -5864,17 +5878,35 @@ describe("SessionService", () => {
         key: "org-1:runtime-provisioned-1",
         id: "runtime-provisioned-1",
       });
-      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce(
-        makeSessionGroup({
-          id: "group-1",
-          sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
-        }),
-      );
+      prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce(
+          makeSessionGroup({
+            id: "group-1",
+            sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+          }),
+        )
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          connection: {
+            adapterType: "provisioned",
+            runtimeInstanceId: "runtime-provisioned-1",
+          },
+        });
 
       await onLifecycle?.("session_runtime_start_requested", {
         runtimeInstanceId: "runtime-provisioned-1",
       });
 
+      expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function));
+      expect(prismaMock.$queryRaw).toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "group-1" },
+          data: expect.objectContaining({
+            connection: expect.objectContaining({ runtimeInstanceId: "runtime-provisioned-1" }),
+          }),
+        }),
+      );
       expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: {
@@ -6257,10 +6289,18 @@ describe("SessionService", () => {
 
   describe("retryConnection", () => {
     beforeEach(() => {
+      prismaMock.session.findFirst.mockReset();
+      prismaMock.session.findFirst.mockResolvedValue({ sessionGroupId: "group-1" });
       prismaMock.session.findFirstOrThrow.mockReset();
       prismaMock.session.findUnique.mockReset();
       prismaMock.session.findUniqueOrThrow.mockReset();
       prismaMock.session.update.mockReset();
+      sessionRouterMock.send.mockReset();
+      sessionRouterMock.send.mockReturnValue("delivered");
+      sessionRouterMock.getRuntime.mockReset();
+      sessionRouterMock.getRuntime.mockReturnValue(null);
+      sessionRouterMock.isRuntimeAvailable.mockReset();
+      sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
       eventServiceMock.create.mockClear();
     });
 
@@ -6285,6 +6325,10 @@ describe("SessionService", () => {
       const result = await service.retryConnection("session-1", "org-1", "user", "user-1");
 
       expect(result).toBe(current);
+      expect(withDistributedLockMock).toHaveBeenCalledWith(
+        expect.objectContaining({ key: "trace:session-group-runtime-transition:group-1" }),
+        expect.any(Function),
+      );
       expect(eventServiceMock.create).not.toHaveBeenCalled();
       expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
       expect(sessionRouterMock.send).not.toHaveBeenCalled();
@@ -8684,6 +8728,59 @@ describe("SessionService", () => {
       );
     });
 
+    it("does not apply a delayed disconnect after the session unloads", async () => {
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            agentStatus: "active",
+            connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            agentStatus: "stopped",
+            connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+          }),
+        );
+
+      await service.markConnectionLost("session-1", "runtime_disconnected", "runtime-1");
+
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
+    it("drops a stale delivery failure after a newer runtime takes ownership", async () => {
+      prismaMock.session.findUnique
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            connection: { state: "connected", version: 4, runtimeInstanceId: "runtime-old" },
+          }),
+        )
+        .mockResolvedValueOnce(
+          makeSession({
+            id: "session-1",
+            connection: { state: "connecting", version: 5, runtimeInstanceId: "runtime-new" },
+          }),
+        );
+
+      await (
+        service as unknown as {
+          persistConnectionFailure(
+            sessionId: string,
+            organizationId: string,
+            result: "runtime_disconnected",
+            operation: string,
+          ): Promise<void>;
+        }
+      ).persistConnectionFailure("session-1", "org-1", "runtime_disconnected", "send");
+
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
     it("does not rewrite already-disconnected done cloud sessions for the same runtime", async () => {
       prismaMock.session.findUnique.mockResolvedValue(
         makeSession({
@@ -9037,6 +9134,7 @@ describe("SessionService", () => {
             id: "group-1",
             workdir: "/workspace/group-1",
             worktreeDeleted: false,
+            connection: disconnectOnDeprovisionConnection,
             sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
           }),
         )
@@ -9045,6 +9143,18 @@ describe("SessionService", () => {
           repoId: "repo-1",
           connection: disconnectOnDeprovisionConnection,
         })
+        .mockResolvedValueOnce({
+          organizationId: "org-1",
+          connection: disconnectOnDeprovisionConnection,
+        })
+        .mockResolvedValueOnce(
+          makeSessionGroup({
+            id: "group-1",
+            workdir: "/workspace/group-1",
+            worktreeDeleted: false,
+            sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
+          }),
+        )
         .mockResolvedValueOnce(
           makeSessionGroup({
             id: "group-1",
@@ -10096,6 +10206,15 @@ describe("SessionService", () => {
       );
 
       expect(result.id).toBe("session-1");
+      expect(withDistributedLockMock).toHaveBeenCalledWith(
+        expect.objectContaining({ key: "trace:session-group-runtime-transition:group-1" }),
+        expect.any(Function),
+      );
+      expect(prismaMock.$queryRaw).toHaveBeenCalled();
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: { id: "session-1", connection: { path: ["version"], equals: 0 } },
+        data: { connection: expect.objectContaining({ runtimeInstanceId: "runtime-source" }) },
+      });
       expect(prismaMock.session.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -10288,6 +10407,7 @@ describe("SessionService", () => {
         where: {
           sessionGroupId: "group-1",
           id: { notIn: ["session-1", "session-2", "session-merged"] },
+          connection: { path: ["version"], equals: 0 },
         },
         data: expect.objectContaining({
           hosting: "local",
@@ -13392,9 +13512,14 @@ describe("SessionService", () => {
       prismaMock.sessionGroup.findFirst.mockResolvedValue({
         connection: { runtimeInstanceId: "runtime-old" },
       } as unknown as Awaited<ReturnType<typeof prismaMock.sessionGroup.findFirst>>);
-      prismaMock.sessionGroup.findUnique.mockResolvedValue({
-        organizationId: "org-1",
-      } as unknown as Awaited<ReturnType<typeof prismaMock.sessionGroup.findUnique>>);
+      prismaMock.sessionGroup.findUnique
+        .mockResolvedValueOnce({
+          connection: { runtimeInstanceId: "runtime-old" },
+        } as unknown as Awaited<ReturnType<typeof prismaMock.sessionGroup.findUnique>>)
+        .mockResolvedValue({
+          organizationId: "org-1",
+          connection: conn,
+        } as unknown as Awaited<ReturnType<typeof prismaMock.sessionGroup.findUnique>>);
 
       await service.reconcileStuckDeprovisions({ now, stuckAfterMs: 60_000 });
 

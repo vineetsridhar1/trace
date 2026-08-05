@@ -34,7 +34,7 @@ import { sessionService } from "./services/session.js";
 import { codexCredentialService } from "./services/codex-credential.js";
 import { runtimeDebug } from "./lib/runtime-debug.js";
 import { handleTerminalConnection } from "./lib/terminal-handler.js";
-import { connectRedis, disconnectRedis, redis } from "./lib/redis.js";
+import { connectRedis, disconnectRedis } from "./lib/redis.js";
 import { pubsub } from "./lib/pubsub.js";
 import { runtimeAccessService } from "./services/runtime-access.js";
 import { isLocalMode } from "./lib/mode.js";
@@ -96,26 +96,8 @@ async function withRedisJobLock<T>(options: {
   run: () => Promise<T>;
 }): Promise<T | null> {
   if (!options.enabled) return options.run();
-
-  const token = `${process.pid}:${Date.now()}:${Math.random()}`;
-  const acquired = await redis.set(options.key, token, "PX", options.ttlMs, "NX");
-  if (acquired !== "OK") return null;
-
-  try {
-    return await options.run();
-  } finally {
-    await redis
-      .eval(
-        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-        1,
-        options.key,
-        token,
-      )
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[redis-lock] failed to release ${options.key}: ${message}`);
-      });
-  }
+  const locked = await withDistributedLock({ key: options.key, ttlMs: options.ttlMs }, options.run);
+  return locked.acquired ? locked.value : null;
 }
 
 function requestHasSessionCookie(req: Pick<express.Request, "headers">): boolean {

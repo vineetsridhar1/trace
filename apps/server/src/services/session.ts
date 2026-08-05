@@ -306,6 +306,21 @@ export type RuntimeLeaseAuthorization =
         | "runtime_stopping";
     };
 
+type ConnectionMutationSession = {
+  agentStatus: AgentStatus;
+  sessionStatus: SessionStatus;
+  worktreeDeleted: boolean;
+  hosting: string;
+  lastUserMessageAt: Date | null;
+  lastMessageAt: Date | null;
+};
+
+type GroupRuntimeBindingEffects = {
+  sessionGroupId: string;
+  bindingChanged: boolean;
+  sessionsToRebind: Array<{ id: string; organizationId: string }>;
+};
+
 const RUNTIME_IDENTITY_FIELDS = [
   "environmentId",
   "adapterType",
@@ -1982,9 +1997,7 @@ export class SessionService {
 
     const adapterType = this.lifecycleAdapterType(result.updated, update);
     const lifecycleState = this.lifecycleConnectionState(eventType, adapterType);
-    const sessionGroup = await this.syncGroupWorkspaceState(result.sessionGroupId, {
-      connection: connJson(result.updated),
-    });
+    const sessionGroup = await this.loadSessionGroupSnapshot(result.sessionGroupId);
 
     await eventService.create({
       organizationId: session.organizationId,
@@ -1996,8 +2009,8 @@ export class SessionService {
         sessionId,
         lifecycleState,
         connection: connJson(result.updated),
-        agentStatus: session.agentStatus,
-        sessionStatus: session.sessionStatus,
+        agentStatus: result.session.agentStatus,
+        sessionStatus: result.session.sessionStatus,
         ...(update.runtimeInstanceId && { runtimeInstanceId: update.runtimeInstanceId }),
         ...(update.runtimeLabel && { runtimeLabel: update.runtimeLabel }),
         ...(update.providerRuntimeId && { providerRuntimeId: update.providerRuntimeId }),
@@ -2293,44 +2306,101 @@ export class SessionService {
    */
   private async updateConnectionConditional(
     sessionId: string,
-    mutator: (current: SessionConnectionData) => SessionConnectionData | null,
+    mutator: (
+      current: SessionConnectionData,
+      session: ConnectionMutationSession,
+    ) => SessionConnectionData | null,
     options?: {
       maxAttempts?: number;
-      sessionData?: Prisma.SessionUpdateManyMutationInput;
+      sessionData?:
+        | Prisma.SessionUpdateManyMutationInput
+        | ((session: ConnectionMutationSession) => Prisma.SessionUpdateManyMutationInput);
     },
-  ): Promise<{ updated: SessionConnectionData; sessionGroupId: string | null } | null> {
+  ): Promise<{
+    updated: SessionConnectionData;
+    sessionGroupId: string | null;
+    session: ConnectionMutationSession;
+  } | null> {
     const maxAttempts = options?.maxAttempts ?? MAX_CONNECTION_UPDATE_ATTEMPTS;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const session = await prisma.session.findUnique({
-        where: { id: sessionId },
-        select: { connection: true, sessionGroupId: true },
-      });
-      if (!session) return null;
-      const current = this.parseConnection(session.connection);
-      const next = mutator(current);
-      if (!next) return null;
-
-      const expectedVersion = current.version ?? 0;
-      const nextWithVersion: SessionConnectionData = {
-        ...next,
-        version: expectedVersion + 1,
-      };
-
-      const result = await prisma.session.updateMany({
-        where: connectionVersionWhere(sessionId, expectedVersion),
-        data: { ...options?.sessionData, connection: connJson(nextWithVersion) },
-      });
-      if (result.count === 1) {
-        const runtimeBindingChanged = hasRuntimeBindingChanged(current, nextWithVersion);
-        await this.syncGroupWorkspaceState(
-          session.sessionGroupId,
-          { connection: connJson(nextWithVersion) },
-          {
-            rebindSessionsToConnection: runtimeBindingChanged,
-            destroyGroupTerminals: runtimeBindingChanged,
+      const outcome = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const row = await tx.session.findUnique({
+          where: { id: sessionId },
+          select: {
+            connection: true,
+            sessionGroupId: true,
+            agentStatus: true,
+            sessionStatus: true,
+            worktreeDeleted: true,
+            hosting: true,
+            lastUserMessageAt: true,
+            lastMessageAt: true,
           },
-        );
-        return { updated: nextWithVersion, sessionGroupId: session.sessionGroupId };
+        });
+        if (!row) return { kind: "missing" as const };
+
+        // Group runtime ownership is shared. Lock the group row before
+        // calculating the transition so lifecycle writes from different
+        // sibling sessions serialize on the same database record.
+        if (row.sessionGroupId) {
+          await tx.$queryRaw`SELECT "id" FROM "SessionGroup" WHERE "id" = ${row.sessionGroupId} FOR UPDATE`;
+        }
+
+        const sessionState: ConnectionMutationSession = row;
+        const current = this.parseConnection(row.connection);
+        const next = mutator(current, sessionState);
+        if (!next) return { kind: "declined" as const };
+
+        const expectedVersion = current.version ?? 0;
+        const nextWithVersion: SessionConnectionData = {
+          ...next,
+          version: expectedVersion + 1,
+        };
+        const extraSessionData =
+          typeof options?.sessionData === "function"
+            ? options.sessionData(sessionState)
+            : options?.sessionData;
+        const result = await tx.session.updateMany({
+          where: connectionVersionWhere(sessionId, expectedVersion),
+          data: { ...extraSessionData, connection: connJson(nextWithVersion) },
+        });
+        if (result.count !== 1) return { kind: "retry" as const };
+
+        const effects = row.sessionGroupId
+          ? await this.writeGroupRuntimeBindingInTransaction(
+              tx,
+              row.sessionGroupId,
+              sessionId,
+              nextWithVersion,
+            )
+          : null;
+        return {
+          kind: "updated" as const,
+          updated: nextWithVersion,
+          sessionGroupId: row.sessionGroupId,
+          session: {
+            ...sessionState,
+            ...(extraSessionData?.agentStatus
+              ? { agentStatus: extraSessionData.agentStatus as AgentStatus }
+              : {}),
+            ...(extraSessionData?.sessionStatus
+              ? { sessionStatus: extraSessionData.sessionStatus as SessionStatus }
+              : {}),
+          },
+          effects,
+        };
+      });
+
+      if (outcome.kind === "missing" || outcome.kind === "declined") return null;
+      if (outcome.kind === "updated") {
+        if (outcome.effects) {
+          await this.applyGroupRuntimeBindingEffects(outcome.effects, outcome.updated);
+        }
+        return {
+          updated: outcome.updated,
+          sessionGroupId: outcome.sessionGroupId,
+          session: outcome.session,
+        };
       }
       // Version mismatch — another writer landed first. Loop and retry.
     }
@@ -7751,23 +7821,18 @@ export class SessionService {
     if (isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted))
       return;
 
-    // A lost runtime means Trace can no longer observe or control work that is
-    // in flight. An idle, never-started session may still be bound to the same
-    // local runtime, so only fail startup when its initial user message has not
-    // been answered.
-    // The user can explicitly retry or move the failed session once a runtime
-    // is available again.
-    const hasUnansweredUserMessage =
-      session.lastUserMessageAt !== null &&
-      (session.lastMessageAt === null || session.lastUserMessageAt >= session.lastMessageAt);
-    const agentStatus =
-      session.agentStatus === "active" ||
-      (session.agentStatus === "not_started" && hasUnansweredUserMessage)
-        ? "failed"
-        : session.agentStatus;
     const result = await this.updateConnectionConditional(
       sessionId,
-      (conn) => {
+      (conn, currentSession) => {
+        if (
+          isFullyUnloadedSession(
+            currentSession.agentStatus,
+            currentSession.sessionStatus,
+            currentSession.worktreeDeleted,
+          )
+        ) {
+          return null;
+        }
         // A close callback belongs to one immutable runtime generation. It may
         // arrive after Retry/Move reserved a replacement; never let the stale
         // callback steal ownership back by writing its runtime id.
@@ -7791,10 +7856,26 @@ export class SessionService {
           lastError: reason,
           canRetry: true,
           canMove: true,
-          autoRetryable: session.hosting !== "cloud",
+          autoRetryable: currentSession.hosting !== "cloud",
         };
       },
-      { sessionData: { agentStatus } },
+      {
+        sessionData: (currentSession) => {
+          // Derive status from the same locked snapshot as the connection
+          // write. Otherwise a delayed close callback can fail a session that
+          // completed or unloaded while the callback was waiting.
+          const hasUnansweredUserMessage =
+            currentSession.lastUserMessageAt !== null &&
+            (currentSession.lastMessageAt === null ||
+              currentSession.lastUserMessageAt >= currentSession.lastMessageAt);
+          const agentStatus =
+            currentSession.agentStatus === "active" ||
+            (currentSession.agentStatus === "not_started" && hasUnansweredUserMessage)
+              ? "failed"
+              : currentSession.agentStatus;
+          return { agentStatus };
+        },
+      },
     );
     if (!result) return;
     const updated = result.updated;
@@ -7810,8 +7891,8 @@ export class SessionService {
         reason,
         runtimeInstanceId,
         connection: connJson(updated),
-        agentStatus,
-        sessionStatus: session.sessionStatus,
+        agentStatus: result.session.agentStatus,
+        sessionStatus: result.session.sessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
       actorType: "system",
@@ -8388,9 +8469,13 @@ export class SessionService {
     actorType: ActorType,
     actorId: string,
   ) {
+    const lockScope = await prisma.session.findFirst({
+      where: { id: sessionId, organizationId },
+      select: { sessionGroupId: true },
+    });
     const locked = await withDistributedLock(
       {
-        key: `trace:session-runtime-transition:${sessionId}`,
+        key: this.runtimeTransitionLockKey(sessionId, lockScope?.sessionGroupId),
         ttlMs: RUNTIME_TRANSITION_LOCK_TTL_MS,
       },
       () => this.retryConnectionLocked(sessionId, organizationId, actorType, actorId),
@@ -8407,6 +8492,12 @@ export class SessionService {
       where: { id: sessionId, organizationId },
       include: { ...SESSION_INCLUDE, projects: true },
     });
+  }
+
+  private runtimeTransitionLockKey(sessionId: string, sessionGroupId?: string | null): string {
+    return sessionGroupId
+      ? `trace:session-group-runtime-transition:${sessionGroupId}`
+      : `trace:session-runtime-transition:${sessionId}`;
   }
 
   private async retryConnectionLocked(
@@ -8904,7 +8995,7 @@ export class SessionService {
     if (!params.runtimeLockHeld) {
       const locked = await withDistributedLock(
         {
-          key: `trace:session-runtime-transition:${params.session.id}`,
+          key: this.runtimeTransitionLockKey(params.session.id, params.session.sessionGroupId),
           ttlMs: RUNTIME_TRANSITION_LOCK_TTL_MS,
         },
         () => this.moveSessionInPlace({ ...params, runtimeLockHeld: true }),
@@ -9053,7 +9144,7 @@ export class SessionService {
     // shortly afterward, but idle cleanup can run in between; persisting the
     // startup state here keeps the normal grace window in effect for that gap.
     const replacementRequestedAt = new Date().toISOString();
-    const nextConnection = connJson(
+    const nextConnectionBase =
       targetHosting === "local"
         ? defaultConnection({
             runtimeInstanceId: targetRuntimeInstanceId ?? undefined,
@@ -9064,16 +9155,35 @@ export class SessionService {
             environmentId: targetEnvironment?.id ?? sourceConnection.environmentId,
             state: "requested",
             requestedAt: replacementRequestedAt,
-          }),
-    );
+          });
 
     const movedSessions = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (session.sessionGroupId) {
+        await tx.$queryRaw`SELECT "id" FROM "SessionGroup" WHERE "id" = ${session.sessionGroupId} FOR UPDATE`;
+      } else {
+        await tx.$queryRaw`SELECT "id" FROM "Session" WHERE "id" = ${session.id} FOR UPDATE`;
+      }
+
+      // The group lock serializes all lifecycle writers. The version CAS then
+      // proves that no writer committed while this move performed external
+      // teardown work before acquiring the lock.
+      const primaryFence = await tx.session.updateMany({
+        where: connectionVersionWhere(session.id, sourceConnection.version ?? 0),
+        data: { connection: connJson(sourceConnection) },
+      });
+      if (primaryFence.count !== 1) {
+        throw new Error("Runtime transition was superseded by a newer session update");
+      }
+
       if (session.sessionGroupId) {
         await tx.sessionGroup.update({
           where: { id: session.sessionGroupId },
           data: {
             workdir: null,
-            connection: nextConnection,
+            connection: connJson({
+              ...nextConnectionBase,
+              version: (sourceConnection.version ?? 0) + 1,
+            }),
             branch: sourceBranch,
             worktreeDeleted: false,
           },
@@ -9103,7 +9213,10 @@ export class SessionService {
                 } satisfies PendingSessionCommand,
               }),
               toolSessionId: null,
-              connection: nextConnection,
+              connection: connJson({
+                ...nextConnectionBase,
+                version: (this.parseConnection(current.connection).version ?? 0) + 1,
+              }),
             },
             include: SESSION_INCLUDE,
           }),
@@ -9114,12 +9227,19 @@ export class SessionService {
           where: {
             sessionGroupId: session.sessionGroupId,
             id: { notIn: sessionsToMove.map((current) => current.id) },
+            connection: {
+              path: ["version"],
+              equals: sourceConnection.version ?? 0,
+            },
           },
           data: {
             hosting: targetHosting,
             branch: sourceBranch,
             workdir: null,
-            connection: nextConnection,
+            connection: connJson({
+              ...nextConnectionBase,
+              version: (sourceConnection.version ?? 0) + 1,
+            }),
           },
         });
       }
@@ -10657,6 +10777,103 @@ export class SessionService {
     return latestPrompt.id;
   }
 
+  private async writeGroupRuntimeBindingInTransaction(
+    tx: Prisma.TransactionClient,
+    sessionGroupId: string,
+    initiatingSessionId: string,
+    targetConnection: SessionConnectionData,
+  ): Promise<GroupRuntimeBindingEffects> {
+    const currentGroup = await tx.sessionGroup.findUnique({
+      where: { id: sessionGroupId },
+      select: { connection: true },
+    });
+    if (!currentGroup) {
+      return { sessionGroupId, bindingChanged: false, sessionsToRebind: [] };
+    }
+
+    const bindingChanged = hasRuntimeBindingChanged(
+      this.parseConnection(currentGroup.connection),
+      targetConnection,
+    );
+    await tx.sessionGroup.update({
+      where: { id: sessionGroupId },
+      data: { connection: connJson(targetConnection) },
+    });
+
+    if (!bindingChanged) {
+      return { sessionGroupId, bindingChanged: false, sessionsToRebind: [] };
+    }
+
+    const sessions = await tx.session.findMany({
+      where: { sessionGroupId },
+      select: { id: true, organizationId: true, connection: true },
+    });
+    for (const session of sessions) {
+      if (session.id === initiatingSessionId) continue;
+      const currentConnection = this.parseConnection(session.connection);
+      const reboundConnection = mergeRuntimeBinding(currentConnection, targetConnection);
+      await tx.session.update({
+        where: { id: session.id },
+        data: {
+          connection: connJson({
+            // Runtime identity is group-owned, but lifecycle state and retry
+            // history remain session-owned.
+            ...reboundConnection,
+            version: (currentConnection.version ?? 0) + 1,
+          }),
+        },
+      });
+    }
+
+    return {
+      sessionGroupId,
+      bindingChanged: true,
+      sessionsToRebind: sessions.map(({ id, organizationId }) => ({ id, organizationId })),
+    };
+  }
+
+  private async applyGroupRuntimeBindingEffects(
+    effects: GroupRuntimeBindingEffects,
+    targetConnection: SessionConnectionData,
+  ): Promise<void> {
+    if (!effects.bindingChanged) return;
+
+    const group = await prisma.sessionGroup.findUnique({
+      where: { id: effects.sessionGroupId },
+      select: { organizationId: true, connection: true },
+    });
+    // Transaction side effects can be delayed behind a newer committed move.
+    // Only mutate router/terminal state if this binding still owns the group.
+    if (
+      !group ||
+      hasRuntimeBindingChanged(this.parseConnection(group.connection), targetConnection)
+    ) {
+      return;
+    }
+
+    terminalRelay.destroyAllForSessionGroup(effects.sessionGroupId);
+    if (group) {
+      await sessionApplicationService
+        .markSessionGroupRuntimeStopped(effects.sessionGroupId, group.organizationId)
+        .catch((error: unknown) => {
+          console.warn(
+            `[session-service] failed to stop application processes for group ${effects.sessionGroupId} after runtime rebind: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        });
+    }
+
+    const runtimeInstanceId = targetConnection.runtimeInstanceId;
+    const runtime = runtimeInstanceId
+      ? sessionRouter.getRuntime(runtimeInstanceId, effects.sessionsToRebind[0]?.organizationId)
+      : null;
+    for (const session of effects.sessionsToRebind) {
+      sessionRouter.unbindSession(session.id);
+      if (runtime) sessionRouter.bindSession(session.id, runtime.key);
+    }
+  }
+
   private async syncGroupWorkspaceState(
     sessionGroupId: string | null | undefined,
     patch: GroupWorkspaceStatePatch,
@@ -11362,13 +11579,13 @@ export class SessionService {
         sessionGroupId: true,
       },
     });
+    if (!session) return;
     if (
-      session &&
       isFullyUnloadedSession(session.agentStatus, session.sessionStatus, session.worktreeDeleted)
     ) {
       return;
     }
-    const conn = this.parseConnection(session?.connection);
+    const conn = this.parseConnection(session.connection);
 
     const homeOffline = deliveryResult === "runtime_disconnected" && !!conn.runtimeInstanceId;
     const unsupportedHomeTool = deliveryResult === "no_runtime" && !!conn.runtimeInstanceId;
@@ -11381,30 +11598,43 @@ export class SessionService {
       : unsupportedRuntime
         ? `${bridgeLabel} must be updated before it can prepare design-system packages`
         : unsupportedHomeTool
-          ? session?.tool === "pi"
+          ? session.tool === "pi"
             ? `${bridgeLabel} does not have Pi installed. Install it with \`${PI_INSTALL_COMMAND}\`, then restart the bridge. Docs: ${PI_INSTALL_DOCS_URL}`
-            : `${bridgeLabel} does not support ${session?.tool ?? "this coding tool"}`
+            : `${bridgeLabel} does not support ${session.tool}`
           : `${operation}: ${deliveryResult}`;
-    const updated: SessionConnectionData = {
-      ...conn,
-      state: "disconnected",
-      lastError,
-      lastDeliveryFailureAt: new Date().toISOString(),
-      retryCount: conn.retryCount + 1,
-      canRetry: true,
-      canMove: true,
-      // Don't spin the auto-retry loop for a non-transient failure.
-      autoRetryable:
-        session?.hosting !== "cloud" && !homeOffline && !unsupportedHomeTool && !unsupportedRuntime,
-    };
-
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { connection: connJson(updated) },
+    const result = await this.updateConnectionConditional(sessionId, (current, currentSession) => {
+      // Delivery happened against the snapshot read above. A reconnect or move
+      // that advanced either the generation or version supersedes this result.
+      if (
+        !isSameRuntimeGeneration(current, conn) ||
+        (current.version ?? 0) !== (conn.version ?? 0) ||
+        isFullyUnloadedSession(
+          currentSession.agentStatus,
+          currentSession.sessionStatus,
+          currentSession.worktreeDeleted,
+        )
+      ) {
+        return null;
+      }
+      return {
+        ...current,
+        state: "disconnected",
+        lastError,
+        lastDeliveryFailureAt: new Date().toISOString(),
+        retryCount: current.retryCount + 1,
+        canRetry: true,
+        canMove: true,
+        // Don't spin the auto-retry loop for a non-transient failure.
+        autoRetryable:
+          currentSession.hosting !== "cloud" &&
+          !homeOffline &&
+          !unsupportedHomeTool &&
+          !unsupportedRuntime,
+      };
     });
-    const sessionGroup = await this.syncGroupWorkspaceState(session?.sessionGroupId, {
-      connection: connJson(updated),
-    });
+    if (!result) return;
+    const updated = result.updated;
+    const sessionGroup = await this.loadSessionGroupSnapshot(result.sessionGroupId);
 
     await eventService.create({
       organizationId,
