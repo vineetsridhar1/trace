@@ -6089,7 +6089,7 @@ describe("SessionService", () => {
 
   describe("recoverMissingToolSession", () => {
     it("clears a stale tool session id and retries with conversation history", async () => {
-      prismaMock.session.findUnique.mockResolvedValue(
+      prismaMock.session.findUnique.mockResolvedValueOnce(
         makeSession({
           agentStatus: "active",
           workdir: "/tmp/worktree",
