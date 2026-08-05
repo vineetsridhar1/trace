@@ -22,6 +22,8 @@ import { slackRouter } from "./routes/slack.js";
 import { gitRouter } from "./routes/git.js";
 import { designPreviewRouter } from "./routes/design-preview.js";
 import { animationPreviewRouter } from "./routes/animation-preview.js";
+import { agentArtifactRouter } from "./routes/agent-artifact.js";
+import { artifactContentRouter } from "./routes/artifact-content.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -212,8 +214,10 @@ async function main() {
   app.use("/git", gitRouter);
   app.use(designPreviewRouter);
   app.use(animationPreviewRouter);
+  app.use(agentArtifactRouter);
 
   app.use(express.json());
+  app.use(artifactContentRouter);
   app.post("/runtime/codex-auth", async (req: express.Request, res: express.Response) => {
     const token = readBearerToken(req);
     const runtime = token ? authenticateProvisionedRuntimeToken(token) : null;

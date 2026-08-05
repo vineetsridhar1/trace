@@ -39,6 +39,7 @@ import {
   inspectSessionGitSyncStatus,
   BridgeOutbox,
 } from "@trace/shared";
+import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
 import type { GitExecFn } from "@trace/shared";
 import { getUsedSlugs } from "@trace/shared/animal-names";
 import {
@@ -375,6 +376,7 @@ export class BridgeClient implements IBridgeClient {
   private terminalManager: TerminalManager;
   private autoSyncManager: LinkedCheckoutAutoSyncManager;
   private getSessionCookieHeader: (url: string) => Promise<string | null>;
+  private traceRuntime = ensureTraceRuntime(path.join(os.homedir(), ".trace", "runtime"));
 
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
@@ -465,11 +467,13 @@ export class BridgeClient implements IBridgeClient {
 
     const bridgeUrl = new URL(`${this.serverUrl}/bridge`);
     bridgeUrl.searchParams.set("bridgeAuthToken", bridgeAuthToken);
-    this.ws = new WebSocket(bridgeUrl.toString(), {
+    const socket = new WebSocket(bridgeUrl.toString(), {
       headers: { "User-Agent": BRIDGE_USER_AGENT },
     });
+    this.ws = socket;
 
-    this.ws.on("open", () => {
+    socket.on("open", () => {
+      if (this.ws !== socket) return;
       console.log("[bridge] connected to server");
       runtimeDebug("desktop bridge websocket open", { instanceId: this.instanceId });
       this.setStatus("connected");
@@ -483,7 +487,8 @@ export class BridgeClient implements IBridgeClient {
       void this.pollLocalPrStatuses();
     });
 
-    this.ws.on("message", (data) => {
+    socket.on("message", (data) => {
+      if (this.ws !== socket) return;
       try {
         const msg = JSON.parse(data.toString()) as BridgeCommand;
         this.handleCommand(msg);
@@ -492,7 +497,9 @@ export class BridgeClient implements IBridgeClient {
       }
     });
 
-    this.ws.on("close", (code, reason) => {
+    socket.on("close", (code, reason) => {
+      if (this.ws !== socket) return;
+      this.ws = null;
       const reasonText = reason.toString();
       console.log(
         `[bridge] disconnected, reconnecting in 3s... code=${code}${
@@ -514,7 +521,14 @@ export class BridgeClient implements IBridgeClient {
       }
     });
 
-    this.ws.on("error", (err) => {
+    socket.on("error", (err) => {
+      if (this.ws !== socket) {
+        runtimeDebug("desktop bridge stale websocket error", {
+          instanceId: this.instanceId,
+          error: err.message,
+        });
+        return;
+      }
       console.error("[bridge] error:", err.message);
       runtimeDebug("desktop bridge websocket error", {
         instanceId: this.instanceId,
@@ -578,11 +592,12 @@ export class BridgeClient implements IBridgeClient {
     this.stopHookQueueDrain();
     this.stopLocalPrPolling();
     this.autoSyncManager.stop();
-    // Tear down the old socket without triggering the close handler's reconnect
+    // Detach the old socket before closing it so its handlers can safely consume
+    // teardown errors without changing the new connection's state.
     if (this.ws) {
-      this.ws.removeAllListeners();
-      this.ws.close();
+      const socket = this.ws;
       this.ws = null;
+      socket.close();
     }
     this.setStatus("disconnected");
     this.connect();
@@ -907,6 +922,7 @@ export class BridgeClient implements IBridgeClient {
     toolSessionId,
     checkpointContext,
     imageUrls,
+    runtimeEnv,
   }: {
     sessionId: string;
     prompt: string;
@@ -919,6 +935,7 @@ export class BridgeClient implements IBridgeClient {
     toolSessionId?: string;
     checkpointContext?: GitCheckpointContext | null;
     imageUrls?: string[];
+    runtimeEnv?: Record<string, string>;
   }) {
     if (!cwd) {
       console.warn(
@@ -926,6 +943,21 @@ export class BridgeClient implements IBridgeClient {
       );
     }
     const workdir = cwd ?? os.homedir();
+    const traceRuntime = await this.traceRuntime;
+    const traceApiUrl = new URL(this.serverUrl);
+    if (traceApiUrl.protocol === "wss:") traceApiUrl.protocol = "https:";
+    if (traceApiUrl.protocol === "ws:") traceApiUrl.protocol = "http:";
+    traceApiUrl.pathname = "/";
+    traceApiUrl.search = "";
+    traceApiUrl.hash = "";
+    const invocationEnv = {
+      ...runtimeEnv,
+      TRACE_API_URL: traceApiUrl.toString(),
+      TRACE_SKILLS_DIR: traceRuntime.skillsDir,
+      TRACE_NODE_BINARY: process.execPath,
+      TRACE_ELECTRON_RUN_AS_NODE: "1",
+      PATH: `${traceRuntime.binDir}${path.delimiter}${process.env.PATH ?? ""}`,
+    };
 
     if (checkpointContext && cwd) {
       try {
@@ -1110,6 +1142,7 @@ export class BridgeClient implements IBridgeClient {
       reasoningEffort,
       enableClaudeInChrome,
       toolSessionId,
+      runtimeEnv: invocationEnv,
     });
   }
 
@@ -1128,6 +1161,7 @@ export class BridgeClient implements IBridgeClient {
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
           imageUrls: cmd.imageUrls,
+          runtimeEnv: cmd.runtimeEnv,
         });
         break;
       }
@@ -1144,6 +1178,7 @@ export class BridgeClient implements IBridgeClient {
           toolSessionId: cmd.toolSessionId,
           checkpointContext: cmd.checkpointContext,
           imageUrls: cmd.imageUrls,
+          runtimeEnv: cmd.runtimeEnv,
         });
         break;
       }

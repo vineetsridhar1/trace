@@ -34,6 +34,8 @@ describe("session empty state", () => {
     expect(kindSupportsDesignImplementation(undefined)).toBe(true); // defaults to coding
     expect(kindSupportsDesignImplementation("app")).toBe(true);
     expect(kindSupportsDesignImplementation("design")).toBe(false);
-    expect(kindSupportsDesignImplementation("pdf")).toBe(false);
+    expect(kindSupportsDesignImplementation("design_system")).toBe(false);
+    expect(kindSupportsDesignImplementation("pdf")).toBe(true);
+    expect(kindSupportsDesignImplementation("animation")).toBe(true);
   });
 });

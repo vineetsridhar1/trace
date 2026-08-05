@@ -183,12 +183,10 @@ export function isMissingToolSessionError(message: string): boolean {
 }
 
 const TOOL_AUTH_ERROR_PATTERNS = [
-  /\bfailed to authenticate\b/i,
   /\boauth\b[\s\S]{0,60}\b(expired|revoked|invalid)\b/i,
+  /\b(expired|revoked|invalid)\b[\s\S]{0,60}\boauth\b/i,
   /\bplease run \/login\b/i,
-  /\bnot logged in\b/i,
-  /\binvalid api key\b/i,
-  /\bauthentication[_ ]error\b/i,
+  /(?:^|\n)\s*(?:error:\s*)?not logged in[\s.!·:-]*(?:please run \/login)?\s*(?:\n|$)/i,
 ];
 
 /** Classify an adapter error message as a login/credentials failure. */
@@ -208,6 +206,8 @@ export interface RunOptions {
   enableClaudeInChrome?: boolean;
   /** Tool-specific session ID for resuming (e.g. Claude Code's --resume flag) */
   toolSessionId?: string;
+  /** Invocation-scoped Trace capabilities supplied by the runtime bridge. */
+  runtimeEnv?: Record<string, string>;
 }
 
 /**

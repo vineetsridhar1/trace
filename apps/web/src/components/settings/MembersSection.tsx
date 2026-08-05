@@ -321,7 +321,7 @@ export function MembersSection() {
                   if (value) setAddRole(value as UserRole);
                 }}
               >
-                <SelectTrigger className="h-9 w-full bg-background text-[13px]">
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -410,7 +410,7 @@ export function MembersSection() {
                         if (v) handleRoleChange(member.user.id, v as UserRole);
                       }}
                     >
-                      <SelectTrigger className="h-8 w-full text-sm">
+                      <SelectTrigger size="sm" className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

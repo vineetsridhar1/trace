@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AppWindow, NotebookText, Palette, Sparkles } from "lucide-react";
+import { AppWindow, Component, NotebookText, Palette, Sparkles } from "lucide-react";
 import { gql } from "@urql/core";
 import type { AgentEnvironment, Repo } from "@trace/gql";
 import { useAuthStore, useEntityStore } from "@trace/client-core";
@@ -95,6 +95,9 @@ function repoLabel(repo: Repo): string {
 export function NewGeneratedProjectDialog() {
   const kind = useCommandPaletteStore((state) => state.newGeneratedProjectKind);
   const close = useCommandPaletteStore((state) => state.closeGeneratedProjectDialog);
+  const openGeneratedProjectDialog = useCommandPaletteStore(
+    (state) => state.openGeneratedProjectDialog,
+  );
   const activeOrgId = useAuthStore((state) => state.activeOrgId);
   const upsertMany = useEntityStore((state) => state.upsertMany);
   const sessionGroups = useEntityStore((state) => state.sessionGroups);
@@ -114,6 +117,10 @@ export function NewGeneratedProjectDialog() {
   const [repoId, setRepoId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [pendingAuthoringGroupId, setPendingAuthoringGroupId] = useState<string | null>(null);
+  const [optionsStatus, setOptionsStatus] = useState<"idle" | "loading" | "ready" | "error">(
+    "idle",
+  );
+  const [optionsRetry, setOptionsRetry] = useState(0);
   const selectedRepo = repos.find((repo) => repo.id === repoId);
 
   const createImmediate = useCallback(
@@ -138,15 +145,17 @@ export function NewGeneratedProjectDialog() {
   useEffect(() => {
     if (!activeOrgId || kind !== "design-system") return;
     let active = true;
-    void client
-      .query(
-        DESIGN_SYSTEMS_QUERY,
-        { organizationId: activeOrgId },
-        { requestPolicy: "network-only" },
-      )
-      .toPromise()
-      .then((result) => {
-        if (!active || result.error) return;
+    setOptionsStatus("loading");
+    void (async () => {
+      try {
+        const result = await client
+          .query(
+            DESIGN_SYSTEMS_QUERY,
+            { organizationId: activeOrgId },
+            { requestPolicy: "network-only" },
+          )
+          .toPromise();
+        if (!active) return;
         const nextRepos = (result.data?.repos ?? []).filter(
           (repo: Repo) => repo.provider !== "managed",
         ) as Repo[];
@@ -156,18 +165,25 @@ export function NewGeneratedProjectDialog() {
         ) as AgentEnvironment[];
         upsertMany("repos", nextRepos);
         upsertMany("agentEnvironments", nextEnvironments);
-        if (!repoId && nextRepos[0]) setRepoId(nextRepos[0].id);
-        if (!environmentId)
-          setEnvironmentId(
-            nextEnvironments.find((environment) => environment.isDefault)?.id ??
+        setRepoId((current) =>
+          nextRepos.some((repo) => repo.id === current) ? current : (nextRepos[0]?.id ?? ""),
+        );
+        setEnvironmentId((current) =>
+          nextEnvironments.some((environment) => environment.id === current)
+            ? current
+            : (nextEnvironments.find((environment) => environment.isDefault)?.id ??
               nextEnvironments[0]?.id ??
-              "",
-          );
-      });
+              ""),
+        );
+        setOptionsStatus(result.error ? "error" : "ready");
+      } catch {
+        if (active) setOptionsStatus("error");
+      }
+    })();
     return () => {
       active = false;
     };
-  }, [activeOrgId, environmentId, kind, repoId, upsertMany]);
+  }, [activeOrgId, kind, optionsRetry, upsertMany]);
 
   useEffect(() => {
     if (!pendingAuthoringGroupId) return;
@@ -183,7 +199,7 @@ export function NewGeneratedProjectDialog() {
 
   const choose = (nextKind: CreatableGeneratedProjectKind) => createImmediate(nextKind);
   const submitSystem = async () => {
-    if (!name.trim() || !repoId) return;
+    if (optionsStatus !== "ready" || !name.trim() || !repoId || !environmentId) return;
     setSubmitting(true);
     try {
       const result = await client
@@ -200,7 +216,17 @@ export function NewGeneratedProjectDialog() {
         return;
       }
       const groupId = result.data?.createDesignSystem?.authoringSessionGroupId;
-      if (groupId) setPendingAuthoringGroupId(groupId);
+      if (!groupId) {
+        toast.error("Could not create design system", {
+          description: "Trace did not return the authoring session.",
+        });
+        return;
+      }
+      setPendingAuthoringGroupId(groupId);
+    } catch (error) {
+      toast.error("Could not create design system", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -228,6 +254,19 @@ export function NewGeneratedProjectDialog() {
                 </div>
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => openGeneratedProjectDialog("design-system")}
+              className="flex items-center gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-surface-elevated focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Component size={20} className="text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Design system</p>
+                <p className="text-xs text-muted-foreground">
+                  Build a shared system from an existing source repository.
+                </p>
+              </div>
+            </button>
           </div>
         </ResponsiveDialogContent>
       </ResponsiveDialog>
@@ -263,7 +302,21 @@ export function NewGeneratedProjectDialog() {
                 </SelectContent>
               </Select>
             </label>
-            {environments.length > 1 ? (
+            {optionsStatus === "loading" && repos.length === 0 && environments.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Loading creation options…</p>
+            ) : optionsStatus === "error" ? (
+              <div className="flex items-center justify-between gap-3 text-xs text-destructive">
+                <span>Creation options could not be loaded.</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setOptionsRetry((value) => value + 1)}
+                >
+                  Try again
+                </Button>
+              </div>
+            ) : environments.length > 1 ? (
               <label className="grid gap-1 text-sm">
                 Authoring environment
                 <Select
@@ -288,9 +341,20 @@ export function NewGeneratedProjectDialog() {
                 Configure an enabled cloud authoring environment first.
               </p>
             ) : null}
+            {optionsStatus === "ready" && repos.length === 0 ? (
+              <p className="text-xs text-destructive">
+                Connect a source repository before creating a design system.
+              </p>
+            ) : null}
             <div className="flex justify-end">
               <Button
-                disabled={submitting || !name.trim() || !repoId || !environmentId}
+                disabled={
+                  submitting ||
+                  optionsStatus !== "ready" ||
+                  !name.trim() ||
+                  !repoId ||
+                  !environmentId
+                }
                 onClick={() => void submitSystem()}
               >
                 {submitting ? "Creating…" : "Create Workbench"}

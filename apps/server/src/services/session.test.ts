@@ -93,6 +93,7 @@ vi.mock("../lib/runtime-debug.js", () => ({
 vi.mock("../lib/storage/index.js", () => ({
   storage: {
     getGetUrl: vi.fn(async (key: string) => `https://example.test/${key}`),
+    deleteObject: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -366,6 +367,7 @@ describe("SessionService", () => {
     // Default: a group has no sibling sessions to relocate during a move. Tests
     // exercising multi-session groups override this with mockResolvedValueOnce.
     prismaMock.session.findMany.mockResolvedValue([]);
+    prismaMock.artifact.findMany.mockResolvedValue([]);
     sessionRouterMock.send.mockReturnValue("delivered");
     sessionRouterMock.transitionRuntime.mockResolvedValue("delivered");
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
@@ -592,6 +594,22 @@ describe("SessionService", () => {
       });
       expect(result.map((group) => group.id)).toEqual(["group-app"]);
     });
+
+    it("includes archived apps when requested for creation history", async () => {
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
+
+      await service.listAppGroups("org-1", "user-1", true);
+
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            organizationId: "org-1",
+            kind: "app",
+            AND: [{ OR: [{ visibility: "public" }, { ownerUserId: "user-1" }] }],
+          },
+        }),
+      );
+    });
   });
 
   describe("listDesignGroups", () => {
@@ -799,6 +817,20 @@ describe("SessionService", () => {
   });
 
   describe("start", () => {
+    it("rejects a project outside the session organization", async () => {
+      prismaMock.project.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "coding",
+          projectId: "project-1",
+          prompt: "Build checkout",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Project does not belong to this organization");
+    });
+
     it("rejects app sessions linked to a user repo", async () => {
       await expect(
         service.start({
@@ -919,6 +951,57 @@ describe("SessionService", () => {
       });
     });
 
+    it("queues a selected design with the initial session run", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "design-1",
+        name: "Checkout",
+        slug: "checkout",
+        repoId: "design-repo-1",
+        branch: "main",
+        designPreviewCommitSha: "design-commit-1",
+        visibility: "public",
+        ownerUserId: "user-2",
+      });
+      const repo = await managedGitServiceMock.createManagedRepo({
+        organizationId: "org-1",
+        name: "App source",
+        actorType: "user",
+        actorId: "user-1",
+      });
+      managedGitServiceMock.createManagedRepo.mockClear();
+      const sessionGroup = makeSessionGroup({ kind: "app", repoId: repo.id, repo });
+      const session = makeSession({ hosting: "cloud", repoId: repo.id, repo, sessionGroup });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        kind: "app",
+        hosting: "cloud",
+        prompt: "Build checkout",
+        designSessionGroupId: "design-1",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            pendingRun: expect.objectContaining({
+              type: "run",
+              prompt: "Build checkout",
+              designAttachments: [
+                {
+                  designSessionGroupId: "design-1",
+                  slug: "checkout",
+                  designName: "Checkout",
+                },
+              ],
+            }),
+          }),
+        }),
+      );
+    });
+
     it("validates design sessions as repo-less, cloud sessions", async () => {
       await expect(
         service.start({
@@ -953,6 +1036,19 @@ describe("SessionService", () => {
         } as unknown as StartSessionServiceInput),
       ).rejects.toThrow("only be selected for Design sessions");
       expect(prismaMock.designSystemVersion.findFirst).not.toHaveBeenCalled();
+    });
+
+    it("rejects design attachments for Design sessions", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "design",
+          hosting: "cloud",
+          designSessionGroupId: "design-1",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Designs cannot be attached");
+      expect(prismaMock.sessionGroup.findFirst).not.toHaveBeenCalled();
     });
 
     it("rejects unavailable or archived design-system versions", async () => {
@@ -8414,6 +8510,18 @@ describe("SessionService", () => {
         }),
       );
     });
+
+    it("deletes stored artifact bundles after the database cascade succeeds", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(makeSession());
+      prismaMock.session.count.mockResolvedValueOnce(0);
+      prismaMock.artifact.findMany.mockResolvedValueOnce([
+        { storageKey: "artifacts/org-1/artifact-1.tar.gz" },
+      ]);
+
+      await service.delete("session-1");
+
+      expect(storageMock.deleteObject).toHaveBeenCalledWith("artifacts/org-1/artifact-1.tar.gz");
+    });
   });
 
   describe("deleteGroup", () => {
@@ -8469,6 +8577,87 @@ describe("SessionService", () => {
   });
 
   describe("markConnectionLost", () => {
+    it("fails an active agent and publishes the terminal status", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+          worktreeDeleted: false,
+          connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+        }),
+      );
+
+      await service.markConnectionLost("session-1", "runtime_heartbeat_timeout", "runtime-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: expect.objectContaining({ agentStatus: "failed" }),
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "connection_lost",
+            agentStatus: "failed",
+          }),
+        }),
+      );
+    });
+
+    it("fails a session whose runtime is lost during startup", async () => {
+      const initialMessageAt = new Date("2026-08-02T03:00:00.000Z");
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          worktreeDeleted: false,
+          connection: { state: "connecting", runtimeInstanceId: "runtime-1" },
+          lastUserMessageAt: initialMessageAt,
+          lastMessageAt: initialMessageAt,
+        }),
+      );
+
+      await service.markConnectionLost("session-1", "runtime_heartbeat_timeout", "runtime-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: expect.objectContaining({ agentStatus: "failed" }),
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ agentStatus: "failed" }),
+        }),
+      );
+    });
+
+    it("does not fail an idle session that has never received a user message", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce(
+        makeSession({
+          id: "session-1",
+          agentStatus: "not_started",
+          sessionStatus: "in_progress",
+          worktreeDeleted: false,
+          connection: { state: "connected", runtimeInstanceId: "runtime-1" },
+          lastUserMessageAt: null,
+          lastMessageAt: null,
+        }),
+      );
+
+      await service.markConnectionLost("session-1", "runtime_heartbeat_timeout", "runtime-1");
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith({
+        where: { id: "session-1" },
+        data: expect.objectContaining({ agentStatus: "not_started" }),
+      });
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ agentStatus: "not_started" }),
+        }),
+      );
+    });
+
     it("does not rewrite already-disconnected done cloud sessions for the same runtime", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce(
         makeSession({

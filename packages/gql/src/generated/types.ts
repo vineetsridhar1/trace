@@ -81,6 +81,43 @@ export type ApplicationProcessStatus =
   | "stopped"
   | "stopping";
 
+export type Artifact = {
+  __typename?: "Artifact";
+  bundleDigest: Scalars["String"]["output"];
+  byteSize: Scalars["Int"]["output"];
+  createdAt: Scalars["DateTime"]["output"];
+  createdBy: User;
+  id: Scalars["ID"]["output"];
+  key: Scalars["String"]["output"];
+  manifest: ArtifactManifest;
+  organizationId: Scalars["ID"]["output"];
+  session: Session;
+  sessionId: Scalars["ID"]["output"];
+  type: Scalars["String"]["output"];
+};
+
+export type ArtifactApprovalAction = "KEEP_CONTEXT" | "NEW_SESSION";
+
+export type ArtifactApprovalResult = {
+  __typename?: "ArtifactApprovalResult";
+  artifact: Artifact;
+  implementationSession: Session;
+};
+
+export type ArtifactFile = {
+  __typename?: "ArtifactFile";
+  digest: Scalars["String"]["output"];
+  mediaType: Scalars["String"]["output"];
+  path: Scalars["String"]["output"];
+  size: Scalars["Int"]["output"];
+};
+
+export type ArtifactManifest = {
+  __typename?: "ArtifactManifest";
+  files: Array<ArtifactFile>;
+  schemaVersion: Scalars["Int"]["output"];
+};
+
 export type BranchDiffFile = {
   __typename?: "BranchDiffFile";
   additions: Scalars["Int"]["output"];
@@ -251,6 +288,7 @@ export type CodingTool =
 
 export type CollapsedSessionEvents = {
   __typename?: "CollapsedSessionEvents";
+  actionCount: Scalars["Int"]["output"];
   endEventId: Scalars["ID"]["output"];
   endTimestamp: Scalars["DateTime"]["output"];
   id: Scalars["ID"]["output"];
@@ -642,6 +680,8 @@ export type EventType =
   | "agent_environment_updated"
   | "animation_preview_updated"
   | "application_config_updated"
+  | "artifact_approved"
+  | "artifact_created"
   | "bridge_access_request_resolved"
   | "bridge_access_requested"
   | "bridge_access_revoked"
@@ -898,6 +938,7 @@ export type Mutation = {
   addChannelMember: Channel;
   addChatMember: Chat;
   addOrgMember: OrgMember;
+  approveArtifact: ArtifactApprovalResult;
   approveBridgeAccessRequest: BridgeAccessGrant;
   archiveDesignSystem: DesignSystem;
   archiveSessionGroup?: Maybe<SessionGroup>;
@@ -1038,6 +1079,12 @@ export type MutationAddOrgMemberArgs = {
   organizationId: Scalars["ID"]["input"];
   role?: InputMaybe<UserRole>;
   userId: Scalars["ID"]["input"];
+};
+
+export type MutationApproveArtifactArgs = {
+  action: ArtifactApprovalAction;
+  artifactId: Scalars["ID"]["input"];
+  prompt: Scalars["String"]["input"];
 };
 
 export type MutationApproveBridgeAccessRequestArgs = {
@@ -1708,6 +1755,7 @@ export type Query = {
    * listing surface (the sidebar Apps section).
    */
   appSessionGroups: Array<SessionGroup>;
+  artifacts: Array<Artifact>;
   availableRuntimes: Array<SessionRuntimeInstance>;
   availableSessionRuntimes: Array<SessionRuntimeInstance>;
   bridgeRuntimeAccess: BridgeRuntimeAccess;
@@ -1792,6 +1840,13 @@ export type QueryAnimationSessionGroupsArgs = {
 
 export type QueryAppSessionGroupsArgs = {
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryArtifactsArgs = {
+  key?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionId?: InputMaybe<Scalars["ID"]["input"]>;
+  type?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type QueryAvailableRuntimesArgs = {
@@ -2279,6 +2334,7 @@ export type ScopeType = "channel" | "chat" | "session" | "system" | "ticket";
 export type Session = {
   __typename?: "Session";
   agentStatus: AgentStatus;
+  artifacts: Array<Artifact>;
   branch?: Maybe<Scalars["String"]["output"]>;
   cacheCreationTokens: Scalars["Float"]["output"];
   cacheReadTokens: Scalars["Float"]["output"];
@@ -2287,6 +2343,7 @@ export type Session = {
   costUsd: Scalars["Float"]["output"];
   createdAt: Scalars["DateTime"]["output"];
   createdBy: User;
+  createdById: Scalars["ID"]["output"];
   endpoints?: Maybe<SessionEndpoints>;
   gitCheckpoints: Array<GitCheckpoint>;
   hosting: HostingMode;
@@ -2613,9 +2670,11 @@ export type SlashCommandCategory = "passthrough" | "special" | "terminal";
 export type SlashCommandSource = "builtin" | "project_skill" | "user_skill";
 
 export type StartSessionInput = {
+  attachmentKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  designSessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   designSystemVersionId?: InputMaybe<Scalars["ID"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   hosting?: InputMaybe<HostingMode>;

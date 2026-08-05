@@ -6,6 +6,7 @@ export type {
   AssistantEvent,
   ResultEvent,
   ErrorEvent,
+  AuthRequiredEvent,
   MessageBlock,
   ContentBlock,
   ToolUseBlock,
@@ -28,6 +29,7 @@ export {
   hasPlanBlock,
   hasQuestionBlock,
   isMissingToolSessionError,
+  isToolAuthError,
   parseQuestion,
 } from "./adapters/coding-tool.js";
 export type {

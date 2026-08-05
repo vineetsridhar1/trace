@@ -342,6 +342,55 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it("classifies a Claude Code stream result auth failure", () => {
+    const adapter = new ClaudeCodeAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "do something",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    const message = "Not logged in. Please run /login";
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({ type: "result", subtype: "error", result: message })}\n`,
+    );
+    spawnedChildren[0].emit("exit", 1);
+    vi.advanceTimersByTime(1000);
+
+    expect(onOutput).toHaveBeenCalledTimes(1);
+    expect(onOutput).toHaveBeenCalledWith({ type: "auth_required", message });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates the same Claude Code auth failure from stdout and stderr", () => {
+    const adapter = new ClaudeCodeAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "do something",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    const message = "Failed to authenticate: OAuth session expired";
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({ type: "result", subtype: "error", result: message })}\n`,
+    );
+    spawnedChildren[0].stderr.write(`${message}\n`);
+    spawnedChildren[0].emit("exit", 1);
+    vi.advanceTimersByTime(1000);
+
+    expect(onOutput).toHaveBeenCalledTimes(1);
+    expect(onOutput).toHaveBeenCalledWith({ type: "auth_required", message });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
   it("still emits a plain error for non-auth Claude Code failures", () => {
     const adapter = new ClaudeCodeAdapter();
     const onOutput = vi.fn();
@@ -735,7 +784,7 @@ describe("coding tool adapter process exit fallback", () => {
     });
   });
 
-  it("wraps Antigravity output as a plan block in plan mode", () => {
+  it("leaves Antigravity plan-mode output as text because plans publish as artifacts", () => {
     const adapter = new AntigravityAdapter();
     const onOutput = vi.fn();
     const onComplete = vi.fn();
@@ -753,7 +802,7 @@ describe("coding tool adapter process exit fallback", () => {
 
     expect(onOutput).toHaveBeenCalledWith({
       type: "assistant",
-      message: { content: [{ type: "plan", content: "Step 1. Step 2." }] },
+      message: { content: [{ type: "text", text: "Step 1. Step 2." }] },
     });
   });
 

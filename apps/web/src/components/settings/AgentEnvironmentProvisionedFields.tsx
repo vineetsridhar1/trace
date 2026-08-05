@@ -62,7 +62,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
             disabled={!orgSecrets.length}
             onValueChange={(value) => update("authSecretId", value ?? "")}
           >
-            <SelectTrigger className="h-9 w-full bg-background">
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="Select an organization secret">
                 <span className="flex min-w-0 items-center gap-1.5">
                   {selectedSecret ? (
@@ -77,6 +77,7 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
             <SelectContent>
               {orgSecrets.map((secret) => (
                 <SelectItem key={secret.id} value={secret.id}>
+                  <Shield size={13} />
                   {secret.name}
                 </SelectItem>
               ))}

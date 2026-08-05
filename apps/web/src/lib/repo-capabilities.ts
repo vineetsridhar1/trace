@@ -21,8 +21,7 @@ export function repoRemoteKnownMissing(repo: RepoRemoteRef): boolean {
 
 export function resolveSupportedHostingForRepo(
   hosting: string | null | undefined,
-  repo: RepoRemoteRef,
+  _repo: RepoRemoteRef,
 ): string | undefined {
-  if (hosting === "cloud" && repoRemoteKnownMissing(repo)) return "local";
   return hosting ?? undefined;
 }

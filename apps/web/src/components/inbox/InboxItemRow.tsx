@@ -1,5 +1,6 @@
 import { useState, useCallback, memo } from "react";
 import { MessageCircleQuestion, Map, Check } from "lucide-react";
+import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import {
   SEND_SESSION_MESSAGE_MUTATION,
@@ -15,7 +16,11 @@ import { optimisticallyInsertSession } from "../../lib/optimistic-session";
 import { InboxPlanBody } from "./InboxPlanBody";
 import { InboxQuestionBody } from "./InboxQuestionBody";
 import type { QuestionData } from "./InboxQuestionBody";
-import { resolveSupportedHostingForRepo } from "../../lib/repo-capabilities";
+import {
+  CLOUD_REPO_REMOTE_REQUIRED,
+  repoRemoteKnownMissing,
+  resolveSupportedHostingForRepo,
+} from "../../lib/repo-capabilities";
 
 /** Human-friendly label for inbox item types. */
 function itemTypeLabel(itemType: string | undefined): string {
@@ -97,6 +102,10 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
       const prompt = planContent
         ? `Implement the following plan:\n\n${planContent}`
         : "Implement the plan from the previous session.";
+      if (sessionHosting === "cloud" && repoRemoteKnownMissing(sessionRepo)) {
+        toast.error("Cloud is unavailable for this repo", { description: CLOUD_REPO_REMOTE_REQUIRED });
+        return;
+      }
       const hosting = resolveSupportedHostingForRepo(sessionHosting ?? "cloud", sessionRepo);
       const result = await client
         .mutation(START_SESSION_MUTATION, {
@@ -113,6 +122,11 @@ export const InboxItemRow = memo(function InboxItemRow({ id }: { id: string }) {
           },
         })
         .toPromise();
+
+      if (result.error) {
+        toast.error("Failed to create session", { description: result.error.message });
+        return;
+      }
 
       const newSessionId = result.data?.startSession?.id;
       if (newSessionId) {

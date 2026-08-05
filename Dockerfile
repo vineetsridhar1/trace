@@ -21,6 +21,7 @@ COPY packages/shared/ packages/shared/
 COPY packages/client-core/ packages/client-core/
 COPY apps/server/ apps/server/
 COPY apps/web/ apps/web/
+COPY runtime/ runtime/
 COPY tsconfig.base.json ./
 RUN cd apps/server && npx prisma generate
 RUN node packages/gql/scripts/codegen.cjs

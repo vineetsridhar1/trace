@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Button } from "../ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { formatMobilePairingDate } from "./mobile-pairing-utils";
 
@@ -29,11 +31,17 @@ export function MobilePairingQrPanel({
   onGenerateQr,
   onCopyPayload,
 }: MobilePairingQrPanelProps) {
+  const [qrOpen, setQrOpen] = useState(false);
+
+  useEffect(() => {
+    if (qrDataUrl) setQrOpen(true);
+  }, [qrDataUrl]);
+
   return (
     <div className="mt-4 min-w-0">
       {requiresReachableUrl ? (
         <div className="mb-4">
-          <div className="flex items-end gap-2">
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end">
             <label htmlFor="mobile-pairing-public-url" className="min-w-0 flex-1">
               <span className="mb-1.5 block text-xs font-medium text-muted-foreground">
                 Reachable Trace URL
@@ -64,11 +72,14 @@ export function MobilePairingQrPanel({
       <div className="grid min-w-0 grid-cols-[96px_minmax(0,1fr)] items-start gap-4">
         <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-lg border border-border bg-background p-2">
           {qrDataUrl ? (
-            <img
-              src={qrDataUrl}
-              alt="Trace mobile pairing QR code"
-              className="h-full w-full rounded bg-white p-1"
-            />
+            <button
+              type="button"
+              onClick={() => setQrOpen(true)}
+              aria-label="Open pairing QR code"
+              className="h-full w-full cursor-zoom-in rounded bg-white p-1"
+            >
+              <img src={qrDataUrl} alt="Trace mobile pairing QR code" className="h-full w-full" />
+            </button>
           ) : (
             <span className="text-center text-[11px] leading-4 text-muted-foreground">
               QR appears here
@@ -98,6 +109,27 @@ export function MobilePairingQrPanel({
           ) : null}
         </div>
       </div>
+
+      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+        <DialogContent className="w-auto max-w-[calc(100%-2rem)] gap-3 p-5 sm:max-w-md">
+          <DialogHeader className="pr-8">
+            <DialogTitle>Scan to pair your phone</DialogTitle>
+            <DialogDescription>
+              Open the Trace mobile app and scan this one-time code.
+            </DialogDescription>
+          </DialogHeader>
+          {qrDataUrl ? (
+            <img
+              src={qrDataUrl}
+              alt="Trace mobile pairing QR code"
+              className="mx-auto aspect-square w-[min(78vw,360px)] rounded-xl bg-white p-3"
+            />
+          ) : null}
+          <p className="text-center text-xs text-muted-foreground">
+            Expires {formatMobilePairingDate(expiresAt)} and can only be used once.
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

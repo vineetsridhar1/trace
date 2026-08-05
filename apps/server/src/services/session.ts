@@ -82,6 +82,7 @@ import { managedGitService } from "./managed-git.js";
 import { appCheckpointCaptureService } from "./app-checkpoint-capture.js";
 import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 import { gitStorage } from "../lib/git-storage/index.js";
+import { createAgentInvocationToken } from "../lib/agent-invocation-auth.js";
 import { parseGitTreeArchive } from "../lib/design-system-archive.js";
 import { isGeneratedProjectKind } from "../lib/generated-project.js";
 import {
@@ -870,6 +871,7 @@ function serializeSession(session: {
   model: string | null;
   reasoningEffort: string | null;
   hosting: string;
+  createdById: string;
   createdBy: unknown;
   repo: unknown;
   repoId?: string | null;
@@ -898,6 +900,7 @@ function serializeSession(session: {
     model: session.model,
     reasoningEffort: session.reasoningEffort,
     hosting: session.hosting,
+    createdById: session.createdById,
     createdBy: session.createdBy,
     repo: session.repo ?? null,
     repoId: session.repoId ?? null,
@@ -1152,6 +1155,20 @@ function appendPromptInstructions(
   if (hasRepo && !isGeneratedProjectKind(sessionGroupKind)) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
+}
+
+function appendArtifactSkillInstruction(prompt: string, interactionMode?: string | null): string {
+  if (interactionMode !== "plan") return prompt;
+  return `${prompt}
+
+<system-instruction>
+Trace visual plans are immutable artifacts. Before planning, read these files completely:
+1. $TRACE_SKILLS_DIR/trace-artifacts/SKILL.md
+2. $TRACE_SKILLS_DIR/visual-plan/SKILL.md
+
+Follow their authoring and publishing instructions. Publish one complete visual-plan artifact with
+the Trace CLI when it is ready for review. Do not use a provider-native plan approval tool.
+</system-instruction>`;
 }
 
 function buildBaseBranchInstruction(baseBranch: string): string {
@@ -1468,6 +1485,36 @@ export function isFullyUnloadedSession(
 
 export class SessionService {
   private manualElementSaveQueues = new Map<string, Promise<void>>();
+
+  private async prepareArtifactInvocation(
+    sessionId: string,
+    organizationId: string,
+  ): Promise<{ invocationId: string; runtimeEnv: Record<string, string> }> {
+    const invocationId = randomUUID();
+    await prisma.session.updateMany({
+      where: { id: sessionId, organizationId },
+      data: { activeInvocationId: invocationId },
+    });
+    return {
+      invocationId,
+      runtimeEnv: {
+        TRACE_SESSION_ID: sessionId,
+        TRACE_INVOCATION_ID: invocationId,
+        TRACE_INVOCATION_TOKEN: createAgentInvocationToken({
+          organizationId,
+          sessionId,
+          invocationId,
+        }),
+      },
+    };
+  }
+
+  private async clearArtifactInvocation(sessionId: string, invocationId: string): Promise<void> {
+    await prisma.session.updateMany({
+      where: { id: sessionId, activeInvocationId: invocationId },
+      data: { activeInvocationId: null },
+    });
+  }
 
   private async withManualElementSaveLock<Result>(
     sessionGroupId: string,
@@ -2912,40 +2959,45 @@ export class SessionService {
   }
 
   /** Channel-less generated project groups for the Apps and Designs sidebar sections. */
-  async listAppGroups(organizationId: string, userId: string) {
-    return this.listGeneratedProjectGroups("app", organizationId, userId);
+  async listAppGroups(organizationId: string, userId: string, includeArchived = false) {
+    return this.listGeneratedProjectGroups("app", organizationId, userId, includeArchived);
   }
 
-  async listDesignGroups(organizationId: string, userId: string) {
-    return this.listGeneratedProjectGroups(["design", "design_system"], organizationId, userId);
+  async listDesignGroups(organizationId: string, userId: string, includeArchived = false) {
+    return this.listGeneratedProjectGroups(
+      ["design", "design_system"],
+      organizationId,
+      userId,
+      includeArchived,
+    );
   }
 
-  async listPdfGroups(organizationId: string, userId: string) {
-    return this.listGeneratedProjectGroups("pdf", organizationId, userId);
+  async listPdfGroups(organizationId: string, userId: string, includeArchived = false) {
+    return this.listGeneratedProjectGroups("pdf", organizationId, userId, includeArchived);
   }
 
-  async listAnimationGroups(organizationId: string, userId: string) {
-    return this.listGeneratedProjectGroups("animation", organizationId, userId);
+  async listAnimationGroups(organizationId: string, userId: string, includeArchived = false) {
+    return this.listGeneratedProjectGroups("animation", organizationId, userId, includeArchived);
   }
 
   private async listGeneratedProjectGroups(
     kind: "app" | "design" | "pdf" | "animation" | readonly ["design", "design_system"],
     organizationId: string,
     userId: string,
+    includeArchived: boolean,
   ) {
     const groups = await prisma.sessionGroup.findMany({
       where: {
         organizationId,
         kind: typeof kind === "string" ? kind : { in: [...kind] },
-        archivedAt: null,
+        ...(includeArchived ? {} : { archivedAt: null }),
         AND: [visibleSessionGroupWhere(userId)],
       },
       include: SESSION_GROUP_INCLUDE,
-      // Bound this org-wide listing so it can't grow without limit as an org
-      // accumulates apps. The sidebar shows the most recent apps; the tail is
-      // reachable via search/dedicated views when those land.
+      // Sidebar listings stay bounded. The creation-history view explicitly
+      // requests archived groups and needs the full history for local search.
       orderBy: { updatedAt: "desc" },
-      take: GENERATED_PROJECT_GROUP_LIST_LIMIT,
+      ...(includeArchived ? {} : { take: GENERATED_PROJECT_GROUP_LIST_LIMIT }),
     });
 
     type SessionGroupWithSessions = SessionGroupSummary & {
@@ -3534,6 +3586,12 @@ export class SessionService {
     if (input.designSystemVersionId && resolvedKind !== "design") {
       throw new ValidationError("Design-system versions may only be selected for Design sessions");
     }
+    if (
+      input.designSessionGroupId &&
+      (resolvedKind === "design" || resolvedKind === "design_system")
+    ) {
+      throw new ValidationError("Designs cannot be attached to Design or Design System sessions");
+    }
     const selectedDesignSystemVersion = input.designSystemVersionId
       ? await prisma.designSystemVersion.findFirst({
           where: {
@@ -3550,6 +3608,13 @@ export class SessionService {
     if (input.designSystemVersionId && !selectedDesignSystemVersion) {
       throw new ValidationError("Selected design-system version is unavailable");
     }
+    const selectedDesignAttachment = input.designSessionGroupId
+      ? await this.resolveDesignArtifact(
+          input.designSessionGroupId,
+          input.organizationId,
+          input.createdById,
+        )
+      : null;
     if (
       existingGroup &&
       input.designSystemVersionId &&
@@ -3600,9 +3665,27 @@ export class SessionService {
     if (resolvedChannel && resolvedChannel.organizationId !== input.organizationId) {
       throw new Error("Channel does not belong to this organization");
     }
+    const resolvedProject = input.projectId
+      ? await prisma.project.findFirst({
+          where: {
+            id: input.projectId,
+            organizationId: input.organizationId,
+            ...(resolvedChannelId ? { channels: { some: { channelId: resolvedChannelId } } } : {}),
+          },
+          select: { id: true, repoId: true },
+        })
+      : null;
+    if (input.projectId && !resolvedProject) {
+      throw new ValidationError(
+        resolvedChannelId
+          ? "Project is not linked to the selected channel"
+          : "Project does not belong to this organization",
+      );
+    }
 
     const authoritativeChannelRepoId =
       resolvedChannel?.type === "coding" ? (resolvedChannel.repoId ?? null) : null;
+    const authoritativeProjectRepoId = resolvedProject?.repoId ?? null;
     if (isGeneratedProjectKind(resolvedKind) && authoritativeChannelRepoId && !existingGroup) {
       const label = resolvedKind === "design" ? "Design" : "App";
       throw new ValidationError(`${label} sessions cannot start in a repo-linked coding channel`);
@@ -3610,6 +3693,14 @@ export class SessionService {
 
     if (authoritativeChannelRepoId && input.repoId && input.repoId !== authoritativeChannelRepoId) {
       throw new Error("Coding channel sessions must use the channel's linked repo");
+    }
+    if (
+      !authoritativeChannelRepoId &&
+      authoritativeProjectRepoId &&
+      input.repoId &&
+      input.repoId !== authoritativeProjectRepoId
+    ) {
+      throw new Error("Project sessions must use the project's linked repo");
     }
     if (
       authoritativeChannelRepoId &&
@@ -3634,6 +3725,7 @@ export class SessionService {
 
     let resolvedRepoId =
       authoritativeChannelRepoId ??
+      authoritativeProjectRepoId ??
       input.repoId ??
       seedGroup?.repoId ??
       sourceSession?.repoId ??
@@ -4171,6 +4263,17 @@ export class SessionService {
                     clientSource: normalizeClientSource(input.clientSource),
                     checkpointContext: null,
                     ...(input.imageKeys?.length ? { imageKeys: input.imageKeys } : {}),
+                    ...(selectedDesignAttachment
+                      ? {
+                          designAttachments: [
+                            {
+                              designSessionGroupId: selectedDesignAttachment.id,
+                              slug: selectedDesignAttachment.slug,
+                              designName: selectedDesignAttachment.name,
+                            },
+                          ],
+                        }
+                      : {}),
                   },
                 ])
               : undefined,
@@ -4880,6 +4983,9 @@ export class SessionService {
     if (isFirstRun && resolvedPrompt && channelBaseBranch) {
       resolvedPrompt = resolvedPrompt + buildBaseBranchInstruction(channelBaseBranch);
     }
+    if (resolvedPrompt) {
+      resolvedPrompt = appendArtifactSkillInstruction(resolvedPrompt, interactionMode);
+    }
 
     const checkpointContext = buildCheckpointContextFromStartMeta({
       sessionId: id,
@@ -4888,6 +4994,7 @@ export class SessionService {
       startMeta,
     });
 
+    const invocation = await this.prepareArtifactInvocation(id, session.organizationId);
     const command = {
       type: "run" as const,
       sessionId: id,
@@ -4907,6 +5014,7 @@ export class SessionService {
       imageUrls: imageKeys?.length
         ? await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)))
         : undefined,
+      runtimeEnv: invocation.runtimeEnv,
     };
 
     const deliveryResult = sessionRouter.send(id, command, {
@@ -4915,6 +5023,7 @@ export class SessionService {
     });
 
     if (deliveryResult !== "delivered") {
+      await this.clearArtifactInvocation(id, invocation.invocationId);
       await this.storePendingCommand(id, {
         type: "run",
         prompt: resolvedPrompt ?? null,
@@ -5072,6 +5181,10 @@ export class SessionService {
       include: SESSION_INCLUDE,
     });
     if (!session) throw new Error("Session not found or already deleted");
+    const artifactObjects = await prisma.artifact.findMany({
+      where: { sessionId: id },
+      select: { storageKey: true },
+    });
 
     // Resolve any pending inbox items (plans/questions awaiting input)
     await inboxService.resolveBySource({
@@ -5127,6 +5240,17 @@ export class SessionService {
         deletedSessionGroupId = session.sessionGroupId;
       }
     });
+
+    await Promise.all(
+      artifactObjects.map(({ storageKey }) =>
+        storage.deleteObject(storageKey).catch((error: unknown) => {
+          console.warn("[session] failed to delete artifact object with session", {
+            storageKey,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }),
+      ),
+    );
 
     // Broadcast the deletion event (events are kept for audit trail)
     await eventService.create({
@@ -5264,6 +5388,10 @@ export class SessionService {
         ...(newSessionStatus !== current.sessionStatus ? { sessionStatus: newSessionStatus } : {}),
       },
       include: SESSION_INCLUDE,
+    });
+    await prisma.session.updateMany({
+      where: { id, activeInvocationId: { not: null } },
+      data: { activeInvocationId: null },
     });
     const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
 
@@ -5998,7 +6126,7 @@ export class SessionService {
     const newSessionStatus: SessionStatus =
       current.sessionStatus === "merged"
         ? "merged"
-        : hasPendingPlan || hasQuestion
+        : current.sessionStatus === "needs_input" || hasPendingPlan || hasQuestion
           ? "needs_input"
           : current.sessionStatus === "in_review"
             ? "in_review"
@@ -6006,8 +6134,15 @@ export class SessionService {
 
     const session = await prisma.session.update({
       where: { id },
-      data: { agentStatus: newAgentStatus, sessionStatus: newSessionStatus },
+      data: {
+        agentStatus: newAgentStatus,
+        sessionStatus: newSessionStatus,
+      },
       select: { organizationId: true, createdById: true, name: true },
+    });
+    await prisma.session.updateMany({
+      where: { id, activeInvocationId: { not: null } },
+      data: { activeInvocationId: null },
     });
     const sessionGroup = await this.loadSessionGroupSnapshot(current.sessionGroupId);
 
@@ -6389,6 +6524,7 @@ export class SessionService {
       hasRepo: !!session.repoId,
       sessionGroupKind: session.sessionGroup?.kind,
     });
+    prompt = appendArtifactSkillInstruction(prompt, interactionMode);
 
     const checkpointContext =
       session.sessionGroup?.kind !== "design_system" && session.repoId && session.sessionGroupId
@@ -6414,6 +6550,7 @@ export class SessionService {
     // runtime prevents silent bridge hijack when the home is offline and a
     // different bridge (e.g. Laptop B) is now the only connected runtime.
     const expectedRuntimeId = runtimeBinding.runtimeId ?? conn.runtimeInstanceId;
+    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
     const deliveryCommand = {
       type: "send" as const,
       sessionId,
@@ -6431,6 +6568,7 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext,
       imageUrls,
+      runtimeEnv: invocation.runtimeEnv,
     };
     const deliveryResult: DeliveryResult =
       session.hosting === "cloud" && !expectedRuntimeId
@@ -6441,6 +6579,7 @@ export class SessionService {
           });
 
     if (deliveryResult !== "delivered") {
+      await this.clearArtifactInvocation(sessionId, invocation.invocationId);
       await this.storePendingCommand(
         sessionId,
         {
@@ -7563,6 +7702,8 @@ export class SessionService {
         hosting: true,
         connection: true,
         sessionGroupId: true,
+        lastUserMessageAt: true,
+        lastMessageAt: true,
       },
     });
     if (!session) return;
@@ -7592,13 +7733,25 @@ export class SessionService {
       return;
     }
 
-    // Preserve agent/session status — the session may still be running on the
-    // local machine even though the bridge WebSocket dropped. Only the
-    // connection state changes; the agent's actual work status is unknown.
+    // A lost runtime means Trace can no longer observe or control work that is
+    // in flight. An idle, never-started session may still be bound to the same
+    // local runtime, so only fail startup when its initial user message has not
+    // been answered.
+    // The user can explicitly retry or move the failed session once a runtime
+    // is available again.
+    const hasUnansweredUserMessage =
+      session.lastUserMessageAt !== null &&
+      (session.lastMessageAt === null || session.lastUserMessageAt >= session.lastMessageAt);
+    const agentStatus =
+      session.agentStatus === "active" ||
+      (session.agentStatus === "not_started" && hasUnansweredUserMessage)
+        ? "failed"
+        : session.agentStatus;
     await prisma.session.update({
       where: { id: sessionId },
       data: {
         connection: connJson(updated),
+        agentStatus,
       },
     });
     const sessionGroup = await this.syncGroupWorkspaceState(session.sessionGroupId, {
@@ -7615,7 +7768,7 @@ export class SessionService {
         reason,
         runtimeInstanceId,
         connection: connJson(updated),
-        agentStatus: session.agentStatus,
+        agentStatus,
         sessionStatus: session.sessionStatus,
         ...(sessionGroup ? { sessionGroup } : {}),
       },
@@ -7835,6 +7988,7 @@ export class SessionService {
       hasRepo: !!session.repoId,
       sessionGroupKind: session.sessionGroup?.kind,
     });
+    prompt = appendArtifactSkillInstruction(prompt, options.interactionMode);
 
     const promptEvent = await prisma.event.findFirst({
       where: {
@@ -7863,6 +8017,7 @@ export class SessionService {
       data: { toolSessionId: null },
     });
 
+    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
     const deliveryResult = sessionRouter.send(
       sessionId,
       {
@@ -7881,11 +8036,13 @@ export class SessionService {
         cwd: session.workdir ?? undefined,
         checkpointContext,
         imageUrls: options.imageUrls,
+        runtimeEnv: invocation.runtimeEnv,
       },
       { expectedHomeRuntimeId: conn.runtimeInstanceId, organizationId: session.organizationId },
     );
 
     if (deliveryResult !== "delivered") {
+      await this.clearArtifactInvocation(sessionId, invocation.invocationId);
       await this.persistConnectionFailure(
         sessionId,
         session.organizationId,
@@ -10885,6 +11042,7 @@ export class SessionService {
         hasRepo: !!session.repoId,
         sessionGroupKind: session.sessionGroup?.kind,
       });
+      prompt = appendArtifactSkillInstruction(prompt, pending.interactionMode);
     }
 
     const fallbackCheckpointContext =
@@ -10904,14 +11062,25 @@ export class SessionService {
       imageUrls = await Promise.all(pending.imageKeys.map((key) => storage.getGetUrl(key)));
     }
 
+    const generatedInstruction = generatedProjectInstruction(
+      session.sessionGroup?.kind,
+      session.sessionGroup?.designSystemVersion,
+    );
+    const attachedDesignInstruction = pending.designAttachments
+      ?.map((ref) =>
+        this.buildDesignImplementationPrompt(ref.designName, `.trace/designs/${ref.slug}`),
+      )
+      .join("\n\n");
+    const appendSystemPrompt = [generatedInstruction, attachedDesignInstruction]
+      .filter((instruction): instruction is string => !!instruction)
+      .join("\n\n");
+
+    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
     const command = {
       type: pending.type,
       sessionId,
       prompt: prompt ?? undefined,
-      appendSystemPrompt: generatedProjectInstruction(
-        session.sessionGroup?.kind,
-        session.sessionGroup?.designSystemVersion,
-      ),
+      appendSystemPrompt: appendSystemPrompt || undefined,
       tool: session.tool,
       model: session.model ?? undefined,
       reasoningEffort: session.reasoningEffort ?? undefined,
@@ -10921,6 +11090,7 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext: checkpointContext ?? undefined,
       imageUrls,
+      runtimeEnv: invocation.runtimeEnv,
     } satisfies {
       type: "run" | "send";
       sessionId: string;
@@ -10935,6 +11105,7 @@ export class SessionService {
       toolSessionId?: string;
       checkpointContext?: GitCheckpointContext;
       imageUrls?: string[];
+      runtimeEnv?: Record<string, string>;
     };
 
     // Materialize any attached designs into the freshly-provisioned workspace
@@ -10987,6 +11158,7 @@ export class SessionService {
       organizationId: session.organizationId,
     });
     if (deliveryResult !== "delivered") {
+      await this.clearArtifactInvocation(sessionId, invocation.invocationId);
       return deliveryResult;
     }
 

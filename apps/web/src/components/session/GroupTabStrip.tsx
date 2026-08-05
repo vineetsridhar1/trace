@@ -4,6 +4,7 @@ import {
   Activity,
   FilePlus2,
   FileCode,
+  FileText,
   GitCompareArrows,
   MessageSquarePlus,
   Plus,
@@ -51,6 +52,8 @@ interface GroupTabStripProps {
   activeTerminalId: string | null;
   openFiles: OpenFileTab[];
   activeFilePath: string | null;
+  openArtifactIds: string[];
+  activeArtifactId: string | null;
   trafficTabOpen: boolean;
   trafficTabActive: boolean;
   onSelectSession: (sessionId: string) => void;
@@ -61,6 +64,8 @@ interface GroupTabStripProps {
   onRenameTerminal: (terminalId: string, name: string) => void;
   onSelectFile: (filePath: string) => void;
   onCloseFile: (filePath: string) => void;
+  onSelectArtifact: (artifactId: string) => void;
+  onCloseArtifact: (artifactId: string) => void;
   onSelectTraffic: () => void;
   onCloseTraffic: () => void;
   onNewChat: () => void;
@@ -75,7 +80,8 @@ const tabBase =
 
 const tabActive = "border-b-accent bg-surface-mid text-foreground";
 
-const tabInactive = "border-b-transparent bg-surface-mid text-muted-foreground hover:text-foreground";
+const tabInactive =
+  "border-b-transparent bg-surface-mid text-muted-foreground hover:text-foreground";
 
 export function GroupTabStrip({
   sessionTabs,
@@ -85,6 +91,8 @@ export function GroupTabStrip({
   activeTerminalId,
   openFiles,
   activeFilePath,
+  openArtifactIds,
+  activeArtifactId,
   trafficTabOpen,
   trafficTabActive,
   onSelectSession,
@@ -95,6 +103,8 @@ export function GroupTabStrip({
   onRenameTerminal,
   onSelectFile,
   onCloseFile,
+  onSelectArtifact,
+  onCloseArtifact,
   onSelectTraffic,
   onCloseTraffic,
   onNewChat,
@@ -118,7 +128,11 @@ export function GroupTabStrip({
   }, []);
 
   // Scroll the active tab into view when selection changes
-  const activeKey = activeFilePath ?? activeTerminalId ?? (trafficTabActive ? "traffic" : selectedSessionId);
+  const activeKey =
+    activeArtifactId ??
+    activeFilePath ??
+    activeTerminalId ??
+    (trafficTabActive ? "traffic" : selectedSessionId);
   useEffect(() => {
     if (!activeKey) return;
     const el = tabRefs.current.get(activeKey);
@@ -176,6 +190,7 @@ export function GroupTabStrip({
               const isActive =
                 !activeTerminalId &&
                 !activeFilePath &&
+                !activeArtifactId &&
                 !trafficTabActive &&
                 selectedSessionId === session.id;
               const hasDoneBadge = !!sessionDoneBadges[session.id];
@@ -219,6 +234,38 @@ export function GroupTabStrip({
                       <X size={12} />
                     </button>
                   )}
+                </div>
+              );
+            })}
+
+            {openArtifactIds.map((artifactId) => {
+              const isActive = activeArtifactId === artifactId;
+              return (
+                <div
+                  key={artifactId}
+                  ref={(el: HTMLElement | null) => setTabRef(artifactId, el)}
+                  className={cn(
+                    tabBase,
+                    "max-w-[260px] gap-0 p-0",
+                    isActive ? tabActive : tabInactive,
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelectArtifact(artifactId)}
+                    className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
+                  >
+                    <FileText size={12} className="shrink-0" />
+                    <span className="truncate">Plan</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onCloseArtifact(artifactId)}
+                    className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
+                    title="Close plan tab"
+                  >
+                    <X size={12} />
+                  </button>
                 </div>
               );
             })}

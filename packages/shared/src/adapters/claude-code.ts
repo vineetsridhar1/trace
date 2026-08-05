@@ -59,11 +59,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     cwd,
     onOutput,
     onComplete,
-    interactionMode,
     model,
     reasoningEffort,
     enableClaudeInChrome,
     toolSessionId,
+    runtimeEnv,
   }: RunOptions) {
     this.cwd = cwd;
     this.resultEmitted = false;
@@ -75,14 +75,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       this.claudeSessionId = toolSessionId;
     }
 
-    const args = [
-      "-p",
-      "--input-format",
-      "text",
-      "--output-format",
-      "stream-json",
-      "--verbose",
-    ];
+    const args = ["-p", "--input-format", "text", "--output-format", "stream-json", "--verbose"];
     if (model) {
       args.push("--model", model);
     }
@@ -92,11 +85,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     if (enableClaudeInChrome) {
       args.push("--chrome");
     }
-    if (interactionMode === "plan") {
-      args.push("--permission-mode", "plan");
-    } else {
-      args.push("--dangerously-skip-permissions");
-    }
+    // Trace plan mode is artifact-driven. Claude's native plan mode prevents
+    // the shell command that publishes the completed artifact.
+    args.push("--dangerously-skip-permissions");
     if (this.claudeSessionId) {
       args.push("--resume", this.claudeSessionId);
     }
@@ -105,7 +96,7 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     const child = spawn("claude", args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv(),
+      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
       detached: true,
     });
     child.stdin?.on("error", () => {});
@@ -120,6 +111,14 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     let stderrEmitted = false;
     let authRequiredEmitted = false;
     let exitFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const emitOutput = (output: ToolOutput) => {
+      if (output.type === "auth_required") {
+        if (authRequiredEmitted) return;
+        authRequiredEmitted = true;
+      }
+      onOutput(output);
+    };
 
     const isCurrentProcess = () =>
       this.processGeneration === processGeneration && this.process === child;
@@ -137,10 +136,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       if (exitCode !== 0 && exitCode !== null && stderrChunks.length > 0) {
         const message = stderrChunks.join("\n");
         if (isToolAuthError(message)) {
-          authRequiredEmitted = true;
-          onOutput({ type: "auth_required", message });
+          emitOutput({ type: "auth_required", message });
         } else {
-          onOutput({ type: "error", message });
+          emitOutput({ type: "error", message });
         }
       }
     };
@@ -181,11 +179,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
           if (Array.isArray(parsed)) {
             for (const item of parsed) {
               if (item && typeof item === "object") {
-                this.processEvent(item as Record<string, unknown>, onOutput);
+                this.processEvent(item as Record<string, unknown>, emitOutput);
               }
             }
           } else {
-            this.processEvent(parsed, onOutput);
+            this.processEvent(parsed, emitOutput);
           }
         } catch {
           // Non-JSON text from stdout

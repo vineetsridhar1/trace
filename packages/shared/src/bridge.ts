@@ -21,6 +21,7 @@ export interface BridgeRunCommand {
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
+  runtimeEnv?: Record<string, string>;
 }
 
 export interface BridgeSendCommand {
@@ -37,6 +38,7 @@ export interface BridgeSendCommand {
   toolSessionId?: string;
   checkpointContext?: GitCheckpointContext | null;
   imageUrls?: string[];
+  runtimeEnv?: Record<string, string>;
 }
 
 export interface BridgePrepareCommand {

@@ -309,7 +309,10 @@ export function SessionRuntimePickerSheetContent({
       } catch (err) {
         rollback();
         void haptic.error();
-        console.warn("[updateSessionConfig] bridge change failed", err);
+        Alert.alert(
+          "Couldn't change runtime",
+          err instanceof Error ? err.message : "Try again in a moment.",
+        );
       }
     },
     [

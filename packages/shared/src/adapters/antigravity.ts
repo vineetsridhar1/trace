@@ -4,6 +4,7 @@ import { homedir } from "os";
 import { join } from "path";
 import { createInterface } from "readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
+import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 /** Generous cap so long agent runs aren't cut short by agy's default 5m print timeout. */
@@ -43,7 +44,12 @@ function parseAntigravityUsage(data: Record<string, unknown>): TokenUsage | unde
 
   const normalized: TokenUsage = {
     inputTokens: num(usage.inputTokens, usage.input_tokens, usage.input, usage.prompt_tokens),
-    outputTokens: num(usage.outputTokens, usage.output_tokens, usage.output, usage.completion_tokens),
+    outputTokens: num(
+      usage.outputTokens,
+      usage.output_tokens,
+      usage.output,
+      usage.completion_tokens,
+    ),
     cacheReadTokens: num(
       usage.cacheReadTokens,
       usage.cacheRead,
@@ -95,7 +101,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
   private processGeneration = 0;
   private lastUsage: TokenUsage | undefined;
 
-  run({ prompt, cwd, onOutput, onComplete, interactionMode, toolSessionId }: RunOptions) {
+  run({ prompt, cwd, onOutput, onComplete, toolSessionId, runtimeEnv }: RunOptions) {
     this.lastUsage = undefined;
 
     // Restore resume capability after a bridge restart.
@@ -116,7 +122,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
     const child = spawn("agy", args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
       detached: true,
     });
     this.process = child;
@@ -171,11 +177,7 @@ export class AntigravityAdapter implements CodingToolAdapter {
       const isError = code !== 0 && code !== null;
       const text = stdoutChunks.join("\n").trim();
       if (text) {
-        onOutput(
-          interactionMode === "plan"
-            ? { type: "assistant", message: { content: [{ type: "plan", content: text }] } }
-            : { type: "assistant", message: { content: [{ type: "text", text }] } },
-        );
+        onOutput({ type: "assistant", message: { content: [{ type: "text", text }] } });
       }
       if (isError && stderrChunks.length > 0) {
         onOutput({ type: "error", message: stderrChunks.join("\n") });

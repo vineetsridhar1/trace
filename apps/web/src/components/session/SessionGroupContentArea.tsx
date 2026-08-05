@@ -1,11 +1,12 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import type { SessionEntity } from "@trace/client-core";
+import { useEntityStore, type SessionEntity } from "@trace/client-core";
 import { SessionDetailView } from "./SessionDetailView";
 import { TerminalInstance } from "./TerminalInstance";
 import { FileScopedAiInput } from "./FileScopedAiInput";
 import { SessionEndpointTrafficPanel } from "./applications/SessionEndpointTrafficPanel";
 import type { OpenFileTab } from "./GroupTabStrip";
 import type { FileEditorBuffer } from "./file-editor-buffer";
+import { VisualPlanArtifact } from "../artifact/VisualPlanArtifact";
 
 const MonacoFileViewer = lazy(() =>
   import("./MonacoFileViewer").then((m) => ({ default: m.MonacoFileViewer })),
@@ -26,6 +27,7 @@ interface SessionGroupContentAreaProps {
   openFiles: OpenFileTab[];
   activeTerminalId: string | null;
   activeTrafficEndpointId: string | null;
+  activeArtifactId?: string | null;
   selectedSession: { id: string; _optimistic?: boolean } | null;
   sessionsByRecency: SessionEntity[];
   canStartNewChat: boolean;
@@ -46,6 +48,7 @@ export function SessionGroupContentArea({
   openFiles,
   activeTerminalId,
   activeTrafficEndpointId,
+  activeArtifactId = null,
   selectedSession,
   sessionsByRecency,
   canStartNewChat,
@@ -60,6 +63,17 @@ export function SessionGroupContentArea({
   emptyState,
 }: SessionGroupContentAreaProps) {
   const activeFile = openFiles.find((file) => file.filePath === activeFilePath);
+  const activeArtifact = useEntityStore((state) =>
+    activeArtifactId ? state.artifacts[activeArtifactId] : undefined,
+  );
+
+  if (activeArtifact?.type === "trace.visual-plan.v1") {
+    return (
+      <div className="h-full">
+        <VisualPlanArtifact artifact={activeArtifact} />
+      </div>
+    );
+  }
 
   if (activeFile?.isUploadedAttachment && activeFile.attachmentKey) {
     return (

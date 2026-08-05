@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "sections": [
+    {
+      "id": "plan-artifacts",
+      "name": "Plan artifacts in chat",
+      "screenIds": ["plan-compact", "plan-rich"]
+    },
+    {
+      "id": "media-artifacts",
+      "name": "Media artifacts in chat",
+      "screenIds": ["media-mixed"]
+    }
+  ],
+  "screens": [
+    {
+      "id": "plan-compact",
+      "name": "Compact HTML attachment",
+      "component": "./screens/CompactPlanArtifactScreen.tsx",
+      "variation": "Compact",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 },
+      "position": { "x": 0, "y": 0 }
+    },
+    {
+      "id": "plan-rich",
+      "name": "HTML preview card",
+      "component": "./screens/RichPlanArtifactScreen.tsx",
+      "variation": "Preview",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 },
+      "position": { "x": 1520, "y": 0 }
+    },
+    {
+      "id": "media-mixed",
+      "name": "Screenshot and video",
+      "component": "./screens/MediaArtifactsScreen.tsx",
+      "variation": "Mixed media",
+      "state": "Default",
+      "viewport": { "width": 1440, "height": 900 },
+      "position": { "x": 0, "y": 0 }
+    }
+  ]
+}

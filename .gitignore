@@ -35,4 +35,7 @@ package-lock.json
 # Managed git bare-repo storage (default GIT_STORAGE_ROOT in dev)
 .trace-git/
 
+# Local design-source packages supplied for implementation reference
+.trace/designs/
+
 apps/server/cloud.config.json

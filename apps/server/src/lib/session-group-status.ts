@@ -23,18 +23,13 @@ export function deriveSessionGroupStatus(
   // Merged is terminal and takes priority over all other states,
   // including needs_input and in_review (which depends on prUrl).
   if (sessions.some((session) => session?.sessionStatus === "merged")) return "merged";
+  if (sessions.some((session) => session?.agentStatus === "active")) return "in_progress";
+  if (sessions.some((session) => session?.agentStatus === "failed")) return "failed";
+  if (sessions.some((session) => session?.agentStatus === "stopped")) return "stopped";
   if (sessions.some((session) => session?.sessionStatus === "needs_input")) {
     return "needs_input";
   }
   if (prUrl) return "in_review";
-  if (
-    sessions.some(
-      (session) => session?.agentStatus === "active" || session?.sessionStatus === "in_progress",
-    )
-  ) {
-    return "in_progress";
-  }
-  if (sessions.some((session) => session?.agentStatus === "failed")) return "failed";
-  if (sessions.some((session) => session?.agentStatus === "stopped")) return "stopped";
+  if (sessions.some((session) => session?.sessionStatus === "in_progress")) return "in_progress";
   return "in_progress";
 }

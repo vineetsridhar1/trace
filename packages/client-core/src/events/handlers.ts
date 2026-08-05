@@ -20,6 +20,7 @@ import type {
   DesignSystem,
   DesignSystemCommitArtifact,
   DesignSystemVersion,
+  Artifact,
 } from "@trace/gql";
 import { StoreBatchWriter, type SessionEntity, type SessionGroupEntity } from "../stores/entity.js";
 import { useAuthStore } from "../stores/auth.js";
@@ -162,6 +163,18 @@ export function handleOrgEvent(event: Event): void {
   const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
 
   const scopeKey = `${event.scopeType}:${event.scopeId}`;
+
+  if (event.eventType === "artifact_created") {
+    const artifact = asJsonObject(payload.artifact);
+    if (artifact && typeof artifact.id === "string") {
+      batch.upsert("artifacts", artifact.id, artifact as unknown as Artifact);
+    }
+    if (typeof payload.sessionId === "string" && payload.sessionStatus === "needs_input") {
+      batch.patch("sessions", payload.sessionId, {
+        sessionStatus: "needs_input",
+      } as Partial<SessionEntity>);
+    }
+  }
 
   const designSystemEvents = new Set<EventType>([
     "design_system_created",
@@ -877,6 +890,19 @@ export function handleSessionEvent(sessionId: string, event: Event & { id: strin
   upsertSessionEventWithOptimisticResolution(sessionId, event);
 
   const payload = asJsonObject(event.payload) ?? ({} as JsonObject);
+  if (event.eventType === "artifact_created") {
+    const artifact = asJsonObject(payload.artifact);
+    if (artifact && typeof artifact.id === "string") {
+      const batch = new StoreBatchWriter();
+      batch.upsert("artifacts", artifact.id, artifact as unknown as Artifact);
+      if (payload.sessionStatus === "needs_input") {
+        batch.patch("sessions", sessionId, {
+          sessionStatus: "needs_input",
+        } as Partial<SessionEntity>);
+      }
+      batch.flush();
+    }
+  }
   if (event.eventType === "session_output" && event.scopeType === ("session" satisfies ScopeType)) {
     const batch = new StoreBatchWriter();
     routeSessionOutput({ event, payload, batch, ui: getOrgEventUIBindings() });

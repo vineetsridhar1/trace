@@ -1,7 +1,6 @@
 import { Home } from "lucide-react";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { cn } from "../../lib/utils";
-import { sidebarRootLeftEdgeRowClass } from "./sidebarItemStyles";
 
 export function HomeButton() {
   const activePage = useUIStore((s: UIState) => s.activePage);
@@ -17,7 +16,6 @@ export function HomeButton() {
       onClick={() => setActiveChannelId(null)}
       className={cn(
         "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-        sidebarRootLeftEdgeRowClass,
         "pl-4",
         isActive
           ? "bg-white/10 text-foreground"
@@ -26,6 +24,12 @@ export function HomeButton() {
     >
       <Home size={16} />
       <span>Home</span>
+      <kbd className="ml-auto mr-2 rounded border border-[var(--th-edge)] bg-[var(--th-surface)] px-1.5 py-0.5 font-mono text-[9px] font-normal tracking-wider text-white">
+        <span className="inline-flex items-center gap-0.5">
+          <span>⌘</span>
+          <span>N</span>
+        </span>
+      </kbd>
     </button>
   );
 }

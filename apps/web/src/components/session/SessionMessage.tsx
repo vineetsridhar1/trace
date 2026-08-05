@@ -11,6 +11,7 @@ import { AuthRequiredNotice } from "./messages/AuthRequiredNotice";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
 import { GitCheckpointChips } from "./messages/GitCheckpointChips";
+import { ArtifactUploadedCard } from "./messages/ArtifactUploadedCard";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
 
@@ -177,7 +178,7 @@ function renderSessionOutput(
   }
 
   if (type === "auth_required") {
-    return <AuthRequiredNotice message={str(payload.message)} timestamp={ts} />;
+    return <AuthRequiredNotice timestamp={ts} />;
   }
 
   if (type === "workspace_failed") {
@@ -297,6 +298,38 @@ export const SessionMessage = memo(function SessionMessage({
           footer={<GitCheckpointChips checkpoints={promptGitCheckpoints} />}
         />
       );
+
+    case "artifact_created": {
+      const artifact = asJsonObject(payload?.artifact);
+      const manifest = asJsonObject(artifact?.manifest);
+      const files = Array.isArray(manifest?.files) ? manifest.files : [];
+      const artifactType = str(artifact?.type);
+      const artifactFile = files.map(asJsonObject).find((file) => {
+        if (!file || typeof file.path !== "string" || typeof file.mediaType !== "string") {
+          return false;
+        }
+        if (artifactType === "trace.visual-plan.v1") {
+          return file.path === "plan.html" || file.path === "plan.mdx";
+        }
+        return file.mediaType.startsWith(artifactType === "trace.image.v1" ? "image/" : "video/");
+      });
+      return typeof artifact?.type === "string" && typeof artifact.id === "string" ? (
+        <ArtifactUploadedCard
+          artifactId={artifact.id}
+          artifactType={artifact.type}
+          filePath={str(artifactFile?.path) || undefined}
+          mediaType={str(artifactFile?.mediaType) || undefined}
+          byteSize={
+            typeof artifact.byteSize === "number"
+              ? artifact.byteSize
+              : typeof artifactFile?.size === "number"
+                ? artifactFile.size
+                : undefined
+          }
+          timestamp={timestamp}
+        />
+      ) : null;
+    }
 
     case "session_terminated": {
       if (payload?.reason === "bridge_complete") return null;

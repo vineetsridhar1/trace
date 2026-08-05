@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowLeft,
-  History,
+  Boxes,
   WifiOff,
   Monitor,
   Cloud,
@@ -25,7 +25,7 @@ import {
 } from "./sessionStatus";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
 import { AgentStatusIcon } from "./AgentStatusIcon";
-import { SessionHistory } from "./SessionHistory";
+import { SessionGroupArtifactsDialog } from "../artifact/SessionGroupArtifactsDialog";
 import { ScrambleText } from "../ui/ScrambleText";
 import { SessionMoveButton } from "./SessionMoveButton";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
@@ -86,8 +86,7 @@ export function SessionHeader({
   const toggleFullscreen = useDetailPanelStore(
     (s: { toggleFullscreen: () => void }) => s.toggleFullscreen,
   );
-  const [showHistory, setShowHistory] = useState(false);
-  const historyRef = useRef<HTMLDivElement>(null);
+  const [showArtifacts, setShowArtifacts] = useState(false);
   const prUrl = groupPrUrl ?? null;
 
   const disconnected = isDisconnected(connection);
@@ -141,26 +140,6 @@ export function SessionHeader({
     { workdir, lastUserMessageAt, connection },
   );
 
-  const closeHistory = useCallback(() => setShowHistory(false), []);
-
-  useEffect(() => {
-    if (!showHistory) return;
-    function handleClick(e: MouseEvent) {
-      if (historyRef.current && !historyRef.current.contains(e.target as Node)) {
-        closeHistory();
-      }
-    }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") closeHistory();
-    }
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [showHistory, closeHistory]);
-
   return (
     <div className="app-region-drag flex shrink-0 items-center gap-3 border-b border-border bg-surface-mid px-4 py-2">
       {panelMode ? (
@@ -198,7 +177,7 @@ export function SessionHeader({
         </span>
       </ActionTooltip>
 
-      {disconnected ? (
+      {disconnected && displayAgentStatus !== "failed" ? (
         pastGracePeriod ? (
           <span className="flex shrink-0 items-center gap-1.5 text-xs text-destructive">
             <WifiOff size={12} />
@@ -274,22 +253,24 @@ export function SessionHeader({
           disabledReason={moveDisabledReason}
         />
 
-        <div className="relative" ref={historyRef}>
-          <ActionTooltip label="Session history">
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className={headerIconButtonClass}
-              aria-label="Session history"
-            >
-              <History size={13} />
-            </button>
-          </ActionTooltip>
-          {showHistory && (
-            <div className="app-region-no-drag absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-surface shadow-lg">
-              <SessionHistory sessionId={sessionId} />
-            </div>
-          )}
-        </div>
+        {sessionGroupId ? (
+          <>
+            <ActionTooltip label="Artifacts">
+              <button
+                onClick={() => setShowArtifacts(true)}
+                className={headerIconButtonClass}
+                aria-label="Artifacts"
+              >
+                <Boxes size={13} />
+              </button>
+            </ActionTooltip>
+            <SessionGroupArtifactsDialog
+              sessionGroupId={sessionGroupId}
+              open={showArtifacts}
+              onOpenChange={setShowArtifacts}
+            />
+          </>
+        ) : null}
 
         <GitHubActions
           sessionId={sessionId}

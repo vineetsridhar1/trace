@@ -379,11 +379,9 @@ ipcMain.handle("get-github-auth-token", async () => {
 ipcMain.handle("login-codex-with-chatgpt", async () => {
   const codexHome = await mkdtemp(path.join(tmpdir(), "trace-codex-login-"));
   try {
-    await writeFile(
-      path.join(codexHome, "config.toml"),
-      'cli_auth_credentials_store = "file"\n',
-      { mode: 0o600 },
-    );
+    await writeFile(path.join(codexHome, "config.toml"), 'cli_auth_credentials_store = "file"\n', {
+      mode: 0o600,
+    });
     const exitCode = await new Promise<number | null>((resolve, reject) => {
       const child = spawn("codex", ["login"], {
         env: { ...process.env, CODEX_HOME: codexHome },

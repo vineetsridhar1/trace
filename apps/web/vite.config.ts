@@ -87,6 +87,7 @@ export default defineConfig({
     proxy: {
       "/.well-known/apple-app-site-association": api,
       "/apple-app-site-association": api,
+      "/artifacts": api,
       "/auth": api,
       "/graphql": api,
       "/slack": api,

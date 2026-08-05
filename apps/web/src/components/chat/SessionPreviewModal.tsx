@@ -2,8 +2,9 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ExpandIcon, X } from "lucide-react";
 import { createPortal } from "react-dom";
-import { navigateToSession } from "../../stores/ui";
+import { navigateToSession, useUIStore } from "../../stores/ui";
 import { SessionDetailView } from "../session/SessionDetailView";
+import { ArtifactOpenContext } from "../artifact/ArtifactOpenContext";
 
 interface SessionPreviewModalProps {
   sessionId: string;
@@ -21,6 +22,7 @@ export function SessionPreviewModal({
   const [open, setOpen] = useState(false);
   const [origin, setOrigin] = useState({ x: 0, y: 0 });
   const triggerRef = useRef<HTMLDivElement>(null);
+  const openArtifactTab = useUIStore((state) => state.openArtifactTab);
 
   const handleOpen = useCallback(() => {
     if (triggerRef.current) {
@@ -39,6 +41,15 @@ export function SessionPreviewModal({
     setOpen(false);
     navigateToSession(channelId, sessionGroupId, sessionId);
   }, [channelId, sessionGroupId, sessionId]);
+
+  const handleOpenArtifact = useCallback(
+    (artifactId: string) => {
+      setOpen(false);
+      openArtifactTab(sessionGroupId, artifactId);
+      navigateToSession(channelId, sessionGroupId, sessionId);
+    },
+    [channelId, openArtifactTab, sessionGroupId, sessionId],
+  );
 
   // Close on Escape
   useEffect(() => {
@@ -103,7 +114,9 @@ export function SessionPreviewModal({
                 }}
                 transition={{ type: "spring", duration: 0.5 }}
               >
-                <SessionDetailView sessionId={sessionId} />
+                <ArtifactOpenContext.Provider value={handleOpenArtifact}>
+                  <SessionDetailView sessionId={sessionId} />
+                </ArtifactOpenContext.Provider>
               </motion.div>
 
               {/* Close button */}

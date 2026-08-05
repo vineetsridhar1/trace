@@ -1,0 +1,382 @@
+<!doctype html>
+<!--
+  Trace visual plan starter.
+
+  Copy this file to your plan directory as plan.html, then replace the sample
+  content. Keep the <style> block; it is the component vocabulary. Every class
+  below is demonstrated once in the body so you can see what it renders as.
+
+  Rules that are enforced on upload:
+    - One file. No sibling CSS, JS, or image files.
+    - No external references. Images must be inline data: URLs or CSS shapes.
+    - No <script>. The plan renders with scripting disabled.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Implementation plan</title>
+    <style>
+      :root {
+        --bg: #171717;
+        --surface: #1f1f1f;
+        --raised: #262626;
+        --fg: #e4e4e7;
+        --muted: #a1a1aa;
+        --faint: #71717a;
+        --border: #2e2e2e;
+        --accent: #3b82f6;
+        --add: #22c55e;
+        --change: #eab308;
+        --remove: #ef4444;
+        --radius: 8px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 40px 32px 72px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.65 ui-sans-serif,
+          -apple-system,
+          "Segoe UI",
+          system-ui,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .plan {
+        max-width: 860px;
+        margin: 0 auto;
+      }
+
+      /* ── Title block ── */
+      .plan-title {
+        margin: 0 0 8px;
+        font-size: 28px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .plan-summary {
+        margin: 0 0 20px;
+        color: var(--muted);
+        font-size: 16px;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 36px;
+      }
+      .chip {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .chip strong {
+        color: var(--fg);
+        font-weight: 550;
+      }
+
+      /* ── Sections ── */
+      section {
+        margin-bottom: 40px;
+      }
+      h2 {
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      h3 {
+        margin: 0 0 6px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      code {
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.9em;
+      }
+
+      /* ── Two-column split (scope vs non-goals, etc.) ── */
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .card {
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .card h3 {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .card ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .card li {
+        margin-bottom: 4px;
+      }
+
+      /* ── Flow diagram: horizontal boxes joined by arrows ── */
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 0;
+        margin: 4px 0 8px;
+      }
+      .node {
+        flex: 1 1 0;
+        min-width: 120px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .node b {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .node span {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .node.is-new {
+        border-color: var(--accent);
+      }
+      .arrow {
+        flex: 0 0 28px;
+        align-self: center;
+        text-align: center;
+        color: var(--faint);
+      }
+
+      /* ── Phases ── */
+      .phase {
+        position: relative;
+        padding: 0 0 20px 26px;
+        border-left: 1px solid var(--border);
+      }
+      .phase:last-child {
+        border-left-color: transparent;
+        padding-bottom: 0;
+      }
+      .phase::before {
+        content: attr(data-step);
+        position: absolute;
+        left: -11px;
+        top: 0;
+        width: 21px;
+        height: 21px;
+        border-radius: 50%;
+        background: var(--raised);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 21px;
+        text-align: center;
+      }
+
+      /* ── Tables: file maps, risks, verification ── */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      td code {
+        background: none;
+        padding: 0;
+        color: var(--muted);
+      }
+      .tag {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .tag.add {
+        color: var(--add);
+      }
+      .tag.change {
+        color: var(--change);
+      }
+      .tag.remove {
+        color: var(--remove);
+      }
+
+      /* ── Callout ── */
+      .callout {
+        padding: 12px 16px;
+        border-left: 2px solid var(--accent);
+        border-radius: 0 var(--radius) var(--radius) 0;
+        background: var(--surface);
+        color: var(--muted);
+      }
+      .callout.risk {
+        border-left-color: var(--change);
+      }
+      .callout strong {
+        color: var(--fg);
+      }
+
+      @media (max-width: 640px) {
+        .split {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <article class="plan">
+      <h1 class="plan-title">Title of the change</h1>
+      <p class="plan-summary">
+        One or two sentences a reviewer can decide on: what changes, and what it buys.
+      </p>
+      <div class="meta">
+        <span class="chip"><strong>6</strong> files</span>
+        <span class="chip"><strong>3</strong> phases</span>
+        <span class="chip">Migration required</span>
+      </div>
+
+      <section>
+        <h2>Scope</h2>
+        <div class="split">
+          <div class="card">
+            <h3>In scope</h3>
+            <ul>
+              <li>What this change delivers.</li>
+              <li>Keep these concrete and checkable.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Not doing</h3>
+            <ul>
+              <li>Deliberate exclusions.</li>
+              <li>Say why, briefly.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Current state</h2>
+        <p>
+          What the code does today, citing real paths such as
+          <code>apps/server/src/services/artifact.ts</code>. Ground every claim in something you
+          read.
+        </p>
+      </section>
+
+      <section>
+        <h2>How it will work</h2>
+        <div class="flow">
+          <div class="node"><b>CLI</b><span>existing</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new"><b>New step</b><span>added here</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>Store</b><span>unchanged</span></div>
+        </div>
+        <p>
+          Explain what moves through the flow and what is new. Mark new nodes with class
+          <code>is-new</code>.
+        </p>
+      </section>
+
+      <section>
+        <h2>Phases</h2>
+        <div class="phase" data-step="1">
+          <h3>First shippable slice</h3>
+          <p>What lands, and how you know it works.</p>
+        </div>
+        <div class="phase" data-step="2">
+          <h3>Second slice</h3>
+          <p>Each phase should be independently verifiable.</p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Files</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Change</th>
+              <th>What</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>path/to/file.ts</code></td>
+              <td><span class="tag change">edit</span></td>
+              <td>Describe the change; do not paste the implementation.</td>
+            </tr>
+            <tr>
+              <td><code>path/to/new-file.ts</code></td>
+              <td><span class="tag add">new</span></td>
+              <td>What this file will own.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Verification</h2>
+        <table>
+          <tbody>
+            <tr>
+              <td><code>pnpm --filter @trace/server test</code></td>
+              <td>Cases that must pass, named specifically.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Risks</h2>
+        <div class="callout risk">
+          <strong>The risk.</strong> What breaks, who notices, and the mitigation.
+        </div>
+      </section>
+    </article>
+  </body>
+</html>

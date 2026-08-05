@@ -13,7 +13,7 @@ import { formatTime } from "./utils";
  * run because it isn't logged in. Offers the same login flow as running the
  * CLI in a terminal, opened in the in-session terminal panel.
  */
-export function AuthRequiredNotice({ message, timestamp }: { message: string; timestamp: string }) {
+export function AuthRequiredNotice({ timestamp }: { timestamp: string }) {
   const scopeKey = useEventScopeKey();
   const sessionId = scopeKey.startsWith("session:") ? scopeKey.slice("session:".length) : "";
   const tool = useEntityField("sessions", sessionId, "tool") as string | undefined;
@@ -52,11 +52,6 @@ export function AuthRequiredNotice({ message, timestamp }: { message: string; ti
           ? " Log in below, then resend your message."
           : " Log in from a terminal on the runtime, then resend your message."}
       </div>
-      {message && (
-        <div className="mt-1 ml-5 whitespace-pre-wrap text-[11px] text-muted-foreground/70">
-          {message}
-        </div>
-      )}
       {canLogin && (
         <div className="mt-2 ml-5">
           <Button size="sm" variant="secondary" onClick={handleLogin} disabled={opening}>
