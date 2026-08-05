@@ -17,4 +17,14 @@ describe("getSessionGroupDisplayStatus", () => {
       getSessionGroupDisplayStatus(["in_progress"], ["active", "failed"], null),
     ).toBe("in_progress");
   });
+
+  it("keeps a group in review while an agent is active and a PR exists", () => {
+    expect(
+      getSessionGroupDisplayStatus(
+        ["in_progress"],
+        ["active"],
+        "https://github.com/trace/trace/pull/123",
+      ),
+    ).toBe("in_review");
+  });
 });

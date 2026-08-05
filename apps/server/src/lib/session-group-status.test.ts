@@ -19,18 +19,18 @@ describe("deriveSessionGroupStatus", () => {
           { agentStatus: "done", sessionStatus: "needs_input" },
           { agentStatus: "active", sessionStatus: "in_progress" },
         ],
-        "https://github.com/trace/trace/pull/123",
+        null,
       ),
     ).toBe("in_progress");
   });
 
-  it("keeps a group in progress while another agent is active and a PR exists", () => {
+  it("keeps a group in review while an agent is active and a PR exists", () => {
     expect(
       deriveSessionGroupStatus(
         [{ agentStatus: "active", sessionStatus: "in_progress" }],
         "https://github.com/trace/trace/pull/123",
       ),
-    ).toBe("in_progress");
+    ).toBe("in_review");
   });
 
   it("reports failed before a stale in_progress session status", () => {
