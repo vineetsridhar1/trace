@@ -1,7 +1,7 @@
 import { isCanvasLabelVisible } from "./viewport";
 
 // Screen-space gap between the bottom of the label and the top of its first artboard.
-export const SECTION_LABEL_GAP = 128;
+export const SECTION_LABEL_GAP = 102;
 // Keep in sync with the heading font size and line height below.
 const SECTION_LABEL_FONT_SIZE = 28;
 const SECTION_LABEL_HEIGHT = 36;

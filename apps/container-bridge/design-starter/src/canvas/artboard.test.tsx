@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DesignArtboard } from "./DesignArtboard";
-import { DesignSectionLabel } from "./DesignSectionLabel";
+import { DesignSectionLabel, SECTION_LABEL_GAP } from "./DesignSectionLabel";
 import type { DesignScreen } from "./manifest";
 
 const screen: DesignScreen = {
@@ -50,6 +50,8 @@ test("anchors the section label to the bottom of its zero-height wrapper", () =>
   assert.match(html, /bottom-0/);
   assert.match(html, /origin-bottom-left/);
   assert.match(html, /transform:scale\(2\)/);
+  // The section heading sits 24px above the 78px screen-label block.
+  assert.equal(SECTION_LABEL_GAP - 78, 24);
 });
 
 test("hides labels once they would dwarf the artboards", () => {
@@ -62,7 +64,7 @@ test("hides labels once they would run into the artboards above", () => {
   // 78px of screen label needs 78px of room: 310 canvas px covers it at 0.3 zoom, not 0.2.
   assert.match(renderArtboard(0.3, STACKED_CLEARANCE), /Welcome/);
   assert.doesNotMatch(renderArtboard(0.2, STACKED_CLEARANCE), /Welcome/);
-  // The taller 164px section label runs out of room sooner.
-  assert.notEqual(renderSectionLabel(0.6, STACKED_CLEARANCE), "");
+  // The taller 138px section label runs out of room sooner.
+  assert.notEqual(renderSectionLabel(0.5, STACKED_CLEARANCE), "");
   assert.equal(renderSectionLabel(0.4, STACKED_CLEARANCE), "");
 });
