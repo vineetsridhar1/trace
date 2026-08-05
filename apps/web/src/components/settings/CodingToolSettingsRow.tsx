@@ -72,13 +72,8 @@ export function CodingToolSettingsRow({
             dimmed={status.status === "missing"}
           />
           <span className="min-w-0">
-            <span className="flex items-center gap-2">
-              <span className="truncate text-sm font-semibold text-[#fafafa]">{status.label}</span>
-              {presentation.primary ? (
-                <span className="rounded border border-[#3f3f46] px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.08em] text-[#a1a1aa]">
-                  Primary
-                </span>
-              ) : null}
+            <span className="block truncate text-sm font-semibold text-[#fafafa]">
+              {status.label}
             </span>
             <span className="mt-0.5 block truncate font-mono text-xs text-[#a1a1aa]">
               {presentation.command}
