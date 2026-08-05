@@ -18,7 +18,7 @@ RUN npm install -g pnpm@10.7.0 @anthropic-ai/claude-code @openai/codex @earendil
 WORKDIR /app
 
 # Install runtime dependencies directly (avoids workspace: protocol issue)
-RUN npm init -y && npm install ws node-pty && \
+RUN npm init -y && npm pkg set type=module && npm install ws node-pty && \
     (chmod +x node_modules/node-pty/prebuilds/linux-*/spawn-helper 2>/dev/null || true)
 
 # Copy pre-built shared package as a node_modules dependency
@@ -45,8 +45,8 @@ COPY apps/container-bridge/pdf-starter/ /opt/trace/pdf-starter/
 # RCE in a previewed (agent-written) app trivially container-root and able to read
 # every stripped secret via /proc/1/environ. Only these commands are permitted.
 RUN useradd -m -s /bin/bash coder && \
-    mkdir -p /workspace /repos /workspaces /home/coder/.npm-global && \
-    chown -R coder:coder /workspace /repos /workspaces /app /home/coder/.npm-global /opt/trace && \
+    mkdir -p /trace /workspace /repos /workspaces /home/coder/.npm-global && \
+    chown -R coder:coder /trace /workspace /repos /workspaces /app /home/coder/.npm-global /opt/trace && \
     printf '%s\n' \
       'coder ALL=(root) NOPASSWD: /usr/sbin/service postgresql start' \
       'coder ALL=(postgres) NOPASSWD: /usr/bin/psql, /usr/bin/createuser' \
