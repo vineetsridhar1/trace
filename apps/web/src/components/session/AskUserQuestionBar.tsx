@@ -135,12 +135,14 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
               />
             ) : (
               <>
-                <QuestionProgress
-                  current={state.page}
-                  total={state.total}
-                  answered={answeredCount}
-                />
-                <div className="mt-4">
+                {hasQuestionSet ? (
+                  <QuestionProgress
+                    current={state.page}
+                    total={state.total}
+                    answered={answeredCount}
+                  />
+                ) : null}
+                <div className={hasQuestionSet ? "mt-4" : undefined}>
                   <QuestionEyebrow type={type} />
                   {question.context ? (
                     <p className="mt-3 text-[13px] text-muted-foreground">{question.context}</p>

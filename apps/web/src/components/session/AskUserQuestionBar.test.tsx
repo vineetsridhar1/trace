@@ -27,10 +27,16 @@ function render(questions: Question[]): string {
 
 describe("AskUserQuestionBar", () => {
   it("omits the question-set sidebar for one question", () => {
-    expect(render([question("one")])).not.toContain("Before I continue");
+    const markup = render([question("one")]);
+
+    expect(markup).not.toContain("Before I continue");
+    expect(markup).not.toContain("Question 1 of 1");
   });
 
   it("shows the question-set sidebar for multiple questions", () => {
-    expect(render([question("one"), question("two")])).toContain("Before I continue");
+    const markup = render([question("one"), question("two")]);
+
+    expect(markup).toContain("Before I continue");
+    expect(markup).toContain("Question 1 of 2");
   });
 });
