@@ -1166,6 +1166,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
   ws.on("close", (code: number, reason: Buffer) => {
     clearInterval(pingInterval);
+    const disconnectedAt = new Date().toISOString();
     const reasonText = reason.toString();
     runtimeDebug("bridge websocket closed, grace period starting", {
       runtimeId,
@@ -1209,6 +1210,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             sessionId,
             "runtime_disconnected",
             closedRuntimeId,
+            disconnectedAt,
           );
         });
       }
