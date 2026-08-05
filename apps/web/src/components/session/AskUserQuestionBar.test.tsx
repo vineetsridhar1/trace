@@ -32,6 +32,7 @@ describe("AskUserQuestionBar", () => {
     expect(markup).not.toContain("Before I continue");
     expect(markup).not.toContain("Question 1 of 1");
     expect(markup).toContain("flex flex-wrap justify-end gap-2");
+    expect(markup.indexOf("number keys pick")).toBeLessThan(markup.indexOf("You decide"));
     expect(markup.indexOf("You decide")).toBeLessThan(markup.indexOf("Review 1 answer"));
   });
 

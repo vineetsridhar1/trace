@@ -165,6 +165,9 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
                 </div>
               </>
             )}
+            <p className="mt-3 font-mono text-[10px] text-muted-foreground">
+              {reviewing ? "⌘↵ send · esc chat" : "number keys pick · ↵ next · esc chat"}
+            </p>
           </div>
           <footer className="border-t border-border px-5 py-3">
             <div className="flex flex-wrap justify-end gap-2">
@@ -211,9 +214,6 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
                     : "Next question"}
               </button>
             </div>
-            <p className="mt-2 font-mono text-[10px] text-muted-foreground">
-              {reviewing ? "⌘↵ send · esc chat" : "number keys pick · ↵ next · esc chat"}
-            </p>
           </footer>
         </div>
       </section>
