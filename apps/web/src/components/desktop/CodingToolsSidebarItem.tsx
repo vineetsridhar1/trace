@@ -48,8 +48,8 @@ export function CodingToolsSidebarItem() {
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
         className={cn(
-          "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors duration-150 hover:bg-[#09090b] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#3b82f6]",
-          open && "bg-[#09090b]",
+          "flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-ring",
+          open && "bg-white/10",
         )}
       >
         <span className="flex size-6 shrink-0 items-center justify-center rounded-[6px] border border-[#3f3f46] bg-[#09090b] text-[#fafafa]">
@@ -76,7 +76,7 @@ export function CodingToolsSidebarItem() {
         side="top"
         align="start"
         sideOffset={6}
-        className="w-[296px] gap-0 bg-transparent p-0 shadow-none ring-0"
+        className="w-[var(--anchor-width)] gap-0 bg-transparent p-0 shadow-none ring-0"
       >
         <CodingToolsPopover onClose={() => setOpen(false)} />
       </PopoverContent>
