@@ -73,10 +73,10 @@ test("uses responsive zoom for trackpad pinch gestures", () => {
 });
 
 test("hides canvas labels once their canvas-space size passes the threshold", () => {
-  const label = { fontSize: 24, blockHeight: 78, clearanceAbove: Number.POSITIVE_INFINITY };
+  const label = { fontSize: 20, blockHeight: 70, clearanceAbove: Number.POSITIVE_INFINITY };
 
   assert.equal(isCanvasLabelVisible({ ...label, zoom: 1 }), true);
-  const minZoom = 24 / MAX_LABEL_CANVAS_FONT_SIZE;
+  const minZoom = 20 / MAX_LABEL_CANVAS_FONT_SIZE;
   assert.equal(isCanvasLabelVisible({ ...label, zoom: minZoom }), true);
   assert.equal(isCanvasLabelVisible({ ...label, zoom: minZoom - 0.01 }), false);
   assert.equal(isCanvasLabelVisible({ ...label, zoom: MIN_CANVAS_ZOOM }), false);
@@ -84,15 +84,15 @@ test("hides canvas labels once their canvas-space size passes the threshold", ()
 });
 
 test("hides canvas labels once they no longer fit above the artboard", () => {
-  const label = { fontSize: 24, blockHeight: 78, clearanceAbove: 310 };
+  const label = { fontSize: 20, blockHeight: 70, clearanceAbove: 310 };
 
-  // 310 canvas px of room shrinks to 78 screen px — exactly the label — at this zoom.
-  assert.equal(isCanvasLabelVisible({ ...label, zoom: 78 / 310 + 0.001 }), true);
-  assert.equal(isCanvasLabelVisible({ ...label, zoom: 78 / 310 - 0.001 }), false);
+  // 310 canvas px of room shrinks to 70 screen px — exactly the label — at this zoom.
+  assert.equal(isCanvasLabelVisible({ ...label, zoom: 70 / 310 + 0.001 }), true);
+  assert.equal(isCanvasLabelVisible({ ...label, zoom: 70 / 310 - 0.001 }), false);
   assert.equal(isCanvasLabelVisible({ ...label, zoom: 1 }), true);
   // A taller label runs out of that same room sooner.
-  assert.equal(isCanvasLabelVisible({ ...label, blockHeight: 138, zoom: 0.4 }), false);
-  assert.equal(isCanvasLabelVisible({ ...label, blockHeight: 138, zoom: 0.6 }), true);
+  assert.equal(isCanvasLabelVisible({ ...label, blockHeight: 126, zoom: 0.4 }), false);
+  assert.equal(isCanvasLabelVisible({ ...label, blockHeight: 126, zoom: 0.6 }), true);
 });
 
 test("normalizes line and page wheel deltas", () => {
