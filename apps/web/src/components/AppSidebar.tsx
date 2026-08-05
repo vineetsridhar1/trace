@@ -190,9 +190,7 @@ export function AppSidebar() {
                 <SidebarTabSwitcher tabProgress={tabProgress} onTabClick={expandedTabs.selectTab} />
               </div>
             )}
-            <div className="border-t border-[#3f3f46] px-2 py-2">
-              <CodingToolsSidebarItem />
-            </div>
+            <CodingToolsSidebarItem />
             <SidebarGettingStartedItem />
             <div className="border-t border-white/10">
               <UserMenu />
