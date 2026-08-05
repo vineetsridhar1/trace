@@ -1,10 +1,27 @@
 import { isCanvasLabelVisible } from "./viewport";
 
-// Keep in sync with the heading font size below.
+// Screen-space gap between the bottom of the label and the top of its first artboard.
+export const SECTION_LABEL_GAP = 128;
+// Keep in sync with the heading font size and line height below.
 const SECTION_LABEL_FONT_SIZE = 28;
+const SECTION_LABEL_HEIGHT = 36;
 
-export function DesignSectionLabel({ name, zoom }: { name: string; zoom: number }) {
-  if (!isCanvasLabelVisible(SECTION_LABEL_FONT_SIZE, zoom)) return null;
+export function DesignSectionLabel({
+  name,
+  zoom,
+  clearanceAbove,
+}: {
+  name: string;
+  zoom: number;
+  clearanceAbove: number;
+}) {
+  const visible = isCanvasLabelVisible({
+    fontSize: SECTION_LABEL_FONT_SIZE,
+    blockHeight: SECTION_LABEL_GAP + SECTION_LABEL_HEIGHT,
+    clearanceAbove,
+    zoom,
+  });
+  if (!visible) return null;
 
   return (
     // Anchored to the bottom of its zero-height wrapper so the gap below the label stays

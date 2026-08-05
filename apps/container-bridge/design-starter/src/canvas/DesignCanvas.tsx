@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { DesignArtboard } from "./DesignArtboard";
-import { DesignSectionLabel } from "./DesignSectionLabel";
+import { DesignSectionLabel, SECTION_LABEL_GAP } from "./DesignSectionLabel";
 import { placeScreens } from "./layout";
 import type { DesignManifest } from "./manifest";
 import { resolveScreenComponent } from "./screen-modules";
 import { useCanvasViewport } from "./useCanvasViewport";
-
-// Screen-space gap between the bottom of a section label and the top of its first artboard.
-const SECTION_LABEL_GAP = 128;
 
 export function DesignCanvas({
   manifest,
@@ -91,15 +88,24 @@ export function DesignCanvas({
             className="pointer-events-none absolute h-0"
             style={{ left: item.x, top: item.y - SECTION_LABEL_GAP / viewport.zoom }}
           >
-            <DesignSectionLabel name={item.sectionName} zoom={viewport.zoom} />
+            <DesignSectionLabel
+              name={item.sectionName}
+              zoom={viewport.zoom}
+              clearanceAbove={item.clearanceAbove}
+            />
           </div>
         ))}
-        {visible.map(({ screen, x, y }) => {
+        {visible.map(({ screen, x, y, clearanceAbove }) => {
           const component = resolveScreenComponent(screenModules, screen.component);
           return (
             <div key={screen.id} className="absolute" style={{ left: x, top: y }}>
               {component ? (
-                <DesignArtboard screen={screen} component={component} zoom={viewport.zoom} />
+                <DesignArtboard
+                  screen={screen}
+                  component={component}
+                  zoom={viewport.zoom}
+                  clearanceAbove={clearanceAbove}
+                />
               ) : (
                 <div
                   className="flex items-center justify-center bg-rose-950/50 p-8 text-sm text-rose-200"

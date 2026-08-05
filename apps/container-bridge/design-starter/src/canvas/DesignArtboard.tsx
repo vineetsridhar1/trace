@@ -5,15 +5,20 @@ import { isCanvasLabelVisible } from "./viewport";
 
 // Keep in sync with the screen name font size below.
 const SCREEN_LABEL_FONT_SIZE = 24;
+const SCREEN_LABEL_GAP = 12;
+// Screen-space height of the label: name (32) + margin (8) + variation line (26).
+const SCREEN_LABEL_HEIGHT = 66;
 
 export function DesignArtboard({
   screen,
   component: ScreenComponent,
   zoom,
+  clearanceAbove,
 }: {
   screen: DesignScreen;
   component: ComponentType;
   zoom: number;
+  clearanceAbove: number;
 }) {
   const inverseZoom = 1 / zoom;
   const labelWidth = screen.viewport.width * zoom;
@@ -24,11 +29,16 @@ export function DesignArtboard({
       className="relative"
       style={{ width: screen.viewport.width }}
     >
-      {isCanvasLabelVisible(SCREEN_LABEL_FONT_SIZE, zoom) ? (
+      {isCanvasLabelVisible({
+        fontSize: SCREEN_LABEL_FONT_SIZE,
+        blockHeight: SCREEN_LABEL_GAP + SCREEN_LABEL_HEIGHT,
+        clearanceAbove,
+        zoom,
+      }) ? (
         <div
           className="absolute left-0"
           style={{
-            bottom: screen.viewport.height + 12 * inverseZoom,
+            bottom: screen.viewport.height + SCREEN_LABEL_GAP * inverseZoom,
             transform: `scale(${inverseZoom})`,
             transformOrigin: "bottom left",
             width: labelWidth,
