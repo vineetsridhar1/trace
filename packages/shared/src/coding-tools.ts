@@ -41,8 +41,8 @@ export const CODING_TOOL_CLIS: Readonly<Record<string, CodingToolCli>> = {
     tool: "antigravity",
     label: "Antigravity",
     command: "agy",
-    install: "brew install antigravity",
-    installUrl: "https://antigravity.google",
+    install: "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+    installUrl: "https://antigravity.google/docs/cli-install",
   },
   cursor_composer: {
     tool: "cursor_composer",
