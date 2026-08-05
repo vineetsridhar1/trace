@@ -8952,6 +8952,11 @@ export class SessionService {
         : null;
     const sourceBranch = sourceGitStatus?.branch ?? session.branch ?? null;
     const sourceConnection = this.parseConnection(session.connection);
+    // Mark a cloud replacement as starting before any post-move events or
+    // adapter work. `provisionRuntime` will reserve the concrete runtime id
+    // shortly afterward, but idle cleanup can run in between; persisting the
+    // startup state here keeps the normal grace window in effect for that gap.
+    const replacementRequestedAt = new Date().toISOString();
     const nextConnection = connJson(
       targetHosting === "local"
         ? defaultConnection({
@@ -8961,6 +8966,8 @@ export class SessionService {
         : defaultConnection({
             adapterType: "provisioned",
             environmentId: targetEnvironment?.id ?? sourceConnection.environmentId,
+            state: "requested",
+            requestedAt: replacementRequestedAt,
           }),
     );
 

@@ -6435,6 +6435,8 @@ describe("SessionService", () => {
             connection: expect.objectContaining({
               adapterType: "provisioned",
               environmentId: "env-1",
+              state: "requested",
+              requestedAt: expect.any(String),
             }),
           }),
         }),
