@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuestionState } from "@trace/client-core";
 import type { Question } from "@trace/shared";
+import { cn } from "@/lib/utils";
 import { QuestionCard, QuestionEyebrow, QuestionProgress } from "./questions/QuestionChrome";
 import { QuestionControl } from "./questions/QuestionControl";
 import { QuestionReview } from "./questions/QuestionReview";
@@ -17,6 +18,7 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
   const question = state.question;
   const answeredCount = state.answers.filter((answer) => answer.answered).length;
   const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
+  const hasQuestionSet = state.total > 1;
 
   const send = () => {
     const response = state.buildResponse();
@@ -65,41 +67,48 @@ export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuest
         role="dialog"
         aria-modal="true"
         aria-label="Questions from the agent"
-        className="grid max-h-[min(680px,calc(100vh-32px))] w-[min(720px,calc(100vw-32px))] grid-cols-1 overflow-hidden rounded-[14px] border border-foreground/30 bg-surface shadow-2xl sm:grid-cols-[212px_1fr]"
+        className={cn(
+          "grid max-h-[min(680px,calc(100vh-32px))] grid-cols-1 overflow-hidden rounded-[14px] border border-foreground/30 bg-surface shadow-2xl",
+          hasQuestionSet
+            ? "w-[min(720px,calc(100vw-32px))] sm:grid-cols-[212px_1fr]"
+            : "w-[min(520px,calc(100vw-32px))]",
+        )}
       >
-        <aside className="hidden border-r border-border bg-surface-deep/55 p-4 sm:block">
-          <QuestionEyebrow />
-          <p className="mt-3 text-[13px] font-semibold leading-4">Before I continue</p>
-          <ol className="mt-4 grid gap-1">
-            {node.questions.map((item, index) => {
-              const answer = state.answers[index];
-              const current = !reviewing && index === state.page;
-              return (
-                <li key={item.id ?? `${index}-${item.header}`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      state.setPage(index);
-                      setReviewing(false);
-                    }}
-                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${current ? "bg-foreground/[0.08]" : ""}`}
-                  >
-                    <span
-                      className={`grid h-4 w-4 place-items-center rounded border font-mono text-[9px] ${answer?.answered ? "border-[color-mix(in_srgb,var(--th-success)_50%,transparent)] text-[var(--th-success)]" : current ? "border-foreground" : "border-border text-muted-foreground"}`}
+        {hasQuestionSet ? (
+          <aside className="hidden border-r border-border bg-surface-deep/55 p-4 sm:block">
+            <QuestionEyebrow />
+            <p className="mt-3 text-[13px] font-semibold leading-4">Before I continue</p>
+            <ol className="mt-4 grid gap-1">
+              {node.questions.map((item, index) => {
+                const answer = state.answers[index];
+                const current = !reviewing && index === state.page;
+                return (
+                  <li key={item.id ?? `${index}-${item.header}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        state.setPage(index);
+                        setReviewing(false);
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${current ? "bg-foreground/[0.08]" : ""}`}
                     >
-                      {answer?.answered ? "✓" : index + 1}
-                    </span>
-                    <span
-                      className={`line-clamp-2 text-xs leading-4 ${current ? "font-semibold" : "text-muted-foreground"}`}
-                    >
-                      {item.header || item.question}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-        </aside>
+                      <span
+                        className={`grid h-4 w-4 place-items-center rounded border font-mono text-[9px] ${answer?.answered ? "border-[color-mix(in_srgb,var(--th-success)_50%,transparent)] text-[var(--th-success)]" : current ? "border-foreground" : "border-border text-muted-foreground"}`}
+                      >
+                        {answer?.answered ? "✓" : index + 1}
+                      </span>
+                      <span
+                        className={`line-clamp-2 text-xs leading-4 ${current ? "font-semibold" : "text-muted-foreground"}`}
+                      >
+                        {item.header || item.question}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </aside>
+        ) : null}
 
         <div className="flex min-h-0 flex-col">
           <header className="flex items-center gap-2 border-b border-border px-5 py-3">
