@@ -37,10 +37,10 @@ function renderSectionLabel(zoom: number, clearanceAbove = Number.POSITIVE_INFIN
 test("keeps the screen label constant-sized and on one line", () => {
   const html = renderArtboard(0.5);
 
-  assert.match(html, /bottom:868px/);
+  assert.match(html, /bottom:860px/);
   assert.match(html, /transform:scale\(2\)/);
-  assert.match(html, /text-\[20px\]/);
-  assert.match(html, /text-\[16px\]/);
+  assert.match(html, /text-\[18px\]/);
+  assert.match(html, /text-\[14px\]/);
   assert.equal((html.match(/truncate/g) ?? []).length, 2);
   assert.match(html, /Screen content/);
 });
@@ -52,9 +52,9 @@ test("anchors the section label to the bottom of its zero-height wrapper", () =>
   assert.match(html, /bottom-0/);
   assert.match(html, /origin-bottom-left/);
   assert.match(html, /transform:scale\(2\)/);
-  assert.match(html, /text-\[24px\]/);
-  // The section heading sits 24px above the 70px screen-label block.
-  assert.equal(SECTION_LABEL_GAP - 70, 24);
+  assert.match(html, /text-\[20px\]/);
+  // The section heading sits 16px above the 56px screen-label block.
+  assert.equal(SECTION_LABEL_GAP - 56, 16);
 });
 
 test("hides labels once they would dwarf the artboards", () => {
@@ -64,10 +64,10 @@ test("hides labels once they would dwarf the artboards", () => {
 });
 
 test("hides labels once they would run into the artboards above", () => {
-  // 70px of screen label needs 70px of room: 310 canvas px covers it at 0.3 zoom, not 0.2.
-  assert.match(renderArtboard(0.3, STACKED_CLEARANCE), /Welcome/);
-  assert.doesNotMatch(renderArtboard(0.2, STACKED_CLEARANCE), /Welcome/);
-  // The taller 126px section label runs out of room sooner.
+  // The smaller 56px screen label still fits at 0.2 zoom, but not at 0.18.
+  assert.match(renderArtboard(0.2, STACKED_CLEARANCE), /Welcome/);
+  assert.doesNotMatch(renderArtboard(0.18, STACKED_CLEARANCE), /Welcome/);
+  // The taller 100px section label runs out of room sooner.
   assert.notEqual(renderSectionLabel(0.5, STACKED_CLEARANCE), "");
-  assert.equal(renderSectionLabel(0.4, STACKED_CLEARANCE), "");
+  assert.equal(renderSectionLabel(0.3, STACKED_CLEARANCE), "");
 });
