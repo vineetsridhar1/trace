@@ -7,6 +7,7 @@ import { sessionRouter } from "../lib/session-router.js";
 import { parseCookieToken, verifyToken } from "../lib/auth.js";
 import { canViewSessionGroup } from "./access.js";
 import { appIntegrationService } from "./app-integrations.js";
+import { APP_VIEWER_CONTEXT_HEADER, createAppViewerContextToken } from "./app-viewer-context.js";
 import {
   AuthorizationError,
   AuthenticationError,
@@ -499,6 +500,15 @@ export class EndpointProxyService {
       res.writeHead(503).end("Endpoint unavailable");
       return;
     }
+    const viewerUserId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
+    const needsViewerAuthorization =
+      endpoint.accessMode === "private" ||
+      url.pathname.startsWith("/api/") ||
+      url.pathname.startsWith("/__trace/integrations/");
+    const viewerCanAccessApp =
+      viewerUserId && needsViewerAuthorization
+        ? await authorizePrivateAccess(req, endpoint)
+        : false;
     if (endpoint.accessMode === "private") {
       // The preview cookie is SameSite=None, so a credentialed request can be
       // driven cross-site (CSRF). Reject any browser Origin that isn't the app's
@@ -507,7 +517,7 @@ export class EndpointProxyService {
         res.writeHead(403).end("Cross-origin request forbidden");
         return;
       }
-      if (!(await authorizePrivateAccess(req, endpoint))) {
+      if (!viewerCanAccessApp) {
         const acceptsHtml = String(req.headers.accept ?? "").includes("text/html");
         const isNavigation = req.headers["sec-fetch-mode"] === "navigate" || acceptsHtml;
         const redirect =
@@ -528,12 +538,12 @@ export class EndpointProxyService {
         res.writeHead(403).end("Cross-origin request forbidden");
         return;
       }
-      const userId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
+      const userId = viewerUserId;
       if (!userId) {
         res.writeHead(401).end("Authentication required");
         return;
       }
-      if (!(await authorizePrivateAccess(req, endpoint))) {
+      if (!viewerCanAccessApp) {
         res.writeHead(403).end("Forbidden");
         return;
       }
@@ -679,6 +689,18 @@ export class EndpointProxyService {
       authoringParentOrigins,
     };
     this.pendingHttp.set(requestId, pending);
+    const forwardedHeaders = forwardableRequestHeaders(req.headers, {
+      authoringOverlay: authoringParentOrigins !== null,
+    });
+    if (url.pathname.startsWith("/api/") && viewerUserId && viewerCanAccessApp) {
+      forwardedHeaders[APP_VIEWER_CONTEXT_HEADER] = createAppViewerContextToken({
+        tokenType: "app_viewer_context",
+        userId: viewerUserId,
+        organizationId: endpoint.organizationId,
+        sessionGroupId: endpoint.sessionGroupId,
+        endpointId: endpoint.id,
+      });
+    }
     const delivery = await sendRuntimeCommand(
       runtime.key,
       {
@@ -689,9 +711,7 @@ export class EndpointProxyService {
         port: endpoint.targetPort,
         method: req.method ?? "GET",
         path: `${path}${query ? `?${query}` : ""}`,
-        headers: forwardableRequestHeaders(req.headers, {
-          authoringOverlay: authoringParentOrigins !== null,
-        }),
+        headers: forwardedHeaders,
         bodyBase64: requestBody.byteLength ? requestBody.toString("base64") : undefined,
       },
       endpoint.organizationId,

@@ -27,6 +27,31 @@ Keep browser requests to this app same-origin. Put calls that require secrets or
 browser CORS behind a route in `server.ts` or another server module. Never send secrets to the
 browser or commit them.
 
+## Connected data
+
+Call integrations only from server routes. Trace attaches the current signed-in viewer to proxied
+`/api/*` requests, and the server-only `trace` helper passes that identity to Trace without exposing
+credentials to browser code.
+
+For a Snowflake binding, keep the SQL in the Node route and accept only its parameter values from
+the browser:
+
+```ts
+import { trace } from "./trace.js";
+
+app.get("/api/revenue", async (request, response) => {
+  const rows = await trace.integrations.snowflake.query(request, "<binding-id>", {
+    sql: "SELECT region, SUM(revenue) FROM analytics.sales WHERE sold_at >= ? GROUP BY region",
+    parameters: [String(request.query.startDate)],
+  });
+  response.json(rows);
+});
+```
+
+Trace accepts one read-only `SELECT` statement, resolves the binding's viewer/shared/service
+connection, and sends the request through Nango. Do not accept SQL, binding IDs, database names,
+schema names, warehouse names, or connection identifiers from browser input.
+
 ## Runtime
 
 Trace manages the development server on port 3000. Do not run `pnpm dev` or start another server.

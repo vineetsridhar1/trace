@@ -18,7 +18,11 @@ vi.mock("./nango-connection-provider.js", () => ({
 
 import { prisma } from "../lib/db.js";
 import { AuthorizationError, ValidationError } from "../lib/errors.js";
-import { AppIntegrationService, normalizeIntegrationPath } from "./app-integrations.js";
+import {
+  AppIntegrationService,
+  assertSnowflakeReadOnlyQuery,
+  normalizeIntegrationPath,
+} from "./app-integrations.js";
 import { nangoConnectionProvider } from "./nango-connection-provider.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
@@ -66,6 +70,7 @@ describe("AppIntegrationService", () => {
       id: "binding-1",
       organizationId: "org-1",
       sessionGroupId: "app-1",
+      provider: "GitHub",
       providerConfigKey: "github",
       executionIdentity: "viewer",
       sharedConnectionId: null,
@@ -128,6 +133,112 @@ describe("AppIntegrationService", () => {
         body: Buffer.alloc(0),
       }),
     ).rejects.toBeInstanceOf(AuthorizationError);
+    expect(nangoMock.proxy).not.toHaveBeenCalled();
+  });
+
+  it("accepts a single read-only Snowflake query", () => {
+    expect(() =>
+      assertSnowflakeReadOnlyQuery(`
+        WITH totals AS (
+          SELECT region, SUM(revenue) AS revenue
+          FROM analytics.sales
+          WHERE note = 'delete; is text'
+          GROUP BY region
+        )
+        SELECT * FROM totals
+      `),
+    ).not.toThrow();
+  });
+
+  it.each([
+    "DELETE FROM analytics.sales",
+    "SELECT * FROM analytics.sales; DROP TABLE analytics.sales",
+    "WITH rows AS (SELECT * FROM analytics.sales) UPDATE analytics.sales SET revenue = 0",
+    "/* harmless */ CALL refresh_finance()",
+    "SELECT SYSTEM$CANCEL_QUERY('query-id')",
+  ])("rejects a non-read-only Snowflake statement: %s", (sql) => {
+    expect(() => assertSnowflakeReadOnlyQuery(sql)).toThrow(ValidationError);
+  });
+
+  it("runs Snowflake SQL through the current viewer connection with typed bindings", async () => {
+    prismaMock.appIntegrationBinding.findFirst.mockResolvedValue({
+      id: "binding-1",
+      organizationId: "org-1",
+      sessionGroupId: "app-1",
+      provider: "Snowflake",
+      providerConfigKey: "snowflake",
+      executionIdentity: "viewer",
+      sharedConnectionId: null,
+      allowedMethods: ["POST"],
+      allowedPathPrefixes: ["/api/v2/statements"],
+    });
+    prismaMock.integrationConnection.findFirst.mockResolvedValue({
+      id: "viewer-connection",
+      nangoConnectionId: "nango-viewer-1",
+    });
+    nangoMock.proxy.mockResolvedValue({
+      status: 200,
+      contentType: "application/json",
+      body: Buffer.from('{"data":[["east","42"]]}'),
+    });
+
+    const response = await new AppIntegrationService().executeSnowflakeQuery({
+      endpoint: { organizationId: "org-1", sessionGroupId: "app-1" },
+      userId: "viewer-1",
+      bindingId: "binding-1",
+      query: {
+        sql: "SELECT * FROM analytics.sales WHERE year = ? AND active = ?",
+        parameters: [2026, true],
+        warehouse: "REPORTING_WH",
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(nangoMock.proxy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: "nango-viewer-1",
+        method: "POST",
+        path: "/api/v2/statements",
+        contentType: "application/json",
+      }),
+    );
+    const proxyInput = nangoMock.proxy.mock.calls[0]?.[0] as { body: Buffer };
+    expect(JSON.parse(proxyInput.body.toString("utf8"))).toEqual({
+      statement: "SELECT * FROM analytics.sales WHERE year = ? AND active = ?",
+      timeout: 30,
+      bindings: {
+        "1": { type: "FIXED", value: "2026" },
+        "2": { type: "BOOLEAN", value: "true" },
+      },
+      warehouse: "REPORTING_WH",
+    });
+  });
+
+  it("blocks the generic proxy from bypassing Snowflake query validation", async () => {
+    prismaMock.appIntegrationBinding.findFirst.mockResolvedValue({
+      id: "binding-1",
+      organizationId: "org-1",
+      sessionGroupId: "app-1",
+      provider: "Snowflake",
+      providerConfigKey: "snowflake",
+      executionIdentity: "viewer",
+      sharedConnectionId: null,
+      allowedMethods: ["POST"],
+      allowedPathPrefixes: ["/api/v2/statements"],
+    });
+
+    await expect(
+      new AppIntegrationService().execute({
+        endpoint: { organizationId: "org-1", sessionGroupId: "app-1" },
+        userId: "viewer-1",
+        bindingId: "binding-1",
+        method: "POST",
+        path: "/api/v2/statements",
+        query: null,
+        contentType: "application/json",
+        body: Buffer.from('{"statement":"DELETE FROM analytics.sales"}'),
+      }),
+    ).rejects.toThrow("server-side Trace integration helper");
     expect(nangoMock.proxy).not.toHaveBeenCalled();
   });
 });

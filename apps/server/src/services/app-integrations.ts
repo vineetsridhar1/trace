@@ -11,6 +11,155 @@ import { nangoConnectionProvider, type NangoProxyResponse } from "./nango-connec
 
 const PROVIDER_KEY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
+const SNOWFLAKE_STATEMENTS_PATH = "/api/v2/statements";
+const MAX_SNOWFLAKE_QUERY_LENGTH = 100_000;
+const MAX_SNOWFLAKE_PARAMETERS = 100;
+const SNOWFLAKE_WRITE_KEYWORDS = new Set([
+  "ALTER",
+  "BEGIN",
+  "CALL",
+  "COMMIT",
+  "COPY",
+  "CREATE",
+  "DELETE",
+  "DROP",
+  "EXECUTE",
+  "GET",
+  "GRANT",
+  "INSERT",
+  "MERGE",
+  "PUT",
+  "REMOVE",
+  "REVOKE",
+  "ROLLBACK",
+  "SET",
+  "TRUNCATE",
+  "UNSET",
+  "UPDATE",
+  "USE",
+]);
+
+export type SnowflakeQueryInput = {
+  sql: string;
+  parameters?: Array<string | number | boolean>;
+  database?: string;
+  schema?: string;
+  warehouse?: string;
+  timeoutSeconds?: number;
+};
+
+function snowflakeSqlTokens(sql: string): string[] {
+  const tokens: string[] = [];
+  let index = 0;
+  while (index < sql.length) {
+    const char = sql[index]!;
+    const next = sql[index + 1];
+    if (/\s/.test(char)) {
+      index += 1;
+      continue;
+    }
+    if (char === "-" && next === "-") {
+      index += 2;
+      while (index < sql.length && sql[index] !== "\n") index += 1;
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      const end = sql.indexOf("*/", index + 2);
+      if (end === -1) throw new ValidationError("Snowflake query has an unterminated comment");
+      index = end + 2;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      const quote = char;
+      index += 1;
+      let closed = false;
+      while (index < sql.length) {
+        if (sql[index] !== quote) {
+          index += 1;
+          continue;
+        }
+        if (sql[index + 1] === quote) {
+          index += 2;
+          continue;
+        }
+        index += 1;
+        closed = true;
+        break;
+      }
+      if (!closed) throw new ValidationError("Snowflake query has an unterminated string");
+      continue;
+    }
+    if (char === "$") {
+      const delimiter = sql.slice(index).match(/^\$[A-Za-z0-9_]*\$/)?.[0];
+      if (delimiter) {
+        const end = sql.indexOf(delimiter, index + delimiter.length);
+        if (end === -1) throw new ValidationError("Snowflake query has an unterminated string");
+        index = end + delimiter.length;
+        continue;
+      }
+    }
+    if (char === ";") {
+      throw new ValidationError("Snowflake queries must contain exactly one statement");
+    }
+    if (/[A-Za-z_]/.test(char)) {
+      const match = sql.slice(index).match(/^[A-Za-z_][A-Za-z0-9_$]*/)?.[0];
+      if (!match) throw new ValidationError("Snowflake query is invalid");
+      tokens.push(match.toUpperCase());
+      index += match.length;
+      continue;
+    }
+    index += 1;
+  }
+  return tokens;
+}
+
+export function assertSnowflakeReadOnlyQuery(sql: string): void {
+  const normalized = sql.trim();
+  if (!normalized) throw new ValidationError("Snowflake query is required");
+  if (normalized.length > MAX_SNOWFLAKE_QUERY_LENGTH) {
+    throw new ValidationError("Snowflake query is too long");
+  }
+  const tokens = snowflakeSqlTokens(normalized);
+  if (tokens[0] !== "SELECT" && tokens[0] !== "WITH") {
+    throw new ValidationError("Snowflake integrations only allow SELECT queries");
+  }
+  if (!tokens.includes("SELECT")) {
+    throw new ValidationError("Snowflake integrations only allow SELECT queries");
+  }
+  const forbidden = tokens.find(
+    (token) => SNOWFLAKE_WRITE_KEYWORDS.has(token) || token.startsWith("SYSTEM$"),
+  );
+  if (forbidden) {
+    throw new ValidationError(`Snowflake query contains a forbidden operation: ${forbidden}`);
+  }
+}
+
+function snowflakeBindings(parameters: Array<string | number | boolean>) {
+  if (parameters.length > MAX_SNOWFLAKE_PARAMETERS) {
+    throw new ValidationError("Snowflake query has too many parameters");
+  }
+  return Object.fromEntries(
+    parameters.map((value, index) => {
+      if (typeof value === "number" && !Number.isFinite(value)) {
+        throw new ValidationError("Snowflake query parameters must be finite values");
+      }
+      const type =
+        typeof value === "boolean"
+          ? "BOOLEAN"
+          : typeof value === "number" && Number.isInteger(value)
+            ? "FIXED"
+            : typeof value === "number"
+              ? "REAL"
+              : "TEXT";
+      return [String(index + 1), { type, value: String(value) }];
+    }),
+  );
+}
+
+function optionalSnowflakeContext(value: string | undefined, label: string): string | undefined {
+  if (value === undefined) return undefined;
+  return requiredText(value, label, 255);
+}
 
 function requiredText(value: string, label: string, maxLength = 120): string {
   const normalized = value.trim();
@@ -339,6 +488,11 @@ export class AppIntegrationService {
     if (!binding.allowedPathPrefixes.some((prefix) => pathMatchesPrefix(path, prefix))) {
       throw new AuthorizationError("This application is not allowed to access that provider path");
     }
+    if (method === "POST" && pathMatchesPrefix(path, SNOWFLAKE_STATEMENTS_PATH)) {
+      throw new AuthorizationError(
+        "Snowflake queries must use the server-side Trace integration helper",
+      );
+    }
     const connection = await this.resolveExecutionConnection(binding, input.userId);
     const response = await nangoConnectionProvider.proxy({
       connectionId: connection.nangoConnectionId,
@@ -360,6 +514,85 @@ export class AppIntegrationService {
         executionIdentity: binding.executionIdentity,
         method,
         path,
+        status: response.status,
+      },
+      actorType: "user",
+      actorId: input.userId,
+    });
+    return response;
+  }
+
+  async executeSnowflakeQuery(input: {
+    endpoint: { organizationId: string; sessionGroupId: string };
+    userId: string;
+    bindingId: string;
+    query: SnowflakeQueryInput;
+  }): Promise<NangoProxyResponse> {
+    await this.assertCanViewApp(
+      input.endpoint.sessionGroupId,
+      input.endpoint.organizationId,
+      input.userId,
+    );
+    const binding = await prisma.appIntegrationBinding.findFirst({
+      where: {
+        id: input.bindingId,
+        organizationId: input.endpoint.organizationId,
+        sessionGroupId: input.endpoint.sessionGroupId,
+      },
+    });
+    if (!binding) throw new NotFoundError("Application integration binding", input.bindingId);
+    if (binding.provider.trim().toLowerCase() !== "snowflake") {
+      throw new ValidationError("This binding is not a Snowflake integration");
+    }
+    if (
+      !binding.allowedMethods.includes("POST") ||
+      !binding.allowedPathPrefixes.some((prefix) =>
+        pathMatchesPrefix(SNOWFLAKE_STATEMENTS_PATH, prefix),
+      )
+    ) {
+      throw new AuthorizationError("This application is not allowed to query Snowflake");
+    }
+    assertSnowflakeReadOnlyQuery(input.query.sql);
+    const parameters = input.query.parameters ?? [];
+    const timeoutSeconds = input.query.timeoutSeconds ?? 30;
+    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 45) {
+      throw new ValidationError("Snowflake query timeout must be between 1 and 45 seconds");
+    }
+    const connection = await this.resolveExecutionConnection(binding, input.userId);
+    const requestBody = {
+      statement: input.query.sql,
+      timeout: timeoutSeconds,
+      ...(parameters.length ? { bindings: snowflakeBindings(parameters) } : {}),
+      ...(input.query.database === undefined
+        ? {}
+        : { database: optionalSnowflakeContext(input.query.database, "Snowflake database") }),
+      ...(input.query.schema === undefined
+        ? {}
+        : { schema: optionalSnowflakeContext(input.query.schema, "Snowflake schema") }),
+      ...(input.query.warehouse === undefined
+        ? {}
+        : { warehouse: optionalSnowflakeContext(input.query.warehouse, "Snowflake warehouse") }),
+    };
+    const response = await nangoConnectionProvider.proxy({
+      connectionId: connection.nangoConnectionId,
+      providerConfigKey: binding.providerConfigKey,
+      method: "POST",
+      path: SNOWFLAKE_STATEMENTS_PATH,
+      query: null,
+      contentType: "application/json",
+      body: Buffer.from(JSON.stringify(requestBody)),
+    });
+    await eventService.create({
+      organizationId: binding.organizationId,
+      scopeType: "session",
+      scopeId: binding.sessionGroupId,
+      eventType: "app_integration_request_executed",
+      payload: {
+        bindingId: binding.id,
+        connectionId: connection.id,
+        executionIdentity: binding.executionIdentity,
+        method: "POST",
+        path: SNOWFLAKE_STATEMENTS_PATH,
         status: response.status,
       },
       actorType: "user",
