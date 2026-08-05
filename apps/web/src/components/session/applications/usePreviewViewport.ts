@@ -20,6 +20,7 @@ export const PREVIEW_PRESETS = {
 
 export type PreviewPreset = keyof typeof PREVIEW_PRESETS;
 type Size = { width: number; height: number };
+type Pan = { x: number; y: number };
 type ResizeOrigin = Size & { x: number; y: number };
 type PanOrigin = { x: number; y: number; panX: number; panY: number };
 
@@ -27,6 +28,8 @@ export function usePreviewViewport(contentSize?: Size, frameMargin = PREVIEW_FRA
   const canvasRef = useRef<HTMLDivElement>(null);
   const resizeOriginRef = useRef<ResizeOrigin | null>(null);
   const panOriginRef = useRef<PanOrigin | null>(null);
+  const panFrameRef = useRef<number | null>(null);
+  const pendingPanRef = useRef<Pan | null>(null);
   const [canvasSize, setCanvasSize] = useState<Size>({ width: 0, height: 0 });
   const [viewportSize, setViewportSize] = useState<Size>(PREVIEW_PRESETS.desktop);
   const [scaleReference, setScaleReference] = useState<Size>(PREVIEW_PRESETS.desktop);
@@ -50,6 +53,13 @@ export function usePreviewViewport(contentSize?: Size, frameMargin = PREVIEW_FRA
     observer.observe(canvas);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(
+    () => () => {
+      if (panFrameRef.current !== null) cancelAnimationFrame(panFrameRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!contentSize) return;
@@ -140,12 +150,32 @@ export function usePreviewViewport(contentSize?: Size, frameMargin = PREVIEW_FRA
   const handleCanvasPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
     const origin = panOriginRef.current;
     if (!origin) return;
-    setPan({ x: origin.panX + event.clientX - origin.x, y: origin.panY + event.clientY - origin.y });
+    pendingPanRef.current = {
+      x: origin.panX + event.clientX - origin.x,
+      y: origin.panY + event.clientY - origin.y,
+    };
+    if (panFrameRef.current !== null) return;
+    panFrameRef.current = requestAnimationFrame(() => {
+      panFrameRef.current = null;
+      const pendingPan = pendingPanRef.current;
+      if (!pendingPan) return;
+      pendingPanRef.current = null;
+      setPan(pendingPan);
+    });
   }, []);
 
   const handleCanvasPointerEnd = useCallback((event: PointerEvent<HTMLDivElement>) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (panFrameRef.current !== null) {
+      cancelAnimationFrame(panFrameRef.current);
+      panFrameRef.current = null;
+    }
+    const pendingPan = pendingPanRef.current;
+    if (pendingPan) {
+      pendingPanRef.current = null;
+      setPan(pendingPan);
     }
     panOriginRef.current = null;
     setPanning(false);
