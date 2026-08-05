@@ -52,17 +52,22 @@
       }
       .section-label {
         --inverse-zoom: 1;
+        height: 0;
         left: 140px;
         position: absolute;
-        top: calc(190px - 164px * var(--inverse-zoom));
-        transform: scale(var(--inverse-zoom));
-        transform-origin: bottom left;
+        top: calc(190px - 128px * var(--inverse-zoom));
       }
       .section {
-        margin: 0 0 8px;
+        bottom: 0;
+        left: 0;
+        margin: 0;
+        position: absolute;
+        transform: scale(var(--inverse-zoom));
+        transform-origin: bottom left;
         color: #71717a;
-        font-size: 12px;
-        font-weight: 700;
+        font-size: 28px;
+        font-weight: 600;
+        line-height: 36px;
         letter-spacing: 0.18em;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -156,12 +161,47 @@
         position: fixed;
         pointer-events: none;
       }
+      .toolbar {
+        align-items: center;
+        background: #18181bd9;
+        border: 1px solid #27272a;
+        border-radius: 999px;
+        bottom: 20px;
+        display: flex;
+        gap: 4px;
+        left: 50%;
+        padding: 6px;
+        position: fixed;
+        transform: translateX(-50%);
+      }
+      .toolbar button {
+        background: transparent;
+        border: 0;
+        border-radius: 999px;
+        color: #e4e4e7;
+        cursor: pointer;
+        font-size: 13px;
+        padding: 6px 12px;
+      }
+      .toolbar button:hover {
+        background: #27272a;
+      }
+      .toolbar .zoom-readout {
+        color: #a1a1aa;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        min-width: 92px;
+        padding: 0 8px;
+        text-align: center;
+      }
     </style>
   </head>
   <body>
     <main class="canvas" id="canvas">
       <div class="world" id="world">
-        <h2 class="section-label section">Key states &amp; responsive</h2>
+        <div class="section-label">
+          <h2 class="section">Key states &amp; responsive</h2>
+        </div>
         <article class="artboard" style="left: 140px; top: 190px">
           <div class="label">
             <header class="screen-label">
@@ -211,16 +251,29 @@
           </div>
         </article>
       </div>
-      <p class="hint">
-        Drag to pan · Pinch or scroll to zoom · Preview controls are intentionally hidden
-      </p>
+      <p class="hint">Drag to pan · Pinch or ⌘/ctrl + scroll to zoom · Scroll to pan</p>
+      <div class="toolbar">
+        <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+        <span class="zoom-readout" id="zoom-readout">72%</span>
+        <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+        <button type="button" id="reset">Reset</button>
+      </div>
     </main>
     <script>
       const canvas = document.querySelector("#canvas");
       const world = document.querySelector("#world");
       const labels = [...document.querySelectorAll(".label")];
       const sectionLabels = [...document.querySelectorAll(".section-label")];
-      let viewport = { zoom: 0.72, x: 20, y: 40 };
+      const zoomReadout = document.querySelector("#zoom-readout");
+      // Mirrors src/canvas/viewport.ts — labels counter-scale with zoom, so their
+      // canvas-space size is fontSize / zoom. Past the max they dwarf the artboards.
+      const MAX_LABEL_CANVAS_FONT_SIZE = 96;
+      const SCREEN_LABEL_FONT_SIZE = 24;
+      const SECTION_LABEL_FONT_SIZE = 28;
+      const isCanvasLabelVisible = (fontSize, zoom) =>
+        zoom > 0 && fontSize / zoom <= MAX_LABEL_CANVAS_FONT_SIZE;
+      const initialViewport = { zoom: 0.72, x: 20, y: 40 };
+      let viewport = { ...initialViewport };
       const pointers = new Map();
       let drag = null;
       let pinch = null;
@@ -232,13 +285,42 @@
       function render() {
         world.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`;
         canvas.style.backgroundPosition = `${viewport.x * 0.25}px ${viewport.y * 0.25}px`;
+        const screenLabelsVisible = isCanvasLabelVisible(SCREEN_LABEL_FONT_SIZE, viewport.zoom);
+        const sectionLabelsVisible = isCanvasLabelVisible(SECTION_LABEL_FONT_SIZE, viewport.zoom);
         for (const label of labels) {
           label.style.setProperty("--inverse-zoom", 1 / viewport.zoom);
           label.style.setProperty("--label-width", `${390 * viewport.zoom}px`);
+          label.style.display = screenLabelsVisible ? "" : "none";
         }
-        for (const label of sectionLabels)
+        for (const label of sectionLabels) {
           label.style.setProperty("--inverse-zoom", 1 / viewport.zoom);
+          label.style.display = sectionLabelsVisible ? "" : "none";
+        }
+        const hidden = [
+          screenLabelsVisible ? null : "screens",
+          sectionLabelsVisible ? null : "sections",
+        ].filter(Boolean);
+        zoomReadout.textContent = `${Math.round(viewport.zoom * 100)}%${
+          hidden.length ? ` · ${hidden.join(" + ")} hidden` : ""
+        }`;
       }
+      function zoomAtCenter(factor) {
+        const point = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        const zoom = clamp(viewport.zoom * factor);
+        const worldX = (point.x - viewport.x) / viewport.zoom;
+        const worldY = (point.y - viewport.y) / viewport.zoom;
+        viewport = { zoom, x: point.x - worldX * zoom, y: point.y - worldY * zoom };
+        render();
+      }
+      document
+        .querySelector(".toolbar")
+        .addEventListener("pointerdown", (event) => event.stopPropagation());
+      document.querySelector("#zoom-in").addEventListener("click", () => zoomAtCenter(1.2));
+      document.querySelector("#zoom-out").addEventListener("click", () => zoomAtCenter(1 / 1.2));
+      document.querySelector("#reset").addEventListener("click", () => {
+        viewport = { ...initialViewport };
+        render();
+      });
       function zoomAt(start, point, startDistance, currentDistance) {
         const zoom = clamp(
           start.zoom * Math.pow(currentDistance / startDistance, pinchZoomExponent),

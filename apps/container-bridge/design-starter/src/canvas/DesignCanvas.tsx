@@ -7,6 +7,9 @@ import type { DesignManifest } from "./manifest";
 import { resolveScreenComponent } from "./screen-modules";
 import { useCanvasViewport } from "./useCanvasViewport";
 
+// Screen-space gap between the bottom of a section label and the top of its first artboard.
+const SECTION_LABEL_GAP = 128;
+
 export function DesignCanvas({
   manifest,
   preview = false,
@@ -85,8 +88,8 @@ export function DesignCanvas({
         {sectionLabels.map(([sectionId, item]) => (
           <div
             key={sectionId}
-            className="pointer-events-none absolute"
-            style={{ left: item.x, top: item.y - 164 / viewport.zoom }}
+            className="pointer-events-none absolute h-0"
+            style={{ left: item.x, top: item.y - SECTION_LABEL_GAP / viewport.zoom }}
           >
             <DesignSectionLabel name={item.sectionName} zoom={viewport.zoom} />
           </div>
