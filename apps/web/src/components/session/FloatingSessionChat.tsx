@@ -18,7 +18,7 @@ export function FloatingSessionChat({
     : { type: "spring" as const, stiffness: 300, damping: 32 };
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20">
+    <div className="pointer-events-none absolute inset-0 z-50 isolate">
       <AnimatePresence initial={false} mode="wait">
         {state === "hidden" ? (
           <motion.div
@@ -32,7 +32,7 @@ export function FloatingSessionChat({
             <Button
               type="button"
               variant="outline"
-              className="h-10 rounded-full bg-background/95 px-4 shadow-lg backdrop-blur-md"
+              className="h-10 rounded-full bg-background px-4 shadow-lg"
               onClick={() => setState("compact")}
               aria-label="Show chat preview"
             >
@@ -50,7 +50,7 @@ export function FloatingSessionChat({
             transition={transition}
             aria-label={state === "expanded" ? "Expanded chat" : "Chat preview"}
             className={cn(
-              "group/chat pointer-events-auto absolute bottom-4 left-4 overflow-hidden rounded-2xl border border-border bg-background/95 shadow-2xl backdrop-blur-md",
+              "group/chat pointer-events-auto absolute bottom-4 left-4 overflow-hidden rounded-2xl border border-border bg-background shadow-2xl",
               state === "expanded"
                 ? "h-[calc(100%-2rem)] w-[min(30rem,calc(100%-2rem))]"
                 : "h-[min(28rem,calc(100%-2rem))] w-[min(26rem,calc(100%-2rem))]",
@@ -62,7 +62,7 @@ export function FloatingSessionChat({
                 variant="outline"
                 size="icon-sm"
                 className={cn(
-                  "bg-background/90 shadow-sm backdrop-blur transition-opacity",
+                  "bg-background shadow-sm transition-opacity",
                   state === "compact" &&
                     "opacity-0 group-hover/chat:opacity-100 group-focus-within/chat:opacity-100",
                 )}
@@ -75,7 +75,7 @@ export function FloatingSessionChat({
                 type="button"
                 variant="outline"
                 size="icon-sm"
-                className="bg-background/90 shadow-sm backdrop-blur"
+                className="bg-background shadow-sm"
                 onClick={() => setState("hidden")}
                 aria-label="Hide chat"
               >
