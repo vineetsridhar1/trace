@@ -53,7 +53,7 @@ export function CodingToolSettingsRow({
 
   return (
     <div>
-      <div className="flex min-w-[760px] items-center gap-4 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-4 px-4 py-3">
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}

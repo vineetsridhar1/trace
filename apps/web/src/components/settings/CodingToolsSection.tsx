@@ -175,8 +175,8 @@ export function CodingToolsSection() {
           <h3 className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#a1a1aa]">
             On this computer
           </h3>
-          <div className="overflow-x-auto rounded-[12px] border border-[#3f3f46] bg-[#09090b]">
-            <div className="flex min-w-[760px] items-center gap-4 border-b border-[#3f3f46] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#a1a1aa]">
+          <div className="overflow-hidden rounded-[12px] border border-[#3f3f46] bg-[#09090b]">
+            <div className="flex min-w-0 items-center gap-4 border-b border-[#3f3f46] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#a1a1aa]">
               <span className="min-w-0 flex-1">Tool</span>
               <span className="w-[90px]">Size</span>
               <span className="w-[160px]">Version</span>
