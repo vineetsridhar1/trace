@@ -115,7 +115,7 @@ export function DesignPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-2xl">
+      <DialogContent className="flex h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-2xl">
         <DialogHeader className="shrink-0">
           <DialogTitle>Implement a design</DialogTitle>
           <DialogDescription>
@@ -129,7 +129,7 @@ export function DesignPickerDialog({
             <span>No designs yet. Create a design session first.</span>
           </div>
         ) : (
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+          <div className="grid min-h-0 flex-1 content-start grid-cols-1 gap-3 overflow-y-auto pr-1 [grid-auto-rows:max-content] sm:grid-cols-2">
             {designs.map((group) => (
               <DesignPickerCard
                 key={group.id}
@@ -172,6 +172,13 @@ function DesignPickerCard({
         disabled && "cursor-not-allowed opacity-60",
       )}
     >
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+        <LayoutTemplate className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          {group.name}
+        </span>
+        {busy && <span className="text-xs text-muted-foreground">Attaching…</span>}
+      </div>
       <div className="aspect-[16/10] overflow-hidden bg-surface-deep">
         {previewUrl ? (
           <iframe
@@ -186,13 +193,6 @@ function DesignPickerCard({
             <LayoutTemplate className="size-6" />
           </div>
         )}
-      </div>
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        <LayoutTemplate className="size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-          {group.name}
-        </span>
-        {busy && <span className="text-xs text-muted-foreground">Attaching…</span>}
       </div>
     </button>
   );
