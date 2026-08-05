@@ -91,8 +91,8 @@ test("hides canvas labels once they no longer fit above the artboard", () => {
   assert.equal(isCanvasLabelVisible({ ...label, zoom: 78 / 310 - 0.001 }), false);
   assert.equal(isCanvasLabelVisible({ ...label, zoom: 1 }), true);
   // A taller label runs out of that same room sooner.
-  assert.equal(isCanvasLabelVisible({ ...label, blockHeight: 164, zoom: 0.4 }), false);
-  assert.equal(isCanvasLabelVisible({ ...label, blockHeight: 164, zoom: 0.6 }), true);
+  assert.equal(isCanvasLabelVisible({ ...label, blockHeight: 138, zoom: 0.4 }), false);
+  assert.equal(isCanvasLabelVisible({ ...label, blockHeight: 138, zoom: 0.6 }), true);
 });
 
 test("normalizes line and page wheel deltas", () => {
