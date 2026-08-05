@@ -73,11 +73,26 @@ test("uses responsive zoom for trackpad pinch gestures", () => {
 });
 
 test("hides canvas labels once their canvas-space size passes the threshold", () => {
-  assert.equal(isCanvasLabelVisible(24, 1), true);
-  assert.equal(isCanvasLabelVisible(24, 24 / MAX_LABEL_CANVAS_FONT_SIZE), true);
-  assert.equal(isCanvasLabelVisible(24, 24 / MAX_LABEL_CANVAS_FONT_SIZE - 0.01), false);
-  assert.equal(isCanvasLabelVisible(24, MIN_CANVAS_ZOOM), false);
-  assert.equal(isCanvasLabelVisible(24, 0), false);
+  const label = { fontSize: 24, blockHeight: 78, clearanceAbove: Number.POSITIVE_INFINITY };
+
+  assert.equal(isCanvasLabelVisible({ ...label, zoom: 1 }), true);
+  const minZoom = 24 / MAX_LABEL_CANVAS_FONT_SIZE;
+  assert.equal(isCanvasLabelVisible({ ...label, zoom: minZoom }), true);
+  assert.equal(isCanvasLabelVisible({ ...label, zoom: minZoom - 0.01 }), false);
+  assert.equal(isCanvasLabelVisible({ ...label, zoom: MIN_CANVAS_ZOOM }), false);
+  assert.equal(isCanvasLabelVisible({ ...label, zoom: 0 }), false);
+});
+
+test("hides canvas labels once they no longer fit above the artboard", () => {
+  const label = { fontSize: 24, blockHeight: 78, clearanceAbove: 310 };
+
+  // 310 canvas px of room shrinks to 78 screen px — exactly the label — at this zoom.
+  assert.equal(isCanvasLabelVisible({ ...label, zoom: 78 / 310 + 0.001 }), true);
+  assert.equal(isCanvasLabelVisible({ ...label, zoom: 78 / 310 - 0.001 }), false);
+  assert.equal(isCanvasLabelVisible({ ...label, zoom: 1 }), true);
+  // A taller label runs out of that same room sooner.
+  assert.equal(isCanvasLabelVisible({ ...label, blockHeight: 164, zoom: 0.4 }), false);
+  assert.equal(isCanvasLabelVisible({ ...label, blockHeight: 164, zoom: 0.6 }), true);
 });
 
 test("normalizes line and page wheel deltas", () => {

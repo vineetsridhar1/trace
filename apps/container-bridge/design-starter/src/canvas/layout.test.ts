@@ -39,6 +39,11 @@ test("lays out screens as rows and stacks sections vertically when positions are
       { x: 0, y: 1200 },
     ],
   );
+  // The first section has open canvas above it; the next one clears the row above by 310.
+  assert.deepEqual(
+    placed.map(({ clearanceAbove }) => clearanceAbove),
+    [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, 310],
+  );
 });
 
 test("keeps explicit screen coordinates relative to its section row", () => {

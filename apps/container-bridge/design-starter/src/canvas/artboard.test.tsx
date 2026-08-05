@@ -14,10 +14,28 @@ const screen: DesignScreen = {
   viewport: { width: 390, height: 844 },
 };
 
-test("keeps the screen label constant-sized and on one line", () => {
-  const html = renderToStaticMarkup(
-    <DesignArtboard screen={screen} component={() => <div>Screen content</div>} zoom={0.5} />,
+// The room a stacked section leaves above its artboards.
+const STACKED_CLEARANCE = 310;
+
+function renderArtboard(zoom: number, clearanceAbove = Number.POSITIVE_INFINITY) {
+  return renderToStaticMarkup(
+    <DesignArtboard
+      screen={screen}
+      component={() => <div>Screen content</div>}
+      zoom={zoom}
+      clearanceAbove={clearanceAbove}
+    />,
   );
+}
+
+function renderSectionLabel(zoom: number, clearanceAbove = Number.POSITIVE_INFINITY) {
+  return renderToStaticMarkup(
+    <DesignSectionLabel name="Key states" zoom={zoom} clearanceAbove={clearanceAbove} />,
+  );
+}
+
+test("keeps the screen label constant-sized and on one line", () => {
+  const html = renderArtboard(0.5);
 
   assert.match(html, /bottom:868px/);
   assert.match(html, /transform:scale\(2\)/);
@@ -26,7 +44,7 @@ test("keeps the screen label constant-sized and on one line", () => {
 });
 
 test("anchors the section label to the bottom of its zero-height wrapper", () => {
-  const html = renderToStaticMarkup(<DesignSectionLabel name="Key states" zoom={0.5} />);
+  const html = renderSectionLabel(0.5);
 
   // Bottom anchoring is what keeps the gap below the label constant across zoom levels.
   assert.match(html, /bottom-0/);
@@ -34,15 +52,17 @@ test("anchors the section label to the bottom of its zero-height wrapper", () =>
   assert.match(html, /transform:scale\(2\)/);
 });
 
-test("hides the section label once it would dwarf the artboards", () => {
-  assert.equal(renderToStaticMarkup(<DesignSectionLabel name="Key states" zoom={0.15} />), "");
+test("hides labels once they would dwarf the artboards", () => {
+  assert.doesNotMatch(renderArtboard(0.15), /Welcome/);
+  assert.match(renderArtboard(0.15), /Screen content/);
+  assert.equal(renderSectionLabel(0.15), "");
 });
 
-test("hides the screen label once it would dwarf the artboard", () => {
-  const html = renderToStaticMarkup(
-    <DesignArtboard screen={screen} component={() => <div>Screen content</div>} zoom={0.15} />,
-  );
-
-  assert.doesNotMatch(html, /Welcome/);
-  assert.match(html, /Screen content/);
+test("hides labels once they would run into the artboards above", () => {
+  // 78px of screen label needs 78px of room: 310 canvas px covers it at 0.3 zoom, not 0.2.
+  assert.match(renderArtboard(0.3, STACKED_CLEARANCE), /Welcome/);
+  assert.doesNotMatch(renderArtboard(0.2, STACKED_CLEARANCE), /Welcome/);
+  // The taller 164px section label runs out of room sooner.
+  assert.notEqual(renderSectionLabel(0.6, STACKED_CLEARANCE), "");
+  assert.equal(renderSectionLabel(0.4, STACKED_CLEARANCE), "");
 });

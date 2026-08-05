@@ -23,8 +23,24 @@ export function clampCanvasZoom(zoom: number): number {
 // dwarf the artboard it names, hide it instead — the way Figma drops frame names.
 export const MAX_LABEL_CANVAS_FONT_SIZE = 96;
 
-export function isCanvasLabelVisible(fontSize: number, zoom: number): boolean {
-  return zoom > 0 && fontSize / zoom <= MAX_LABEL_CANVAS_FONT_SIZE;
+export function isCanvasLabelVisible({
+  fontSize,
+  blockHeight,
+  clearanceAbove,
+  zoom,
+}: {
+  fontSize: number;
+  /** Screen-space height the label occupies above its artboard, gap included. */
+  blockHeight: number;
+  /** Canvas-space room above the artboard before the artboards above it start. */
+  clearanceAbove: number;
+  zoom: number;
+}): boolean {
+  if (zoom <= 0) return false;
+  if (fontSize / zoom > MAX_LABEL_CANVAS_FONT_SIZE) return false;
+  // The label keeps its screen size while the room above shrinks with zoom, so it
+  // disappears the moment it would run into the artboards above.
+  return blockHeight <= clearanceAbove * zoom;
 }
 
 export function panCanvasViewport(
