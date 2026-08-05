@@ -38,6 +38,7 @@ import { connectRedis, disconnectRedis, redis } from "./lib/redis.js";
 import { pubsub } from "./lib/pubsub.js";
 import { runtimeAccessService } from "./services/runtime-access.js";
 import { isLocalMode } from "./lib/mode.js";
+import { withDistributedLock } from "./lib/distributed-lock.js";
 import {
   getAllowedCorsOrigins,
   hasSessionCookie,
@@ -69,6 +70,7 @@ const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_AFTER_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_CLOUD_SESSION_GROUP_ACTIVE_IDLE_CLEANUP_AFTER_MS = 60 * 60 * 1000;
 const DEFAULT_CLOUD_SESSION_GROUP_IDLE_CLEANUP_INTERVAL_MS = 60 * 1000;
 const CLOUD_SESSION_GROUP_IDLE_CLEANUP_LOCK_KEY = "trace:jobs:cloud-session-group-idle-cleanup";
+const DEPROVISION_RECONCILE_LOCK_KEY = "trace:jobs:deprovision-reconcile";
 const RUNTIME_HARD_DEADLINE_RECONCILE_INTERVAL_MS = 60 * 1000;
 const RUNTIME_HARD_DEADLINE_RECONCILE_LOCK_KEY = "trace:jobs:runtime-hard-deadline-reconcile";
 const ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
@@ -335,9 +337,16 @@ async function main() {
 
   const deprovisionReconciler = setInterval(() => {
     const startedAt = Date.now();
-    void sessionService
-      .reconcileStuckDeprovisions()
-      .then((result) => {
+    void withDistributedLock(
+      {
+        key: DEPROVISION_RECONCILE_LOCK_KEY,
+        ttlMs: 10 * 60_000,
+      },
+      () => sessionService.reconcileStuckDeprovisions(),
+    )
+      .then((locked) => {
+        if (!locked.acquired) return;
+        const result = locked.value;
         logAgentEnvironmentTelemetry("deprovision.reconciler_iteration", {
           reconciledCount: result.reconciled.length,
           abandonedCount: result.abandoned.length,
@@ -619,15 +628,33 @@ async function main() {
         async serverWillStart() {
           return {
             async drainServer() {
-              await wsServerCleanup.dispose();
+              // Stop every mutating background loop as soon as ECS begins
+              // draining. Waiting for long-lived WebSockets first leaves the
+              // retiring replica running cleanup/reconciliation against the
+              // same rows as its replacement for the full deregistration
+              // window.
               clearInterval(staleRuntimeMonitor);
               clearInterval(deprovisionReconciler);
               clearInterval(designPreviewReconciler);
               clearInterval(pdfExportReconciler);
               clearInterval(runtimePreviewReconciler);
+              clearInterval(designSystemArtifactReconciler);
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               clearInterval(runtimeHardDeadlineReconciler);
               clearInterval(endpointTrafficCleanup);
+
+              // Code 1012 tells bridges to reconnect to the replacement task
+              // immediately. The persisted generation/lastSeen fences make the
+              // draining task's delayed close callback harmless once that
+              // reconnect lands on another replica.
+              for (const client of bridgeWss.clients) {
+                client.close(1012, "Service restart");
+              }
+              for (const client of terminalWss.clients) {
+                client.close(1012, "Service restart");
+              }
+
+              await wsServerCleanup.dispose();
               bridgeWss.close();
               terminalWss.close();
               await disconnectRedis();
