@@ -316,16 +316,8 @@ export function SessionDetailView({
         : timelineInputRequest
           ? null
           : latestPlanArtifact;
-  const visiblePlanPath = visiblePlanArtifact?.manifest.files.some(
-    (file) => file.path === "plan.html",
-  )
-    ? "plan.html"
-    : "plan.mdx";
   const { implementationContent: artifactPlanContent, error: artifactPlanError } =
-    useVisualPlanDocument(
-      visiblePlanArtifact?.id ?? null,
-      visiblePlanArtifact ? visiblePlanPath : undefined,
-    );
+    useVisualPlanDocument(visiblePlanArtifact?.id ?? null);
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;

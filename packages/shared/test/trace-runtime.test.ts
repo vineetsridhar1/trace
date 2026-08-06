@@ -21,9 +21,18 @@ describe("ensureTraceRuntime", () => {
     const runtime = await ensureTraceRuntime(join(parent, "runtime"));
 
     expect(await readFile(join(runtime.binDir, "trace"), "utf8")).toContain("TRACE_NODE_BINARY");
-    expect(await readFile(join(runtime.skillsDir, "visual-plan", "SKILL.md"), "utf8")).toContain(
-      "trace artifact push visual-plan",
+    const visualPlanSkill = await readFile(
+      join(runtime.skillsDir, "visual-plan", "SKILL.md"),
+      "utf8",
     );
+    expect(visualPlanSkill).toContain("trace artifact push visual-plan");
+    expect(visualPlanSkill).toContain("supplied canvas template");
+    expect(visualPlanSkill).toContain("Trace renders the uploaded artifact");
+    expect(visualPlanSkill).toContain("Trace does not watch a plan file");
+    expect(visualPlanSkill).not.toContain("Agent-Native Plans");
+    expect(
+      await readFile(join(runtime.skillsDir, "visual-plan", "template.html"), "utf8"),
+    ).toContain("agent's authoring canvas");
   });
 
   it("replaces an older install so machines pick up changed skills", async () => {

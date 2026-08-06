@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { escapeHtml, planMarkdownForImplementation, sandboxedPlanHtml } from "./plan-html";
+import { planMarkdownForImplementation, sandboxedPlanHtml } from "./plan-html";
 
 describe("planMarkdownForImplementation", () => {
   it("converts semantic content to Markdown and drops presentation", () => {
@@ -42,13 +42,5 @@ describe("sandboxedPlanHtml", () => {
     const html = sandboxedPlanHtml("<main>Plan</main>");
     expect(html).toContain("<head><meta");
     expect(html).toContain("<body><main>Plan</main></body>");
-  });
-});
-
-describe("escapeHtml", () => {
-  it("neutralizes markup so legacy plans render as text", () => {
-    expect(escapeHtml('# Plan <img src=x onerror="alert(1)">')).toBe(
-      "# Plan &lt;img src=x onerror=&quot;alert(1)&quot;&gt;",
-    );
   });
 });

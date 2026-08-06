@@ -38,6 +38,7 @@ import {
   inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
   BridgeOutbox,
+  buildTraceInvocationEnv,
 } from "@trace/shared";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
 import type { GitExecFn } from "@trace/shared";
@@ -950,20 +951,15 @@ export class BridgeClient implements IBridgeClient {
     }
     const workdir = cwd ?? os.homedir();
     const traceRuntime = await this.traceRuntime;
-    const traceApiUrl = new URL(this.serverUrl);
-    if (traceApiUrl.protocol === "wss:") traceApiUrl.protocol = "https:";
-    if (traceApiUrl.protocol === "ws:") traceApiUrl.protocol = "http:";
-    traceApiUrl.pathname = "/";
-    traceApiUrl.search = "";
-    traceApiUrl.hash = "";
-    const invocationEnv = {
-      ...runtimeEnv,
-      TRACE_API_URL: traceApiUrl.toString(),
-      TRACE_SKILLS_DIR: traceRuntime.skillsDir,
-      TRACE_NODE_BINARY: process.execPath,
-      TRACE_ELECTRON_RUN_AS_NODE: "1",
-      PATH: `${traceRuntime.binDir}${path.delimiter}${process.env.PATH ?? ""}`,
-    };
+    const invocationEnv = buildTraceInvocationEnv({
+      runtimeEnv,
+      serverUrl: this.serverUrl,
+      skillsDir: traceRuntime.skillsDir,
+      binDir: traceRuntime.binDir,
+      nodeBinary: process.execPath,
+      basePath: process.env.PATH,
+      electronRunAsNode: true,
+    });
 
     if (checkpointContext && cwd) {
       try {

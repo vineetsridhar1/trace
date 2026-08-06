@@ -5179,6 +5179,52 @@ describe("SessionService", () => {
       );
     });
 
+    it("injects an active artifact credential into plan-mode bridge commands", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        hosting: "local",
+        workdir: "/tmp/worktree",
+        toolSessionId: "tool-sess-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      } as ReturnType<typeof sessionRouterMock.getRuntimeForSession>);
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "plan the change",
+        actorType: "user",
+        actorId: "user-1",
+        interactionMode: "plan",
+      });
+
+      const command = sessionRouterMock.send.mock.calls.at(-1)?.[1] as
+        | { prompt?: string; runtimeEnv?: Record<string, string> }
+        | undefined;
+      expect(command?.prompt).toContain("template.html canvas");
+      expect(command?.prompt).toContain(
+        "trace artifact push visual-plan .trace-work/plan --key primary",
+      );
+      expect(command?.runtimeEnv).toMatchObject({
+        TRACE_SESSION_ID: "session-1",
+      });
+      expect(command?.runtimeEnv?.TRACE_INVOCATION_ID).toEqual(expect.any(String));
+      expect(command?.runtimeEnv?.TRACE_INVOCATION_TOKEN).toEqual(expect.any(String));
+    });
+
     it("injects design guidance without branch instructions for managed design repos", async () => {
       const session = makeSession({
         agentStatus: "done",

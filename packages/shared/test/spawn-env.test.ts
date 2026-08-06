@@ -40,13 +40,15 @@ describe("buildChildProcessEnv", () => {
     expect(Object.values(env).join("").length).toBeLessThan(64 * 1024);
   });
 
-  it("keeps tool credentials even before dropping larger non-essential values", () => {
+  it("keeps Trace artifact capabilities even before dropping larger non-essential values", () => {
     const env = buildChildProcessEnv({
       HOME: "/home/coder",
-      PATH: "/usr/bin",
+      PATH: "/trace/runtime/bin:/usr/bin",
       OPENAI_API_KEY: "sk-test",
       ANTHROPIC_API_KEY: "sk-ant-test",
+      TRACE_API_URL: "https://trace.example/",
       TRACE_INVOCATION_TOKEN: "trace-token",
+      TRACE_SKILLS_DIR: "/trace/runtime/skills",
       LARGE_ONE: "a".repeat(15 * 1024),
       LARGE_TWO: "b".repeat(15 * 1024),
       LARGE_THREE: "c".repeat(15 * 1024),
@@ -56,6 +58,9 @@ describe("buildChildProcessEnv", () => {
 
     expect(env.OPENAI_API_KEY).toBe("sk-test");
     expect(env.ANTHROPIC_API_KEY).toBe("sk-ant-test");
+    expect(env.PATH?.split(":")).toContain("/trace/runtime/bin");
+    expect(env.TRACE_API_URL).toBe("https://trace.example/");
     expect(env.TRACE_INVOCATION_TOKEN).toBe("trace-token");
+    expect(env.TRACE_SKILLS_DIR).toBe("/trace/runtime/skills");
   });
 });
