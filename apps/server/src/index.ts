@@ -23,6 +23,7 @@ import { gitRouter } from "./routes/git.js";
 import { designPreviewRouter } from "./routes/design-preview.js";
 import { animationPreviewRouter } from "./routes/animation-preview.js";
 import { agentArtifactRouter } from "./routes/agent-artifact.js";
+import { agentDesignRouter } from "./routes/agent-design.js";
 import { artifactContentRouter } from "./routes/artifact-content.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
@@ -199,6 +200,7 @@ async function main() {
   app.use(designPreviewRouter);
   app.use(animationPreviewRouter);
   app.use(agentArtifactRouter);
+  app.use(agentDesignRouter);
 
   app.use(express.json());
   app.use(artifactContentRouter);

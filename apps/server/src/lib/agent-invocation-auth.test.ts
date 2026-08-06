@@ -14,6 +14,7 @@ describe("agent invocation auth", () => {
       sessionId: "session-1",
       invocationId: "invocation-1",
       scope: "artifact:write",
+      scopes: ["artifact:write", "design:read"],
     });
   });
 

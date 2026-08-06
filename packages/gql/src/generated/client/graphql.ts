@@ -703,6 +703,7 @@ export type EventType =
   | "design_element_styles_updated"
   | "design_element_text_updated"
   | "design_preview_updated"
+  | "design_source_pulled"
   | "design_system_archived"
   | "design_system_commit_artifact_created"
   | "design_system_commit_artifact_updated"
@@ -1837,10 +1838,12 @@ export type QueryAgentEnvironmentsArgs = {
 };
 
 export type QueryAnimationSessionGroupsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryAppSessionGroupsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -1914,6 +1917,7 @@ export type QueryDesignElementTextSourceArgs = {
 };
 
 export type QueryDesignSessionGroupsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -1997,6 +2001,7 @@ export type QueryPdfSessionDownloadUrlArgs = {
 };
 
 export type QueryPdfSessionGroupsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -3211,6 +3216,65 @@ export type HomeComposerDesignSystemsQuery = {
     sourceRepo?: { __typename?: "Repo"; id: string; name: string } | null;
   }>;
 };
+
+export type HomeCreationsQueryVariables = Exact<{
+  organizationId: Scalars["ID"]["input"];
+}>;
+
+export type HomeCreationsQuery = {
+  __typename?: "Query";
+  appSessionGroups: Array<
+    { __typename?: "SessionGroup" } & {
+      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
+    }
+  >;
+  designSessionGroups: Array<
+    { __typename?: "SessionGroup" } & {
+      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
+    }
+  >;
+  pdfSessionGroups: Array<
+    { __typename?: "SessionGroup" } & {
+      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
+    }
+  >;
+  animationSessionGroups: Array<
+    { __typename?: "SessionGroup" } & {
+      " $fragmentRefs"?: { CreationGroupFragment: CreationGroupFragment };
+    }
+  >;
+};
+
+export type CreationGroupFragment = {
+  __typename?: "SessionGroup";
+  id: string;
+  name: string;
+  slug?: string | null;
+  kind: SessionGroupKind;
+  status: SessionGroupStatus;
+  visibility: SessionGroupVisibility;
+  archivedAt?: string | null;
+  designPreviewUrl?: string | null;
+  animationPreviewUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
+  connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
+  sessions: Array<{
+    __typename?: "Session";
+    id: string;
+    sessionGroupId?: string | null;
+    createdById: string;
+    agentStatus: AgentStatus;
+    sessionStatus: SessionStatus;
+    prUrl?: string | null;
+    worktreeDeleted: boolean;
+    lastMessageAt?: string | null;
+    lastUserMessageAt?: string | null;
+    updatedAt: string;
+    createdAt: string;
+  }>;
+} & { " $fragmentName"?: "CreationGroupFragment" };
 
 export type SessionGroupBranchDiffQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
@@ -4536,206 +4600,6 @@ export type DesignSessionGroupsQuery = {
   }>;
 };
 
-export type GeneratedProjectsQueryVariables = Exact<{
-  organizationId: Scalars["ID"]["input"];
-}>;
-
-export type GeneratedProjectsQuery = {
-  __typename?: "Query";
-  appSessionGroups: Array<{
-    __typename?: "SessionGroup";
-    id: string;
-    name: string;
-    slug?: string | null;
-    kind: SessionGroupKind;
-    status: SessionGroupStatus;
-    visibility: SessionGroupVisibility;
-    designPreviewUrl?: string | null;
-    archivedAt?: string | null;
-    updatedAt: string;
-    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-    gitCheckpoints: Array<{
-      __typename?: "GitCheckpoint";
-      id: string;
-      committedAt: string;
-      previewStatus?: GitCheckpointCaptureStatus | null;
-      previewUrl?: string | null;
-    }>;
-    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
-    sessions: Array<{
-      __typename?: "Session";
-      id: string;
-      sessionGroupId?: string | null;
-      createdById: string;
-      agentStatus: AgentStatus;
-      sessionStatus: SessionStatus;
-      prUrl?: string | null;
-      worktreeDeleted: boolean;
-      lastMessageAt?: string | null;
-      lastUserMessageAt?: string | null;
-      updatedAt: string;
-      createdAt: string;
-    }>;
-  }>;
-  designSessionGroups: Array<{
-    __typename?: "SessionGroup";
-    id: string;
-    name: string;
-    slug?: string | null;
-    kind: SessionGroupKind;
-    status: SessionGroupStatus;
-    visibility: SessionGroupVisibility;
-    designPreviewUrl?: string | null;
-    archivedAt?: string | null;
-    updatedAt: string;
-    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-    gitCheckpoints: Array<{
-      __typename?: "GitCheckpoint";
-      id: string;
-      committedAt: string;
-      previewStatus?: GitCheckpointCaptureStatus | null;
-      previewUrl?: string | null;
-    }>;
-    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
-    sessions: Array<{
-      __typename?: "Session";
-      id: string;
-      sessionGroupId?: string | null;
-      createdById: string;
-      agentStatus: AgentStatus;
-      sessionStatus: SessionStatus;
-      prUrl?: string | null;
-      worktreeDeleted: boolean;
-      lastMessageAt?: string | null;
-      lastUserMessageAt?: string | null;
-      updatedAt: string;
-      createdAt: string;
-    }>;
-  }>;
-  pdfSessionGroups: Array<{
-    __typename?: "SessionGroup";
-    id: string;
-    name: string;
-    slug?: string | null;
-    kind: SessionGroupKind;
-    status: SessionGroupStatus;
-    visibility: SessionGroupVisibility;
-    designPreviewUrl?: string | null;
-    archivedAt?: string | null;
-    updatedAt: string;
-    pdfExportStatus?: string | null;
-    pdfExportCommitSha?: string | null;
-    pdfExportCapturedAt?: string | null;
-    pdfExportError?: string | null;
-    pdfPageWidth: number;
-    pdfPageHeight: number;
-    pdfPageUnit: string;
-    pdfFormatVersion: number;
-    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-    gitCheckpoints: Array<{
-      __typename?: "GitCheckpoint";
-      id: string;
-      committedAt: string;
-      previewStatus?: GitCheckpointCaptureStatus | null;
-      previewUrl?: string | null;
-    }>;
-    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
-    sessions: Array<{
-      __typename?: "Session";
-      id: string;
-      sessionGroupId?: string | null;
-      createdById: string;
-      agentStatus: AgentStatus;
-      sessionStatus: SessionStatus;
-      prUrl?: string | null;
-      worktreeDeleted: boolean;
-      lastMessageAt?: string | null;
-      lastUserMessageAt?: string | null;
-      updatedAt: string;
-      createdAt: string;
-    }>;
-  }>;
-  animationSessionGroups: Array<{
-    __typename?: "SessionGroup";
-    id: string;
-    name: string;
-    slug?: string | null;
-    kind: SessionGroupKind;
-    status: SessionGroupStatus;
-    visibility: SessionGroupVisibility;
-    animationPreviewUrl?: string | null;
-    animationPreviewStatus?: string | null;
-    archivedAt?: string | null;
-    updatedAt: string;
-    owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-    gitCheckpoints: Array<{
-      __typename?: "GitCheckpoint";
-      id: string;
-      committedAt: string;
-      previewStatus?: GitCheckpointCaptureStatus | null;
-      previewUrl?: string | null;
-    }>;
-    connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
-    sessions: Array<{
-      __typename?: "Session";
-      id: string;
-      sessionGroupId?: string | null;
-      createdById: string;
-      agentStatus: AgentStatus;
-      sessionStatus: SessionStatus;
-      prUrl?: string | null;
-      worktreeDeleted: boolean;
-      lastMessageAt?: string | null;
-      lastUserMessageAt?: string | null;
-      updatedAt: string;
-      createdAt: string;
-    }>;
-  }>;
-  designSystems: Array<{
-    __typename?: "DesignSystem";
-    id: string;
-    authoringSessionGroupId: string;
-    archivedAt?: string | null;
-    name: string;
-    status: DesignSystemStatus;
-    authoringSessionGroup: {
-      __typename?: "SessionGroup";
-      id: string;
-      name: string;
-      slug?: string | null;
-      kind: SessionGroupKind;
-      status: SessionGroupStatus;
-      visibility: SessionGroupVisibility;
-      designPreviewUrl?: string | null;
-      archivedAt?: string | null;
-      updatedAt: string;
-      owner: { __typename?: "User"; id: string; name: string; avatarUrl?: string | null };
-      gitCheckpoints: Array<{
-        __typename?: "GitCheckpoint";
-        id: string;
-        committedAt: string;
-        previewStatus?: GitCheckpointCaptureStatus | null;
-        previewUrl?: string | null;
-      }>;
-      connection?: { __typename?: "SessionConnection"; state: SessionConnectionState } | null;
-      sessions: Array<{
-        __typename?: "Session";
-        id: string;
-        sessionGroupId?: string | null;
-        createdById: string;
-        agentStatus: AgentStatus;
-        sessionStatus: SessionStatus;
-        prUrl?: string | null;
-        worktreeDeleted: boolean;
-        lastMessageAt?: string | null;
-        lastUserMessageAt?: string | null;
-        updatedAt: string;
-        createdAt: string;
-      }>;
-    };
-  }>;
-};
-
 export type DeleteChannelGroupMutationVariables = Exact<{
   id: Scalars["ID"]["input"];
 }>;
@@ -5494,6 +5358,72 @@ export type OnboardingSessionsQuery = {
   sessions: Array<{ __typename?: "Session"; id: string }>;
 };
 
+export const CreationGroupFragmentDoc = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "CreationGroup" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "name" } },
+          { kind: "Field", name: { kind: "Name", value: "slug" } },
+          { kind: "Field", name: { kind: "Name", value: "kind" } },
+          { kind: "Field", name: { kind: "Name", value: "status" } },
+          { kind: "Field", name: { kind: "Name", value: "visibility" } },
+          { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+          { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "animationPreviewUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "owner" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "connection" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessions" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<CreationGroupFragment, unknown>;
 export const SessionGroupArtifactsDocument = {
   kind: "Document",
   definitions: [
@@ -6559,6 +6489,180 @@ export const HomeComposerDesignSystemsDocument = {
   HomeComposerDesignSystemsQuery,
   HomeComposerDesignSystemsQueryVariables
 >;
+export const HomeCreationsDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "HomeCreations" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "appSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "includeArchived" },
+                value: { kind: "BooleanValue", value: true },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "designSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "includeArchived" },
+                value: { kind: "BooleanValue", value: true },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "pdfSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "includeArchived" },
+                value: { kind: "BooleanValue", value: true },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "animationSessionGroups" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "organizationId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
+              },
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "includeArchived" },
+                value: { kind: "BooleanValue", value: true },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "FragmentSpread", name: { kind: "Name", value: "CreationGroup" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    {
+      kind: "FragmentDefinition",
+      name: { kind: "Name", value: "CreationGroup" },
+      typeCondition: { kind: "NamedType", name: { kind: "Name", value: "SessionGroup" } },
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          { kind: "Field", name: { kind: "Name", value: "id" } },
+          { kind: "Field", name: { kind: "Name", value: "name" } },
+          { kind: "Field", name: { kind: "Name", value: "slug" } },
+          { kind: "Field", name: { kind: "Name", value: "kind" } },
+          { kind: "Field", name: { kind: "Name", value: "status" } },
+          { kind: "Field", name: { kind: "Name", value: "visibility" } },
+          { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
+          { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "animationPreviewUrl" } },
+          { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+          { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "owner" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+              ],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "connection" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
+            },
+          },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "sessions" },
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "createdById" } },
+                { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
+                { kind: "Field", name: { kind: "Name", value: "prUrl" } },
+                { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
+                { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<HomeCreationsQuery, HomeCreationsQueryVariables>;
 export const SessionGroupBranchDiffDocument = {
   kind: "Document",
   definitions: [
@@ -10854,444 +10958,6 @@ export const DesignSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<DesignSessionGroupsQuery, DesignSessionGroupsQueryVariables>;
-export const GeneratedProjectsDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "GeneratedProjects" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "appSessionGroups" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "slug" } },
-                { kind: "Field", name: { kind: "Name", value: "kind" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "visibility" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "owner" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
-                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "gitCheckpoints" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "connection" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "sessions" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
-                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
-                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "designSessionGroups" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "slug" } },
-                { kind: "Field", name: { kind: "Name", value: "kind" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "visibility" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "owner" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
-                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "gitCheckpoints" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "connection" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "sessions" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
-                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
-                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "pdfSessionGroups" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "slug" } },
-                { kind: "Field", name: { kind: "Name", value: "kind" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "visibility" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "owner" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
-                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "gitCheckpoints" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "pdfExportStatus" } },
-                { kind: "Field", name: { kind: "Name", value: "pdfExportCommitSha" } },
-                { kind: "Field", name: { kind: "Name", value: "pdfExportCapturedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "pdfExportError" } },
-                { kind: "Field", name: { kind: "Name", value: "pdfPageWidth" } },
-                { kind: "Field", name: { kind: "Name", value: "pdfPageHeight" } },
-                { kind: "Field", name: { kind: "Name", value: "pdfPageUnit" } },
-                { kind: "Field", name: { kind: "Name", value: "pdfFormatVersion" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "connection" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "sessions" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
-                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
-                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "animationSessionGroups" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "slug" } },
-                { kind: "Field", name: { kind: "Name", value: "kind" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                { kind: "Field", name: { kind: "Name", value: "visibility" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "owner" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
-                      { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "animationPreviewUrl" } },
-                { kind: "Field", name: { kind: "Name", value: "animationPreviewStatus" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "gitCheckpoints" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
-                    ],
-                  },
-                },
-                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "connection" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
-                  },
-                },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "sessions" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdById" } },
-                      { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
-                      { kind: "Field", name: { kind: "Name", value: "prUrl" } },
-                      { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
-                      { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "designSystems" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "organizationId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "organizationId" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                { kind: "Field", name: { kind: "Name", value: "authoringSessionGroupId" } },
-                { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-                { kind: "Field", name: { kind: "Name", value: "name" } },
-                { kind: "Field", name: { kind: "Name", value: "status" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "authoringSessionGroup" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      { kind: "Field", name: { kind: "Name", value: "id" } },
-                      { kind: "Field", name: { kind: "Name", value: "name" } },
-                      { kind: "Field", name: { kind: "Name", value: "slug" } },
-                      { kind: "Field", name: { kind: "Name", value: "kind" } },
-                      { kind: "Field", name: { kind: "Name", value: "status" } },
-                      { kind: "Field", name: { kind: "Name", value: "visibility" } },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "owner" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "name" } },
-                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                          ],
-                        },
-                      },
-                      { kind: "Field", name: { kind: "Name", value: "designPreviewUrl" } },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "gitCheckpoints" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "committedAt" } },
-                            { kind: "Field", name: { kind: "Name", value: "previewStatus" } },
-                            { kind: "Field", name: { kind: "Name", value: "previewUrl" } },
-                          ],
-                        },
-                      },
-                      { kind: "Field", name: { kind: "Name", value: "archivedAt" } },
-                      { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "connection" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [{ kind: "Field", name: { kind: "Name", value: "state" } }],
-                        },
-                      },
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "sessions" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
-                            { kind: "Field", name: { kind: "Name", value: "createdById" } },
-                            { kind: "Field", name: { kind: "Name", value: "agentStatus" } },
-                            { kind: "Field", name: { kind: "Name", value: "sessionStatus" } },
-                            { kind: "Field", name: { kind: "Name", value: "prUrl" } },
-                            { kind: "Field", name: { kind: "Name", value: "worktreeDeleted" } },
-                            { kind: "Field", name: { kind: "Name", value: "lastMessageAt" } },
-                            { kind: "Field", name: { kind: "Name", value: "lastUserMessageAt" } },
-                            { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
-                            { kind: "Field", name: { kind: "Name", value: "createdAt" } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<GeneratedProjectsQuery, GeneratedProjectsQueryVariables>;
 export const DeleteChannelGroupDocument = {
   kind: "Document",
   definitions: [

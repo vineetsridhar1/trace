@@ -233,6 +233,11 @@ export function createPrismaMock() {
       delete: vi.fn(),
       count: vi.fn(),
     },
+    sessionGroupDesignLink: {
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     designSystem: {
       create: vi.fn(),
       findMany: vi.fn(),

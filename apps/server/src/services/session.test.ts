@@ -1010,6 +1010,20 @@ describe("SessionService", () => {
           }),
         }),
       );
+      expect(prismaMock.sessionGroupDesignLink.upsert).toHaveBeenCalledWith({
+        where: {
+          implementationSessionGroupId_designSessionGroupId: {
+            implementationSessionGroupId: sessionGroup.id,
+            designSessionGroupId: "design-1",
+          },
+        },
+        create: {
+          organizationId: "org-1",
+          implementationSessionGroupId: sessionGroup.id,
+          designSessionGroupId: "design-1",
+        },
+        update: {},
+      });
     });
 
     it("validates design sessions as repo-less, cloud sessions", async () => {

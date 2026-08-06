@@ -3,6 +3,7 @@ import { resolveJwtSecret } from "./jwt-secret.js";
 
 const JWT_SECRET = resolveJwtSecret();
 const TOKEN_TTL_SECONDS = 6 * 60 * 60;
+export type AgentInvocationScope = "artifact:write" | "design:read";
 
 export type AgentInvocationToken = {
   tokenType: "agent_invocation";
@@ -10,6 +11,7 @@ export type AgentInvocationToken = {
   sessionId: string;
   invocationId: string;
   scope: "artifact:write";
+  scopes?: AgentInvocationScope[];
 };
 
 export function createAgentInvocationToken(input: {
@@ -24,6 +26,7 @@ export function createAgentInvocationToken(input: {
       sessionId: input.sessionId,
       invocationId: input.invocationId,
       scope: "artifact:write",
+      scopes: ["artifact:write", "design:read"],
     } satisfies AgentInvocationToken,
     JWT_SECRET,
     { expiresIn: TOKEN_TTL_SECONDS },
@@ -38,7 +41,10 @@ export function verifyAgentInvocationToken(token: string): AgentInvocationToken 
       payload.scope !== "artifact:write" ||
       typeof payload.organizationId !== "string" ||
       typeof payload.sessionId !== "string" ||
-      typeof payload.invocationId !== "string"
+      typeof payload.invocationId !== "string" ||
+      (payload.scopes !== undefined &&
+        (!Array.isArray(payload.scopes) ||
+          payload.scopes.some((scope) => scope !== "artifact:write" && scope !== "design:read")))
     ) {
       return null;
     }
@@ -46,4 +52,11 @@ export function verifyAgentInvocationToken(token: string): AgentInvocationToken 
   } catch {
     return null;
   }
+}
+
+export function hasAgentInvocationScope(
+  token: AgentInvocationToken,
+  scope: AgentInvocationScope,
+): boolean {
+  return token.scopes?.includes(scope) ?? scope === token.scope;
 }

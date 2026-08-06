@@ -329,6 +329,7 @@ enum EventType {
   design_element_text_updated
   design_element_styles_updated
   manual_element_saved
+  design_source_pulled
   chat_created
   chat_member_added
   chat_member_removed

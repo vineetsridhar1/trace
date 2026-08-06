@@ -84,7 +84,9 @@ import { designCheckpointPreviewService } from "./design-checkpoint-preview.js";
 import { gitStorage } from "../lib/git-storage/index.js";
 import { createAgentInvocationToken } from "../lib/agent-invocation-auth.js";
 import { parseGitTreeArchive } from "../lib/design-system-archive.js";
+import { designSourceSlug, isDesignSourcePath } from "../lib/design-source.js";
 import { isGeneratedProjectKind } from "../lib/generated-project.js";
+import { sessionDesignService } from "./session-design.js";
 import { withDistributedLock } from "../lib/distributed-lock.js";
 import {
   designSourceHash,
@@ -493,14 +495,7 @@ function defaultConnection(overrides?: Partial<SessionConnectionData>): SessionC
 
 // Which files from a design session's tree make up its portable artifact: the
 // screen/component source, the canvas manifest, the brief, and the tokens.
-export function isDesignSourcePath(path: string): boolean {
-  return (
-    path.startsWith("src/design/") ||
-    path === "design.canvas.json" ||
-    path === "design.brief.json" ||
-    path === "trace.tokens.json"
-  );
-}
+export { isDesignSourcePath } from "../lib/design-source.js";
 
 export function parseDesignAttachments(raw: unknown): DesignAttachmentRef[] | null {
   if (!Array.isArray(raw)) return null;
@@ -4393,6 +4388,17 @@ export class SessionService {
           },
           include: SESSION_INCLUDE,
         });
+
+        if (selectedDesignAttachment) {
+          await sessionDesignService.link(
+            {
+              organizationId: input.organizationId,
+              implementationSessionGroupId: sessionGroup.id,
+              designSessionGroupId: selectedDesignAttachment.id,
+            },
+            tx,
+          );
+        }
 
         if (sourceTicketLinks.length > 0) {
           await tx.ticketLink.createMany({
@@ -10127,18 +10133,12 @@ export class SessionService {
     return true;
   }
 
-  private designArtifactSlug(group: { slug: string | null; name: string; id: string }): string {
-    if (group.slug) return group.slug;
-    const fromName = group.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-    return fromName || group.id;
-  }
-
   private buildDesignImplementationPrompt(designName: string, destRoot: string): string {
+    const slug = destRoot.split("/").at(-1) ?? designName;
     return (
-      `I've added the "${designName}" design to this workspace under \`${destRoot}/\`.\n\n` +
+      `The "${designName}" design is linked to this session. Run ` +
+      `\`trace design pull ${slug}\` before implementation to refresh its latest saved source ` +
+      `under \`${destRoot}/\`.\n\n` +
       `- \`${destRoot}/design.canvas.json\` lists every screen — its name, viewport, and the ` +
       `component that renders it.\n` +
       `- \`${destRoot}/design.brief.json\` captures the intent and required states.\n` +
@@ -10201,7 +10201,7 @@ export class SessionService {
     return {
       id: design.id,
       name: design.name,
-      slug: this.designArtifactSlug(design),
+      slug: designSourceSlug(design),
       repoId: design.repoId,
       commitSha,
     };
@@ -10297,6 +10297,7 @@ export class SessionService {
       select: {
         id: true,
         sessionGroupId: true,
+        sessionGroup: { select: { kind: true } },
         workdir: true,
         worktreeDeleted: true,
         sessionStatus: true,
@@ -10307,11 +10308,19 @@ export class SessionService {
     if (!session.sessionGroupId) {
       throw new ValidationError("Session is not part of a session group");
     }
+    if (session.sessionGroup?.kind === "design" || session.sessionGroup?.kind === "design_system") {
+      throw new ValidationError("Designs cannot be attached to Design or Design System sessions");
+    }
     if (session.worktreeDeleted) {
       throw new ValidationError("Cannot attach a design: session worktree has been deleted");
     }
 
     const design = await this.resolveDesignArtifact(designSessionGroupId, organizationId, userId);
+    await sessionDesignService.link({
+      organizationId,
+      implementationSessionGroupId: session.sessionGroupId,
+      designSessionGroupId,
+    });
     const destRoot = `.trace/designs/${design.slug}`;
     const text = this.buildDesignImplementationPrompt(design.name, destRoot);
     const designAttachments = [
