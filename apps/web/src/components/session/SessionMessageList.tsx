@@ -55,8 +55,7 @@ export interface SessionMessageListProps {
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
   activePlanId?: string | null;
-  activeQuestionId?: string | null;
-  activeQuestionRequestIds?: ReadonlySet<string>;
+  replacedQuestionIds?: ReadonlySet<string>;
   planComments?: MarkdownSteerCommentsByBlock;
   onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
@@ -82,8 +81,7 @@ export function SessionMessageList({
   scrollToEventId,
   onScrollComplete,
   activePlanId,
-  activeQuestionId,
-  activeQuestionRequestIds,
+  replacedQuestionIds,
   planComments,
   onAddPlanComment,
   onRemovePlanComment,
@@ -599,8 +597,7 @@ export function SessionMessageList({
             toolResultByUseId={toolResultByUseId}
             highlightEventId={highlightEventId}
             activePlanId={activePlanId}
-            activeQuestionId={activeQuestionId}
-            activeQuestionRequestIds={activeQuestionRequestIds}
+            replacedQuestionIds={replacedQuestionIds}
             planComments={planComments}
             onAddPlanComment={onAddPlanComment}
             onRemovePlanComment={onRemovePlanComment}
@@ -623,8 +620,7 @@ interface SessionMessageRowsProps {
   toolResultByUseId: Map<string, unknown>;
   highlightEventId: string | null;
   activePlanId?: string | null;
-  activeQuestionId?: string | null;
-  activeQuestionRequestIds?: ReadonlySet<string>;
+  replacedQuestionIds?: ReadonlySet<string>;
   planComments?: MarkdownSteerCommentsByBlock;
   onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
@@ -644,8 +640,7 @@ const SessionMessageRows = memo(function SessionMessageRows({
   toolResultByUseId,
   highlightEventId,
   activePlanId,
-  activeQuestionId,
-  activeQuestionRequestIds,
+  replacedQuestionIds,
   planComments,
   onAddPlanComment,
   onRemovePlanComment,
@@ -681,8 +676,7 @@ const SessionMessageRows = memo(function SessionMessageRows({
               toolResultByUseId={toolResultByUseId}
               highlightEventId={highlightEventId}
               activePlanId={activePlanId}
-              activeQuestionId={activeQuestionId}
-              activeQuestionRequestIds={activeQuestionRequestIds}
+              replacedQuestionIds={replacedQuestionIds}
               planComments={planComments}
               onAddPlanComment={onAddPlanComment}
               onRemovePlanComment={onRemovePlanComment}

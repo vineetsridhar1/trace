@@ -44,7 +44,6 @@ import {
   MOVE_SESSION_TO_CLOUD_MUTATION,
   RETRY_SESSION_CONNECTION_MUTATION,
   RETRY_SESSION_GROUP_SETUP_MUTATION,
-  SEND_SESSION_MESSAGE_MUTATION,
 } from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
@@ -52,9 +51,10 @@ import { cn } from "../../lib/utils";
 import { findLatestTimelineInputRequest } from "./visualPlanReview";
 import { CondensedSessionMessages } from "./CondensedSessionMessages";
 import { buildCompactChatSummary } from "./compact-chat-summary";
-import { useDraftsStore } from "../../stores/drafts";
 import { uploadFile } from "../../lib/upload";
 import type { FileAttachment } from "./ImageAttachmentBar";
+import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
+import { findReplacedQuestionIds } from "./questionHistory";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -568,14 +568,9 @@ export function SessionDetailView({
     }
     return null;
   }, [nodes, timelineInputRequest]);
-  const activeQuestionRequestIds = useMemo(
-    () =>
-      new Set(
-        activeQuestion?.node.questions
-          .map((question) => question.id)
-          .filter((id): id is string => Boolean(id)) ?? [],
-      ),
-    [activeQuestion],
+  const replacedQuestionIds = useMemo(
+    () => findReplacedQuestionIds(nodes, events),
+    [events, nodes],
   );
 
   const [planComments, setPlanComments] = useState<MarkdownSteerCommentsByBlock>({});
@@ -658,46 +653,31 @@ export function SessionDetailView({
   }, [sessionId]);
 
   const addAttachments = useAddAttachments(sessionId);
-  const setDraftImages = useDraftsStore((state) => state.setDraftImages);
   const handleQuestionResponse = useCallback(
     async (text: string, attachments: FileAttachment[] = []) => {
-      const ids = new Set(attachments.map((attachment) => attachment.id));
-      if (ids.size > 0)
-        setDraftImages(sessionId, (current) =>
-          current.map((attachment) =>
-            ids.has(attachment.id) ? { ...attachment, uploading: true } : attachment,
-          ),
-        );
       try {
         const organizationId = useAuthStore.getState().activeOrgId;
         const attachmentKeys = await Promise.all(
           attachments.map((attachment) => uploadFile(attachment.file, organizationId ?? undefined)),
         );
-        const result = await client
-          .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-            sessionId,
-            text,
-            attachmentKeys: attachmentKeys.length > 0 ? attachmentKeys : undefined,
-          })
-          .toPromise();
-        if (result.error) throw result.error;
-        setDraftImages(sessionId, (current) =>
-          current.filter((attachment) => !ids.has(attachment.id)),
-        );
+        await sendOptimisticSessionMessage({
+          sessionId,
+          text,
+          imageKeys: attachmentKeys.length > 0 ? attachmentKeys : undefined,
+          imagePreviewUrls:
+            attachmentKeys.length > 0
+              ? attachments.map((attachment) => attachment.previewUrl)
+              : undefined,
+        });
         for (const attachment of attachments) URL.revokeObjectURL(attachment.previewUrl);
       } catch (questionError) {
-        setDraftImages(sessionId, (current) =>
-          current.map((attachment) =>
-            ids.has(attachment.id) ? { ...attachment, uploading: false } : attachment,
-          ),
-        );
         toast.error(
           questionError instanceof Error ? questionError.message : "Failed to send answers",
         );
         throw questionError;
       }
     },
-    [sessionId, setDraftImages],
+    [sessionId],
   );
   // Mirror the conditions under which the composer (with its attachment bar) is
   // actually shown and can accept input. Otherwise dropped files would land in a
@@ -777,8 +757,7 @@ export function SessionDetailView({
                   scrollToEventId={scrollToEventId}
                   onScrollComplete={onScrollComplete}
                   activePlanId={activePlan?.node.id}
-                  activeQuestionId={activeQuestion?.node.id}
-                  activeQuestionRequestIds={activeQuestionRequestIds}
+                  replacedQuestionIds={replacedQuestionIds}
                   planComments={planComments}
                   onAddPlanComment={handleAddPlanComment}
                   onRemovePlanComment={handleRemovePlanComment}
@@ -851,8 +830,8 @@ export function SessionDetailView({
             {showQuestion || pinnedQuestion ? (
               <>
                 <AskUserQuestionBar
+                  key={(showQuestion ?? pinnedQuestion!).id}
                   node={showQuestion ?? pinnedQuestion!}
-                  sessionId={sessionId}
                   collapsed={Boolean(pinnedQuestion)}
                   onResponse={handleQuestionResponse}
                   onDismiss={() => {

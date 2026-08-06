@@ -15,8 +15,7 @@ export interface SessionNodeRendererProps {
   toolResultByUseId: Map<string, unknown>;
   highlightEventId?: string | null;
   activePlanId?: string | null;
-  activeQuestionId?: string | null;
-  activeQuestionRequestIds?: ReadonlySet<string>;
+  replacedQuestionIds?: ReadonlySet<string>;
   planComments?: MarkdownSteerCommentsByBlock;
   onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
@@ -32,8 +31,7 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
   toolResultByUseId,
   highlightEventId,
   activePlanId,
-  activeQuestionId,
-  activeQuestionRequestIds,
+  replacedQuestionIds,
   planComments,
   onAddPlanComment,
   onRemovePlanComment,
@@ -94,13 +92,7 @@ export const SessionNodeRenderer = memo(function SessionNodeRenderer({
       <AskUserQuestionInline
         questions={node.questions}
         timestamp={node.timestamp}
-        replaced={Boolean(
-          activeQuestionId &&
-          activeQuestionId !== node.id &&
-          node.questions.some(
-            (question) => question.id && activeQuestionRequestIds?.has(question.id),
-          ),
-        )}
+        replaced={replacedQuestionIds?.has(node.id) ?? false}
       />
     );
   }

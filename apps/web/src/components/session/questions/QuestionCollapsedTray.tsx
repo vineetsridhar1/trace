@@ -6,18 +6,19 @@ export function QuestionCollapsedTray({
   answeredCount,
   nextQuestion,
   onResume,
-  onDecide,
 }: {
   questions: Question[];
   answeredCount: number;
   nextQuestion: string;
   onResume: () => void;
-  onDecide: () => void;
 }) {
-  const waiting = questions.length - answeredCount;
+  const waiting = Math.max(0, questions.length - answeredCount);
+  const ready = waiting === 0;
   return (
     <QuestionTrayFrame
-      label={`${waiting} question${waiting === 1 ? "" : "s"} waiting`}
+      label={
+        ready ? "Answers ready to send" : `${waiting} question${waiting === 1 ? "" : "s"} waiting`
+      }
       meta="tray collapsed"
       compact
     >
@@ -29,13 +30,6 @@ export function QuestionCollapsedTray({
           className="min-h-8 shrink-0 rounded-lg bg-foreground px-3 text-[11px] font-semibold text-background"
         >
           Resume
-        </button>
-        <button
-          type="button"
-          onClick={onDecide}
-          className="min-h-8 shrink-0 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-        >
-          You decide
         </button>
       </div>
     </QuestionTrayFrame>

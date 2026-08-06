@@ -5,6 +5,8 @@ interface QuestionNode {
   questions: Question[];
 }
 
+const EMPTY_REFERENCE_VALUES: Readonly<Record<number, readonly string[]>> = {};
+
 function optionValue(question: Question, index: number): string {
   const option = question.options[index];
   return option?.id ?? option?.label ?? "";
@@ -24,20 +26,25 @@ function responseForTraceQuestion(
   selected: ReadonlySet<string>,
   custom: string,
   ranking: readonly string[],
+  references: readonly string[],
   assumed: boolean,
 ): string {
   const id = escapeXml(question.id ?? question.header ?? "question");
   const values = question.type === "ranking" ? ranking : [...selected];
+  const referenceText = [custom, ...references].filter(Boolean).join("\n");
   const body = assumed
     ? "  <assumption>you-decide</assumption>"
-    : custom
-      ? `  <text>${escapeXml(custom)}</text>`
+    : referenceText
+      ? `  <text>${escapeXml(referenceText)}</text>`
       : values.map((value) => `  <selected>${escapeXml(value)}</selected>`).join("\n");
   return `<trace:input-response id="${id}">\n${body}\n</trace:input-response>`;
 }
 
 /** Shared state machine for native and trace-protocol question sets. */
-export function useQuestionState(node: QuestionNode) {
+export function useQuestionState(
+  node: QuestionNode,
+  referenceValues: Readonly<Record<number, readonly string[]>> = EMPTY_REFERENCE_VALUES,
+) {
   const total = node.questions.length;
   const [page, setPage] = useState(0);
   const [selections, setSelections] = useState<Record<number, Set<string>>>({});
@@ -74,11 +81,17 @@ export function useQuestionState(node: QuestionNode) {
         const custom = (customTexts[index] ?? "").trim();
         const assumed = assumptions.has(index);
         const ranking = rankings[index] ?? [];
-        const count = candidate.type === "ranking" ? ranking.length : selected.size;
+        const references = referenceValues[index] ?? [];
         const type = candidate.type ?? (candidate.multiSelect ? "multi-select" : "single-select");
+        const otherNeedsText =
+          (type === "select-with-other" || candidate.other) && selected.has("other");
+        const invalidOther = otherNeedsText && custom.length === 0;
+        const count =
+          candidate.type === "ranking" ? ranking.length : selected.size - (invalidOther ? 1 : 0);
         const answered =
           assumed ||
           custom.length > 0 ||
+          (type === "reference" && references.length > 0) ||
           ((type === "ranking" || type === "confirm" || type.includes("select")) && count > 0);
         const belowMin = candidate.min != null && count < candidate.min;
         const aboveMax = candidate.max != null && count > candidate.max;
@@ -88,20 +101,26 @@ export function useQuestionState(node: QuestionNode) {
           selected,
           custom,
           ranking,
+          references,
           assumed,
         };
       }),
-    [assumptions, customTexts, node.questions, rankings, selections],
+    [assumptions, customTexts, node.questions, rankings, referenceValues, selections],
   );
 
   const hasAllAnswers = answerState.length > 0 && answerState.every((answer) => answer.valid);
   const currentAnswer = answerState[page];
+  const currentType = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
+  const currentOtherNeedsText =
+    (currentType === "select-with-other" || question.other) && currentSelected.has("other");
   const validationMessage =
-    question.min != null && currentSelected.size < question.min
-      ? `Pick at least ${question.min}.`
-      : question.max != null && currentSelected.size > question.max
-        ? `Pick no more than ${question.max}.`
-        : null;
+    currentOtherNeedsText && currentCustom.trim().length === 0
+      ? "Describe your alternative."
+      : question.min != null && currentSelected.size < question.min
+        ? `Pick at least ${question.min}.`
+        : question.max != null && currentSelected.size > question.max
+          ? `Pick no more than ${question.max}.`
+          : null;
 
   const toggleOption = useCallback(
     (value: string) => {
@@ -110,6 +129,9 @@ export function useQuestionState(node: QuestionNode) {
         next.delete(page);
         return next;
       });
+      if (question.type === "select-with-other" || question.other) {
+        setCustomTexts((current) => ({ ...current, [page]: "" }));
+      }
       setSelections((previous) => {
         const current = previous[page] ?? new Set<string>();
         const next = new Set(current);
@@ -126,7 +148,7 @@ export function useQuestionState(node: QuestionNode) {
         return { ...previous, [page]: next };
       });
     },
-    [page, question.max, question.multiSelect, question.type],
+    [page, question.max, question.multiSelect, question.other, question.type],
   );
 
   const setCustomText = useCallback(
@@ -143,6 +165,8 @@ export function useQuestionState(node: QuestionNode) {
 
   const decideForMe = useCallback(() => {
     setAssumptions((current) => new Set(current).add(page));
+    setSelections((current) => ({ ...current, [page]: new Set() }));
+    setCustomTexts((current) => ({ ...current, [page]: "" }));
   }, [page]);
 
   const moveRankOption = useCallback(
@@ -179,6 +203,7 @@ export function useQuestionState(node: QuestionNode) {
               state.selected,
               custom,
               state.ranking,
+              state.references,
               state.assumed,
             ),
           );
@@ -189,9 +214,10 @@ export function useQuestionState(node: QuestionNode) {
             state.selected.has(option.id ?? option.label ?? optionValue(candidate, optionIndex)),
           )
           .map((option) => option.label);
+        const referenceText = [custom, ...state.references].filter(Boolean).join(", ");
         const value = state.assumed
           ? "You decide"
-          : custom || selectedLabels.join(", ") || state.ranking.join(", ");
+          : referenceText || selectedLabels.join(", ") || state.ranking.join(", ");
         responses.push(`${candidate.header}: ${value}`);
       });
       return responses.length > 0 ? responses.join("\n") : null;

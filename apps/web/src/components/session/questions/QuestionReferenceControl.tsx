@@ -1,7 +1,24 @@
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { FileText, Paperclip, X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { FileAttachment } from "../ImageAttachmentBar";
+
+const DEFAULT_REFERENCE_ACCEPT = ".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf";
+
+function acceptsFile(file: File, accept: string): boolean {
+  const fileName = file.name.toLowerCase();
+  const fileType = file.type.toLowerCase();
+  return accept
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+    .some((value) => {
+      if (value.startsWith(".")) return fileName.endsWith(value);
+      if (value.endsWith("/*")) return fileType.startsWith(value.slice(0, -1));
+      return fileType === value;
+    });
+}
 
 export function QuestionReferenceControl({
   value,
@@ -22,18 +39,32 @@ export function QuestionReferenceControl({
   const [dragging, setDragging] = useState(false);
   const entries = value.split("\n").filter(Boolean);
   const addEntry = (entry: string) => onChange([...entries, entry].join("\n"));
+  const acceptedTypes = accept ?? DEFAULT_REFERENCE_ACCEPT;
+  const handleFiles = useCallback(
+    (files: File[]) => {
+      const accepted = files.filter((file) => acceptsFile(file, acceptedTypes));
+      if (accepted.length < files.length) {
+        toast.error("Reference files must match the accepted file types");
+      }
+      if (accepted.length > 0) onFiles?.(accepted);
+    },
+    [acceptedTypes, onFiles],
+  );
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
       const files = Array.from(event.clipboardData?.files ?? []);
-      if (files.length > 0) onFiles?.(files);
+      if (files.length > 0) {
+        event.preventDefault();
+        handleFiles(files);
+      }
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [onFiles]);
+  }, [handleFiles]);
   const dropFiles = (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault();
     setDragging(false);
-    onFiles?.(Array.from(event.dataTransfer.files));
+    handleFiles(Array.from(event.dataTransfer.files));
   };
   return (
     <div className="grid gap-2">
@@ -59,11 +90,11 @@ export function QuestionReferenceControl({
         ref={inputRef}
         type="file"
         multiple
-        accept={accept}
+        accept={acceptedTypes}
         className="sr-only"
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
-          if (files.length > 0) onFiles?.(files);
+          if (files.length > 0) handleFiles(files);
           event.target.value = "";
         }}
       />

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   hasQuestionBlock,
+  parseQuestion,
   parseTraceInputResponses,
   parseTraceRequestInputs,
 } from "./coding-tool.js";
@@ -56,6 +57,25 @@ describe("parseTraceRequestInputs", () => {
       \`\`\``),
     ).toEqual([]);
   });
+
+  it("normalizes impossible selection constraints", () => {
+    const [question] = parseTraceRequestInputs(`
+      <trace:request-input id="broken" type="multi-select" min="9" max="2">
+        <question>Choose viable options</question>
+        <option id="one">One</option>
+        <option id="two">Two</option>
+      </trace:request-input>
+    `);
+
+    expect(question).toMatchObject({ min: 2, max: 2 });
+  });
+
+  it("falls back to text for a native selection question with no choices", () => {
+    expect(parseQuestion({ type: "single-select", question: "What should we do?" })).toMatchObject({
+      type: "text",
+      question: "What should we do?",
+    });
+  });
 });
 
 describe("parseTraceInputResponses", () => {
@@ -71,5 +91,13 @@ describe("parseTraceInputResponses", () => {
       { id: "promise", selected: [], text: "Fast & safe", assumed: false },
       { id: "reference", selected: [], text: undefined, assumed: true },
     ]);
+  });
+
+  it("ignores response examples inside fenced code", () => {
+    expect(
+      parseTraceInputResponses(`\`\`\`xml
+        <trace:input-response id="example"><selected>web</selected></trace:input-response>
+      \`\`\``),
+    ).toEqual([]);
   });
 });

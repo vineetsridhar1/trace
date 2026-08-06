@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useQuestionState } from "@trace/client-core";
 import type { Question } from "@trace/shared";
 import type { FileAttachment } from "./ImageAttachmentBar";
@@ -17,7 +17,6 @@ import {
 
 interface AskUserQuestionBarProps {
   node: { id: string; questions: Question[] };
-  sessionId?: string;
   collapsed?: boolean;
   onResponse: (text: string, attachments?: FileAttachment[]) => void | Promise<void>;
   onDismiss: () => void;
@@ -26,20 +25,17 @@ interface AskUserQuestionBarProps {
 
 export function AskUserQuestionBar({
   node,
-  sessionId,
   collapsed = false,
   onResponse,
   onDismiss,
   onResume,
 }: AskUserQuestionBarProps) {
-  const state = useQuestionState(node);
+  const references = useQuestionReferenceAttachments();
+  const { beginTransfer, cancelTransfer, clearQuestionReferences } = references;
+  const state = useQuestionState(node, references.referenceValues);
   const [reviewing, setReviewing] = useState(false);
-  const { attachments, addReferenceFiles, removeReference } = useQuestionReferenceAttachments({
-    sessionId,
-    fallbackId: node.id,
-    currentText: state.currentCustom,
-    setText: state.setCustomText,
-  });
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const question = state.question;
   const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
   const hasLaterAnswers = state.answers.slice(state.page + 1).some((answer) => answer.answered);
@@ -52,27 +48,46 @@ export function AskUserQuestionBar({
     !reviewing && state.currentSelected.size > 0 && state.validationMessage !== null;
 
   const responseAttachments = node.questions.some((candidate) => candidate.type === "reference")
-    ? attachments
+    ? references.attachments
     : EMPTY_QUESTION_ATTACHMENTS;
-  const send = useCallback(() => {
+  const send = useCallback(async () => {
+    if (sendingRef.current) return;
     const response = state.buildResponse();
-    if (response) {
-      void Promise.resolve(onResponse(response, responseAttachments)).catch(() => undefined);
+    if (!response) return;
+    sendingRef.current = true;
+    setSending(true);
+    beginTransfer();
+    try {
+      await onResponse(response, responseAttachments);
+    } catch {
+      cancelTransfer();
+      // The response handler owns user-facing error reporting.
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
     }
-  }, [onResponse, responseAttachments, state.buildResponse]);
+  }, [beginTransfer, cancelTransfer, onResponse, responseAttachments, state.buildResponse]);
   const advance = useCallback(() => {
     if (!state.currentValid) return;
     if (state.isLastPage) setReviewing(true);
     else state.goNext();
   }, [state.currentValid, state.goNext, state.isLastPage]);
   const decideAndAdvance = useCallback(() => {
+    if (type === "reference") clearQuestionReferences(state.page);
     state.decideForMe();
     if (state.isLastPage) setReviewing(true);
     else state.goNext();
-  }, [state.decideForMe, state.goNext, state.isLastPage]);
+  }, [
+    clearQuestionReferences,
+    state.decideForMe,
+    state.goNext,
+    state.isLastPage,
+    state.page,
+    type,
+  ]);
 
   useQuestionKeyboard({
-    disabled: collapsed,
+    disabled: collapsed || sending,
     reviewing,
     question,
     type,
@@ -89,10 +104,6 @@ export function AskUserQuestionBar({
         answeredCount={answeredCount}
         nextQuestion={question.question}
         onResume={onResume ?? (() => undefined)}
-        onDecide={() => {
-          decideAndAdvance();
-          onResume?.();
-        }}
       />
     );
   }
@@ -116,9 +127,9 @@ export function AskUserQuestionBar({
       onToggle={state.toggleOption}
       onTextChange={state.setCustomText}
       onMoveRank={state.moveRankOption}
-      referenceAttachments={attachments}
-      onReferenceFiles={addReferenceFiles}
-      onRemoveReference={removeReference}
+      referenceAttachments={references.attachmentsByQuestion[state.page]}
+      onReferenceFiles={(files) => references.addReferenceFiles(state.page, files)}
+      onRemoveReference={(id) => references.removeReference(state.page, id)}
     />
   );
   return (
@@ -143,7 +154,8 @@ export function AskUserQuestionBar({
         <QuestionTrayFooter
           reviewing={reviewing}
           total={state.total}
-          disabled={reviewing ? !state.hasAllAnswers : !state.currentValid}
+          disabled={sending || (reviewing ? !state.hasAllAnswers : !state.currentValid)}
+          sending={sending}
           backDisabled={!reviewing && state.isFirstPage}
           onPrimary={reviewing ? send : advance}
           onBack={() => {

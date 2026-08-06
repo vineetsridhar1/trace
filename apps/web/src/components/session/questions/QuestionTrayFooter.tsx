@@ -2,6 +2,7 @@ export function QuestionTrayFooter({
   reviewing,
   total,
   disabled,
+  sending,
   backDisabled,
   onPrimary,
   onBack,
@@ -9,11 +10,16 @@ export function QuestionTrayFooter({
   reviewing: boolean;
   total: number;
   disabled: boolean;
+  sending: boolean;
   backDisabled: boolean;
   onPrimary: () => void;
   onBack: () => void;
 }) {
-  const primary = reviewing ? `Send ${total} answer${total === 1 ? "" : "s"}` : "Next";
+  const primary = sending
+    ? "Sending…"
+    : reviewing
+      ? `Send ${total} answer${total === 1 ? "" : "s"}`
+      : "Next";
   return (
     <div className="flex items-center justify-end gap-2">
       <button

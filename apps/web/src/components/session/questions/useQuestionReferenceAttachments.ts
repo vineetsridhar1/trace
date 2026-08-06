@@ -1,55 +1,105 @@
-import { useCallback } from "react";
-import { useDraftsStore } from "../../../stores/drafts";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { generateUUID } from "@trace/client-core";
+import { toast } from "sonner";
 import type { FileAttachment } from "../ImageAttachmentBar";
-import { MAX_ATTACHMENTS, useAddAttachments } from "../useAddAttachments";
+import { MAX_ATTACHMENTS } from "../useAddAttachments";
 
 export const EMPTY_QUESTION_ATTACHMENTS: FileAttachment[] = [];
 
-export function useQuestionReferenceAttachments({
-  sessionId,
-  fallbackId,
-  currentText,
-  setText,
-}: {
-  sessionId?: string;
-  fallbackId: string;
-  currentText: string;
-  setText: (text: string) => void;
-}) {
-  const attachments = useDraftsStore((store) =>
-    sessionId
-      ? (store.drafts[sessionId]?.images ?? EMPTY_QUESTION_ATTACHMENTS)
-      : EMPTY_QUESTION_ATTACHMENTS,
+export function useQuestionReferenceAttachments() {
+  const [attachmentsByQuestion, setAttachmentsByQuestion] = useState<
+    Record<number, FileAttachment[]>
+  >({});
+  const attachmentsRef = useRef(attachmentsByQuestion);
+  const transferInProgressRef = useRef(false);
+  attachmentsRef.current = attachmentsByQuestion;
+
+  useEffect(
+    () => () => {
+      if (transferInProgressRef.current) return;
+      for (const attachments of Object.values(attachmentsRef.current)) {
+        for (const attachment of attachments) URL.revokeObjectURL(attachment.previewUrl);
+      }
+    },
+    [],
   );
-  const setDraftImages = useDraftsStore((store) => store.setDraftImages);
-  const addAttachments = useAddAttachments(sessionId ?? fallbackId);
+
+  const attachments = useMemo(
+    () => Object.values(attachmentsByQuestion).flat(),
+    [attachmentsByQuestion],
+  );
+  const referenceValues = useMemo(() => {
+    const values: Record<number, string[]> = {};
+    for (const [index, questionAttachments] of Object.entries(attachmentsByQuestion)) {
+      values[Number(index)] = questionAttachments.map(
+        (attachment) => attachment.file.name || "Attachment",
+      );
+    }
+    return values;
+  }, [attachmentsByQuestion]);
 
   const addReferenceFiles = useCallback(
-    (files: File[]) => {
-      const accepted = files.slice(0, Math.max(0, MAX_ATTACHMENTS - attachments.length));
-      if (accepted.length === 0 || !addAttachments(accepted)) return;
-      const entries = currentText.split("\n").filter(Boolean);
-      setText([...new Set([...entries, ...accepted.map((file) => file.name)])].join("\n"));
+    (questionIndex: number, files: File[]) => {
+      const remaining = Math.max(0, MAX_ATTACHMENTS - attachments.length);
+      const accepted = files.slice(0, remaining);
+      if (accepted.length === 0) {
+        toast.error(`You can attach up to ${MAX_ATTACHMENTS} files`);
+        return;
+      }
+      if (accepted.length < files.length) {
+        toast.error(`Only ${remaining} more attachment${remaining === 1 ? "" : "s"} allowed`);
+      }
+      const next = accepted.map((file) => ({
+        id: generateUUID(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        s3Key: null,
+        uploading: false,
+      }));
+      setAttachmentsByQuestion((current) => ({
+        ...current,
+        [questionIndex]: [...(current[questionIndex] ?? []), ...next],
+      }));
     },
-    [addAttachments, attachments.length, currentText, setText],
+    [attachments.length],
   );
 
-  const removeReference = useCallback(
-    (id: string) => {
-      if (!sessionId) return;
-      const attachment = attachments.find((candidate) => candidate.id === id);
-      setDraftImages(sessionId, (current) => current.filter((candidate) => candidate.id !== id));
-      if (!attachment) return;
-      URL.revokeObjectURL(attachment.previewUrl);
-      setText(
-        currentText
-          .split("\n")
-          .filter((entry) => entry && entry !== attachment.file.name)
-          .join("\n"),
-      );
-    },
-    [attachments, currentText, sessionId, setDraftImages, setText],
-  );
+  const removeReference = useCallback((questionIndex: number, id: string) => {
+    setAttachmentsByQuestion((current) => {
+      const attachment = current[questionIndex]?.find((candidate) => candidate.id === id);
+      if (attachment) URL.revokeObjectURL(attachment.previewUrl);
+      return {
+        ...current,
+        [questionIndex]: (current[questionIndex] ?? []).filter((candidate) => candidate.id !== id),
+      };
+    });
+  }, []);
 
-  return { attachments, addReferenceFiles, removeReference };
+  const clearQuestionReferences = useCallback((questionIndex: number) => {
+    setAttachmentsByQuestion((current) => {
+      for (const attachment of current[questionIndex] ?? []) {
+        URL.revokeObjectURL(attachment.previewUrl);
+      }
+      return { ...current, [questionIndex]: [] };
+    });
+  }, []);
+
+  const beginTransfer = useCallback(() => {
+    transferInProgressRef.current = true;
+  }, []);
+
+  const cancelTransfer = useCallback(() => {
+    transferInProgressRef.current = false;
+  }, []);
+
+  return {
+    attachments,
+    attachmentsByQuestion,
+    referenceValues,
+    addReferenceFiles,
+    removeReference,
+    clearQuestionReferences,
+    beginTransfer,
+    cancelTransfer,
+  };
 }

@@ -28,4 +28,12 @@ describe("structuredResponseSummary", () => {
       "Please make the header smaller.",
     );
   });
+
+  it("leaves protocol documentation and mixed messages unchanged", () => {
+    const example = `Here is the payload format:\n\n\`\`\`xml\n<trace:input-response id="example"><selected>web</selected></trace:input-response>\n\`\`\``;
+    const mixed = `I added context before the answer.\n<trace:input-response id="target"><selected>web</selected></trace:input-response>`;
+
+    expect(structuredResponseSummary(example)).toBe(example);
+    expect(structuredResponseSummary(mixed)).toBe(mixed);
+  });
 });

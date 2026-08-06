@@ -127,7 +127,7 @@ export function parseQuestion(raw: unknown): Question {
     raw != null && typeof raw === "object" && !Array.isArray(raw)
       ? (raw as Record<string, unknown>)
       : ({} as Record<string, unknown>);
-  return {
+  return normalizeQuestion({
     ...(typeof r.id === "string" ? { id: r.id } : {}),
     ...(isQuestionType(r.type) ? { type: r.type } : {}),
     ...(typeof r.context === "string" ? { context: r.context } : {}),
@@ -147,9 +147,11 @@ export function parseQuestion(raw: unknown): Question {
         })
       : [],
     multiSelect: r.multiSelect === true,
-    ...(typeof r.min === "number" ? { min: r.min } : {}),
-    ...(typeof r.max === "number" ? { max: r.max } : {}),
-    ...(typeof r.maxLength === "number" ? { maxLength: r.maxLength } : {}),
+    ...(typeof r.min === "number" && Number.isFinite(r.min) ? { min: r.min } : {}),
+    ...(typeof r.max === "number" && Number.isFinite(r.max) ? { max: r.max } : {}),
+    ...(typeof r.maxLength === "number" && Number.isFinite(r.maxLength)
+      ? { maxLength: r.maxLength }
+      : {}),
     ...(typeof r.placeholder === "string" ? { placeholder: r.placeholder } : {}),
     ...(Array.isArray(r.suggestions)
       ? { suggestions: r.suggestions.map((value) => String(value)) }
@@ -157,7 +159,7 @@ export function parseQuestion(raw: unknown): Question {
     ...(typeof r.accept === "string" ? { accept: r.accept } : {}),
     ...(typeof r.other === "boolean" ? { other: r.other } : {}),
     ...(r.protocol === "trace" ? { protocol: "trace" as const } : {}),
-  };
+  });
 }
 
 const QUESTION_TYPES = new Set<QuestionType>([
@@ -172,6 +174,49 @@ const QUESTION_TYPES = new Set<QuestionType>([
 
 function isQuestionType(value: unknown): value is QuestionType {
   return typeof value === "string" && QUESTION_TYPES.has(value as QuestionType);
+}
+
+function normalizeQuestion(question: Question): Question {
+  const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
+  const optionType =
+    type === "single-select" ||
+    type === "multi-select" ||
+    type === "select-with-other" ||
+    type === "confirm" ||
+    type === "ranking";
+  const other = question.other === true || type === "select-with-other";
+  const capacity =
+    type === "confirm" && question.options.length === 0
+      ? 2
+      : question.options.length + (other ? 1 : 0);
+  const normalized = { ...question };
+  delete normalized.min;
+  delete normalized.max;
+  delete normalized.maxLength;
+  if (optionType && capacity === 0) {
+    return {
+      ...normalized,
+      type: "text",
+      multiSelect: false,
+      ...(question.maxLength == null
+        ? {}
+        : { maxLength: Math.max(1, Math.floor(question.maxLength)) }),
+    };
+  }
+  const max =
+    optionType && question.max != null ? Math.max(1, Math.floor(question.max)) : undefined;
+  const min =
+    optionType && question.min != null
+      ? Math.min(max ?? capacity, Math.max(0, Math.floor(question.min)))
+      : undefined;
+  return {
+    ...normalized,
+    ...(min == null ? {} : { min }),
+    ...(max == null ? {} : { max }),
+    ...(question.maxLength == null
+      ? {}
+      : { maxLength: Math.max(1, Math.floor(question.maxLength)) }),
+  };
 }
 
 function decodeXml(value: string): string {
@@ -198,6 +243,23 @@ function readNumberAttribute(source: string, name: string): number | undefined {
   if (value == null) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normalizeSelectionConstraints(
+  attributes: string,
+  capacity: number,
+): { min?: number; max?: number } {
+  const rawMax = readNumberAttribute(attributes, "max");
+  const max = rawMax == null ? undefined : Math.max(1, Math.floor(rawMax));
+  const rawMin = readNumberAttribute(attributes, "min");
+  const min =
+    rawMin == null ? undefined : Math.min(max ?? capacity, Math.max(0, Math.floor(rawMin)));
+  return { min, max };
+}
+
+function normalizeMaxLength(attributes: string): number | undefined {
+  const value = readNumberAttribute(attributes, "maxlength");
+  return value == null ? undefined : Math.max(1, Math.floor(value));
 }
 
 /** Parse the portable XML question contract emitted by coding agents. */
@@ -229,21 +291,36 @@ export function parseTraceRequestInputs(text: string): Question[] {
     )
       .map((entry) => decodeXml((entry[1] ?? "").trim()))
       .filter(Boolean);
+    const other = readAttribute(attributes, "other") === "true" || type === "select-with-other";
+    const optionType =
+      type === "single-select" ||
+      type === "multi-select" ||
+      type === "select-with-other" ||
+      type === "confirm" ||
+      type === "ranking";
+    const capacity =
+      type === "confirm" && options.length === 0 ? 2 : options.length + (other ? 1 : 0);
+    const normalizedType = optionType && capacity === 0 ? "text" : type;
+    const constraints =
+      optionType && normalizedType !== "text"
+        ? normalizeSelectionConstraints(attributes, capacity)
+        : {};
+    const maxLength = normalizeMaxLength(attributes);
     questions.push({
       id: readAttribute(attributes, "id") ?? `question-${questions.length + 1}`,
-      type,
+      type: normalizedType,
       protocol: "trace",
       context: readElement(body, "context"),
       question,
       header: readElement(body, "header") ?? question,
       options,
-      multiSelect: type === "multi-select",
-      min: readNumberAttribute(attributes, "min"),
-      max: readNumberAttribute(attributes, "max"),
-      maxLength: readNumberAttribute(attributes, "maxlength"),
+      multiSelect: normalizedType === "multi-select",
+      ...(constraints.min == null ? {} : { min: constraints.min }),
+      ...(constraints.max == null ? {} : { max: constraints.max }),
+      ...(maxLength == null ? {} : { maxLength }),
       placeholder: readAttribute(attributes, "placeholder"),
       accept: readAttribute(attributes, "accept"),
-      other: readAttribute(attributes, "other") === "true" || type === "select-with-other",
+      other: normalizedType === "select-with-other" || (normalizedType !== "text" && other),
       ...(suggestions.length > 0 ? { suggestions } : {}),
     });
   }
@@ -253,8 +330,9 @@ export function parseTraceRequestInputs(text: string): Question[] {
 /** Parse structured answers so clients can render a human-readable sent record. */
 export function parseTraceInputResponses(text: string): TraceInputResponse[] {
   const responses: TraceInputResponse[] = [];
+  const unfencedText = text.replace(/```[\s\S]*?```/gu, "");
   const pattern = /<trace:input-response\b([^>]*)>([\s\S]*?)<\/trace:input-response>/giu;
-  for (const match of text.matchAll(pattern)) {
+  for (const match of unfencedText.matchAll(pattern)) {
     const attributes = match[1] ?? "";
     const body = match[2] ?? "";
     const id = readAttribute(attributes, "id");

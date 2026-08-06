@@ -8,6 +8,11 @@ function humanize(value: string): string {
 export function structuredResponseSummary(text: string): string {
   const responses = parseTraceInputResponses(text);
   if (responses.length === 0) return text;
+  const unfencedText = text.replace(/```[\s\S]*?```/gu, "");
+  const remainder = unfencedText
+    .replace(/<trace:input-response\b[^>]*>[\s\S]*?<\/trace:input-response>/giu, "")
+    .trim();
+  if (remainder) return text;
 
   const details = responses.map((response) => {
     const value = response.assumed
