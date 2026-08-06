@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { hasQuestionBlock, parseTraceRequestInputs } from "./coding-tool.js";
+import {
+  hasQuestionBlock,
+  parseTraceInputResponses,
+  parseTraceRequestInputs,
+} from "./coding-tool.js";
 
 describe("parseTraceRequestInputs", () => {
   it("parses typed options and constraints", () => {
@@ -51,5 +55,21 @@ describe("parseTraceRequestInputs", () => {
         </trace:request-input>
       \`\`\``),
     ).toEqual([]);
+  });
+});
+
+describe("parseTraceInputResponses", () => {
+  it("parses selections, text, and delegated answers", () => {
+    expect(
+      parseTraceInputResponses(`
+      <trace:input-response id="surface"><selected>web</selected></trace:input-response>
+      <trace:input-response id="promise"><text>Fast &amp; safe</text></trace:input-response>
+      <trace:input-response id="reference"><assumption>you-decide</assumption></trace:input-response>
+    `),
+    ).toEqual([
+      { id: "surface", selected: ["web"], text: undefined, assumed: false },
+      { id: "promise", selected: [], text: "Fast & safe", assumed: false },
+      { id: "reference", selected: [], text: undefined, assumed: true },
+    ]);
   });
 });

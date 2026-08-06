@@ -39,7 +39,11 @@ export function QuestionTrayFrame({
           <span className={cn("text-xs font-semibold", tone === "error" && "text-destructive")}>
             {label}
           </span>
-          <span className="ml-auto font-mono text-[10px] text-muted-foreground">{meta}</span>
+          {meta ? (
+            <span className="ml-auto font-mono text-[10px] text-muted-foreground">{meta}</span>
+          ) : (
+            <span className="ml-auto" />
+          )}
           {onExit ? (
             <button
               type="button"

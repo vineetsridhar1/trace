@@ -1,6 +1,11 @@
 import { memo } from "react";
 import type { GitCheckpoint } from "@trace/gql";
-import { attachmentKeysFromPayload, asJsonObject, type JsonObject } from "@trace/shared";
+import {
+  attachmentKeysFromPayload,
+  asJsonObject,
+  parseTraceInputResponses,
+  type JsonObject,
+} from "@trace/shared";
 import { useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
@@ -47,6 +52,19 @@ function agentResultToString(content: unknown): string | undefined {
   if (typeof content === "string") return content;
   if (content != null && typeof content === "object") return serializeUnknown(content, 3000);
   return undefined;
+}
+
+function structuredResponseSummary(text: string): string {
+  const responses = parseTraceInputResponses(text);
+  if (responses.length === 0) return text;
+  const details = responses.map((response) => {
+    const label = response.id.replaceAll("-", " ");
+    const value = response.assumed
+      ? "Agent decides"
+      : response.text || response.selected.join(", ") || "No reference";
+    return `- **${label}**: ${value}`;
+  });
+  return `Sent ${responses.length} structured answer${responses.length === 1 ? "" : "s"}\n\n${details.join("\n")}`;
 }
 
 /**
@@ -285,7 +303,7 @@ export const SessionMessage = memo(function SessionMessage({
     case "message_sent":
       return (
         <UserBubble
-          text={str(payload?.text)}
+          text={structuredResponseSummary(str(payload?.text))}
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}

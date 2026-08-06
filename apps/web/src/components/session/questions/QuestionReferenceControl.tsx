@@ -1,39 +1,70 @@
-import { useRef } from "react";
-import { Paperclip, X } from "lucide-react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
+import { FileText, Paperclip, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { FileAttachment } from "../ImageAttachmentBar";
 
 export function QuestionReferenceControl({
   value,
   accept,
+  attachments = [],
   onChange,
+  onFiles,
+  onRemoveAttachment,
 }: {
   value: string;
   accept?: string;
+  attachments?: FileAttachment[];
   onChange: (value: string) => void;
+  onFiles?: (files: File[]) => void;
+  onRemoveAttachment?: (id: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
   const entries = value.split("\n").filter(Boolean);
   const addEntry = (entry: string) => onChange([...entries, entry].join("\n"));
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      const files = Array.from(event.clipboardData?.files ?? []);
+      if (files.length > 0) onFiles?.(files);
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [onFiles]);
+  const dropFiles = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    onFiles?.(Array.from(event.dataTransfer.files));
+  };
   return (
     <div className="grid gap-2">
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="grid place-items-center gap-1 rounded-lg border border-dashed border-border bg-surface-deep/55 px-3 py-5"
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={() => setDragging(false)}
+        onDrop={dropFiles}
+        className={cn(
+          "grid place-items-center gap-1 rounded-lg border border-dashed px-3 py-4 transition-colors",
+          dragging ? "border-foreground/40 bg-foreground/[0.08]" : "border-border",
+        )}
       >
-        <Paperclip size={16} className="text-muted-foreground" />
         <span className="text-[12px] font-medium">Drop a screenshot or brand guide</span>
-        <span className="text-[11px] text-muted-foreground">
-          PNG, JPG, PDF · or paste from clipboard
-        </span>
+        <span className="text-[10px] text-muted-foreground">PNG, JPG, PDF · or paste</span>
       </button>
       <input
         ref={inputRef}
         type="file"
+        multiple
         accept={accept}
         className="sr-only"
         onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) addEntry(file.name);
+          const files = Array.from(event.target.files ?? []);
+          if (files.length > 0) onFiles?.(files);
+          event.target.value = "";
         }}
       />
       <form
@@ -50,7 +81,7 @@ export function QuestionReferenceControl({
           name="reference-url"
           aria-label="Reference URL"
           placeholder="Paste a reference URL"
-          className="min-h-10 min-w-0 flex-1 rounded-lg border border-border bg-surface-deep/55 px-3 text-[12px] outline-none focus:border-foreground/35"
+          className="min-h-10 min-w-0 flex-1 rounded-lg border border-border bg-transparent px-3 text-[12px] outline-none focus:border-foreground/35"
         />
         <button
           type="submit"
@@ -59,23 +90,47 @@ export function QuestionReferenceControl({
           Add
         </button>
       </form>
-      {entries.map((entry) => (
+      {attachments.map((attachment) => (
         <div
-          key={entry}
-          className="flex items-center gap-2 rounded-lg border border-border bg-surface-deep/55 px-3 py-2"
+          key={attachment.id}
+          className="flex items-center gap-2 rounded-lg border border-border px-3 py-2"
         >
-          <Paperclip size={14} className="text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{entry}</span>
+          <FileText size={14} className="text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate text-[11px] font-medium">
+            {attachment.file.name || "Attachment"}
+          </span>
+          <span className="font-mono text-[9px] text-muted-foreground">attached</span>
           <button
             type="button"
-            aria-label={`Remove ${entry}`}
-            onClick={() => onChange(entries.filter((candidate) => candidate !== entry).join("\n"))}
-            className="grid h-7 w-7 place-items-center rounded border border-border text-muted-foreground"
+            aria-label={`Remove ${attachment.file.name || "attachment"}`}
+            onClick={() => onRemoveAttachment?.(attachment.id)}
+            className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:text-foreground"
           >
             <X size={12} />
           </button>
         </div>
       ))}
+      {entries
+        .filter((entry) => !attachments.some((attachment) => attachment.file.name === entry))
+        .map((entry) => (
+          <div
+            key={entry}
+            className="flex items-center gap-2 rounded-lg border border-border px-3 py-2"
+          >
+            <Paperclip size={14} className="text-muted-foreground" />
+            <span className="min-w-0 flex-1 truncate text-[11px] font-medium">{entry}</span>
+            <button
+              type="button"
+              aria-label={`Remove ${entry}`}
+              onClick={() =>
+                onChange(entries.filter((candidate) => candidate !== entry).join("\n"))
+              }
+              className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:text-foreground"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        ))}
     </div>
   );
 }

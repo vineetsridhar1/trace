@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useQuestionState } from "@trace/client-core";
 import type { Question } from "@trace/shared";
+import type { FileAttachment } from "./ImageAttachmentBar";
 import { QuestionCollapsedTray } from "./questions/QuestionCollapsedTray";
 import { QuestionReview } from "./questions/QuestionReview";
 import { QuestionStack } from "./questions/QuestionStack";
@@ -8,17 +9,23 @@ import { QuestionTrayFooter } from "./questions/QuestionTrayFooter";
 import { QuestionTrayFrame } from "./questions/QuestionTrayFrame";
 import { QuestionTrayQuestion } from "./questions/QuestionTrayQuestion";
 import { useQuestionKeyboard } from "./questions/useQuestionKeyboard";
+import {
+  EMPTY_QUESTION_ATTACHMENTS,
+  useQuestionReferenceAttachments,
+} from "./questions/useQuestionReferenceAttachments";
 
 interface AskUserQuestionBarProps {
   node: { id: string; questions: Question[] };
+  sessionId?: string;
   collapsed?: boolean;
-  onResponse: (text: string) => void;
+  onResponse: (text: string, attachments?: FileAttachment[]) => void | Promise<void>;
   onDismiss: () => void;
   onResume?: () => void;
 }
 
 export function AskUserQuestionBar({
   node,
+  sessionId,
   collapsed = false,
   onResponse,
   onDismiss,
@@ -26,6 +33,12 @@ export function AskUserQuestionBar({
 }: AskUserQuestionBarProps) {
   const state = useQuestionState(node);
   const [reviewing, setReviewing] = useState(false);
+  const { attachments, addReferenceFiles, removeReference } = useQuestionReferenceAttachments({
+    sessionId,
+    fallbackId: node.id,
+    currentText: state.currentCustom,
+    setText: state.setCustomText,
+  });
   const question = state.question;
   const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
   const hasLaterAnswers = state.answers.slice(state.page + 1).some((answer) => answer.answered);
@@ -37,10 +50,13 @@ export function AskUserQuestionBar({
   const validationError =
     !reviewing && state.currentSelected.size > 0 && state.validationMessage !== null;
 
+  const responseAttachments = node.questions.some((candidate) => candidate.type === "reference")
+    ? attachments
+    : EMPTY_QUESTION_ATTACHMENTS;
   const send = useCallback(() => {
     const response = state.buildResponse();
-    if (response) onResponse(response);
-  }, [onResponse, state.buildResponse]);
+    if (response) void onResponse(response, responseAttachments);
+  }, [onResponse, responseAttachments, state.buildResponse]);
   const advance = useCallback(() => {
     if (!state.currentValid) return;
     if (state.isLastPage) setReviewing(true);
@@ -77,7 +93,7 @@ export function AskUserQuestionBar({
 
   const meta =
     state.total === 1
-      ? type
+      ? ""
       : answeredCount === 0
         ? `question ${state.page + 1} of ${state.total}`
         : `${answeredCount} of ${state.total} answered`;
@@ -91,6 +107,9 @@ export function AskUserQuestionBar({
       onToggle={state.toggleOption}
       onTextChange={state.setCustomText}
       onMoveRank={state.moveRankOption}
+      referenceAttachments={attachments}
+      onReferenceFiles={addReferenceFiles}
+      onRemoveReference={removeReference}
     />
   );
   return (

@@ -2,6 +2,7 @@ import type { Question } from "@trace/shared";
 import { QuestionChoice } from "./QuestionChrome";
 import { QuestionRankingControl } from "./QuestionRankingControl";
 import { QuestionReferenceControl } from "./QuestionReferenceControl";
+import type { FileAttachment } from "../ImageAttachmentBar";
 
 interface QuestionControlProps {
   question: Question;
@@ -12,6 +13,9 @@ interface QuestionControlProps {
   onToggle: (value: string) => void;
   onTextChange: (value: string) => void;
   onMoveRank: (value: string, direction: -1 | 1) => void;
+  referenceAttachments?: FileAttachment[];
+  onReferenceFiles?: (files: File[]) => void;
+  onRemoveReference?: (id: string) => void;
 }
 
 function TextControl({
@@ -65,6 +69,9 @@ export function QuestionControl({
   onToggle,
   onTextChange,
   onMoveRank,
+  referenceAttachments,
+  onReferenceFiles,
+  onRemoveReference,
 }: QuestionControlProps) {
   const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
 
@@ -76,7 +83,10 @@ export function QuestionControl({
       <QuestionReferenceControl
         value={customText}
         accept={question.accept}
+        attachments={referenceAttachments}
         onChange={onTextChange}
+        onFiles={onReferenceFiles}
+        onRemoveAttachment={onRemoveReference}
       />
     );
   }

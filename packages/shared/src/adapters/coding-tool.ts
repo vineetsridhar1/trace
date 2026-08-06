@@ -64,6 +64,13 @@ export interface QuestionBlock {
   toolUseId?: string;
 }
 
+export interface TraceInputResponse {
+  id: string;
+  selected: string[];
+  text?: string;
+  assumed: boolean;
+}
+
 export interface PlanBlock {
   type: "plan";
   content: string;
@@ -241,6 +248,28 @@ export function parseTraceRequestInputs(text: string): Question[] {
     });
   }
   return questions;
+}
+
+/** Parse structured answers so clients can render a human-readable sent record. */
+export function parseTraceInputResponses(text: string): TraceInputResponse[] {
+  const responses: TraceInputResponse[] = [];
+  const pattern = /<trace:input-response\b([^>]*)>([\s\S]*?)<\/trace:input-response>/giu;
+  for (const match of text.matchAll(pattern)) {
+    const attributes = match[1] ?? "";
+    const body = match[2] ?? "";
+    const id = readAttribute(attributes, "id");
+    if (!id) continue;
+    const selected = Array.from(body.matchAll(/<selected(?:\s[^>]*)?>([\s\S]*?)<\/selected>/giu))
+      .map((entry) => decodeXml((entry[1] ?? "").trim()))
+      .filter(Boolean);
+    responses.push({
+      id,
+      selected,
+      text: readElement(body, "text"),
+      assumed: readElement(body, "assumption") === "you-decide",
+    });
+  }
+  return responses;
 }
 
 export interface AssistantEvent {

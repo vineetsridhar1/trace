@@ -1,8 +1,10 @@
 import type { Question } from "@trace/shared";
 import { QuestionControl } from "./QuestionControl";
+import type { FileAttachment } from "../ImageAttachmentBar";
 
-function typeLabel(question: Question): string {
+function typeLabel(question: Question): string | null {
   const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
+  if (type === "single-select") return null;
   if (type !== "multi-select" || (question.min == null && question.max == null)) return type;
   if (question.min != null && question.max != null)
     return `${type} · pick ${question.min}–${question.max}`;
@@ -18,6 +20,9 @@ export function QuestionTrayQuestion({
   onToggle,
   onTextChange,
   onMoveRank,
+  referenceAttachments,
+  onReferenceFiles,
+  onRemoveReference,
 }: {
   question: Question;
   selected: ReadonlySet<string>;
@@ -27,13 +32,19 @@ export function QuestionTrayQuestion({
   onToggle: (value: string) => void;
   onTextChange: (value: string) => void;
   onMoveRank: (value: string, direction: -1 | 1) => void;
+  referenceAttachments?: FileAttachment[];
+  onReferenceFiles?: (files: File[]) => void;
+  onRemoveReference?: (id: string) => void;
 }) {
+  const label = typeLabel(question);
   return (
     <div className="mt-2 grid gap-2">
       <div className="flex items-center gap-2">
-        <span className="rounded border border-border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
-          {typeLabel(question)}
-        </span>
+        {label ? (
+          <span className="rounded border border-border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
+            {label}
+          </span>
+        ) : null}
         {question.context ? (
           <span className="text-[11px] leading-4 text-muted-foreground">{question.context}</span>
         ) : null}
@@ -48,6 +59,9 @@ export function QuestionTrayQuestion({
         onToggle={onToggle}
         onTextChange={onTextChange}
         onMoveRank={onMoveRank}
+        referenceAttachments={referenceAttachments}
+        onReferenceFiles={onReferenceFiles}
+        onRemoveReference={onRemoveReference}
       />
     </div>
   );

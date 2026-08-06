@@ -32,7 +32,7 @@ describe("AskUserQuestionBar", () => {
     expect(markup).toContain("Answer before I continue");
     expect(markup).not.toContain("Question 1 of 1");
     expect(markup).not.toContain("trace:request-input");
-    expect(markup).toContain("single-select");
+    expect(markup).not.toContain("single-select");
     expect(markup).toContain('aria-label="Exit to chat"');
     expect(markup).not.toContain('role="dialog"');
     expect(markup).not.toContain("fixed inset-0");

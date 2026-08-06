@@ -4,12 +4,14 @@ export type {
   QuestionBlock,
   QuestionOption,
   QuestionType,
+  TraceInputResponse,
 } from "./adapters/coding-tool.js";
 export {
   hasPlanBlock,
   hasQuestionBlock,
   parseQuestion,
   parseTraceRequestInputs,
+  parseTraceInputResponses,
 } from "./adapters/coding-tool.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
