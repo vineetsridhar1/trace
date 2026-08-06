@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { toast } from "sonner";
 import { normalizeTool } from "../session/picker/pickerShared";
@@ -27,6 +27,8 @@ import type { HomeCreatableKind } from "../home/home-kinds";
 
 export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   const activeOrgId = useAuthStore((state: AuthState) => state.activeOrgId);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const getScrollElement = useCallback(() => scrollRef.current, []);
   const currentUserId = useAuthStore((state: AuthState) => state.user?.id);
   const defaultTool = useAuthStore((state: AuthState) => state.user?.defaultSessionTool);
   const draftScope = homeComposerDraftScope(currentUserId, activeOrgId);
@@ -198,7 +200,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--th-surface-mid)]">
       <HomeHeader people={people} title={isCreateMode ? "New session" : "Home"} />
-      <div className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="pointer-events-none absolute left-1/2 top-[-70px] h-[420px] w-[min(900px,100vw)] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,color-mix(in_srgb,var(--th-accent)_8%,transparent),transparent_70%)]" />
         <main
           className={`relative mx-auto flex min-h-full w-full flex-col px-4 pb-7 sm:px-6 ${
@@ -289,7 +291,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
             <HomeWorkLedger items={work.items} />
           ) : null}
 
-          {isCreateMode ? <HomeCreationsGrid /> : null}
+          {isCreateMode ? <HomeCreationsGrid getScrollElement={getScrollElement} /> : null}
 
           <p className="mt-auto pt-8 text-center text-[11px] text-[var(--th-faint)]">
             <span className="hidden sm:inline">⌘N New session · </span>⌘K Search · ⌘J Latest session

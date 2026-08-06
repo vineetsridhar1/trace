@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { MoreHorizontal, Search, Trash2 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEntityStore, type SessionGroupEntity } from "@trace/client-core";
@@ -26,10 +26,15 @@ const CREATION_TYPES: Array<{ id: "all" | GeneratedProjectKind; label: string }>
   { id: "animation", label: "Animations" },
 ];
 
-export function HomeCreationsGrid() {
+export function HomeCreationsGrid({
+  getScrollElement,
+}: {
+  getScrollElement: () => HTMLDivElement | null;
+}) {
   const [type, setType] = useState<(typeof CREATION_TYPES)[number]["id"]>("all");
   const [search, setSearch] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
   const sessionGroups = useEntityStore((state) => state.sessionGroups);
   const sessions = useEntityStore((state) => state.sessions);
   const creations = useMemo(() => {
@@ -46,10 +51,27 @@ export function HomeCreationsGrid() {
   }, [search, sessionGroups, type]);
   const virtualizer = useVirtualizer({
     count: Math.ceil(creations.length / 2),
-    getScrollElement: () => scrollRef.current,
+    getScrollElement,
     estimateSize: () => 112,
     overscan: 4,
+    scrollMargin,
   });
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    const scrollElement = getScrollElement();
+    if (!grid || !scrollElement) return;
+
+    const updateScrollMargin = () => {
+      setScrollMargin(
+        grid.getBoundingClientRect().top - scrollElement.getBoundingClientRect().top + scrollElement.scrollTop,
+      );
+    };
+    updateScrollMargin();
+    const observer = new ResizeObserver(updateScrollMargin);
+    observer.observe(grid);
+    observer.observe(scrollElement);
+    return () => observer.disconnect();
+  }, [getScrollElement]);
   const sessionCountByGroup = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const session of Object.values(sessions)) {
@@ -100,7 +122,7 @@ export function HomeCreationsGrid() {
           No creations match your search.
         </div>
       ) : (
-        <div ref={scrollRef} className="no-scrollbar mt-3 max-h-[456px] overflow-y-auto">
+        <div ref={gridRef} className="mt-3">
           <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const rowItems = creations.slice(virtualRow.index * 2, virtualRow.index * 2 + 2);
@@ -110,7 +132,7 @@ export function HomeCreationsGrid() {
                   data-index={virtualRow.index}
                   ref={virtualizer.measureElement}
                   className="absolute left-0 top-0 grid w-full grid-cols-2 gap-3 pb-3"
-                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  style={{ transform: `translateY(${virtualRow.start - scrollMargin}px)` }}
                 >
                   {rowItems.map((group) => (
                     <CreationCard
