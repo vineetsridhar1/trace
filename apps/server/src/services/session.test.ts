@@ -5215,7 +5215,9 @@ describe("SessionService", () => {
         | { prompt?: string; runtimeEnv?: Record<string, string> }
         | undefined;
       expect(command?.prompt).toContain("template.html canvas");
-      expect(command?.prompt).toContain("trace artifact push\nvisual-plan");
+      expect(command?.prompt).toContain(
+        "trace artifact push visual-plan .trace-work/plan --key primary",
+      );
       expect(command?.runtimeEnv).toMatchObject({
         TRACE_SESSION_ID: "session-1",
       });
