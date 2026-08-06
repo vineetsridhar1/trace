@@ -32,20 +32,8 @@ export function SessionLinkCard({ sessionId, channelId, sessionGroupId }: Sessio
     | undefined;
 
   const preparation = { workdir, lastUserMessageAt, connection };
-  const displayStatus = getDisplaySessionStatus(
-    sessionStatus,
-    null,
-    agentStatus,
-    null,
-    preparation,
-  );
-  const displayAgentStatus = getDisplayAgentStatus(
-    agentStatus,
-    sessionStatus,
-    null,
-    null,
-    preparation,
-  );
+  const displayStatus = getDisplaySessionStatus(sessionStatus, null);
+  const displayAgentStatus = getDisplayAgentStatus(agentStatus, sessionStatus, null, preparation);
   const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";
   const label = sessionStatusLabel[displayStatus] ?? displayStatus;
 

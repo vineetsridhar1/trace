@@ -21,18 +21,11 @@ export function useGeneratedProjectSessionGroupRow(groupId: string): SessionGrou
       .filter((session): session is SessionEntity => Boolean(session));
     const agentStatuses = groupSessions.map((session) => session.agentStatus);
     const sessionStatuses = groupSessions.map((session) => session.sessionStatus);
-    const prUrl = group?.prUrl as string | null | undefined;
     const archivedAt = group?.archivedAt as string | null | undefined;
 
     const displaySessionStatus =
       groupSessions.length > 0
-        ? getSessionGroupDisplayStatus(
-            sessionStatuses,
-            agentStatuses,
-            prUrl,
-            archivedAt,
-            groupSessions,
-          )
+        ? getSessionGroupDisplayStatus(sessionStatuses, archivedAt)
         : ((group?.status as string | undefined) ?? "in_progress");
     const displayAgentStatus = archivedAt
       ? "stopped"

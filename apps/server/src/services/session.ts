@@ -649,7 +649,7 @@ function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStat
 }
 
 function getRunningSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
-  return sessionStatus === "merged" ? "merged" : "in_progress";
+  return sessionStatus ?? "in_progress";
 }
 
 function getIdleAgentStatus(agentStatus?: AgentStatus | null): AgentStatus {
@@ -1036,7 +1036,7 @@ function buildSessionGroupSnapshot(
   return {
     ...group,
     owner: group.ownerUser,
-    status: deriveSessionGroupStatus(sessions ?? [], group.prUrl ?? null, group.archivedAt ?? null),
+    status: deriveSessionGroupStatus(sessions ?? [], group.archivedAt ?? null),
   };
 }
 
@@ -4871,7 +4871,7 @@ export class SessionService {
         where: { id: session.id },
         data: {
           agentStatus: "active",
-          sessionStatus: "in_progress",
+          sessionStatus: getRunningSessionStatus(session.sessionStatus),
           connection: this.mergeConnection(session.connection, {
             state: "connecting",
             runtimeInstanceId: input.runtimeInstanceId,
@@ -4996,7 +4996,7 @@ export class SessionService {
         data: {
           pendingRun: pendingRunValue([...commands, pendingCommand]),
           agentStatus: "active",
-          sessionStatus: "in_progress",
+          sessionStatus: getRunningSessionStatus(session.sessionStatus),
           ...(markLocalPreparing && {
             connection: this.mergeConnection(session.connection, {
               state: "connecting",
@@ -5173,7 +5173,7 @@ export class SessionService {
       payload: {
         sessionId: id,
         agentStatus: "active",
-        sessionStatus: "in_progress",
+        sessionStatus: updated.sessionStatus,
         clientSource: normalizeClientSource(access?.clientSource),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
@@ -11520,6 +11520,8 @@ export class SessionService {
       eventType: "session_resumed",
       payload: {
         sessionId,
+        agentStatus: updatedSession.agentStatus,
+        sessionStatus: updatedSession.sessionStatus,
         clientSource: normalizeClientSource(pending.clientSource),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
@@ -12271,6 +12273,10 @@ export class SessionService {
       where: { sessionGroupId, sessionStatus: { notIn: ["merged", "needs_input"] } },
       data: { sessionStatus: "in_review" },
     });
+    const sessionStatusUpdates = await prisma.session.findMany({
+      where: { sessionGroupId },
+      select: { id: true, sessionStatus: true },
+    });
 
     const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
       prUrl,
@@ -12283,7 +12289,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: eventSessionId,
       eventType: "session_pr_opened",
-      payload: { sessionId: eventSessionId, prUrl, sessionStatus: "in_review", sessionGroup },
+      payload: { sessionId: eventSessionId, prUrl, sessionStatusUpdates, sessionGroup },
       actorType: "system",
       actorId,
     });
@@ -12432,6 +12438,14 @@ export class SessionService {
     });
     if (!group?.prUrl || group.prUrl !== prUrl) return;
 
+    await prisma.session.updateMany({
+      where: { sessionGroupId, sessionStatus: "in_review" },
+      data: { sessionStatus: "in_progress" },
+    });
+    const sessionStatusUpdates = await prisma.session.findMany({
+      where: { sessionGroupId },
+      select: { id: true, sessionStatus: true },
+    });
     const sessionGroup = await this.syncGroupWorkspaceState(sessionGroupId, {
       prUrl: null,
     });
@@ -12443,7 +12457,7 @@ export class SessionService {
       scopeType: "session",
       scopeId: eventSessionId,
       eventType: "session_pr_closed",
-      payload: { sessionId: eventSessionId, sessionGroup },
+      payload: { sessionId: eventSessionId, sessionStatusUpdates, sessionGroup },
       actorType: "system",
       actorId,
     });

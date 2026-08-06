@@ -6,34 +6,31 @@ describe("deriveSessionGroupStatus", () => {
     expect(
       deriveSessionGroupStatus(
         [{ agentStatus: "active", sessionStatus: "in_progress" }],
-        "https://github.com/trace/trace/pull/123",
         "2024-01-03T00:00:00.000Z",
       ),
     ).toBe("archived");
   });
 
-  it("keeps a group in progress while another agent is active", () => {
+  it("uses the pipeline status even while another agent is active", () => {
     expect(
       deriveSessionGroupStatus(
         [
           { agentStatus: "done", sessionStatus: "needs_input" },
           { agentStatus: "active", sessionStatus: "in_progress" },
         ],
-        "https://github.com/trace/trace/pull/123",
       ),
-    ).toBe("in_progress");
+    ).toBe("needs_input");
   });
 
-  it("keeps a group in progress while another agent is active and a PR exists", () => {
+  it("keeps a group in review while an agent is active", () => {
     expect(
       deriveSessionGroupStatus(
-        [{ agentStatus: "active", sessionStatus: "in_progress" }],
-        "https://github.com/trace/trace/pull/123",
+        [{ agentStatus: "active", sessionStatus: "in_review" }],
       ),
-    ).toBe("in_progress");
+    ).toBe("in_review");
   });
 
-  it("reports failed before a stale in_progress session status", () => {
+  it("keeps the pipeline status separate from failed and stopped agents", () => {
     expect(
       deriveSessionGroupStatus(
         [
@@ -41,19 +38,17 @@ describe("deriveSessionGroupStatus", () => {
           { agentStatus: "failed", sessionStatus: "in_progress" },
           { agentStatus: "stopped", sessionStatus: "in_progress" },
         ],
-        null,
       ),
-    ).toBe("failed");
+    ).toBe("in_progress");
   });
 
-  it("reports failed before stale needs_input and review lifecycle states", () => {
+  it("keeps review lifecycle state separate from a failed agent", () => {
     expect(
       deriveSessionGroupStatus(
         [
-          { agentStatus: "failed", sessionStatus: "needs_input" },
+          { agentStatus: "failed", sessionStatus: "in_review" },
         ],
-        "https://github.com/trace/trace/pull/123",
       ),
-    ).toBe("failed");
+    ).toBe("in_review");
   });
 });

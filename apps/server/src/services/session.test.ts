@@ -5475,6 +5475,56 @@ describe("SessionService", () => {
       );
     });
 
+    it("keeps an in-review session in review when sending another message", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_review",
+        workdir: "/tmp/worktree",
+        toolSessionId: "tool-sess-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+      sessionRouterMock.getRuntimeForSession.mockReturnValue({
+        id: "runtime-a",
+        label: "Laptop A",
+      });
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "address the review feedback",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            agentStatus: "active",
+            sessionStatus: "in_review",
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_resumed",
+          payload: expect.objectContaining({
+            agentStatus: "active",
+            sessionStatus: "in_review",
+          }),
+        }),
+      );
+    });
+
     it("does not prepend conversation history twice after a tool switch", async () => {
       const session = makeSession({
         agentStatus: "done",

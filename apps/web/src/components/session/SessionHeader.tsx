@@ -125,20 +125,12 @@ export function SessionHeader({
     connectionState && connectionState !== "connected"
       ? (connectionColor[connectionState] ?? "text-muted-foreground")
       : null;
-  const displaySessionStatus = getDisplaySessionStatus(
-    sessionStatus,
-    prUrl,
-    agentStatus,
-    groupArchivedAt,
-    { workdir, lastUserMessageAt, connection },
-  );
-  const displayAgentStatus = getDisplayAgentStatus(
-    agentStatus,
-    sessionStatus,
-    prUrl,
-    groupArchivedAt,
-    { workdir, lastUserMessageAt, connection },
-  );
+  const displaySessionStatus = getDisplaySessionStatus(sessionStatus, groupArchivedAt);
+  const displayAgentStatus = getDisplayAgentStatus(agentStatus, sessionStatus, groupArchivedAt, {
+    workdir,
+    lastUserMessageAt,
+    connection,
+  });
 
   return (
     <div className="app-region-drag flex shrink-0 items-center gap-3 border-b border-border bg-surface-mid px-4 py-2">
