@@ -9,6 +9,11 @@ A visual plan is one self-contained HTML file that a reviewer reads top to botto
 sends back. When it is approved, its content becomes the brief the implementing agent works from,
 so every claim in it has to be true of this repository.
 
+Trace plans use this skill and the Trace artifact CLI only. Do not use an Agent-Native or
+Builder-style plan skill, MDX plan blocks, a watched `plan.mdx` file, or a provider-native plan
+approval tool. Trace does not watch a plan file: the completed `plan.html` is published explicitly
+as an immutable artifact.
+
 ## 1. Research before writing
 
 A plan invented from the request alone is worthless. Read the code first and let what you find
