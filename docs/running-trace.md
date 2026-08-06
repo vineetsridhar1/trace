@@ -32,6 +32,35 @@ Requirements:
 
 Open `http://localhost:3000` after the command finishes starting the web app.
 
+### Local provisioned cloud runtime
+
+For local iteration on the container image, use the development-only Docker
+launcher. This keeps local authentication and the local Prisma database while
+running a real provisioned runtime container:
+
+```bash
+pnpm --filter @trace/shared build
+pnpm --filter @trace/container-bridge build
+docker build -f apps/container-bridge/Dockerfile -t trace-agent-runtime:dev .
+pnpm dev:local:cloud
+```
+
+The opt-in command starts the launcher on `http://localhost:8787`, exposes the
+Trace bridge and local file storage to containers through
+`host.docker.internal`, and sets `TRACE_LOCAL_CLOUD_ENABLED=1`. In the web app,
+create a provisioned Agent Environment using:
+
+- Start URL: `http://localhost:8787/trace/start-session`
+- Stop URL: `http://localhost:8787/trace/stop-session`
+- Status URL: `http://localhost:8787/trace/session-status`
+- Authentication: bearer
+
+The harness configures the server and launcher with the same development bearer
+token. Mark the environment as the organization default. Rebuild the image and
+start a new cloud session after each image change. This launcher is for
+development and quality assurance only; it has no isolation, quotas, or
+public-ingress hardening.
+
 ## Self-hosted server
 
 Use this path when you want a persistent Trace instance for yourself or a team.

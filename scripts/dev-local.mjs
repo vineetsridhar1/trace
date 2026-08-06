@@ -17,6 +17,12 @@ const databasePort = 5691 + portOffset;
 const shadowDatabasePort = 5692 + portOffset;
 const serverUrl = `http://localhost:${serverPort}`;
 const webUrl = `http://localhost:${webPort}`;
+const containerServerUrl = `http://host.docker.internal:${serverPort}`;
+const containerBridgeUrl = `ws://host.docker.internal:${serverPort}/bridge`;
+const cloudLauncherPort = 8787 + portOffset;
+const cloudLauncherUrl = `http://localhost:${cloudLauncherPort}`;
+const localCloudEnabled = process.argv.includes("--cloud");
+const runtimeImage = process.env.TRACE_RUNTIME_IMAGE ?? "trace-agent-runtime:dev";
 const prismaServerName = `trace-local-${hashValue(cwd)}-${portOffset}`;
 let sharedEnv = { ...process.env };
 let webEnv = { ...process.env };
@@ -121,14 +127,22 @@ async function initializeLocalModeEnv() {
     ...process.env,
     TRACE_PORT: String(portOffset),
     TRACE_LOCAL_MODE: "1",
+    TRACE_LOCAL_CLOUD_ENABLED: localCloudEnabled ? "1" : "0",
     JWT_SECRET: jwtSecret,
     TOKEN_ENCRYPTION_KEY: tokenEncryptionKey,
-    TRACE_SERVER_PUBLIC_URL: serverUrl,
+    TRACE_SERVER_PUBLIC_URL: localCloudEnabled ? containerServerUrl : serverUrl,
     TRACE_SERVER_URL: serverUrl,
     TRACE_WEB_URL: webUrl,
     CORS_ALLOWED_ORIGINS: webUrl,
     STORAGE_MODE: "local",
     STORAGE_PUBLIC_URL: serverUrl,
+    TRACE_CLOUD_STORAGE_PUBLIC_URL: localCloudEnabled ? containerServerUrl : "",
+    TRACE_CLOUD_BRIDGE_URL: localCloudEnabled ? containerBridgeUrl : "",
+    TRACE_CLOUD_LAUNCHER_TOKEN: localCloudEnabled ? "dev-secret" : "",
+    MCP_DANGEROUSLY_ALLOW_INSECURE_ISSUER_URL: localCloudEnabled ? "1" : "",
+    TRACE_ENDPOINT_PREVIEW_BASE_HOST: localCloudEnabled
+      ? `preview.localhost:${serverPort}`
+      : (process.env.TRACE_ENDPOINT_PREVIEW_BASE_HOST ?? ""),
     NODE_ENV: process.env.NODE_ENV ?? "development",
   };
 
@@ -241,8 +255,8 @@ function assertNodeVersion() {
   process.exit(1);
 }
 
-function spawnLongRunning(label, args, env) {
-  const child = spawn(pnpmCommand, args, {
+function spawnProcess(label, command, args, env, { cleanElectronExit = false } = {}) {
+  const child = spawn(command, args, {
     cwd,
     env,
     stdio: "inherit",
@@ -253,7 +267,7 @@ function spawnLongRunning(label, args, env) {
     children.delete(child);
     if (shuttingDown) return;
 
-    if (label === "electron" && (code === 0 || signal === "SIGTERM")) {
+    if (cleanElectronExit && (code === 0 || signal === "SIGTERM")) {
       void shutdown(0);
       return;
     }
@@ -275,9 +289,33 @@ function spawnLongRunning(label, args, env) {
   return child;
 }
 
-async function runCommand(label, args, env = process.env, stdinText = null) {
+async function assertLocalCloudImage() {
+  if (!localCloudEnabled) return;
+  try {
+    await runCapturedCommand("docker version", "docker", [
+      "version",
+      "--format",
+      "{{.Server.Version}}",
+    ]);
+  } catch {
+    throw new Error(
+      "Docker is required for local cloud runtimes. Start Docker Desktop and try again.",
+    );
+  }
+  try {
+    await runCapturedCommand("docker image inspect", "docker", ["image", "inspect", runtimeImage]);
+  } catch {
+    throw new Error(
+      `Local cloud runtime image ${runtimeImage} was not found. Build it with: ` +
+        `pnpm --filter @trace/shared build && pnpm --filter @trace/container-bridge build && ` +
+        `docker build -f apps/container-bridge/Dockerfile -t ${runtimeImage} .`,
+    );
+  }
+}
+
+async function runCapturedCommand(label, command, args, env = process.env, stdinText = null) {
   return new Promise((resolve, reject) => {
-    const child = spawn(pnpmCommand, args, {
+    const child = spawn(command, args, {
       cwd,
       env,
       stdio: ["pipe", "pipe", "pipe"],
@@ -297,18 +335,19 @@ async function runCommand(label, args, env = process.env, stdinText = null) {
 
     child.on("error", reject);
     child.on("close", (code) => {
+      const output = stripAnsi(`${stdout}${stderr}`);
       if (code === 0) {
-        resolve(stripAnsi(`${stdout}${stderr}`));
+        resolve(output);
         return;
       }
 
-      reject(
-        new Error(
-          `[${label}] exited with code ${code ?? 1}\n${stripAnsi(`${stdout}${stderr}`)}`.trim(),
-        ),
-      );
+      reject(new Error(`[${label}] exited with code ${code ?? 1}\n${output}`.trim()));
     });
   });
+}
+
+async function runCommand(label, args, env = process.env, stdinText = null) {
+  return runCapturedCommand(label, pnpmCommand, args, env, stdinText);
 }
 
 async function getPrismaDevEntry() {
@@ -521,6 +560,7 @@ process.on("unhandledRejection", (error) => {
 async function main() {
   assertNodeVersion();
   await initializeLocalModeEnv();
+  await assertLocalCloudImage();
 
   log("building shared package");
   await runCommand("build:shared", ["build:shared"], sharedEnv);
@@ -533,14 +573,15 @@ async function main() {
   const serverEnv = await migrateAndSeed(databaseUrl);
 
   log("starting Trace server");
-  spawnLongRunning(
+  spawnProcess(
     "server",
+    pnpmCommand,
     ["--filter", "@trace/server", "exec", "tsx", "watch", "src/index.ts"],
     serverEnv,
   );
 
   log("starting Trace web app");
-  spawnLongRunning("web", ["--filter", "@trace/web", "dev"], webEnv);
+  spawnProcess("web", pnpmCommand, ["--filter", "@trace/web", "dev"], webEnv);
 
   await waitForHttp(
     `${serverUrl}/health`,
@@ -553,8 +594,32 @@ async function main() {
 
   await waitForHttp(webUrl, async () => true, "web app");
 
+  if (localCloudEnabled) {
+    log(`starting local Docker cloud launcher with image ${runtimeImage}`);
+    const launcherEnv = {
+      ...sharedEnv,
+      PORT: String(cloudLauncherPort),
+      LAUNCHER_SECRET: "dev-secret",
+      TRACE_RUNTIME_IMAGE: runtimeImage,
+    };
+    spawnProcess(
+      "local Docker cloud launcher",
+      process.execPath,
+      [path.join(cwd, "examples/launchers/local-docker/server.mjs")],
+      launcherEnv,
+    );
+    await waitForHttp(
+      `${cloudLauncherUrl}/healthz`,
+      async (response) => response.ok,
+      "local cloud launcher",
+    );
+    log(`local cloud launcher ready at ${cloudLauncherUrl}`);
+  }
+
   log("opening Electron");
-  spawnLongRunning("electron", ["--filter", "@trace/desktop", "dev"], sharedEnv);
+  spawnProcess("electron", pnpmCommand, ["--filter", "@trace/desktop", "dev"], sharedEnv, {
+    cleanElectronExit: true,
+  });
 }
 
 main().catch((error) => {

@@ -201,6 +201,10 @@ pnpm dev:local
 The local mode path does not require a GitHub OAuth app. State is stored in the
 OS application-support directory for the current checkout.
 
+To exercise provisioned cloud sessions against a locally rebuilt Docker image,
+follow the [local provisioned cloud runtime guide](docs/running-trace.md#local-provisioned-cloud-runtime).
+Plain `pnpm dev:local` remains local-only.
+
 > Requirements: Node.js 22+, pnpm 11+.
 
 <br/>

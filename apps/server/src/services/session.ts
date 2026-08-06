@@ -41,6 +41,7 @@ import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
 import { terminalRelay } from "../lib/terminal-relay.js";
 import { storage } from "../lib/storage/index.js";
+import { rewriteRuntimeAttachmentUrl } from "../lib/runtime-attachments.js";
 import {
   runtimeAccessService,
   setBridgeAccessApprovedHandler,
@@ -56,7 +57,11 @@ import {
   type SessionGroupStatus as DerivedSessionGroupStatus,
   type SessionGroupStatusSource,
 } from "../lib/session-group-status.js";
-import { isLocalMode } from "../lib/mode.js";
+import {
+  assertCloudHostingAllowed,
+  isCloudHostingAllowed,
+  isLocalMode,
+} from "../lib/mode.js";
 import {
   assertSessionGroupAccess,
   canViewSessionGroup,
@@ -97,6 +102,20 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   buildStartEvent?: (input: StartSessionBuildStartEventInput) => StartSessionEventOverride;
   afterCreate?: (input: StartSessionAfterCreateInput) => Promise<void>;
 };
+
+async function runtimeAttachmentUrls(
+  keys: string[],
+  hosting: string | null | undefined,
+): Promise<string[]> {
+  const urls = await Promise.all(keys.map((key) => storage.getGetUrl(key)));
+  return urls.map((url) =>
+    rewriteRuntimeAttachmentUrl(url, {
+      hosting,
+      storageMode: process.env.STORAGE_MODE,
+      cloudStoragePublicUrl: process.env.TRACE_CLOUD_STORAGE_PUBLIC_URL,
+    }),
+  );
+}
 
 type SessionStartMetadata = {
   prompt: string | null;
@@ -3306,9 +3325,7 @@ export class SessionService {
 
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
     // default to local in TRACE_LOCAL_MODE and cloud everywhere else.
-    if (isLocalMode() && input.hosting === "cloud") {
-      throw new Error("Cloud sessions are disabled in local mode");
-    }
+    assertCloudHostingAllowed(input.hosting);
 
     const requestedRuntimeSelection =
       !!input.environmentId || !!input.hosting || !!input.runtimeInstanceId;
@@ -3420,7 +3437,7 @@ export class SessionService {
       (deferRuntimeSelection ? "local" : environmentHosting) ??
       sourceSession?.hosting ??
       (isLocalMode() ? "local" : "cloud");
-    if (isLocalMode() && hosting === "cloud") {
+    if (!isCloudHostingAllowed() && hosting === "cloud") {
       hosting = "local";
     }
     if (hosting === "cloud" && !requestedEnvironment && !reuseExistingGroupRuntimeSelection) {
@@ -4476,7 +4493,7 @@ export class SessionService {
       toolSessionId: session.toolSessionId ?? undefined,
       checkpointContext,
       imageUrls: imageKeys?.length
-        ? await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)))
+        ? await runtimeAttachmentUrls(imageKeys, session.hosting)
         : undefined,
     };
 
@@ -4917,9 +4934,7 @@ export class SessionService {
     > | null = null;
     let shouldProvisionPendingRun = false;
     if (runtimeChanged) {
-      if (isLocalMode() && config.hosting === "cloud") {
-        throw new Error("Cloud sessions are disabled in local mode");
-      }
+      assertCloudHostingAllowed(config.hosting);
       let newHosting = config.hosting ?? prev.hosting;
       let runtimeInstanceId: string | undefined;
       let runtimeLabel: string | undefined;
@@ -5850,7 +5865,7 @@ export class SessionService {
     // Generate presigned GET URLs for attached files
     let imageUrls: string[] | undefined;
     if (imageKeys?.length) {
-      imageUrls = await Promise.all(imageKeys.map((key) => storage.getGetUrl(key)));
+      imageUrls = await runtimeAttachmentUrls(imageKeys, session.hosting);
       runtimeDebug(`Generated ${imageUrls.length} attachment URLs for ${sessionId}`);
     }
 
@@ -8049,9 +8064,7 @@ export class SessionService {
     actorType: ActorType,
     actorId: string,
   ) {
-    if (isLocalMode()) {
-      throw new Error("Cloud sessions are disabled in local mode");
-    }
+    assertCloudHostingAllowed("cloud");
 
     const session = await prisma.session.findFirstOrThrow({
       where: { id: sessionId, organizationId },
@@ -9376,6 +9389,7 @@ export class SessionService {
         reasoningEffort: true,
         createdBy: { select: { enableClaudeInChrome: true } },
         sessionStatus: true,
+        hosting: true,
         workdir: true,
         toolSessionId: true,
         repoId: true,
@@ -9417,7 +9431,7 @@ export class SessionService {
     // Generate presigned GET URLs for any attached files in the pending command
     let imageUrls: string[] | undefined;
     if (pending.imageKeys?.length) {
-      imageUrls = await Promise.all(pending.imageKeys.map((key) => storage.getGetUrl(key)));
+      imageUrls = await runtimeAttachmentUrls(pending.imageKeys, session.hosting);
     }
 
     const command = {
