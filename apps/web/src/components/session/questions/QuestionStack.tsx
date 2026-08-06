@@ -57,6 +57,7 @@ function QuestionStep({
   children: ReactNode;
 }) {
   const showLabel = answered || (question.header && question.header !== question.question);
+  const showContext = Boolean(question.context);
   return (
     <div className="grid grid-cols-[24px_1fr] gap-2.5">
       <span
@@ -70,16 +71,23 @@ function QuestionStep({
       >
         {answered ? <Check size={11} strokeWidth={2.5} /> : number}
       </span>
-      <div className="min-w-0 pt-0.5">
-        {showLabel ? (
-          <p
-            className={cn(
-              "text-xs leading-4",
-              answered ? "text-muted-foreground" : "font-semibold",
-            )}
-          >
-            {question.header || question.question}
-          </p>
+      <div className="min-w-0">
+        {showLabel || showContext ? (
+          <div className="flex min-h-6 flex-wrap items-center gap-x-2 gap-y-0.5">
+            {showLabel ? (
+              <p
+                className={cn(
+                  "text-xs leading-4",
+                  answered ? "text-muted-foreground" : "font-semibold",
+                )}
+              >
+                {question.header || question.question}
+              </p>
+            ) : null}
+            {showContext ? (
+              <p className="text-[11px] leading-4 text-muted-foreground">{question.context}</p>
+            ) : null}
+          </div>
         ) : null}
         {children}
       </div>

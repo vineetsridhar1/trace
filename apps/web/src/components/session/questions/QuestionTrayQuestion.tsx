@@ -17,6 +17,8 @@ export function QuestionTrayQuestion({
   customText,
   ranking,
   validationMessage,
+  helperText,
+  showContext = true,
   onToggle,
   onTextChange,
   onMoveRank,
@@ -29,6 +31,8 @@ export function QuestionTrayQuestion({
   customText: string;
   ranking: readonly string[];
   validationMessage: string | null;
+  helperText: string;
+  showContext?: boolean;
   onToggle: (value: string) => void;
   onTextChange: (value: string) => void;
   onMoveRank: (value: string, direction: -1 | 1) => void;
@@ -37,18 +41,21 @@ export function QuestionTrayQuestion({
   onRemoveReference?: (id: string) => void;
 }) {
   const label = typeLabel(question);
+  const context = showContext ? question.context : undefined;
   return (
     <div className="mt-2 grid gap-2">
-      <div className="flex items-center gap-2">
-        {label ? (
-          <span className="rounded border border-border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
-            {label}
-          </span>
-        ) : null}
-        {question.context ? (
-          <span className="text-[11px] leading-4 text-muted-foreground">{question.context}</span>
-        ) : null}
-      </div>
+      {label || context ? (
+        <div className="flex items-center gap-2">
+          {label ? (
+            <span className="rounded border border-border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
+              {label}
+            </span>
+          ) : null}
+          {context ? (
+            <span className="text-[11px] leading-4 text-muted-foreground">{context}</span>
+          ) : null}
+        </div>
+      ) : null}
       <h3 className="text-[15px] font-semibold leading-5">{question.question}</h3>
       <QuestionControl
         question={question}
@@ -63,6 +70,7 @@ export function QuestionTrayQuestion({
         onReferenceFiles={onReferenceFiles}
         onRemoveReference={onRemoveReference}
       />
+      <span className="font-mono text-[9px] leading-3 text-muted-foreground">{helperText}</span>
     </div>
   );
 }

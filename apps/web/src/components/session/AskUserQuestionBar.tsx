@@ -8,6 +8,7 @@ import { QuestionStack } from "./questions/QuestionStack";
 import { QuestionTrayFooter } from "./questions/QuestionTrayFooter";
 import { QuestionTrayFrame } from "./questions/QuestionTrayFrame";
 import { QuestionTrayQuestion } from "./questions/QuestionTrayQuestion";
+import { questionTrayHint } from "./questions/questionTrayHint";
 import { useQuestionKeyboard } from "./questions/useQuestionKeyboard";
 import {
   EMPTY_QUESTION_ATTACHMENTS,
@@ -106,6 +107,8 @@ export function AskUserQuestionBar({
       customText={state.currentCustom}
       ranking={state.currentRanking}
       validationMessage={state.validationMessage}
+      helperText={questionTrayHint(type, false)}
+      showContext={state.total === 1}
       onToggle={state.toggleOption}
       onTextChange={state.setCustomText}
       onMoveRank={state.moveRankOption}
@@ -136,8 +139,6 @@ export function AskUserQuestionBar({
         <QuestionTrayFooter
           reviewing={reviewing}
           total={state.total}
-          page={state.page}
-          type={type}
           disabled={reviewing ? !state.hasAllAnswers : !state.currentValid}
           onPrimary={reviewing ? send : advance}
           onSecondary={() => {
@@ -152,14 +153,19 @@ export function AskUserQuestionBar({
       }
     >
       {reviewing ? (
-        <QuestionReview
-          questions={node.questions}
-          answers={state.answers}
-          onEdit={(index) => {
-            state.setPage(index);
-            setReviewing(false);
-          }}
-        />
+        <div className="grid gap-2">
+          <QuestionReview
+            questions={node.questions}
+            answers={state.answers}
+            onEdit={(index) => {
+              state.setPage(index);
+              setReviewing(false);
+            }}
+          />
+          <span className="font-mono text-[9px] leading-3 text-muted-foreground">
+            {questionTrayHint(type, true)}
+          </span>
+        </div>
       ) : state.total > 1 ? (
         <QuestionStack
           questions={node.questions}
