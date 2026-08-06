@@ -28,7 +28,7 @@ const MAX_SETUP_OUTPUT_BYTES = 64 * 1024;
 // A hung setup script (interactive prompt, network stall) must not block session
 // setup forever with no result. Kill the tree and report failure past this.
 const SETUP_SCRIPT_TIMEOUT_MS = 10 * 60_000;
-const PROCESS_START_TIMEOUT_MS = 5 * 60_000;
+const PROCESS_START_TIMEOUT_MS = 15 * 60_000;
 
 function safeRelativeCwd(baseWorkdir: string, cwd: string): string {
   const relative = cwd.trim() || ".";
