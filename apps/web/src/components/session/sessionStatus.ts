@@ -24,6 +24,7 @@ export const agentStatusLabel: Record<string, string> = {
 // ─── Session Status (where the session is in its lifecycle) ───
 
 export const sessionStatusColor: Record<string, string> = {
+  failed: "text-destructive",
   in_progress: "text-blue-400",
   needs_input: "text-amber-400",
   in_review: "text-violet-400",
@@ -32,6 +33,7 @@ export const sessionStatusColor: Record<string, string> = {
 };
 
 export const sessionStatusLabel: Record<string, string> = {
+  failed: "Failed",
   in_progress: "In Progress",
   needs_input: "Needs Input",
   in_review: "In Review",

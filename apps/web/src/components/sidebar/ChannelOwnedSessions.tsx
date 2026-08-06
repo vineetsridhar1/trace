@@ -18,7 +18,7 @@ import { UPDATE_SESSION_GROUP_VISIBILITY_MUTATION, useAuthStore } from "@trace/c
 import type { AuthState } from "@trace/client-core";
 import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
-import { sessionStatusGroupOrder, type SessionGroupRow } from "../channel/sessions-table-types";
+import type { SessionGroupRow } from "../channel/sessions-table-types";
 import { useSessionGroupRows } from "../channel/useSessionGroupRows";
 import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
 import { useUIStore, type UIState } from "../../stores/ui";
@@ -62,6 +62,15 @@ export type SidebarSessionStatusGroup = {
   records: SidebarSessionGroupRecord[];
 };
 
+const sidebarSessionStatusOrder = [
+  "failed",
+  "needs_input",
+  "in_review",
+  "in_progress",
+  "merged",
+  "archived",
+];
+
 export function useSidebarSessionStatusGroupsForChannel(
   channelId: string,
   scope: SidebarSessionScope,
@@ -87,8 +96,7 @@ export function useSidebarSessionStatusGroupsForChannel(
 
     return [...groups.entries()]
       .sort(([statusA, recordsA], [statusB, recordsB]) => {
-        const statusDiff =
-          (sessionStatusGroupOrder[statusA] ?? 99) - (sessionStatusGroupOrder[statusB] ?? 99);
+        const statusDiff = getSidebarSessionStatusOrder(statusA) - getSidebarSessionStatusOrder(statusB);
         if (statusDiff !== 0) return statusDiff;
         return (
           Math.max(...recordsB.map((record) => getRecordSortTime(record)), 0) -
@@ -427,10 +435,19 @@ function buildSidebarSessionGroupRecord(row: SessionGroupRow): SidebarSessionGro
     latestSessionId: row.latestSession?.id ?? null,
     prUrl: (row.prUrl as string | null | undefined) ?? row.latestSession?.prUrl ?? null,
     sortTimestamp: getRowSortTimestamp(row),
-    status: row.displaySessionStatus,
+    status: getSidebarSessionGroupStatus(row),
     workdir: (row.workdir as string | null | undefined) ?? row.latestSession?.workdir ?? null,
     row,
   };
+}
+
+export function getSidebarSessionGroupStatus(row: SessionGroupRow): string {
+  return row.displayAgentStatus === "failed" ? "failed" : row.displaySessionStatus;
+}
+
+export function getSidebarSessionStatusOrder(status: string): number {
+  const index = sidebarSessionStatusOrder.indexOf(status);
+  return index === -1 ? sidebarSessionStatusOrder.length : index;
 }
 
 function getRowSortTimestamp(row: SessionGroupRow): string {
