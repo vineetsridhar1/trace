@@ -14,6 +14,11 @@ export function findLatestTimelineInputRequest(
     const event = events[eventIds[index]];
     if (!event) continue;
 
+    // A user message supersedes any earlier input request. This keeps a
+    // collapsed question resumable across status changes until the user
+    // explicitly continues the conversation.
+    if (event.eventType === "message_sent") return null;
+
     const payload = asJsonObject(event.payload);
     if (event.eventType === "session_output" && payload) {
       if (hasQuestionBlock(payload)) return { kind: "question" };

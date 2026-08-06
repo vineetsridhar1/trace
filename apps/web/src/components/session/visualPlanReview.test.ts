@@ -40,6 +40,16 @@ function questionEvent(id: string): Event {
   };
 }
 
+function messageEvent(id: string): Event {
+  return {
+    ...artifactEvent(id),
+    id: `message-${id}`,
+    eventType: "message_sent",
+    payload: { text: "Continue with a different direction" },
+    actor: { type: "user", id: "user-1", name: null, avatarUrl: null },
+  };
+}
+
 describe("findLatestTimelineInputRequest", () => {
   it("finds the newest plan directly from timeline events", () => {
     const first = artifactEvent("1");
@@ -69,5 +79,22 @@ describe("findLatestTimelineInputRequest", () => {
     const image = artifactEvent("1", "trace.image.v1");
 
     expect(findLatestTimelineInputRequest([image.id], { [image.id]: image })).toBeNull();
+  });
+
+  it("keeps a question pending until a later user message makes it stale", () => {
+    const question = questionEvent("1");
+    const message = messageEvent("2");
+
+    expect(
+      findLatestTimelineInputRequest([question.id], {
+        [question.id]: question,
+      }),
+    ).toEqual({ kind: "question" });
+    expect(
+      findLatestTimelineInputRequest([question.id, message.id], {
+        [question.id]: question,
+        [message.id]: message,
+      }),
+    ).toBeNull();
   });
 });
