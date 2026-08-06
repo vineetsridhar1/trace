@@ -1,4 +1,5 @@
-import { statSync } from "fs";
+import { readFileSync, statSync } from "fs";
+import { execFileSync } from "child_process";
 import { delimiter, join } from "path";
 
 const MAX_CHILD_ENV_BYTES = 64 * 1024;
@@ -65,6 +66,7 @@ const ESSENTIAL_ENV_KEYS = new Set([
   "ANTHROPIC_AUTH_TOKEN",
   "ANTHROPIC_BASE_URL",
   "ANTHROPIC_MODEL",
+  "AI_GATEWAY_API_KEY",
   "CODEX_HOME",
   "HOME",
   "LANG",
@@ -104,6 +106,26 @@ export function buildChildProcessEnv(
   // when the launching process (e.g. a GUI-launched Electron app) has a
   // narrower PATH than the user's interactive shell.
   source = { ...source, PATH: augmentedPath(source) };
+  if (!source.AI_GATEWAY_API_KEY) {
+    try {
+      const odAi = resolveExecutable("od-ai", source);
+      let keyHelper = resolveExecutable("od-ai-key", source);
+      if (!keyHelper && odAi) {
+        const configuredHelper = readFileSync(odAi, "utf8").match(
+          /OD_AI_KEY_HELPER="([^"]+)"/,
+        )?.[1];
+        if (configuredHelper) keyHelper = resolveExecutable(configuredHelper, source);
+      }
+      if (keyHelper) {
+        const key = execFileSync(keyHelper, {
+          encoding: "utf8",
+          env: source,
+          timeout: 2_000,
+        }).trim();
+        if (key) source.AI_GATEWAY_API_KEY = key;
+      }
+    } catch {}
+  }
   const entries: EnvEntry[] = [];
 
   for (const [key, value] of Object.entries(source)) {
