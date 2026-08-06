@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { CircleHelp } from "lucide-react";
 import type { Question } from "@trace/shared";
 import { formatTime } from "./utils";
 
@@ -18,9 +18,7 @@ export function AskUserQuestionInline({
         aria-hidden="true"
       />
       <div className="flex items-center gap-2">
-        <span className="grid h-4 w-4 place-items-center rounded-full border border-muted-foreground/50 text-muted-foreground">
-          <Check size={10} />
-        </span>
+        <CircleHelp size={15} className="text-muted-foreground" aria-hidden="true" />
         <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {replaced
             ? "Question replaced"
@@ -30,21 +28,19 @@ export function AskUserQuestionInline({
           {formatTime(timestamp)}
         </span>
       </div>
-      <div className="mt-2.5 grid gap-2">
+      <ol className="mt-2.5 grid gap-2">
         {questions.map((question, index) => (
-          <div
+          <li
             key={question.id ?? `${index}-${question.question}`}
-            className="flex items-baseline gap-2"
+            className="grid grid-cols-[18px_1fr] items-start gap-2"
           >
-            <span className="w-20 shrink-0 truncate font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-              {question.header || `Question ${index + 1}`}
+            <span className="pt-px text-right font-mono text-[10px] leading-4 text-muted-foreground">
+              {index + 1}.
             </span>
-            <span className="line-clamp-2 text-xs leading-4 text-foreground">
-              {question.question}
-            </span>
-          </div>
+            <span className="text-xs leading-4 text-foreground">{question.question}</span>
+          </li>
         ))}
-      </div>
+      </ol>
     </div>
   );
 }
