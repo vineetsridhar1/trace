@@ -20,7 +20,7 @@ import { SessionDropzone } from "./SessionDropzone";
 import { useAddAttachments } from "./useAddAttachments";
 import { PlanResponseBar } from "./PlanResponseBar";
 import { PlanReviewPendingBar } from "./PlanReviewPendingBar";
-import { AskUserQuestionBar, QuestionWaitingCard } from "./AskUserQuestionBar";
+import { AskUserQuestionBar } from "./AskUserQuestionBar";
 import { TerminalPanel } from "./TerminalPanel";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, useBridgeRuntimeAccess } from "./useBridgeRuntimeAccess";
@@ -792,22 +792,42 @@ export function SessionDetailView({
             )}
           </div>
           <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
-            {showQuestion ? (
-              <AskUserQuestionBar
-                node={showQuestion}
-                onResponse={(text) => {
-                  client
-                    .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-                      sessionId,
-                      text,
-                      interactionMode: activePlan ? "plan" : undefined,
-                    })
-                    .toPromise();
-                }}
-                onDismiss={() => {
-                  setDismissedQuestionId(showQuestion.id);
-                }}
-              />
+            {showQuestion || pinnedQuestion ? (
+              <>
+                <AskUserQuestionBar
+                  node={showQuestion ?? pinnedQuestion!}
+                  collapsed={Boolean(pinnedQuestion)}
+                  onResponse={(text) => {
+                    client
+                      .mutation(SEND_SESSION_MESSAGE_MUTATION, {
+                        sessionId,
+                        text,
+                        interactionMode: activePlan ? "plan" : undefined,
+                      })
+                      .toPromise();
+                  }}
+                  onDismiss={() => {
+                    setDismissedQuestionId((showQuestion ?? pinnedQuestion)!.id);
+                  }}
+                  onResume={() => setDismissedQuestionId(null)}
+                />
+                {pinnedQuestion ? (
+                  <>
+                    {!condensed && agentStatus === "active" && latestTodos ? (
+                      <StickyTodoList todos={latestTodos} />
+                    ) : null}
+                    <QueuedMessagesList sessionId={sessionId} condensed={condensed} />
+                    <SessionInput
+                      sessionId={sessionId}
+                      onStop={handleStop}
+                      bridgeAccess={bridgeAccess}
+                      sessionGroupId={sessionGroupId ?? null}
+                      onAccessRequested={refreshBridgeAccess}
+                      condensed={condensed}
+                    />
+                  </>
+                ) : null}
+              </>
             ) : activePlan || visiblePlanArtifact ? (
               planReviewContent ? (
                 <PlanResponseBar
@@ -837,24 +857,6 @@ export function SessionDetailView({
               </div>
             ) : (
               <>
-                {pinnedQuestion ? (
-                  <QuestionWaitingCard
-                    node={pinnedQuestion}
-                    onResume={() => setDismissedQuestionId(null)}
-                    onDecide={() => {
-                      const text = pinnedQuestion.questions
-                        .map((question) =>
-                          question.protocol === "trace"
-                            ? `<trace:input-response id="${question.id ?? "question"}">\n  <assumption>you-decide</assumption>\n</trace:input-response>`
-                            : `${question.header}: You decide`,
-                        )
-                        .join("\n");
-                      client
-                        .mutation(SEND_SESSION_MESSAGE_MUTATION, { sessionId, text })
-                        .toPromise();
-                    }}
-                  />
-                ) : null}
                 {!condensed && agentStatus === "active" && latestTodos && (
                   <StickyTodoList todos={latestTodos} />
                 )}

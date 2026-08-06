@@ -26,24 +26,42 @@ function render(questions: Question[]): string {
 }
 
 describe("AskUserQuestionBar", () => {
-  it("omits the question-set sidebar for one question", () => {
+  it("renders one question inside the composer tray", () => {
     const markup = render([question("one")]);
 
-    expect(markup).not.toContain("Before I continue");
+    expect(markup).toContain("Answer before I continue");
     expect(markup).not.toContain("Question 1 of 1");
     expect(markup).not.toContain("trace:request-input");
-    expect(markup).not.toContain("single-select");
-    expect(markup).toContain("Needs your input");
+    expect(markup).toContain("single-select");
     expect(markup).toContain('aria-label="Exit to chat"');
-    expect(markup).toContain("flex flex-wrap justify-end gap-2");
-    expect(markup.indexOf("number keys pick")).toBeLessThan(markup.indexOf("You decide"));
-    expect(markup.indexOf("You decide")).toBeLessThan(markup.indexOf("Review 1 answer"));
+    expect(markup).not.toContain('role="dialog"');
+    expect(markup).not.toContain("fixed inset-0");
+    expect(markup.indexOf("Review 1 answer")).toBeLessThan(markup.indexOf("You decide"));
+    expect(markup.indexOf("You decide")).toBeLessThan(markup.indexOf("number keys pick"));
   });
 
-  it("shows the question-set sidebar for multiple questions", () => {
+  it("starts a multi-question set as a progressive stack", () => {
     const markup = render([question("one"), question("two")]);
 
-    expect(markup).toContain("Before I continue");
-    expect(markup).toContain("Question 1 of 2");
+    expect(markup).toContain("Answer before I continue");
+    expect(markup).toContain("question 1 of 2");
+    expect(markup).toContain("Answer &amp; show question 2");
+    expect(markup).not.toContain("sm:grid-cols-[212px_1fr]");
+  });
+
+  it("collapses to a waiting tray", () => {
+    const markup = renderToStaticMarkup(
+      <AskUserQuestionBar
+        node={{ id: "question-node", questions: [question("one")] }}
+        collapsed
+        onResponse={() => undefined}
+        onDismiss={() => undefined}
+        onResume={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain("1 question waiting");
+    expect(markup).toContain("tray collapsed");
+    expect(markup).toContain("Resume");
   });
 });
