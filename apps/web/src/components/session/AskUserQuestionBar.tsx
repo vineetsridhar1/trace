@@ -65,6 +65,11 @@ export function AskUserQuestionBar({
     if (state.isLastPage) setReviewing(true);
     else state.goNext();
   }, [state.currentValid, state.goNext, state.isLastPage]);
+  const decideAndAdvance = useCallback(() => {
+    state.decideForMe();
+    if (state.isLastPage) setReviewing(true);
+    else state.goNext();
+  }, [state.decideForMe, state.goNext, state.isLastPage]);
 
   useQuestionKeyboard({
     disabled: collapsed,
@@ -85,9 +90,7 @@ export function AskUserQuestionBar({
         nextQuestion={question.question}
         onResume={onResume ?? (() => undefined)}
         onDecide={() => {
-          state.decideForMe();
-          if (state.isLastPage) setReviewing(true);
-          else state.goNext();
+          decideAndAdvance();
           onResume?.();
         }}
       />
@@ -109,6 +112,7 @@ export function AskUserQuestionBar({
       validationMessage={state.validationMessage}
       helperText={questionTrayHint(type, false)}
       showContext={state.total === 1}
+      onDecide={decideAndAdvance}
       onToggle={state.toggleOption}
       onTextChange={state.setCustomText}
       onMoveRank={state.moveRankOption}
@@ -140,14 +144,11 @@ export function AskUserQuestionBar({
           reviewing={reviewing}
           total={state.total}
           disabled={reviewing ? !state.hasAllAnswers : !state.currentValid}
+          backDisabled={!reviewing && state.isFirstPage}
           onPrimary={reviewing ? send : advance}
-          onSecondary={() => {
+          onBack={() => {
             if (reviewing) setReviewing(false);
-            else {
-              state.decideForMe();
-              if (state.isLastPage) setReviewing(true);
-              else state.goNext();
-            }
+            else state.goPrev();
           }}
         />
       }

@@ -38,7 +38,9 @@ describe("AskUserQuestionBar", () => {
     expect(markup).not.toContain('role="dialog"');
     expect(markup).not.toContain("fixed inset-0");
     expect(markup.indexOf("number keys pick")).toBeLessThan(markup.indexOf("You decide"));
-    expect(markup.indexOf("You decide")).toBeLessThan(markup.indexOf(">Next<"));
+    expect(markup.indexOf("You decide")).toBeLessThan(markup.indexOf(">Back<"));
+    expect(markup.indexOf(">Back<")).toBeLessThan(markup.indexOf(">Next<"));
+    expect(markup).toContain('aria-label="Go to previous question" disabled=""');
   });
 
   it("starts a multi-question set as a progressive stack", () => {

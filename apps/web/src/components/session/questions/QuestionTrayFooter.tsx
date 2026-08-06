@@ -2,24 +2,28 @@ export function QuestionTrayFooter({
   reviewing,
   total,
   disabled,
+  backDisabled,
   onPrimary,
-  onSecondary,
+  onBack,
 }: {
   reviewing: boolean;
   total: number;
   disabled: boolean;
+  backDisabled: boolean;
   onPrimary: () => void;
-  onSecondary: () => void;
+  onBack: () => void;
 }) {
   const primary = reviewing ? `Send ${total} answer${total === 1 ? "" : "s"}` : "Next";
   return (
     <div className="flex items-center justify-end gap-2">
       <button
         type="button"
-        onClick={onSecondary}
-        className="min-h-9 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+        aria-label="Go to previous question"
+        disabled={backDisabled}
+        onClick={onBack}
+        className="min-h-9 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {reviewing ? `Back to question ${total}` : "You decide"}
+        Back
       </button>
       <button
         type="button"

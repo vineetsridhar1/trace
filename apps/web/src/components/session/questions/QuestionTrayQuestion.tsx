@@ -19,6 +19,7 @@ export function QuestionTrayQuestion({
   validationMessage,
   helperText,
   showContext = true,
+  onDecide,
   onToggle,
   onTextChange,
   onMoveRank,
@@ -33,6 +34,7 @@ export function QuestionTrayQuestion({
   validationMessage: string | null;
   helperText: string;
   showContext?: boolean;
+  onDecide: () => void;
   onToggle: (value: string) => void;
   onTextChange: (value: string) => void;
   onMoveRank: (value: string, direction: -1 | 1) => void;
@@ -70,7 +72,16 @@ export function QuestionTrayQuestion({
         onReferenceFiles={onReferenceFiles}
         onRemoveReference={onRemoveReference}
       />
-      <span className="font-mono text-[9px] leading-3 text-muted-foreground">{helperText}</span>
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-[9px] leading-3 text-muted-foreground">{helperText}</span>
+        <button
+          type="button"
+          onClick={onDecide}
+          className="ml-auto min-h-8 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+        >
+          You decide
+        </button>
+      </div>
     </div>
   );
 }
