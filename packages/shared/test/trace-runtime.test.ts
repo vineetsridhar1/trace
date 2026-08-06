@@ -33,6 +33,9 @@ describe("ensureTraceRuntime", () => {
     expect(
       await readFile(join(runtime.skillsDir, "visual-plan", "template.html"), "utf8"),
     ).toContain("agent's authoring canvas");
+    expect(
+      await readFile(join(runtime.skillsDir, "request-user-input", "SKILL.md"), "utf8"),
+    ).toContain("<trace:request-input");
   });
 
   it("replaces an older install so machines pick up changed skills", async () => {

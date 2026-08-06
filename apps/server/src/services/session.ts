@@ -1104,6 +1104,11 @@ const BACKGROUND_WORK_INSTRUCTION = `\n\n<system-instruction>
 If you start anything in the background, including long-running shell commands, dev servers, watchers, or subagents, keep the main agent process alive until that work is complete or intentionally stopped. Do not send a final response while background work you started is still running unless the user explicitly asks you to leave it running; in that case, report what is running and how it is being kept alive.
 </system-instruction>`;
 
+/** Tell every coding agent where to find Trace's portable structured-question contract. */
+const REQUEST_USER_INPUT_SKILL_INSTRUCTION = `\n\n<system-instruction>
+Before asking the user for information, a decision, confirmation, or references, first read $TRACE_SKILLS_DIR/request-user-input/SKILL.md completely. Follow that skill's guidance for deciding whether to ask, formatting structured questions, and waiting for the response. Use the skill whenever you need user input before continuing.
+</system-instruction>`;
+
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves each response. */
 const AUTO_SAVE_INSTRUCTION = `\n\n<system-instruction>
 Before completing every response that changes the workspace, silently save your work to the remote:
@@ -1139,7 +1144,7 @@ This is a Trace Animation session, not an App or Coding session. Build one inter
 // something generic. Creation requests are usually specific in the user's head
 // but underspecified in the prompt.
 const CLARIFYING_QUESTIONS_INSTRUCTION = `\n\n<system-instruction>
-This is a creation session: the user is building something specific and wants it to match what they have in mind. Before you start building from a new request, first ask the user the clarifying questions you need so that what you create is exactly what the user wants, and wait for their answers — do not silently assume and jump straight to building. If you have an interactive tool for asking the user structured questions, use it so they can pick from options; otherwise just ask in your reply and stop for their response. Ask in a single upfront batch of a few high-value questions covering only the decisions that most shape the result: purpose and audience, the must-have scope and features, visual style and tone, the specific content or data to use, and any hard constraints. Do not ask about trivial or easily-reversible details, and never re-ask anything the user already specified. Only skip questions when the request is already detailed enough to build confidently, or the user tells you to just build it or to stop asking. Once the user has answered, proceed to build as instructed below; on later turns follow the same judgment — ask when a new request is ambiguous, otherwise keep working.
+This is a creation session: the user is building something specific and wants it to match what they have in mind. Before you start building from a new request, first ask the user the clarifying questions you need so that what you create is exactly what the user wants, and wait for their answers — do not silently assume and jump straight to building. Before asking, read $TRACE_SKILLS_DIR/request-user-input/SKILL.md completely and use its structured question workflow. Ask in a single upfront batch of a few high-value questions covering only the decisions that most shape the result: purpose and audience, the must-have scope and features, visual style and tone, the specific content or data to use, and any hard constraints. Do not ask about trivial or easily-reversible details, and never re-ask anything the user already specified. Only skip questions when the request is already detailed enough to build confidently, or the user tells you to just build it or to stop asking. Once the user has answered, proceed to build as instructed below; on later turns follow the same judgment — ask when a new request is ambiguous, otherwise keep working.
 </system-instruction>`;
 
 function generatedProjectInstruction(
@@ -1178,6 +1183,7 @@ function appendPromptInstructions(
 ): string {
   let result = prompt + TITLE_INSTRUCTION;
   result += BACKGROUND_WORK_INSTRUCTION;
+  result += REQUEST_USER_INPUT_SKILL_INSTRUCTION;
   if (hasRepo && !isGeneratedProjectKind(sessionGroupKind)) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
