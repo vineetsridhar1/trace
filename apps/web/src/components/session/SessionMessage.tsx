@@ -304,7 +304,7 @@ export const SessionMessage = memo(function SessionMessage({
           return false;
         }
         if (artifactType === "trace.visual-plan.v1") {
-          return file.path === "plan.html" || file.path === "plan.mdx";
+          return file.path === "plan.html";
         }
         return file.mediaType.startsWith(artifactType === "trace.image.v1" ? "image/" : "video/");
       });

@@ -11,10 +11,7 @@ export function VisualPlanArtifact({
   artifact: Artifact;
   onContent?: (content: string) => void;
 }) {
-  const planPath = artifact.manifest.files.some((file) => file.path === "plan.html")
-    ? "plan.html"
-    : "plan.mdx";
-  const { html, implementationContent, error } = useVisualPlanDocument(artifact.id, planPath);
+  const { html, implementationContent, error } = useVisualPlanDocument(artifact.id);
 
   useEffect(() => {
     if (implementationContent) onContent?.(implementationContent);

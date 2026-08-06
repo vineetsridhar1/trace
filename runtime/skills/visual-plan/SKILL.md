@@ -5,14 +5,14 @@ description: Research a change and publish a reviewable implementation plan as a
 
 # Visual plan
 
-A visual plan is one self-contained HTML file that a reviewer reads top to bottom and approves or
-sends back. When it is approved, its content becomes the brief the implementing agent works from,
-so every claim in it has to be true of this repository.
+A visual plan is one polished, self-contained HTML canvas that a reviewer reads top to bottom and
+approves or sends back. When it is approved, its content becomes the brief the implementing agent
+works from, so every claim in it has to be true of this repository.
 
 Trace plans use this skill and the Trace artifact CLI only. Do not use an Agent-Native or
 Builder-style plan skill, MDX plan blocks, a watched `plan.mdx` file, or a provider-native plan
 approval tool. Trace does not watch a plan file: the completed `plan.html` is published explicitly
-as an immutable artifact.
+as an immutable artifact and Trace renders that artifact for review.
 
 ## 1. Research before writing
 
@@ -36,14 +36,15 @@ Prefer reading a few files completely over grepping many files shallowly.
 
 ## 2. Write the plan
 
-Start from the starter template, which carries the component vocabulary:
+Start from the supplied canvas template, which carries the component vocabulary and visual system:
 
 ```bash
 mkdir -p .trace-work/plan
 cp "$TRACE_SKILLS_DIR/visual-plan/template.html" .trace-work/plan/plan.html
 ```
 
-The template's `<style>` block defines every component available: `.plan-title`, `.plan-summary`,
+Treat the copied file as the canvas: replace its sample content while preserving and composing its
+visual system. The template's `<style>` block defines every component available: `.plan-title`, `.plan-summary`,
 `.meta`/`.chip`, `.split`/`.card` for scope against non-goals, `.flow`/`.node`/`.arrow` for data
 flow, `.phase` for sequenced work, tables for file maps and verification, `.tag` for add/change/
 remove, and `.callout` for risks. Each one is demonstrated in the template body. Compose from these
@@ -72,9 +73,9 @@ references — no linked stylesheets, no remote images or fonts, no `<script>`. 
 and use `data:` URLs or CSS shapes for any image. The plan renders with scripting disabled, so it
 must read correctly as static markup.
 
-Publish once, when the plan is complete. Do not print the plan into chat and do not invoke a
-provider-native plan approval tool. After the upload succeeds, tell the user in one line that the
-plan is ready for review.
+Publish once, when the canvas is complete. Do not print the plan into chat and do not invoke a
+provider-native plan approval tool. Trace renders the uploaded artifact; after the upload succeeds,
+tell the user in one line that the plan is ready for review.
 
 Revising after feedback is the same loop: edit the file and push again. Each push is a new
 immutable artifact and the reviewer sees the newest one.

@@ -26,8 +26,13 @@ describe("ensureTraceRuntime", () => {
       "utf8",
     );
     expect(visualPlanSkill).toContain("trace artifact push visual-plan");
+    expect(visualPlanSkill).toContain("supplied canvas template");
+    expect(visualPlanSkill).toContain("Trace renders the uploaded artifact");
     expect(visualPlanSkill).toContain("Trace does not watch a plan file");
     expect(visualPlanSkill).not.toContain("Agent-Native Plans");
+    expect(
+      await readFile(join(runtime.skillsDir, "visual-plan", "template.html"), "utf8"),
+    ).toContain("agent's authoring canvas");
   });
 
   it("replaces an older install so machines pick up changed skills", async () => {
