@@ -55,7 +55,9 @@ export function AskUserQuestionBar({
     : EMPTY_QUESTION_ATTACHMENTS;
   const send = useCallback(() => {
     const response = state.buildResponse();
-    if (response) void onResponse(response, responseAttachments);
+    if (response) {
+      void Promise.resolve(onResponse(response, responseAttachments)).catch(() => undefined);
+    }
   }, [onResponse, responseAttachments, state.buildResponse]);
   const advance = useCallback(() => {
     if (!state.currentValid) return;

@@ -3,6 +3,7 @@ import { QuestionChoice } from "./QuestionChrome";
 import { QuestionRankingControl } from "./QuestionRankingControl";
 import { QuestionReferenceControl } from "./QuestionReferenceControl";
 import type { FileAttachment } from "../ImageAttachmentBar";
+import { QuestionTextControl } from "./QuestionTextControl";
 
 interface QuestionControlProps {
   question: Question;
@@ -16,48 +17,6 @@ interface QuestionControlProps {
   referenceAttachments?: FileAttachment[];
   onReferenceFiles?: (files: File[]) => void;
   onRemoveReference?: (id: string) => void;
-}
-
-function TextControl({
-  question,
-  value,
-  onChange,
-}: {
-  question: Question;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="grid gap-2">
-      <textarea
-        autoFocus
-        rows={4}
-        value={value}
-        maxLength={question.maxLength}
-        placeholder={question.placeholder ?? "Type your answer…"}
-        aria-label={question.question}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full resize-none rounded-lg border border-foreground/35 bg-surface-deep/55 px-3 py-2 text-[13px] leading-5 outline-none ring-2 ring-foreground/10 placeholder:text-muted-foreground"
-      />
-      <div className="flex flex-wrap gap-1.5">
-        {question.suggestions?.map((suggestion) => (
-          <button
-            key={suggestion}
-            type="button"
-            onClick={() => onChange(suggestion)}
-            className="min-h-8 rounded-full border border-border px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-          >
-            {suggestion}
-          </button>
-        ))}
-        {question.maxLength ? (
-          <span className="ml-auto self-center font-mono text-[10px] text-muted-foreground">
-            {value.length} / {question.maxLength}
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 export function QuestionControl({
@@ -76,7 +35,7 @@ export function QuestionControl({
   const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
 
   if (type === "text") {
-    return <TextControl question={question} value={customText} onChange={onTextChange} />;
+    return <QuestionTextControl question={question} value={customText} onChange={onTextChange} />;
   }
   if (type === "reference") {
     return (
@@ -111,7 +70,7 @@ export function QuestionControl({
               type="button"
               aria-pressed={selected.has(value)}
               onClick={() => onToggle(value)}
-              className={`flex min-h-14 flex-col justify-center rounded-lg border px-3 text-left ${selected.has(value) ? "border-foreground/35 bg-foreground/[0.08]" : "border-border bg-surface-deep/55"}`}
+              className={`flex min-h-14 flex-col justify-center rounded-lg border px-3 text-left ${selected.has(value) ? "border-foreground/35 bg-foreground/[0.08]" : "border-border"}`}
             >
               <span className="text-[13px] font-semibold">{option.label}</span>
               <span className="font-mono text-[10px] text-muted-foreground">
@@ -167,7 +126,7 @@ export function QuestionControl({
         ) : null}
       </div>
       {showOther && otherSelected ? (
-        <TextControl
+        <QuestionTextControl
           question={{ ...question, maxLength: question.maxLength ?? 240 }}
           value={customText}
           onChange={onTextChange}

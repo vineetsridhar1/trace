@@ -568,6 +568,15 @@ export function SessionDetailView({
     }
     return null;
   }, [nodes, sessionStatus]);
+  const activeQuestionRequestIds = useMemo(
+    () =>
+      new Set(
+        activeQuestion?.node.questions
+          .map((question) => question.id)
+          .filter((id): id is string => Boolean(id)) ?? [],
+      ),
+    [activeQuestion],
+  );
 
   const [planComments, setPlanComments] = useState<MarkdownSteerCommentsByBlock>({});
 
@@ -768,6 +777,8 @@ export function SessionDetailView({
                   scrollToEventId={scrollToEventId}
                   onScrollComplete={onScrollComplete}
                   activePlanId={activePlan?.node.id}
+                  activeQuestionId={activeQuestion?.node.id}
+                  activeQuestionRequestIds={activeQuestionRequestIds}
                   planComments={planComments}
                   onAddPlanComment={handleAddPlanComment}
                   onRemovePlanComment={handleRemovePlanComment}

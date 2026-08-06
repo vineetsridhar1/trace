@@ -5,9 +5,11 @@ import { formatTime } from "./utils";
 export function AskUserQuestionInline({
   questions,
   timestamp,
+  replaced = false,
 }: {
   questions: Question[];
   timestamp: string;
+  replaced?: boolean;
 }) {
   return (
     <div className="structured-question relative overflow-hidden rounded-[14px] border border-border bg-surface px-4 py-3 pl-5">
@@ -20,7 +22,9 @@ export function AskUserQuestionInline({
           <Check size={10} />
         </span>
         <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          {questions.length} question{questions.length === 1 ? "" : "s"} asked
+          {replaced
+            ? "Question replaced"
+            : `${questions.length} question${questions.length === 1 ? "" : "s"} asked`}
         </span>
         <span className="ml-auto font-mono text-[10px] text-muted-foreground">
           {formatTime(timestamp)}

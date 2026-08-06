@@ -18,7 +18,7 @@ export function QuestionRankingControl({
         return (
           <div
             key={value}
-            className="flex min-h-11 items-center gap-3 rounded-lg border border-border bg-surface-deep/55 px-3 py-2"
+            className="flex min-h-10 items-center gap-3 rounded-lg border border-border px-3 py-1.5"
           >
             <GripVertical size={14} className="text-muted-foreground" />
             <span className="grid h-5 w-5 place-items-center rounded border border-foreground/30 bg-foreground/[0.08] font-mono text-[10px] font-semibold">

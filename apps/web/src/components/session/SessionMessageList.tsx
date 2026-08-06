@@ -39,7 +39,6 @@ function estimateNodeHeight(node: SessionListNode): number {
   return 88;
 }
 
-
 export interface SessionMessageListProps {
   key?: React.Key;
   sessionId: string;
@@ -56,6 +55,8 @@ export interface SessionMessageListProps {
   scrollToEventId?: string | null;
   onScrollComplete?: () => void;
   activePlanId?: string | null;
+  activeQuestionId?: string | null;
+  activeQuestionRequestIds?: ReadonlySet<string>;
   planComments?: MarkdownSteerCommentsByBlock;
   onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
@@ -81,6 +82,8 @@ export function SessionMessageList({
   scrollToEventId,
   onScrollComplete,
   activePlanId,
+  activeQuestionId,
+  activeQuestionRequestIds,
   planComments,
   onAddPlanComment,
   onRemovePlanComment,
@@ -476,9 +479,7 @@ export function SessionMessageList({
             <h2 className="text-base font-semibold tracking-tight text-foreground">
               {emptyStateContent.title}
             </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {emptyStateContent.description}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{emptyStateContent.description}</p>
 
             <div className="pointer-events-auto mt-4 flex flex-wrap gap-2">
               {emptyStateContent.starterPrompts.map(({ label, prompt, action }) => (
@@ -598,6 +599,8 @@ export function SessionMessageList({
             toolResultByUseId={toolResultByUseId}
             highlightEventId={highlightEventId}
             activePlanId={activePlanId}
+            activeQuestionId={activeQuestionId}
+            activeQuestionRequestIds={activeQuestionRequestIds}
             planComments={planComments}
             onAddPlanComment={onAddPlanComment}
             onRemovePlanComment={onRemovePlanComment}
@@ -620,6 +623,8 @@ interface SessionMessageRowsProps {
   toolResultByUseId: Map<string, unknown>;
   highlightEventId: string | null;
   activePlanId?: string | null;
+  activeQuestionId?: string | null;
+  activeQuestionRequestIds?: ReadonlySet<string>;
   planComments?: MarkdownSteerCommentsByBlock;
   onAddPlanComment?: (block: MarkdownSteerBlock, text: string) => void;
   onRemovePlanComment?: (blockId: string, commentId: string) => void;
@@ -639,6 +644,8 @@ const SessionMessageRows = memo(function SessionMessageRows({
   toolResultByUseId,
   highlightEventId,
   activePlanId,
+  activeQuestionId,
+  activeQuestionRequestIds,
   planComments,
   onAddPlanComment,
   onRemovePlanComment,
@@ -674,6 +681,8 @@ const SessionMessageRows = memo(function SessionMessageRows({
               toolResultByUseId={toolResultByUseId}
               highlightEventId={highlightEventId}
               activePlanId={activePlanId}
+              activeQuestionId={activeQuestionId}
+              activeQuestionRequestIds={activeQuestionRequestIds}
               planComments={planComments}
               onAddPlanComment={onAddPlanComment}
               onRemovePlanComment={onRemovePlanComment}
