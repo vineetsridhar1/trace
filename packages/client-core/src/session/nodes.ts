@@ -3,6 +3,7 @@ import {
   asJsonObject,
   hasVisibleUserSessionContent,
   parseQuestion,
+  parseTraceRequestInputs,
   type JsonObject,
   type Question,
 } from "@trace/shared";
@@ -406,15 +407,22 @@ function detectQuestionNodes(nodes: SessionNode[], events: Record<string, Event>
     const blocks = message?.content;
     if (!Array.isArray(blocks)) return node;
 
-    const qBlock = blocks.find((b: unknown) => asJsonObject(b)?.type === "question");
-    if (!qBlock) return node;
-    const q = asJsonObject(qBlock)!;
-    const questions = Array.isArray(q.questions) ? q.questions : [];
+    const questions: Question[] = [];
+    for (const block of blocks) {
+      const parsed = asJsonObject(block);
+      if (parsed?.type === "question") {
+        const nativeQuestions = Array.isArray(parsed.questions) ? parsed.questions : [];
+        questions.push(...nativeQuestions.map(parseQuestion));
+      } else if (parsed?.type === "text" && typeof parsed.text === "string") {
+        questions.push(...parseTraceRequestInputs(parsed.text));
+      }
+    }
+    if (questions.length === 0) return node;
 
     return {
       kind: "ask-user-question" as const,
       id: node.id,
-      questions: questions.map(parseQuestion),
+      questions,
       timestamp: event.timestamp,
     };
   });

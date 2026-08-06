@@ -9,11 +9,7 @@ import {
   type SessionEntity,
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import {
-  CREATE_TERMINAL_MUTATION,
-  SEND_SESSION_MESSAGE_MUTATION,
-  QUEUE_SESSION_MESSAGE_MUTATION,
-} from "@trace/client-core";
+import { CREATE_TERMINAL_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
@@ -23,11 +19,6 @@ import { getModelLabel } from "./modelOptions";
 import { getToolLabel } from "./picker/pickerShared";
 import { TraceLoader } from "../ui/trace-loader";
 import { toast } from "sonner";
-import {
-  optimisticallyInsertSessionMessage,
-  reconcileOptimisticSessionMessage,
-  removeOptimisticSessionMessage,
-} from "@trace/client-core";
 import { type ChatEditorHandle, type ChatEditorSubmitOptions } from "../chat/ChatEditor";
 import { SessionComposer } from "./SessionComposer";
 import { useSlashCommands } from "./useSlashCommands";
@@ -46,6 +37,7 @@ import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
 import { getSessionEmptyStateContent, kindSupportsDesignImplementation } from "./sessionEmptyState";
 import { DesignPickerDialog } from "./DesignPickerDialog";
+import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
 
 const EMPTY_ATTACHMENTS: FileAttachment[] = [];
 
@@ -350,44 +342,22 @@ export function SessionInput({
           };
         }
 
-        const { eventId: tempEventId, clientMutationId } = optimisticallyInsertSessionMessage(
+        const sendPromise = sendOptimisticSessionMessage({
           sessionId,
-          wrappedText,
-          imageKeys.length > 0 || startsDeferredRuntime
-            ? {
-                ...(startsDeferredRuntime ? { deliveryStatus: "pending_runtime" as const } : {}),
-                ...(imageKeys.length > 0 ? { imageKeys, imagePreviewUrls } : {}),
-              }
-            : undefined,
-        );
+          text: wrappedText,
+          imageKeys: imageKeys.length > 0 ? imageKeys : undefined,
+          imagePreviewUrls: imageKeys.length > 0 ? imagePreviewUrls : undefined,
+          interactionMode: mode === "code" ? undefined : mode,
+          deliveryStatus: startsDeferredRuntime ? "pending_runtime" : undefined,
+        });
         useComposerStore.getState().requestScrollToBottom(sessionId);
 
         setDraftImages(sessionId, (prev) => prev.filter((img) => !savedIds.has(img.id)));
 
         try {
-          const result = await client
-            .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-              sessionId,
-              text: wrappedText,
-              attachmentKeys: imageKeys.length > 0 ? imageKeys : undefined,
-              interactionMode: mode === "code" ? undefined : mode,
-              clientMutationId,
-            })
-            .toPromise();
-
-          if (result.error) {
-            throw result.error;
-          }
-
-          const realEventId = result.data?.sendSessionMessage?.id;
-          if (!realEventId) {
-            throw new Error("Failed to send message");
-          }
-
-          reconcileOptimisticSessionMessage(sessionId, tempEventId, realEventId);
+          await sendPromise;
           for (const img of savedImages) URL.revokeObjectURL(img.previewUrl);
         } catch (error) {
-          removeOptimisticSessionMessage(sessionId, tempEventId);
           rollbackStartupPatch?.();
           setDraftImages(sessionId, (prev) => [
             ...savedImages.map((img) => ({ ...img, uploading: false })),

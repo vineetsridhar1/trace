@@ -5177,6 +5177,15 @@ describe("SessionService", () => {
         }),
         expect.any(Object),
       );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          prompt: expect.stringContaining(
+            "$TRACE_SKILLS_DIR/request-user-input/SKILL.md completely",
+          ),
+        }),
+        expect.any(Object),
+      );
     });
 
     it("injects an active artifact credential into plan-mode bridge commands", async () => {
@@ -5296,6 +5305,13 @@ describe("SessionService", () => {
         expect.objectContaining({
           appendSystemPrompt: expect.stringContaining(
             "first ask the user the clarifying questions you need",
+          ),
+        }),
+      );
+      expect(command).toEqual(
+        expect.objectContaining({
+          appendSystemPrompt: expect.stringContaining(
+            "$TRACE_SKILLS_DIR/request-user-input/SKILL.md completely",
           ),
         }),
       );

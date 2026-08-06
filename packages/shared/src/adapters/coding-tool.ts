@@ -26,21 +26,49 @@ export interface ToolResultBlock {
 }
 
 export interface QuestionOption {
+  id?: string;
   label: string;
   description: string;
 }
 
+export type QuestionType =
+  | "single-select"
+  | "multi-select"
+  | "select-with-other"
+  | "text"
+  | "confirm"
+  | "ranking"
+  | "reference";
+
 export interface Question {
+  id?: string;
+  type?: QuestionType;
+  context?: string;
   question: string;
   header: string;
   options: QuestionOption[];
   multiSelect: boolean;
+  min?: number;
+  max?: number;
+  maxLength?: number;
+  placeholder?: string;
+  suggestions?: string[];
+  accept?: string;
+  other?: boolean;
+  protocol?: "trace" | "native";
 }
 
 export interface QuestionBlock {
   type: "question";
   questions: Question[];
   toolUseId?: string;
+}
+
+export interface TraceInputResponse {
+  id: string;
+  selected: string[];
+  text?: string;
+  assumed: boolean;
 }
 
 export interface PlanBlock {
@@ -83,7 +111,13 @@ export function hasQuestionBlock(data: Record<string, unknown>): boolean {
   if (!Array.isArray(content)) return false;
   return content.some((block: unknown) => {
     if (block == null || typeof block !== "object") return false;
-    return (block as Record<string, unknown>).type === "question";
+    const candidate = block as Record<string, unknown>;
+    return (
+      candidate.type === "question" ||
+      (candidate.type === "text" &&
+        typeof candidate.text === "string" &&
+        parseTraceRequestInputs(candidate.text).length > 0)
+    );
   });
 }
 
@@ -93,7 +127,10 @@ export function parseQuestion(raw: unknown): Question {
     raw != null && typeof raw === "object" && !Array.isArray(raw)
       ? (raw as Record<string, unknown>)
       : ({} as Record<string, unknown>);
-  return {
+  return normalizeQuestion({
+    ...(typeof r.id === "string" ? { id: r.id } : {}),
+    ...(isQuestionType(r.type) ? { type: r.type } : {}),
+    ...(typeof r.context === "string" ? { context: r.context } : {}),
     question: String(r.question ?? ""),
     header: String(r.header ?? ""),
     options: Array.isArray(r.options)
@@ -102,11 +139,215 @@ export function parseQuestion(raw: unknown): Question {
             o != null && typeof o === "object" && !Array.isArray(o)
               ? (o as Record<string, unknown>)
               : ({} as Record<string, unknown>);
-          return { label: String(opt.label ?? ""), description: String(opt.description ?? "") };
+          return {
+            ...(typeof opt.id === "string" ? { id: opt.id } : {}),
+            label: String(opt.label ?? ""),
+            description: String(opt.description ?? ""),
+          };
         })
       : [],
     multiSelect: r.multiSelect === true,
+    ...(typeof r.min === "number" && Number.isFinite(r.min) ? { min: r.min } : {}),
+    ...(typeof r.max === "number" && Number.isFinite(r.max) ? { max: r.max } : {}),
+    ...(typeof r.maxLength === "number" && Number.isFinite(r.maxLength)
+      ? { maxLength: r.maxLength }
+      : {}),
+    ...(typeof r.placeholder === "string" ? { placeholder: r.placeholder } : {}),
+    ...(Array.isArray(r.suggestions)
+      ? { suggestions: r.suggestions.map((value) => String(value)) }
+      : {}),
+    ...(typeof r.accept === "string" ? { accept: r.accept } : {}),
+    ...(typeof r.other === "boolean" ? { other: r.other } : {}),
+    ...(r.protocol === "trace" ? { protocol: "trace" as const } : {}),
+  });
+}
+
+const QUESTION_TYPES = new Set<QuestionType>([
+  "single-select",
+  "multi-select",
+  "select-with-other",
+  "text",
+  "confirm",
+  "ranking",
+  "reference",
+]);
+
+function isQuestionType(value: unknown): value is QuestionType {
+  return typeof value === "string" && QUESTION_TYPES.has(value as QuestionType);
+}
+
+function normalizeQuestion(question: Question): Question {
+  const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
+  const optionType =
+    type === "single-select" ||
+    type === "multi-select" ||
+    type === "select-with-other" ||
+    type === "confirm" ||
+    type === "ranking";
+  const other = question.other === true || type === "select-with-other";
+  const capacity =
+    type === "confirm" && question.options.length === 0
+      ? 2
+      : question.options.length + (other ? 1 : 0);
+  const normalized = { ...question };
+  delete normalized.min;
+  delete normalized.max;
+  delete normalized.maxLength;
+  if (optionType && capacity === 0) {
+    return {
+      ...normalized,
+      type: "text",
+      multiSelect: false,
+      ...(question.maxLength == null
+        ? {}
+        : { maxLength: Math.max(1, Math.floor(question.maxLength)) }),
+    };
+  }
+  const max =
+    optionType && question.max != null ? Math.max(1, Math.floor(question.max)) : undefined;
+  const min =
+    optionType && question.min != null
+      ? Math.min(max ?? capacity, Math.max(0, Math.floor(question.min)))
+      : undefined;
+  return {
+    ...normalized,
+    ...(min == null ? {} : { min }),
+    ...(max == null ? {} : { max }),
+    ...(question.maxLength == null
+      ? {}
+      : { maxLength: Math.max(1, Math.floor(question.maxLength)) }),
   };
+}
+
+function decodeXml(value: string): string {
+  return value
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&apos;", "'")
+    .replaceAll("&amp;", "&");
+}
+
+function readAttribute(source: string, name: string): string | undefined {
+  const match = source.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(["'])(.*?)\\1`, "iu"));
+  return match?.[2] ? decodeXml(match[2]) : undefined;
+}
+
+function readElement(source: string, name: string): string | undefined {
+  const match = source.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`, "iu"));
+  return match?.[1] == null ? undefined : decodeXml(match[1].trim());
+}
+
+function readNumberAttribute(source: string, name: string): number | undefined {
+  const value = readAttribute(source, name);
+  if (value == null) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normalizeSelectionConstraints(
+  attributes: string,
+  capacity: number,
+): { min?: number; max?: number } {
+  const rawMax = readNumberAttribute(attributes, "max");
+  const max = rawMax == null ? undefined : Math.max(1, Math.floor(rawMax));
+  const rawMin = readNumberAttribute(attributes, "min");
+  const min =
+    rawMin == null ? undefined : Math.min(max ?? capacity, Math.max(0, Math.floor(rawMin)));
+  return { min, max };
+}
+
+function normalizeMaxLength(attributes: string): number | undefined {
+  const value = readNumberAttribute(attributes, "maxlength");
+  return value == null ? undefined : Math.max(1, Math.floor(value));
+}
+
+/** Parse the portable XML question contract emitted by coding agents. */
+export function parseTraceRequestInputs(text: string): Question[] {
+  const questions: Question[] = [];
+  const unfencedText = text.replace(/```[\s\S]*?```/gu, "");
+  const blockPattern = /<trace:request-input\b([^>]*)>([\s\S]*?)<\/trace:request-input>/giu;
+  for (const match of unfencedText.matchAll(blockPattern)) {
+    const attributes = match[1] ?? "";
+    const body = match[2] ?? "";
+    const typeValue = readAttribute(attributes, "type");
+    const type = isQuestionType(typeValue) ? typeValue : "text";
+    const options: QuestionOption[] = [];
+    const optionPattern = /<option\b([^>]*)>([\s\S]*?)<\/option>/giu;
+    for (const optionMatch of body.matchAll(optionPattern)) {
+      const optionAttributes = optionMatch[1] ?? "";
+      const label = decodeXml((optionMatch[2] ?? "").trim());
+      if (!label) continue;
+      options.push({
+        id: readAttribute(optionAttributes, "id") ?? label,
+        label,
+        description: readAttribute(optionAttributes, "description") ?? "",
+      });
+    }
+    const question = readElement(body, "question");
+    if (!question) continue;
+    const suggestions = Array.from(
+      body.matchAll(/<suggestion(?:\s[^>]*)?>([\s\S]*?)<\/suggestion>/giu),
+    )
+      .map((entry) => decodeXml((entry[1] ?? "").trim()))
+      .filter(Boolean);
+    const other = readAttribute(attributes, "other") === "true" || type === "select-with-other";
+    const optionType =
+      type === "single-select" ||
+      type === "multi-select" ||
+      type === "select-with-other" ||
+      type === "confirm" ||
+      type === "ranking";
+    const capacity =
+      type === "confirm" && options.length === 0 ? 2 : options.length + (other ? 1 : 0);
+    const normalizedType = optionType && capacity === 0 ? "text" : type;
+    const constraints =
+      optionType && normalizedType !== "text"
+        ? normalizeSelectionConstraints(attributes, capacity)
+        : {};
+    const maxLength = normalizeMaxLength(attributes);
+    questions.push({
+      id: readAttribute(attributes, "id") ?? `question-${questions.length + 1}`,
+      type: normalizedType,
+      protocol: "trace",
+      context: readElement(body, "context"),
+      question,
+      header: readElement(body, "header") ?? question,
+      options,
+      multiSelect: normalizedType === "multi-select",
+      ...(constraints.min == null ? {} : { min: constraints.min }),
+      ...(constraints.max == null ? {} : { max: constraints.max }),
+      ...(maxLength == null ? {} : { maxLength }),
+      placeholder: readAttribute(attributes, "placeholder"),
+      accept: readAttribute(attributes, "accept"),
+      other: normalizedType === "select-with-other" || (normalizedType !== "text" && other),
+      ...(suggestions.length > 0 ? { suggestions } : {}),
+    });
+  }
+  return questions;
+}
+
+/** Parse structured answers so clients can render a human-readable sent record. */
+export function parseTraceInputResponses(text: string): TraceInputResponse[] {
+  const responses: TraceInputResponse[] = [];
+  const unfencedText = text.replace(/```[\s\S]*?```/gu, "");
+  const pattern = /<trace:input-response\b([^>]*)>([\s\S]*?)<\/trace:input-response>/giu;
+  for (const match of unfencedText.matchAll(pattern)) {
+    const attributes = match[1] ?? "";
+    const body = match[2] ?? "";
+    const id = readAttribute(attributes, "id");
+    if (!id) continue;
+    const selected = Array.from(body.matchAll(/<selected(?:\s[^>]*)?>([\s\S]*?)<\/selected>/giu))
+      .map((entry) => decodeXml((entry[1] ?? "").trim()))
+      .filter(Boolean);
+    responses.push({
+      id,
+      selected,
+      text: readElement(body, "text"),
+      assumed: readElement(body, "assumption") === "you-decide",
+    });
+  }
+  return responses;
 }
 
 export interface AssistantEvent {

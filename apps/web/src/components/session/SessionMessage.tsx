@@ -13,6 +13,7 @@ import { GitCheckpointChips } from "./messages/GitCheckpointChips";
 import { ArtifactUploadedCard } from "./messages/ArtifactUploadedCard";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
+import { structuredResponseSummary } from "./structuredResponseSummary";
 
 const AGENT_NAMES = new Set(["agent", "task"]);
 
@@ -285,7 +286,7 @@ export const SessionMessage = memo(function SessionMessage({
     case "message_sent":
       return (
         <UserBubble
-          text={str(payload?.text)}
+          text={structuredResponseSummary(str(payload?.text))}
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}

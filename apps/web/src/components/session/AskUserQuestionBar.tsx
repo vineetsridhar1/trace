@@ -1,123 +1,196 @@
-import { ChevronLeft, ChevronRight, Send, X } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { useQuestionState } from "@trace/client-core";
-import type { Question, QuestionOption } from "@trace/shared";
-import { QuestionOptionPill } from "./messages/QuestionOptionPill";
-import { PendingRichTextInput } from "./PendingRichTextInput";
+import type { Question } from "@trace/shared";
+import type { FileAttachment } from "./ImageAttachmentBar";
+import { QuestionCollapsedTray } from "./questions/QuestionCollapsedTray";
+import { QuestionReview } from "./questions/QuestionReview";
+import { QuestionStack } from "./questions/QuestionStack";
+import { QuestionTrayFooter } from "./questions/QuestionTrayFooter";
+import { QuestionTrayFrame } from "./questions/QuestionTrayFrame";
+import { QuestionTrayQuestion } from "./questions/QuestionTrayQuestion";
+import { questionTrayHint } from "./questions/questionTrayHint";
+import { useQuestionKeyboard } from "./questions/useQuestionKeyboard";
+import {
+  EMPTY_QUESTION_ATTACHMENTS,
+  useQuestionReferenceAttachments,
+} from "./questions/useQuestionReferenceAttachments";
 
 interface AskUserQuestionBarProps {
-  node: {
-    id: string;
-    questions: Question[];
-  };
-  onResponse: (text: string) => void;
+  node: { id: string; questions: Question[] };
+  collapsed?: boolean;
+  onResponse: (text: string, attachments?: FileAttachment[]) => void | Promise<void>;
   onDismiss: () => void;
+  onResume?: () => void;
 }
 
-export function AskUserQuestionBar({ node, onResponse, onDismiss }: AskUserQuestionBarProps) {
-  const {
-    page,
-    total,
+export function AskUserQuestionBar({
+  node,
+  collapsed = false,
+  onResponse,
+  onDismiss,
+  onResume,
+}: AskUserQuestionBarProps) {
+  const references = useQuestionReferenceAttachments();
+  const { beginTransfer, cancelTransfer, clearQuestionReferences } = references;
+  const state = useQuestionState(node, references.referenceValues);
+  const [reviewing, setReviewing] = useState(false);
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const question = state.question;
+  const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
+  const hasLaterAnswers = state.answers.slice(state.page + 1).some((answer) => answer.answered);
+  const answeredCount = reviewing
+    ? state.total
+    : hasLaterAnswers
+      ? state.answers.filter((answer) => answer.answered).length
+      : state.page;
+  const validationError =
+    !reviewing && state.currentSelected.size > 0 && state.validationMessage !== null;
+
+  const responseAttachments = node.questions.some((candidate) => candidate.type === "reference")
+    ? references.attachments
+    : EMPTY_QUESTION_ATTACHMENTS;
+  const send = useCallback(async () => {
+    if (sendingRef.current) return;
+    const response = state.buildResponse();
+    if (!response) return;
+    sendingRef.current = true;
+    setSending(true);
+    beginTransfer();
+    try {
+      await onResponse(response, responseAttachments);
+    } catch {
+      cancelTransfer();
+      // The response handler owns user-facing error reporting.
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  }, [beginTransfer, cancelTransfer, onResponse, responseAttachments, state.buildResponse]);
+  const advance = useCallback(() => {
+    if (!state.currentValid) return;
+    if (state.isLastPage) setReviewing(true);
+    else state.goNext();
+  }, [state.currentValid, state.goNext, state.isLastPage]);
+  const decideAndAdvance = useCallback(() => {
+    if (type === "reference") clearQuestionReferences(state.page);
+    state.decideForMe();
+    if (state.isLastPage) setReviewing(true);
+    else state.goNext();
+  }, [
+    clearQuestionReferences,
+    state.decideForMe,
+    state.goNext,
+    state.isLastPage,
+    state.page,
+    type,
+  ]);
+
+  useQuestionKeyboard({
+    disabled: collapsed || sending,
+    reviewing,
     question,
-    currentSelected,
-    currentCustom,
-    isFirstPage,
-    isLastPage,
-    hasAllAnswers,
-    toggleOption,
-    setCustomText,
-    goNext,
-    goPrev,
-    buildResponse,
-  } = useQuestionState(node);
+    type,
+    onDismiss,
+    onSend: send,
+    onAdvance: advance,
+    onToggle: state.toggleOption,
+  });
 
-  const handleSubmit = (currentText?: string) => {
-    const response = buildResponse(currentText);
-    if (response) onResponse(response);
-  };
+  if (collapsed) {
+    return (
+      <QuestionCollapsedTray
+        questions={node.questions}
+        answeredCount={answeredCount}
+        nextQuestion={question.question}
+        onResume={onResume ?? (() => undefined)}
+      />
+    );
+  }
 
+  const meta =
+    state.total === 1
+      ? ""
+      : answeredCount === 0
+        ? `question ${state.page + 1} of ${state.total}`
+        : `${answeredCount} of ${state.total} answered`;
+  const control = (
+    <QuestionTrayQuestion
+      question={question}
+      selected={state.currentSelected}
+      customText={state.currentCustom}
+      ranking={state.currentRanking}
+      validationMessage={state.validationMessage}
+      helperText={questionTrayHint(type, false)}
+      showContext={state.total === 1}
+      onDecide={decideAndAdvance}
+      onToggle={state.toggleOption}
+      onTextChange={state.setCustomText}
+      onMoveRank={state.moveRankOption}
+      referenceAttachments={references.attachmentsByQuestion[state.page]}
+      onReferenceFiles={(files) => references.addReferenceFiles(state.page, files)}
+      onRemoveReference={(id) => references.removeReference(state.page, id)}
+    />
+  );
   return (
-    <div className="border-t border-accent/30 bg-surface px-3 py-3">
-      {/* Header row */}
-      <div className="mb-2 flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-accent">
-              {question.header}
-            </span>
-            {total > 1 && (
-              <span className="text-[11px] text-muted-foreground">
-                {page + 1}/{total}
-              </span>
-            )}
-          </div>
-          <div className="mt-0.5 max-h-24 overflow-y-auto text-sm text-foreground">
-            {question.question}
-          </div>
-        </div>
-        <button
-          type="button"
-          title="Dismiss"
-          onClick={onDismiss}
-          className="flex-shrink-0 cursor-pointer text-muted-foreground hover:text-red-400"
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-        </button>
-      </div>
-
-      {/* Option pills */}
-      <div className="mb-2 flex flex-wrap gap-1.5">
-        {question.options.map((opt: QuestionOption) => (
-          <QuestionOptionPill
-            key={opt.label}
-            label={opt.label}
-            description={opt.description}
-            selected={currentSelected.has(opt.label)}
-            multiSelect={question.multiSelect}
-            onClick={() => toggleOption(opt.label)}
-          />
-        ))}
-      </div>
-
-      {/* Bottom row: custom input, pagination, send */}
-      <div className="flex items-end gap-2">
-        <PendingRichTextInput
-          value={currentCustom}
-          resetKey={page}
-          onChange={setCustomText}
-          onSubmit={(text) => {
-            if (hasAllAnswers) handleSubmit(text);
+    <QuestionTrayFrame
+      label={
+        reviewing
+          ? "Ready to send"
+          : validationError
+            ? "Not enough to continue"
+            : "Answer before I continue"
+      }
+      meta={
+        reviewing
+          ? `${state.total} answer${state.total === 1 ? "" : "s"}`
+          : validationError && question.min != null
+            ? `minimum ${question.min}`
+            : meta
+      }
+      tone={validationError ? "error" : "pending"}
+      onExit={onDismiss}
+      footer={
+        <QuestionTrayFooter
+          reviewing={reviewing}
+          total={state.total}
+          disabled={sending || (reviewing ? !state.hasAllAnswers : !state.currentValid)}
+          sending={sending}
+          backDisabled={!reviewing && state.isFirstPage}
+          onPrimary={reviewing ? send : advance}
+          onBack={() => {
+            if (reviewing) setReviewing(false);
+            else state.goPrev();
           }}
-          placeholder="Other..."
-          submitLabel="Reply"
-          SubmitIcon={Send}
-          submitDisabled={!hasAllAnswers}
-          allowEmptySubmit
         />
-
-        {total > 1 && (
-          <div className="flex items-center gap-1 pb-0.5">
-            <button
-              type="button"
-              title="Previous question"
-              onClick={goPrev}
-              disabled={isFirstPage}
-              className="cursor-pointer rounded-md border border-border px-2 py-1.5 text-xs text-foreground disabled:opacity-50"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              title="Next question"
-              onClick={goNext}
-              disabled={isLastPage}
-              className="cursor-pointer rounded-md border border-border px-2 py-1.5 text-xs text-foreground disabled:opacity-50"
-            >
-              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </div>
-        )}
-
-      </div>
-    </div>
+      }
+    >
+      {reviewing ? (
+        <div className="grid gap-2">
+          <QuestionReview
+            questions={node.questions}
+            answers={state.answers}
+            onEdit={(index) => {
+              state.setPage(index);
+              setReviewing(false);
+            }}
+          />
+          <span className="font-mono text-[9px] leading-3 text-muted-foreground">
+            {questionTrayHint(type, true)}
+          </span>
+        </div>
+      ) : state.total > 1 ? (
+        <QuestionStack
+          questions={node.questions}
+          answers={state.answers}
+          page={state.page}
+          onEdit={state.setPage}
+        >
+          {control}
+        </QuestionStack>
+      ) : (
+        control
+      )}
+    </QuestionTrayFrame>
   );
 }
