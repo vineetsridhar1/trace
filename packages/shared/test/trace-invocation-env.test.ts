@@ -21,6 +21,7 @@ describe("buildTraceInvocationEnv", () => {
 
     expect(env).toMatchObject({
       TRACE_API_URL: "https://trace.example/",
+      TRACE_CLI: "/trace/runtime/bin/trace",
       TRACE_INVOCATION_TOKEN: "invocation-token",
       TRACE_SKILLS_DIR: "/trace/runtime/skills",
       TRACE_NODE_BINARY: "/trace/node",

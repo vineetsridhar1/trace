@@ -1,4 +1,4 @@
-import { delimiter } from "path";
+import { delimiter, join } from "path";
 
 export function buildTraceInvocationEnv(input: {
   runtimeEnv?: Record<string, string>;
@@ -19,6 +19,7 @@ export function buildTraceInvocationEnv(input: {
   return {
     ...input.runtimeEnv,
     TRACE_API_URL: traceApiUrl.toString(),
+    TRACE_CLI: join(input.binDir, "trace"),
     TRACE_SKILLS_DIR: input.skillsDir,
     TRACE_NODE_BINARY: input.nodeBinary,
     ...(input.electronRunAsNode ? { TRACE_ELECTRON_RUN_AS_NODE: "1" } : {}),

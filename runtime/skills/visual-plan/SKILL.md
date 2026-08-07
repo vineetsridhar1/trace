@@ -77,7 +77,7 @@ repository plan immediately before publishing:
 ```bash
 mkdir -p .trace-work/plan
 cp docs/session-artifact-upload-plan.html .trace-work/plan/plan.html
-trace artifact push visual-plan .trace-work/plan --key primary
+"$TRACE_CLI" artifact push visual-plan .trace-work/plan --key primary
 ```
 
 The upload is rejected unless the directory holds exactly one file, `plan.html`, with no external

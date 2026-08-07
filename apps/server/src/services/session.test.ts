@@ -5352,7 +5352,7 @@ describe("SessionService", () => {
         | undefined;
       expect(command?.prompt).toContain("template.html canvas");
       expect(command?.prompt).toContain(
-        "trace artifact push visual-plan .trace-work/plan --key primary",
+        "\"$TRACE_CLI\" artifact push visual-plan .trace-work/plan --key primary",
       );
       expect(command?.runtimeEnv).toMatchObject({
         TRACE_SESSION_ID: "session-1",
