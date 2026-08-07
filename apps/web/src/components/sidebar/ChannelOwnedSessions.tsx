@@ -20,7 +20,7 @@ import { useAttachedCheckoutForGroup } from "../../stores/bridges";
 import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
 import type { SessionGroupRow } from "../channel/sessions-table-types";
 import { useSessionGroupRows } from "../channel/useSessionGroupRows";
-import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
+import { sessionStatusLabel } from "../session/sessionStatus";
 import { useUIStore, type UIState } from "../../stores/ui";
 import { cn, timeAgo } from "../../lib/utils";
 import { createQuickSession } from "../../lib/create-quick-session";
@@ -191,7 +191,6 @@ function SidebarSessionStatusGroup({
   onToggle: (status: string) => void;
 }) {
   const Icon = collapsed ? ChevronRight : ChevronDown;
-  const color = sessionStatusColor[group.status] ?? "text-muted-foreground";
   const label = sessionStatusLabel[group.status] ?? group.status;
 
   return (
@@ -205,7 +204,7 @@ function SidebarSessionStatusGroup({
         onClick={() => onToggle(group.status)}
       >
         <Icon size={14} className="shrink-0 text-foreground" />
-        <span className={cn("min-w-0 flex-1 truncate", color)}>{label}</span>
+        <span className="min-w-0 flex-1 truncate text-foreground">{label}</span>
       </button>
       <AnimatePresence initial={false}>
         {!collapsed && (
