@@ -797,7 +797,7 @@ function imageFilename(asset: ImagePicker.ImagePickerAsset, mimeType: string): s
 
 function filenameFromUri(uri: string, fallback: string): string {
   const cleanUri = uri.split("?")[0] ?? uri;
-  let decoded = cleanUri;
+  let decoded: string;
   try {
     decoded = decodeURIComponent(cleanUri);
   } catch {

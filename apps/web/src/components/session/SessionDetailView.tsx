@@ -47,7 +47,6 @@ import {
 } from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
-import { cn } from "../../lib/utils";
 import { findLatestTimelineInputRequest } from "./visualPlanReview";
 import { CondensedSessionMessages } from "./CondensedSessionMessages";
 import { buildCompactChatSummary } from "./compact-chat-summary";
