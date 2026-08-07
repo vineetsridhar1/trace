@@ -108,6 +108,55 @@ describe("AskUserQuestionBar", () => {
     expect(markup).not.toContain("You decide");
   });
 
+  it("preserves an answer while dismissing and resuming a question", async () => {
+    const onDismiss = vi.fn();
+    const onResume = vi.fn();
+    const node = { id: "question-node", questions: [question("one")] };
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <AskUserQuestionBar
+          node={node}
+          onResponse={() => undefined}
+          onDismiss={onDismiss}
+          onResume={onResume}
+        />,
+      );
+    });
+    await act(async () => findButton(renderer.root, "Yes").props.onClick());
+    await act(async () =>
+      renderer.root.findByProps({ "aria-label": "Exit to chat" }).props.onClick(),
+    );
+    expect(onDismiss).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      renderer.update(
+        <AskUserQuestionBar
+          node={node}
+          collapsed
+          onResponse={() => undefined}
+          onDismiss={onDismiss}
+          onResume={onResume}
+        />,
+      );
+    });
+    await act(async () => findButton(renderer.root, "Resume").props.onClick());
+    expect(onResume).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      renderer.update(
+        <AskUserQuestionBar
+          node={node}
+          onResponse={() => undefined}
+          onDismiss={onDismiss}
+          onResume={onResume}
+        />,
+      );
+    });
+    expect(findButton(renderer.root, "Next").props.disabled).toBe(false);
+    await act(async () => renderer.unmount());
+  });
+
   it("labels a fully answered collapsed review without a zero count", () => {
     const markup = renderToStaticMarkup(
       <QuestionCollapsedTray

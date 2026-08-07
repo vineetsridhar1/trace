@@ -851,6 +851,10 @@ export function handleOrgEvent(event: Event): void {
       event.eventType === "message_sent" || payload.type === "assistant";
     const updates: Partial<SessionEntity> = {
       updatedAt: event.timestamp,
+      ...(payload.agentStatus ? { agentStatus: payload.agentStatus as AgentStatus } : {}),
+      ...(payload.sessionStatus
+        ? { sessionStatus: payload.sessionStatus as SessionStatus }
+        : {}),
       ...(isConversationalMessage ? { lastMessageAt: event.timestamp } : {}),
       ...(isUserMessage ? { lastUserMessageAt: event.timestamp } : {}),
     };

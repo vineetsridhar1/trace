@@ -1,6 +1,19 @@
 import type { Event } from "@trace/gql";
 import type { SessionNode } from "./groupReadGlob";
 
+export function findActiveQuestion(
+  nodes: readonly SessionNode[],
+  sessionStatus: string | undefined,
+  latestInputKind: "question" | "native-plan" | "visual-plan" | null,
+): { node: Extract<SessionNode, { kind: "ask-user-question" }>; index: number } | null {
+  if (sessionStatus !== "needs_input" || latestInputKind !== "question") return null;
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    const node = nodes[index];
+    if (node.kind === "ask-user-question") return { node, index };
+  }
+  return null;
+}
+
 export function findReplacedQuestionIds(
   nodes: readonly SessionNode[],
   events: Readonly<Record<string, Event | undefined>>,

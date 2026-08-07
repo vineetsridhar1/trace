@@ -4973,6 +4973,14 @@ describe("SessionService", () => {
         sessionStatus: "needs_input",
         workdir: "/workspace/session-1",
         toolSessionId: "tool-session-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Cloud A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
       });
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
       prismaMock.session.update.mockResolvedValueOnce(
@@ -4998,6 +5006,89 @@ describe("SessionService", () => {
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "session_resumed",
+          payload: expect.objectContaining({ sessionStatus: "in_progress" }),
+        }),
+      );
+    });
+
+    it("clears needs_input while upgrading a read-only workspace", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "needs_input",
+        readOnlyWorkspace: true,
+        workdir: "/workspace/session-1",
+        toolSessionId: "tool-session-1",
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.findUnique.mockResolvedValueOnce({ pendingRun: null });
+      prismaMock.session.update.mockResolvedValueOnce(session);
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "Implement this instead.",
+        interactionMode: "code",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            pendingRun: expect.objectContaining({ workspaceUpgrade: true }),
+            sessionStatus: "in_progress",
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "message_sent",
+          payload: expect.objectContaining({ sessionStatus: "in_progress" }),
+        }),
+      );
+    });
+
+    it("broadcasts the cleared input status when message delivery is deferred", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "needs_input",
+        workdir: "/workspace/session-1",
+        toolSessionId: "tool-session-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-a",
+          runtimeLabel: "Laptop A",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.findUnique.mockResolvedValue({
+        ...session,
+        sessionStatus: "in_progress",
+      });
+      sessionRouterMock.send.mockReturnValueOnce("runtime_disconnected");
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "Continue with a different approach.",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_output",
+          payload: expect.objectContaining({
+            type: "connection_lost",
+            sessionStatus: "in_progress",
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "message_sent",
           payload: expect.objectContaining({ sessionStatus: "in_progress" }),
         }),
       );

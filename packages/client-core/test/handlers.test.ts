@@ -732,6 +732,31 @@ describe("handleOrgEvent", () => {
     expect(session._sortTimestamp).toBe("2026-02-01T00:00:00.000Z");
   });
 
+  it("applies an explicit resumed status from a sent session message", () => {
+    useEntityStore.setState({
+      sessions: {
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          sessionStatus: "needs_input",
+        } as never,
+      },
+      sessionGroups: { "group-1": { id: "group-1" } as never },
+      _sessionIdsByGroup: { "group-1": ["session-1"] },
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "message_sent",
+        scopeId: "session-1",
+        payload: { text: "Continue another way", sessionStatus: "in_progress" },
+        actor: { type: "user", id: "user-1" },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessions["session-1"].sessionStatus).toBe("in_progress");
+  });
+
   it("routes session_output workspace_ready into workdir", () => {
     useEntityStore.setState({
       sessions: { "session-1": { id: "session-1", sessionGroupId: "group-1" } as never },
