@@ -243,6 +243,58 @@ describe("AskUserQuestionBar", () => {
     await act(async () => renderer.unmount());
   });
 
+  it("continues text questions with Enter and preserves Shift+Enter for a new line", async () => {
+    const textQuestion: Question = {
+      ...question("text"),
+      type: "text",
+      options: [],
+    };
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <AskUserQuestionBar
+          node={{ id: "request-text", questions: [textQuestion] }}
+          onResponse={() => undefined}
+          onDismiss={() => undefined}
+        />,
+      );
+    });
+    const textarea = renderer.root.findByType("textarea");
+    await act(async () => textarea.props.onChange({ target: { value: "A concise answer" } }));
+
+    const enter = {
+      key: "Enter",
+      shiftKey: false,
+      nativeEvent: { isComposing: false },
+      preventDefault: vi.fn(),
+    };
+    await act(async () => textarea.props.onKeyDown(enter));
+    expect(enter.preventDefault).toHaveBeenCalledOnce();
+    expect(findButton(renderer.root, "Send 1 answer")).toBeDefined();
+
+    await act(async () => renderer.unmount());
+    await act(async () => {
+      renderer = create(
+        <AskUserQuestionBar
+          node={{ id: "request-text-shift", questions: [textQuestion] }}
+          onResponse={() => undefined}
+          onDismiss={() => undefined}
+        />,
+      );
+    });
+    const shiftedTextarea = renderer.root.findByType("textarea");
+    const shiftEnter = {
+      key: "Enter",
+      shiftKey: true,
+      nativeEvent: { isComposing: false },
+      preventDefault: vi.fn(),
+    };
+    await act(async () => shiftedTextarea.props.onKeyDown(shiftEnter));
+    expect(shiftEnter.preventDefault).not.toHaveBeenCalled();
+    expect(findButton(renderer.root, "Next")).toBeDefined();
+    await act(async () => renderer.unmount());
+  });
+
   it("keeps reference files owned by the question where they were attached", async () => {
     const createObjectUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:reference");
     const revokeObjectUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);

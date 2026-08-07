@@ -4,10 +4,12 @@ export function QuestionTextControl({
   question,
   value,
   onChange,
+  onContinue,
 }: {
   question: Question;
   value: string;
   onChange: (value: string) => void;
+  onContinue: () => void;
 }) {
   return (
     <div className="grid gap-2">
@@ -19,6 +21,11 @@ export function QuestionTextControl({
         placeholder={question.placeholder ?? "Type your answer…"}
         aria-label={question.question}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+          event.preventDefault();
+          onContinue();
+        }}
         className="w-full resize-none rounded-lg border border-foreground/35 bg-transparent px-3 py-2 text-[13px] leading-5 outline-none ring-2 ring-foreground/10 placeholder:text-muted-foreground"
       />
       <div className="flex flex-wrap gap-1.5">

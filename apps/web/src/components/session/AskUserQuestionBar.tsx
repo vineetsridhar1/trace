@@ -126,6 +126,7 @@ export function AskUserQuestionBar({
       onDecide={decideAndAdvance}
       onToggle={state.toggleOption}
       onTextChange={state.setCustomText}
+      onContinue={advance}
       onMoveRank={state.moveRankOption}
       referenceAttachments={references.attachmentsByQuestion[state.page]}
       onReferenceFiles={(files) => references.addReferenceFiles(state.page, files)}

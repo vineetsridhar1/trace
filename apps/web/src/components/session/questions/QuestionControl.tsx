@@ -13,6 +13,7 @@ interface QuestionControlProps {
   validationMessage: string | null;
   onToggle: (value: string) => void;
   onTextChange: (value: string) => void;
+  onContinue: () => void;
   onMoveRank: (value: string, direction: -1 | 1) => void;
   referenceAttachments?: FileAttachment[];
   onReferenceFiles?: (files: File[]) => void;
@@ -27,6 +28,7 @@ export function QuestionControl({
   validationMessage,
   onToggle,
   onTextChange,
+  onContinue,
   onMoveRank,
   referenceAttachments,
   onReferenceFiles,
@@ -35,7 +37,14 @@ export function QuestionControl({
   const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
 
   if (type === "text") {
-    return <QuestionTextControl question={question} value={customText} onChange={onTextChange} />;
+    return (
+      <QuestionTextControl
+        question={question}
+        value={customText}
+        onChange={onTextChange}
+        onContinue={onContinue}
+      />
+    );
   }
   if (type === "reference") {
     return (
@@ -130,6 +139,7 @@ export function QuestionControl({
           question={{ ...question, maxLength: question.maxLength ?? 240 }}
           value={customText}
           onChange={onTextChange}
+          onContinue={onContinue}
         />
       ) : null}
       {validationMessage && selected.size > 0 ? (
