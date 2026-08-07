@@ -661,6 +661,11 @@
 
       <section>
         <h2>How the complete system works</h2>
+        <div class="toolbar" data-view-switcher="architecture" aria-label="Architecture view">
+          <button type="button" data-view="authoring" aria-pressed="false">Authoring</button>
+          <button type="button" data-view="runtime" aria-pressed="true">Runtime query</button>
+          <button type="button" data-view="recovery" aria-pressed="false">Connection recovery</button>
+        </div>
         <div class="view-panel" data-view-group="architecture" data-view-panel="authoring">
           <h3>CEO and AI author the capability</h3>
           <div class="flow">
@@ -732,6 +737,11 @@ Never exposed:     provider token · Nango secret · Nango connection ID · anot
 
       <section>
         <h2>Authorization and read-only policy</h2>
+        <div class="toolbar" data-view-switcher="security" aria-label="Security layer">
+          <button type="button" data-view="trace" aria-pressed="true">Trace access</button>
+          <button type="button" data-view="binding" aria-pressed="false">Binding policy</button>
+          <button type="button" data-view="snowflake" aria-pressed="false">Snowflake policy</button>
+        </div>
         <div class="view-panel" data-view-group="security" data-view-panel="trace">
           <h3>Who is calling?</h3>
           <p>Private links carry no user credential. Trace authenticates the viewer, checks current organization membership and app visibility, strips forged <code>x-trace-*</code> headers, then injects an HS256 context scoped to user, organization, app, and endpoint for 60 seconds. The private runtime route revalidates the enabled endpoint before execution.</p>
@@ -812,6 +822,10 @@ Never exposed:     provider token · Nango secret · Nango connection ID · anot
 
       <section>
         <h2>Primary file impact</h2>
+        <div class="toolbar" data-file-filters aria-label="Filter file changes">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="change" aria-pressed="false">Changed</button>
+        </div>
         <table data-file-table>
           <thead><tr><th>File</th><th>Change</th><th>Responsibility</th></tr></thead>
           <tbody>
@@ -859,5 +873,47 @@ Never exposed:     provider token · Nango secret · Nango connection ID · anot
         <p>Approval authorizes the six phases above while preserving the existing connection and binding models. Any proposal to store SQL in Trace, expose provider credentials, broaden browser authority, or version bindings with application releases returns for separate review.</p>
       </section>
     </article>
+    <script>
+      (() => {
+        document.querySelectorAll("[data-view-switcher]").forEach((switcher) => {
+          const group = switcher.dataset.viewSwitcher;
+          const buttons = [...switcher.querySelectorAll("[data-view]")];
+          const panels = [...document.querySelectorAll(`[data-view-group="${group}"]`)];
+
+          const selectView = (view) => {
+            buttons.forEach((button) => {
+              button.setAttribute("aria-pressed", String(button.dataset.view === view));
+            });
+            panels.forEach((panel) => {
+              panel.hidden = panel.dataset.viewPanel !== view;
+            });
+          };
+
+          buttons.forEach((button) => {
+            button.addEventListener("click", () => selectView(button.dataset.view));
+          });
+          selectView(
+            buttons.find((button) => button.getAttribute("aria-pressed") === "true")?.dataset.view,
+          );
+        });
+
+        document.querySelectorAll("[data-file-filters]").forEach((filters) => {
+          const buttons = [...filters.querySelectorAll("[data-filter]")];
+          const rows = [...document.querySelectorAll("[data-file-table] [data-change]")];
+
+          buttons.forEach((button) => {
+            button.addEventListener("click", () => {
+              const filter = button.dataset.filter;
+              buttons.forEach((candidate) => {
+                candidate.setAttribute("aria-pressed", String(candidate === button));
+              });
+              rows.forEach((row) => {
+                row.hidden = filter !== "all" && row.dataset.change !== filter;
+              });
+            });
+          });
+        });
+      })();
+    </script>
   </body>
 </html>
