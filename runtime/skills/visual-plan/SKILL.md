@@ -48,7 +48,8 @@ but make the published canvas a coherent argument rather than a research dump.
 
 Choose the story and visuals from the shape of the change. Use:
 
-- a flow or architecture map for boundaries and movement;
+- a flowchart for branching logic, validation, retries, and failure paths;
+- an architecture or dependency map for system boundaries and ownership;
 - a sequence or timeline for ordered interactions and rollout;
 - a before/after comparison for replacement or migration;
 - a state view for lifecycle behavior;
@@ -56,7 +57,10 @@ Choose the story and visuals from the shape of the change. Use:
 - a decision table for meaningful alternatives.
 
 Use the smallest visual that makes the relationship obvious. Do not turn prose into decorative
-boxes or invent quantitative charts without real data.
+boxes or invent quantitative charts without real data. Label arrows with what moves or what causes
+the transition, show important unhappy paths, and distinguish existing, changed, and new nodes.
+Prefer editable HTML/CSS for simple diagrams and inline SVG for branches or connectors that would
+otherwise be ambiguous. Do not use ASCII diagrams or external diagram libraries.
 
 Cover, in whatever order best explains the change: objective and outcome, scope and explicit
 non-goals, current state grounded in real paths, the proposed behavior and boundaries, phased work,
@@ -87,7 +91,8 @@ cp "$TRACE_SKILLS_DIR/visual-plan/template.html" \
 The HTML filename is descriptive, not standardized. Treat the copied file as a component palette,
 not a form: delete sample sections, reorder the story, combine components, and add shapes when the
 change calls for them. The template demonstrates summaries and metrics, cards, flows, before/after
-views, phases, accordions, tables, tags, callouts, and small DOM-only interactions.
+views, a branching flowchart, an interaction sequence, phases, accordions, tables, tags, callouts,
+and small DOM-only interactions.
 
 Use inline CSS, inline SVG, and concise inline JavaScript to make the explanation clear and
 interactive. Scripts may modify only their own document: do not access the network, storage,
