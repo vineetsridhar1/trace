@@ -9,7 +9,10 @@ interface VisualPlanDocument {
   error: string | null;
 }
 
-export function useVisualPlanDocument(artifactId: string | null): VisualPlanDocument {
+export function useVisualPlanDocument(
+  artifactId: string | null,
+  htmlPath: string | null,
+): VisualPlanDocument {
   const [document, setDocument] = useState<VisualPlanDocument>({
     html: null,
     implementationContent: "",
@@ -20,14 +23,22 @@ export function useVisualPlanDocument(artifactId: string | null): VisualPlanDocu
     const controller = new AbortController();
     setDocument({ html: null, implementationContent: "", error: null });
     if (!artifactId) return () => controller.abort();
+    if (!htmlPath) {
+      setDocument({
+        html: null,
+        implementationContent: "",
+        error: "Visual plan artifact has no HTML file",
+      });
+      return () => controller.abort();
+    }
 
     void (async () => {
-      const response = await fetch(artifactFileUrl(artifactId, "plan.html"), {
+      const response = await fetch(artifactFileUrl(artifactId, htmlPath), {
         credentials: "include",
         headers: getAuthHeaders(),
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error("Could not load plan.html");
+      if (!response.ok) throw new Error(`Could not load ${htmlPath}`);
 
       const value = await response.text();
       if (controller.signal.aborted) return;
@@ -46,7 +57,7 @@ export function useVisualPlanDocument(artifactId: string | null): VisualPlanDocu
     });
 
     return () => controller.abort();
-  }, [artifactId]);
+  }, [artifactId, htmlPath]);
 
   return document;
 }

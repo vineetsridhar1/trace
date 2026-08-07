@@ -5352,8 +5352,9 @@ describe("SessionService", () => {
         | undefined;
       expect(command?.prompt).toContain("template.html canvas");
       expect(command?.prompt).toContain(
-        "\"$TRACE_CLI\" artifact push visual-plan .trace-work/plan --key primary",
+        '"$TRACE_CLI" artifact push visual-plan docs/<plan-folder> --key primary',
       );
+      expect(command?.prompt).toContain("create a staging copy or rename the HTML");
       expect(command?.runtimeEnv).toMatchObject({
         TRACE_SESSION_ID: "session-1",
       });

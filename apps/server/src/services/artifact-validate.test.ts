@@ -10,31 +10,31 @@ function manifest(files: Array<{ path: string; mediaType: string }>): ArtifactBu
   };
 }
 
-const PLAN = { path: "plan.html", mediaType: "text/html" };
+const PLAN = { path: "implementation-approach.html", mediaType: "text/html" };
 
 describe("validateType for visual plans", () => {
-  it("accepts a bundle holding only plan.html", () => {
+  it("accepts one descriptively named HTML file", () => {
     expect(() => validateType("trace.visual-plan.v1", manifest([PLAN]))).not.toThrow();
   });
 
-  it("rejects sibling files, which the single-page render cannot load", () => {
+  it("accepts supporting files in the uploaded plan folder", () => {
     expect(() =>
       validateType(
         "trace.visual-plan.v1",
-        manifest([PLAN, { path: "assets/flow.png", mediaType: "image/png" }]),
+        manifest([PLAN, { path: "evidence/notes.md", mediaType: "text/markdown" }]),
       ),
-    ).toThrow("Remove assets/flow.png");
-    expect(() =>
-      validateType(
-        "trace.visual-plan.v1",
-        manifest([PLAN, { path: "plan.css", mediaType: "text/css" }]),
-      ),
-    ).toThrow("Remove plan.css");
+    ).not.toThrow();
   });
 
-  it("requires plan.html at the root", () => {
+  it("requires exactly one HTML file", () => {
     expect(() =>
       validateType("trace.visual-plan.v1", manifest([{ path: "plan.mdx", mediaType: "text/mdx" }])),
-    ).toThrow("require plan.html at the root");
+    ).toThrow("require one HTML file");
+    expect(() =>
+      validateType(
+        "trace.visual-plan.v1",
+        manifest([PLAN, { path: "alternate.html", mediaType: "text/html" }]),
+      ),
+    ).toThrow("more than one HTML file");
   });
 });

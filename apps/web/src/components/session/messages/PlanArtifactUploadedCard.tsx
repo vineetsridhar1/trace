@@ -18,8 +18,8 @@ export function PlanArtifactUploadedCard({
   timestamp: string;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const displayName = artifactFileName(filePath, "visual-plan.html");
-  const { html } = useVisualPlanDocument(artifactId);
+  const displayName = artifactFileName(filePath, "Implementation plan");
+  const { html } = useVisualPlanDocument(artifactId, filePath ?? null);
 
   const previewModal = (
     <PlanPreviewModal

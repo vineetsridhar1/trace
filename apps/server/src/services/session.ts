@@ -1199,11 +1199,12 @@ Trace visual plans are immutable artifacts. Before planning, read these files co
 2. $TRACE_SKILLS_DIR/visual-plan/SKILL.md
 
 Follow their authoring and publishing instructions. Copy the supplied template.html canvas, compose
-a polished self-contained plan.html on that canvas, then upload it with
-\`"$TRACE_CLI" artifact push visual-plan .trace-work/plan --key primary\`. Trace renders the uploaded
-artifact for review; it does not watch or render a plan.mdx file. Do not use Agent-Native/Builder
-plan skills, MDX plan blocks, a plan-file watcher, or a provider-native plan approval tool. Publish
-one complete visual-plan artifact with the Trace CLI when it is ready for review.
+a polished self-contained HTML plan inside a descriptive folder under docs/, then upload that folder
+directly with \`"$TRACE_CLI" artifact push visual-plan docs/<plan-folder> --key primary\`. Do not
+create a staging copy or rename the HTML for upload. Trace renders the uploaded artifact for review;
+it does not watch repository files. Do not use Agent-Native/Builder plan skills, MDX plan blocks, a
+plan-file watcher, or a provider-native plan approval tool. Publish one complete visual-plan artifact
+with the Trace CLI when it is ready for review.
 </system-instruction>`;
 }
 
