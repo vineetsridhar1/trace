@@ -251,7 +251,7 @@ export async function getGithubAuthToken(): Promise<string> {
     }
     return token;
   } catch (error) {
-    throw new Error(extractExecErrorMessage(error));
+    throw new Error(extractExecErrorMessage(error), { cause: error });
   }
 }
 
@@ -284,7 +284,7 @@ async function inspectLocalPrStatus(workdir: string): Promise<{
     if (isNoPullRequestError(message)) {
       return { branch, pr: null };
     }
-    throw new Error(message);
+    throw new Error(message, { cause: error });
   }
 
   const parsed = JSON.parse(stdout) as {

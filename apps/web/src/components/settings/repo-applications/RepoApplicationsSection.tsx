@@ -56,7 +56,7 @@ export function RepoApplicationsSection({ repoId }: { repoId: string }) {
       const message =
         saveError instanceof Error ? saveError.message : "Failed to save applications";
       setError(message);
-      throw new Error(message);
+      throw new Error(message, { cause: saveError });
     } finally {
       setSaving(false);
     }

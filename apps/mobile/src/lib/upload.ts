@@ -1,6 +1,5 @@
 import { getAuthHeaders } from "@trace/client-core";
 import { File, Paths } from "expo-file-system";
-import { isPreviewableImageMimeType } from "./attachment-utils";
 import { getActiveApiUrl } from "./connection-target";
 import { UploadedImageUrlCache } from "./upload-url-cache";
 

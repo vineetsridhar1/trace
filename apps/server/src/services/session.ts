@@ -4416,7 +4416,7 @@ export class SessionService {
         }
 
         const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
-          { agentStatus: initialAgentStatus, sessionStatus: initialSessionStatus },
+          { sessionStatus: initialSessionStatus },
         ]);
 
         const startEventId = input.startEventId ?? randomUUID();
@@ -8946,7 +8946,9 @@ export class SessionService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!params.allowUnverifiedSourceGitStatus) {
-        throw new Error(`Cannot move session: source git status could not be verified. ${message}`);
+        throw new Error(`Cannot move session: source git status could not be verified. ${message}`, {
+          cause: error,
+        });
       }
       console.warn(
         `[session-service] skipping move source git sync check for ${params.sessionId}: ${message}`,

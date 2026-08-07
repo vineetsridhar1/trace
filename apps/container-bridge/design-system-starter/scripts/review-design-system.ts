@@ -10,7 +10,9 @@ async function executable() {
     try {
       await access(candidate);
       return candidate;
-    } catch {}
+    } catch {
+      // Try the next candidate.
+    }
   throw new Error("Chromium is unavailable");
 }
 const browser = await chromium.launch({

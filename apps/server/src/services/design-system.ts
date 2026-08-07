@@ -126,7 +126,9 @@ async function putImmutableObject(
     const existing = await storage.getObject(key).catch(() => null);
     if (!existing) throw uploadError;
     if (sha256(existing) !== sha256(body))
-      throw new Error("Immutable storage key already contains different content");
+      throw new Error("Immutable storage key already contains different content", {
+        cause: uploadError,
+      });
   }
 }
 

@@ -7,7 +7,6 @@ import type {
   AgentEnvironmentDraft,
   UpdateAgentEnvironmentDraft,
 } from "./agent-environment-form-types";
-import { AgentEnvironmentFieldLabel } from "./AgentEnvironmentFieldLabel";
 
 type Props = {
   draft: AgentEnvironmentDraft;
