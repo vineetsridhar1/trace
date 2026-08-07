@@ -1,4 +1,6 @@
 import { execFile, spawn } from "node:child_process";
+import { basename, dirname, parse } from "node:path";
+import { realpathSync } from "node:fs";
 import { promisify } from "node:util";
 import { CODING_TOOL_CLIS, type CodingToolCli } from "@trace/shared";
 import { buildChildProcessEnv, resolveExecutable } from "@trace/shared/adapters";
@@ -68,6 +70,34 @@ function compareVersions(left: string, right: string): number | null {
   return 0;
 }
 
+/**
+ * Finds the global npm prefix that owns an executable, if it is installed in
+ * the conventional <prefix>/lib/node_modules tree. A desktop app can inherit
+ * a different npm than the one that installed the CLI (for example, a second
+ * nvm Node version), so relying on npm's default prefix can update the wrong
+ * copy while leaving the detected executable unchanged.
+ */
+function getOwningNpmPrefix(executablePath: string | null): string | null {
+  if (!executablePath) return null;
+
+  let current: string;
+  try {
+    current = realpathSync(executablePath);
+  } catch {
+    return null;
+  }
+
+  const root = parse(current).root;
+  while (current !== root) {
+    if (basename(current) === "node_modules") {
+      const libDirectory = dirname(current);
+      return basename(libDirectory) === "lib" ? dirname(libDirectory) : null;
+    }
+    current = dirname(current);
+  }
+  return null;
+}
+
 export async function getCodingToolStatuses(): Promise<DesktopCodingToolStatus[]> {
   return Promise.all(
     Object.values(CODING_TOOL_CLIS).map(async (tool) => {
@@ -103,8 +133,17 @@ export async function installOrUpdateCodingTool(toolId: string): Promise<Desktop
   const tool = CODING_TOOL_CLIS[toolId];
   if (!tool) throw new Error("Unsupported coding tool.");
   const npmTool = NPM_TOOLS[toolId];
+  const npmPrefix = getOwningNpmPrefix(resolveExecutable(tool.command));
   const command = npmTool
-    ? { executable: "npm", args: ["install", "--global", `${npmTool.packageName}@latest`] }
+    ? {
+        executable: "npm",
+        args: [
+          ...(npmPrefix ? ["--prefix", npmPrefix] : []),
+          "install",
+          "--global",
+          `${npmTool.packageName}@latest`,
+        ],
+      }
     : { executable: "/bin/sh", args: ["-lc", tool.install] };
 
   await new Promise<void>((resolve, reject) => {
