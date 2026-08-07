@@ -25,7 +25,11 @@ export function useGeneratedProjectSessionGroupRow(groupId: string): SessionGrou
 
     const displaySessionStatus =
       groupSessions.length > 0
-        ? getSessionGroupDisplayStatus(sessionStatuses, archivedAt)
+        ? getSessionGroupDisplayStatus(
+            sessionStatuses,
+            archivedAt,
+            group?.prUrl as string | null,
+          )
         : ((group?.status as string | undefined) ?? "in_progress");
     const displayAgentStatus = archivedAt
       ? "stopped"

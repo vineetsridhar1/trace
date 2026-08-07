@@ -125,7 +125,10 @@ export function SessionHeader({
     connectionState && connectionState !== "connected"
       ? (connectionColor[connectionState] ?? "text-muted-foreground")
       : null;
-  const displaySessionStatus = getDisplaySessionStatus(sessionStatus, groupArchivedAt);
+  const displaySessionStatus =
+    groupPrUrl && sessionStatus !== "merged" && sessionStatus !== "needs_input"
+      ? "in_review"
+      : getDisplaySessionStatus(sessionStatus, groupArchivedAt);
   const displayAgentStatus = getDisplayAgentStatus(agentStatus, sessionStatus, groupArchivedAt, {
     workdir,
     lastUserMessageAt,

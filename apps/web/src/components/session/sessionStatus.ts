@@ -130,11 +130,13 @@ export function getDisplayAgentStatus(
 export function getSessionGroupDisplayStatus(
   sessionStatuses: Array<string | null | undefined>,
   archivedAt?: string | null | undefined,
+  prUrl?: string | null | undefined,
 ): string {
   if (archivedAt) return "archived";
   // Merged is terminal and takes priority over all other pipeline states.
   if (sessionStatuses.some((s) => s === "merged")) return "merged";
   if (sessionStatuses.some((s) => s === "needs_input")) return "needs_input";
+  if (prUrl) return "in_review";
   if (sessionStatuses.some((s) => s === "in_review")) return "in_review";
   if (sessionStatuses.some((s) => s === "in_progress")) return "in_progress";
   return "in_progress";

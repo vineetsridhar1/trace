@@ -1036,7 +1036,7 @@ function buildSessionGroupSnapshot(
   return {
     ...group,
     owner: group.ownerUser,
-    status: deriveSessionGroupStatus(sessions ?? [], group.archivedAt ?? null),
+    status: deriveSessionGroupStatus(sessions ?? [], group.archivedAt ?? null, group.prUrl),
   };
 }
 

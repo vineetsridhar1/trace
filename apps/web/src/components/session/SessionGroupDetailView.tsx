@@ -39,7 +39,7 @@ import { useTerminalActions } from "./useTerminalActions";
 import { useFileActions } from "./useFileActions";
 import { useSessionGroupFiles } from "./useSessionGroupFiles";
 import { useSessionGroupDirectoryTree } from "./useSessionGroupDirectoryTree";
-import { getDisplaySessionStatus, isTerminalStatus } from "./sessionStatus";
+import { getSessionGroupDisplayStatus, isTerminalStatus } from "./sessionStatus";
 import { isAnimationCanvasReady, isAppCanvasReady } from "./app-session-readiness";
 import { isGeneratedProjectCanvasReady } from "./generated-project-readiness";
 import { getProjectWorkspaceKind } from "./project-workspace-kind";
@@ -546,9 +546,11 @@ export function SessionGroupDetailView({
     }
   }, [showApplicationsSidebar, showApplicationsSidebarTab]);
 
-  const selectedSessionStatus = selectedSession
-    ? getDisplaySessionStatus(selectedSession.sessionStatus, groupArchivedAt ?? null)
-    : "in_progress";
+  const selectedSessionStatus = getSessionGroupDisplayStatus(
+    groupSessions.map((session) => session.sessionStatus),
+    groupArchivedAt ?? null,
+    groupPrUrl,
+  );
   const selectedSessionMergedUnavailable =
     selectedSession?.sessionStatus === "merged" && groupWorktreeDeleted !== false;
   const canMoveSelectedSession =
