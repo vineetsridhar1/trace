@@ -52,4 +52,8 @@ describe("sandboxedPlanHtml", () => {
     expect(html).toContain("<head><meta");
     expect(html).toContain("<body><main>Plan</main></body>");
   });
+
+  it("contains plan scrolls within the embedded document", () => {
+    expect(sandboxedPlanHtml("<main>Plan</main>")).toContain("overscroll-behavior:contain");
+  });
 });
