@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cloud browser video artifacts — implementation plan</title>
+    <style>
+      :root { --bg:#171717; --surface:#1f1f1f; --raised:#262626; --fg:#e4e4e7; --muted:#a1a1aa; --faint:#71717a; --border:#2e2e2e; --accent:#3b82f6; --add:#22c55e; --change:#eab308; --radius:8px; }
+      * { box-sizing:border-box; } body { margin:0; padding:40px 32px 72px; background:var(--bg); color:var(--fg); font:15px/1.65 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+      .plan { max-width:860px; margin:0 auto; } .plan-title { margin:0 0 8px; font-size:28px; font-weight:650; letter-spacing:-.02em; } .plan-summary { margin:0 0 20px; color:var(--muted); font-size:16px; } .meta { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:36px; } .chip { padding:4px 10px; border:1px solid var(--border); border-radius:999px; background:var(--surface); color:var(--muted); font-size:12px; } .chip strong { color:var(--fg); font-weight:550; }
+      section { margin-bottom:40px; } h2 { margin:0 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); } h3 { margin:0 0 6px; font-size:15px; font-weight:600; } p { margin:0 0 12px; } ul { margin:0; padding-left:18px; } li { margin-bottom:4px; } code { padding:1px 5px; border-radius:4px; background:var(--raised); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em; }
+      .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; } .card { padding:16px 18px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); } .card h3 { color:var(--muted); font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+      .flow { display:flex; flex-wrap:wrap; align-items:stretch; margin:4px 0 8px; } .node { flex:1 1 130px; min-width:120px; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); } .node b { display:block; font-size:13px; font-weight:600; } .node span { color:var(--faint); font-size:12px; } .node.is-new { border-color:var(--accent); } .arrow { flex:0 0 28px; align-self:center; text-align:center; color:var(--faint); }
+      .phase { position:relative; padding:0 0 20px 26px; border-left:1px solid var(--border); } .phase:last-child { border-left-color:transparent; padding-bottom:0; } .phase::before { content:attr(data-step); position:absolute; left:-11px; top:0; width:21px; height:21px; border-radius:50%; background:var(--raised); color:var(--muted); font-size:11px; font-weight:600; line-height:21px; text-align:center; }
+      table { width:100%; border-collapse:collapse; font-size:14px; } th { padding:6px 10px; border-bottom:1px solid var(--border); color:var(--faint); font-size:11px; font-weight:600; letter-spacing:.06em; text-align:left; text-transform:uppercase; } td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; } td code { background:none; padding:0; color:var(--muted); } .tag { display:inline-block; padding:1px 7px; border-radius:4px; background:var(--raised); font-size:11px; font-weight:600; } .tag.add { color:var(--add); } .tag.change { color:var(--change); }
+      .callout { padding:12px 16px; border-left:2px solid var(--accent); border-radius:0 var(--radius) var(--radius) 0; background:var(--surface); color:var(--muted); } .callout.risk { border-left-color:var(--change); } .callout strong { color:var(--fg); } @media (max-width:640px) { .split { grid-template-columns:1fr; } }
+    </style>
+  </head>
+  <body>
+    <article class="plan">
+      <h1 class="plan-title">Cloud browser video artifacts</h1>
+      <p class="plan-summary">Give cloud-session agents a built-in skill and deterministic runner for exercising a localhost app in headless Chromium, turning the browser run into a compact WebM recording, and publishing it through Trace’s existing video-artifact flow.</p>
+      <div class="meta"><span class="chip"><strong>9</strong> implementation files</span><span class="chip"><strong>4</strong> phases</span><span class="chip">Cloud runtime only</span><span class="chip">No schema migration</span></div>
+
+      <section>
+        <h2>Scope</h2>
+        <div class="split">
+          <div class="card"><h3>In scope</h3><ul><li>A <code>browser-video</code> runtime skill agents can discover and follow.</li><li>A small, recipe-driven runner that launches system Chromium, drives a tab, captures frames, and encodes WebM.</li><li>Bundled cloud-image dependencies and a runtime command that keeps the agent workflow stable.</li><li>Upload through <code>$TRACE_CLI artifact push video</code>, yielding the existing session event and playable artifact card.</li></ul></div>
+          <div class="card"><h3>Explicitly not doing</h3><ul><li>No GraphQL, Prisma, storage, or web-client feature work: video artifacts already exist.</li><li>No recording of a user’s local Chrome, audio capture, arbitrary remote sites, or persistent browser profiles.</li><li>No availability in desktop/local sessions in this first slice; the runner relies on the provisioned image.</li><li>No generalized browser-control product surface or new agent tool protocol.</li></ul></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Current state and chosen seam</h2>
+        <p><code>apps/container-bridge/src/bridge.ts</code> gives each cloud invocation the bundled runtime paths, <code>TRACE_CLI</code>, and <code>TRACE_SKILLS_DIR</code>. <code>runtime/manifest.json</code> is the source list embedded into <code>packages/shared/src/trace-runtime.generated.ts</code>; therefore a runtime skill is available without changing the session service or resolver.</p>
+        <p><code>apps/server/src/services/artifact.ts</code> already normalizes <code>video</code> to <code>trace.video.v1</code>, validates that the archive contains video media, stores it, and emits <code>artifact_created</code>. <code>apps/web/src/components/artifact/MediaArtifact.tsx</code> and <code>MediaArtifactUploadedCard.tsx</code> already play and present that event. The implementation follows the existing runtime artifact skill rather than creating a competing upload API.</p>
+        <p><code>apps/container-bridge/Dockerfile</code> already supplies system Chromium. The design-starter review script is the sibling pattern for launching <code>playwright-core</code> against system Chromium; the new runner will reuse that execution model but record a scripted app run instead of only taking screenshots.</p>
+      </section>
+
+      <section>
+        <h2>How it will work</h2>
+        <div class="flow"><div class="node"><b>Agent-written app</b><span>existing localhost preview</span></div><div class="arrow">→</div><div class="node is-new"><b>browser-video skill</b><span>creates bounded recipe</span></div><div class="arrow">→</div><div class="node is-new"><b>cloud runner</b><span>Chromium + frame capture + ffmpeg</span></div><div class="arrow">→</div><div class="node"><b>artifact CLI</b><span>existing authenticated archive upload</span></div><div class="arrow">→</div><div class="node"><b>Trace video artifact</b><span>existing event and player</span></div></div>
+        <p>The runner accepts a local URL, viewport, a finite sequence of safe browser actions (navigate, wait, click, type, key press, and pause), and recording options. It launches a fresh headless Chromium process with sandbox-safe cloud flags, drives only that page, samples screenshots at a bounded frame rate, encodes a WebM with <code>ffmpeg</code>, and exits with clear failure output. The skill requires the agent to start and smoke-test its preview first, keep recordings brief, inspect the generated video metadata, then upload only the finished media file.</p>
+        <div class="callout"><strong>Why WebM:</strong> it is already accepted by the artifact bundle, directly playable in the existing web UI, and avoids assuming a proprietary H.264 encoder in the Debian runner image.</div>
+      </section>
+
+      <section>
+        <h2>Implementation phases</h2>
+        <div class="phase" data-step="1"><h3>Package the recording capability in the cloud image</h3><p>Add the minimal automation and encoding dependencies to the provisioned runtime image. Add a focused runner module plus executable wrapper with explicit environment/configuration boundaries; it must never require a browser download or network package install during a session.</p></div>
+        <div class="phase" data-step="2"><h3>Make it agent-usable through the runtime</h3><p>Add the <code>browser-video</code> skill with a concise contract, action-recipe example, duration/size limits, localhost-only guidance, cleanup rules, and the final <code>artifact push video</code> command. Add its files to the runtime manifest and regenerate the embedded runtime bundle so new cloud invocations receive it.</p></div>
+        <div class="phase" data-step="3"><h3>Harden runner behavior</h3><p>Validate recipe shape and URL policy before launch; enforce fixed maximum duration, action count, frame rate, viewport, and output path handling; always close browser/ffmpeg processes and remove temporary frames on success or failure. Report actionable errors for an unavailable preview, failed selector/action, Chromium failure, encoder failure, or missing output.</p></div>
+        <div class="phase" data-step="4"><h3>Verify the full artifact handoff</h3><p>Unit-test validation, command construction, action dispatch, and cleanup with injected process/browser seams. Build the cloud image, run a small local app through the runner, confirm WebM structure and size, publish it with the existing CLI, and verify the resulting <code>artifact_created</code> event displays as a playable video card.</p></div>
+      </section>
+
+      <section>
+        <h2>File map</h2>
+        <table><thead><tr><th>File</th><th>Change</th><th>Responsibility</th></tr></thead><tbody>
+          <tr><td><code>apps/container-bridge/Dockerfile</code></td><td><span class="tag change">edit</span></td><td>Install the pinned browser-automation dependency and <code>ffmpeg</code> alongside the existing Chromium runtime.</td></tr>
+          <tr><td><code>apps/container-bridge/package.json</code></td><td><span class="tag change">edit</span></td><td>Declare the runner’s automation dependency so the standalone-image dependency test remains truthful.</td></tr>
+          <tr><td><code>pnpm-lock.yaml</code></td><td><span class="tag change">generated</span></td><td>Lock the added container-bridge dependency for reproducible runner-image builds.</td></tr>
+          <tr><td><code>apps/container-bridge/src/browser-video-recorder.ts</code></td><td><span class="tag add">new</span></td><td>Own recipe validation, Chromium lifecycle, browser actions, frame capture, WebM encoding, output validation, and cleanup.</td></tr>
+          <tr><td><code>apps/container-bridge/src/browser-video-recorder.test.ts</code></td><td><span class="tag add">new</span></td><td>Cover invalid/unsafe recipes, bounded options, action ordering, encoder arguments, and cleanup/error paths without launching a real browser.</td></tr>
+          <tr><td><code>apps/container-bridge/scripts/trace-browser-record.mjs</code></td><td><span class="tag add">new</span></td><td>Expose the recorder as a stable image command, translating JSON/CLI input into the runner and returning useful exit status.</td></tr>
+          <tr><td><code>runtime/skills/browser-video/SKILL.md</code></td><td><span class="tag add">new</span></td><td>Teach cloud agents the tested, bounded record-and-upload workflow and when to use it.</td></tr>
+          <tr><td><code>runtime/manifest.json</code></td><td><span class="tag change">edit</span></td><td>Include the new skill and bump runtime version so existing runtime directories refresh.</td></tr>
+          <tr><td><code>packages/shared/src/trace-runtime.generated.ts</code></td><td><span class="tag change">generated</span></td><td>Regenerated embedded runtime payload consumed by the container bridge.</td></tr>
+        </tbody></table>
+      </section>
+
+      <section>
+        <h2>Verification criteria</h2>
+        <table><tbody>
+          <tr><td><code>pnpm --filter @trace/container-bridge test</code></td><td>New recorder tests and existing standalone-image dependency checks pass.</td></tr>
+          <tr><td><code>pnpm --filter @trace/container-bridge build</code></td><td>The bridge and recorder compile under the production runtime’s TypeScript configuration.</td></tr>
+          <tr><td><code>pnpm --filter @trace/shared test</code></td><td>The regenerated runtime bundle remains valid and preserves runtime installation behavior.</td></tr>
+          <tr><td>Container smoke test</td><td>System Chromium opens a local preview, a multi-action recipe produces a non-empty playable WebM within configured limits, and temporary capture data is removed.</td></tr>
+          <tr><td>Artifact smoke test</td><td><code>$TRACE_CLI artifact push video</code> succeeds; the session receives <code>trace.video.v1</code>; the web card and artifact dialog load a playable video.</td></tr>
+        </tbody></table>
+      </section>
+
+      <section>
+        <h2>Risks and mitigations</h2>
+        <div class="callout risk"><strong>Video recording is resource-intensive.</strong> Headless browser capture plus encoding can consume CPU and disk in a shared cloud runtime. Limit recording duration, frame rate, dimensions, action count, and output size; clean all temp data; fail before uploading an oversized capture.</div>
+        <div class="callout risk" style="margin-top:12px"><strong>Untrusted navigation must not become an egress feature.</strong> The first version accepts localhost/loopback preview URLs only. Recipes cannot supply arbitrary Chromium flags, shell snippets, downloads, or persistent profile locations.</div>
+        <div class="callout risk" style="margin-top:12px"><strong>Automation can be flaky.</strong> Use explicit waits and selector/action failures in the recipe, require the agent to test the app before recording, and surface a readable error instead of publishing a partial capture.</div>
+      </section>
+    </article>
+  </body>
+</html>
