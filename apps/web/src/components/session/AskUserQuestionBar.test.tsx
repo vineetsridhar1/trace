@@ -305,7 +305,7 @@ describe("AskUserQuestionBar", () => {
       );
     });
 
-    expect(JSON.stringify(renderer.toJSON())).toContain("Or write your own answer");
+    expect(renderer.root.findByType("textarea").props.placeholder).toBe("Write your own answer…");
     await act(async () => findButton(renderer.root, "Yes").props.onClick());
     const textarea = renderer.root.findByType("textarea");
     await act(async () => textarea.props.onChange({ target: { value: "Use a tablet kiosk" } }));
