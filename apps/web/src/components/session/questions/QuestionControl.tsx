@@ -4,6 +4,7 @@ import { QuestionRankingControl } from "./QuestionRankingControl";
 import { QuestionReferenceControl } from "./QuestionReferenceControl";
 import type { FileAttachment } from "../ImageAttachmentBar";
 import { QuestionTextControl } from "./QuestionTextControl";
+import { QuestionCustomAnswer } from "./QuestionCustomAnswer";
 
 interface QuestionControlProps {
   question: Question;
@@ -59,7 +60,17 @@ export function QuestionControl({
     );
   }
   if (type === "ranking") {
-    return <QuestionRankingControl question={question} ranking={ranking} onMove={onMoveRank} />;
+    return (
+      <div className="grid gap-2">
+        <QuestionRankingControl question={question} ranking={ranking} onMove={onMoveRank} />
+        <QuestionCustomAnswer
+          question={question}
+          value={customText}
+          onChange={onTextChange}
+          onContinue={onContinue}
+        />
+      </div>
+    );
   }
   if (type === "confirm") {
     const options =
@@ -70,24 +81,32 @@ export function QuestionControl({
             { id: "no", label: "No", description: "" },
           ];
     return (
-      <div className="grid grid-cols-2 gap-2">
-        {options.slice(0, 2).map((option, index) => {
-          const value = option.id ?? option.label;
-          return (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={selected.has(value)}
-              onClick={() => onToggle(value)}
-              className={`flex min-h-14 flex-col justify-center rounded-lg border px-3 text-left ${selected.has(value) ? "border-foreground/35 bg-foreground/[0.08]" : "border-border"}`}
-            >
-              <span className="text-[13px] font-semibold">{option.label}</span>
-              <span className="font-mono text-[10px] text-muted-foreground">
-                {index === 0 ? "y" : "n"}
-              </span>
-            </button>
-          );
-        })}
+      <div className="grid gap-2">
+        <div className="grid grid-cols-2 gap-2">
+          {options.slice(0, 2).map((option, index) => {
+            const value = option.id ?? option.label;
+            return (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={selected.has(value)}
+                onClick={() => onToggle(value)}
+                className={`flex min-h-14 flex-col justify-center rounded-lg border px-3 text-left ${selected.has(value) ? "border-foreground/35 bg-foreground/[0.08]" : "border-border"}`}
+              >
+                <span className="text-[13px] font-semibold">{option.label}</span>
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {index === 0 ? "y" : "n"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <QuestionCustomAnswer
+          question={question}
+          value={customText}
+          onChange={onTextChange}
+          onContinue={onContinue}
+        />
       </div>
     );
   }
@@ -134,14 +153,12 @@ export function QuestionControl({
           />
         ) : null}
       </div>
-      {showOther && otherSelected ? (
-        <QuestionTextControl
-          question={{ ...question, maxLength: question.maxLength ?? 240 }}
-          value={customText}
-          onChange={onTextChange}
-          onContinue={onContinue}
-        />
-      ) : null}
+      <QuestionCustomAnswer
+        question={question}
+        value={customText}
+        onChange={onTextChange}
+        onContinue={onContinue}
+      />
       {validationMessage && selected.size > 0 ? (
         <p
           role="alert"

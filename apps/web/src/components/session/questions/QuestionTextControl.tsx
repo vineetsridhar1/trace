@@ -5,16 +5,18 @@ export function QuestionTextControl({
   value,
   onChange,
   onContinue,
+  autoFocus = true,
 }: {
   question: Question;
   value: string;
   onChange: (value: string) => void;
   onContinue: () => void;
+  autoFocus?: boolean;
 }) {
   return (
     <div className="grid gap-2">
       <textarea
-        autoFocus
+        autoFocus={autoFocus}
         rows={3}
         value={value}
         maxLength={question.maxLength}

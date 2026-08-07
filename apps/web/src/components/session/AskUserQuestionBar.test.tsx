@@ -292,6 +292,50 @@ describe("AskUserQuestionBar", () => {
     await act(async () => renderer.unmount());
   });
 
+  it("accepts and serializes a custom answer for a choice question", async () => {
+    const onResponse = vi.fn(() => Promise.resolve());
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <AskUserQuestionBar
+          node={{ id: "request-custom-answer", questions: [question("custom")] }}
+          onResponse={onResponse}
+          onDismiss={() => undefined}
+        />,
+      );
+    });
+
+    expect(JSON.stringify(renderer.toJSON())).toContain("Or write your own answer");
+    await act(async () => findButton(renderer.root, "Yes").props.onClick());
+    const textarea = renderer.root.findByType("textarea");
+    await act(async () => textarea.props.onChange({ target: { value: "Use a tablet kiosk" } }));
+    await act(async () => findButton(renderer.root, "Next").props.onClick());
+    await act(async () => findButton(renderer.root, "Send 1 answer").props.onClick());
+
+    expect(onResponse).toHaveBeenCalledWith(
+      expect.stringContaining("<selected>yes</selected>\n  <text>Use a tablet kiosk</text>"),
+      [],
+    );
+    await act(async () => renderer.unmount());
+  });
+
+  it("allows a custom answer without selecting an option", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <AskUserQuestionBar
+          node={{ id: "request-custom-only", questions: [question("custom-only")] }}
+          onResponse={() => undefined}
+          onDismiss={() => undefined}
+        />,
+      );
+    });
+    const textarea = renderer.root.findByType("textarea");
+    await act(async () => textarea.props.onChange({ target: { value: "A custom direction" } }));
+    expect(findButton(renderer.root, "Next").props.disabled).toBe(false);
+    await act(async () => renderer.unmount());
+  });
+
   it("continues text questions with Enter and preserves Shift+Enter for a new line", async () => {
     const textQuestion: Question = {
       ...question("text"),
