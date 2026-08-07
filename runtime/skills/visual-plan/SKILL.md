@@ -36,15 +36,22 @@ Prefer reading a few files completely over grepping many files shallowly.
 
 ## 2. Write the plan
 
-Start from the supplied canvas template, which carries the component vocabulary and visual system:
+First choose a durable, descriptive home for the plan in the repository. Look for an existing
+documentation directory such as `docs/`, `doc/`, or `documentation/`; use the project's existing
+convention when one exists. Otherwise create `docs/`. Name the file for the change, for example
+`docs/session-artifact-upload-plan.html` — never use the generic `plan.mdx` or put the plan at the
+repository root.
+
+Start the named plan from the supplied canvas template, which carries the component vocabulary and
+visual system:
 
 ```bash
-mkdir -p .trace-work/plan
-cp "$TRACE_SKILLS_DIR/visual-plan/template.html" .trace-work/plan/plan.html
+mkdir -p docs
+cp "$TRACE_SKILLS_DIR/visual-plan/template.html" docs/session-artifact-upload-plan.html
 ```
 
-Treat the copied file as the canvas: replace its sample content while preserving and composing its
-visual system. The template's `<style>` block defines every component available: `.plan-title`, `.plan-summary`,
+Treat the copied, descriptively named file as the canvas: replace its sample content while preserving
+and composing its visual system. The template's `<style>` block defines every component available: `.plan-title`, `.plan-summary`,
 `.meta`/`.chip`, `.split`/`.card` for scope against non-goals, `.flow`/`.node`/`.arrow` for data
 flow, `.phase` for sequenced work, tables for file maps and verification, `.tag` for add/change/
 remove, and `.callout` for risks. Each one is demonstrated in the template body. Compose from these
@@ -64,14 +71,19 @@ instead of pasting its body. A plan that contains the implementation is not revi
 
 ## 3. Publish
 
+The artifact bundle must contain a root-level file named `plan.html`, so stage a copy of the named
+repository plan immediately before publishing:
+
 ```bash
+mkdir -p .trace-work/plan
+cp docs/session-artifact-upload-plan.html .trace-work/plan/plan.html
 trace artifact push visual-plan .trace-work/plan --key primary
 ```
 
 The upload is rejected unless the directory holds exactly one file, `plan.html`, with no external
 references — no linked stylesheets, no remote images or fonts, no `<script>`. Inline the styles,
-and use `data:` URLs or CSS shapes for any image. The plan renders with scripting disabled, so it
-must read correctly as static markup.
+and use `data:` URLs or CSS shapes for any image. The plan renders with scripting disabled, so the
+named repository plan and its staged copy must read correctly as static markup.
 
 Publish once, when the canvas is complete. Do not print the plan into chat and do not invoke a
 provider-native plan approval tool. Trace renders the uploaded artifact; after the upload succeeds,
