@@ -19,6 +19,7 @@ describe("code monorepo application config", () => {
             key: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
             secretName: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
           },
+          { key: "BUNDLE_GEM__FURY__IO", secretName: "BUNDLE_GEM__FURY__IO" },
         ],
       }),
     ]);
@@ -40,6 +41,7 @@ describe("code monorepo application config", () => {
                 key: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
                 secretName: "BUNDLE_ENTERPRISE__CONTRIBSYS__COM",
               },
+              { key: "BUNDLE_GEM__FURY__IO", secretName: "BUNDLE_GEM__FURY__IO" },
               { key: "ASDF_JAVA_VERSION", value: "temurin-17.0.17+10" },
               { key: "PGHOST", value: "127.0.0.1" },
               { key: "PGPORT", value: "5432" },
