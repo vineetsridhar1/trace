@@ -3,101 +3,157 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Secure ephemeral runtime credentials</title>
+    <title>Safer credentials for cloud sessions</title>
     <style>
       :root { --bg:#171717; --surface:#1f1f1f; --raised:#262626; --fg:#e4e4e7; --muted:#a1a1aa; --faint:#71717a; --border:#2e2e2e; --accent:#3b82f6; --add:#22c55e; --change:#eab308; --remove:#ef4444; --radius:8px; }
-      * { box-sizing:border-box; } body { margin:0; padding:40px 32px 72px; background:var(--bg); color:var(--fg); font:15px/1.65 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
-      .plan { max-width:860px; margin:0 auto; } .plan-title { margin:0 0 8px; font-size:28px; font-weight:650; letter-spacing:-.02em; } .plan-summary { margin:0 0 20px; color:var(--muted); font-size:16px; }
-      .meta { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:36px; } .chip { padding:4px 10px; border:1px solid var(--border); border-radius:999px; background:var(--surface); color:var(--muted); font-size:12px; } .chip strong { color:var(--fg); font-weight:550; }
-      section { margin-bottom:40px; } h2 { margin:0 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); } h3 { margin:0 0 6px; font-size:15px; font-weight:600; } p { margin:0 0 12px; } code { padding:1px 5px; border-radius:4px; background:var(--raised); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em; }
-      .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; } .card { padding:16px 18px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); } .card h3 { color:var(--muted); font-size:12px; letter-spacing:.06em; text-transform:uppercase; } .card ul { margin:0; padding-left:18px; } .card li { margin-bottom:4px; }
-      .flow { display:flex; flex-wrap:wrap; align-items:stretch; gap:0; margin:4px 0 8px; } .node { flex:1 1 0; min-width:120px; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); } .node b { display:block; font-size:13px; font-weight:600; } .node span { color:var(--faint); font-size:12px; } .node.is-new { border-color:var(--accent); } .arrow { flex:0 0 28px; align-self:center; text-align:center; color:var(--faint); }
-      .phase { position:relative; padding:0 0 20px 26px; border-left:1px solid var(--border); } .phase:last-child { border-left-color:transparent; padding-bottom:0; } .phase::before { content:attr(data-step); position:absolute; left:-11px; top:0; width:21px; height:21px; border-radius:50%; background:var(--raised); color:var(--muted); font-size:11px; font-weight:600; line-height:21px; text-align:center; }
-      table { width:100%; border-collapse:collapse; font-size:14px; } th { padding:6px 10px; border-bottom:1px solid var(--border); color:var(--faint); font-size:11px; font-weight:600; letter-spacing:.06em; text-align:left; text-transform:uppercase; } td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; } td code { background:none; padding:0; color:var(--muted); } .tag { display:inline-block; padding:1px 7px; border-radius:4px; background:var(--raised); font-size:11px; font-weight:600; } .tag.add { color:var(--add); } .tag.change { color:var(--change); } .tag.remove { color:var(--remove); }
-      .callout { padding:12px 16px; border-left:2px solid var(--accent); border-radius:0 var(--radius) var(--radius) 0; background:var(--surface); color:var(--muted); } .callout.risk { border-left-color:var(--change); } .callout strong { color:var(--fg); }
+      * { box-sizing:border-box; }
+      body { margin:0; padding:40px 32px 72px; background:var(--bg); color:var(--fg); font:15px/1.65 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+      .plan { max-width:860px; margin:0 auto; }
+      .plan-title { margin:0 0 8px; font-size:28px; font-weight:650; letter-spacing:-.02em; }
+      .plan-summary { margin:0 0 20px; color:var(--muted); font-size:16px; }
+      .meta { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:36px; }
+      .chip { padding:4px 10px; border:1px solid var(--border); border-radius:999px; background:var(--surface); color:var(--muted); font-size:12px; }
+      .chip strong { color:var(--fg); font-weight:550; }
+      section { margin-bottom:40px; }
+      h2 { margin:0 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); }
+      h3 { margin:0 0 6px; font-size:15px; font-weight:600; }
+      p { margin:0 0 12px; }
+      code { padding:1px 5px; border-radius:4px; background:var(--raised); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em; }
+      .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+      .card { padding:16px 18px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); }
+      .card h3 { color:var(--muted); font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+      .card ul { margin:0; padding-left:18px; }
+      .card li { margin-bottom:4px; }
+      .flow { display:flex; flex-wrap:wrap; align-items:stretch; gap:0; margin:4px 0 8px; }
+      .node { flex:1 1 0; min-width:120px; padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); }
+      .node b { display:block; font-size:13px; font-weight:600; }
+      .node span { color:var(--faint); font-size:12px; }
+      .node.is-new { border-color:var(--accent); }
+      .arrow { flex:0 0 28px; align-self:center; text-align:center; color:var(--faint); }
+      .phase { position:relative; padding:0 0 20px 26px; border-left:1px solid var(--border); }
+      .phase:last-child { border-left-color:transparent; padding-bottom:0; }
+      .phase::before { content:attr(data-step); position:absolute; left:-11px; top:0; width:21px; height:21px; border-radius:50%; background:var(--raised); color:var(--muted); font-size:11px; font-weight:600; line-height:21px; text-align:center; }
+      table { width:100%; border-collapse:collapse; font-size:14px; }
+      th { padding:6px 10px; border-bottom:1px solid var(--border); color:var(--faint); font-size:11px; font-weight:600; letter-spacing:.06em; text-align:left; text-transform:uppercase; }
+      td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+      td code { background:none; padding:0; color:var(--muted); }
+      .tag { display:inline-block; padding:1px 7px; border-radius:4px; background:var(--raised); font-size:11px; font-weight:600; }
+      .tag.add { color:var(--add); }
+      .tag.change { color:var(--change); }
+      .callout { padding:12px 16px; border-left:2px solid var(--accent); border-radius:0 var(--radius) var(--radius) 0; background:var(--surface); color:var(--muted); }
+      .callout.risk { border-left-color:var(--change); }
+      .callout strong { color:var(--fg); }
       @media (max-width:640px) { .split { grid-template-columns:1fr; } }
     </style>
   </head>
   <body>
     <article class="plan">
-      <h1 class="plan-title">Secure credentials for ephemeral cloud runtimes</h1>
-      <p class="plan-summary">Remove raw user and organization credentials from ECS <code>RunTask</code> overrides. A short-lived runtime bootstrap grant establishes a session-bound control channel; provider credentials remain server-side and are used only by scoped Git and model egress brokers.</p>
-      <div class="meta"><span class="chip"><strong>11</strong> code areas</span><span class="chip"><strong>5</strong> delivery phases</span><span class="chip">Security-sensitive</span><span class="chip">Migration required</span></div>
+      <h1 class="plan-title">Keep personal keys out of cloud containers</h1>
+      <p class="plan-summary">Today, Trace gives a new cloud container copies of the user’s real API and login keys. The safer design is for Trace to keep those keys and give the container a temporary pass that works only for one session.</p>
+      <div class="meta">
+        <span class="chip"><strong>4</strong> stages</span>
+        <span class="chip">No database migration expected</span>
+        <span class="chip">Security improvement</span>
+        <span class="chip">Approval required before coding</span>
+      </div>
 
       <section>
-        <h2>Outcome and scope</h2>
-        <div class="split"><div class="card"><h3>In scope</h3><ul><li>Eliminate plaintext provider credentials from the provisioned-runtime launcher payload and ECS task overrides.</li><li>Issue a single-use, runtime-generation-bound bootstrap grant and exchange it for scoped runtime capabilities.</li><li>Use managed Git and server-side provider egress paths so user API keys and Codex session material never enter the task.</li><li>Add audit-safe telemetry, revocation, tests, rollout controls, and credential-rotation runbook.</li></ul></div><div class="card"><h3>Explicitly deferred</h3><ul><li>A generic “fetch any org secret” API for containers; it would recreate the exfiltration boundary.</li><li>Granting the ECS task role broad Secrets Manager or database access.</li><li>Changing local/Electron runtime credential behavior in this first cut.</li><li>Supporting ChatGPT-session auth in cloud until its server-side execution/proxy contract is proven.</li></ul></div></div>
+        <h2>The idea in everyday language</h2>
+        <div class="callout"><strong>Think of a hotel key card.</strong> A hotel does not hand every guest the master key. It gives each guest a card that opens one room for a limited time. Trace should do the same: keep the master credentials safe and give each cloud container a temporary pass for one session.</div>
       </section>
 
       <section>
-        <h2>Current state and security boundary</h2>
-        <p><code>apps/server/src/lib/runtime-adapters.ts</code> decrypts org runtime secrets through <code>resolveProvisionedRuntimeEnv</code> and user tokens through <code>resolveUserApiTokenEnv</code>, then sends all of them in <code>bootstrapEnv</code> to the provisioned launcher. The launcher maps that object to ECS environment overrides, which are returned by task inspection APIs.</p>
-        <p><code>apps/server/src/services/api-token.ts</code>, <code>codex-credential.ts</code>, and <code>org-secret.ts</code> correctly encrypt data at rest, but decryption immediately crosses into an ephemeral task. <code>apps/container-bridge/src/tool-auth.ts</code> additionally writes Codex session JSON to disk. <code>managed-git.ts</code> already offers a session-bound managed Git token, so Git can move to that capability rather than a user <code>GITHUB_TOKEN</code>.</p>
-        <div class="callout risk"><strong>Boundary to enforce:</strong> a compromised runtime may use only the capabilities needed for its assigned session. It must never be able to read, list, refresh, or reuse the owner’s raw API keys, OAuth/ChatGPT-session credentials, SSH keys, or unrelated organization secrets.</div>
+        <h2>What is wrong today</h2>
+        <div class="split">
+          <div class="card"><h3>Today</h3><ul><li>Trace decrypts the user’s real Anthropic, OpenAI, GitHub, SSH, or Codex credentials.</li><li>Those credentials are copied into the cloud container when it starts.</li><li>A person or system with permission to inspect the AWS task can see them.</li><li>Code running inside the container can also read them.</li></ul></div>
+          <div class="card"><h3>After this change</h3><ul><li>Trace keeps the real credentials on the server.</li><li>The container receives only a short-lived temporary pass.</li><li>The pass works for one user, one session, and one container.</li><li>Stopping or moving the session cancels the pass.</li></ul></div>
+        </div>
       </section>
 
       <section>
-        <h2>Target flow</h2>
-        <div class="flow"><div class="node"><b>Session service</b><span>creates runtime id + 5–10 minute bootstrap grant</span></div><div class="arrow">→</div><div class="node"><b>Launcher / ECS</b><span>receives only non-secret config and the grant</span></div><div class="arrow">→</div><div class="node is-new"><b>Credential broker</b><span>atomically validates and consumes grant</span></div><div class="arrow">→</div><div class="node is-new"><b>Scoped capabilities</b><span>managed Git + model egress tokens</span></div></div>
-        <p>The grant carries a random identifier, exact runtime instance id, session id, organization id, selected tool, audience, expiration, and token type. Its one-time use is recorded in Redis with an expiry. The broker rechecks the persisted session-group runtime binding and active generation before issuing any capability. No endpoint returns a stored provider credential.</p>
-        <div class="flow"><div class="node"><b>Runtime tool</b><span>uses a short-lived egress token</span></div><div class="arrow">→</div><div class="node is-new"><b>Trace egress proxy</b><span>authorizes session, model, provider, spend/rate policy</span></div><div class="arrow">→</div><div class="node"><b>Provider API</b><span>real key added only server-side</span></div></div>
+        <h2>How it will work</h2>
+        <div class="flow">
+          <div class="node"><b>1. Trace starts a session</b><span>Creates a temporary one-use pass</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>2. Container checks in</b><span>Uses the pass to prove which session it belongs to</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new"><b>3. Trace acts as middleman</b><span>Uses the real credential without revealing it</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>4. Work completes</b><span>Git or AI response returns to the container</span></div>
+        </div>
+        <p>The container can ask Trace to perform an approved action, such as sending a prompt to Anthropic or pushing to the session’s repository. It cannot ask Trace to show, download, or refresh the real credential.</p>
       </section>
 
       <section>
-        <h2>Decisions</h2>
-        <div class="split"><div class="card"><h3>Chosen: brokered capability delivery</h3><p>Use the existing Trace control plane, encrypted-at-rest secret services, managed-Git authorization pattern, Redis, and runtime ownership checks. ECS receives a disposable bootstrap grant only.</p></div><div class="card"><h3>Rejected: ECS secret injection as the main solution</h3><p>Secrets Manager references would hide values from task-definition output, but values still become process environment and dynamic per-user secrets cannot safely be selected via task overrides. It does not protect against code running in the task.</p></div></div>
-        <p><strong>Provider policy:</strong> Anthropic and OpenAI API-key traffic will be proxied. Git will use Trace-managed, repository- and runtime-scoped credentials. Codex API-key traffic follows the OpenAI egress path. ChatGPT-session and access-token modes will be blocked for cloud runtime launch until a server-side Codex execution adapter is available; they remain valid for local runtimes.</p>
+        <h2>What happens to each credential</h2>
+        <table>
+          <thead><tr><th>Credential</th><th>New behavior</th><th>User impact</th></tr></thead>
+          <tbody>
+            <tr><td>Anthropic API key</td><td>Trace sends Claude requests on behalf of the container.</td><td>Claude Code should behave the same.</td></tr>
+            <tr><td>OpenAI or Codex API key</td><td>Trace sends model requests on behalf of the container.</td><td>API-key Codex sessions should behave the same.</td></tr>
+            <tr><td>GitHub token</td><td>The container uses Trace’s existing session-specific Git access.</td><td>Clone, pull, and push continue without exposing the personal token.</td></tr>
+            <tr><td>SSH private key</td><td>It is no longer copied into cloud containers.</td><td>Cloud Git must use Trace-managed access instead.</td></tr>
+            <tr><td>Codex ChatGPT login</td><td>Keep it on the server; do not copy the login file into a cloud container.</td><td>Cloud ChatGPT-login sessions are temporarily disabled until a safe server-side path is proven. Local sessions still work.</td></tr>
+            <tr><td>Custom organization secrets</td><td>Add safe, purpose-built connections one at a time instead of a general “download secret” feature.</td><td>Existing custom cloud-secret use must be inventoried before the old path is removed.</td></tr>
+          </tbody>
+        </table>
       </section>
 
       <section>
-        <h2>Implementation phases</h2>
-        <div class="phase" data-step="1"><h3>Containment and contract inventory</h3><p>Rotate credentials exposed through the prior task inspection; disable task-definition override logging/debug output that serializes environment values. Catalog every current <code>bootstrapEnv</code> name by class: runtime identity, non-secret configuration, managed Git, provider API key, OAuth/session credential, and arbitrary org secret. Define an allowlist of non-secret ECS bootstrap fields and reject all credential-shaped keys at the launcher boundary.</p></div>
-        <div class="phase" data-step="2"><h3>Runtime bootstrap grant and broker</h3><p>Add a dedicated credential capability module with signed grant creation/verification, a distinct audience and 10-minute maximum TTL, Redis-backed single-use consumption, and an explicit revoke-by-runtime/session key. Add a runtime route that authenticates the grant, verifies the persisted connection’s <code>runtimeInstanceId</code> and session ownership, and returns only provider-independent capability metadata and short-lived scoped bearer tokens. Refactor inline runtime routes from <code>index.ts</code> into the same route module so auth logic is centralized.</p></div>
-        <div class="phase" data-step="3"><h3>Brokered provider and Git access</h3><p>Create a server-side egress service/routes for the minimum Anthropic and OpenAI-compatible request surface used by the cloud tools. The service resolves the owner credential only after capability authorization, applies model/provider/session allowlists and request-size/rate controls, forwards over HTTPS, and redacts failures. Change managed Git setup to mint runtime-scoped managed-Git credentials only; remove <code>GITHUB_TOKEN</code> and <code>SSH_PRIVATE_KEY</code> from cloud bootstrap. Keep provider credentials out of bridge process environment; supply the tool only with local proxy URL plus an ephemeral egress token.</p></div>
-        <div class="phase" data-step="4"><h3>Bridge/tool integration and safe migration</h3><p>At bridge boot, exchange the grant once and retain only the resulting expiring capabilities in memory. Update Claude/Codex tool setup to point at the brokered endpoint and use token refresh that requires the long-lived runtime control identity plus an active lease. Remove <code>CODEX_AUTH_JSON</code> file installation and cloud credential-sync behavior. Gate the new path behind a cloud-runtime credential mode flag; default new sessions to broker mode after integration tests pass, retain the legacy path only for a short rollback window, then delete it.</p></div>
-        <div class="phase" data-step="5"><h3>Deploy and prove the boundary</h3><p>Deploy the control plane before the runtime image, use a canary organization/session, and inspect the resulting ECS task through the same CLI path that exposed the issue. Confirm task overrides contain no raw provider, Git, SSH, or Codex credentials; validate normal Claude/Codex API-key runs, managed repository clone/push, revocation on stop/move, restart behavior, expiry, replay, cross-session misuse, and denied ChatGPT-session cloud launch.</p></div>
+        <h2>Implementation stages</h2>
+        <div class="phase" data-step="1"><h3>Build the temporary-pass system</h3><p>Create passes that expire after a few minutes, work only once during startup, and are tied to the exact user, session, and container. Trace checks that the session is still active before accepting one.</p></div>
+        <div class="phase" data-step="2"><h3>Connect Git and AI tools through Trace</h3><p>Reuse Trace’s existing session-specific Git access. Add a controlled middleman for Anthropic and OpenAI requests. It will limit which provider, model, and session each temporary pass can use.</p></div>
+        <div class="phase" data-step="3"><h3>Remove real credentials from container startup</h3><p>Update the container so it checks in with its temporary pass. Remove API keys, GitHub tokens, SSH keys, and Codex login files from the information sent to AWS.</p></div>
+        <div class="phase" data-step="4"><h3>Roll out carefully</h3><p>Enable the new system for a small test group first. Confirm normal model requests, Git operations, restarts, and shutdowns. Then make it the default and delete the old credential-copying path.</p></div>
       </section>
 
       <section>
-        <h2>File and infrastructure map</h2>
-        <table><thead><tr><th>Area</th><th>Change</th><th>Responsibility</th></tr></thead><tbody>
-          <tr><td><code>apps/server/src/lib/runtime-adapters.ts</code></td><td><span class="tag change">edit</span></td><td>Replace credential-bearing <code>bootstrapEnv</code> assembly with grant plus safe configuration; remove direct cloud-token resolution.</td></tr>
-          <tr><td><code>apps/server/src/lib/runtime-credential.ts</code></td><td><span class="tag add">new</span></td><td>Typed bootstrap and egress capability claims, signing, validation, TTLs, and Redis one-time/revocation helpers.</td></tr>
-          <tr><td><code>apps/server/src/services/runtime-credential-broker.ts</code></td><td><span class="tag add">new</span></td><td>Authorization, session-generation checks, capability issuance, provider credential resolution, and audit events.</td></tr>
-          <tr><td><code>apps/server/src/routes/runtime-credentials.ts</code></td><td><span class="tag add">new</span></td><td>Bootstrap exchange, refresh/revoke, and authenticated egress endpoints with payload limits.</td></tr>
-          <tr><td><code>apps/server/src/index.ts</code></td><td><span class="tag change">edit</span></td><td>Mount the runtime credential router and remove the inline Codex-auth credential upload endpoint.</td></tr>
-          <tr><td><code>apps/server/src/services/managed-git.ts</code></td><td><span class="tag change">edit</span></td><td>Reuse runtime-scoped Git token issuance in the broker path; ensure no personal GitHub credential is necessary in cloud.</td></tr>
-          <tr><td><code>apps/container-bridge/src/index.ts</code></td><td><span class="tag change">edit</span></td><td>Exchange bootstrap grant before enabling tools; keep capability state in memory and release it on shutdown.</td></tr>
-          <tr><td><code>apps/container-bridge/src/tool-auth.ts</code></td><td><span class="tag change">edit</span></td><td>Replace raw Claude/Codex login material and Codex auth-file persistence with proxy configuration; reject session auth in cloud.</td></tr>
-          <tr><td><code>apps/container-bridge/src/bridge.ts</code></td><td><span class="tag change">edit</span></td><td>Pass only invocation-scoped, non-secret tool configuration; never echo capability values in output.</td></tr>
-          <tr><td><code>apps/server/src/lib/runtime-adapters.test.ts</code> and new focused tests</td><td><span class="tag add">test</span></td><td>Prove launcher body and errors never contain secret values; test JWT audience, replay, expiry, binding, denial, and egress policy.</td></tr>
-          <tr><td>Production ECS/IAM configuration</td><td><span class="tag change">ops</span></td><td>Keep task role limited to ECR/logs/network bootstrap; add private egress/proxy routing and remove broad secret reads. The owning infrastructure repository must be identified before implementation.</td></tr>
-        </tbody></table>
+        <h2>What is included and excluded</h2>
+        <div class="split">
+          <div class="card"><h3>Included</h3><ul><li>Temporary session passes.</li><li>Safe Git and AI request handling.</li><li>Canceling access when a session stops or moves.</li><li>Tests, monitoring, credential rotation, and a gradual rollout.</li></ul></div>
+          <div class="card"><h3>Not in the first version</h3><ul><li>A way for containers to download arbitrary secrets.</li><li>Changes to local desktop sessions.</li><li>Cloud use of a personal ChatGPT login until the safe approach is confirmed.</li><li>Unrelated AWS or session-lifecycle changes.</li></ul></div>
+        </div>
       </section>
 
       <section>
-        <h2>Risks and mitigations</h2>
-        <table><thead><tr><th>Risk</th><th>Mitigation</th></tr></thead><tbody>
-          <tr><td>Bootstrap grant is replayed from an ECS inspection or log.</td><td>Ten-minute audience-bound JWT plus Redis <code>SET NX</code> consumption, exact persisted runtime-generation check, lease check on refresh, and immediate revocation on stop/move.</td></tr>
-          <tr><td>Proxy becomes a general credential oracle.</td><td>No “get secret” operation. Each endpoint has fixed provider semantics, validates session/runtime/user ownership, and emits only redacted audit metadata.</td></tr>
-          <tr><td>Tool lacks required base-URL/auth-header support.</td><td>Validate Claude Code and Codex configuration in a disposable runtime before enabling each provider; retain a feature flag and fail closed rather than falling back to raw keys.</td></tr>
-          <tr><td>Provider streaming or large requests overload the API service.</td><td>Stream responses without buffering, bound headers/body sizes, apply per-runtime limits, and place the egress proxy behind the existing production ingress/load-balancing policy.</td></tr>
-          <tr><td>Existing credentials have already been exposed.</td><td>Rotate affected GitHub, Anthropic, OpenAI, and Codex credentials before rollout; invalidate current cloud runtimes and record completion in the operational runbook.</td></tr>
-        </tbody></table>
+        <h2>Main risks</h2>
+        <table>
+          <thead><tr><th>Risk</th><th>How we reduce it</th></tr></thead>
+          <tbody>
+            <tr><td>Someone steals the temporary pass.</td><td>It expires quickly, works only for one session/container, and is canceled when that session ends.</td></tr>
+            <tr><td>The middleman is used for unapproved requests.</td><td>It checks the user, session, provider, model, request size, and rate every time. It never has a “show me the key” operation.</td></tr>
+            <tr><td>Claude Code or Codex cannot use the middleman.</td><td>Test each tool in a disposable cloud session before enabling it. If it is incompatible, that tool stays on the old path only during the limited rollout period; production fails safely before the old path is removed.</td></tr>
+            <tr><td>Previously exposed keys remain valid.</td><td>Rotate the affected Anthropic, OpenAI, GitHub, and Codex credentials before rollout.</td></tr>
+          </tbody>
+        </table>
       </section>
 
       <section>
-        <h2>Verification and acceptance criteria</h2>
-        <table><thead><tr><th>Level</th><th>Proof</th></tr></thead><tbody>
-          <tr><td>Unit</td><td>Credential grant replay, expiration, wrong audience, wrong runtime/session, and revoked lease all fail; secret redaction tests cover nested payloads and error strings.</td></tr>
-          <tr><td>Service/route</td><td>Broker authorizes only the configured provider/tool and owner; egress requests are forwarded without exposing source credentials; session auth returns an intentional cloud-mode error.</td></tr>
-          <tr><td>Bridge</td><td>Bridge exchanges once, configures tools with proxy capability only, refreshes safely, and never writes raw provider credentials or Codex auth JSON to disk.</td></tr>
-          <tr><td>End to end</td><td>Create a fresh cloud design/coding session with an API key, clone/push a managed repo, complete one model request, restart the runtime, and stop it. Inspect <code>aws ecs describe-tasks</code>: no raw credential value or credential-shaped environment override is present.</td></tr>
-          <tr><td>Build and regression</td><td>Run targeted Vitest suites, <code>pnpm gql:codegen</code> if route/schema types change, and <code>pnpm build</code>. Validate the restart lifecycle separately so credential changes do not regress idle-cleanup protection.</td></tr>
-        </tbody></table>
+        <h2>How we will know it is finished</h2>
+        <table>
+          <thead><tr><th>Check</th><th>Expected result</th></tr></thead>
+          <tbody>
+            <tr><td>Start a fresh cloud session</td><td>The selected AI tool completes a real request.</td></tr>
+            <tr><td>Clone and push code</td><td>The session can use its repository without receiving the user’s GitHub or SSH credential.</td></tr>
+            <tr><td>Restart the container</td><td>The replacement receives a new temporary pass and resumes normally.</td></tr>
+            <tr><td>Stop or move the session</td><td>The previous container immediately loses access.</td></tr>
+            <tr><td>Try an expired, copied, or wrong-session pass</td><td>Trace refuses it.</td></tr>
+            <tr><td>Inspect the AWS task</td><td>No Anthropic, OpenAI, GitHub, SSH, or Codex credential appears in the task details.</td></tr>
+            <tr><td>Run the repository test and build commands</td><td>All focused tests and the full build pass.</td></tr>
+          </tbody>
+        </table>
       </section>
 
-      <section><h2>Approval requested</h2><p>Approve this brokered-capability plan to begin implementation. The only pre-implementation discovery item is the repository or stack that owns production ECS/IAM configuration; code changes will not assume or modify infrastructure until that owner is located.</p></section>
+      <section>
+        <h2>Technical appendix</h2>
+        <p>The main server changes are in <code>apps/server/src/lib/runtime-adapters.ts</code>, a new runtime-credential service and route, <code>apps/server/src/index.ts</code>, and <code>apps/server/src/services/managed-git.ts</code>. The cloud-container changes are in <code>apps/container-bridge/src/index.ts</code>, <code>tool-auth.ts</code>, and <code>bridge.ts</code>. Focused tests will cover temporary-pass security, secret-free startup data, Git, AI requests, restart, and revocation.</p>
+        <p>The production AWS setup lives outside the code paths inspected here. Before implementation changes AWS permissions, we must identify the repository or stack that owns the ECS task and its roles.</p>
+      </section>
+
+      <section>
+        <h2>Approval requested</h2>
+        <div class="callout"><strong>Decision for review:</strong> approve the “hotel key card” approach and the four-stage rollout. The important temporary limitation is that personal ChatGPT-login credentials will not be placed in cloud containers; cloud Codex will use an API key until a safe server-side ChatGPT-login path is proven.</div>
+      </section>
     </article>
   </body>
 </html>
