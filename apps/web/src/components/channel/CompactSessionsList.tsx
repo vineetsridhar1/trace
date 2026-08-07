@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Circle } from "lucide-react";
 import { navigateToSessionGroup, useUIStore, type UIState } from "../../stores/ui";
-import { agentStatusColor, sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
+import { sessionStatusColor, sessionStatusLabel } from "../session/sessionStatus";
 import { AgentStatusIcon } from "../session/AgentStatusIcon";
 import { timeAgo, cn } from "../../lib/utils";
 import type { SessionGroupRow } from "./sessions-table-types";
@@ -18,7 +18,8 @@ function CompactSessionRow({
 }) {
   const isActive = useUIStore((s: UIState) => s.activeSessionGroupId === row.id);
   const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionGroupDoneBadges[row.id]);
-  const rowColor = agentStatusColor[row.displayAgentStatus] ?? "text-muted-foreground";
+  const rowColor =
+    sessionStatusColor[row.displaySessionStatus ?? "in_progress"] ?? "text-muted-foreground";
 
   return (
     <button
