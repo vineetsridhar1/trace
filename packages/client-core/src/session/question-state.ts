@@ -160,8 +160,12 @@ export function useQuestionState(
         return next;
       });
       setCustomTexts((previous) => ({ ...previous, [page]: text }));
+      const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
+      if (text.trim().length > 0 && (type === "confirm" || type.includes("select"))) {
+        setSelections((previous) => ({ ...previous, [page]: new Set() }));
+      }
     },
-    [page],
+    [page, question.multiSelect, question.type],
   );
 
   const decideForMe = useCallback(() => {

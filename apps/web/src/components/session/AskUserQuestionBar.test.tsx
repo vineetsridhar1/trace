@@ -308,18 +308,20 @@ describe("AskUserQuestionBar", () => {
     const customAnswer = renderer.root.findByType("textarea");
     expect(customAnswer.props.placeholder).toBe("Write your own answer…");
     expect(customAnswer.props.className).toContain("border-border");
-    expect(customAnswer.props.className).toContain("h-12");
+    expect(customAnswer.props.className).toContain("min-h-10");
     expect(customAnswer.props.className).not.toContain("ring-2");
     await act(async () => findButton(renderer.root, "Yes").props.onClick());
     const textarea = renderer.root.findByType("textarea");
     await act(async () => textarea.props.onChange({ target: { value: "Use a tablet kiosk" } }));
+    expect(findButton(renderer.root, "Yes").props["aria-pressed"]).toBe(false);
     await act(async () => findButton(renderer.root, "Next").props.onClick());
     await act(async () => findButton(renderer.root, "Send 1 answer").props.onClick());
 
     expect(onResponse).toHaveBeenCalledWith(
-      expect.stringContaining("<selected>yes</selected>\n  <text>Use a tablet kiosk</text>"),
+      expect.stringContaining("<text>Use a tablet kiosk</text>"),
       [],
     );
+    expect(onResponse.mock.calls[0]?.[0]).not.toContain("<selected>yes</selected>");
     await act(async () => renderer.unmount());
   });
 
