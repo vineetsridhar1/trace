@@ -28,6 +28,16 @@ import {
   webSocketProtocols,
 } from "./endpoint-utils.js";
 
+function runtimeDescriptor(...args: Parameters<typeof sessionRouter.getRuntime>) {
+  return sessionRouter.getRuntimeDescriptor?.(...args) ?? sessionRouter.getRuntime(...args);
+}
+
+async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntime>) {
+  return sessionRouter.sendToRuntimeAsync
+    ? sessionRouter.sendToRuntimeAsync(...args)
+    : Promise.resolve(sessionRouter.sendToRuntime(...args));
+}
+
 type PendingHttp = {
   endpointId: string;
   trafficEntryId: string;
@@ -516,8 +526,8 @@ export class EndpointProxyService {
       res.writeHead(503).end("Process is not running");
       return;
     }
-    const runtime = sessionRouter.getRuntime(process.runtimeInstanceId, endpoint.organizationId);
-    if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) {
+    const runtime = runtimeDescriptor(process.runtimeInstanceId, endpoint.organizationId);
+    if (!runtime) {
       res.writeHead(503).end("Runtime disconnected");
       return;
     }
@@ -594,7 +604,7 @@ export class EndpointProxyService {
       authoringParentOrigins,
     };
     this.pendingHttp.set(requestId, pending);
-    const delivery = sessionRouter.sendToRuntime(
+    const delivery = await sendRuntimeCommand(
       runtime.key,
       {
         type: "endpoint_http_request",
@@ -754,8 +764,8 @@ export class EndpointProxyService {
       client.close();
       return;
     }
-    const runtime = sessionRouter.getRuntime(process.runtimeInstanceId, endpoint.organizationId);
-    if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) {
+    const runtime = runtimeDescriptor(process.runtimeInstanceId, endpoint.organizationId);
+    if (!runtime) {
       client.close();
       return;
     }
@@ -767,7 +777,7 @@ export class EndpointProxyService {
         : Array.isArray(data)
           ? Buffer.concat(data)
           : Buffer.from(data);
-      sessionRouter.sendToRuntime(
+      void sendRuntimeCommand(
         runtime.key,
         {
           type: "endpoint_ws_data",
@@ -780,7 +790,7 @@ export class EndpointProxyService {
     });
     client.on("close", (code, reason) => {
       this.pendingWs.delete(requestId);
-      sessionRouter.sendToRuntime(
+      void sendRuntimeCommand(
         runtime.key,
         {
           type: "endpoint_ws_close",
@@ -792,7 +802,7 @@ export class EndpointProxyService {
       );
     });
     const { path, query } = requestPath(req);
-    const delivery = sessionRouter.sendToRuntime(
+    const delivery = await sendRuntimeCommand(
       runtime.key,
       {
         type: "endpoint_ws_open",

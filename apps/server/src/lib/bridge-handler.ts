@@ -24,6 +24,7 @@ import { endpointProxyService } from "../services/endpoint-proxy.js";
 import { prisma } from "./db.js";
 import { AuthorizationError } from "./errors.js";
 import { runtimeLeaseTtlMs } from "./provisioned-runtime-lease.js";
+import { correlatedResponseRelay } from "./correlated-response-relay.js";
 
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
@@ -93,6 +94,163 @@ function isTerminalConnectionState(connection: unknown): boolean {
   const state = jsonRecord(connection)?.state;
   return state === "failed" || state === "timed_out" || state === "stopped";
 }
+
+function dispatchRelayedCorrelatedResponse(msg: Record<string, unknown>, runtimeKey: string): void {
+  const requestId = typeof msg.requestId === "string" ? msg.requestId : null;
+  if (!requestId) return;
+  const error = typeof msg.error === "string" ? msg.error : undefined;
+
+  if (msg.type === "endpoint_http_response") {
+    endpointProxyService.resolveHttpResponse(requestId, {
+      status: typeof msg.status === "number" ? msg.status : 502,
+      headers:
+        msg.headers && typeof msg.headers === "object" && !Array.isArray(msg.headers)
+          ? (msg.headers as Record<string, string | string[]>)
+          : {},
+      bodyBase64: typeof msg.bodyBase64 === "string" ? msg.bodyBase64 : undefined,
+    });
+  } else if (msg.type === "endpoint_http_error") {
+    endpointProxyService.resolveHttpError(requestId, error ?? "Endpoint proxy failed");
+  } else if (msg.type === "endpoint_ws_opened") {
+    endpointProxyService.resolveWebSocketOpened(requestId);
+  } else if (msg.type === "endpoint_ws_data" && typeof msg.dataBase64 === "string") {
+    endpointProxyService.resolveWebSocketData(
+      requestId,
+      msg.dataBase64,
+      typeof msg.isBinary === "boolean" ? msg.isBinary : true,
+    );
+  } else if (msg.type === "endpoint_ws_closed") {
+    endpointProxyService.resolveWebSocketClosed(requestId);
+  } else if (msg.type === "linked_checkout_status_result") {
+    sessionRouter.resolveLinkedCheckoutStatusRequest(
+      requestId,
+      msg.status as BridgeLinkedCheckoutStatus,
+      runtimeKey,
+    );
+  } else if (msg.type === "linked_checkout_changed_file_result") {
+    sessionRouter.resolveLinkedCheckoutChangedFileRequest(
+      requestId,
+      msg.file as BridgeLinkedCheckoutChangedFilePreview | undefined,
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "linked_checkout_action_result") {
+    sessionRouter.resolveLinkedCheckoutActionRequest(
+      requestId,
+      msg.result as BridgeLinkedCheckoutActionResultPayload,
+      runtimeKey,
+    );
+  } else if (msg.type === "session_current_branch_result") {
+    sessionRouter.resolveSessionCurrentBranchRequest(
+      requestId,
+      typeof msg.branch === "string" ? msg.branch : null,
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "session_git_sync_status_result") {
+    sessionRouter.resolveSessionGitSyncStatusRequest(
+      requestId,
+      msg.status && typeof msg.status === "object" && !Array.isArray(msg.status)
+        ? (msg.status as Parameters<typeof sessionRouter.resolveSessionGitSyncStatusRequest>[1])
+        : undefined,
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "branches_result") {
+    sessionRouter.resolveBranchRequest(
+      requestId,
+      Array.isArray(msg.branches)
+        ? msg.branches.filter((item): item is string => typeof item === "string")
+        : [],
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "workspace_slugs_result") {
+    sessionRouter.resolveWorkspaceSlugRequest(
+      requestId,
+      Array.isArray(msg.slugs)
+        ? msg.slugs.filter((item): item is string => typeof item === "string")
+        : [],
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "worktrees_result") {
+    sessionRouter.resolveWorktreeListRequest(
+      requestId,
+      Array.isArray(msg.worktrees) ? (msg.worktrees as BridgeRepoWorktree[]) : [],
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "files_result") {
+    sessionRouter.resolveFileRequest(
+      requestId,
+      Array.isArray(msg.files)
+        ? msg.files.filter((item): item is string => typeof item === "string")
+        : [],
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "file_content_result") {
+    sessionRouter.resolveFileContentRequest(
+      requestId,
+      typeof msg.content === "string" ? msg.content : "",
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "file_write_result") {
+    sessionRouter.resolveFileWriteRequest(requestId, error, runtimeKey);
+  } else if (msg.type === "file_commit_result") {
+    sessionRouter.resolveFileCommitRequest(
+      requestId,
+      typeof msg.commitSha === "string" ? msg.commitSha : undefined,
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "worktree_changes_result") {
+    const files = Array.isArray(msg.files)
+      ? (msg.files as Parameters<typeof sessionRouter.resolveWorktreeChangesRequest>[1])
+      : [];
+    sessionRouter.resolveWorktreeChangesRequest(
+      requestId,
+      files,
+      typeof msg.totalCount === "number" ? msg.totalCount : files.length,
+      msg.truncated === true,
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "revert_worktree_file_result") {
+    sessionRouter.resolveRevertWorktreeFileRequest(requestId, error, runtimeKey);
+  } else if (msg.type === "branch_diff_result") {
+    sessionRouter.resolveBranchDiffRequest(
+      requestId,
+      Array.isArray(msg.files)
+        ? (msg.files as Parameters<typeof sessionRouter.resolveBranchDiffRequest>[1])
+        : [],
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "file_at_ref_result") {
+    sessionRouter.resolveFileAtRefRequest(
+      requestId,
+      typeof msg.content === "string" ? msg.content : "",
+      error,
+      runtimeKey,
+    );
+  } else if (msg.type === "skills_result") {
+    sessionRouter.resolveSkillsRequest(
+      requestId,
+      Array.isArray(msg.skills)
+        ? (msg.skills as Parameters<typeof sessionRouter.resolveSkillsRequest>[1])
+        : [],
+      error,
+      runtimeKey,
+    );
+  }
+}
+
+correlatedResponseRelay.onResponse(({ message, runtimeKey }) => {
+  dispatchRelayedCorrelatedResponse(message, runtimeKey);
+});
 
 export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequest) {
   // Default runtime ID; replaced if the bridge sends runtime_hello
@@ -568,6 +726,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       // organization is known from here on. Scope every runtime-driven mutation
       // to it so a compromised runtime can't touch another tenant's rows.
       if (!bridgeAuth) return;
+
+      // Request IDs for cross-replica commands encode the caller replica. Send
+      // correlated responses back there before consulting this replica's
+      // in-memory pending-request maps.
+      if (await correlatedResponseRelay.forwardIfRemote(msg, runtimeKey)) return;
 
       if (msg.type === "repo_linked") {
         const repoId = typeof msg.repoId === "string" ? msg.repoId.trim() : "";

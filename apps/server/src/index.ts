@@ -58,6 +58,9 @@ import {
   assertPreviewHostIsolated,
   endpointTrafficRetentionHours,
 } from "./services/endpoint-utils.js";
+import { ServerLifecycle } from "./lib/server-lifecycle.js";
+import { realtimeBackplane } from "./lib/realtime-backplane.js";
+import { runtimeDirectory } from "./lib/runtime-directory.js";
 
 // A single proxied response is base64-framed over the bridge WS; bound a single
 // message so an untrusted runtime can't force an unbounded allocation.
@@ -77,6 +80,10 @@ const ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
 const ENDPOINT_TRAFFIC_CLEANUP_LOCK_KEY = "trace:jobs:endpoint-traffic-cleanup";
 const DESIGN_PREVIEW_RECONCILE_INTERVAL_MS = 30 * 1000;
 const DESIGN_SYSTEM_ARTIFACT_RECONCILE_INTERVAL_MS = 30 * 1000;
+const DESIGN_PREVIEW_RECONCILE_LOCK_KEY = "trace:jobs:design-preview-reconcile";
+const PDF_EXPORT_RECONCILE_LOCK_KEY = "trace:jobs:pdf-export-reconcile";
+const RUNTIME_PREVIEW_RECONCILE_LOCK_KEY = "trace:jobs:runtime-preview-reconcile";
+const DESIGN_SYSTEM_ARTIFACT_RECONCILE_LOCK_KEY = "trace:jobs:design-system-artifact-reconcile";
 
 function readDurationEnv(name: string, fallbackMs: number): number {
   const raw = process.env[name]?.trim();
@@ -131,7 +138,18 @@ async function main() {
     traceWebUrl: process.env.TRACE_WEB_URL,
     corsAllowedOrigins: process.env.CORS_ALLOWED_ORIGINS,
   });
-  let startupReady = false;
+  const lifecycle = new ServerLifecycle();
+
+  // Once draining begins, fail new application work immediately. The health
+  // endpoints remain available so the load balancer can observe readiness
+  // before the process closes its long-lived connections.
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (!lifecycle.isDraining() || req.path === "/health" || req.path === "/health/live") {
+      next();
+      return;
+    }
+    res.status(503).json({ error: "Server is draining" });
+  });
 
   // Preview-proxied requests (Host = <key>.<previewHost>) belong to the app
   // session's own server. Hand them to the endpoint proxy BEFORE any CORS /
@@ -153,7 +171,10 @@ async function main() {
   });
 
   app.get("/health", (_req: express.Request, res: express.Response) => {
-    res.json({ status: "ok", ready: startupReady });
+    res.status(lifecycle.isReady() ? 200 : 503).json(lifecycle.snapshot());
+  });
+  app.get("/health/live", (_req: express.Request, res: express.Response) => {
+    res.json({ status: "ok" });
   });
 
   const appleTeamId = process.env.APPLE_TEAM_ID?.trim();
@@ -346,51 +367,66 @@ async function main() {
   }, 30_000);
 
   const reconcileDesignPreviews = () => {
-    void managedGitService.retryPendingDesignCommitPreviews().catch((error: unknown) => {
+    void withRedisJobLock({
+      enabled: !localMode,
+      key: DESIGN_PREVIEW_RECONCILE_LOCK_KEY,
+      ttlMs: DESIGN_PREVIEW_RECONCILE_INTERVAL_MS * 2,
+      run: () => managedGitService.retryPendingDesignCommitPreviews(),
+    }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[design-preview-reconciler] iteration failed: ${message}`);
     });
   };
-  reconcileDesignPreviews();
   const designPreviewReconciler = setInterval(
     reconcileDesignPreviews,
     DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
   );
   const reconcilePdfExports = () => {
-    void managedGitService.retryPendingPdfExports().catch((error: unknown) => {
+    void withRedisJobLock({
+      enabled: !localMode,
+      key: PDF_EXPORT_RECONCILE_LOCK_KEY,
+      ttlMs: DESIGN_PREVIEW_RECONCILE_INTERVAL_MS * 2,
+      run: () => managedGitService.retryPendingPdfExports(),
+    }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[pdf-export-reconciler] iteration failed: ${message}`);
     });
   };
-  reconcilePdfExports();
   const pdfExportReconciler = setInterval(
     reconcilePdfExports,
     DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
   );
   const reconcileRuntimePreviews = () => {
-    void managedGitService.retryPendingAnimationExports().catch((error: unknown) => {
+    void withRedisJobLock({
+      enabled: !localMode,
+      key: RUNTIME_PREVIEW_RECONCILE_LOCK_KEY,
+      ttlMs: DESIGN_PREVIEW_RECONCILE_INTERVAL_MS * 2,
+      run: async () => {
+        await managedGitService.retryPendingAnimationExports();
+        await managedGitService.retryPendingDesignSystemExports();
+      },
+    }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[animation-preview-reconciler] iteration failed: ${message}`);
-    });
-    void managedGitService.retryPendingDesignSystemExports().catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(`[design-system-preview-reconciler] iteration failed: ${message}`);
+      console.warn(`[runtime-preview-reconciler] iteration failed: ${message}`);
     });
   };
-  reconcileRuntimePreviews();
   const runtimePreviewReconciler = setInterval(
     reconcileRuntimePreviews,
     DESIGN_PREVIEW_RECONCILE_INTERVAL_MS,
   );
   const reconcileDesignSystemArtifacts = () => {
-    void designSystemService.reconcileCommitArtifacts().catch((error: unknown) => {
+    void withRedisJobLock({
+      enabled: !localMode,
+      key: DESIGN_SYSTEM_ARTIFACT_RECONCILE_LOCK_KEY,
+      ttlMs: DESIGN_SYSTEM_ARTIFACT_RECONCILE_INTERVAL_MS * 2,
+      run: () => designSystemService.reconcileCommitArtifacts(),
+    }).catch((error: unknown) => {
       console.warn(
         "[design-system-reconciler] iteration failed",
         error instanceof Error ? error.message : String(error),
       );
     });
   };
-  reconcileDesignSystemArtifacts();
   const designSystemArtifactReconciler = setInterval(
     reconcileDesignSystemArtifacts,
     DESIGN_SYSTEM_ARTIFACT_RECONCILE_INTERVAL_MS,
@@ -523,6 +559,11 @@ async function main() {
 
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    if (!lifecycle.isReady()) {
+      socket.write("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return;
+    }
     if (endpointProxyService.isEndpointHost(req.headers.host)) {
       endpointProxyService.handleWebSocketUpgrade(req, socket as import("net").Socket, head);
       return;
@@ -639,6 +680,9 @@ async function main() {
               await wsServerCleanup.dispose();
               bridgeWss.close();
               terminalWss.close();
+              await slackEventBridge.stop();
+              runtimeDirectory.stop();
+              await realtimeBackplane.stop();
               await disconnectRedis();
             },
           };
@@ -649,6 +693,40 @@ async function main() {
 
   await apollo.start();
   app.use("/graphql", expressMiddleware(apollo, { context: buildContext }));
+
+  let shutdownPromise: Promise<void> | null = null;
+  const shutdown = (signal: NodeJS.Signals): Promise<void> => {
+    if (shutdownPromise) return shutdownPromise;
+    lifecycle.beginDrain();
+    console.log(`[shutdown] ${signal} received; draining server`);
+    const forceExitAfterMs = readDurationEnv("TRACE_SHUTDOWN_TIMEOUT_MS", 30_000);
+    const forceExit = setTimeout(() => {
+      console.error(`[shutdown] forced exit after ${forceExitAfterMs}ms`);
+      process.exit(1);
+    }, forceExitAfterMs);
+    forceExit.unref();
+
+    shutdownPromise = apollo
+      .stop()
+      .then(() => {
+        lifecycle.markStopped();
+        clearTimeout(forceExit);
+        console.log("[shutdown] server drained");
+      })
+      .catch((error: unknown) => {
+        clearTimeout(forceExit);
+        console.error("[shutdown] drain failed:", error);
+        throw error;
+      });
+    return shutdownPromise;
+  };
+
+  process.once("SIGTERM", () => {
+    void shutdown("SIGTERM").catch(() => process.exit(1));
+  });
+  process.once("SIGINT", () => {
+    void shutdown("SIGINT").catch(() => process.exit(1));
+  });
 
   await new Promise<void>((resolve) => {
     httpServer.listen(PORT, "0.0.0.0", () => {
@@ -674,6 +752,15 @@ async function main() {
     }
   }
 
+  // A replica must be listening on its command inbox and have hydrated the
+  // shared runtime directory before it is eligible for load-balancer traffic.
+  await realtimeBackplane.start();
+  await runtimeDirectory.start();
+  reconcileDesignPreviews();
+  reconcilePdfExports();
+  reconcileRuntimePreviews();
+  reconcileDesignSystemArtifacts();
+
   // Reattach Slack event bridges only when Slack is configured.
   if (isSlackConfigured()) {
     await slackEventBridge.rehydrate().catch((err: unknown) => {
@@ -687,7 +774,7 @@ async function main() {
     console.error("[cloud-config] cloud seed failed:", (err as Error).message);
   });
 
-  startupReady = true;
+  lifecycle.markReady();
 }
 
 main().catch((error) => {

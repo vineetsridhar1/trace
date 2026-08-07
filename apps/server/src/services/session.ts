@@ -1507,6 +1507,26 @@ function selectRuntimeSupportedTool(
   return LOCAL_TOOL_FALLBACK_ORDER.find((tool) => runtime.supportedTools.includes(tool)) ?? null;
 }
 
+function runtimeMetadata(...args: Parameters<typeof sessionRouter.getRuntime>) {
+  return sessionRouter.getRuntimeMetadata?.(...args) ?? sessionRouter.getRuntime(...args);
+}
+
+async function sendSessionCommand(
+  ...args: Parameters<typeof sessionRouter.send>
+): Promise<DeliveryResult> {
+  return sessionRouter.sendAsync
+    ? sessionRouter.sendAsync(...args)
+    : Promise.resolve(sessionRouter.send(...args));
+}
+
+async function sendRuntimeCommand(
+  ...args: Parameters<typeof sessionRouter.sendToRuntime>
+): Promise<DeliveryResult> {
+  return sessionRouter.sendToRuntimeAsync
+    ? sessionRouter.sendToRuntimeAsync(...args)
+    : Promise.resolve(sessionRouter.sendToRuntime(...args));
+}
+
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
 
 export function isFullyUnloadedSession(
@@ -2610,7 +2630,7 @@ export class SessionService {
       throw new ValidationError("Private session groups require an owner");
     }
 
-    const liveRuntime = sessionRouter.getRuntime(params.runtimeInstanceId, params.organizationId);
+    const liveRuntime = runtimeMetadata(params.runtimeInstanceId, params.organizationId);
     if (liveRuntime) {
       if (liveRuntime.hostingMode !== "local" || liveRuntime.ownerUserId !== params.ownerUserId) {
         throw new ValidationError("Private sessions can only run on the owner's local bridge");
@@ -2692,7 +2712,7 @@ export class SessionService {
         sessionGroupId: params.sessionGroupId,
         failureMessage: params.failureMessage,
       });
-      const runtime = sessionRouter.getRuntime(conn.runtimeInstanceId, params.organizationId);
+      const runtime = runtimeMetadata(conn.runtimeInstanceId, params.organizationId);
       if (runtime) {
         const supportsTool = runtime.supportedTools?.includes(params.tool) ?? true;
         if (!supportsTool) {
@@ -2820,7 +2840,7 @@ export class SessionService {
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
     if (groupRuntimeId) {
-      const runtime = sessionRouter.getRuntime(groupRuntimeId, organizationId);
+      const runtime = runtimeMetadata(groupRuntimeId, organizationId);
       if (!runtime) {
         throw new Error("No connected runtime available for this session group");
       }
@@ -2856,7 +2876,7 @@ export class SessionService {
     for (const session of sessions) {
       const runtimeId = resolveSessionRuntimeId(session);
       if (!runtimeId) continue;
-      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+      const runtime = runtimeMetadata(runtimeId, organizationId);
       if (!runtime) continue;
       try {
         if (options.requireWrite) {
@@ -2893,7 +2913,7 @@ export class SessionService {
 
   private assertSessionGroupFileWriteAccess(
     group: { ownerUserId: string | null },
-    runtime: RuntimeInstance,
+    runtime: Pick<RuntimeInstance, "hostingMode">,
     userId: string,
   ): void {
     if (group.ownerUserId === userId) return;
@@ -3967,7 +3987,7 @@ export class SessionService {
 
     if (!hasExplicitTool) {
       const requestedRuntime = input.runtimeInstanceId
-        ? sessionRouter.getRuntime(input.runtimeInstanceId, input.organizationId)
+        ? runtimeMetadata(input.runtimeInstanceId, input.organizationId)
         : undefined;
       const localFallbackRuntime =
         requestedRuntime?.hostingMode === "local"
@@ -4027,7 +4047,7 @@ export class SessionService {
     }
     const environmentRuntimeInstanceId = localEnvironmentRuntimeInstanceId(requestedEnvironment);
     if (!hasExplicitTool && environmentRuntimeInstanceId) {
-      const runtime = sessionRouter.getRuntime(environmentRuntimeInstanceId, input.organizationId);
+      const runtime = runtimeMetadata(environmentRuntimeInstanceId, input.organizationId);
       const fallbackTool = runtime ? selectRuntimeSupportedTool(runtime, tool) : null;
       if (fallbackTool) {
         tool = fallbackTool;
@@ -4114,7 +4134,7 @@ export class SessionService {
       if (!runtimeId) {
         throw new Error("Requested runtime not found");
       }
-      let runtime = sessionRouter.getRuntime(runtimeId, input.organizationId);
+      let runtime = runtimeMetadata(runtimeId, input.organizationId);
       runtimeDebug("startSession resolving requested runtime", {
         sessionId: "pending",
         runtimeInstanceId: runtimeId,
@@ -4223,7 +4243,7 @@ export class SessionService {
 
     if (requestedRuntimeInstanceId && !runtimeLabel) {
       runtimeLabel =
-        sessionRouter.getRuntime(requestedRuntimeInstanceId, input.organizationId)?.label ??
+        runtimeMetadata(requestedRuntimeInstanceId, input.organizationId)?.label ??
         this.parseConnection(sharedConnection ?? restoreGroup?.connection ?? null).runtimeLabel;
     }
     if (isGeneratedProjectKind(resolvedKind) && hosting !== "cloud") {
@@ -4500,7 +4520,7 @@ export class SessionService {
     const runtimeToBind = requestedRuntimeInstanceId;
     if (runtimeToBind) {
       const runtimeKeyToBind =
-        sessionRouter.getRuntime(runtimeToBind, input.organizationId)?.key ?? runtimeToBind;
+        runtimeMetadata(runtimeToBind, input.organizationId)?.key ?? runtimeToBind;
       sessionRouter.bindSession(session.id, runtimeKeyToBind);
     }
 
@@ -5132,7 +5152,7 @@ export class SessionService {
       runtimeEnv: invocation.runtimeEnv,
     };
 
-    const deliveryResult = sessionRouter.send(id, command, {
+    const deliveryResult = await sendSessionCommand(id, command, {
       expectedHomeRuntimeId: runtimeBinding.runtimeId ?? conn.runtimeInstanceId,
       organizationId: session.organizationId,
     });
@@ -5668,7 +5688,7 @@ export class SessionService {
           runtimeInstanceId: config.runtimeInstanceId,
           sessionGroupId: prev.sessionGroupId,
         });
-        const runtime = sessionRouter.getRuntime(config.runtimeInstanceId, organizationId);
+        const runtime = runtimeMetadata(config.runtimeInstanceId, organizationId);
         if (!runtime) throw new Error("Requested runtime not found");
         newHosting = runtime.hostingMode;
         runtimeInstanceId = runtime.id;
@@ -6691,7 +6711,7 @@ export class SessionService {
     const deliveryResult: DeliveryResult =
       session.hosting === "cloud" && !expectedRuntimeId
         ? "no_runtime"
-        : sessionRouter.send(sessionId, deliveryCommand, {
+        : await sendSessionCommand(sessionId, deliveryCommand, {
             expectedHomeRuntimeId: expectedRuntimeId ?? undefined,
             organizationId: session.organizationId,
           });
@@ -7387,7 +7407,7 @@ export class SessionService {
       designSystem.createdById,
       true,
     );
-    const delivery = sessionRouter.send(
+    const delivery = await sendSessionCommand(
       session.id,
       {
         type: "prepare_app",
@@ -7939,8 +7959,7 @@ export class SessionService {
         ...conn,
         state: "connected",
         runtimeLabel:
-          sessionRouter.getRuntime(runtimeInstanceId, session.organizationId)?.label ??
-          conn.runtimeLabel,
+          runtimeMetadata(runtimeInstanceId, session.organizationId)?.label ?? conn.runtimeLabel,
         connectedAt: restoredAt,
         lastSeen: restoredAt,
         lastError: undefined,
@@ -8040,7 +8059,7 @@ export class SessionService {
       sessionRouter.bindSession(session.id, runtime.key);
 
       if (runtime.hostingMode === "local" && session.workdir) {
-        sessionRouter.sendToRuntime(
+        void sendRuntimeCommand(
           runtime.id,
           {
             type: "track_session",
@@ -8156,7 +8175,7 @@ export class SessionService {
     });
 
     const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
-    const deliveryResult = sessionRouter.send(
+    const deliveryResult = await sendSessionCommand(
       sessionId,
       {
         type: "send",
@@ -8585,7 +8604,7 @@ export class SessionService {
 
     const runtime = homeRuntimeId
       ? sessionRouter.isRuntimeAvailable(homeRuntimeId, organizationId)
-        ? sessionRouter.getRuntime(homeRuntimeId, organizationId)
+        ? runtimeMetadata(homeRuntimeId, organizationId)
         : undefined
       : session.hosting === "local"
         ? await this.resolveDefaultAccessibleLocalRuntime({
@@ -8745,7 +8764,7 @@ export class SessionService {
           };
       // Re-run workspace preparation — pin delivery to the runtime we just
       // resolved (the home bridge) so no other bridge can intercept.
-      const prepResult = sessionRouter.send(sessionId, retryPreparation, {
+      const prepResult = await sendSessionCommand(sessionId, retryPreparation, {
         expectedHomeRuntimeId: runtime.id,
         organizationId: session.organizationId,
       });
@@ -8952,9 +8971,12 @@ export class SessionService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!params.allowUnverifiedSourceGitStatus) {
-        throw new Error(`Cannot move session: source git status could not be verified. ${message}`, {
-          cause: error,
-        });
+        throw new Error(
+          `Cannot move session: source git status could not be verified. ${message}`,
+          {
+            cause: error,
+          },
+        );
       }
       console.warn(
         `[session-service] skipping move source git sync check for ${params.sessionId}: ${message}`,
@@ -9004,7 +9026,7 @@ export class SessionService {
     targetHosting: "cloud" | "local";
     targetRuntimeInstanceId?: string | null;
     targetRuntimeLabel?: string | null;
-    targetRuntime?: RuntimeInstance | null;
+    targetRuntime?: Pick<RuntimeInstance, "supportedTools" | "label"> | null;
     allowUnverifiedSourceGitStatus?: boolean;
     actorType: ActorType;
     actorId: string;
@@ -9269,7 +9291,7 @@ export class SessionService {
 
     const targetRuntimeKey =
       targetHosting === "local" && targetRuntimeInstanceId
-        ? (sessionRouter.getRuntime(targetRuntimeInstanceId, movedSession.organizationId)?.key ??
+        ? (runtimeMetadata(targetRuntimeInstanceId, movedSession.organizationId)?.key ??
           targetRuntimeInstanceId)
         : null;
     const sessionIdsToBind = new Set(movedSessions.map((moved) => moved.id));
@@ -9429,8 +9451,8 @@ export class SessionService {
       runtimeInstanceId,
       sessionGroupId: session.sessionGroupId,
     });
-    const targetRuntime = sessionRouter.getRuntime(runtimeInstanceId, organizationId);
-    if (!targetRuntime || targetRuntime.ws.readyState !== targetRuntime.ws.OPEN) {
+    const targetRuntime = runtimeMetadata(runtimeInstanceId, organizationId);
+    if (!targetRuntime) {
       throw new Error("Selected runtime is not available");
     }
     if (
@@ -9659,7 +9681,7 @@ export class SessionService {
         runtimeInstanceId: runtimeId,
         sessionGroupId,
       });
-      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+      const runtime = runtimeMetadata(runtimeId, organizationId);
       if (!runtime) throw new Error("Requested runtime not found");
       runtimeId = runtime.key;
     } else {
@@ -9697,7 +9719,7 @@ export class SessionService {
     let runtimeId = runtimeInstanceId;
     if (runtimeId) {
       await this.assertRuntimeAccess({ userId, organizationId, runtimeInstanceId: runtimeId });
-      const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
+      const runtime = runtimeMetadata(runtimeId, organizationId);
       if (!runtime) throw new Error("Requested runtime not found");
       if (runtime.hostingMode !== "local") {
         throw new ValidationError("Worktree import is only available for local runtimes");
@@ -11278,7 +11300,7 @@ export class SessionService {
     assertCloudRepoRemoteAvailable(session.hosting, repo);
 
     const conn = this.parseConnection(session.connection);
-    const deliveryResult = sessionRouter.send(
+    const deliveryResult = await sendSessionCommand(
       sessionId,
       {
         type: "upgrade_workspace",
@@ -11496,7 +11518,7 @@ export class SessionService {
     }
 
     const conn = this.parseConnection(session.connection);
-    const deliveryResult = sessionRouter.send(sessionId, command, {
+    const deliveryResult = await sendSessionCommand(sessionId, command, {
       expectedHomeRuntimeId: conn.runtimeInstanceId,
       organizationId: session.organizationId,
     });
@@ -12377,7 +12399,7 @@ export class SessionService {
       return;
     }
 
-    const runtime = sessionRouter.getRuntime(runtimeInstanceId);
+    const runtime = runtimeMetadata(runtimeInstanceId);
     if (runtime?.ownerUserId && runtime.ownerUserId !== ownerUserId) {
       return;
     }

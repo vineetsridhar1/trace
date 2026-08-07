@@ -18,6 +18,12 @@ import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
 
 import type { RepoEnvVar } from "@trace/gql";
 
+async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntime>) {
+  return sessionRouter.sendToRuntimeAsync
+    ? sessionRouter.sendToRuntimeAsync(...args)
+    : Promise.resolve(sessionRouter.sendToRuntime(...args));
+}
+
 type Tx = Prisma.TransactionClient;
 const SETUP_OUTPUT_PREVIEW_LIMIT = 65_536;
 export const PROCESS_LOG_ENTRY_MAX_CHARS = 8_192;
@@ -86,9 +92,7 @@ const DESIGN_SYSTEM_APP_SESSION_CONFIG = createGeneratedProjectConfig(
 );
 
 function generatedProjectConfig(kind: string) {
-  return kind === "design_system"
-    ? DESIGN_SYSTEM_APP_SESSION_CONFIG
-    : DEFAULT_APP_SESSION_CONFIG;
+  return kind === "design_system" ? DESIGN_SYSTEM_APP_SESSION_CONFIG : DEFAULT_APP_SESSION_CONFIG;
 }
 
 function connectionRecord(connection: Prisma.JsonValue): Record<string, unknown> {
@@ -283,10 +287,9 @@ export class SessionApplicationService {
       organizationId,
       userId,
     );
-    const config =
-      isGeneratedProjectKind(group.kind)
-        ? generatedProjectConfig(group.kind)
-        : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const config = isGeneratedProjectKind(group.kind)
+      ? generatedProjectConfig(group.kind)
+      : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const script = config.setupScripts.find((candidate) => candidate.id === scriptId);
     if (!script) throw new ValidationError("Setup script not found");
     const run = await prisma.sessionSetupScriptRun.create({
@@ -312,7 +315,7 @@ export class SessionApplicationService {
       actorId: userId,
     });
     const env = await this.resolveEnv(organizationId, script.env);
-    const delivery = sessionRouter.sendToRuntime(
+    const delivery = await sendRuntimeCommand(
       runtimeId,
       {
         type: "setup_script_run",
@@ -468,7 +471,7 @@ export class SessionApplicationService {
       actorId: options?.asSystem ? "system" : userId,
     });
 
-    const delivery = sessionRouter.sendToRuntime(
+    const delivery = await sendRuntimeCommand(
       runtimeId,
       {
         type: "app_process_start",
@@ -541,7 +544,7 @@ export class SessionApplicationService {
         },
       },
     });
-    const delivery = sessionRouter.sendToRuntime(
+    const delivery = await sendRuntimeCommand(
       runtimeId,
       {
         type: "app_process_stop",
@@ -1177,10 +1180,9 @@ export class SessionApplicationService {
   }
 
   private getApplication(group: ManagedSessionGroup, appConfigId: string) {
-    const config =
-      isGeneratedProjectKind(group.kind)
-        ? generatedProjectConfig(group.kind)
-        : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
+    const config = isGeneratedProjectKind(group.kind)
+      ? generatedProjectConfig(group.kind)
+      : repoApplicationConfigService.parseApplicationConfig(group.repo?.setupConfig);
     const app = config.applications.find((candidate) => candidate.id === appConfigId);
     if (!app) throw new ValidationError("Application not found");
     return app;

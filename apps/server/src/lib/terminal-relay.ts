@@ -2,6 +2,8 @@ import { randomUUID } from "crypto";
 import type WebSocket from "ws";
 import { prisma } from "./db.js";
 import { sessionRouter } from "./session-router.js";
+import { terminalDirectory } from "./terminal-directory.js";
+import { realtimeBackplane } from "./realtime-backplane.js";
 
 interface TerminalEntry {
   sessionId: string;
@@ -20,6 +22,7 @@ interface TerminalEntry {
   /** User that created the terminal. Frontend attach/list/destroy is owner-only. */
   ownerUserId: string | null;
   frontendWs: WebSocket | null;
+  remoteFrontendReplicaId?: string;
   /** User who currently has a frontend WebSocket attached to this terminal. */
   attachedUserId: string | null;
   ready: boolean;
@@ -57,6 +60,80 @@ export class TerminalRelay {
   private sessionGroupTerminals = new Map<string, Set<string>>();
   /** Reverse index for repo/channel terminals on a specific runtime. */
   private channelTerminals = new Map<string, Set<string>>();
+  private remoteFrontendSockets = new Map<string, WebSocket>();
+
+  constructor() {
+    realtimeBackplane.on("terminal_bridge_message", (envelope) => {
+      const payload = envelope.payload;
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
+      const input = payload as Record<string, unknown>;
+      if (
+        typeof input.sourceRuntimeInstanceId !== "string" ||
+        !input.message ||
+        typeof input.message !== "object" ||
+        Array.isArray(input.message)
+      ) {
+        return;
+      }
+      const message = input.message as { type: string; terminalId: string; [key: string]: unknown };
+      this.relayFromBridge(message, input.sourceRuntimeInstanceId);
+    });
+    realtimeBackplane.on("terminal_frontend_attach", (envelope) => {
+      const input = this.backplanePayload(envelope.payload);
+      if (!input || typeof input.terminalId !== "string") return;
+      const entry = this.terminals.get(input.terminalId);
+      if (!entry) return;
+      entry.remoteFrontendReplicaId = envelope.sourceReplicaId;
+      const messages = [
+        ...(entry.scrollback.length > 0
+          ? [JSON.stringify({ type: "output", data: entry.scrollback.join("") })]
+          : []),
+        ...entry.buffer,
+        ...(entry.ready ? [JSON.stringify({ type: "ready" })] : []),
+      ];
+      entry.buffer = [];
+      void realtimeBackplane.send(envelope.sourceReplicaId, "terminal_frontend_messages", {
+        terminalId: input.terminalId,
+        messages,
+      });
+    });
+    realtimeBackplane.on("terminal_frontend_messages", (envelope) => {
+      const input = this.backplanePayload(envelope.payload);
+      if (!input || typeof input.terminalId !== "string" || !Array.isArray(input.messages)) return;
+      const ws = this.remoteFrontendSockets.get(input.terminalId);
+      if (!ws || ws.readyState !== ws.OPEN) return;
+      for (const message of input.messages) {
+        if (typeof message === "string") ws.send(message);
+      }
+    });
+    realtimeBackplane.on("terminal_frontend_command", (envelope) => {
+      const input = this.backplanePayload(envelope.payload);
+      if (
+        !input ||
+        typeof input.terminalId !== "string" ||
+        (input.commandType !== "input" && input.commandType !== "resize") ||
+        !input.payload ||
+        typeof input.payload !== "object" ||
+        Array.isArray(input.payload)
+      ) {
+        return;
+      }
+      this.relayFromFrontend(
+        input.terminalId,
+        input.commandType,
+        input.payload as Record<string, unknown>,
+      );
+    });
+    realtimeBackplane.on("terminal_frontend_detach", (envelope) => {
+      const input = this.backplanePayload(envelope.payload);
+      if (!input || typeof input.terminalId !== "string") return;
+      const entry = this.terminals.get(input.terminalId);
+      if (entry?.remoteFrontendReplicaId === envelope.sourceReplicaId) {
+        entry.remoteFrontendReplicaId = undefined;
+        this.scheduleOrphanCleanup(input.terminalId);
+      }
+    });
+  }
 
   /**
    * Create a terminal on the bridge for a given session.
@@ -98,6 +175,15 @@ export class TerminalRelay {
       hasEverAttached: false,
       orphanTimer: null,
     });
+    terminalDirectory.register({
+      terminalId,
+      kind: "session",
+      sessionId,
+      sessionGroupId,
+      ownerUserId,
+      runtimeInstanceId,
+      organizationId: organizationId ?? undefined,
+    });
     const ids = this.sessionTerminals.get(sessionId) ?? new Set();
     ids.add(terminalId);
     this.sessionTerminals.set(sessionId, ids);
@@ -108,21 +194,37 @@ export class TerminalRelay {
     }
 
     // Send terminal_create command to the bridge, pinned to the authorized runtime.
-    const result = sessionRouter.send(
-      sessionId,
-      {
-        type: "terminal_create",
-        terminalId,
-        sessionId,
-        ownerUserId,
-        cols,
-        rows,
-        cwd: cwd ?? "",
-      },
-      { expectedHomeRuntimeId: runtimeInstanceId, organizationId },
-    );
-
-    if (result !== "delivered") {
+    const createDelivery = sessionRouter.sendAsync
+      ? sessionRouter.sendAsync(
+          sessionId,
+          {
+            type: "terminal_create",
+            terminalId,
+            sessionId,
+            ownerUserId,
+            cols,
+            rows,
+            cwd: cwd ?? "",
+          },
+          { expectedHomeRuntimeId: runtimeInstanceId, organizationId },
+        )
+      : Promise.resolve(
+          sessionRouter.send(
+            sessionId,
+            {
+              type: "terminal_create",
+              terminalId,
+              sessionId,
+              ownerUserId,
+              cols,
+              rows,
+              cwd: cwd ?? "",
+            },
+            { expectedHomeRuntimeId: runtimeInstanceId, organizationId },
+          ),
+        );
+    void createDelivery.then((result) => {
+      if (result === "delivered") return;
       // Bridge not available — buffer an error so the frontend gets feedback on attach
       const errorMsg = JSON.stringify({
         type: "error",
@@ -130,7 +232,7 @@ export class TerminalRelay {
       });
       const entry = this.terminals.get(terminalId);
       if (entry) entry.buffer.push(errorMsg);
-    }
+    });
 
     return terminalId;
   }
@@ -169,6 +271,17 @@ export class TerminalRelay {
       hasEverAttached: false,
       orphanTimer: null,
     });
+    terminalDirectory.register({
+      terminalId,
+      kind: "channel",
+      sessionId,
+      sessionGroupId: null,
+      channelId,
+      repoId,
+      ownerUserId,
+      runtimeInstanceId,
+      organizationId,
+    });
 
     const sessionIds = this.sessionTerminals.get(sessionId) ?? new Set();
     sessionIds.add(terminalId);
@@ -178,28 +291,29 @@ export class TerminalRelay {
     channelIds.add(terminalId);
     this.channelTerminals.set(channelKey, channelIds);
 
-    const result = sessionRouter.sendToRuntime(
-      runtimeInstanceId,
-      {
-        type: "terminal_create",
-        terminalId,
-        sessionId,
-        ownerUserId,
-        cols,
-        rows,
-        cwd,
-      },
-      organizationId,
-    );
-
-    if (result !== "delivered") {
-      const entry = this.terminals.get(terminalId);
-      if (entry) {
-        entry.buffer.push(
-          JSON.stringify({ type: "error", message: `Terminal creation failed: ${result}` }),
-        );
-      }
-    }
+    void sessionRouter
+      .sendToRuntimeAsync(
+        runtimeInstanceId,
+        {
+          type: "terminal_create",
+          terminalId,
+          sessionId,
+          ownerUserId,
+          cols,
+          rows,
+          cwd,
+        },
+        organizationId,
+      )
+      .then((result) => {
+        if (result === "delivered") return;
+        const entry = this.terminals.get(terminalId);
+        if (entry) {
+          entry.buffer.push(
+            JSON.stringify({ type: "error", message: `Terminal creation failed: ${result}` }),
+          );
+        }
+      });
 
     return terminalId;
   }
@@ -244,7 +358,7 @@ export class TerminalRelay {
       }, timeoutMs);
 
       entry.onReady = () => {
-        sessionRouter.send(
+        void sessionRouter.sendAsync(
           sessionId,
           {
             type: "terminal_input",
@@ -359,6 +473,17 @@ export class TerminalRelay {
           hasEverAttached: true,
           orphanTimer: null,
         });
+        terminalDirectory.register({
+          terminalId,
+          kind: "channel",
+          sessionId,
+          sessionGroupId: null,
+          channelId,
+          organizationId: channel.organizationId,
+          repoId: channel.repoId,
+          ownerUserId,
+          runtimeInstanceId,
+        });
 
         const sessionTerminals = this.sessionTerminals.get(sessionId) ?? new Set();
         sessionTerminals.add(terminalId);
@@ -392,6 +517,15 @@ export class TerminalRelay {
         scrollbackBytes: 0,
         hasEverAttached: true,
         orphanTimer: null,
+      });
+      terminalDirectory.register({
+        terminalId,
+        kind: "session",
+        sessionId,
+        sessionGroupId,
+        organizationId: sessionContext?.organizationId ?? runtimeOrganizationId,
+        ownerUserId,
+        runtimeInstanceId,
       });
 
       const ids = this.sessionTerminals.get(sessionId) ?? new Set();
@@ -474,6 +608,21 @@ export class TerminalRelay {
     return true;
   }
 
+  async attachFrontendDistributed(
+    terminalId: string,
+    ws: WebSocket,
+    userId: string,
+  ): Promise<boolean> {
+    if (this.attachFrontend(terminalId, ws, userId)) return true;
+    const descriptor = await terminalDirectory.get(terminalId);
+    if (!descriptor || descriptor.frontendReplicaId === realtimeBackplane.replicaId) return false;
+    this.remoteFrontendSockets.set(terminalId, ws);
+    await realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_frontend_attach", {
+      terminalId,
+    });
+    return true;
+  }
+
   /** Detach the frontend WebSocket (e.g. on disconnect). */
   detachFrontend(terminalId: string): void {
     const entry = this.terminals.get(terminalId);
@@ -543,13 +692,52 @@ export class TerminalRelay {
     };
   }
 
+  async getTerminalAuthContextDistributed(
+    terminalId: string,
+  ): Promise<ReturnType<TerminalRelay["getTerminalAuthContext"]>> {
+    const local = this.getTerminalAuthContext(terminalId);
+    if (local) return local;
+    const descriptor = await terminalDirectory.get(terminalId);
+    if (!descriptor) return null;
+    if (descriptor.kind === "channel") {
+      if (!descriptor.channelId || !descriptor.organizationId || !descriptor.repoId) return null;
+      return {
+        kind: "channel",
+        channelId: descriptor.channelId,
+        organizationId: descriptor.organizationId,
+        repoId: descriptor.repoId,
+        runtimeInstanceId: descriptor.runtimeInstanceId,
+        ownerUserId: descriptor.ownerUserId,
+      };
+    }
+    return {
+      kind: "session",
+      sessionId: descriptor.sessionId,
+      sessionGroupId: descriptor.sessionGroupId,
+      runtimeInstanceId: descriptor.runtimeInstanceId,
+      ownerUserId: descriptor.ownerUserId,
+    };
+  }
+
   /** Forward a message from the bridge to the attached frontend WebSocket. */
   relayFromBridge(
     msg: { type: string; terminalId: string; [key: string]: unknown },
     sourceRuntimeInstanceId?: string,
   ): void {
     const entry = this.terminals.get(msg.terminalId);
-    if (!entry) return;
+    if (!entry) {
+      void terminalDirectory
+        .get(msg.terminalId)
+        .then((descriptor) => {
+          if (!descriptor || descriptor.frontendReplicaId === realtimeBackplane.replicaId) return;
+          return realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_bridge_message", {
+            sourceRuntimeInstanceId,
+            message: msg,
+          });
+        })
+        .catch((error) => console.error("[terminal-relay] forwarding failed:", error));
+      return;
+    }
     if (
       sourceRuntimeInstanceId &&
       entry.runtimeInstanceId !== sourceRuntimeInstanceId &&
@@ -597,7 +785,13 @@ export class TerminalRelay {
       }
     }
 
-    if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
+    if (entry.remoteFrontendReplicaId) {
+      void realtimeBackplane.send(entry.remoteFrontendReplicaId, "terminal_frontend_messages", {
+        terminalId: msg.terminalId,
+        messages: [serialized],
+      });
+      if (isTerminalEnd) this.removeTerminal(msg.terminalId);
+    } else if (entry.frontendWs && entry.frontendWs.readyState === entry.frontendWs.OPEN) {
       entry.frontendWs.send(serialized);
       if (isTerminalEnd) this.removeTerminal(msg.terminalId);
     } else {
@@ -620,7 +814,17 @@ export class TerminalRelay {
     payload: Record<string, unknown>,
   ): void {
     const entry = this.terminals.get(terminalId);
-    if (!entry) return;
+    if (!entry) {
+      void terminalDirectory.get(terminalId).then((descriptor) => {
+        if (!descriptor || descriptor.frontendReplicaId === realtimeBackplane.replicaId) return;
+        return realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_frontend_command", {
+          terminalId,
+          commandType: type,
+          payload,
+        });
+      });
+      return;
+    }
 
     if (type === "input") {
       this.sendTerminalCommand(entry, {
@@ -672,6 +876,7 @@ export class TerminalRelay {
         }
       }
       this.terminals.delete(terminalId);
+      terminalDirectory.remove(terminalId);
     }
     this.sessionTerminals.delete(sessionId);
   }
@@ -689,6 +894,7 @@ export class TerminalRelay {
       }
       this.cancelOrphanCleanup(terminalId);
       this.terminals.delete(terminalId);
+      terminalDirectory.remove(terminalId);
       const sessionIds = this.sessionTerminals.get(entry.sessionId);
       if (sessionIds) {
         sessionIds.delete(terminalId);
@@ -706,6 +912,16 @@ export class TerminalRelay {
         entry.attachedUserId = null;
         this.scheduleOrphanCleanup(terminalId);
       }
+    }
+    for (const [terminalId, frontendWs] of this.remoteFrontendSockets) {
+      if (frontendWs !== ws) continue;
+      this.remoteFrontendSockets.delete(terminalId);
+      void terminalDirectory.get(terminalId).then((descriptor) => {
+        if (!descriptor || descriptor.frontendReplicaId === realtimeBackplane.replicaId) return;
+        return realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_frontend_detach", {
+          terminalId,
+        });
+      });
     }
   }
 
@@ -776,10 +992,10 @@ export class TerminalRelay {
       | { type: "terminal_destroy"; terminalId: string },
   ): void {
     if (entry.kind === "channel") {
-      sessionRouter.sendToRuntime(entry.runtimeInstanceId, command, entry.organizationId);
+      void sessionRouter.sendToRuntimeAsync(entry.runtimeInstanceId, command, entry.organizationId);
       return;
     }
-    sessionRouter.send(entry.sessionId, command, {
+    void sessionRouter.sendAsync(entry.sessionId, command, {
       expectedHomeRuntimeId: entry.runtimeInstanceId,
       organizationId: entry.organizationId,
     });
@@ -791,6 +1007,12 @@ export class TerminalRelay {
 
   private resolveRuntimeKey(runtimeInstanceId: string, organizationId?: string | null): string {
     return sessionRouter.getRuntime(runtimeInstanceId, organizationId)?.key ?? runtimeInstanceId;
+  }
+
+  private backplanePayload(payload: unknown): Record<string, unknown> | null {
+    return payload && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : null;
   }
 
   private removeTerminal(terminalId: string): void {
@@ -818,7 +1040,9 @@ export class TerminalRelay {
         }
       }
     }
+    this.remoteFrontendSockets.delete(terminalId);
     this.terminals.delete(terminalId);
+    terminalDirectory.remove(terminalId);
   }
 }
 
