@@ -13,7 +13,6 @@ export function AgentStatusIcon({
   color?: string;
 }) {
   switch (agentStatus) {
-    case "preparing":
     case "active":
       return (
         <TraceLoader
