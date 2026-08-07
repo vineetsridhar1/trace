@@ -212,6 +212,104 @@
         color: var(--faint);
       }
 
+      /* ── Diagrams: use SVG for branches, HTML for ordered interactions ── */
+      .diagram {
+        overflow-x: auto;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .diagram-svg {
+        display: block;
+        width: 100%;
+        min-width: 620px;
+        height: auto;
+      }
+      .diagram-svg .edge {
+        fill: none;
+        stroke: var(--faint);
+        stroke-width: 1.5;
+      }
+      .diagram-svg .box {
+        fill: var(--raised);
+        stroke: var(--border);
+        stroke-width: 1.5;
+      }
+      .diagram-svg .box.is-new {
+        stroke: var(--accent);
+      }
+      .diagram-svg .decision {
+        fill: color-mix(in srgb, var(--change) 10%, var(--surface));
+        stroke: var(--change);
+        stroke-width: 1.5;
+      }
+      .diagram-svg text {
+        fill: var(--fg);
+        font-family: inherit;
+        font-size: 12px;
+        text-anchor: middle;
+      }
+      .diagram-svg .edge-label {
+        fill: var(--faint);
+        font-size: 10px;
+      }
+      .sequence {
+        display: grid;
+        gap: 8px;
+        min-width: 560px;
+      }
+      .sequence-row {
+        display: grid;
+        grid-template-columns: 110px 1fr 110px;
+        align-items: center;
+        gap: 12px;
+      }
+      .sequence-party {
+        padding: 7px 9px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--raised);
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+      }
+      .sequence-message {
+        position: relative;
+        padding-bottom: 5px;
+        border-bottom: 1px solid var(--faint);
+        color: var(--muted);
+        font-size: 11px;
+        text-align: center;
+      }
+      .sequence-message::after {
+        content: "";
+        position: absolute;
+        right: -1px;
+        bottom: -4px;
+        width: 7px;
+        height: 7px;
+        border-top: 1px solid var(--faint);
+        border-right: 1px solid var(--faint);
+        transform: rotate(45deg);
+      }
+      .sequence-row.reverse .sequence-party:first-child {
+        grid-column: 3;
+      }
+      .sequence-row.reverse .sequence-message {
+        grid-column: 2;
+        grid-row: 1;
+        transform: scaleX(-1);
+      }
+      .sequence-row.reverse .sequence-message span {
+        display: inline-block;
+        transform: scaleX(-1);
+      }
+      .sequence-row.reverse .sequence-party:last-child {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
       /* ── Switchable before/after or alternative views ── */
       .toolbar {
         display: flex;
@@ -487,6 +585,82 @@
         <p>
           Let the reviewer compare states without making them reconstruct either one. Mark new nodes
           with class <code>is-new</code>.
+        </p>
+      </section>
+
+      <section>
+        <h2>Critical flow</h2>
+        <div class="toolbar" data-view-switcher="diagram" aria-label="Diagram type">
+          <button type="button" data-view="flowchart" aria-pressed="true">Flowchart</button>
+          <button type="button" data-view="sequence" aria-pressed="false">Sequence</button>
+        </div>
+        <div
+          class="diagram"
+          data-view-group="diagram"
+          data-view-panel="flowchart"
+          aria-label="Artifact validation flowchart"
+        >
+          <svg class="diagram-svg" viewBox="0 0 720 300" role="img">
+            <title>Artifact validation and publication flow</title>
+            <desc>
+              An upload is validated. Valid uploads are published; invalid uploads return actionable
+              feedback and are revised before validation runs again.
+            </desc>
+            <defs>
+              <marker
+                id="arrowhead"
+                markerWidth="8"
+                markerHeight="8"
+                refX="7"
+                refY="4"
+                orient="auto"
+              >
+                <path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)" />
+              </marker>
+            </defs>
+            <path class="edge" marker-end="url(#arrowhead)" d="M180 70 H285" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M435 70 H540" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M360 112 V190 H510" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M510 230 H150 V102" />
+            <rect class="box" x="40" y="40" width="140" height="60" rx="8" />
+            <text x="110" y="66">Upload plan</text>
+            <text class="edge-label" x="110" y="83">HTML + evidence</text>
+            <path class="decision" d="M360 28 L435 70 L360 112 L285 70 Z" />
+            <text x="360" y="66">Valid and</text>
+            <text x="360" y="82">self-contained?</text>
+            <rect class="box is-new" x="540" y="40" width="140" height="60" rx="8" />
+            <text x="610" y="66">Publish artifact</text>
+            <text class="edge-label" x="610" y="83">immutable version</text>
+            <rect class="box" x="440" y="190" width="140" height="60" rx="8" />
+            <text x="510" y="216">Return feedback</text>
+            <text class="edge-label" x="510" y="233">revise and retry</text>
+            <text class="edge-label" x="485" y="61">yes</text>
+            <text class="edge-label" x="376" y="157">no</text>
+          </svg>
+        </div>
+        <div class="diagram" data-view-group="diagram" data-view-panel="sequence">
+          <div class="sequence" aria-label="Ordered upload interaction">
+            <div class="sequence-row">
+              <span class="sequence-party">Agent</span>
+              <span class="sequence-message"><span>push plan folder</span></span>
+              <span class="sequence-party">Artifact service</span>
+            </div>
+            <div class="sequence-row reverse">
+              <span class="sequence-party">Artifact service</span>
+              <span class="sequence-message"><span>validation result</span></span>
+              <span class="sequence-party">Agent</span>
+            </div>
+            <div class="sequence-row">
+              <span class="sequence-party">Artifact service</span>
+              <span class="sequence-message"><span>artifact event</span></span>
+              <span class="sequence-party">Reviewer</span>
+            </div>
+          </div>
+        </div>
+        <p>
+          Use a flowchart for decisions and failure paths; use a sequence when ordering and
+          ownership matter. Label connectors with the event, data, or condition that moves between
+          nodes.
         </p>
       </section>
 
