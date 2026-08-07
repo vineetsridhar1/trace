@@ -17,7 +17,14 @@ function artifactEvent(id: string, type = "trace.visual-plan.v1"): Event {
         createdAt: `2026-08-02T00:00:0${id}.000Z`,
         manifest: {
           schemaVersion: 1,
-          files: [{ path: "plan.html", mediaType: "text/html", size: 1, digest: "digest" }],
+          files: [
+            {
+              path: "implementation-approach.html",
+              mediaType: "text/html",
+              size: 1,
+              digest: "digest",
+            },
+          ],
         },
       },
     },

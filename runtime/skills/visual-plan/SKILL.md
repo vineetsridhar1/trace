@@ -10,9 +10,9 @@ approves or sends back. When it is approved, its content becomes the brief the i
 works from, so every claim in it has to be true of this repository.
 
 Trace plans use this skill and the Trace artifact CLI only. Do not use an Agent-Native or
-Builder-style plan skill, MDX plan blocks, a watched `plan.mdx` file, or a provider-native plan
-approval tool. Trace does not watch a plan file: the completed `plan.html` is published explicitly
-as an immutable artifact and Trace renders that artifact for review.
+Builder-style plan skill, MDX plan blocks, a watched plan file, or a provider-native plan approval
+tool. Trace does not watch the repository: the completed plan folder is published explicitly as an
+immutable artifact and Trace renders its HTML document for review.
 
 ## 1. Research before writing
 
@@ -36,22 +36,24 @@ Prefer reading a few files completely over grepping many files shallowly.
 
 ## 2. Write the plan
 
-First choose a durable, descriptive home for the plan in the repository. Look for an existing
+First choose a durable, descriptive folder for the plan in the repository. Look for an existing
 documentation directory such as `docs/`, `doc/`, or `documentation/`; use the project's existing
-convention when one exists. Otherwise create `docs/`. Name the file for the change, for example
-`docs/session-artifact-upload-plan.html` — never use the generic `plan.mdx` or put the plan at the
-repository root.
+convention when one exists. Otherwise create `docs/`. Put the plan in a change-specific folder such
+as `docs/session-artifact-upload-plan/`, not at the repository root. Everything created for the plan
+belongs in that folder so the folder itself is the artifact source.
 
 Start the named plan from the supplied canvas template, which carries the component vocabulary and
 visual system:
 
 ```bash
-mkdir -p docs
-cp "$TRACE_SKILLS_DIR/visual-plan/template.html" docs/session-artifact-upload-plan.html
+mkdir -p docs/session-artifact-upload-plan
+cp "$TRACE_SKILLS_DIR/visual-plan/template.html" \
+  docs/session-artifact-upload-plan/implementation-approach.html
 ```
 
-Treat the copied, descriptively named file as the canvas: replace its sample content while preserving
-and composing its visual system. The template's `<style>` block defines every component available: `.plan-title`, `.plan-summary`,
+The HTML filename is descriptive, not standardized; choose one that fits the change. Treat the
+copied file as the canvas: replace its sample content while preserving and composing its visual
+system. The template's `<style>` block defines every component available: `.plan-title`, `.plan-summary`,
 `.meta`/`.chip`, `.split`/`.card` for scope against non-goals, `.flow`/`.node`/`.arrow` for data
 flow, `.phase` for sequenced work, tables for file maps and verification, `.tag` for add/change/
 remove, and `.callout` for risks. Each one is demonstrated in the template body. Compose from these
@@ -71,19 +73,18 @@ instead of pasting its body. A plan that contains the implementation is not revi
 
 ## 3. Publish
 
-The artifact bundle must contain a root-level file named `plan.html`, so stage a copy of the named
-repository plan immediately before publishing:
+Upload the repository folder directly. Do not create a staging directory, rename the HTML, or copy
+the plan elsewhere:
 
 ```bash
-mkdir -p .trace-work/plan
-cp docs/session-artifact-upload-plan.html .trace-work/plan/plan.html
-"$TRACE_CLI" artifact push visual-plan .trace-work/plan --key primary
+"$TRACE_CLI" artifact push visual-plan docs/session-artifact-upload-plan --key primary
 ```
 
-The upload is rejected unless the directory holds exactly one file, `plan.html`, with no external
-references — no linked stylesheets, no remote images or fonts, no `<script>`. Inline the styles,
-and use `data:` URLs or CSS shapes for any image. The plan renders with scripting disabled, so the
-named repository plan and its staged copy must read correctly as static markup.
+The folder must contain exactly one HTML file, but that file may have any name and may sit anywhere
+inside the folder. Supporting notes or evidence may live beside it and are preserved in the artifact.
+The rendered HTML remains self-contained: no linked stylesheets, remote images or fonts, or
+`<script>`. Inline styles and visual assets with `data:` URLs or CSS shapes. Trace renders the HTML
+with scripting and network access disabled.
 
 Publish once, when the canvas is complete. Do not print the plan into chat and do not invoke a
 provider-native plan approval tool. Trace renders the uploaded artifact; after the upload succeeds,

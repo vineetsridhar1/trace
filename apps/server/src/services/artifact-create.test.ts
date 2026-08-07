@@ -37,7 +37,11 @@ async function planArchive(): Promise<Buffer> {
     pack.on("end", () => resolve(gzipSync(Buffer.concat(chunks))));
     pack.on("error", reject);
   });
-  pack.entry({ name: "plan.html" }, "<!doctype html><html><body>Plan</body></html>");
+  pack.entry(
+    { name: "implementation-approach.html" },
+    "<!doctype html><html><body>Plan</body></html>",
+  );
+  pack.entry({ name: "evidence/notes.md" }, "Supporting evidence");
   pack.finalize();
   return finished;
 }

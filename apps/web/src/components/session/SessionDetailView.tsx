@@ -36,6 +36,7 @@ import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
 import { useVisualPlanDocument } from "../artifact/useVisualPlanDocument";
+import { visualPlanHtmlPath } from "../artifact/visual-plan-file";
 import { findMessageActionsEventIds } from "./messageActions";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
@@ -320,7 +321,7 @@ export function SessionDetailView({
           ? null
           : latestPlanArtifact;
   const { implementationContent: artifactPlanContent, error: artifactPlanError } =
-    useVisualPlanDocument(visiblePlanArtifact?.id ?? null);
+    useVisualPlanDocument(visiblePlanArtifact?.id ?? null, visualPlanHtmlPath(visiblePlanArtifact));
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;

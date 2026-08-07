@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { Artifact } from "@trace/gql";
 import { TraceLoader } from "../ui/trace-loader";
 import { useVisualPlanDocument } from "./useVisualPlanDocument";
+import { visualPlanHtmlPath } from "./visual-plan-file";
 import { sandboxedPlanHtml } from "./plan-html";
 
 export function VisualPlanArtifact({
@@ -11,7 +12,10 @@ export function VisualPlanArtifact({
   artifact: Artifact;
   onContent?: (content: string) => void;
 }) {
-  const { html, implementationContent, error } = useVisualPlanDocument(artifact.id);
+  const { html, implementationContent, error } = useVisualPlanDocument(
+    artifact.id,
+    visualPlanHtmlPath(artifact),
+  );
 
   useEffect(() => {
     if (implementationContent) onContent?.(implementationContent);
