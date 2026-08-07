@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Interactive cloud browser video artifacts — implementation plan</title>
+    <title>Open-source cloud browser video artifacts — implementation plan</title>
     <style>
       :root { --bg:#171717; --surface:#1f1f1f; --raised:#262626; --fg:#e4e4e7; --muted:#a1a1aa; --faint:#71717a; --border:#2e2e2e; --accent:#3b82f6; --add:#22c55e; --change:#eab308; --remove:#ef4444; --radius:8px; }
       * { box-sizing:border-box; }
@@ -49,15 +49,6 @@
       .diagram-svg .decision { fill:color-mix(in srgb,var(--change) 10%,var(--surface)); stroke:var(--change); stroke-width:1.5; }
       .diagram-svg text { fill:var(--fg); font-family:inherit; font-size:12px; text-anchor:middle; }
       .diagram-svg .edge-label { fill:var(--faint); font-size:10px; }
-      .sequence { display:grid; gap:8px; min-width:620px; }
-      .sequence-row { display:grid; grid-template-columns:130px 1fr 150px; align-items:center; gap:12px; }
-      .sequence-party { padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--raised); font-size:12px; font-weight:600; text-align:center; }
-      .sequence-message { position:relative; padding-bottom:5px; border-bottom:1px solid var(--faint); color:var(--muted); font-size:11px; text-align:center; }
-      .sequence-message::after { content:""; position:absolute; right:-1px; bottom:-4px; width:7px; height:7px; border-top:1px solid var(--faint); border-right:1px solid var(--faint); transform:rotate(45deg); }
-      .sequence-row.reverse .sequence-party:first-child { grid-column:3; }
-      .sequence-row.reverse .sequence-message { grid-column:2; grid-row:1; transform:scaleX(-1); }
-      .sequence-row.reverse .sequence-message span { display:inline-block; transform:scaleX(-1); }
-      .sequence-row.reverse .sequence-party:last-child { grid-column:1; grid-row:1; }
       .phase { position:relative; padding:0 0 22px 26px; border-left:1px solid var(--border); }
       .phase:last-child { border-left-color:transparent; padding-bottom:0; }
       .phase::before { content:attr(data-step); position:absolute; left:-11px; top:0; width:21px; height:21px; border-radius:50%; background:var(--raised); color:var(--muted); font-size:11px; font-weight:600; line-height:21px; text-align:center; }
@@ -81,163 +72,138 @@
   </head>
   <body>
     <article class="plan">
-      <h1 class="plan-title">Interactive cloud browser control and video proof</h1>
-      <p class="plan-summary">Give a cloud agent a persistent browser it can observe and control one step at a time, while it independently inspects and prepares application/database state. Recording becomes an explicit phase of that same live browser session, and the finished WebM uses Trace’s existing artifact pipeline.</p>
+      <h1 class="plan-title">Use Playwright CLI for cloud browser control and video</h1>
+      <p class="plan-summary">Adopt Microsoft’s open-source Playwright CLI as the browser engine instead of building a Trace-specific automation protocol. Trace supplies the cloud-image packaging, invocation isolation, state-aware skill, lifecycle cleanup, and artifact upload; upstream supplies the persistent browser, snapshots, ref-based actions, debugging, and WebM recording.</p>
       <div class="meta">
-        <span class="chip"><strong>14</strong> implementation files</span>
-        <span class="chip"><strong>5</strong> phases</span>
-        <span class="chip">Observe → reason → act</span>
-        <span class="chip">Cloud runtime only</span>
+        <span class="chip"><strong>Apache-2.0</strong> upstream</span>
+        <span class="chip"><strong>10</strong> implementation files</span>
+        <span class="chip"><strong>4</strong> phases</span>
+        <span class="chip">Pinned dependency</span>
         <span class="chip">No GraphQL or DB migration</span>
       </div>
       <div class="metrics" aria-label="Decision summary">
-        <div class="metric"><b>1</b><span>persistent browser per active invocation</span></div>
-        <div class="metric"><b>2</b><span>state planes coordinated: database + browser</span></div>
-        <div class="metric"><b>0</b><span>agent reasoning time added to the video</span></div>
+        <div class="metric"><b>None</b><span>custom browser protocol, ref engine, or video encoder</span></div>
+        <div class="metric"><b>1</b><span>cross-agent CLI + Trace skill workflow</span></div>
+        <div class="metric"><b>0</b><span>browser-control code forks to maintain</span></div>
       </div>
 
       <section>
         <h2>Decision</h2>
-        <div class="callout"><strong>Recommended architecture:</strong> the container bridge owns an invocation-scoped Playwright browser controller. The bundled <code>trace browser</code> CLI is a thin local client. Every inspect command returns the current URL, page title, bounded semantic snapshot, visible element references, recent console/page errors, and a screenshot path. The AI reads those observations, reasons normally, then sends one ref-based action.</div>
-        <p style="margin-top:12px">This is not a pre-authored playback recipe. Browser state—page, history, cookies, storage, and authenticated session—stays alive across commands, so the agent can react to redirects, loading states, unexpected data, validation errors, and UI changes. The skill explicitly joins this browser loop with repository/API/database inspection.</p>
+        <div class="callout"><strong>Recommended:</strong> pin <code>@playwright/cli</code> in the provisioned runtime image and invoke <code>playwright-cli</code> directly from the bundled <code>browser-video</code> skill. Its named sessions preserve cookies and storage across commands; snapshots provide deterministic element refs; built-in console/request/screenshot commands provide inspection; built-in <code>video-start</code>, chapters, action annotations, <code>run-code</code>, and <code>video-stop</code> produce WebM.</div>
+        <p style="margin-top:12px">This is precisely the upstream project’s intended use: its official README calls CLI + skills the best fit for coding agents because it avoids adapter-specific MCP registration and large tool schemas. Trace does not wrap every browser action or copy Playwright internals.</p>
       </section>
 
       <section>
-        <h2>What the AI can actually do</h2>
-        <table><thead><tr><th>Command family</th><th>Result</th><th>Why the agent needs it</th></tr></thead><tbody>
-          <tr><td><code>trace browser open &lt;url&gt;</code></td><td>Launches a fresh Chromium context for this Trace invocation and returns the first observation.</td><td>Starts at the exact route after code/route discovery; preserves one stateful tab thereafter.</td></tr>
-          <tr><td><code>trace browser inspect</code></td><td>JSON with URL/title, semantic content, element refs/roles/names/state/bounds, console and page errors, plus a PNG path.</td><td>The model can reason over structure and text, then visually inspect layout with its image-reading capability.</td></tr>
-          <tr><td><code>trace browser goto|back|reload</code></td><td>Navigates the existing tab and returns a fresh observation after auto-waiting.</td><td>Handles routes, redirects, query parameters, and server state changes without losing cookies.</td></tr>
-          <tr><td><code>trace browser click|fill|press|select &lt;ref&gt;</code></td><td>Acts on a reference from the latest snapshot, waits for settlement, and returns the next observation.</td><td>Lets the model take one grounded action, see the consequence, and choose the next action.</td></tr>
-          <tr><td><code>trace browser record start|hold|stop</code></td><td>Builds a bounded WebM from explicit action/hold segments and returns the completed local file path.</td><td>Produces a concise demo without recording minutes of model thinking between commands.</td></tr>
-          <tr><td><code>trace browser close</code></td><td>Closes Chromium and removes invocation-scoped temporary state after upload.</td><td>Prevents leaked processes, profiles, screenshots, and partial recordings.</td></tr>
+        <h2>Open-source option comparison</h2>
+        <table><thead><tr><th>Tool</th><th>Strengths</th><th>Tradeoff here</th><th>Decision</th></tr></thead><tbody>
+          <tr><td><strong>Playwright CLI</strong><br><code>Apache-2.0</code></td><td>Built for coding agents; persistent named sessions; accessibility snapshots/refs; screenshots; console/network/storage; video, chapters, action callouts; hero scripts.</td><td>Young package, so pin a tested version and prove Chromium/FFmpeg compatibility in the image.</td><td><span class="tag add">choose</span></td></tr>
+          <tr><td><strong>Playwright MCP</strong><br><code>Apache-2.0</code></td><td>Same Playwright foundation with rich persistent MCP tools and structured snapshots.</td><td>Requires MCP configuration in every <code>CodingToolAdapter</code>; larger tool schemas/context; unnecessary when all current tools can execute a CLI.</td><td><span class="tag change">later option</span></td></tr>
+          <tr><td><strong>Chrome DevTools MCP</strong><br><code>Apache-2.0</code></td><td>Excellent Chrome console/network/performance debugging; Puppeteer automation; broad coding-agent support.</td><td>MCP adapter work; officially targets Google Chrome/Chrome for Testing rather than Debian Chromium; telemetry/update checks require explicit disablement; video-artifact workflow is less direct.</td><td>not v1</td></tr>
+          <tr><td><strong>Stagehand</strong><br><code>MIT</code></td><td>High-level <code>act</code>/<code>extract</code>/<code>observe</code>, action caching, self-healing workflows.</td><td>Best with an additional LLM/API-key/browser-provider loop; duplicates the reasoning already owned by Trace’s coding agent and complicates provider neutrality.</td><td>not v1</td></tr>
         </tbody></table>
-        <details><summary>Element references are grounded in the latest page, not invented CSS selectors</summary><div class="detail-body"><p>The controller enumerates visible actionable elements from the live page and holds the corresponding Playwright handles/locator descriptors server-side. References such as <code>e7</code> are valid only for that observation generation. A re-rendered or detached element produces a stale-reference error that requires another <code>inspect</code>; the runner never clicks a guessed fallback element.</p></div></details>
-        <details><summary>Observations are useful but bounded and do not expose request secrets</summary><div class="detail-body"><p>Semantic output prioritizes headings, labels, controls, visible text, validation state, and key attributes. It caps nodes and text length. Network diagnostics include only method, same-origin path, status, and failure reason—never headers, cookies, authorization values, or response bodies. Screenshots and observations remain local unless the agent explicitly uploads the finished video.</p></div></details>
+        <details><summary>Upstream evidence reviewed on 2026-08-07</summary><div class="detail-body"><ul><li>Microsoft <code>playwright-cli</code> README: CLI + skills is positioned as the best fit for coding agents; named sessions retain cookies/storage between calls; commands include snapshots, refs, screenshots, storage, console, requests, tracing, video, chapters, action annotations, and <code>run-code</code>.</li><li>Microsoft Playwright video guidance: a proof-of-work video should rehearse interactively, then run one “hero script” with deliberate pauses/annotations while recording.</li><li>Microsoft <code>playwright-mcp</code>: MCP is aimed at persistent, rich introspection but requires an MCP client configuration.</li><li>Chrome DevTools MCP: Apache-2.0 and capable, but officially supports Google Chrome/Chrome for Testing; usage statistics are on by default unless disabled.</li><li>Browserbase Stagehand: MIT and agent-oriented, but its own README says it is best with LLM-provider and Browserbase credentials.</li></ul></div></details>
       </section>
 
       <section>
-        <h2>The state-aware workflow the skill will require</h2>
-        <div class="diagram" aria-label="Database, application, browser, and agent reasoning loop">
-          <svg class="diagram-svg" viewBox="0 0 900 470" role="img">
-            <title>Agent workflow from state discovery through recorded proof</title>
-            <desc>The agent discovers code and database contracts, prepares deterministic state, discovers and probes the exact URL, opens a stateful browser, repeatedly observes reasons and acts, then starts an action-clock recording only when the target state is ready.</desc>
+        <h2>Division of responsibility</h2>
+        <div class="toolbar" data-view-switcher="ownership" aria-label="Ownership view">
+          <button type="button" data-view="upstream" aria-pressed="false">Playwright owns</button>
+          <button type="button" data-view="trace" aria-pressed="true">Trace owns</button>
+        </div>
+        <div class="view-panel" data-view-group="ownership" data-view-panel="upstream"><h3>Use upstream directly</h3><div class="flow"><div class="node"><b>Named sessions</b><span>browser + cookies + storage</span></div><div class="arrow">·</div><div class="node"><b>Snapshot + refs</b><span>observe and target</span></div><div class="arrow">·</div><div class="node"><b>Actions + diagnostics</b><span>click/fill/goto/console/requests</span></div><div class="arrow">·</div><div class="node"><b>Video + run-code</b><span>WebM hero script</span></div></div></div>
+        <div class="view-panel" data-view-group="ownership" data-view-panel="trace"><h3>Keep product policy in Trace</h3><div class="flow"><div class="node is-new"><b>Runtime packaging</b><span>pinned CLI + browser media deps</span></div><div class="arrow">·</div><div class="node is-new"><b>Invocation config</b><span>session/output isolation</span></div><div class="arrow">·</div><div class="node is-new"><b>State-aware skill</b><span>DB, URL, auth, reasoning loop</span></div><div class="arrow">·</div><div class="node"><b>Artifact upload</b><span>existing video service + UI</span></div></div></div>
+        <p style="margin-top:12px">Trace will not add a parallel <code>trace browser</code> command, custom socket protocol, semantic-tree implementation, stale-ref registry, or CDP video encoder. Those were removed from the previous plan.</p>
+      </section>
+
+      <section>
+        <h2>End-to-end AI workflow</h2>
+        <div class="diagram" aria-label="State preparation, Playwright exploration, hero recording, and artifact upload">
+          <svg class="diagram-svg" viewBox="0 0 900 390" role="img">
+            <title>State-aware Playwright CLI workflow</title>
+            <desc>The agent discovers code and database contracts, prepares safe deterministic state, probes the exact route, explores the stateful browser using snapshots and refs, fixes discrepancies, rehearses a hero script, resets the initial state, records the script, inspects and uploads the WebM.</desc>
             <defs><marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)" /></marker></defs>
-            <path class="edge" marker-end="url(#arrowhead)" d="M160 65 H225" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M375 65 H440" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M590 65 H655" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M730 95 V145" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M655 180 H590" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M440 180 H375" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M300 210 V265" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M375 300 H455" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M605 300 H680" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M755 330 V385 H610" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M680 415 H605" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M455 415 H380" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M300 385 V330" />
-            <rect class="box" x="20" y="35" width="140" height="60" rx="8" /><text x="90" y="61">Discover contracts</text><text class="edge-label" x="90" y="79">routes, API, schema, auth</text>
-            <path class="decision" d="M300 25 L375 65 L300 105 L225 65 Z" /><text x="300" y="61">Local ephemeral</text><text x="300" y="77">database?</text>
-            <rect class="box" x="440" y="35" width="150" height="60" rx="8" /><text x="515" y="61">Prepare demo state</text><text class="edge-label" x="515" y="79">service/seed/API or safe SQL</text>
-            <rect class="box" x="655" y="35" width="150" height="60" rx="8" /><text x="730" y="61">Verify state + URL</text><text class="edge-label" x="730" y="79">query + curl exact route</text>
-            <rect class="box is-new" x="655" y="145" width="150" height="70" rx="8" /><text x="730" y="174">Open browser</text><text class="edge-label" x="730" y="192">persistent context + auth</text>
-            <rect class="box is-new" x="440" y="145" width="150" height="70" rx="8" /><text x="515" y="174">Observe page</text><text class="edge-label" x="515" y="192">semantic JSON + PNG + errors</text>
-            <rect class="box" x="225" y="145" width="150" height="70" rx="8" /><text x="300" y="174">AI reasons</text><text class="edge-label" x="300" y="192">compare browser, code, DB</text>
-            <path class="decision" d="M300 260 L375 300 L300 340 L225 300 Z" /><text x="300" y="296">Correct state and</text><text x="300" y="312">right page?</text>
-            <rect class="box" x="455" y="270" width="150" height="60" rx="8" /><text x="530" y="296">Update state or URL</text><text class="edge-label" x="530" y="314">DB/API/goto/reload</text>
-            <rect class="box is-new" x="680" y="270" width="150" height="60" rx="8" /><text x="755" y="296">Start recording</text><text class="edge-label" x="755" y="314">action-clock timeline</text>
-            <rect class="box is-new" x="455" y="385" width="150" height="60" rx="8" /><text x="530" y="411">Act + observe</text><text class="edge-label" x="530" y="429">captured transition segment</text>
-            <rect class="box" x="225" y="385" width="155" height="60" rx="8" /><text x="302" y="411">Stop + upload</text><text class="edge-label" x="302" y="429">existing video artifact CLI</text>
-            <text class="edge-label" x="405" y="54">yes / isolated</text><text class="edge-label" x="252" y="125">no: namespace + avoid reset</text><text class="edge-label" x="407" y="290">no</text><text class="edge-label" x="637" y="290">yes</text>
+            <path class="edge" marker-end="url(#arrowhead)" d="M155 65 H215" /><path class="edge" marker-end="url(#arrowhead)" d="M365 65 H425" /><path class="edge" marker-end="url(#arrowhead)" d="M575 65 H635" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M710 95 V145" /><path class="edge" marker-end="url(#arrowhead)" d="M635 180 H575" /><path class="edge" marker-end="url(#arrowhead)" d="M425 180 H365" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M290 210 V260" /><path class="edge" marker-end="url(#arrowhead)" d="M365 300 H425" /><path class="edge" marker-end="url(#arrowhead)" d="M575 300 H635" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M710 330 V355 H575" /><path class="edge" marker-end="url(#arrowhead)" d="M425 355 H365" />
+            <rect class="box" x="15" y="35" width="140" height="60" rx="8" /><text x="85" y="61">Discover contracts</text><text class="edge-label" x="85" y="79">routes, API, schema, auth</text>
+            <path class="decision" d="M290 25 L365 65 L290 105 L215 65 Z" /><text x="290" y="61">Safe state</text><text x="290" y="77">setup path?</text>
+            <rect class="box" x="425" y="35" width="150" height="60" rx="8" /><text x="500" y="61">Prepare + verify DB</text><text class="edge-label" x="500" y="79">service/seed/API/safe SQL</text>
+            <rect class="box" x="635" y="35" width="150" height="60" rx="8" /><text x="710" y="61">Probe exact URL</text><text class="edge-label" x="710" y="79">source + curl</text>
+            <rect class="box is-new" x="635" y="145" width="150" height="70" rx="8" /><text x="710" y="174">Playwright open</text><text class="edge-label" x="710" y="192">named isolated session</text>
+            <rect class="box is-new" x="425" y="145" width="150" height="70" rx="8" /><text x="500" y="174">Snapshot + inspect</text><text class="edge-label" x="500" y="192">refs, PNG, console, requests</text>
+            <rect class="box" x="215" y="145" width="150" height="70" rx="8" /><text x="290" y="174">AI reasons + acts</text><text class="edge-label" x="290" y="192">browser + source + DB</text>
+            <path class="decision" d="M290 260 L365 300 L290 340 L215 300 Z" /><text x="290" y="296">Expected flow</text><text x="290" y="312">proven?</text>
+            <rect class="box is-new" x="425" y="270" width="150" height="60" rx="8" /><text x="500" y="296">Build hero script</text><text class="edge-label" x="500" y="314">stable locators + pauses</text>
+            <rect class="box is-new" x="635" y="270" width="150" height="60" rx="8" /><text x="710" y="296">Reset + record</text><text class="edge-label" x="710" y="314">video + chapters + run-code</text>
+            <rect class="box" x="425" y="345" width="150" height="40" rx="8" /><text x="500" y="370">Inspect + artifact push</text>
+            <text class="edge-label" x="390" y="54">yes</text><text class="edge-label" x="235" y="126">no: add app-owned setup</text><text class="edge-label" x="390" y="290">yes</text><text class="edge-label" x="255" y="360">no: repair + inspect again</text>
           </svg>
         </div>
-        <p style="margin-top:12px">The browser controller does not mutate the database behind the application’s back. The agent uses the project’s existing state boundary, verifies the result, then observes the live UI. When UI evidence contradicts the query or source code, it loops: inspect errors, correct data/auth/route, reload, and inspect again.</p>
+        <p style="margin-top:12px">Exploration stays adaptive: after each Playwright command the CLI writes a snapshot containing URL/title and ref-addressable page state. The agent can request a fresh snapshot, screenshot, console messages, or requests, compare that with source and DB queries, update data or URL, reload, and continue in the same authenticated browser session.</p>
       </section>
 
       <section>
-        <h2>Database, URL, and authentication policy</h2>
+        <h2>Database, URL, auth, and video policy in the skill</h2>
         <div class="split">
-          <div class="card"><h3>Database preparation</h3><ol><li>Read schema, migrations, model/service code, existing seeds, and API routes before touching data.</li><li>Prefer an existing seed/fixture/service/API because it preserves business invariants.</li><li>Use parameterized, narrowly scoped SQL only when the app has no state setup seam.</li><li>Query back the exact records and relationships the demo needs.</li><li>Never print <code>DATABASE_URL</code>, credentials, tokens, or seeded passwords.</li></ol></div>
-          <div class="card"><h3>Route and session preparation</h3><ol><li>Derive candidate routes from router/source code, not guesses.</li><li>Probe the exact URL with <code>curl</code>; then let browser observations confirm redirects and rendered state.</li><li>Create a demo identity through the app’s normal auth/service path.</li><li>Sign in through the UI or supported auth endpoint so browser cookies/storage are real.</li><li>Keep the same browser context while inspecting, changing state, reloading, and recording.</li></ol></div>
+          <div class="card"><h3>Before browser work</h3><ol><li>Read schema/migrations/services/seeds/API/router/auth code.</li><li>Classify the DB hostname without printing <code>DATABASE_URL</code>.</li><li>Prefer an app-owned seed/fixture/service/API; use narrow parameterized SQL only as fallback.</li><li>For external DBs: no reset/drop/truncate/broad delete; namespace reversible demo rows.</li><li>Query back required records and relationships; derive and <code>curl</code> the exact route.</li></ol></div>
+          <div class="card"><h3>Browser and proof</h3><ol><li>Open the exact URL in the invocation’s named Playwright session.</li><li>Use snapshot refs; inspect PNG for layout; inspect console/request summaries for failure.</li><li>Establish auth through the supported UI/API and preserve cookies in the same session.</li><li>Rehearse until DB/source/browser evidence agrees; generate stable locators.</li><li>Reset to initial demo state, create the hero script, dry-run, reset again, then start video and execute it in one <code>run-code</code> command.</li><li>Stop video, inspect metadata/playback, upload with <code>$TRACE_CLI artifact push video</code>, close, and clean namespaced external data.</li></ol></div>
         </div>
-        <div class="callout risk" style="margin-top:14px"><strong>Shared/external database guardrail:</strong> the runtime default is a local Postgres database at <code>localhost:5432/app</code>, but an Agent Environment may inject an external <code>DATABASE_URL</code>. The skill must classify only the hostname (without logging the URL). For a non-loopback database it forbids reset, drop, truncate, and broad delete; demo rows must be uniquely namespaced, reversible, and removed after recording unless the user asked to keep them.</div>
-        <details><summary>Repository evidence: app sessions already have the state primitives this workflow needs</summary><div class="detail-body"><ul><li><code>apps/server/src/services/session.ts</code> tells app agents that the managed preview is already running on port 3000 and that PostgreSQL/Redis are ready.</li><li><code>apps/container-bridge/docker-entrypoint.sh</code> starts local Postgres and supplies a complete credentialed <code>DATABASE_URL</code> unless the launcher injected one.</li><li><code>docs/launcher-runtime-image-handoff.md</code> documents the external-database override, which is why the skill cannot assume all databases are disposable.</li><li><code>apps/container-bridge/app-starter/docs/trace-apps.md</code> identifies <code>http://localhost:3000</code> as the managed app preview and requires the agent to exercise the live flow.</li></ul></div></details>
+        <div class="callout risk" style="margin-top:14px"><strong>Why a hero script:</strong> Playwright’s own video guidance recommends rehearsing interactively, then recording one scripted proof with deliberate pauses and annotations. The model does all open-ended reasoning before recording, so the final video has no minutes of dead air and does not require Trace to invent an action-clock encoder.</div>
       </section>
 
       <section>
-        <h2>How recording works while the AI reasons</h2>
-        <div class="toolbar" data-view-switcher="recording" aria-label="Recording behavior comparison">
-          <button type="button" data-view="wallclock" aria-pressed="false">Rejected: wall-clock</button>
-          <button type="button" data-view="actionclock" aria-pressed="true">Chosen: action-clock</button>
-        </div>
-        <div class="view-panel" data-view-group="recording" data-view-panel="wallclock"><h3>Continuous wall-clock capture</h3><p>Starting a normal recorder before the AI reasons would produce long frozen stretches while the model reads snapshots, queries the database, and decides what to do. It also increases file size and makes failures expensive.</p></div>
-        <div class="view-panel" data-view-group="recording" data-view-panel="actionclock"><h3>Action-clock capture</h3><p><code>record start</code> captures an opening hold. Each subsequent browser action opens a short CDP screencast segment, performs the action, captures the visible transition through settlement, and pauses the media timeline when the command returns. AI reasoning and shell/DB work between commands add no frames. <code>record hold</code> adds an intentional static pause; <code>record stop</code> finalizes and verifies WebM.</p></div>
-        <p style="margin-top:12px">This lets the same adaptive observe–reason–act session become a concise video. There is no fragile second replay against changed data, and no need to expose credentials in a saved recipe.</p>
-      </section>
-
-      <section>
-        <h2>Runtime ownership and isolation</h2>
-        <div class="diagram"><div class="sequence" aria-label="Invocation-scoped browser control sequence">
-          <div class="sequence-row"><span class="sequence-party">Container bridge</span><span class="sequence-message"><span>mint browser capability + socket env</span></span><span class="sequence-party">Agent invocation</span></div>
-          <div class="sequence-row reverse"><span class="sequence-party">Agent invocation</span><span class="sequence-message"><span>trace browser command + capability</span></span><span class="sequence-party">Browser manager</span></div>
-          <div class="sequence-row"><span class="sequence-party">Browser manager</span><span class="sequence-message"><span>bounded observation / action result</span></span><span class="sequence-party">Agent invocation</span></div>
-          <div class="sequence-row reverse"><span class="sequence-party">Agent invocation</span><span class="sequence-message"><span>artifact push finished WebM</span></span><span class="sequence-party">Artifact service</span></div>
-          <div class="sequence-row"><span class="sequence-party">Container bridge</span><span class="sequence-message"><span>completion/abort: revoke + close + cleanup</span></span><span class="sequence-party">Browser manager</span></div>
-        </div></div>
-        <p style="margin-top:12px">The existing bridge process owns Chromium rather than a detached agent process. It maps a random capability to <code>TRACE_SESSION_ID</code> + <code>TRACE_INVOCATION_ID</code>, allows one browser context per active invocation, restricts navigation to loopback HTTP(S), and tears everything down on completion, abort, replacement invocation, timeout, or runtime shutdown.</p>
+        <h2>Cloud integration</h2>
+        <div class="flow"><div class="node"><b>Container image</b><span>pinned Playwright CLI + system Chromium + matching FFmpeg runtime</span></div><div class="arrow">→</div><div class="node is-new"><b>Invocation env</b><span>unique session + temp output + config</span></div><div class="arrow">→</div><div class="node is-new"><b>browser-video skill</b><span>state-aware operational workflow</span></div><div class="arrow">→</div><div class="node"><b>Artifact CLI</b><span>existing authenticated video upload</span></div></div>
+        <p>The bridge derives <code>PLAYWRIGHT_CLI_SESSION</code> and output paths from <code>TRACE_INVOCATION_ID</code>, never from agent-supplied names. A baked config selects <code>/usr/bin/chromium</code>, headless isolated profiles, a fixed viewport, bounded timeouts, workspace-restricted file access, and loopback origins. On completion/abort/replacement, the bridge closes that exact Playwright session and removes its temp output after the agent has uploaded the video.</p>
+        <details><summary>Dependency policy: pin, build offline, and smoke the exact browser/video combination</summary><div class="detail-body"><p>Do not use <code>@latest</code> or <code>npx -y</code> at session time. The researched npm release is <code>@playwright/cli@0.1.18</code> (Apache-2.0, Node ≥18, Playwright 1.63 alpha dated 2026-08-05); pin that exact resolved package after the implementation smoke confirms it. Use the existing system Chromium through upstream <code>executablePath</code> configuration, install the matching Playwright FFmpeg artifact during image build, and run open/snapshot/click/video/run-code/stop in CI without network access. Keep the upstream license in the installed npm package.</p></div></details>
       </section>
 
       <section>
         <h2>Implementation phases</h2>
-        <div class="phase" data-step="1"><h3>Define the local browser protocol and lifecycle</h3><p>Add a typed request/response contract for open, inspect, navigation, ref-based actions, recording, and close. Integrate capability creation and cleanup with the container bridge’s existing invocation lifecycle.</p><details><summary>Success criterion: two concurrent Trace sessions cannot address each other’s browser context</summary><div class="detail-body"><p>Tests exercise missing/wrong/revoked capabilities, invocation replacement, stale refs, one-context limits, cleanup on completion/abort, and bounded request bodies.</p></div></details></div>
-        <div class="phase" data-step="2"><h3>Implement observe–act browser control</h3><p>Use <code>playwright-core</code> with system Chromium. Preserve a context across CLI calls; produce semantic observations and PNGs; auto-wait after actions; collect bounded same-origin diagnostics.</p><details><summary>Observation contract: URL + title + semantic nodes + actionable refs + diagnostics + screenshot path</summary><div class="detail-body"><p>Action results always include the next observation. Element references carry an observation generation and fail closed when stale. Screenshots and final media live under an invocation-scoped temp directory, never in the Git worktree.</p></div></details></div>
-        <div class="phase" data-step="3"><h3>Add action-clock recording</h3><p>Use Chromium’s CDP screencast frames and system <code>ffmpeg</code> to append only explicit action/hold segments, then verify a bounded WebM before exposing its path.</p><details><summary>Hard limits protect runtime CPU, disk, and artifact size</summary><div class="detail-body"><p>Cap viewport, frame rate, per-action settlement, holds, total media duration, and encoded bytes. Stop on encoder/browser failure, delete partial output, and retain the verified file only until upload/invocation cleanup.</p></div></details></div>
-        <div class="phase" data-step="4"><h3>Expose the CLI and state-aware skill</h3><p>Extend the existing bundled <code>trace</code> CLI with browser subcommands. Write the skill as an operational playbook spanning code/schema discovery, database classification and setup, exact URL/auth preparation, iterative inspection/action, recording, upload, and safe cleanup.</p><details><summary>The skill must make the reasoning loop explicit, not merely list commands</summary><div class="detail-body"><p>It includes stop conditions: do not record until DB queries and browser observations agree; re-inspect after every navigation/action/data mutation; never act on a stale ref; never reset an external DB; never upload a video not inspected for the intended final state.</p></div></details></div>
-        <div class="phase" data-step="5"><h3>Verify the whole behavior in a built cloud image</h3><p>Use a fixture app with Postgres data, authentication, redirects, loading state, and a multistep UI flow. Have the test driver prepare data, control the page adaptively, record action-clock segments, publish the video, and verify the existing Trace player.</p><details><summary>Failure smoke: wrong DB state must be diagnosable and recoverable before recording</summary><div class="detail-body"><p>Start with a missing relationship so the page shows an empty/error state; inspect it; query and repair the fixture through the supported service/DB path; reload; verify the expected semantic and visual state; then record. This proves the capability requested here rather than only a happy-path click script.</p></div></details></div>
+        <div class="phase" data-step="1"><h3>Prove the upstream CLI in the Trace image</h3><p>Pin Playwright CLI; configure system Chromium and isolated output; install its matching recording runtime; add an image smoke covering named sessions, snapshot refs, actions, console, screenshot, hero script, and WebM.</p><details><summary>Exit criterion: no package or browser download occurs during an agent session</summary><div class="detail-body"><p>The smoke runs with network package access disabled and verifies playable WebM metadata. If the pinned CLI cannot reliably use the image’s Chromium, use the matching Playwright Chromium installed at image build rather than adding custom automation code.</p></div></details></div>
+        <div class="phase" data-step="2"><h3>Add invocation scoping and cleanup</h3><p>Derive a unique Playwright session/config/output directory for each active invocation and close it from every bridge completion, abort, replacement, timeout, and shutdown path.</p><details><summary>Isolation test: parallel cloud sessions retain separate tabs, cookies, storage, and output files</summary><div class="detail-body"><p>Test that one invocation cannot select another’s session via environment or CLI defaults, and that stale sessions are removed even when the coding tool exits unexpectedly.</p></div></details></div>
+        <div class="phase" data-step="3"><h3>Write and bundle the state-aware Trace skill</h3><p>Teach database safety, state verification, exact-route/auth setup, Playwright exploration, ref-based action, visual/error inspection, hero-script generation, video recording, artifact upload, and cleanup.</p><details><summary>The skill supplements upstream Playwright guidance rather than copying it</summary><div class="detail-body"><p>The Trace skill names product-specific invariants and tells the agent to consult <code>playwright-cli --help</code> and the installed upstream skill for command details. It never teaches a second command vocabulary.</p></div></details></div>
+        <div class="phase" data-step="4"><h3>Verify adaptive state repair and proof upload</h3><p>A fixture app begins with wrong relational DB state, requires auth, and redirects to a parameterized route. The agent/test driver must discover, repair, inspect, rehearse, record, and upload; the unchanged Trace player must play the video.</p></div>
       </section>
 
       <section>
         <h2>File impact map</h2>
-        <div class="toolbar" data-file-filters aria-label="Filter file changes"><button type="button" data-filter="all" aria-pressed="true">All 14</button><button type="button" data-filter="add" aria-pressed="false">New 3</button><button type="button" data-filter="change" aria-pressed="false">Changed 11</button></div>
+        <div class="toolbar" data-file-filters aria-label="Filter file changes"><button type="button" data-filter="all" aria-pressed="true">All 10</button><button type="button" data-filter="add" aria-pressed="false">New 3</button><button type="button" data-filter="change" aria-pressed="false">Changed 7</button></div>
         <table data-file-table><thead><tr><th>File</th><th>Change</th><th>Boundary / behavior</th></tr></thead><tbody>
-          <tr data-change="change"><td><code>apps/container-bridge/Dockerfile</code></td><td><span class="tag change">edit</span></td><td>Install system <code>ffmpeg</code>; keep system Chromium and pinned runtime dependencies offline-ready.</td></tr>
-          <tr data-change="change"><td><code>apps/container-bridge/package.json</code></td><td><span class="tag change">edit</span></td><td>Declare <code>playwright-core</code>.</td></tr>
-          <tr data-change="change"><td><code>pnpm-lock.yaml</code></td><td><span class="tag change">generated</span></td><td>Lock the new runtime dependency.</td></tr>
-          <tr data-change="add"><td><code>apps/container-bridge/src/browser-control-protocol.ts</code></td><td><span class="tag add">new</span></td><td>Runtime validation and typed command/observation/action contracts.</td></tr>
-          <tr data-change="add"><td><code>apps/container-bridge/src/browser-control-manager.ts</code></td><td><span class="tag add">new</span></td><td>Capability-scoped socket server, persistent Playwright contexts, observation, actions, recording, cleanup.</td></tr>
-          <tr data-change="add"><td><code>apps/container-bridge/src/browser-control-manager.test.ts</code></td><td><span class="tag add">new</span></td><td>Protocol limits, isolation, stale refs, diagnostics redaction, recording clock, and lifecycle cleanup.</td></tr>
-          <tr data-change="change"><td><code>apps/container-bridge/src/bridge.ts</code></td><td><span class="tag change">edit</span></td><td>Create/revoke browser capabilities with agent invocations and inject local control environment.</td></tr>
-          <tr data-change="change"><td><code>apps/container-bridge/src/dockerfile-runtime-dependencies.test.ts</code></td><td><span class="tag change">edit</span></td><td>Assert Chromium, ffmpeg, and external Node dependencies are present in the standalone image.</td></tr>
-          <tr data-change="change"><td><code>runtime/bin/trace.mjs</code></td><td><span class="tag change">edit</span></td><td>Add the thin <code>browser</code> client while preserving artifact upload behavior.</td></tr>
-          <tr data-change="change"><td><code>packages/shared/test/trace-cli.test.ts</code></td><td><span class="tag change">edit</span></td><td>Exercise browser command parsing, socket requests, structured output, missing capability, and legacy artifact push.</td></tr>
-          <tr data-change="change"><td><code>runtime/skills/browser-video/SKILL.md</code></td><td><span class="tag change">runtime</span></td><td>Operational state-discovery, DB safety, URL/auth, observe–reason–act, recording, upload, cleanup playbook.</td></tr>
+          <tr data-change="change"><td><code>apps/container-bridge/Dockerfile</code></td><td><span class="tag change">edit</span></td><td>Pin Playwright CLI and matching recording runtime at image build; preserve system Chromium.</td></tr>
+          <tr data-change="add"><td><code>apps/container-bridge/playwright-cli.config.json</code></td><td><span class="tag add">new</span></td><td>Headless system-Chromium, isolated profile, viewport, timeouts, output and network defaults.</td></tr>
+          <tr data-change="add"><td><code>apps/container-bridge/src/playwright-session.ts</code></td><td><span class="tag add">new</span></td><td>Derive invocation session/output env and close/delete exact named sessions safely.</td></tr>
+          <tr data-change="add"><td><code>apps/container-bridge/src/playwright-session.test.ts</code></td><td><span class="tag add">new</span></td><td>Session-name bounds, env isolation, cleanup lifecycle, failure tolerance, parallel invocations.</td></tr>
+          <tr data-change="change"><td><code>apps/container-bridge/src/bridge.ts</code></td><td><span class="tag change">edit</span></td><td>Attach Playwright session env to each run and cleanup on every terminal lifecycle path.</td></tr>
+          <tr data-change="change"><td><code>apps/container-bridge/src/dockerfile-runtime-dependencies.test.ts</code></td><td><span class="tag change">edit</span></td><td>Assert pinned CLI/config/Chromium/recording runtime are present; add offline browser-video smoke.</td></tr>
+          <tr data-change="change"><td><code>runtime/skills/browser-video/SKILL.md</code></td><td><span class="tag change">runtime</span></td><td>Trace-specific DB/URL/auth/reasoning/rehearsal/record/upload/cleanup workflow using upstream CLI.</td></tr>
           <tr data-change="change"><td><code>runtime/manifest.json</code></td><td><span class="tag change">edit</span></td><td>Include the skill and bump runtime version.</td></tr>
-          <tr data-change="change"><td><code>packages/shared/src/trace-runtime.generated.ts</code></td><td><span class="tag change">generated</span></td><td>Embed the updated CLI and skill for cloud runtimes.</td></tr>
-          <tr data-change="change"><td><code>packages/shared/test/trace-runtime.test.ts</code></td><td><span class="tag change">edit</span></td><td>Verify installation/upgrade includes the browser skill and updated executable.</td></tr>
+          <tr data-change="change"><td><code>packages/shared/src/trace-runtime.generated.ts</code></td><td><span class="tag change">generated</span></td><td>Embed the new skill for cloud invocation installation.</td></tr>
+          <tr data-change="change"><td><code>packages/shared/test/trace-runtime.test.ts</code></td><td><span class="tag change">edit</span></td><td>Verify runtime installation/upgrade includes the browser-video skill.</td></tr>
         </tbody></table>
       </section>
 
       <section>
         <h2>Verification matrix</h2>
-        <table><thead><tr><th>Layer</th><th>Proof</th></tr></thead><tbody>
-          <tr><td>Protocol and isolation</td><td>Wrong/revoked capability, concurrent sessions, oversized command, invalid URL, stale ref, completion/abort cleanup tests.</td></tr>
-          <tr><td>Observation quality</td><td>Fixture pages prove headings/text/control state, stable refs, screenshot generation, redirect URL, console/page errors, diagnostics redaction and bounds.</td></tr>
-          <tr><td>Adaptive control</td><td>A conditional fixture flow changes based on DB state; the driver must inspect the changed page before choosing the next action.</td></tr>
-          <tr><td>Database workflow</td><td>Local fixture seed/service succeeds and verifies relationships; external-host classification blocks destructive reset paths and uses namespaced cleanup.</td></tr>
-          <tr><td>Recording</td><td>Wall-clock delays between actions do not increase media duration; action transitions and explicit holds do; WebM passes <code>ffprobe</code> and size/duration limits.</td></tr>
-          <tr><td>Artifact handoff</td><td><code>$TRACE_CLI artifact push video</code> emits <code>trace.video.v1</code>; the unchanged timeline card and artifact dialog play the result.</td></tr>
-          <tr><td>Builds</td><td><code>pnpm --filter @trace/container-bridge test && build</code> and <code>pnpm --filter @trace/shared test</code>, followed by a clean runtime-image smoke test.</td></tr>
+        <table><thead><tr><th>Concern</th><th>Proof</th></tr></thead><tbody>
+          <tr><td>Open-source capability</td><td>Pinned CLI prints version/license; open/snapshot/ref action/screenshot/console/requests/storage/video/chapters/run-code work in the built image.</td></tr>
+          <tr><td>Isolation</td><td>Parallel invocation names cannot collide; cookies/output stay separate; completion/abort/replacement closes only the caller’s session.</td></tr>
+          <tr><td>State reasoning</td><td>Fixture starts wrong; DB query, UI snapshot, redirect URL, console/requests lead to a corrective state mutation and successful re-inspection.</td></tr>
+          <tr><td>DB safety</td><td>Loopback DB allows scoped reset; external-host classification forbids destructive operations and proves namespaced cleanup.</td></tr>
+          <tr><td>Video quality</td><td>Dry-run hero script succeeds; reset; recording includes explicit chapters/action callouts and intended pauses but no model reasoning time; WebM passes metadata/playback and artifact limits.</td></tr>
+          <tr><td>Artifact handoff</td><td>Existing <code>artifact push video</code> produces <code>trace.video.v1</code>; unchanged timeline card and artifact dialog play it.</td></tr>
         </tbody></table>
       </section>
 
       <section>
-        <h2>Critical risks and mitigations</h2>
+        <h2>Critical risks</h2>
         <div class="stack">
-          <div class="callout risk"><strong>Database damage.</strong> A launcher can provide a shared external database even though the default is local. Classify by parsed hostname without logging secrets; prefer app-owned setup paths; forbid destructive operations externally; namespace and clean demo data.</div>
-          <div class="callout risk"><strong>Browser cross-talk in multi-session runtimes.</strong> Scope every context and filesystem path to a random invocation capability; never select a browser by caller-supplied session ID alone; revoke on every terminal lifecycle path.</div>
-          <div class="callout risk"><strong>Model acts on stale or misleading UI state.</strong> Every action is tied to the latest observation generation and returns a new observation; stale refs fail closed; the skill requires DB/source/browser evidence to agree before recording.</div>
-          <div class="callout risk"><strong>Secrets leak into logs or recordings.</strong> Never emit headers/cookies/DB URLs; redact fill values marked secret; avoid displaying credentials in the UI; keep inspection files local and upload only the reviewed WebM.</div>
-          <div class="callout risk"><strong>Runtime resource pressure.</strong> Enforce one context per invocation, global concurrency limits, bounded observations/screenshots, action-clock recording, fixed media ceilings, idle timeout, and unconditional process/temp cleanup.</div>
+          <div class="callout risk"><strong>Upstream maturity.</strong> Playwright CLI is young and currently tracks a fast-moving Playwright dependency. Pin an exact reviewed version, smoke the full command/video surface, and upgrade deliberately.</div>
+          <div class="callout risk"><strong>Database damage.</strong> Keep the prior guardrails: classify without logging secrets, prefer app-owned state setup, prohibit destructive external-DB operations, namespace and clean demo data.</div>
+          <div class="callout risk"><strong>Prompt injection from page content.</strong> Treat snapshots, console, and page text as untrusted application data, browse loopback previews only, and never interpret page text as instructions that override the skill or user request.</div>
+          <div class="callout risk"><strong>Secrets in scripts or video.</strong> Prepare auth before recording when possible, keep hero scripts in invocation temp output, do not print DB URLs/cookies/tokens, and review the WebM before upload.</div>
+          <div class="callout risk"><strong>Orphaned sessions.</strong> Explicit skill cleanup is insufficient alone; the bridge must close the invocation’s named Playwright session on every terminal path and runtime shutdown.</div>
         </div>
       </section>
     </article>
@@ -247,21 +213,14 @@
           const group = switcher.dataset.viewSwitcher;
           const buttons = [...switcher.querySelectorAll("[data-view]")];
           const panels = [...document.querySelectorAll(`[data-view-group="${group}"]`)];
-          const select = (view) => {
-            buttons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.view === view)));
-            panels.forEach((panel) => { panel.hidden = panel.dataset.viewPanel !== view; });
-          };
+          const select = (view) => { buttons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.view === view))); panels.forEach((panel) => { panel.hidden = panel.dataset.viewPanel !== view; }); };
           buttons.forEach((button) => button.addEventListener("click", () => select(button.dataset.view)));
           select(buttons.find((button) => button.getAttribute("aria-pressed") === "true")?.dataset.view);
         });
         document.querySelectorAll("[data-file-filters]").forEach((filters) => {
           const buttons = [...filters.querySelectorAll("[data-filter]")];
           const rows = [...document.querySelectorAll("[data-file-table] [data-change]")];
-          buttons.forEach((button) => button.addEventListener("click", () => {
-            const filter = button.dataset.filter;
-            buttons.forEach((candidate) => candidate.setAttribute("aria-pressed", String(candidate === button)));
-            rows.forEach((row) => { row.hidden = filter !== "all" && row.dataset.change !== filter; });
-          }));
+          buttons.forEach((button) => button.addEventListener("click", () => { const filter = button.dataset.filter; buttons.forEach((candidate) => candidate.setAttribute("aria-pressed", String(candidate === button))); rows.forEach((row) => { row.hidden = filter !== "all" && row.dataset.change !== filter; }); }));
         });
       })();
     </script>
