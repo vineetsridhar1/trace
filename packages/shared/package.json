@@ -32,6 +32,11 @@
       "types": "./dist/trace-runtime.d.ts",
       "import": "./dist/trace-runtime.js",
       "require": "./dist/cjs/trace-runtime.js"
+    },
+    "./trace-invocation-env": {
+      "types": "./dist/trace-invocation-env.d.ts",
+      "import": "./dist/trace-invocation-env.js",
+      "require": "./dist/cjs/trace-invocation-env.js"
     }
   },
   "typesVersions": {
@@ -47,6 +52,9 @@
       ],
       "trace-runtime": [
         "dist/trace-runtime.d.ts"
+      ],
+      "trace-invocation-env": [
+        "dist/trace-invocation-env.d.ts"
       ]
     }
   },
