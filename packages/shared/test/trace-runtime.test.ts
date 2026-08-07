@@ -27,6 +27,9 @@ describe("ensureTraceRuntime", () => {
     );
     expect(visualPlanSkill).toContain("trace artifact push visual-plan");
     expect(visualPlanSkill).toContain("supplied canvas template");
+    expect(visualPlanSkill).toContain("documentation directory");
+    expect(visualPlanSkill).toContain("never use the generic `plan.mdx`");
+    expect(visualPlanSkill).toContain("session-artifact-upload-plan.html");
     expect(visualPlanSkill).toContain("Trace renders the uploaded artifact");
     expect(visualPlanSkill).toContain("Trace does not watch a plan file");
     expect(visualPlanSkill).not.toContain("Agent-Native Plans");
