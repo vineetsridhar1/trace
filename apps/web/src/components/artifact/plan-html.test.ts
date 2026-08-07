@@ -40,6 +40,15 @@ describe("sandboxedPlanHtml", () => {
     expect(html.indexOf("Content-Security-Policy")).toBeLessThan(html.indexOf("</head>"));
   });
 
+  it("adds layout guards so long content stays within the plan viewport", () => {
+    const html = sandboxedPlanHtml("<html><head></head><body>Body</body></html>");
+
+    expect(html).toContain('id="trace-plan-layout-guards"');
+    expect(html).toContain("overflow-wrap: anywhere");
+    expect(html).toContain("fitSvgLabels");
+    expect(html).toContain("textLength");
+  });
+
   it("grants scripts without granting same-origin or navigation capabilities", () => {
     expect(PLAN_IFRAME_SANDBOX).toBe("allow-scripts");
     expect(PLAN_IFRAME_SANDBOX).not.toContain("allow-same-origin");

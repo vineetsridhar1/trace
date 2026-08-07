@@ -62,6 +62,11 @@ the transition, show important unhappy paths, and distinguish existing, changed,
 Prefer editable HTML/CSS for simple diagrams and inline SVG for branches or connectors that would
 otherwise be ambiguous. Do not use ASCII diagrams or external diagram libraries.
 
+Design every visual for its narrowest embedded viewport. Cards and grid children need `min-width: 0`
+and wrapping text; code and long identifiers need `overflow-wrap: anywhere`. In SVG, text does not
+wrap automatically: split node labels into short `<text>`/`<tspan>` lines or size the node to fit.
+Never let an SVG label cross a node border or connector.
+
 Cover, in whatever order best explains the change: objective and outcome, scope and explicit
 non-goals, current state grounded in real paths, the proposed behavior and boundaries, phased work,
 the file impact map, verification criteria, and risks with mitigations. State assumptions as
