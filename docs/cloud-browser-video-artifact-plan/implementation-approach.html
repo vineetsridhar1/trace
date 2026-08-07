@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cloud browser video artifacts — implementation plan</title>
+    <title>Interactive cloud browser video artifacts — implementation plan</title>
     <style>
       :root { --bg:#171717; --surface:#1f1f1f; --raised:#262626; --fg:#e4e4e7; --muted:#a1a1aa; --faint:#71717a; --border:#2e2e2e; --accent:#3b82f6; --add:#22c55e; --change:#eab308; --remove:#ef4444; --radius:8px; }
       * { box-sizing:border-box; }
       body { margin:0; padding:40px 32px 72px; background:var(--bg); color:var(--fg); font:15px/1.65 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
-      .plan { max-width:900px; margin:0 auto; }
+      .plan { max-width:920px; margin:0 auto; }
       .plan-title { margin:0 0 8px; font-size:30px; font-weight:650; letter-spacing:-.02em; }
-      .plan-summary { margin:0 0 20px; max-width:760px; color:var(--muted); font-size:16px; }
+      .plan-summary { margin:0 0 20px; max-width:800px; color:var(--muted); font-size:16px; }
       .meta,.toolbar { display:flex; flex-wrap:wrap; gap:8px; }
       .meta { margin-bottom:36px; }
       .chip { padding:4px 10px; border:1px solid var(--border); border-radius:999px; background:var(--surface); color:var(--muted); font-size:12px; }
@@ -23,7 +23,7 @@
       h2 { margin:0 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); color:var(--faint); font-size:13px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
       h3 { margin:0 0 6px; font-size:15px; font-weight:600; }
       p { margin:0 0 12px; }
-      ul { margin:0; padding-left:18px; }
+      ul,ol { margin:0; padding-left:20px; }
       li { margin-bottom:4px; }
       code { padding:1px 5px; border-radius:4px; background:var(--raised); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em; }
       button { color:inherit; font:inherit; }
@@ -42,13 +42,22 @@
       .node.is-new { border-color:var(--accent); }
       .arrow { flex:0 0 28px; align-self:center; text-align:center; color:var(--faint); }
       .diagram { overflow-x:auto; padding:16px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); }
-      .diagram-svg { display:block; width:100%; min-width:720px; height:auto; }
+      .diagram-svg { display:block; width:100%; min-width:760px; height:auto; }
       .diagram-svg .edge { fill:none; stroke:var(--faint); stroke-width:1.5; }
       .diagram-svg .box { fill:var(--raised); stroke:var(--border); stroke-width:1.5; }
       .diagram-svg .box.is-new { stroke:var(--accent); }
       .diagram-svg .decision { fill:color-mix(in srgb,var(--change) 10%,var(--surface)); stroke:var(--change); stroke-width:1.5; }
       .diagram-svg text { fill:var(--fg); font-family:inherit; font-size:12px; text-anchor:middle; }
       .diagram-svg .edge-label { fill:var(--faint); font-size:10px; }
+      .sequence { display:grid; gap:8px; min-width:620px; }
+      .sequence-row { display:grid; grid-template-columns:130px 1fr 150px; align-items:center; gap:12px; }
+      .sequence-party { padding:7px 9px; border:1px solid var(--border); border-radius:6px; background:var(--raised); font-size:12px; font-weight:600; text-align:center; }
+      .sequence-message { position:relative; padding-bottom:5px; border-bottom:1px solid var(--faint); color:var(--muted); font-size:11px; text-align:center; }
+      .sequence-message::after { content:""; position:absolute; right:-1px; bottom:-4px; width:7px; height:7px; border-top:1px solid var(--faint); border-right:1px solid var(--faint); transform:rotate(45deg); }
+      .sequence-row.reverse .sequence-party:first-child { grid-column:3; }
+      .sequence-row.reverse .sequence-message { grid-column:2; grid-row:1; transform:scaleX(-1); }
+      .sequence-row.reverse .sequence-message span { display:inline-block; transform:scaleX(-1); }
+      .sequence-row.reverse .sequence-party:last-child { grid-column:1; grid-row:1; }
       .phase { position:relative; padding:0 0 22px 26px; border-left:1px solid var(--border); }
       .phase:last-child { border-left-color:transparent; padding-bottom:0; }
       .phase::before { content:attr(data-step); position:absolute; left:-11px; top:0; width:21px; height:21px; border-radius:50%; background:var(--raised); color:var(--muted); font-size:11px; font-weight:600; line-height:21px; text-align:center; }
@@ -56,7 +65,7 @@
       summary { cursor:pointer; padding:10px 12px; color:var(--muted); font-size:13px; font-weight:550; }
       summary::marker { color:var(--accent); }
       .detail-body { padding:0 12px 12px; color:var(--muted); font-size:13px; }
-      .detail-body p:last-child,.detail-body ul:last-child { margin-bottom:0; }
+      .detail-body p:last-child,.detail-body ul:last-child,.detail-body ol:last-child { margin-bottom:0; }
       table { width:100%; border-collapse:collapse; font-size:14px; }
       th { padding:6px 10px; border-bottom:1px solid var(--border); color:var(--faint); font-size:11px; font-weight:600; letter-spacing:.06em; text-align:left; text-transform:uppercase; }
       td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
@@ -67,132 +76,168 @@
       .callout.risk { border-left-color:var(--change); }
       .callout strong { color:var(--fg); }
       .stack { display:grid; gap:12px; }
-      @media (max-width:640px) { body { padding:28px 18px 56px; } .split,.metrics { grid-template-columns:1fr; } }
+      @media (max-width:680px) { body { padding:28px 18px 56px; } .split,.metrics { grid-template-columns:1fr; } }
     </style>
   </head>
   <body>
     <article class="plan">
-      <h1 class="plan-title">Cloud browser video artifacts</h1>
-      <p class="plan-summary">Add one cloud-runtime capability: an agent can exercise its localhost app in Chromium, record a bounded browser demo, and publish that video through Trace’s already-supported artifact flow.</p>
+      <h1 class="plan-title">Interactive cloud browser control and video proof</h1>
+      <p class="plan-summary">Give a cloud agent a persistent browser it can observe and control one step at a time, while it independently inspects and prepares application/database state. Recording becomes an explicit phase of that same live browser session, and the finished WebM uses Trace’s existing artifact pipeline.</p>
       <div class="meta">
-        <span class="chip"><strong>9</strong> implementation files</span>
-        <span class="chip"><strong>4</strong> phases</span>
+        <span class="chip"><strong>14</strong> implementation files</span>
+        <span class="chip"><strong>5</strong> phases</span>
+        <span class="chip">Observe → reason → act</span>
         <span class="chip">Cloud runtime only</span>
-        <span class="chip">No schema or database migration</span>
+        <span class="chip">No GraphQL or DB migration</span>
       </div>
       <div class="metrics" aria-label="Decision summary">
-        <div class="metric"><b>1</b><span>new runtime command + skill boundary</span></div>
-        <div class="metric"><b>3</b><span>existing layers reused: upload, events, player</span></div>
-        <div class="metric"><b>0</b><span>public API contract changes</span></div>
+        <div class="metric"><b>1</b><span>persistent browser per active invocation</span></div>
+        <div class="metric"><b>2</b><span>state planes coordinated: database + browser</span></div>
+        <div class="metric"><b>0</b><span>agent reasoning time added to the video</span></div>
       </div>
 
       <section>
         <h2>Decision</h2>
-        <div class="callout"><strong>Recommended:</strong> ship a recipe-driven browser recorder inside the provisioned runtime image and teach agents to invoke it from a bundled <code>browser-video</code> skill. Keep artifact creation on the existing authenticated <code>$TRACE_CLI artifact push video</code> path.</div>
-        <p style="margin-top:12px">This gives agents a stable, offline-capable command instead of making every session invent recording code or install browser packages. It also keeps the service layer and event model unchanged because video artifacts are already first-class.</p>
+        <div class="callout"><strong>Recommended architecture:</strong> the container bridge owns an invocation-scoped Playwright browser controller. The bundled <code>trace browser</code> CLI is a thin local client. Every inspect command returns the current URL, page title, bounded semantic snapshot, visible element references, recent console/page errors, and a screenshot path. The AI reads those observations, reasons normally, then sends one ref-based action.</div>
+        <p style="margin-top:12px">This is not a pre-authored playback recipe. Browser state—page, history, cookies, storage, and authenticated session—stays alive across commands, so the agent can react to redirects, loading states, unexpected data, validation errors, and UI changes. The skill explicitly joins this browser loop with repository/API/database inspection.</p>
       </section>
 
       <section>
-        <h2>Scope and boundaries</h2>
-        <div class="split">
-          <div class="card"><h3>In scope</h3><ul><li>A discoverable <code>browser-video</code> runtime skill.</li><li>Fresh headless Chromium tab against a loopback URL.</li><li>Deterministic actions: navigate, wait, click, type, key press, pause.</li><li>Bounded frame capture, WebM encoding, metadata check, artifact upload.</li></ul></div>
-          <div class="card"><h3>Non-goals</h3><ul><li>No recording of a user’s desktop or local Chrome.</li><li>No audio, arbitrary remote-site crawling, persistent profiles, or downloads.</li><li>No local-session support in the first slice.</li><li>No new GraphQL mutation, event type, database model, or media UI.</li></ul></div>
-        </div>
+        <h2>What the AI can actually do</h2>
+        <table><thead><tr><th>Command family</th><th>Result</th><th>Why the agent needs it</th></tr></thead><tbody>
+          <tr><td><code>trace browser open &lt;url&gt;</code></td><td>Launches a fresh Chromium context for this Trace invocation and returns the first observation.</td><td>Starts at the exact route after code/route discovery; preserves one stateful tab thereafter.</td></tr>
+          <tr><td><code>trace browser inspect</code></td><td>JSON with URL/title, semantic content, element refs/roles/names/state/bounds, console and page errors, plus a PNG path.</td><td>The model can reason over structure and text, then visually inspect layout with its image-reading capability.</td></tr>
+          <tr><td><code>trace browser goto|back|reload</code></td><td>Navigates the existing tab and returns a fresh observation after auto-waiting.</td><td>Handles routes, redirects, query parameters, and server state changes without losing cookies.</td></tr>
+          <tr><td><code>trace browser click|fill|press|select &lt;ref&gt;</code></td><td>Acts on a reference from the latest snapshot, waits for settlement, and returns the next observation.</td><td>Lets the model take one grounded action, see the consequence, and choose the next action.</td></tr>
+          <tr><td><code>trace browser record start|hold|stop</code></td><td>Builds a bounded WebM from explicit action/hold segments and returns the completed local file path.</td><td>Produces a concise demo without recording minutes of model thinking between commands.</td></tr>
+          <tr><td><code>trace browser close</code></td><td>Closes Chromium and removes invocation-scoped temporary state after upload.</td><td>Prevents leaked processes, profiles, screenshots, and partial recordings.</td></tr>
+        </tbody></table>
+        <details><summary>Element references are grounded in the latest page, not invented CSS selectors</summary><div class="detail-body"><p>The controller enumerates visible actionable elements from the live page and holds the corresponding Playwright handles/locator descriptors server-side. References such as <code>e7</code> are valid only for that observation generation. A re-rendered or detached element produces a stale-reference error that requires another <code>inspect</code>; the runner never clicks a guessed fallback element.</p></div></details>
+        <details><summary>Observations are useful but bounded and do not expose request secrets</summary><div class="detail-body"><p>Semantic output prioritizes headings, labels, controls, visible text, validation state, and key attributes. It caps nodes and text length. Network diagnostics include only method, same-origin path, status, and failure reason—never headers, cookies, authorization values, or response bodies. Screenshots and observations remain local unless the agent explicitly uploads the finished video.</p></div></details>
       </section>
 
       <section>
-        <h2>Current state → proposed state</h2>
-        <div class="toolbar" data-view-switcher="architecture" aria-label="Architecture comparison">
-          <button type="button" data-view="current" aria-pressed="false">Current</button>
-          <button type="button" data-view="proposed" aria-pressed="true">Proposed</button>
-        </div>
-        <div class="view-panel" data-view-group="architecture" data-view-panel="current">
-          <h3>Current: the destination exists, but cloud agents lack a producer</h3>
-          <div class="flow"><div class="node"><b>Agent</b><span>can build and test code</span></div><div class="arrow">→</div><div class="node"><b>Artifact CLI</b><span>accepts an existing video file</span></div><div class="arrow">→</div><div class="node"><b>Artifact service</b><span>stores + emits event</span></div><div class="arrow">→</div><div class="node"><b>Web client</b><span>renders video player</span></div></div>
-        </div>
-        <div class="view-panel" data-view-group="architecture" data-view-panel="proposed">
-          <h3>Proposed: add the missing producer inside the cloud runtime</h3>
-          <div class="flow"><div class="node"><b>Local preview</b><span>agent’s running app</span></div><div class="arrow">→</div><div class="node is-new"><b>browser-video skill</b><span>writes a bounded recipe</span></div><div class="arrow">→</div><div class="node is-new"><b>Recorder command</b><span>Chromium + frames + ffmpeg</span></div><div class="arrow">→</div><div class="node"><b>Artifact CLI</b><span>existing upload path</span></div><div class="arrow">→</div><div class="node"><b>Video card</b><span>existing event + player</span></div></div>
-        </div>
-        <details><summary>Evidence: the repository already supports the complete post-recording path</summary><div class="detail-body"><ul><li><code>apps/server/src/services/artifact.ts</code> aliases <code>video</code> to <code>trace.video.v1</code>, validates video media, stores the archive, and emits <code>artifact_created</code>.</li><li><code>apps/server/src/lib/artifact-bundle.ts</code> recognizes <code>.mp4</code> and <code>.webm</code>.</li><li><code>apps/web/src/components/artifact/MediaArtifact.tsx</code> renders the stored file with native video controls; <code>MediaArtifactUploadedCard.tsx</code> supplies the timeline card.</li><li><code>apps/container-bridge/src/bridge.ts</code> injects <code>TRACE_CLI</code> and <code>TRACE_SKILLS_DIR</code> into each cloud invocation.</li></ul></div></details>
-        <details><summary>Sibling pattern: reuse the existing system-Chromium launch model</summary><div class="detail-body"><p><code>apps/container-bridge/design-starter/scripts/review-design.ts</code> already drives the system Chromium executable through <code>playwright-core</code> with cloud-safe flags. The new runner follows that model, while adding capture, encoding, bounded recipes, and cleanup.</p></div></details>
-      </section>
-
-      <section>
-        <h2>Critical flow and failure behavior</h2>
-        <div class="diagram" aria-label="Browser recording flowchart">
-          <svg class="diagram-svg" viewBox="0 0 820 360" role="img">
-            <title>Cloud browser recording, validation, and artifact publication</title>
-            <desc>The runner validates a local recipe, opens Chromium, performs actions while capturing frames, encodes and verifies WebM, then the agent uploads through the existing artifact CLI. Any failure returns actionable output and cleans temporary files.</desc>
+        <h2>The state-aware workflow the skill will require</h2>
+        <div class="diagram" aria-label="Database, application, browser, and agent reasoning loop">
+          <svg class="diagram-svg" viewBox="0 0 900 470" role="img">
+            <title>Agent workflow from state discovery through recorded proof</title>
+            <desc>The agent discovers code and database contracts, prepares deterministic state, discovers and probes the exact URL, opens a stateful browser, repeatedly observes reasons and acts, then starts an action-clock recording only when the target state is ready.</desc>
             <defs><marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)" /></marker></defs>
-            <path class="edge" marker-end="url(#arrowhead)" d="M160 62 H245" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M395 62 H470" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M610 62 H680" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M750 92 V152" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M680 182 H610" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M470 182 H395" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M320 212 V275 H195" />
-            <path class="edge" marker-end="url(#arrowhead)" d="M245 96 V275 H195" />
-            <rect class="box" x="30" y="32" width="130" height="60" rx="8" /><text x="95" y="58">Recipe + URL</text><text class="edge-label" x="95" y="76">agent-authored JSON</text>
-            <path class="decision" d="M320 22 L395 62 L320 102 L245 62 Z" /><text x="320" y="58">Valid, bounded,</text><text x="320" y="74">loopback-only?</text>
-            <rect class="box is-new" x="470" y="32" width="140" height="60" rx="8" /><text x="540" y="58">Drive Chromium</text><text class="edge-label" x="540" y="76">actions + frame capture</text>
-            <rect class="box is-new" x="680" y="32" width="140" height="60" rx="8" /><text x="750" y="58">Encode WebM</text><text class="edge-label" x="750" y="76">bounded ffmpeg process</text>
-            <path class="decision" d="M750 142 L820 182 L750 222 L680 182 Z" /><text x="750" y="178">Playable and</text><text x="750" y="194">within limit?</text>
-            <rect class="box" x="470" y="152" width="140" height="60" rx="8" /><text x="540" y="178">Artifact push</text><text class="edge-label" x="540" y="196">existing video flow</text>
-            <rect class="box" x="245" y="152" width="150" height="60" rx="8" /><text x="320" y="178">Video artifact event</text><text class="edge-label" x="320" y="196">existing service + UI</text>
-            <rect class="box" x="100" y="275" width="190" height="60" rx="8" /><text x="195" y="301">Fail with actionable error</text><text class="edge-label" x="195" y="319">close processes + delete temp data</text>
-            <text class="edge-label" x="430" y="52">yes</text><text class="edge-label" x="272" y="132">no</text><text class="edge-label" x="640" y="171">yes</text><text class="edge-label" x="725" y="250">no</text>
+            <path class="edge" marker-end="url(#arrowhead)" d="M160 65 H225" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M375 65 H440" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M590 65 H655" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M730 95 V145" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M655 180 H590" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M440 180 H375" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M300 210 V265" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M375 300 H455" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M605 300 H680" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M755 330 V385 H610" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M680 415 H605" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M455 415 H380" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M300 385 V330" />
+            <rect class="box" x="20" y="35" width="140" height="60" rx="8" /><text x="90" y="61">Discover contracts</text><text class="edge-label" x="90" y="79">routes, API, schema, auth</text>
+            <path class="decision" d="M300 25 L375 65 L300 105 L225 65 Z" /><text x="300" y="61">Local ephemeral</text><text x="300" y="77">database?</text>
+            <rect class="box" x="440" y="35" width="150" height="60" rx="8" /><text x="515" y="61">Prepare demo state</text><text class="edge-label" x="515" y="79">service/seed/API or safe SQL</text>
+            <rect class="box" x="655" y="35" width="150" height="60" rx="8" /><text x="730" y="61">Verify state + URL</text><text class="edge-label" x="730" y="79">query + curl exact route</text>
+            <rect class="box is-new" x="655" y="145" width="150" height="70" rx="8" /><text x="730" y="174">Open browser</text><text class="edge-label" x="730" y="192">persistent context + auth</text>
+            <rect class="box is-new" x="440" y="145" width="150" height="70" rx="8" /><text x="515" y="174">Observe page</text><text class="edge-label" x="515" y="192">semantic JSON + PNG + errors</text>
+            <rect class="box" x="225" y="145" width="150" height="70" rx="8" /><text x="300" y="174">AI reasons</text><text class="edge-label" x="300" y="192">compare browser, code, DB</text>
+            <path class="decision" d="M300 260 L375 300 L300 340 L225 300 Z" /><text x="300" y="296">Correct state and</text><text x="300" y="312">right page?</text>
+            <rect class="box" x="455" y="270" width="150" height="60" rx="8" /><text x="530" y="296">Update state or URL</text><text class="edge-label" x="530" y="314">DB/API/goto/reload</text>
+            <rect class="box is-new" x="680" y="270" width="150" height="60" rx="8" /><text x="755" y="296">Start recording</text><text class="edge-label" x="755" y="314">action-clock timeline</text>
+            <rect class="box is-new" x="455" y="385" width="150" height="60" rx="8" /><text x="530" y="411">Act + observe</text><text class="edge-label" x="530" y="429">captured transition segment</text>
+            <rect class="box" x="225" y="385" width="155" height="60" rx="8" /><text x="302" y="411">Stop + upload</text><text class="edge-label" x="302" y="429">existing video artifact CLI</text>
+            <text class="edge-label" x="405" y="54">yes / isolated</text><text class="edge-label" x="252" y="125">no: namespace + avoid reset</text><text class="edge-label" x="407" y="290">no</text><text class="edge-label" x="637" y="290">yes</text>
           </svg>
         </div>
-        <p style="margin-top:12px">The runner owns browser and encoder lifecycle. The skill owns workflow guidance and final upload. The server remains the only creator of the immutable artifact event.</p>
+        <p style="margin-top:12px">The browser controller does not mutate the database behind the application’s back. The agent uses the project’s existing state boundary, verifies the result, then observes the live UI. When UI evidence contradicts the query or source code, it loops: inspect errors, correct data/auth/route, reload, and inspect again.</p>
+      </section>
+
+      <section>
+        <h2>Database, URL, and authentication policy</h2>
+        <div class="split">
+          <div class="card"><h3>Database preparation</h3><ol><li>Read schema, migrations, model/service code, existing seeds, and API routes before touching data.</li><li>Prefer an existing seed/fixture/service/API because it preserves business invariants.</li><li>Use parameterized, narrowly scoped SQL only when the app has no state setup seam.</li><li>Query back the exact records and relationships the demo needs.</li><li>Never print <code>DATABASE_URL</code>, credentials, tokens, or seeded passwords.</li></ol></div>
+          <div class="card"><h3>Route and session preparation</h3><ol><li>Derive candidate routes from router/source code, not guesses.</li><li>Probe the exact URL with <code>curl</code>; then let browser observations confirm redirects and rendered state.</li><li>Create a demo identity through the app’s normal auth/service path.</li><li>Sign in through the UI or supported auth endpoint so browser cookies/storage are real.</li><li>Keep the same browser context while inspecting, changing state, reloading, and recording.</li></ol></div>
+        </div>
+        <div class="callout risk" style="margin-top:14px"><strong>Shared/external database guardrail:</strong> the runtime default is a local Postgres database at <code>localhost:5432/app</code>, but an Agent Environment may inject an external <code>DATABASE_URL</code>. The skill must classify only the hostname (without logging the URL). For a non-loopback database it forbids reset, drop, truncate, and broad delete; demo rows must be uniquely namespaced, reversible, and removed after recording unless the user asked to keep them.</div>
+        <details><summary>Repository evidence: app sessions already have the state primitives this workflow needs</summary><div class="detail-body"><ul><li><code>apps/server/src/services/session.ts</code> tells app agents that the managed preview is already running on port 3000 and that PostgreSQL/Redis are ready.</li><li><code>apps/container-bridge/docker-entrypoint.sh</code> starts local Postgres and supplies a complete credentialed <code>DATABASE_URL</code> unless the launcher injected one.</li><li><code>docs/launcher-runtime-image-handoff.md</code> documents the external-database override, which is why the skill cannot assume all databases are disposable.</li><li><code>apps/container-bridge/app-starter/docs/trace-apps.md</code> identifies <code>http://localhost:3000</code> as the managed app preview and requires the agent to exercise the live flow.</li></ul></div></details>
+      </section>
+
+      <section>
+        <h2>How recording works while the AI reasons</h2>
+        <div class="toolbar" data-view-switcher="recording" aria-label="Recording behavior comparison">
+          <button type="button" data-view="wallclock" aria-pressed="false">Rejected: wall-clock</button>
+          <button type="button" data-view="actionclock" aria-pressed="true">Chosen: action-clock</button>
+        </div>
+        <div class="view-panel" data-view-group="recording" data-view-panel="wallclock"><h3>Continuous wall-clock capture</h3><p>Starting a normal recorder before the AI reasons would produce long frozen stretches while the model reads snapshots, queries the database, and decides what to do. It also increases file size and makes failures expensive.</p></div>
+        <div class="view-panel" data-view-group="recording" data-view-panel="actionclock"><h3>Action-clock capture</h3><p><code>record start</code> captures an opening hold. Each subsequent browser action opens a short CDP screencast segment, performs the action, captures the visible transition through settlement, and pauses the media timeline when the command returns. AI reasoning and shell/DB work between commands add no frames. <code>record hold</code> adds an intentional static pause; <code>record stop</code> finalizes and verifies WebM.</p></div>
+        <p style="margin-top:12px">This lets the same adaptive observe–reason–act session become a concise video. There is no fragile second replay against changed data, and no need to expose credentials in a saved recipe.</p>
+      </section>
+
+      <section>
+        <h2>Runtime ownership and isolation</h2>
+        <div class="diagram"><div class="sequence" aria-label="Invocation-scoped browser control sequence">
+          <div class="sequence-row"><span class="sequence-party">Container bridge</span><span class="sequence-message"><span>mint browser capability + socket env</span></span><span class="sequence-party">Agent invocation</span></div>
+          <div class="sequence-row reverse"><span class="sequence-party">Agent invocation</span><span class="sequence-message"><span>trace browser command + capability</span></span><span class="sequence-party">Browser manager</span></div>
+          <div class="sequence-row"><span class="sequence-party">Browser manager</span><span class="sequence-message"><span>bounded observation / action result</span></span><span class="sequence-party">Agent invocation</span></div>
+          <div class="sequence-row reverse"><span class="sequence-party">Agent invocation</span><span class="sequence-message"><span>artifact push finished WebM</span></span><span class="sequence-party">Artifact service</span></div>
+          <div class="sequence-row"><span class="sequence-party">Container bridge</span><span class="sequence-message"><span>completion/abort: revoke + close + cleanup</span></span><span class="sequence-party">Browser manager</span></div>
+        </div></div>
+        <p style="margin-top:12px">The existing bridge process owns Chromium rather than a detached agent process. It maps a random capability to <code>TRACE_SESSION_ID</code> + <code>TRACE_INVOCATION_ID</code>, allows one browser context per active invocation, restricts navigation to loopback HTTP(S), and tears everything down on completion, abort, replacement invocation, timeout, or runtime shutdown.</p>
       </section>
 
       <section>
         <h2>Implementation phases</h2>
-        <div class="phase" data-step="1"><h3>Package an offline-capable recorder in the cloud image</h3><p>Add <code>playwright-core</code> and system <code>ffmpeg</code>, then expose a stable command backed by a typed recorder module.</p><details><summary>Contract: JSON recipe in, verified WebM path out</summary><div class="detail-body"><p>The command accepts a loopback URL, viewport, output path, and finite action list. It launches the already-installed system Chromium; no per-session package or browser download is allowed.</p></div></details></div>
-        <div class="phase" data-step="2"><h3>Harden recording and cleanup</h3><p>Validate input before launch; cap duration, frame rate, viewport, action count, and output size; make all failures explicit and cleanup unconditional.</p><details><summary>Failure cases: preview unavailable, selector timeout, browser exit, encoder failure, invalid output</summary><div class="detail-body"><p>Use injected browser/process seams for focused tests. The command must never upload a partial result and must remove temporary frames on every exit path.</p></div></details></div>
-        <div class="phase" data-step="3"><h3>Bundle the agent skill and refresh existing runtimes</h3><p>Add <code>runtime/skills/browser-video/SKILL.md</code>, add it to the manifest, increment the runtime version, and regenerate the embedded runtime payload.</p><details><summary>Skill workflow: test preview → write recipe → record → inspect → artifact push</summary><div class="detail-body"><p>The instructions prefer short demos, visible interaction pauses, stable selectors, and <code>$TRACE_CLI artifact push video &lt;file&gt; --key demo</code> only after verification.</p></div></details></div>
-        <div class="phase" data-step="4"><h3>Prove the full handoff in a built runner image</h3><p>Run a real localhost app, record multiple interactions, inspect the WebM, upload it, and verify playback in both the timeline card and artifact dialog.</p><details><summary>Acceptance: no server/client code changes are needed for playback</summary><div class="detail-body"><p>The smoke test should demonstrate that the existing <code>artifact_created</code> event contains enough manifest data for the current Zustand event handler and media components.</p></div></details></div>
+        <div class="phase" data-step="1"><h3>Define the local browser protocol and lifecycle</h3><p>Add a typed request/response contract for open, inspect, navigation, ref-based actions, recording, and close. Integrate capability creation and cleanup with the container bridge’s existing invocation lifecycle.</p><details><summary>Success criterion: two concurrent Trace sessions cannot address each other’s browser context</summary><div class="detail-body"><p>Tests exercise missing/wrong/revoked capabilities, invocation replacement, stale refs, one-context limits, cleanup on completion/abort, and bounded request bodies.</p></div></details></div>
+        <div class="phase" data-step="2"><h3>Implement observe–act browser control</h3><p>Use <code>playwright-core</code> with system Chromium. Preserve a context across CLI calls; produce semantic observations and PNGs; auto-wait after actions; collect bounded same-origin diagnostics.</p><details><summary>Observation contract: URL + title + semantic nodes + actionable refs + diagnostics + screenshot path</summary><div class="detail-body"><p>Action results always include the next observation. Element references carry an observation generation and fail closed when stale. Screenshots and final media live under an invocation-scoped temp directory, never in the Git worktree.</p></div></details></div>
+        <div class="phase" data-step="3"><h3>Add action-clock recording</h3><p>Use Chromium’s CDP screencast frames and system <code>ffmpeg</code> to append only explicit action/hold segments, then verify a bounded WebM before exposing its path.</p><details><summary>Hard limits protect runtime CPU, disk, and artifact size</summary><div class="detail-body"><p>Cap viewport, frame rate, per-action settlement, holds, total media duration, and encoded bytes. Stop on encoder/browser failure, delete partial output, and retain the verified file only until upload/invocation cleanup.</p></div></details></div>
+        <div class="phase" data-step="4"><h3>Expose the CLI and state-aware skill</h3><p>Extend the existing bundled <code>trace</code> CLI with browser subcommands. Write the skill as an operational playbook spanning code/schema discovery, database classification and setup, exact URL/auth preparation, iterative inspection/action, recording, upload, and safe cleanup.</p><details><summary>The skill must make the reasoning loop explicit, not merely list commands</summary><div class="detail-body"><p>It includes stop conditions: do not record until DB queries and browser observations agree; re-inspect after every navigation/action/data mutation; never act on a stale ref; never reset an external DB; never upload a video not inspected for the intended final state.</p></div></details></div>
+        <div class="phase" data-step="5"><h3>Verify the whole behavior in a built cloud image</h3><p>Use a fixture app with Postgres data, authentication, redirects, loading state, and a multistep UI flow. Have the test driver prepare data, control the page adaptively, record action-clock segments, publish the video, and verify the existing Trace player.</p><details><summary>Failure smoke: wrong DB state must be diagnosable and recoverable before recording</summary><div class="detail-body"><p>Start with a missing relationship so the page shows an empty/error state; inspect it; query and repair the fixture through the supported service/DB path; reload; verify the expected semantic and visual state; then record. This proves the capability requested here rather than only a happy-path click script.</p></div></details></div>
       </section>
 
       <section>
         <h2>File impact map</h2>
-        <div class="toolbar" data-file-filters aria-label="Filter file changes">
-          <button type="button" data-filter="all" aria-pressed="true">All 9</button>
-          <button type="button" data-filter="add" aria-pressed="false">New 3</button>
-          <button type="button" data-filter="change" aria-pressed="false">Changed 6</button>
-        </div>
-        <table data-file-table><thead><tr><th>File</th><th>Change</th><th>Ownership</th></tr></thead><tbody>
-          <tr data-change="change"><td><code>apps/container-bridge/Dockerfile</code></td><td><span class="tag change">edit</span></td><td>Install <code>ffmpeg</code>, include the recorder command, and retain system Chromium.</td></tr>
-          <tr data-change="change"><td><code>apps/container-bridge/package.json</code></td><td><span class="tag change">edit</span></td><td>Declare the runner’s pinned browser-automation dependency.</td></tr>
-          <tr data-change="change"><td><code>pnpm-lock.yaml</code></td><td><span class="tag change">generated</span></td><td>Lock the image dependency for reproducible builds.</td></tr>
-          <tr data-change="add"><td><code>apps/container-bridge/src/browser-video-recorder.ts</code></td><td><span class="tag add">new</span></td><td>Recipe validation, browser/actions, frame capture, encoding, output verification, cleanup.</td></tr>
-          <tr data-change="add"><td><code>apps/container-bridge/src/browser-video-recorder.test.ts</code></td><td><span class="tag add">new</span></td><td>Validation, action order, encoder arguments, limits, and failure cleanup.</td></tr>
-          <tr data-change="add"><td><code>apps/container-bridge/scripts/trace-browser-record.mjs</code></td><td><span class="tag add">new</span></td><td>Stable executable wrapper for the typed recorder.</td></tr>
-          <tr data-change="change"><td><code>runtime/skills/browser-video/SKILL.md</code></td><td><span class="tag change">runtime</span></td><td>Cloud-agent workflow, safe recipe contract, verification, upload, and cleanup guidance.</td></tr>
-          <tr data-change="change"><td><code>runtime/manifest.json</code></td><td><span class="tag change">edit</span></td><td>Add the skill and bump the version so installed runtime bundles refresh.</td></tr>
-          <tr data-change="change"><td><code>packages/shared/src/trace-runtime.generated.ts</code></td><td><span class="tag change">generated</span></td><td>Embed the updated runtime bundle used by the container bridge.</td></tr>
+        <div class="toolbar" data-file-filters aria-label="Filter file changes"><button type="button" data-filter="all" aria-pressed="true">All 14</button><button type="button" data-filter="add" aria-pressed="false">New 3</button><button type="button" data-filter="change" aria-pressed="false">Changed 11</button></div>
+        <table data-file-table><thead><tr><th>File</th><th>Change</th><th>Boundary / behavior</th></tr></thead><tbody>
+          <tr data-change="change"><td><code>apps/container-bridge/Dockerfile</code></td><td><span class="tag change">edit</span></td><td>Install system <code>ffmpeg</code>; keep system Chromium and pinned runtime dependencies offline-ready.</td></tr>
+          <tr data-change="change"><td><code>apps/container-bridge/package.json</code></td><td><span class="tag change">edit</span></td><td>Declare <code>playwright-core</code>.</td></tr>
+          <tr data-change="change"><td><code>pnpm-lock.yaml</code></td><td><span class="tag change">generated</span></td><td>Lock the new runtime dependency.</td></tr>
+          <tr data-change="add"><td><code>apps/container-bridge/src/browser-control-protocol.ts</code></td><td><span class="tag add">new</span></td><td>Runtime validation and typed command/observation/action contracts.</td></tr>
+          <tr data-change="add"><td><code>apps/container-bridge/src/browser-control-manager.ts</code></td><td><span class="tag add">new</span></td><td>Capability-scoped socket server, persistent Playwright contexts, observation, actions, recording, cleanup.</td></tr>
+          <tr data-change="add"><td><code>apps/container-bridge/src/browser-control-manager.test.ts</code></td><td><span class="tag add">new</span></td><td>Protocol limits, isolation, stale refs, diagnostics redaction, recording clock, and lifecycle cleanup.</td></tr>
+          <tr data-change="change"><td><code>apps/container-bridge/src/bridge.ts</code></td><td><span class="tag change">edit</span></td><td>Create/revoke browser capabilities with agent invocations and inject local control environment.</td></tr>
+          <tr data-change="change"><td><code>apps/container-bridge/src/dockerfile-runtime-dependencies.test.ts</code></td><td><span class="tag change">edit</span></td><td>Assert Chromium, ffmpeg, and external Node dependencies are present in the standalone image.</td></tr>
+          <tr data-change="change"><td><code>runtime/bin/trace.mjs</code></td><td><span class="tag change">edit</span></td><td>Add the thin <code>browser</code> client while preserving artifact upload behavior.</td></tr>
+          <tr data-change="change"><td><code>packages/shared/test/trace-cli.test.ts</code></td><td><span class="tag change">edit</span></td><td>Exercise browser command parsing, socket requests, structured output, missing capability, and legacy artifact push.</td></tr>
+          <tr data-change="change"><td><code>runtime/skills/browser-video/SKILL.md</code></td><td><span class="tag change">runtime</span></td><td>Operational state-discovery, DB safety, URL/auth, observe–reason–act, recording, upload, cleanup playbook.</td></tr>
+          <tr data-change="change"><td><code>runtime/manifest.json</code></td><td><span class="tag change">edit</span></td><td>Include the skill and bump runtime version.</td></tr>
+          <tr data-change="change"><td><code>packages/shared/src/trace-runtime.generated.ts</code></td><td><span class="tag change">generated</span></td><td>Embed the updated CLI and skill for cloud runtimes.</td></tr>
+          <tr data-change="change"><td><code>packages/shared/test/trace-runtime.test.ts</code></td><td><span class="tag change">edit</span></td><td>Verify installation/upgrade includes the browser skill and updated executable.</td></tr>
         </tbody></table>
       </section>
 
       <section>
-        <h2>Verification</h2>
-        <table><tbody>
-          <tr><td><code>pnpm --filter @trace/container-bridge test</code></td><td>Recorder validation, browser/process orchestration, failure cleanup, and existing Docker dependency assertions pass.</td></tr>
-          <tr><td><code>pnpm --filter @trace/container-bridge build</code></td><td>The typed recorder is included in production output and the wrapper resolves it.</td></tr>
-          <tr><td><code>pnpm --filter @trace/shared test</code></td><td>Runtime manifest/version/install behavior remains valid after regeneration.</td></tr>
-          <tr><td>Container smoke</td><td>A clean built image records a loopback app without downloads; <code>ffprobe</code> reports a playable, bounded WebM; temp files are gone.</td></tr>
-          <tr><td>Artifact smoke</td><td>The authenticated video push produces <code>trace.video.v1</code>; the session timeline preview and artifact dialog both play it.</td></tr>
+        <h2>Verification matrix</h2>
+        <table><thead><tr><th>Layer</th><th>Proof</th></tr></thead><tbody>
+          <tr><td>Protocol and isolation</td><td>Wrong/revoked capability, concurrent sessions, oversized command, invalid URL, stale ref, completion/abort cleanup tests.</td></tr>
+          <tr><td>Observation quality</td><td>Fixture pages prove headings/text/control state, stable refs, screenshot generation, redirect URL, console/page errors, diagnostics redaction and bounds.</td></tr>
+          <tr><td>Adaptive control</td><td>A conditional fixture flow changes based on DB state; the driver must inspect the changed page before choosing the next action.</td></tr>
+          <tr><td>Database workflow</td><td>Local fixture seed/service succeeds and verifies relationships; external-host classification blocks destructive reset paths and uses namespaced cleanup.</td></tr>
+          <tr><td>Recording</td><td>Wall-clock delays between actions do not increase media duration; action transitions and explicit holds do; WebM passes <code>ffprobe</code> and size/duration limits.</td></tr>
+          <tr><td>Artifact handoff</td><td><code>$TRACE_CLI artifact push video</code> emits <code>trace.video.v1</code>; the unchanged timeline card and artifact dialog play the result.</td></tr>
+          <tr><td>Builds</td><td><code>pnpm --filter @trace/container-bridge test && build</code> and <code>pnpm --filter @trace/shared test</code>, followed by a clean runtime-image smoke test.</td></tr>
         </tbody></table>
       </section>
 
       <section>
-        <h2>Risks, assumptions, and review posture</h2>
+        <h2>Critical risks and mitigations</h2>
         <div class="stack">
-          <div class="callout risk"><strong>Resource pressure.</strong> Browser capture plus encoding can consume CPU and disk. Enforce hard ceilings, use a modest default viewport/frame rate, and reject oversized output before upload.</div>
-          <div class="callout risk"><strong>Egress and untrusted content.</strong> First release accepts only <code>localhost</code>, <code>127.0.0.1</code>, and <code>::1</code>; recipes cannot supply Chromium flags, shell commands, downloads, or profile paths.</div>
-          <div class="callout risk"><strong>Automation flakiness.</strong> Require explicit selectors and waits, stop on the first failed action, and return the failing action index plus selector.</div>
-          <div class="callout"><strong>Assumption:</strong> cloud-session previews are reachable from Chromium over loopback in the same runtime container. This is true for current app/design starters. If a future adapter isolates previews in another network namespace, the runner will need an adapter-supplied preview URL rather than a recipe change.</div>
+          <div class="callout risk"><strong>Database damage.</strong> A launcher can provide a shared external database even though the default is local. Classify by parsed hostname without logging secrets; prefer app-owned setup paths; forbid destructive operations externally; namespace and clean demo data.</div>
+          <div class="callout risk"><strong>Browser cross-talk in multi-session runtimes.</strong> Scope every context and filesystem path to a random invocation capability; never select a browser by caller-supplied session ID alone; revoke on every terminal lifecycle path.</div>
+          <div class="callout risk"><strong>Model acts on stale or misleading UI state.</strong> Every action is tied to the latest observation generation and returns a new observation; stale refs fail closed; the skill requires DB/source/browser evidence to agree before recording.</div>
+          <div class="callout risk"><strong>Secrets leak into logs or recordings.</strong> Never emit headers/cookies/DB URLs; redact fill values marked secret; avoid displaying credentials in the UI; keep inspection files local and upload only the reviewed WebM.</div>
+          <div class="callout risk"><strong>Runtime resource pressure.</strong> Enforce one context per invocation, global concurrency limits, bounded observations/screenshots, action-clock recording, fixed media ceilings, idle timeout, and unconditional process/temp cleanup.</div>
         </div>
       </section>
     </article>
