@@ -237,6 +237,21 @@ describe("managed git authorization", () => {
     ).rejects.toThrow(AuthorizationError);
   });
 
+  it("rejects a runtime token presented by another organization", async () => {
+    const token = await tokenWith(["read", "write"]);
+
+    await expect(
+      managedGitService.authorizeRequest({
+        token,
+        organizationId: "org-2",
+        repoId: REPO,
+        service: "git-upload-pack",
+      }),
+    ).rejects.toThrow(AuthorizationError);
+
+    expect(prismaMock.session.findFirst).not.toHaveBeenCalled();
+  });
+
   it("rejects a runtime token after its persisted runtime disconnects", async () => {
     const write = await tokenWith(["read", "write"]);
     prismaMock.session.findFirst.mockResolvedValue({

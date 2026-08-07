@@ -205,6 +205,29 @@ describe("SessionRouter stale runtime eviction", () => {
 });
 
 describe("SessionRouter org-scoped runtime keys", () => {
+  it("does not send a command to a cloud runtime in another organization", () => {
+    const router = new SessionRouter();
+    const org2Ws = makeWs();
+
+    router.registerRuntime({
+      id: "runtime-org-2",
+      label: "Cloud runtime org 2",
+      ws: org2Ws,
+      hostingMode: "cloud",
+      organizationId: "org-2",
+      supportedTools: ["codex"],
+    });
+
+    const result = router.send(
+      "session-org-1",
+      { type: "send", sessionId: "session-org-1", tool: "codex" },
+      { expectedHomeRuntimeId: "runtime-org-2", organizationId: "org-1" },
+    );
+
+    expect(result).toBe("runtime_disconnected");
+    expect(org2Ws.send).not.toHaveBeenCalled();
+  });
+
   it("keeps the same bridge instance isolated across organizations", () => {
     const router = new SessionRouter();
     const org1Ws = makeWs();

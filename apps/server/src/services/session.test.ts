@@ -9160,6 +9160,29 @@ describe("SessionService", () => {
   });
 
   describe("authorizeRuntimeLease", () => {
+    it("looks up a cloud runtime lease inside the token organization", async () => {
+      prismaMock.session.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.authorizeRuntimeLease({
+          sessionId: "session-org-2",
+          organizationId: "org-1",
+          runtimeInstanceId: "runtime-org-2",
+          environmentId: "env-org-2",
+        }),
+      ).resolves.toEqual({ authorized: false, reason: "session_not_active" });
+
+      expect(prismaMock.session.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: "session-org-2",
+            organizationId: "org-1",
+            hosting: "cloud",
+          },
+        }),
+      );
+    });
+
     it("authorizes only the persisted cloud runtime generation", async () => {
       prismaMock.session.findFirst.mockResolvedValue({
         agentStatus: "active",

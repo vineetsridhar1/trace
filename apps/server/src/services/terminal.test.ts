@@ -226,6 +226,28 @@ describe("TerminalService", () => {
       ).rejects.toThrow("Session not found");
     });
 
+    it("does not open a terminal for a session in another organization", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        terminalService.create({
+          sessionId: "session-org-2",
+          cols: 80,
+          rows: 24,
+          organizationId: "org-1",
+          userId: "user-1",
+        }),
+      ).rejects.toThrow("Session not found");
+
+      expect(prismaMock.session.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-org-2", organizationId: "org-1" },
+        }),
+      );
+      expect(runtimeAccessServiceMock.assertAccess).not.toHaveBeenCalled();
+      expect(terminalRelayMock.createTerminal).not.toHaveBeenCalled();
+    });
+
     it("throws when session is fully unloaded", async () => {
       prismaMock.session.findFirst.mockResolvedValueOnce({
         id: "session-1",
