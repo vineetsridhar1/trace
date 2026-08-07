@@ -229,16 +229,17 @@ export function handleTerminalConnection(
       return;
     }
 
-    const authContext = terminalRelay.getTerminalAuthContext(terminalId);
-    if (!authContext) {
-      ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
-      return;
-    }
-
     attachPending = true;
 
     (async () => {
       try {
+        const authContext = terminalRelay.getTerminalAuthContextDistributed
+          ? await terminalRelay.getTerminalAuthContextDistributed(terminalId)
+          : terminalRelay.getTerminalAuthContext(terminalId);
+        if (!authContext) {
+          ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
+          return;
+        }
         if (!userId) {
           ws.send(JSON.stringify({ type: "error", message: "Unauthorized" }));
           return;
@@ -318,7 +319,9 @@ export function handleTerminalConnection(
             return;
           }
         }
-        const attached = terminalRelay.attachFrontend(terminalId, ws, userId);
+        const attached = terminalRelay.attachFrontendDistributed
+          ? await terminalRelay.attachFrontendDistributed(terminalId, ws, userId)
+          : terminalRelay.attachFrontend(terminalId, ws, userId);
         if (!attached) {
           ws.send(JSON.stringify({ type: "error", message: "Terminal not found" }));
           return;
