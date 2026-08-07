@@ -24,7 +24,7 @@ export function QuestionTrayFrame({
       <section
         aria-label="Questions from the agent"
         className={cn(
-          "mx-auto max-h-[min(680px,70vh)] w-[90%] overflow-y-auto rounded-2xl border bg-surface-mid shadow-sm",
+          "mx-auto max-h-[calc(100dvh-4rem)] w-[90%] overflow-y-auto rounded-2xl border bg-surface-mid shadow-sm",
           tone === "error" ? "border-destructive/55" : "border-border",
         )}
       >

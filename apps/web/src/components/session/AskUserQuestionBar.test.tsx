@@ -292,6 +292,59 @@ describe("AskUserQuestionBar", () => {
     await act(async () => renderer.unmount());
   });
 
+  it("accepts and serializes a custom answer for a choice question", async () => {
+    const onResponse = vi.fn(() => Promise.resolve());
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <AskUserQuestionBar
+          node={{ id: "request-custom-answer", questions: [question("custom")] }}
+          onResponse={onResponse}
+          onDismiss={() => undefined}
+        />,
+      );
+    });
+
+    const customAnswer = renderer.root.findByType("textarea");
+    expect(customAnswer.props.placeholder).toBe("Write your own answer…");
+    expect(customAnswer.props.className).toContain("border-border");
+    expect(customAnswer.props.className).toContain("min-h-10");
+    expect(customAnswer.props.className).toContain("leading-5");
+    expect(customAnswer.props.className).toContain("[field-sizing:content]");
+    expect(customAnswer.props.className).not.toContain("text-center");
+    expect(customAnswer.props.className).not.toContain("ring-2");
+    await act(async () => findButton(renderer.root, "Yes").props.onClick());
+    const textarea = renderer.root.findByType("textarea");
+    await act(async () => textarea.props.onChange({ target: { value: "Use a tablet kiosk" } }));
+    expect(findButton(renderer.root, "Yes").props["aria-pressed"]).toBe(false);
+    await act(async () => findButton(renderer.root, "Next").props.onClick());
+    await act(async () => findButton(renderer.root, "Send 1 answer").props.onClick());
+
+    expect(onResponse).toHaveBeenCalledWith(
+      expect.stringContaining("<text>Use a tablet kiosk</text>"),
+      [],
+    );
+    expect(onResponse.mock.calls[0]?.[0]).not.toContain("<selected>yes</selected>");
+    await act(async () => renderer.unmount());
+  });
+
+  it("allows a custom answer without selecting an option", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <AskUserQuestionBar
+          node={{ id: "request-custom-only", questions: [question("custom-only")] }}
+          onResponse={() => undefined}
+          onDismiss={() => undefined}
+        />,
+      );
+    });
+    const textarea = renderer.root.findByType("textarea");
+    await act(async () => textarea.props.onChange({ target: { value: "A custom direction" } }));
+    expect(findButton(renderer.root, "Next").props.disabled).toBe(false);
+    await act(async () => renderer.unmount());
+  });
+
   it("continues text questions with Enter and preserves Shift+Enter for a new line", async () => {
     const textQuestion: Question = {
       ...question("text"),

@@ -34,9 +34,10 @@ function responseForTraceQuestion(
   const referenceText = [custom, ...references].filter(Boolean).join("\n");
   const body = assumed
     ? "  <assumption>you-decide</assumption>"
-    : referenceText
-      ? `  <text>${escapeXml(referenceText)}</text>`
-      : values.map((value) => `  <selected>${escapeXml(value)}</selected>`).join("\n");
+    : [
+        ...values.map((value) => `  <selected>${escapeXml(value)}</selected>`),
+        ...(referenceText ? [`  <text>${escapeXml(referenceText)}</text>`] : []),
+      ].join("\n");
   return `<trace:input-response id="${id}">\n${body}\n</trace:input-response>`;
 }
 
@@ -93,7 +94,10 @@ export function useQuestionState(
           custom.length > 0 ||
           (type === "reference" && references.length > 0) ||
           ((type === "ranking" || type === "confirm" || type.includes("select")) && count > 0);
-        const belowMin = candidate.min != null && count < candidate.min;
+        const customSatisfiesChoice =
+          custom.length > 0 && (type === "confirm" || type.includes("select"));
+        const belowMin =
+          candidate.min != null && count < candidate.min && !customSatisfiesChoice;
         const aboveMax = candidate.max != null && count > candidate.max;
         return {
           answered,
@@ -129,9 +133,6 @@ export function useQuestionState(
         next.delete(page);
         return next;
       });
-      if (question.type === "select-with-other" || question.other) {
-        setCustomTexts((current) => ({ ...current, [page]: "" }));
-      }
       setSelections((previous) => {
         const current = previous[page] ?? new Set<string>();
         const next = new Set(current);
@@ -159,8 +160,12 @@ export function useQuestionState(
         return next;
       });
       setCustomTexts((previous) => ({ ...previous, [page]: text }));
+      const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
+      if (text.trim().length > 0 && (type === "confirm" || type.includes("select"))) {
+        setSelections((previous) => ({ ...previous, [page]: new Set() }));
+      }
     },
-    [page],
+    [page, question.multiSelect, question.type],
   );
 
   const decideForMe = useCallback(() => {
@@ -217,7 +222,9 @@ export function useQuestionState(
         const referenceText = [custom, ...state.references].filter(Boolean).join(", ");
         const value = state.assumed
           ? "You decide"
-          : referenceText || selectedLabels.join(", ") || state.ranking.join(", ");
+          : [selectedLabels.join(", "), state.ranking.join(", "), referenceText]
+              .filter(Boolean)
+              .join(", ");
         responses.push(`${candidate.header}: ${value}`);
       });
       return responses.length > 0 ? responses.join("\n") : null;

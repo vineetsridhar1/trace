@@ -22,6 +22,26 @@ describe("getSessionGroupDisplayStatus", () => {
     expect(getSessionGroupAgentStatus(["active"])).toBe("active");
   });
 
+  it("uses review status whenever a group has an attached PR", () => {
+    expect(
+      getSessionGroupDisplayStatus(
+        ["in_progress"],
+        undefined,
+        "https://github.com/trace/trace/pull/123",
+      ),
+    ).toBe("in_review");
+  });
+
+  it("keeps needs input ahead of an attached PR", () => {
+    expect(
+      getSessionGroupDisplayStatus(
+        ["needs_input"],
+        undefined,
+        "https://github.com/trace/trace/pull/123",
+      ),
+    ).toBe("needs_input");
+  });
+
   it("keeps preparation in agent activity rather than pipeline status", () => {
     const preparation = {
       workdir: null,

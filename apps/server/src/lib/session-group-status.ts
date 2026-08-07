@@ -14,6 +14,7 @@ export type SessionGroupStatusSource = {
 export function deriveSessionGroupStatus(
   sessions: Array<SessionGroupStatusSource | null | undefined>,
   archivedAt?: Date | string | null,
+  prUrl?: string | null,
 ): SessionGroupStatus {
   if (archivedAt) return "archived";
   // Merged is terminal and takes priority over all other pipeline states.
@@ -21,6 +22,7 @@ export function deriveSessionGroupStatus(
   if (sessions.some((session) => session?.sessionStatus === "needs_input")) {
     return "needs_input";
   }
+  if (prUrl) return "in_review";
   if (sessions.some((session) => session?.sessionStatus === "in_review")) return "in_review";
   if (sessions.some((session) => session?.sessionStatus === "in_progress")) return "in_progress";
   return "in_progress";

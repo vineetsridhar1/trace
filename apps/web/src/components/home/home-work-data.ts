@@ -143,10 +143,12 @@ function resolveStatus(group: SessionGroupEntity, sessions: SessionEntity[]): st
   ) {
     return "needs_input";
   }
+  if (group.prUrl || sessions.some((session) => session.prUrl)) {
+    return "in_review";
+  }
   if (
     group.status === "in_review" ||
-    group.prUrl ||
-    sessions.some((session) => session.sessionStatus === "in_review" || session.prUrl)
+    sessions.some((session) => session.sessionStatus === "in_review")
   ) {
     return "in_review";
   }

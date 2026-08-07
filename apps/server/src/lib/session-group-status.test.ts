@@ -30,6 +30,26 @@ describe("deriveSessionGroupStatus", () => {
     ).toBe("in_review");
   });
 
+  it("uses review status whenever the group has an attached PR", () => {
+    expect(
+      deriveSessionGroupStatus(
+        [{ agentStatus: "done", sessionStatus: "in_progress" }],
+        null,
+        "https://github.com/trace/trace/pull/123",
+      ),
+    ).toBe("in_review");
+  });
+
+  it("keeps needs input ahead of an attached PR", () => {
+    expect(
+      deriveSessionGroupStatus(
+        [{ agentStatus: "done", sessionStatus: "needs_input" }],
+        null,
+        "https://github.com/trace/trace/pull/123",
+      ),
+    ).toBe("needs_input");
+  });
+
   it("keeps the pipeline status separate from failed and stopped agents", () => {
     expect(
       deriveSessionGroupStatus(
