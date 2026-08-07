@@ -4967,6 +4967,42 @@ describe("SessionService", () => {
   });
 
   describe("sendMessage", () => {
+    it("resumes a session waiting for input when a new message is sent", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "needs_input",
+        workdir: "/workspace/session-1",
+        toolSessionId: "tool-session-1",
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(session);
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({ agentStatus: "active", sessionStatus: "in_progress" }),
+      );
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "Ignore that question and continue with this instead.",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            agentStatus: "active",
+            sessionStatus: "in_progress",
+          }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_resumed",
+          payload: expect.objectContaining({ sessionStatus: "in_progress" }),
+        }),
+      );
+    });
+
     it("does not preserve a channel base branch as the worktree branch for deferred sessions", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
         makeSession({

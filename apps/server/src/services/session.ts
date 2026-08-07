@@ -649,7 +649,7 @@ function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStat
 }
 
 function getRunningSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
-  return sessionStatus ?? "in_progress";
+  return sessionStatus === "needs_input" ? "in_progress" : (sessionStatus ?? "in_progress");
 }
 
 function getIdleAgentStatus(agentStatus?: AgentStatus | null): AgentStatus {
@@ -6705,6 +6705,7 @@ export class SessionService {
           ...(imageKeys?.length ? { imageKeys } : {}),
         },
         {
+          sessionStatus: getRunningSessionStatus(session.sessionStatus),
           lastMessageAt: new Date(),
           ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
         },

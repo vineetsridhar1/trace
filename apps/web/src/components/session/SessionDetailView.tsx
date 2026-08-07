@@ -560,13 +560,14 @@ export function SessionDetailView({
     : (activePlan?.node.planContent ?? "");
 
   const activeQuestion = useMemo(() => {
+    if (sessionStatus !== "needs_input") return null;
     if (timelineInputRequest?.kind !== "question") return null;
     for (let i = nodes.length - 1; i >= 0; i--) {
       const node = nodes[i];
       if (node.kind === "ask-user-question") return { node, index: i };
     }
     return null;
-  }, [nodes, timelineInputRequest]);
+  }, [nodes, sessionStatus, timelineInputRequest]);
   const replacedQuestionIds = useMemo(
     () => findReplacedQuestionIds(nodes, events),
     [events, nodes],

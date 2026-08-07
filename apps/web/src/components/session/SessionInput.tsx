@@ -119,12 +119,16 @@ export function SessionInput({
     // connection.state (e.g. app sessions whose "connected" event arrives late)
     // must not keep showing "Preparing workspace…".
     (!workdir && isSessionRuntimeStartingUp(connection));
-  const canQueue = canQueueMessage(agentStatus, worktreeDeleted);
+  const waitingForInput = sessionStatus === "needs_input";
+  const canQueue = !waitingForInput && canQueueMessage(agentStatus, worktreeDeleted);
   const bridgeInteractionAllowed = hosting === "cloud" || isBridgeInteractionAllowed(bridgeAccess);
   const canSend =
     bridgeInteractionAllowed &&
     !isOptimistic &&
-    (isNotStarted || canSendMessage(agentStatus, connection, worktreeDeleted) || canQueue);
+    (isNotStarted ||
+      waitingForInput ||
+      canSendMessage(agentStatus, connection, worktreeDeleted) ||
+      canQueue);
   const displayModel = model ? getModelLabel(model) : getToolLabel(tool ?? "claude_code");
 
   const lastUserMessageAt = isActive ? (rawLastUserMessageAt ?? undefined) : undefined;
