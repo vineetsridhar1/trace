@@ -1,6 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import { useOpenArtifact } from "../../artifact/ArtifactOpenContext";
-import { sandboxedPlanHtml } from "../../artifact/plan-html";
+import { PLAN_IFRAME_SANDBOX, sandboxedPlanHtml } from "../../artifact/plan-html";
 import { Button } from "../../ui/button";
 import { Dialog, DialogContent, DialogTitle } from "../../ui/dialog";
 
@@ -51,7 +51,7 @@ export function PlanPreviewModal({
             <iframe
               title="Implementation plan"
               srcDoc={sandboxedPlanHtml(html)}
-              sandbox=""
+              sandbox={PLAN_IFRAME_SANDBOX}
               className="size-full border-0 bg-[#0d0f12]"
             />
           ) : (
