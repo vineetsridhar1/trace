@@ -3,9 +3,10 @@ import type { IncomingMessage, ServerResponse } from "http";
 import type { Socket } from "net";
 import { WebSocketServer, type WebSocket } from "ws";
 import { prisma } from "../lib/db.js";
-import { sessionRouter } from "../lib/session-router.js";
+import { sessionRouter, type RuntimeInstance } from "../lib/session-router.js";
 import { parseCookieToken, verifyToken } from "../lib/auth.js";
 import { canViewSessionGroup } from "./access.js";
+import { sessionGroupRuntimeInstanceId } from "./session-applications.js";
 import {
   endpointPreviewCookieHeader,
   endpointPreviewTokenFromCookie,
@@ -107,6 +108,36 @@ async function authorizePrivateAccess(
 
 function requestUrl(req: IncomingMessage): URL {
   return new URL(req.url ?? "/", "http://trace-endpoint.local");
+}
+
+// Where an enabled endpoint's traffic goes. Forwarding is deliberately not tied
+// to a Trace-managed process: the runtime forwarder proxies to 127.0.0.1:<port>
+// and neither knows nor cares who started the listener, so an app an agent or
+// the user launched by hand serves traffic like any other. Prefer the managed
+// process's runtime when one is running (it carries the process instance id used
+// for traffic attribution) and otherwise route to the session group's runtime.
+async function resolveEndpointTarget(endpoint: {
+  sessionGroupId: string;
+  appConfigId: string;
+  processConfigId: string;
+  organizationId: string;
+}): Promise<{ runtime: RuntimeInstance; processInstanceId?: string } | null> {
+  const process = await prisma.sessionApplicationProcess.findUnique({
+    where: {
+      sessionGroupId_appConfigId_processConfigId: {
+        sessionGroupId: endpoint.sessionGroupId,
+        appConfigId: endpoint.appConfigId,
+        processConfigId: endpoint.processConfigId,
+      },
+    },
+  });
+  const runtimeInstanceId =
+    (process?.status === "running" ? process.runtimeInstanceId : null) ??
+    (await sessionGroupRuntimeInstanceId(endpoint.sessionGroupId, endpoint.organizationId));
+  if (!runtimeInstanceId) return null;
+  const runtime = sessionRouter.getRuntime(runtimeInstanceId, endpoint.organizationId);
+  if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) return null;
+  return { runtime, processInstanceId: process?.id };
 }
 
 // A host-mode endpoint (internalHostTemplate set) is only reachable through a
@@ -243,24 +274,12 @@ export class EndpointProxyService {
       res.writeHead(410).end("Endpoint expired");
       return;
     }
-    const process = await prisma.sessionApplicationProcess.findUnique({
-      where: {
-        sessionGroupId_appConfigId_processConfigId: {
-          sessionGroupId: endpoint.sessionGroupId,
-          appConfigId: endpoint.appConfigId,
-          processConfigId: endpoint.processConfigId,
-        },
-      },
-    });
-    if (!process || process.status !== "running" || !process.runtimeInstanceId) {
-      res.writeHead(503).end("Process is not running");
-      return;
-    }
-    const runtime = sessionRouter.getRuntime(process.runtimeInstanceId, endpoint.organizationId);
-    if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) {
+    const target = await resolveEndpointTarget(endpoint);
+    if (!target) {
       res.writeHead(503).end("Runtime disconnected");
       return;
     }
+    const { runtime, processInstanceId } = target;
 
     const requestId = randomUUID();
     const { path, query } = requestPath(req);
@@ -341,7 +360,7 @@ export class EndpointProxyService {
         type: "endpoint_http_request",
         requestId,
         endpointId: endpoint.id,
-        processInstanceId: process.id,
+        processInstanceId,
         port: endpoint.targetPort,
         method: req.method ?? "GET",
         path: `${path}${query ? `?${query}` : ""}`,
@@ -496,24 +515,12 @@ export class EndpointProxyService {
         return;
       }
     }
-    const process = await prisma.sessionApplicationProcess.findUnique({
-      where: {
-        sessionGroupId_appConfigId_processConfigId: {
-          sessionGroupId: endpoint.sessionGroupId,
-          appConfigId: endpoint.appConfigId,
-          processConfigId: endpoint.processConfigId,
-        },
-      },
-    });
-    if (!process?.runtimeInstanceId || process.status !== "running") {
+    const target = await resolveEndpointTarget(endpoint);
+    if (!target) {
       client.close();
       return;
     }
-    const runtime = sessionRouter.getRuntime(process.runtimeInstanceId, endpoint.organizationId);
-    if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) {
-      client.close();
-      return;
-    }
+    const { runtime } = target;
     const requestId = randomUUID();
     this.pendingWs.set(requestId, { client, runtimeId: runtime.key, endpointId: endpoint.id });
     client.on("message", (data, isBinary) => {

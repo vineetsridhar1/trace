@@ -7,31 +7,18 @@ type PreviewEndpoint = {
   url?: string | null;
 };
 
-type PreviewProcess = {
-  sessionGroupId: string;
-  appConfigId: string;
-  processConfigId: string;
-  status: string;
-};
-
+// An enabled endpoint is the readiness signal on its own. Forwarding no longer
+// requires a Trace-managed process, so holding the skeleton until one reports
+// "running" would hide a working preview whenever the app was started by an
+// agent or by hand.
 export function findReadyPreviewEndpoint<T extends PreviewEndpoint>(
   sessionGroupId: string,
   endpoints: T[],
-  processes: PreviewProcess[],
 ): T | undefined {
-  const runningProcessKeys = new Set(
-    processes
-      .filter(
-        (process) => process.sessionGroupId === sessionGroupId && process.status === "running",
-      )
-      .map((process) => `${process.appConfigId}:${process.processConfigId}`),
-  );
-
   return endpoints.find(
     (endpoint) =>
       endpoint.sessionGroupId === sessionGroupId &&
       endpoint.status === "enabled" &&
-      Boolean(endpoint.url) &&
-      runningProcessKeys.has(`${endpoint.appConfigId}:${endpoint.processConfigId}`),
+      Boolean(endpoint.url),
   );
 }

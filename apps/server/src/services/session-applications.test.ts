@@ -184,6 +184,58 @@ describe("SessionApplicationService", () => {
     });
   });
 
+  it("creates endpoint records from config when no process has ever started", async () => {
+    prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+      id: "group-1",
+      kind: "coding",
+      organizationId: "org-1",
+      repoId: "repo-1",
+      repo: {
+        id: "repo-1",
+        name: "repo",
+        remoteUrl: null,
+        setupConfig: {
+          applications: {
+            setupScripts: [],
+            applications: [
+              {
+                id: "web",
+                name: "Web",
+                processes: [
+                  {
+                    id: "dev",
+                    name: "Dev",
+                    command: "pnpm dev",
+                    workingDirectory: ".",
+                    required: true,
+                    ports: [
+                      { id: "web", label: "Web", port: 3000, protocol: "http" },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    await new SessionApplicationService().listEndpoints("group-1", "org-1", "user-1");
+
+    expect(prismaMock.sessionApplicationProcess.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.sessionEndpoint.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sessionGroupId: "group-1",
+          appConfigId: "web",
+          processConfigId: "dev",
+          portConfigId: "web",
+          targetPort: 3000,
+        }),
+      }),
+    );
+  });
+
   it("rejects non-cloud runtimes at the service layer", async () => {
     sessionRouterMock.getRuntime.mockReturnValueOnce({
       key: "runtime-1",
@@ -429,7 +481,52 @@ describe("SessionApplicationService", () => {
     );
   });
 
-  it("requires a running process before enabling forwarding", async () => {
+  it("enables forwarding with no Trace-managed process running", async () => {
+    const disabledEndpoint = {
+      id: "endpoint-1",
+      key: "endpointkey1",
+      organizationId: "org-1",
+      sessionGroupId: "group-1",
+      repoId: "repo-1",
+      appConfigId: "web",
+      processConfigId: "dev",
+      portConfigId: "web",
+      label: "Web",
+      targetPort: 3000,
+      protocol: "http",
+      status: "disabled",
+      accessMode: "private",
+      trafficCaptureMode: "metadata",
+      enabledByUserId: null,
+      enabledAt: null,
+      disabledAt: null,
+      revokedAt: null,
+      currentRuntimeInstanceId: null,
+      createdAt: new Date("2026-07-11T00:00:00.000Z"),
+      updatedAt: new Date("2026-07-11T00:00:00.000Z"),
+    };
+    prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce(disabledEndpoint);
+    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
+      id: "process-1",
+      status: "stopped",
+    });
+    prismaMock.sessionEndpoint.update.mockImplementationOnce(async ({ data }) => ({
+      ...disabledEndpoint,
+      ...data,
+    }));
+
+    await new SessionApplicationService().enableEndpoint("endpoint-1", "org-1", "user-1");
+
+    expect(prismaMock.sessionEndpoint.update).toHaveBeenCalledWith({
+      where: { id: "endpoint-1" },
+      data: expect.objectContaining({
+        status: "enabled",
+        currentRuntimeInstanceId: "runtime-1",
+      }),
+    });
+  });
+
+  it("refuses to enable forwarding when no runtime is connected", async () => {
     prismaMock.sessionEndpoint.findFirstOrThrow.mockResolvedValueOnce({
       id: "endpoint-1",
       organizationId: "org-1",
@@ -438,15 +535,11 @@ describe("SessionApplicationService", () => {
       processConfigId: "dev",
       accessMode: "private",
     });
-    prismaMock.sessionGroup.findFirstOrThrow.mockResolvedValueOnce({ ownerUserId: "user-1" });
-    prismaMock.sessionApplicationProcess.findUnique.mockResolvedValueOnce({
-      id: "process-1",
-      status: "stopped",
-    });
+    sessionRouterMock.getRuntime.mockReturnValueOnce(undefined);
 
     await expect(
       new SessionApplicationService().enableEndpoint("endpoint-1", "org-1", "user-1"),
-    ).rejects.toThrow("Start the process first (current status: stopped)");
+    ).rejects.toThrow("Session group runtime is not connected");
   });
 
   it("publishes the primary enabled endpoint for an app session", async () => {

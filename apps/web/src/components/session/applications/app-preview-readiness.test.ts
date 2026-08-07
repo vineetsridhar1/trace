@@ -11,25 +11,21 @@ const endpoint = {
 };
 
 describe("findReadyPreviewEndpoint", () => {
-  it("keeps the skeleton visible while the app process is starting", () => {
+  it("keeps the skeleton visible while forwarding is off", () => {
     expect(
-      findReadyPreviewEndpoint("group-1", [endpoint], [{ ...endpoint, status: "starting" }]),
+      findReadyPreviewEndpoint("group-1", [{ ...endpoint, status: "disabled" }]),
     ).toBeUndefined();
   });
 
-  it("returns the endpoint once its app process is running", () => {
-    expect(
-      findReadyPreviewEndpoint("group-1", [endpoint], [{ ...endpoint, status: "running" }]),
-    ).toBe(endpoint);
+  it("returns the endpoint once forwarding is enabled, with no process of its own", () => {
+    expect(findReadyPreviewEndpoint("group-1", [endpoint])).toBe(endpoint);
   });
 
-  it("does not match a running process from another app", () => {
-    expect(
-      findReadyPreviewEndpoint(
-        "group-1",
-        [endpoint],
-        [{ ...endpoint, processConfigId: "worker", status: "running" }],
-      ),
-    ).toBeUndefined();
+  it("does not match an endpoint without a URL", () => {
+    expect(findReadyPreviewEndpoint("group-1", [{ ...endpoint, url: null }])).toBeUndefined();
+  });
+
+  it("does not match an endpoint from another session group", () => {
+    expect(findReadyPreviewEndpoint("group-2", [endpoint])).toBeUndefined();
   });
 });

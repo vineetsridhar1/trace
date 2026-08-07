@@ -68,6 +68,28 @@ function connectionRuntimeInstanceId(connection: Prisma.JsonValue): string | nul
     : null;
 }
 
+/**
+ * The runtime serving a session group, independent of any managed process.
+ * Forwarding needs a live runtime and a port — nothing else — so an app started
+ * outside Trace (an agent running the server in a terminal, a manual command)
+ * is just as reachable as one Trace supervises.
+ */
+export async function sessionGroupRuntimeInstanceId(
+  sessionGroupId: string,
+  organizationId: string,
+): Promise<string | null> {
+  const sessions = await prisma.session.findMany({
+    where: { sessionGroupId, organizationId },
+    select: { connection: true },
+    orderBy: { updatedAt: "desc" },
+  });
+  for (const session of sessions) {
+    const runtimeInstanceId = connectionRuntimeInstanceId(session.connection);
+    if (runtimeInstanceId) return runtimeInstanceId;
+  }
+  return null;
+}
+
 function publicProcess(process: PrismaSessionApplicationProcess) {
   return {
     id: process.id,
@@ -212,6 +234,7 @@ export class SessionApplicationService {
 
   async listEndpoints(sessionGroupId: string, organizationId: string, userId: string) {
     await this.assertCanView(sessionGroupId, organizationId, userId);
+    await this.ensureConfiguredEndpoints(sessionGroupId, organizationId);
     return prisma.sessionEndpoint.findMany({
       where: { sessionGroupId, organizationId },
       orderBy: [{ appConfigId: "asc" }, { processConfigId: "asc" }, { portConfigId: "asc" }],
@@ -618,21 +641,16 @@ export class SessionApplicationService {
     const endpoint = await prisma.sessionEndpoint.findFirstOrThrow({
       where: { id: endpointId, organizationId },
     });
-    await this.assertCanManage(endpoint.sessionGroupId, organizationId, userId);
-    const process = await prisma.sessionApplicationProcess.findUnique({
-      where: {
-        sessionGroupId_appConfigId_processConfigId: {
-          sessionGroupId: endpoint.sessionGroupId,
-          appConfigId: endpoint.appConfigId,
-          processConfigId: endpoint.processConfigId,
-        },
-      },
-    });
-    if (!process || (process.status !== "running" && process.status !== "starting")) {
-      throw new ValidationError(
-        `Start the process first (current status: ${process?.status ?? "missing"})`,
-      );
-    }
+    // Deliberately not gated on a managed process: the runtime forwarder only
+    // proxies to 127.0.0.1:<port>, so requiring Trace to own the process blocks
+    // forwarding for apps an agent or the user started themselves. A connected
+    // runtime is the only real prerequisite. (resolveCloudRuntime asserts manage
+    // rights, so no separate assertCanManage here.)
+    const { runtimeId } = await this.resolveCloudRuntime(
+      endpoint.sessionGroupId,
+      organizationId,
+      userId,
+    );
     const updated = await prisma.sessionEndpoint.update({
       where: { id: endpoint.id },
       data: {
@@ -641,7 +659,7 @@ export class SessionApplicationService {
         enabledByUserId: userId,
         enabledAt: new Date(),
         disabledAt: null,
-        currentRuntimeInstanceId: process.runtimeInstanceId,
+        currentRuntimeInstanceId: runtimeId,
       },
     });
     await eventService.create({
@@ -1178,9 +1196,40 @@ export class SessionApplicationService {
     });
   }
 
+  /**
+   * Endpoint rows are the user's forwarding switches, so they have to exist
+   * before anything runs — otherwise an app started outside Trace has no switch
+   * to flip. Creating them on start alone left session groups whose processes
+   * Trace never supervised with an empty endpoint list. Idempotent, so it is
+   * safe on this read path.
+   */
+  private async ensureConfiguredEndpoints(sessionGroupId: string, organizationId: string) {
+    const group = await prisma.sessionGroup.findFirst({
+      where: { id: sessionGroupId, organizationId },
+      select: {
+        id: true,
+        kind: true,
+        organizationId: true,
+        repoId: true,
+        repo: { select: { id: true, name: true, remoteUrl: true, setupConfig: true } },
+      },
+    });
+    if (!group) return;
+    const config =
+      group.kind === "app"
+        ? DEFAULT_APP_SESSION_CONFIG
+        : repoApplicationConfigService.resolveApplicationConfig(group.repo);
+    for (const app of config.applications) {
+      for (const processConfig of app.processes) {
+        if (processConfig.ports.length === 0) continue;
+        await this.ensureEndpoints(prisma, group, app.id, processConfig.id, processConfig.ports);
+      }
+    }
+  }
+
   private async ensureEndpoints(
     tx: Tx,
-    group: ManagedSessionGroup,
+    group: { id: string; organizationId: string; repoId: string | null },
     appConfigId: string,
     processConfigId: string,
     ports: Array<{

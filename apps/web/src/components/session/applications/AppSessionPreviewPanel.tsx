@@ -43,7 +43,6 @@ const APP_PREVIEW_ENDPOINTS_QUERY = gql`
 
 export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: string }) {
   const endpointTable = useEntityStore((s) => s.sessionEndpoints);
-  const processTable = useEntityStore((s) => s.sessionApplicationProcesses);
   const upsertMany = useEntityStore((s) => s.upsertMany);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,12 +69,8 @@ export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: str
 
   const endpoint = useMemo(
     () =>
-      findReadyPreviewEndpoint(
-        sessionGroupId,
-        Object.values(endpointTable),
-        Object.values(processTable),
-      ),
-    [endpointTable, processTable, sessionGroupId],
+      findReadyPreviewEndpoint(sessionGroupId, Object.values(endpointTable)),
+    [endpointTable, sessionGroupId],
   );
 
   if (endpoint)

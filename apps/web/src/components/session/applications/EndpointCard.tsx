@@ -8,7 +8,6 @@ export function EndpointCard({
   endpoint,
   isAppGroup,
   isPending,
-  processRunning,
   onCopy,
   onOpen,
   onOpenTraffic,
@@ -18,7 +17,6 @@ export function EndpointCard({
   endpoint: SessionEndpoint;
   isAppGroup: boolean;
   isPending: (key: string) => boolean;
-  processRunning: boolean;
   onCopy: () => void;
   onOpen: () => void;
   onOpenTraffic: () => void;
@@ -66,7 +64,7 @@ export function EndpointCard({
           size="icon-sm"
           title={enabled ? `Disable ${endpoint.label}` : `Enable ${endpoint.label}`}
           aria-label={enabled ? `Disable ${endpoint.label}` : `Enable ${endpoint.label}`}
-          disabled={isPending(endpoint.id) || (!enabled && !processRunning)}
+          disabled={isPending(endpoint.id)}
           onClick={onToggle}
         >
           {enabled ? <Square size={14} /> : <Power size={14} />}

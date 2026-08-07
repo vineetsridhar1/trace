@@ -28,7 +28,8 @@ const MAX_SETUP_OUTPUT_BYTES = 64 * 1024;
 // A hung setup script (interactive prompt, network stall) must not block session
 // setup forever with no result. Kill the tree and report failure past this.
 const SETUP_SCRIPT_TIMEOUT_MS = 10 * 60_000;
-const PROCESS_START_TIMEOUT_MS = 15 * 60_000;
+// Only bounds the post-exit handoff poll below — the readiness wait is unbounded.
+const BACKGROUND_HANDOFF_TIMEOUT_MS = 15 * 60_000;
 
 function safeRelativeCwd(baseWorkdir: string, cwd: string): string {
   const relative = cwd.trim() || ".";
@@ -154,28 +155,37 @@ function isPortReady(port: ManagedProcessPort): Promise<boolean> {
   return port.healthPath ? hasHealthyHttpEndpoint(port) : hasListeningPort(port.port);
 }
 
+// No deadline: cold monorepo boots (dependency install, asset build, DB setup)
+// have no meaningful upper bound, and a wall clock that fires mid-boot kills a
+// process that was still making progress. The live child is the bound instead,
+// so every way the child can die has to settle this loop — polled state alone
+// does not: an externally SIGKILLed child leaves `exitCode` null and `killed`
+// false, and a failed spawn may only ever emit `error`. Latch both events.
 async function waitForProcessReady(
   child: ChildProcessWithoutNullStreams,
   ports: ManagedProcessPort[],
-  timeoutMs = PROCESS_START_TIMEOUT_MS,
 ): Promise<void> {
   if (ports.length === 0) return Promise.resolve();
-  const deadline = Date.now() + timeoutMs;
+  let died: Error | null = null;
+  child.once("exit", () => {
+    died ??= new Error("App process exited before its configured ports became ready");
+  });
+  child.once("error", (error: Error) => {
+    died ??= new Error(`App process failed to start: ${error.message}`);
+  });
   while (true) {
-    if (child.exitCode !== null || child.killed) {
+    if (died) throw died;
+    if (child.exitCode !== null || child.signalCode !== null || child.killed) {
       throw new Error("App process exited before its configured ports became ready");
     }
     if ((await Promise.all(ports.map(isPortReady))).every(Boolean)) return;
-    if (Date.now() >= deadline) {
-      throw new Error("Timed out waiting for app health checks");
-    }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 }
 
 async function waitForBackgroundHandoff(
   ports: ManagedProcessPort[],
-  timeoutMs = PROCESS_START_TIMEOUT_MS,
+  timeoutMs = BACKGROUND_HANDOFF_TIMEOUT_MS,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   do {

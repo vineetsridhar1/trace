@@ -94,7 +94,6 @@ export function ApplicationProcessCard({
           endpoint={endpoint}
           isAppGroup={groupKind === "app"}
           isPending={isPending}
-          processRunning={running}
           onCopy={() => onCopyEndpoint(endpoint)}
           onOpen={() => onOpenEndpoint(endpoint)}
           onOpenTraffic={() => onOpenTraffic(endpoint.id)}
