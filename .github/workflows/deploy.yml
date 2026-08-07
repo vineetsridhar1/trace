@@ -79,4 +79,17 @@ jobs:
               docker compose -f docker-compose.ec2.yml logs --no-color --tail=200 backend; \
               exit 1; \
             fi && \
+            docker compose -f docker-compose.ec2.yml exec -T caddy \
+              caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && \
+            docker compose -f docker-compose.ec2.yml exec -T caddy \
+              caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile && \
             (docker image prune -af || true)"
+
+      - name: Verify agent artifact routing
+        run: |
+          status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --request POST https://app.gettrace.org/agent/artifacts)
+          test "$status" = "401" || {
+            echo "Expected /agent/artifacts to reach the backend and return 401; got $status"
+            exit 1
+          }
