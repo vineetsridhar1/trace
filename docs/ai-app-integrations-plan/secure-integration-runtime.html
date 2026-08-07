@@ -1,0 +1,863 @@
+<!doctype html>
+<!--
+  Trace visual plan canvas.
+
+  Copy this file into the change-specific folder under docs/ with a descriptive
+  filename, then replace the sample content. This file is the agent's authoring canvas. Keep the <style> block;
+  it is the component vocabulary. Every class below is demonstrated once in the
+  body so you can see what it renders as.
+
+  Rules that are enforced on upload:
+    - Exactly one HTML document per plan folder.
+    - No external references. Images must be inline data: URLs or CSS shapes.
+    - Scripts must be inline and may modify only this document's DOM.
+    - No network, storage, parent-frame access, navigation, popups, downloads,
+      external assets, frames, or forms.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Secure integration runtime for AI-generated apps</title>
+    <style>
+      :root {
+        --bg: #171717;
+        --surface: #1f1f1f;
+        --raised: #262626;
+        --fg: #e4e4e7;
+        --muted: #a1a1aa;
+        --faint: #71717a;
+        --border: #2e2e2e;
+        --accent: #3b82f6;
+        --add: #22c55e;
+        --change: #eab308;
+        --remove: #ef4444;
+        --radius: 8px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 40px 32px 72px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.65 ui-sans-serif,
+          -apple-system,
+          "Segoe UI",
+          system-ui,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .plan {
+        max-width: 860px;
+        margin: 0 auto;
+      }
+
+      /* ── Title block ── */
+      .plan-title {
+        margin: 0 0 8px;
+        font-size: 28px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .plan-summary {
+        margin: 0 0 20px;
+        color: var(--muted);
+        font-size: 16px;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 36px;
+      }
+      .chip {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .chip strong {
+        color: var(--fg);
+        font-weight: 550;
+      }
+
+      /* ── Scan-level metrics ── */
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin: -20px 0 36px;
+      }
+      .metric {
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: linear-gradient(145deg, var(--surface), var(--raised));
+      }
+      .metric b {
+        display: block;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+      .metric span {
+        color: var(--faint);
+        font-size: 12px;
+      }
+
+      /* ── Sections ── */
+      section {
+        margin-bottom: 40px;
+      }
+      h2 {
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      h3 {
+        margin: 0 0 6px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      code {
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.9em;
+      }
+      button {
+        color: inherit;
+        font: inherit;
+      }
+      button:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+
+      /* ── Two-column split (scope vs non-goals, etc.) ── */
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .card {
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .card h3 {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .card ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .card li {
+        margin-bottom: 4px;
+      }
+
+      /* ── Flow diagram: horizontal boxes joined by arrows ── */
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 0;
+        margin: 4px 0 8px;
+      }
+      .node {
+        flex: 1 1 0;
+        min-width: 120px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .node b {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .node span {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .node.is-new {
+        border-color: var(--accent);
+      }
+      .arrow {
+        flex: 0 0 28px;
+        align-self: center;
+        text-align: center;
+        color: var(--faint);
+      }
+
+      /* ── Diagrams: use SVG for branches, HTML for ordered interactions ── */
+      .diagram {
+        overflow-x: auto;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .diagram-svg {
+        display: block;
+        width: 100%;
+        min-width: 620px;
+        height: auto;
+      }
+      .diagram-svg .edge {
+        fill: none;
+        stroke: var(--faint);
+        stroke-width: 1.5;
+      }
+      .diagram-svg .box {
+        fill: var(--raised);
+        stroke: var(--border);
+        stroke-width: 1.5;
+      }
+      .diagram-svg .box.is-new {
+        stroke: var(--accent);
+      }
+      .diagram-svg .decision {
+        fill: color-mix(in srgb, var(--change) 10%, var(--surface));
+        stroke: var(--change);
+        stroke-width: 1.5;
+      }
+      .diagram-svg text {
+        fill: var(--fg);
+        font-family: inherit;
+        font-size: 12px;
+        text-anchor: middle;
+      }
+      .diagram-svg .edge-label {
+        fill: var(--faint);
+        font-size: 10px;
+      }
+      .sequence {
+        display: grid;
+        gap: 8px;
+        min-width: 560px;
+      }
+      .sequence-row {
+        display: grid;
+        grid-template-columns: 110px 1fr 110px;
+        align-items: center;
+        gap: 12px;
+      }
+      .sequence-party {
+        padding: 7px 9px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--raised);
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+      }
+      .sequence-message {
+        position: relative;
+        padding-bottom: 5px;
+        border-bottom: 1px solid var(--faint);
+        color: var(--muted);
+        font-size: 11px;
+        text-align: center;
+      }
+      .sequence-message::after {
+        content: "";
+        position: absolute;
+        right: -1px;
+        bottom: -4px;
+        width: 7px;
+        height: 7px;
+        border-top: 1px solid var(--faint);
+        border-right: 1px solid var(--faint);
+        transform: rotate(45deg);
+      }
+      .sequence-row.reverse .sequence-party:first-child {
+        grid-column: 3;
+      }
+      .sequence-row.reverse .sequence-message {
+        grid-column: 2;
+        grid-row: 1;
+        transform: scaleX(-1);
+      }
+      .sequence-row.reverse .sequence-message span {
+        display: inline-block;
+        transform: scaleX(-1);
+      }
+      .sequence-row.reverse .sequence-party:last-child {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      /* ── Switchable before/after or alternative views ── */
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .toolbar button {
+        cursor: pointer;
+        padding: 5px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .toolbar button:hover {
+        border-color: var(--faint);
+        color: var(--fg);
+      }
+      .toolbar button[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+        color: var(--fg);
+      }
+      .view-panel {
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .view-panel + .view-panel {
+        margin-top: 10px;
+      }
+
+      /* ── Quantitative bars (only for real, sourced values) ── */
+      .bar-chart {
+        display: grid;
+        gap: 9px;
+      }
+      .bar-row {
+        display: grid;
+        grid-template-columns: minmax(100px, 0.8fr) 2fr 32px;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+      }
+      .bar-track {
+        height: 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--raised);
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+      }
+      .bar-value {
+        color: var(--faint);
+        text-align: right;
+      }
+
+      /* ── Phases ── */
+      .phase {
+        position: relative;
+        padding: 0 0 20px 26px;
+        border-left: 1px solid var(--border);
+      }
+      .phase:last-child {
+        border-left-color: transparent;
+        padding-bottom: 0;
+      }
+      .phase::before {
+        content: attr(data-step);
+        position: absolute;
+        left: -11px;
+        top: 0;
+        width: 21px;
+        height: 21px;
+        border-radius: 50%;
+        background: var(--raised);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 21px;
+        text-align: center;
+      }
+
+      /* ── Progressive disclosure ── */
+      details {
+        margin-top: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: color-mix(in srgb, var(--raised) 55%, transparent);
+      }
+      summary {
+        cursor: pointer;
+        padding: 10px 12px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 550;
+      }
+      summary::marker {
+        color: var(--accent);
+      }
+      .detail-body {
+        padding: 0 12px 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .detail-body p:last-child,
+      .detail-body ul:last-child {
+        margin-bottom: 0;
+      }
+
+      /* ── Tables: file maps, risks, verification ── */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      td code {
+        background: none;
+        padding: 0;
+        color: var(--muted);
+      }
+      .tag {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .tag.add {
+        color: var(--add);
+      }
+      .tag.change {
+        color: var(--change);
+      }
+      .tag.remove {
+        color: var(--remove);
+      }
+
+      /* ── Callout ── */
+      .callout {
+        padding: 12px 16px;
+        border-left: 2px solid var(--accent);
+        border-radius: 0 var(--radius) var(--radius) 0;
+        background: var(--surface);
+        color: var(--muted);
+      }
+      .callout.risk {
+        border-left-color: var(--change);
+      }
+      .callout strong {
+        color: var(--fg);
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 8px 0 14px;
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .legend span::before {
+        content: "";
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        margin-right: 6px;
+        border: 1px solid var(--border);
+        border-radius: 2px;
+        background: var(--surface);
+      }
+      .legend .new::before {
+        border-color: var(--accent);
+      }
+      .legend .provider::before {
+        border-color: var(--add);
+      }
+      .node.provider {
+        border-color: color-mix(in srgb, var(--add) 70%, var(--border));
+      }
+      .contract {
+        overflow-x: auto;
+        margin-top: 12px;
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: #141414;
+        color: #d4d4d8;
+        font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre;
+      }
+      .decision-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      .decision-grid .card {
+        min-width: 0;
+      }
+      .decision-grid p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 760px) {
+        .decision-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .split {
+          grid-template-columns: 1fr;
+        }
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+        .bar-row {
+          grid-template-columns: 90px 1fr 28px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <article class="plan">
+      <h1 class="plan-title">Secure integration runtime for AI-generated apps</h1>
+      <p class="plan-summary">
+        Make an AI-generated React/Node app query connected systems without ever receiving provider
+        credentials. The first complete slice runs server-side Snowflake reads as the current viewer,
+        a deliberately shared user, or an organization service account.
+      </p>
+      <div class="meta">
+        <span class="chip"><strong>4</strong> trust boundaries</span>
+        <span class="chip"><strong>3</strong> execution identities</span>
+        <span class="chip"><strong>6</strong> completion phases</span>
+        <span class="chip">No credential migration</span>
+      </div>
+      <div class="metrics" aria-label="Architecture summary">
+        <div class="metric"><b>0</b><span>provider secrets exposed to app code</span></div>
+        <div class="metric"><b>60s</b><span>viewer-context token lifetime</span></div>
+        <div class="metric"><b>2×</b><span>read-only enforcement: Trace + Snowflake</span></div>
+      </div>
+
+      <section>
+        <h2>Decision and outcome</h2>
+        <div class="callout">
+          <strong>The generated Node server is the application boundary.</strong> React calls its own
+          <code>/api/*</code> routes. Node code calls a server-only Trace helper. Trace owns viewer
+          authentication, app and binding authorization, connection selection, query policy, limits,
+          provider transport, and auditing. Nango owns provider credential storage and refresh.
+        </div>
+        <p style="margin-top: 14px">
+          Done means a CEO can connect Snowflake, authorize viewer-scoped data access, have the AI
+          generate a fixed server-side query, publish the app, and let an employee run that same code
+          with the employee's own Snowflake permissions. Missing connections, insufficient provider
+          grants, unsafe SQL, forged identity, and cross-organization access all fail safely and clearly.
+        </p>
+      </section>
+
+      <section>
+        <h2>Scope</h2>
+        <div class="split">
+          <div class="card">
+            <h3>In scope</h3>
+            <ul>
+              <li>Generic Nango-backed connections and app bindings.</li>
+              <li>Viewer, shared-personal, and service execution identities.</li>
+              <li>Server-only generated-app SDK and signed viewer propagation.</li>
+              <li>Snowflake read queries, parameter binding, completion, limits, and errors.</li>
+              <li>In-app recovery when a viewer has not connected Snowflake.</li>
+              <li>AI authoring context, UI alignment, audit events, and E2E coverage.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Explicit non-goals</h3>
+            <ul>
+              <li>No helper for every provider; ordinary HTTP APIs keep one generic request path.</li>
+              <li>No SQL stored in Trace, manifest, or versioned operation catalog.</li>
+              <li>No browser-controlled SQL, role, binding, connection, warehouse, database, or schema.</li>
+              <li>No replacement for Snowflake grants, row policies, or masking policies.</li>
+              <li>No sync engine, webhook automation product, or Composio-style action catalog.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Grounded current state</h2>
+        <p>
+          The branch already contains the security foundation and a working first Snowflake request
+          path. <code>AppIntegrationService</code> owns binding authorization and identity selection;
+          <code>EndpointProxyService</code> authenticates the viewer and injects a short-lived context;
+          the generated starter exposes <code>trace.integrations.snowflake.query()</code>; Nango stores
+          and injects the provider credential.
+        </p>
+        <div class="decision-grid">
+          <div class="card">
+            <h3>Already built</h3>
+            <p>Connections, signed webhooks, bindings, private app bootstrap, generic proxy, viewer token, Snowflake validator, helper, and focused security tests.</p>
+          </div>
+          <div class="card">
+            <h3>Product mismatch</h3>
+            <p>The app binding UI still teaches the older browser-direct route while new generated apps should use the Node helper.</p>
+          </div>
+          <div class="card">
+            <h3>Completion gaps</h3>
+            <p>The AI does not receive binding metadata automatically, an unconnected viewer gets only a raw 403, and async/partitioned Snowflake results are not normalized.</p>
+          </div>
+        </div>
+        <details>
+          <summary>Repository evidence: the existing seams and their exact paths</summary>
+          <div class="detail-body">
+            <ul>
+              <li><code>apps/server/prisma/schema.prisma</code> — <code>IntegrationConnection</code> and <code>AppIntegrationBinding</code>.</li>
+              <li><code>packages/gql/src/schema.graphql</code> — connection/binding projections, queries, and mutations.</li>
+              <li><code>apps/server/src/services/nango-connection-provider.ts</code> — Connect sessions, proxying, HMAC verification, timeout, and response bounds.</li>
+              <li><code>apps/server/src/services/app-integrations.ts</code> — ownership, execution identity, allowlists, Snowflake validation, Nango execution, and events.</li>
+              <li><code>apps/server/src/services/endpoint-proxy.ts</code> and <code>app-viewer-context.ts</code> — app access and one-minute viewer propagation.</li>
+              <li><code>apps/server/src/routes/app-integrations.ts</code> — private runtime Snowflake route.</li>
+              <li><code>apps/container-bridge/app-starter/trace.ts</code> — generated Node application's server-only helper.</li>
+              <li><code>apps/web/src/components/settings/NangoConnectionsSection.tsx</code> and <code>components/session/applications/*</code> — connection and binding UI.</li>
+            </ul>
+          </div>
+        </details>
+      </section>
+
+      <section>
+        <h2>How the complete system works</h2>
+        <div class="view-panel" data-view-group="architecture" data-view-panel="authoring">
+          <h3>CEO and AI author the capability</h3>
+          <div class="flow">
+            <div class="node"><b>CEO connects Snowflake</b><span>Trace creates Nango Connect session</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><b>Nango webhook</b><span>signed ownership metadata</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><b>App binding</b><span>provider + identity + capability</span></div>
+            <div class="arrow">→</div>
+            <div class="node is-new"><b>AI context</b><span>safe binding metadata + SDK contract</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><b>Generated Node route</b><span>fixed SQL + validated values</span></div>
+          </div>
+        </div>
+        <div class="view-panel" data-view-group="architecture" data-view-panel="runtime">
+          <h3>Employee runs the published app</h3>
+          <div class="legend"><span>existing boundary</span><span class="new">changed/completed</span><span class="provider">external provider</span></div>
+          <div class="flow">
+            <div class="node"><b>React</b><span>GET /api/revenue?startDate=…</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><b>Generated Node</b><span>fixed SQL calls Trace helper</span></div>
+            <div class="arrow">→</div>
+            <div class="node is-new"><b>Trace service</b><span>auth + binding + identity + policy</span></div>
+            <div class="arrow">→</div>
+            <div class="node provider"><b>Nango</b><span>injects selected credential</span></div>
+            <div class="arrow">→</div>
+            <div class="node provider"><b>Snowflake</b><span>native roles and row policies</span></div>
+          </div>
+          <div class="contract">React input:       { startDate: "2026-01-01" }
+Node-owned call:   query(request, BINDING_ID, { sql: "SELECT … WHERE sold_at &gt;= ?", parameters: [startDate] })
+Trace-owned facts: viewer identity · app identity · connection resolution · read-only policy
+Never exposed:     provider token · Nango secret · Nango connection ID · another user's Trace identity</div>
+        </div>
+        <div class="view-panel" data-view-group="architecture" data-view-panel="recovery">
+          <h3>Viewer has no matching personal connection</h3>
+          <div class="flow">
+            <div class="node"><b>Trace returns</b><span>CONNECTION_REQUIRED</span></div>
+            <div class="arrow">→</div>
+            <div class="node is-new"><b>Generated app</b><span>Connect Snowflake to continue</span></div>
+            <div class="arrow">→</div>
+            <div class="node is-new"><b>Trace bootstrap</b><span>rechecks viewer + app + binding</span></div>
+            <div class="arrow">→</div>
+            <div class="node provider"><b>Nango Connect</b><span>limited to binding provider</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><b>Retry app route</b><span>now resolves employee connection</span></div>
+          </div>
+          <p>Shared and service bindings never ask the viewer to connect; they report an owner/admin configuration failure.</p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Identity and stored data</h2>
+        <table>
+          <thead><tr><th>Mode</th><th>Connection Trace selects</th><th>Expected behavior</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Viewer</strong></td><td>Current viewer's newest active personal connection matching the provider key.</td><td>CEO and employee run the same code with their own provider permissions.</td></tr>
+            <tr><td><strong>Shared</strong></td><td>The exact active personal connection selected on the binding.</td><td>Every authorized viewer intentionally uses one person's identity.</td></tr>
+            <tr><td><strong>Service</strong></td><td>The exact active organization service connection selected by an admin.</td><td>Organization-owned access for apps that should not vary by viewer.</td></tr>
+          </tbody>
+        </table>
+        <details>
+          <summary>Trace stores references and policy—not provider credentials or SQL</summary>
+          <div class="detail-body">
+            <p><code>IntegrationConnection</code> stores organization, owner, provider, provider configuration key, opaque Nango connection ID, display name, kind, and lifecycle status. OAuth tokens and Snowflake secrets stay in Nango.</p>
+            <p><code>AppIntegrationBinding</code> stores organization, app session group, provider, execution identity, optional shared/service connection reference, allowed HTTP methods, and allowed provider path prefixes. SQL remains beside application logic in generated Node code.</p>
+          </div>
+        </details>
+      </section>
+
+      <section>
+        <h2>Authorization and read-only policy</h2>
+        <div class="view-panel" data-view-group="security" data-view-panel="trace">
+          <h3>Who is calling?</h3>
+          <p>Private links carry no user credential. Trace authenticates the viewer, checks current organization membership and app visibility, strips forged <code>x-trace-*</code> headers, then injects an HS256 context scoped to user, organization, app, and endpoint for 60 seconds. The private runtime route revalidates the enabled endpoint before execution.</p>
+        </div>
+        <div class="view-panel" data-view-group="security" data-view-panel="binding">
+          <h3>What may this app do, and as whom?</h3>
+          <p>Trace loads the binding by the exact <code>(bindingId, organizationId, sessionGroupId)</code> tuple. The app owner or admin controls it. Normalized method and path allowlists constrain generic APIs. Viewer mode can resolve only the current viewer's personal connection; shared/service modes can resolve only the connection fixed on the binding.</p>
+        </div>
+        <div class="view-panel" data-view-group="security" data-view-panel="snowflake">
+          <h3>Can this statement mutate data?</h3>
+          <p>Snowflake statements are blocked from the generic proxy. The specialized route accepts one <code>SELECT</code> or <code>WITH … SELECT</code>, rejects semicolons, writes, DDL, calls, role/session changes, and <code>SYSTEM$</code> operations, bounds query length, parameters, timeout, and response size, and sends values as SQL API bindings.</p>
+          <div class="callout risk"><strong>Provider grants remain mandatory.</strong> Static inspection cannot prove every UDF or external function is side-effect free. The Snowflake connection must use a read-only role with only required warehouse/database/schema <code>USAGE</code> and object <code>SELECT</code>.</div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Failure behavior</h2>
+        <div class="diagram" aria-label="Integration request failure flowchart">
+          <svg class="diagram-svg" viewBox="0 0 760 400" role="img">
+            <title>Authorization, connection, query policy, and provider failure behavior</title>
+            <desc>A runtime request passes through app authorization, binding validation, connection selection, query validation, and provider execution. Each failure returns a stable safe error.</desc>
+            <defs><marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)" /></marker></defs>
+            <path class="edge" marker-end="url(#arrowhead)" d="M155 55 H245" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M395 55 H485" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M635 55 V130" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M635 212 V285" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M560 326 H445" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M320 326 H205" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M320 95 V155 H205" />
+            <path class="edge" marker-end="url(#arrowhead)" d="M560 171 H445" />
+            <rect class="box" x="25" y="25" width="130" height="60" rx="8" /><text x="90" y="51">/api request</text><text class="edge-label" x="90" y="68">signed-in viewer</text>
+            <path class="decision" d="M320 14 L395 55 L320 96 L245 55 Z" /><text x="320" y="51">May view</text><text x="320" y="67">this app?</text>
+            <path class="decision" d="M560 14 L635 55 L560 96 L485 55 Z" /><text x="560" y="51">Binding belongs</text><text x="560" y="67">to app + org?</text>
+            <path class="decision" d="M635 130 L710 171 L635 212 L560 171 Z" /><text x="635" y="167">Connection</text><text x="635" y="183">available?</text>
+            <path class="decision" d="M635 285 L710 326 L635 367 L560 326 Z" /><text x="635" y="322">Safe read</text><text x="635" y="338">query?</text>
+            <rect class="box is-new" x="320" y="296" width="125" height="60" rx="8" /><text x="382" y="322">Execute via Nango</text><text class="edge-label" x="382" y="339">bounded response</text>
+            <rect class="box" x="80" y="296" width="125" height="60" rx="8" /><text x="142" y="322">Provider result</text><text class="edge-label" x="142" y="339">rows or permission error</text>
+            <rect class="box" x="80" y="125" width="125" height="60" rx="8" /><text x="142" y="151">403 APP_FORBIDDEN</text><text class="edge-label" x="142" y="168">no information leak</text>
+            <rect class="box is-new" x="320" y="141" width="125" height="60" rx="8" /><text x="382" y="167">CONNECTION_REQUIRED</text><text class="edge-label" x="382" y="184">viewer recovery only</text>
+            <text class="edge-label" x="204" y="45">authenticate</text><text class="edge-label" x="445" y="45">yes</text><text class="edge-label" x="649" y="115">yes</text><text class="edge-label" x="649" y="270">yes</text><text class="edge-label" x="503" y="317">yes</text><text class="edge-label" x="259" y="317">provider</text><text class="edge-label" x="263" y="145">no</text><text class="edge-label" x="503" y="160">no</text>
+          </svg>
+        </div>
+      </section>
+
+      <section>
+        <h2>Approval-gated implementation phases</h2>
+        <div class="phase" data-step="1">
+          <h3>Make bindings visible to the app-building AI</h3>
+          <p>Load safe capability metadata for the current app into the existing app-session instruction assembly in <code>apps/server/src/services/session.ts</code>.</p>
+          <details><summary>Only the binding contract enters the prompt; secrets and ownership internals stay out</summary><div class="detail-body"><p>Include binding ID, label, provider, execution identity, allowed methods/paths, and the server-helper example. Add prompt tests proving cross-app metadata and Nango identifiers never appear.</p></div></details>
+        </div>
+        <div class="phase" data-step="2">
+          <h3>Align binding UI with the server runtime</h3>
+          <p>Teach the Node helper as the default, add a Snowflake preset for <code>POST /api/v2/statements</code>, keep the binding ID copyable, and explain viewer/shared/service behavior plainly.</p>
+          <details><summary>Keep generic HTTP flexibility without creating provider-specific configuration models</summary><div class="detail-body"><p>Reuse <code>AppIntegrationBindingForm</code>, <code>AppIntegrationBindingsCard</code>, and shadcn inputs/selects. Retain manual method/path editing for ordinary APIs; add only a convenience preset for Snowflake.</p></div></details>
+        </div>
+        <div class="phase" data-step="3">
+          <h3>Add viewer connection recovery</h3>
+          <p>Introduce stable error codes and an authenticated binding-scoped Connect bootstrap so a viewer can connect Snowflake from the app and retry.</p>
+          <details><summary>The bootstrap reuses Nango Connect sessions but rechecks every Trace boundary</summary><div class="detail-body"><p>Verify viewer, organization, app, binding, and viewer execution mode before minting a provider-limited Connect session. Shared/service failures remain owner/admin problems and never prompt the viewer.</p></div></details>
+        </div>
+        <div class="phase" data-step="4">
+          <h3>Normalize Snowflake completion</h3>
+          <p>Return one typed SDK result for immediate, asynchronous, and partitioned SQL API responses within configured row, byte, and elapsed-time limits.</p>
+          <details><summary>Poll and fetch partitions only with server-owned handles and the already-resolved connection</summary><div class="detail-body"><p>Never accept statement handles from the browser. Preserve the Snowflake query ID for audit correlation, map provider permission failures distinctly, and stop or cancel on timeout when supported.</p></div></details>
+        </div>
+        <div class="phase" data-step="5">
+          <h3>Harden observability and abuse controls</h3>
+          <p>Add per-viewer/per-app throttling and safe operation telemetry without recording SQL, parameters, credentials, raw provider errors, or viewer tokens.</p>
+          <details><summary>Audit metadata is useful without becoming a data-exfiltration surface</summary><div class="detail-body"><p>Record app, binding, viewer actor, execution identity, provider, operation, status, duration, response bytes, and query ID. Confirm endpoint traffic capture strips the injected context and sensitive bodies.</p></div></details>
+        </div>
+        <div class="phase" data-step="6">
+          <h3>Unify documentation and prove the two-user journey</h3>
+          <p>Document one canonical React → Node → Trace → Nango → provider architecture and run the complete CEO/employee permission matrix.</p>
+          <details><summary>Browser-direct generic proxy remains compatibility-only; Snowflake statements remain server-only</summary><div class="detail-body"><p>Update the starter guidance and system docs together so newly generated apps cannot be taught two conflicting paths.</p></div></details>
+        </div>
+      </section>
+
+      <section>
+        <h2>Primary file impact</h2>
+        <table data-file-table>
+          <thead><tr><th>File</th><th>Change</th><th>Responsibility</th></tr></thead>
+          <tbody>
+            <tr data-change="change"><td><code>apps/server/src/services/session.ts</code></td><td><span class="tag change">edit</span></td><td>Inject safe app-binding capabilities into AI authoring context.</td></tr>
+            <tr data-change="change"><td><code>apps/server/src/services/app-integrations.ts</code></td><td><span class="tag change">edit</span></td><td>Structured failures, connect authorization, Snowflake completion, limits, and audit projection.</td></tr>
+            <tr data-change="change"><td><code>apps/server/src/routes/app-integrations.ts</code></td><td><span class="tag change">edit</span></td><td>Thin runtime query/connect transport and stable error mapping.</td></tr>
+            <tr data-change="change"><td><code>apps/server/src/services/nango-connection-provider.ts</code></td><td><span class="tag change">edit</span></td><td>Bounded Snowflake status/partition transport using opaque connection references.</td></tr>
+            <tr data-change="change"><td><code>apps/server/src/services/endpoint-proxy.ts</code></td><td><span class="tag change">edit</span></td><td>Reserved recovery route plus viewer-context and traffic-capture safety.</td></tr>
+            <tr data-change="change"><td><code>apps/container-bridge/app-starter/trace.ts</code></td><td><span class="tag change">edit</span></td><td>Typed result and error contract for generated Node apps.</td></tr>
+            <tr data-change="change"><td><code>apps/web/src/components/session/applications/*</code></td><td><span class="tag change">edit</span></td><td>Snowflake preset, identity explanation, and canonical server-helper guidance.</td></tr>
+            <tr data-change="change"><td><code>packages/gql/src/schema.graphql</code></td><td><span class="tag change">conditional</span></td><td>Add only any human-facing bootstrap field/action the final route contract requires; generated apps do not call GraphQL.</td></tr>
+            <tr data-change="change"><td><code>docs/nango-app-integrations.md</code></td><td><span class="tag change">edit</span></td><td>One setup, runtime, recovery, security, and troubleshooting story.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Verification and release gate</h2>
+        <table>
+          <thead><tr><th>Gate</th><th>Proof</th></tr></thead>
+          <tbody>
+            <tr><td><strong>AI context</strong></td><td>An app-building turn sees only its own safe binding metadata and generates a Node helper call without secrets.</td></tr>
+            <tr><td><strong>CEO → employee E2E</strong></td><td>Both users open the same private URL; viewer mode executes with each user's Snowflake connection and native permissions.</td></tr>
+            <tr><td><strong>Recovery</strong></td><td>An unconnected employee completes the app-scoped Connect flow and retries; an out-of-org user and wrong-app binding are denied.</td></tr>
+            <tr><td><strong>Identity matrix</strong></td><td>Viewer, shared, and service modes select only their permitted connection kind and ownership.</td></tr>
+            <tr><td><strong>SQL policy</strong></td><td><code>SELECT</code> and <code>WITH…SELECT</code> pass; writes, DDL, calls, role changes, <code>SYSTEM$</code>, multiple statements, malformed input, and excess limits fail.</td></tr>
+            <tr><td><strong>Snowflake lifecycle</strong></td><td>Immediate, async, partitioned, timeout, oversized, permission-denied, revoked, and refresh-error responses behave deterministically.</td></tr>
+            <tr><td><strong>Security</strong></td><td>Anonymous, removed-member, cross-org, wrong-app, disabled-endpoint, expired-token, forged-header, traversal, and browser-input attacks fail.</td></tr>
+            <tr><td><strong>Redaction</strong></td><td>Events and traffic capture contain no SQL, parameters, Nango identifiers, provider credentials, raw provider bodies, or viewer context.</td></tr>
+            <tr><td><strong>Regression</strong></td><td>Run GraphQL codegen if needed, Prisma validation, focused server/web/starter tests, complete test suites, and <code>pnpm build</code>.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Risks and mitigations</h2>
+        <div class="callout risk"><strong>A SELECT can still invoke a side-effecting external function.</strong> Keep Trace's conservative statement validator, reject known system operations, and require a provider-side read-only role with narrowly granted objects.</div>
+        <div class="callout risk" style="margin-top: 10px"><strong>Generated code is editable and can request any read allowed by the binding and provider identity.</strong> Treat the binding as a capability grant, surface it to the app owner, keep viewer permissions as the final data boundary, and audit every execution.</div>
+        <div class="callout risk" style="margin-top: 10px"><strong>Async result polling can create cost or memory pressure.</strong> Use server-owned handles, hard elapsed/row/byte limits, throttling, bounded partitions, and cancellation where supported.</div>
+        <div class="callout risk" style="margin-top: 10px"><strong>Assumption: Nango's configured Snowflake integration supports the SQL API and viewer-specific authorization required here.</strong> Validate this with a real two-account sandbox before production rollout; if false, only the provider adapter changes, not the Trace identity or app-auth boundaries.</div>
+      </section>
+
+      <section>
+        <h2>Approval boundary</h2>
+        <p>Approval authorizes the six phases above while preserving the existing connection and binding models. Any proposal to store SQL in Trace, expose provider credentials, broaden browser authority, or version bindings with application releases returns for separate review.</p>
+      </section>
+    </article>
+  </body>
+</html>
