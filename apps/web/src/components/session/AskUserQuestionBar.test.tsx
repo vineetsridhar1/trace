@@ -308,6 +308,7 @@ describe("AskUserQuestionBar", () => {
     const customAnswer = renderer.root.findByType("textarea");
     expect(customAnswer.props.placeholder).toBe("Write your own answer…");
     expect(customAnswer.props.className).toContain("border-border");
+    expect(customAnswer.props.className).toContain("h-12");
     expect(customAnswer.props.className).not.toContain("ring-2");
     await act(async () => findButton(renderer.root, "Yes").props.onClick());
     const textarea = renderer.root.findByType("textarea");
