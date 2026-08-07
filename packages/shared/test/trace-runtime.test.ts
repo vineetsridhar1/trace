@@ -25,7 +25,7 @@ describe("ensureTraceRuntime", () => {
       join(runtime.skillsDir, "visual-plan", "SKILL.md"),
       "utf8",
     );
-    expect(visualPlanSkill).toContain("trace artifact push visual-plan");
+    expect(visualPlanSkill).toContain('"$TRACE_CLI" artifact push visual-plan');
     expect(visualPlanSkill).toContain("supplied canvas template");
     expect(visualPlanSkill).toContain("documentation directory");
     expect(visualPlanSkill).toContain("never use the generic `plan.mdx`");
