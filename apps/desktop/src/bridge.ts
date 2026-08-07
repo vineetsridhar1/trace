@@ -38,8 +38,8 @@ import {
   inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
   BridgeOutbox,
-  buildTraceInvocationEnv,
 } from "@trace/shared";
+import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
 import type { GitExecFn } from "@trace/shared";
 import { getUsedSlugs } from "@trace/shared/animal-names";

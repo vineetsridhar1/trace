@@ -143,7 +143,6 @@ export {
   cleanupTempImages,
 } from "./bridge.js";
 export { BridgeOutbox, isQueueableBridgeMessage } from "./bridge-outbox.js";
-export { buildTraceInvocationEnv } from "./trace-invocation-env.js";
 export type { GitExecFn } from "./bridge.js";
 export type {
   GitSyncStatusCommandOptions,
