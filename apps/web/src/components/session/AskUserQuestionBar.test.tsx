@@ -324,7 +324,10 @@ describe("AskUserQuestionBar", () => {
       expect.stringContaining("<text>Use a tablet kiosk</text>"),
       [],
     );
-    expect(onResponse.mock.calls[0]?.[0]).not.toContain("<selected>yes</selected>");
+    expect(onResponse).toHaveBeenCalledWith(
+      expect.not.stringContaining("<selected>yes</selected>"),
+      [],
+    );
     await act(async () => renderer.unmount());
   });
 
