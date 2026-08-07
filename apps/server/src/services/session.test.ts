@@ -766,6 +766,34 @@ describe("SessionService", () => {
   });
 
   describe("start", () => {
+    it("falls back to local when a provisioned default is resolved in ordinary local mode", async () => {
+      vi.stubEnv("TRACE_LOCAL_MODE", "1");
+      const sessionGroup = makeSessionGroup();
+      const session = makeSession({ sessionGroup, hosting: "local" });
+
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        tool: "claude_code",
+        channelId: "channel-1",
+      } as unknown as StartSessionServiceInput);
+
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ hosting: "local" }),
+        }),
+      );
+    });
+
     it("rejects app sessions linked to a user repo", async () => {
       await expect(
         service.start({
@@ -8889,6 +8917,9 @@ describe("SessionService", () => {
     });
 
     it("rejects moving a no-remote repo session to cloud", async () => {
+      vi.stubEnv("TRACE_LOCAL_MODE", "1");
+      vi.stubEnv("TRACE_LOCAL_CLOUD_ENABLED", "1");
+
       prismaMock.session.findFirstOrThrow.mockResolvedValueOnce(
         makeSession({
           hosting: "local",

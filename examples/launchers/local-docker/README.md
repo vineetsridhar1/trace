@@ -37,6 +37,8 @@ preview base host at the host, and run the normal dev stack:
 export TRACE_SERVER_PUBLIC_URL=http://host.docker.internal:4000
 # Preview URLs are matched by Host header on the same :4000 server, so include the port.
 export TRACE_ENDPOINT_PREVIEW_BASE_HOST=preview.localhost:4000
+# Must match LAUNCHER_SECRET when starting the launcher below.
+export TRACE_CLOUD_LAUNCHER_TOKEN=dev-secret
 
 pnpm dev:server   # Apollo on :4000 (binds 0.0.0.0, so the container can reach it)
 pnpm dev:web      # Vite on :3000
@@ -61,7 +63,7 @@ In the web app: **Settings → Agent Environments → New**, adapter type **prov
 - Start URL: `http://localhost:8787/trace/start-session`
 - Stop URL: `http://localhost:8787/trace/stop-session`
 - Status URL: `http://localhost:8787/trace/session-status`
-- Auth: bearer, backed by an **Org Secret** whose value is `dev-secret` (matching `LAUNCHER_SECRET`)
+- Auth: bearer (the server reads the token from `TRACE_CLOUD_LAUNCHER_TOKEN`)
 - Mark it the org default (so app sessions pick it up without extra selection)
 
 Optionally set a `DATABASE_URL` runtime env on the environment to point at an external database; if
