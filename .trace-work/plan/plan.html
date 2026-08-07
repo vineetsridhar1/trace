@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Safer credentials for cloud sessions</title>
+    <title>Prove cloud sessions stay inside their organization</title>
     <style>
       :root { --bg:#171717; --surface:#1f1f1f; --raised:#262626; --fg:#e4e4e7; --muted:#a1a1aa; --faint:#71717a; --border:#2e2e2e; --accent:#3b82f6; --add:#22c55e; --change:#eab308; --remove:#ef4444; --radius:8px; }
       * { box-sizing:border-box; }
@@ -48,111 +48,115 @@
   </head>
   <body>
     <article class="plan">
-      <h1 class="plan-title">Keep personal keys out of cloud containers</h1>
-      <p class="plan-summary">Today, Trace gives a new cloud container copies of the user’s real API and login keys. The safer design is for Trace to keep those keys and give the container a temporary pass that works only for one session.</p>
+      <h1 class="plan-title">Prove every cloud computer stays inside its organization</h1>
+      <p class="plan-summary">A user’s own cloud computer is allowed to use the credentials that user supplied. The security goal is to make it impossible for anyone in Organization A to connect to, control, or learn details about a cloud computer belonging to Organization B.</p>
       <div class="meta">
-        <span class="chip"><strong>4</strong> stages</span>
-        <span class="chip">No database migration expected</span>
-        <span class="chip">Security improvement</span>
+        <span class="chip"><strong>5</strong> stages</span>
+        <span class="chip">No credential redesign</span>
+        <span class="chip">Cross-organization security</span>
         <span class="chip">Approval required before coding</span>
       </div>
 
       <section>
-        <h2>The idea in everyday language</h2>
-        <div class="callout"><strong>Think of a hotel key card.</strong> A hotel does not hand every guest the master key. It gives each guest a card that opens one room for a limited time. Trace should do the same: keep the master credentials safe and give each cloud container a temporary pass for one session.</div>
-      </section>
-
-      <section>
-        <h2>What is wrong today</h2>
+        <h2>The rule we are protecting</h2>
         <div class="split">
-          <div class="card"><h3>Today</h3><ul><li>Trace decrypts the user’s real Anthropic, OpenAI, GitHub, SSH, or Codex credentials.</li><li>Those credentials are copied into the cloud container when it starts.</li><li>A person or system with permission to inspect the AWS task can see them.</li><li>Code running inside the container can also read them.</li></ul></div>
-          <div class="card"><h3>After this change</h3><ul><li>Trace keeps the real credentials on the server.</li><li>The container receives only a short-lived temporary pass.</li><li>The pass works for one user, one session, and one container.</li><li>Stopping or moving the session cancels the pass.</li></ul></div>
+          <div class="card"><h3>Allowed</h3><ul><li>Alice starts a cloud session in Organization A.</li><li>Alice’s container uses the credentials Alice supplied.</li><li>Other authorized members of Organization A use the session features their role allows.</li><li>A deliberately public app preview may be viewed through its limited web address.</li></ul></div>
+          <div class="card"><h3>Must be impossible</h3><ul><li>Bob in Organization B opens Alice’s terminal.</li><li>Bob sends commands to Alice’s runtime by guessing or copying an ID.</li><li>Bob connects to Alice’s bridge or private preview.</li><li>Bob reads Alice’s files, Git repository, runtime details, or credentials.</li></ul></div>
         </div>
+        <div class="callout"><strong>The important identity is a pair:</strong> organization plus runtime. A runtime ID by itself must never be enough to find or control a cloud computer.</div>
       </section>
 
       <section>
-        <h2>How it will work</h2>
-        <div class="flow">
-          <div class="node"><b>1. Trace starts a session</b><span>Creates a temporary one-use pass</span></div>
-          <div class="arrow">→</div>
-          <div class="node"><b>2. Container checks in</b><span>Uses the pass to prove which session it belongs to</span></div>
-          <div class="arrow">→</div>
-          <div class="node is-new"><b>3. Trace acts as middleman</b><span>Uses the real credential without revealing it</span></div>
-          <div class="arrow">→</div>
-          <div class="node"><b>4. Work completes</b><span>Git or AI response returns to the container</span></div>
-        </div>
-        <p>The container can ask Trace to perform an approved action, such as sending a prompt to Anthropic or pushing to the session’s repository. It cannot ask Trace to show, download, or refresh the real credential.</p>
-      </section>
-
-      <section>
-        <h2>What happens to each credential</h2>
+        <h2>Protections already in place</h2>
         <table>
-          <thead><tr><th>Credential</th><th>New behavior</th><th>User impact</th></tr></thead>
+          <thead><tr><th>Protection</th><th>What the current code does</th></tr></thead>
           <tbody>
-            <tr><td>Anthropic API key</td><td>Trace sends Claude requests on behalf of the container.</td><td>Claude Code should behave the same.</td></tr>
-            <tr><td>OpenAI or Codex API key</td><td>Trace sends model requests on behalf of the container.</td><td>API-key Codex sessions should behave the same.</td></tr>
-            <tr><td>GitHub token</td><td>The container uses Trace’s existing session-specific Git access.</td><td>Clone, pull, and push continue without exposing the personal token.</td></tr>
-            <tr><td>SSH private key</td><td>It is no longer copied into cloud containers.</td><td>Cloud Git must use Trace-managed access instead.</td></tr>
-            <tr><td>Codex ChatGPT login</td><td>Keep it on the server; do not copy the login file into a cloud container.</td><td>Cloud ChatGPT-login sessions are temporarily disabled until a safe server-side path is proven. Local sessions still work.</td></tr>
-            <tr><td>Custom organization secrets</td><td>Add safe, purpose-built connections one at a time instead of a general “download secret” feature.</td><td>Existing custom cloud-secret use must be inventoried before the old path is removed.</td></tr>
+            <tr><td>Cloud connection token</td><td>The signed token contains the user, organization, session, environment, and exact runtime ID.</td></tr>
+            <tr><td>Bridge connection</td><td>The connecting computer must present that token, announce the same runtime ID, and still match the session’s saved runtime assignment.</td></tr>
+            <tr><td>Terminal access</td><td>Terminal lookups check the session’s organization, user access, and expected runtime before sending a command.</td></tr>
+            <tr><td>App previews</td><td>Private previews require membership in the correct organization. Requests are routed using both the endpoint organization and runtime ID.</td></tr>
+            <tr><td>Managed Git</td><td>Git tokens contain the organization, repository, session, permissions, and current runtime ID.</td></tr>
+            <tr><td>AWS network</td><td>The current production session-runtime security group has no inbound rules, the runtime task role has no AWS permissions, and ECS Exec was disabled on the inspected task.</td></tr>
           </tbody>
         </table>
+      </section>
+
+      <section>
+        <h2>Why more work is useful</h2>
+        <p>The main runtime router is shared by every organization. It supports organization-aware lookups, and the most sensitive paths already use them. However, some lower-level helper methods still accept only a runtime ID. They are safe only when every caller has already performed the correct organization check.</p>
+        <div class="callout risk"><strong>Risk:</strong> a future caller could accidentally use one of those ID-only helpers without checking the organization first. The plan removes that easy-to-make mistake and adds tests that attack every entry point from the wrong organization.</div>
+      </section>
+
+      <section>
+        <h2>How the safer boundary works</h2>
+        <div class="flow">
+          <div class="node"><b>Signed-in user</b><span>Has a current Organization A membership</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>Session or endpoint</b><span>Must belong to Organization A</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new"><b>Organization-aware router</b><span>Requires Organization A + runtime ID</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>Exact cloud computer</b><span>Receives only its own session’s command</span></div>
+        </div>
+        <p>If any part does not match, Trace returns a generic “not found,” “not authorized,” or “runtime unavailable” response. It must not reveal whether the other organization’s runtime exists, who owns it, or what it is called.</p>
       </section>
 
       <section>
         <h2>Implementation stages</h2>
-        <div class="phase" data-step="1"><h3>Build the temporary-pass system</h3><p>Create passes that expire after a few minutes, work only once during startup, and are tied to the exact user, session, and container. Trace checks that the session is still active before accepting one.</p></div>
-        <div class="phase" data-step="2"><h3>Connect Git and AI tools through Trace</h3><p>Reuse Trace’s existing session-specific Git access. Add a controlled middleman for Anthropic and OpenAI requests. It will limit which provider, model, and session each temporary pass can use.</p></div>
-        <div class="phase" data-step="3"><h3>Remove real credentials from container startup</h3><p>Update the container so it checks in with its temporary pass. Remove API keys, GitHub tokens, SSH keys, and Codex login files from the information sent to AWS.</p></div>
-        <div class="phase" data-step="4"><h3>Roll out carefully</h3><p>Enable the new system for a small test group first. Confirm normal model requests, Git operations, restarts, and shutdowns. Then make it the default and delete the old credential-copying path.</p></div>
+        <div class="phase" data-step="1"><h3>Map every doorway into a runtime</h3><p>List every place that can connect to or send work to a cloud computer: bridge connection, terminal, file actions, Git, HTTP previews, preview WebSockets, app processes, restart/reconnect, and background export jobs. Record where the user, organization, session, and runtime are checked today.</p></div>
+        <div class="phase" data-step="2"><h3>Require organization plus runtime everywhere</h3><p>Change the shared runtime router so cloud and local runtimes are both stored and found using the organization and runtime ID together. Change command helpers so the organization is required rather than optional. Session-based commands must also include the saved “home runtime” so they cannot fall through to another connection.</p></div>
+        <div class="phase" data-step="3"><h3>Harden every doorway</h3><p>Make terminal, preview, Git, bridge, file, and background-job paths follow one rule: load the object inside the caller’s organization first, check the caller’s permission, then send only to that object’s saved runtime. Public previews remain intentionally viewable, but they expose only the app’s web traffic—not terminal or general runtime controls.</p></div>
+        <div class="phase" data-step="4"><h3>Add cross-organization attack tests</h3><p>Create Organization A and Organization B with deliberately similar data, including the same fake runtime ID where possible. Try every Organization A token, user, session ID, endpoint key, terminal ID, and Git token against Organization B. Every attempt must fail without leaking identifying details or delivering a command.</p></div>
+        <div class="phase" data-step="5"><h3>Verify the AWS wall and add monitoring</h3><p>Turn the observed AWS settings into repeatable deployment checks: no inbound runtime security-group rules, ECS Exec disabled, no task-role permissions, and no route that lets one runtime contact another directly. Add safe security telemetry for rejected organization/runtime mismatches without logging credentials or sensitive IDs unnecessarily.</p></div>
       </section>
 
       <section>
-        <h2>What is included and excluded</h2>
-        <div class="split">
-          <div class="card"><h3>Included</h3><ul><li>Temporary session passes.</li><li>Safe Git and AI request handling.</li><li>Canceling access when a session stops or moves.</li><li>Tests, monitoring, credential rotation, and a gradual rollout.</li></ul></div>
-          <div class="card"><h3>Not in the first version</h3><ul><li>A way for containers to download arbitrary secrets.</li><li>Changes to local desktop sessions.</li><li>Cloud use of a personal ChatGPT login until the safe approach is confirmed.</li><li>Unrelated AWS or session-lifecycle changes.</li></ul></div>
-        </div>
-      </section>
-
-      <section>
-        <h2>Main risks</h2>
+        <h2>Attack tests we will run</h2>
         <table>
-          <thead><tr><th>Risk</th><th>How we reduce it</th></tr></thead>
+          <thead><tr><th>Attempt from Organization A</th><th>Expected result</th></tr></thead>
           <tbody>
-            <tr><td>Someone steals the temporary pass.</td><td>It expires quickly, works only for one session/container, and is canceled when that session ends.</td></tr>
-            <tr><td>The middleman is used for unapproved requests.</td><td>It checks the user, session, provider, model, request size, and rate every time. It never has a “show me the key” operation.</td></tr>
-            <tr><td>Claude Code or Codex cannot use the middleman.</td><td>Test each tool in a disposable cloud session before enabling it. If it is incompatible, that tool stays on the old path only during the limited rollout period; production fails safely before the old path is removed.</td></tr>
-            <tr><td>Previously exposed keys remain valid.</td><td>Rotate the affected Anthropic, OpenAI, GitHub, and Codex credentials before rollout.</td></tr>
+            <tr><td>Connect a bridge using Organization B’s runtime or session ID.</td><td>The connection closes before registration.</td></tr>
+            <tr><td>Create, list, resize, or destroy Organization B’s terminal.</td><td>Denied; no terminal information is returned.</td></tr>
+            <tr><td>Send file, branch, setup, prompt, or application commands to Organization B’s runtime.</td><td>No command is delivered.</td></tr>
+            <tr><td>Open Organization B’s private HTTP or WebSocket preview.</td><td>Denied before any runtime traffic is forwarded.</td></tr>
+            <tr><td>Use an Organization A Git token for Organization B’s repository.</td><td>Denied even if repository or runtime IDs are copied.</td></tr>
+            <tr><td>Reconnect with a token from a stopped or replaced runtime.</td><td>Denied because the saved session now points elsewhere.</td></tr>
+            <tr><td>Ask about an Organization B runtime that exists.</td><td>Same generic response as a made-up runtime; no owner or label leak.</td></tr>
           </tbody>
         </table>
       </section>
 
       <section>
-        <h2>How we will know it is finished</h2>
+        <h2>What this plan does not change</h2>
+        <div class="split">
+          <div class="card"><h3>Still true</h3><ul><li>A user’s own cloud container receives and uses that user’s supplied credentials.</li><li>Cloud containers remain temporary.</li><li>Local sessions keep the same credential model.</li><li>Authorized Trace AWS operators retain their infrastructure access.</li></ul></div>
+          <div class="card"><h3>Not being built</h3><ul><li>No credential middleman or AI request proxy.</li><li>No Secrets Manager migration solely to hide keys from their own container.</li><li>No change to normal Claude, Codex, or Git behavior.</li><li>No broad rewrite of organization permissions outside runtime-facing paths.</li></ul></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>How we know it is finished</h2>
         <table>
-          <thead><tr><th>Check</th><th>Expected result</th></tr></thead>
+          <thead><tr><th>Proof</th><th>Passing result</th></tr></thead>
           <tbody>
-            <tr><td>Start a fresh cloud session</td><td>The selected AI tool completes a real request.</td></tr>
-            <tr><td>Clone and push code</td><td>The session can use its repository without receiving the user’s GitHub or SSH credential.</td></tr>
-            <tr><td>Restart the container</td><td>The replacement receives a new temporary pass and resumes normally.</td></tr>
-            <tr><td>Stop or move the session</td><td>The previous container immediately loses access.</td></tr>
-            <tr><td>Try an expired, copied, or wrong-session pass</td><td>Trace refuses it.</td></tr>
-            <tr><td>Inspect the AWS task</td><td>No Anthropic, OpenAI, GitHub, SSH, or Codex credential appears in the task details.</td></tr>
-            <tr><td>Run the repository test and build commands</td><td>All focused tests and the full build pass.</td></tr>
+            <tr><td>Code audit</td><td>No externally reachable runtime command can locate a runtime using an ID alone.</td></tr>
+            <tr><td>Automated tests</td><td>The full cross-organization attack matrix passes for bridge, terminal, commands, previews, Git, reconnect, and information leaks.</td></tr>
+            <tr><td>Normal workflow</td><td>A user can start, use, restart, and stop their own cloud session; model credentials and Git continue working normally.</td></tr>
+            <tr><td>AWS verification</td><td>Runtime tasks have no inbound network access, no ECS Exec access, and no task-role permissions.</td></tr>
+            <tr><td>Regression checks</td><td>Focused tests and <code>pnpm build</code> pass, including tests with identical runtime IDs in two different organizations.</td></tr>
           </tbody>
         </table>
       </section>
 
       <section>
         <h2>Technical appendix</h2>
-        <p>The main server changes are in <code>apps/server/src/lib/runtime-adapters.ts</code>, a new runtime-credential service and route, <code>apps/server/src/index.ts</code>, and <code>apps/server/src/services/managed-git.ts</code>. The cloud-container changes are in <code>apps/container-bridge/src/index.ts</code>, <code>tool-auth.ts</code>, and <code>bridge.ts</code>. Focused tests will cover temporary-pass security, secret-free startup data, Git, AI requests, restart, and revocation.</p>
-        <p>The production AWS setup lives outside the code paths inspected here. Before implementation changes AWS permissions, we must identify the repository or stack that owns the ECS task and its roles.</p>
+        <p>The central change is in <code>apps/server/src/lib/session-router.ts</code>. The audit and protections cover <code>bridge-handler.ts</code>, <code>terminal-handler.ts</code>, <code>services/terminal.ts</code>, <code>services/runtime-access.ts</code>, <code>services/endpoint-proxy.ts</code>, <code>services/managed-git.ts</code>, and the session/application callers that send commands through the router.</p>
+        <p>Tests will extend the matching <code>*.test.ts</code> files rather than creating a separate security framework. AWS network and role settings must be checked in the infrastructure stack that owns <code>trace-prod-session-runtime</code>; that stack is not present in this repository and must be located before infrastructure changes are made.</p>
       </section>
 
       <section>
         <h2>Approval requested</h2>
-        <div class="callout"><strong>Decision for review:</strong> approve the “hotel key card” approach and the four-stage rollout. The important temporary limitation is that personal ChatGPT-login credentials will not be placed in cloud containers; cloud Codex will use an API key until a safe server-side ChatGPT-login path is proven.</div>
+        <div class="callout"><strong>Approve this direction:</strong> keep the current trusted-container credential model, and focus implementation on proving that organization plus runtime identity is enforced at every connection and command boundary.</div>
       </section>
     </article>
   </body>
