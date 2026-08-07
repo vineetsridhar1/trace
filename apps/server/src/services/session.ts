@@ -4416,7 +4416,7 @@ export class SessionService {
         }
 
         const sessionGroupSnapshot = buildSessionGroupSnapshot(sessionGroup, [
-          { agentStatus: initialAgentStatus, sessionStatus: initialSessionStatus },
+          { sessionStatus: initialSessionStatus },
         ]);
 
         const startEventId = input.startEventId ?? randomUUID();
