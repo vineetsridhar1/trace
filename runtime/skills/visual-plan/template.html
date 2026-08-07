@@ -10,7 +10,9 @@
   Rules that are enforced on upload:
     - Exactly one HTML document per plan folder.
     - No external references. Images must be inline data: URLs or CSS shapes.
-    - No <script>. The plan renders with scripting disabled.
+    - Scripts must be inline and may modify only this document's DOM.
+    - No network, storage, parent-frame access, navigation, popups, downloads,
+      external assets, frames, or forms.
 -->
 <html lang="en">
   <head>
@@ -84,6 +86,29 @@
         font-weight: 550;
       }
 
+      /* ── Scan-level metrics ── */
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin: -20px 0 36px;
+      }
+      .metric {
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: linear-gradient(145deg, var(--surface), var(--raised));
+      }
+      .metric b {
+        display: block;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+      .metric span {
+        color: var(--faint);
+        font-size: 12px;
+      }
+
       /* ── Sections ── */
       section {
         margin-bottom: 40px;
@@ -112,6 +137,18 @@
         background: var(--raised);
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 0.9em;
+      }
+      button {
+        color: inherit;
+        font: inherit;
+      }
+      button:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      [hidden] {
+        display: none !important;
       }
 
       /* ── Two-column split (scope vs non-goals, etc.) ── */
@@ -175,6 +212,66 @@
         color: var(--faint);
       }
 
+      /* ── Switchable before/after or alternative views ── */
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .toolbar button {
+        cursor: pointer;
+        padding: 5px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .toolbar button:hover {
+        border-color: var(--faint);
+        color: var(--fg);
+      }
+      .toolbar button[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+        color: var(--fg);
+      }
+      .view-panel {
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      /* ── Quantitative bars (only for real, sourced values) ── */
+      .bar-chart {
+        display: grid;
+        gap: 9px;
+      }
+      .bar-row {
+        display: grid;
+        grid-template-columns: minmax(100px, 0.8fr) 2fr 32px;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+      }
+      .bar-track {
+        height: 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--raised);
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+      }
+      .bar-value {
+        color: var(--faint);
+        text-align: right;
+      }
+
       /* ── Phases ── */
       .phase {
         position: relative;
@@ -199,6 +296,33 @@
         font-weight: 600;
         line-height: 21px;
         text-align: center;
+      }
+
+      /* ── Progressive disclosure ── */
+      details {
+        margin-top: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: color-mix(in srgb, var(--raised) 55%, transparent);
+      }
+      summary {
+        cursor: pointer;
+        padding: 10px 12px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 550;
+      }
+      summary::marker {
+        color: var(--accent);
+      }
+      .detail-body {
+        padding: 0 12px 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .detail-body p:last-child,
+      .detail-body ul:last-child {
+        margin-bottom: 0;
       }
 
       /* ── Tables: file maps, risks, verification ── */
@@ -264,6 +388,12 @@
         .split {
           grid-template-columns: 1fr;
         }
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+        .bar-row {
+          grid-template-columns: 90px 1fr 28px;
+        }
       }
     </style>
   </head>
@@ -277,6 +407,11 @@
         <span class="chip"><strong>6</strong> files</span>
         <span class="chip"><strong>3</strong> phases</span>
         <span class="chip">Migration required</span>
+      </div>
+      <div class="metrics" aria-label="Change summary">
+        <div class="metric"><b>1</b><span>new system boundary</span></div>
+        <div class="metric"><b>2</b><span>existing flows preserved</span></div>
+        <div class="metric"><b>0</b><span>public contract breaks</span></div>
       </div>
 
       <section>
@@ -306,20 +441,52 @@
           <code>apps/server/src/services/artifact.ts</code>. Ground every claim in something you
           read.
         </p>
+        <div class="bar-chart" aria-label="Change surface by layer">
+          <div class="bar-row">
+            <span>Service</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 100%"></div></div>
+            <span class="bar-value">3</span>
+          </div>
+          <div class="bar-row">
+            <span>Client</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 67%"></div></div>
+            <span class="bar-value">2</span>
+          </div>
+          <div class="bar-row">
+            <span>Schema</span>
+            <div class="bar-track"><div class="bar-fill" style="width: 33%"></div></div>
+            <span class="bar-value">1</span>
+          </div>
+        </div>
       </section>
 
       <section>
         <h2>How it will work</h2>
-        <div class="flow">
-          <div class="node"><b>CLI</b><span>existing</span></div>
-          <div class="arrow">→</div>
-          <div class="node is-new"><b>New step</b><span>added here</span></div>
-          <div class="arrow">→</div>
-          <div class="node"><b>Store</b><span>unchanged</span></div>
+        <div class="toolbar" data-view-switcher="architecture" aria-label="Architecture view">
+          <button type="button" data-view="current" aria-pressed="false">Current</button>
+          <button type="button" data-view="proposed" aria-pressed="true">Proposed</button>
+        </div>
+        <div class="view-panel" data-view-group="architecture" data-view-panel="current">
+          <h3>Current</h3>
+          <div class="flow">
+            <div class="node"><b>CLI</b><span>uploads directly</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><b>Store</b><span>existing</span></div>
+          </div>
+        </div>
+        <div class="view-panel" data-view-group="architecture" data-view-panel="proposed">
+          <h3>Proposed</h3>
+          <div class="flow">
+            <div class="node"><b>CLI</b><span>existing</span></div>
+            <div class="arrow">→</div>
+            <div class="node is-new"><b>New step</b><span>added here</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><b>Store</b><span>unchanged</span></div>
+          </div>
         </div>
         <p>
-          Explain what moves through the flow and what is new. Mark new nodes with class
-          <code>is-new</code>.
+          Let the reviewer compare states without making them reconstruct either one. Mark new nodes
+          with class <code>is-new</code>.
         </p>
       </section>
 
@@ -328,16 +495,36 @@
         <div class="phase" data-step="1">
           <h3>First shippable slice</h3>
           <p>What lands, and how you know it works.</p>
+          <details>
+            <summary>Add the service boundary and prove its failure behavior</summary>
+            <div class="detail-body">
+              <p>
+                Name the files, symbols, contracts, edge cases, and focused tests for this slice.
+              </p>
+            </div>
+          </details>
         </div>
         <div class="phase" data-step="2">
           <h3>Second slice</h3>
           <p>Each phase should be independently verifiable.</p>
+          <details>
+            <summary>Connect the client after the event contract is stable</summary>
+            <div class="detail-body">
+              <p>Put supporting execution detail here, not approval-critical information.</p>
+            </div>
+          </details>
         </div>
       </section>
 
       <section>
         <h2>Files</h2>
-        <table>
+        <div class="toolbar" data-file-filters aria-label="Filter file changes">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="add" aria-pressed="false">New</button>
+          <button type="button" data-filter="change" aria-pressed="false">Changed</button>
+          <button type="button" data-filter="remove" aria-pressed="false">Removed</button>
+        </div>
+        <table data-file-table>
           <thead>
             <tr>
               <th>File</th>
@@ -346,15 +533,20 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
+            <tr data-change="change">
               <td><code>path/to/file.ts</code></td>
               <td><span class="tag change">edit</span></td>
               <td>Describe the change; do not paste the implementation.</td>
             </tr>
-            <tr>
+            <tr data-change="add">
               <td><code>path/to/new-file.ts</code></td>
               <td><span class="tag add">new</span></td>
               <td>What this file will own.</td>
+            </tr>
+            <tr data-change="remove">
+              <td><code>path/to/obsolete-file.ts</code></td>
+              <td><span class="tag remove">remove</span></td>
+              <td>Why this path becomes obsolete and what replaces it.</td>
             </tr>
           </tbody>
         </table>
@@ -379,5 +571,47 @@
         </div>
       </section>
     </article>
+    <script>
+      (() => {
+        document.querySelectorAll("[data-view-switcher]").forEach((switcher) => {
+          const group = switcher.dataset.viewSwitcher;
+          const buttons = [...switcher.querySelectorAll("[data-view]")];
+          const panels = [...document.querySelectorAll(`[data-view-group="${group}"]`)];
+
+          const selectView = (view) => {
+            buttons.forEach((button) => {
+              button.setAttribute("aria-pressed", String(button.dataset.view === view));
+            });
+            panels.forEach((panel) => {
+              panel.hidden = panel.dataset.viewPanel !== view;
+            });
+          };
+
+          buttons.forEach((button) => {
+            button.addEventListener("click", () => selectView(button.dataset.view));
+          });
+          selectView(
+            buttons.find((button) => button.getAttribute("aria-pressed") === "true")?.dataset.view,
+          );
+        });
+
+        document.querySelectorAll("[data-file-filters]").forEach((filters) => {
+          const buttons = [...filters.querySelectorAll("[data-filter]")];
+          const rows = [...document.querySelectorAll("[data-file-table] [data-change]")];
+
+          buttons.forEach((button) => {
+            button.addEventListener("click", () => {
+              const filter = button.dataset.filter;
+              buttons.forEach((candidate) => {
+                candidate.setAttribute("aria-pressed", String(candidate === button));
+              });
+              rows.forEach((row) => {
+                row.hidden = filter !== "all" && row.dataset.change !== filter;
+              });
+            });
+          });
+        });
+      })();
+    </script>
   </body>
 </html>

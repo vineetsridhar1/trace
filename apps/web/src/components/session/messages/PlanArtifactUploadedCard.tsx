@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Boxes, Download } from "lucide-react";
 import { artifactFileUrl } from "../../artifact/artifact-file-url";
-import { sandboxedPlanHtml } from "../../artifact/plan-html";
+import { PLAN_IFRAME_SANDBOX, sandboxedPlanHtml } from "../../artifact/plan-html";
 import { useVisualPlanDocument } from "../../artifact/useVisualPlanDocument";
 import { ArtifactCardActions } from "./ArtifactCardActions";
 import { artifactFileName } from "./artifact-card-utils";
@@ -56,7 +56,7 @@ export function PlanArtifactUploadedCard({
             <iframe
               title="Implementation plan preview"
               srcDoc={sandboxedPlanHtml(html)}
-              sandbox=""
+              sandbox={PLAN_IFRAME_SANDBOX}
               tabIndex={-1}
               className="pointer-events-none size-full border-0 bg-[#0d0f12]"
             />

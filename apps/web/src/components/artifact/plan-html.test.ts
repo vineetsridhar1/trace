@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planMarkdownForImplementation, sandboxedPlanHtml } from "./plan-html";
+import { PLAN_IFRAME_SANDBOX, planMarkdownForImplementation, sandboxedPlanHtml } from "./plan-html";
 
 describe("planMarkdownForImplementation", () => {
   it("converts semantic content to Markdown and drops presentation", () => {
@@ -35,7 +35,16 @@ describe("sandboxedPlanHtml", () => {
     );
     expect(html).toContain('http-equiv="Content-Security-Policy"');
     expect(html).toContain("default-src 'none'");
+    expect(html).toContain("script-src 'unsafe-inline'");
+    expect(html).toContain("connect-src 'none'");
     expect(html.indexOf("Content-Security-Policy")).toBeLessThan(html.indexOf("</head>"));
+  });
+
+  it("grants scripts without granting same-origin or navigation capabilities", () => {
+    expect(PLAN_IFRAME_SANDBOX).toBe("allow-scripts");
+    expect(PLAN_IFRAME_SANDBOX).not.toContain("allow-same-origin");
+    expect(PLAN_IFRAME_SANDBOX).not.toContain("allow-top-navigation");
+    expect(PLAN_IFRAME_SANDBOX).not.toContain("allow-popups");
   });
 
   it("wraps fragments so the CSP remains in the document head", () => {

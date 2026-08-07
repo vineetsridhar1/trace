@@ -1,7 +1,7 @@
 import { load } from "cheerio";
 import { ValidationError } from "./errors.js";
 
-const FORBIDDEN_TAGS = new Set(["script", "iframe", "embed", "object", "form"]);
+const FORBIDDEN_TAGS = new Set(["iframe", "embed", "object", "form"]);
 const URL_ATTRIBUTES = new Set([
   "action",
   "background",
@@ -47,6 +47,9 @@ export function validatePlanHtml(source: string): void {
     const tag = element.tagName.toLowerCase();
     if (FORBIDDEN_TAGS.has(tag)) {
       throw new ValidationError(`Visual plan HTML must not contain <${tag}>`);
+    }
+    if (tag === "script" && "src" in element.attribs) {
+      throw new ValidationError("Visual plan scripts must be inline; remove the script src");
     }
     if (tag === "meta" && $(element).attr("http-equiv")?.trim().toLowerCase() === "refresh") {
       throw new ValidationError("Visual plan HTML must not contain meta refresh navigation");
