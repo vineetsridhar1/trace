@@ -1,0 +1,633 @@
+<!doctype html>
+<!--
+  Trace visual plan canvas.
+
+  Copy this file to your plan directory as plan.html, then replace the sample
+  content. This file is the agent's authoring canvas. Keep the <style> block;
+  it is the component vocabulary. Every class below is demonstrated once in the
+  body so you can see what it renders as.
+
+  Rules that are enforced on upload:
+    - One file. No sibling CSS, JS, or image files.
+    - No external references. Images must be inline data: URLs or CSS shapes.
+    - No <script>. The plan renders with scripting disabled.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cloud browser recording skill plan</title>
+    <style>
+      :root {
+        --bg: #171717;
+        --surface: #1f1f1f;
+        --raised: #262626;
+        --fg: #e4e4e7;
+        --muted: #a1a1aa;
+        --faint: #71717a;
+        --border: #2e2e2e;
+        --accent: #3b82f6;
+        --add: #22c55e;
+        --change: #eab308;
+        --remove: #ef4444;
+        --radius: 8px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 40px 32px 72px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.65 ui-sans-serif,
+          -apple-system,
+          "Segoe UI",
+          system-ui,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .plan {
+        max-width: 860px;
+        margin: 0 auto;
+      }
+
+      /* ── Title block ── */
+      .plan-title {
+        margin: 0 0 8px;
+        font-size: 28px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .plan-summary {
+        margin: 0 0 20px;
+        color: var(--muted);
+        font-size: 16px;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 36px;
+      }
+      .chip {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .chip strong {
+        color: var(--fg);
+        font-weight: 550;
+      }
+
+      /* ── Sections ── */
+      section {
+        margin-bottom: 40px;
+      }
+      h2 {
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      h3 {
+        margin: 0 0 6px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      code {
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.9em;
+      }
+
+      /* ── Two-column split (scope vs non-goals, etc.) ── */
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .card {
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .card h3 {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .card ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .card li {
+        margin-bottom: 4px;
+      }
+
+      /* ── Flow diagram: horizontal boxes joined by arrows ── */
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 0;
+        margin: 4px 0 8px;
+      }
+      .node {
+        flex: 1 1 0;
+        min-width: 120px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .node b {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .node span {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .node.is-new {
+        border-color: var(--accent);
+      }
+      .arrow {
+        flex: 0 0 28px;
+        align-self: center;
+        text-align: center;
+        color: var(--faint);
+      }
+
+      /* ── Phases ── */
+      .phase {
+        position: relative;
+        padding: 0 0 20px 26px;
+        border-left: 1px solid var(--border);
+      }
+      .phase:last-child {
+        border-left-color: transparent;
+        padding-bottom: 0;
+      }
+      .phase::before {
+        content: attr(data-step);
+        position: absolute;
+        left: -11px;
+        top: 0;
+        width: 21px;
+        height: 21px;
+        border-radius: 50%;
+        background: var(--raised);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 21px;
+        text-align: center;
+      }
+
+      /* ── Tables: file maps, risks, verification ── */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      td code {
+        background: none;
+        padding: 0;
+        color: var(--muted);
+      }
+      .tag {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .tag.add {
+        color: var(--add);
+      }
+      .tag.change {
+        color: var(--change);
+      }
+      .tag.remove {
+        color: var(--remove);
+      }
+
+      /* ── Callout ── */
+      .callout {
+        padding: 12px 16px;
+        border-left: 2px solid var(--accent);
+        border-radius: 0 var(--radius) var(--radius) 0;
+        background: var(--surface);
+        color: var(--muted);
+      }
+      .callout.risk {
+        border-left-color: var(--change);
+      }
+      .callout strong {
+        color: var(--fg);
+      }
+
+      @media (max-width: 640px) {
+        .split {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <article class="plan">
+      <h1 class="plan-title">Cloud browser recording → video artifact</h1>
+      <p class="plan-summary">
+        Add an agent-facing cloud skill and a stable <code>trace-browser record</code> runner. An AI
+        can implement a change, drive a headless Chromium page with project-specific Playwright
+        actions, save a WebM recording, and publish it through Trace's existing immutable artifact
+        pipeline.
+      </p>
+      <div class="meta">
+        <span class="chip"><strong>9–11</strong> files</span>
+        <span class="chip"><strong>4</strong> phases</span>
+        <span class="chip">Cloud runtime image</span>
+        <span class="chip">No schema or database migration</span>
+      </div>
+
+      <section>
+        <h2>Decision</h2>
+        <div class="callout">
+          <strong>Recommended shape:</strong> keep the skill declarative and put lifecycle-sensitive
+          behavior in one tested runtime command. The agent writes a small scenario module exporting
+          browser actions; <code>trace-browser</code> owns Chromium startup, recording, teardown,
+          output validation, and deterministic error reporting. The existing <code>trace</code> CLI
+          remains the only uploader.
+        </div>
+      </section>
+
+      <section>
+        <h2>Scope</h2>
+        <div class="split">
+          <div class="card">
+            <h3>In scope</h3>
+            <ul>
+              <li>Headless Chromium tab recording inside provisioned cloud containers.</li>
+              <li>Agent-authored Playwright actions against localhost or a reachable URL.</li>
+              <li>
+                WebM output with a bounded viewport, timeout, size check, and reliable finalization.
+              </li>
+              <li>A portable skill that teaches test → record → inspect → upload.</li>
+              <li>Installation for both Claude and Codex in the cloud image.</li>
+              <li>End-to-end proof that the uploaded artifact appears as a playable video.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Not doing</h3>
+            <ul>
+              <li>No live browser stream or user takeover; this produces a completed artifact.</li>
+              <li>
+                No audio capture in v1; Playwright's page video is the deterministic baseline.
+              </li>
+              <li>No desktop/local-session support in this slice.</li>
+              <li>No new artifact type, GraphQL field, database table, or custom uploader.</li>
+              <li>
+                No automatic recording after every code change; the agent invokes the skill when
+                requested.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Current state</h2>
+        <p>
+          The cloud image already installs system Chromium in
+          <code>apps/container-bridge/Dockerfile</code>. Existing design and animation review
+          scripts demonstrate the repository's preferred <code>playwright-core</code> + system
+          Chromium pattern, especially
+          <code>apps/container-bridge/animation-starter/scripts/review-animation.ts</code>.
+        </p>
+        <p>
+          Agent invocations already receive an authenticated Trace CLI and skill directory through
+          <code>packages/shared/src/trace-invocation-env.ts</code>. The CLI packages a
+          file/directory and POSTs it to <code>apps/server/src/routes/agent-artifact.ts</code>;
+          business validation, persistence, and the <code>artifact_created</code> event live in
+          <code>apps/server/src/services/artifact.ts</code>.
+        </p>
+        <p>
+          Video is already a first-class presentation path:
+          <code>apps/server/src/lib/artifact-bundle.ts</code> recognizes <code>.webm</code> and
+          <code>.mp4</code>, the service accepts <code>trace.video.v1</code>, and
+          <code>apps/web/src/components/artifact/MediaArtifact.tsx</code>
+          renders a native video player. The relevant server limits are 32 MiB per uncompressed file
+          and 64 MiB per archive/request. No backend or UI expansion is required for the first
+          slice.
+        </p>
+      </section>
+
+      <section>
+        <h2>How it will work</h2>
+        <div class="flow">
+          <div class="node"><b>Agent</b><span>writes scenario actions</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new"><b>trace-browser</b><span>launch + record + close</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new"><b>demo.webm</b><span>validated local output</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>trace artifact push video</b><span>authenticated upload</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>Artifact event + player</b><span>existing pipeline</span></div>
+        </div>
+        <p>
+          The scenario module exports one async function and receives a Playwright
+          <code>page</code>; it can navigate, assert, fill, click, wait, and exercise the code under
+          test without importing browser dependencies. The runner accepts explicit
+          script/output/URL, viewport, and timeout flags. It launches the configured system
+          Chromium, creates one recorded context/page, optionally navigates, runs the scenario, and
+          always closes the page, context, and browser before resolving Playwright's video path.
+        </p>
+        <p>
+          On success the runner moves the finalized recording to the requested <code>.webm</code>
+          path and rejects missing, empty, or over-limit output. On scenario failure it still tears
+          down cleanly, reports the action error, and does not upload misleading evidence. The skill
+          then directs the agent to inspect the result, keep it below the artifact ceiling, and run
+          <code>trace artifact push video &lt;file&gt; --key &lt;descriptive-key&gt;</code> only
+          after the tested flow succeeds.
+        </p>
+      </section>
+
+      <section>
+        <h2>Phases</h2>
+        <div class="phase" data-step="1">
+          <h3>Build the recording runner as an isolated unit</h3>
+          <p>
+            Add a container-bridge CLI module with strict argument parsing, scenario-module
+            validation, fixed safe defaults (1280×720, bounded timeout), explicit Chromium lookup,
+            deterministic temporary-directory cleanup, and post-finalization file checks. Keep the
+            browser lifecycle injectable so unit tests can cover success and failure without
+            starting a real browser.
+          </p>
+        </div>
+        <div class="phase" data-step="2">
+          <h3>Provision the media runtime in the cloud image</h3>
+          <p>
+            Add <code>playwright-core</code> to the container bridge's declared/install-time
+            dependencies, install Playwright's pinned ffmpeg helper in a shared readable browser
+            cache, retain system Chromium, and expose the compiled runner as
+            <code>trace-browser</code> on PATH for the non-root <code>coder</code> user. Extend the
+            Dockerfile dependency test so image drift fails fast.
+          </p>
+        </div>
+        <div class="phase" data-step="3">
+          <h3>Author and distribute the browser-recording skill</h3>
+          <p>
+            Add one canonical skill with a concise scenario template, readiness checks, guidance for
+            human-readable pacing, assertion-before-upload, cleanup rules, artifact size limits, and
+            the exact video upload command. Bake the same skill into Claude and Codex home skill
+            directories in cloud containers, matching the repository's existing
+            <code>author-design-system</code> distribution pattern. Avoid teaching direct HTTP event
+            creation—the service-backed Trace CLI remains mandatory.
+          </p>
+        </div>
+        <div class="phase" data-step="4">
+          <h3>Prove the complete cloud workflow</h3>
+          <p>
+            Add a small fixture page/scenario or extend the cloud app smoke harness to record a
+            short interaction, verify the WebM exists and stays within the upload ceiling, upload it
+            as
+            <code>video</code>, observe the resulting artifact metadata/event, and fetch the video
+            content. Keep this smoke opt-in where it depends on a deployed cloud runtime; keep unit
+            and image-contract tests in the regular suite.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>File map</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Change</th>
+              <th>Responsibility</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>apps/container-bridge/src/browser-recording.ts</code></td>
+              <td><span class="tag add">new</span></td>
+              <td>
+                Argument contract, scenario loading, browser/video lifecycle, output limits, and
+                cleanup.
+              </td>
+            </tr>
+            <tr>
+              <td><code>apps/container-bridge/src/browser-recording.test.ts</code></td>
+              <td><span class="tag add">new</span></td>
+              <td>
+                Unit coverage for defaults, invalid scripts, finalization, failures, oversize
+                output, and cleanup.
+              </td>
+            </tr>
+            <tr>
+              <td><code>apps/container-bridge/package.json</code></td>
+              <td><span class="tag change">edit</span></td>
+              <td>Declare the browser driver used by the compiled cloud runner.</td>
+            </tr>
+            <tr>
+              <td><code>pnpm-lock.yaml</code></td>
+              <td><span class="tag change">edit</span></td>
+              <td>Lock the container dependency consistently with the workspace.</td>
+            </tr>
+            <tr>
+              <td><code>apps/container-bridge/Dockerfile</code></td>
+              <td><span class="tag change">edit</span></td>
+              <td>
+                Install ffmpeg support, expose <code>trace-browser</code>, and copy the skill to
+                both agent homes.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <code>apps/container-bridge/src/dockerfile-runtime-dependencies.test.ts</code>
+              </td>
+              <td><span class="tag change">edit</span></td>
+              <td>
+                Assert browser driver, recorder helper/cache, executable, and dual-skill
+                installation remain present.
+              </td>
+            </tr>
+            <tr>
+              <td><code>.claude/skills/browser-recording/SKILL.md</code></td>
+              <td><span class="tag add">new</span></td>
+              <td>
+                Canonical agent workflow and scenario contract; copied to Claude and Codex in the
+                image.
+              </td>
+            </tr>
+            <tr>
+              <td><code>scripts/smoke-cloud-browser-recording.mjs</code></td>
+              <td><span class="tag add">new</span></td>
+              <td>
+                Opt-in deployed-runtime proof from page interaction through uploaded video
+                retrieval.
+              </td>
+            </tr>
+            <tr>
+              <td><code>package.json</code></td>
+              <td><span class="tag change">edit</span></td>
+              <td>Expose the cloud recording smoke command.</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout">
+          <strong>Expected unchanged seams:</strong>
+          <code>apps/server/src/routes/agent-artifact.ts</code>,
+          <code>apps/server/src/services/artifact.ts</code>, GraphQL schema/codegen, Prisma, client
+          event handlers, and <code>MediaArtifact.tsx</code>. They already support authenticated
+          video artifacts; implementation should add tests there only if the smoke reveals a real
+          gap.
+        </div>
+      </section>
+
+      <section>
+        <h2>Verification</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Check</th>
+              <th>Acceptance criteria</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>pnpm --filter @trace/container-bridge test</code></td>
+              <td>
+                Runner lifecycle and image-contract tests pass, including failure cleanup and size
+                rejection.
+              </td>
+            </tr>
+            <tr>
+              <td><code>pnpm --filter @trace/container-bridge build</code></td>
+              <td>
+                The executable compiles without <code>any</code> types and can load an ESM scenario.
+              </td>
+            </tr>
+            <tr>
+              <td>Container image smoke</td>
+              <td>
+                As <code>coder</code>, <code>trace-browser record</code> drives localhost Chromium
+                and emits a playable non-empty WebM.
+              </td>
+            </tr>
+            <tr>
+              <td><code>pnpm smoke:cloud-browser-recording</code></td>
+              <td>
+                A real cloud session records the fixture interaction, uploads one
+                <code>trace.video.v1</code> artifact, and retrieves its video bytes.
+              </td>
+            </tr>
+            <tr>
+              <td>Trace web review</td>
+              <td>
+                The session timeline shows a Video artifact card and the artifact tab plays the
+                uploaded recording with native controls.
+              </td>
+            </tr>
+            <tr>
+              <td><code>pnpm build</code></td>
+              <td>
+                Workspace build and generated runtime consumers remain healthy; no schema/codegen
+                delta appears.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Risks &amp; mitigations</h2>
+        <div class="callout risk">
+          <strong>Playwright needs its own ffmpeg helper.</strong> System Chromium alone is not
+          enough for <code>recordVideo</code>. Pin the driver in the container package, install the
+          matching ffmpeg payload at image build time into a shared readable cache, and verify
+          recording as the non-root runtime user.
+        </div>
+        <div class="callout risk">
+          <strong>Video finalization is asynchronous.</strong> Reading or uploading before context
+          closure can produce a missing/corrupt file. The runner—not the skill prose—must close the
+          context, await <code>video.path()</code>, then validate and move the file.
+        </div>
+        <div class="callout risk">
+          <strong>Long demos can exceed the existing 32 MiB file ceiling.</strong> Default to
+          1280×720 and a short bounded run, reject oversize output locally with a useful message,
+          and teach the agent to record focused flows rather than raising server limits in v1.
+        </div>
+        <div class="callout risk">
+          <strong>Generated app readiness can be flaky.</strong> The skill should require an HTTP
+          readiness probe and stable role/label/test-id locators before recording. The scenario must
+          assert the final state; a video is evidence, not a replacement for test assertions.
+        </div>
+      </section>
+
+      <section>
+        <h2>Assumptions to approve</h2>
+        <div class="split">
+          <div class="card">
+            <h3>Product assumptions</h3>
+            <ul>
+              <li>V1 is cloud-only and records one headless page per artifact.</li>
+              <li>Silent WebM is acceptable; audio and cursor embellishment can follow later.</li>
+              <li>Recording is agent-invoked when requested, not an automatic post-run policy.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Technical assumptions</h3>
+            <ul>
+              <li>
+                Cloud image rebuild/deploy is available for the new executable and ffmpeg payload.
+              </li>
+              <li>
+                Existing video artifact limits and native player are sufficient for focused demos.
+              </li>
+              <li>
+                The scenario module is trusted agent-authored code inside the already-isolated
+                session container.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </article>
+  </body>
+</html>
