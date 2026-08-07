@@ -1,7 +1,7 @@
 import type { Event } from "@trace/gql";
 import type { SessionNode } from "./groupReadGlob";
 import { describe, expect, it } from "vitest";
-import { findReplacedQuestionIds } from "./questionHistory";
+import { findActiveQuestion, findReplacedQuestionIds } from "./questionHistory";
 
 function question(id: string): SessionNode {
   return { kind: "ask-user-question", id, questions: [], timestamp: "2026-08-06T00:00:00Z" };
@@ -37,5 +37,17 @@ describe("findReplacedQuestionIds", () => {
     ];
 
     expect(findReplacedQuestionIds(nodes, { [userMessage.id]: userMessage })).toEqual(new Set());
+  });
+});
+
+describe("findActiveQuestion", () => {
+  it("keeps a pending question resumable only while the session needs input", () => {
+    const nodes: SessionNode[] = [question("pending")];
+
+    expect(findActiveQuestion(nodes, "needs_input", "question")).toMatchObject({
+      node: { id: "pending" },
+      index: 0,
+    });
+    expect(findActiveQuestion(nodes, "in_progress", "question")).toBeNull();
   });
 });

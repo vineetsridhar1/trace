@@ -53,7 +53,7 @@ import { buildCompactChatSummary } from "./compact-chat-summary";
 import { uploadFile } from "../../lib/upload";
 import type { FileAttachment } from "./ImageAttachmentBar";
 import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
-import { findReplacedQuestionIds } from "./questionHistory";
+import { findActiveQuestion, findReplacedQuestionIds } from "./questionHistory";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -560,13 +560,8 @@ export function SessionDetailView({
     : (activePlan?.node.planContent ?? "");
 
   const activeQuestion = useMemo(() => {
-    if (timelineInputRequest?.kind !== "question") return null;
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      const node = nodes[i];
-      if (node.kind === "ask-user-question") return { node, index: i };
-    }
-    return null;
-  }, [nodes, timelineInputRequest]);
+    return findActiveQuestion(nodes, sessionStatus, timelineInputRequest?.kind ?? null);
+  }, [nodes, sessionStatus, timelineInputRequest]);
   const replacedQuestionIds = useMemo(
     () => findReplacedQuestionIds(nodes, events),
     [events, nodes],

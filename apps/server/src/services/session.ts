@@ -649,7 +649,7 @@ function getIdleSessionStatus(sessionStatus?: SessionStatus | null): SessionStat
 }
 
 function getRunningSessionStatus(sessionStatus?: SessionStatus | null): SessionStatus {
-  return sessionStatus ?? "in_progress";
+  return sessionStatus === "needs_input" ? "in_progress" : (sessionStatus ?? "in_progress");
 }
 
 function getIdleAgentStatus(agentStatus?: AgentStatus | null): AgentStatus {
@@ -6566,6 +6566,7 @@ export class SessionService {
     // If session has a read-only workspace and user explicitly switched away from ask mode,
     // trigger a workspace upgrade to create a real worktree
     if (session.readOnlyWorkspace && interactionMode && interactionMode !== "ask" && session.repo) {
+      const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
       const pendingCommand: PendingSessionCommand = {
         type: "send",
         prompt: text,
@@ -6575,6 +6576,7 @@ export class SessionService {
         ...(imageKeys?.length ? { imageKeys } : {}),
       };
       await this.triggerWorkspaceUpgrade(sessionId, session, pendingCommand, {
+        sessionStatus: resumedSessionStatus,
         lastMessageAt: new Date(),
         ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
       });
@@ -6587,6 +6589,7 @@ export class SessionService {
         payload: {
           text,
           clientSource: normalizeClientSource(clientSource),
+          sessionStatus: resumedSessionStatus,
           ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
           ...(clientMutationId ? { clientMutationId } : {}),
         },
@@ -6691,6 +6694,7 @@ export class SessionService {
             expectedHomeRuntimeId: expectedRuntimeId ?? undefined,
             organizationId: session.organizationId,
           });
+    const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
 
     if (deliveryResult !== "delivered") {
       await this.clearArtifactInvocation(sessionId, invocation.invocationId);
@@ -6705,6 +6709,7 @@ export class SessionService {
           ...(imageKeys?.length ? { imageKeys } : {}),
         },
         {
+          sessionStatus: resumedSessionStatus,
           lastMessageAt: new Date(),
           ...(actorType === "user" ? { lastUserMessageAt: new Date() } : {}),
         },
@@ -6725,6 +6730,7 @@ export class SessionService {
         payload: {
           text,
           clientSource: normalizeClientSource(clientSource),
+          sessionStatus: resumedSessionStatus,
           ...(imageKeys?.length ? { attachmentKeys: imageKeys, imageKeys } : {}),
           deliveryFailed: true,
           ...(clientMutationId ? { clientMutationId } : {}),
@@ -6739,7 +6745,6 @@ export class SessionService {
     // Only mark active after successful delivery
     // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
     const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
-    const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -11659,6 +11664,7 @@ export class SessionService {
         type: "connection_lost",
         reason: deliveryResult,
         operation,
+        sessionStatus: session.sessionStatus,
         connection: connJson(updated),
         ...(sessionGroup ? { sessionGroup } : {}),
       },

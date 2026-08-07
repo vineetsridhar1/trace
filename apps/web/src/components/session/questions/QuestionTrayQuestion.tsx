@@ -22,6 +22,7 @@ export function QuestionTrayQuestion({
   onDecide,
   onToggle,
   onTextChange,
+  onContinue,
   onMoveRank,
   referenceAttachments,
   onReferenceFiles,
@@ -37,6 +38,7 @@ export function QuestionTrayQuestion({
   onDecide: () => void;
   onToggle: (value: string) => void;
   onTextChange: (value: string) => void;
+  onContinue: () => void;
   onMoveRank: (value: string, direction: -1 | 1) => void;
   referenceAttachments?: FileAttachment[];
   onReferenceFiles?: (files: File[]) => void;
@@ -67,6 +69,7 @@ export function QuestionTrayQuestion({
         validationMessage={validationMessage}
         onToggle={onToggle}
         onTextChange={onTextChange}
+        onContinue={onContinue}
         onMoveRank={onMoveRank}
         referenceAttachments={referenceAttachments}
         onReferenceFiles={onReferenceFiles}
