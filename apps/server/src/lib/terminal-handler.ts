@@ -112,7 +112,7 @@ export function handleTerminalConnection(
         sendFatalError("Invalid token");
         return;
       }
-      if (isExternalLocalModeRequest(req) && auth.kind !== "device") {
+      if (isExternalLocalModeRequest(req) && auth.kind !== "mobile") {
         clearAuthTimeout();
         sendFatalError(EXTERNAL_LOCAL_MODE_AUTH_ERROR);
         return;

@@ -23,6 +23,7 @@ import { prisma } from "./db.js";
 import { createSessionTicketsLoader, createUserLoader } from "./dataloader.js";
 import {
   authenticateAccessToken,
+  authenticateUserAccessToken,
   buildContext,
   buildWsContext,
   createBridgeAuthToken,
@@ -32,6 +33,7 @@ import {
   verifyBridgeAuthToken,
   verifyToken,
 } from "./auth.js";
+import { createAgentInvocationToken } from "./agent-invocation-auth.js";
 
 const OLD_IAT_SECONDS = () => Math.floor(Date.now() / 1000) - 2 * 24 * 60 * 60;
 
@@ -139,17 +141,27 @@ describe("auth helpers", () => {
       ownerUserId: "user-1",
       pairedOrganizationId: "org-1",
       revokedAt: null,
-      clientType: "mobile",
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
 
     await expect(authenticateAccessToken("opaque-device-secret")).resolves.toEqual({
-      kind: "device",
-      clientType: "mobile",
+      kind: "mobile",
       userId: "user-1",
       pairedOrganizationId: "org-1",
       deviceId: "device-1",
     });
+  });
+
+  it("rejects session invocation credentials from user-only endpoints", async () => {
+    const token = createAgentInvocationToken({
+      organizationId: "org-1",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      invocationId: "invocation-1",
+    });
+    prismaMock.session.findFirst.mockResolvedValueOnce({ createdById: "user-1" });
+
+    await expect(authenticateUserAccessToken(token)).resolves.toBeNull();
   });
 
   it("re-issues the session cookie for tokens older than the refresh threshold", () => {
@@ -448,7 +460,6 @@ describe("auth helpers", () => {
       ownerUserId: "user-4",
       pairedOrganizationId: "org-paired-from",
       revokedAt: null,
-      clientType: "mobile",
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
     prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-4", email: "local@trace.dev" });

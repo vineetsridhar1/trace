@@ -1,4 +1,4 @@
-import type { Event, Session, StartSessionInput } from "@trace/gql";
+import type { Event, Session } from "@trace/gql";
 import { randomUUID } from "node:crypto";
 import { usage } from "../errors.js";
 import type { Command, CommandContext } from "../runtime.js";
@@ -57,66 +57,12 @@ async function getSession(ctx: CommandContext, id: string): Promise<SessionView>
 
 export const sessionCommands: Command[] = [
   {
-    path: ["session", "list"],
-    usage: "trace session list [--org ID] [--json]",
-    description: "List sessions in an organization",
-    async run(ctx) {
-      const client = await ctx.client();
-      const organizationId = client.organizationId ?? usage("Organization is required");
-      const result = await client.graphql<{ sessions: SessionView[] }, { organizationId: string }>(
-        `query TraceCliSessions($organizationId: ID!) {
-          sessions(organizationId: $organizationId) { ${SESSION_FIELDS} }
-        }`,
-        { organizationId },
-      );
-      ctx.output(
-        { sessions: result.sessions },
-        result.sessions.length
-          ? result.sessions
-              .map((session) => `${session.id}\t${session.agentStatus}\t${session.name}`)
-              .join("\n")
-          : "No sessions found",
-      );
-    },
-  },
-  {
     path: ["session", "get"],
     usage: "trace session get [session-id] [--json]",
     description: "Get a session, defaulting to TRACE_SESSION_ID",
     async run(ctx) {
       const session = await getSession(ctx, sessionId(ctx));
       ctx.output({ session }, printSession(session));
-    },
-  },
-  {
-    path: ["session", "start"],
-    usage: "trace session start [prompt] [--channel ID|--group ID|--repo ID] [--json]",
-    description: "Start a session through the existing Trace session service",
-    async run(ctx) {
-      const input: StartSessionInput = {};
-      const promptParts: string[] = [];
-      for (let index = 2; index < ctx.args.length; index += 1) {
-        const value = ctx.args[index];
-        if (value === "--channel")
-          input.channelId = ctx.args[++index] || usage("--channel requires an ID");
-        else if (value === "--group")
-          input.sessionGroupId = ctx.args[++index] || usage("--group requires an ID");
-        else if (value === "--repo")
-          input.repoId = ctx.args[++index] || usage("--repo requires an ID");
-        else promptParts.push(value ?? "");
-      }
-      if (promptParts.length) input.prompt = promptParts.join(" ");
-      const client = await ctx.client();
-      const result = await client.graphql<
-        { startSession: SessionView },
-        { input: StartSessionInput }
-      >(
-        `mutation TraceCliStartSession($input: StartSessionInput!) {
-          startSession(input: $input) { ${SESSION_FIELDS} }
-        }`,
-        { input },
-      );
-      ctx.output({ session: result.startSession }, printSession(result.startSession));
     },
   },
   {
@@ -146,62 +92,6 @@ export const sessionCommands: Command[] = [
         { event: result.sendSessionMessage },
         `Sent message (${result.sendSessionMessage.id})`,
       );
-    },
-  },
-  {
-    path: ["session", "run"],
-    usage: "trace session run [session-id] [prompt] [--json]",
-    description: "Run or resume a session",
-    async run(ctx) {
-      const id = sessionId(ctx);
-      const prompt = ctx.args.slice(3).join(" ").trim() || null;
-      const client = await ctx.client();
-      const result = await client.graphql<
-        { runSession: SessionView },
-        { id: string; prompt: string | null }
-      >(
-        `mutation TraceCliRunSession($id: ID!, $prompt: String) {
-          runSession(id: $id, prompt: $prompt) { ${SESSION_FIELDS} }
-        }`,
-        { id, prompt },
-      );
-      ctx.output({ session: result.runSession }, printSession(result.runSession));
-    },
-  },
-  {
-    path: ["session", "stop"],
-    usage: "trace session stop [session-id] [--json]",
-    description: "Stop a running session",
-    async run(ctx) {
-      const id = sessionId(ctx);
-      const client = await ctx.client();
-      const result = await client.graphql<{ terminateSession: SessionView }, { id: string }>(
-        `mutation TraceCliStopSession($id: ID!) {
-          terminateSession(id: $id) { ${SESSION_FIELDS} }
-        }`,
-        { id },
-      );
-      ctx.output({ session: result.terminateSession }, printSession(result.terminateSession));
-    },
-  },
-  {
-    path: ["session", "archive"],
-    usage: "trace session archive [session-id] [--json]",
-    description: "Archive the session's group",
-    async run(ctx) {
-      const session = await getSession(ctx, sessionId(ctx));
-      const groupId = session.sessionGroupId || usage("Session has no group to archive");
-      const client = await ctx.client();
-      const result = await client.graphql<
-        { archiveSessionGroup: { id: string; archived: boolean } | null },
-        { id: string }
-      >(
-        `mutation TraceCliArchiveSession($id: ID!) {
-          archiveSessionGroup(id: $id) { id archived }
-        }`,
-        { id: groupId },
-      );
-      ctx.output({ sessionGroup: result.archiveSessionGroup }, `Archived session group ${groupId}`);
     },
   },
   {

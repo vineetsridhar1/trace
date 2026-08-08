@@ -381,7 +381,7 @@ export async function buildContext({
   }
 
   if (isExternalLocalModeRequest(req)) {
-    if (authSubject?.kind !== "device") {
+    if (authSubject?.kind !== "mobile") {
       throw new AuthenticationError("External local-mode access requires a paired mobile token");
     }
   }
@@ -466,7 +466,7 @@ export async function buildWsContext(
   if (!authSubject) {
     throw new AuthenticationError("Invalid token");
   }
-  if (request && isExternalLocalModeRequest(request) && authSubject.kind !== "device") {
+  if (request && isExternalLocalModeRequest(request) && authSubject.kind !== "mobile") {
     throw new AuthenticationError("External local-mode access requires a paired mobile token");
   }
   const userId = authSubject.userId;

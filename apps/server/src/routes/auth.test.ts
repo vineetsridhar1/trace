@@ -432,7 +432,6 @@ describe("local-mode external auth", () => {
       ownerUserId: "user-1",
       pairedOrganizationId: "org-1",
       revokedAt: null,
-      clientType: "mobile",
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
     prismaMock.user.findUnique.mockResolvedValueOnce({
@@ -469,7 +468,6 @@ describe("local-mode external auth", () => {
       ownerUserId: "user-1",
       pairedOrganizationId: "org-2",
       revokedAt: null,
-      clientType: "mobile",
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
     prismaMock.user.findUnique.mockResolvedValueOnce({
@@ -602,7 +600,6 @@ describe("bridge auth tokens", () => {
       ownerUserId: "user-1",
       pairedOrganizationId: "org-paired-from",
       revokedAt: null,
-      clientType: "mobile",
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
     prismaMock.orgMember.findUnique
@@ -868,7 +865,6 @@ describe("mobile pairing in local mode", () => {
       ownerUserId: "user-1",
       pairedOrganizationId: "org-1",
       revokedAt: null,
-      clientType: "mobile",
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.pushToken.deleteMany.mockResolvedValue({ count: 1 });
@@ -895,7 +891,6 @@ describe("mobile pairing in local mode", () => {
       ownerUserId: "user-1",
       pairedOrganizationId: "org-1",
       revokedAt: null,
-      clientType: "mobile",
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValue({ count: 1 });
 
@@ -992,40 +987,6 @@ describe("mobile pairing in hosted mode", () => {
     expect(body.organizationId).toBe("org-1");
   });
 
-  it("redeems the same one-time pairing flow into a CLI-class device", async () => {
-    prismaMock.mobilePairingToken.findUnique.mockResolvedValueOnce({
-      id: "pair-1",
-      ownerUserId: "user-1",
-      organizationId: "org-1",
-      expiresAt: new Date(Date.now() + 60_000),
-      usedAt: null,
-    });
-    prismaMock.mobileDevice.upsert.mockResolvedValue({ id: "cli-device-1" });
-    prismaMock.mobilePairingToken.updateMany.mockResolvedValue({ count: 1 });
-
-    const res = await fetch(`${baseUrl}/auth/client/pair`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pairingToken: "pair-token-1234567890",
-        installId: "cli-install-12345678",
-        deviceName: "Trace CLI on laptop",
-      }),
-    });
-
-    expect(res.status).toBe(200);
-    expect(prismaMock.mobileDevice.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({ clientType: "cli" }),
-        update: expect.objectContaining({ clientType: "cli" }),
-      }),
-    );
-    const upsert = prismaMock.mobileDevice.upsert.mock.calls.at(-1)?.[0] as {
-      create?: { tokenHash?: string };
-    };
-    expect(upsert.create?.tokenHash).not.toBe("pair-token-1234567890");
-  });
-
   it("lists mobile devices across all organizations for the signed-in user", async () => {
     prismaMock.mobileDevice.findMany.mockResolvedValue([
       {
@@ -1034,7 +995,6 @@ describe("mobile pairing in hosted mode", () => {
         deviceName: "iPhone",
         platform: "ios",
         appVersion: "0.0.1",
-        clientType: "mobile",
         lastSeenAt: new Date("2026-05-01T00:00:00.000Z"),
         createdAt: new Date("2026-05-01T00:00:00.000Z"),
       },
@@ -1061,7 +1021,6 @@ describe("mobile pairing in hosted mode", () => {
         deviceName: true,
         platform: true,
         appVersion: true,
-        clientType: true,
         lastSeenAt: true,
         createdAt: true,
       },

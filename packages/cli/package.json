@@ -3,11 +3,6 @@
   "version": "0.0.2",
   "private": true,
   "type": "module",
-  "bin": {
-    "trace": "dist/main.js"
-  },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -b && esbuild src/main.ts --bundle --platform=node --format=esm --outfile=../../runtime/bin/trace.mjs && chmod +x ../../runtime/bin/trace.mjs",
     "lint": "tsc -b",
@@ -18,7 +13,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
-    "esbuild": "^0.25.10",
+    "esbuild": "^0.27.4",
     "typescript": "^5.7.0",
     "vitest": "^3.2.4"
   }

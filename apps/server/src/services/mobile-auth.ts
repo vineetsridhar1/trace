@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "crypto";
-import type { ClientDeviceType, PushPlatform } from "@prisma/client";
+import type { PushPlatform } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 
 const PAIRING_TOKEN_TTL_MS = 5 * 60 * 1000;
@@ -16,8 +16,7 @@ export class MobileAuthError extends Error {
 }
 
 export type MobileAuthSubject = {
-  kind: "device";
-  clientType: ClientDeviceType;
+  kind: "mobile";
   userId: string;
   pairedOrganizationId: string | null;
   deviceId: string;
@@ -71,7 +70,6 @@ export async function pairMobileDevice(input: {
   deviceName?: string;
   platform?: PushPlatform | null;
   appVersion?: string;
-  clientType?: ClientDeviceType;
 }): Promise<{
   token: string;
   deviceId: string;
@@ -132,7 +130,6 @@ export async function pairMobileDevice(input: {
         deviceName: sanitizeDeviceName(input.deviceName),
         platform: input.platform ?? null,
         appVersion: sanitizeAppVersion(input.appVersion),
-        clientType: input.clientType ?? "mobile",
         tokenHash: secretHash,
         revokedAt: null,
         lastSeenAt: now,
@@ -144,7 +141,6 @@ export async function pairMobileDevice(input: {
         deviceName: sanitizeDeviceName(input.deviceName),
         platform: input.platform ?? null,
         appVersion: sanitizeAppVersion(input.appVersion),
-        clientType: input.clientType ?? "mobile",
         tokenHash: secretHash,
         lastSeenAt: now,
       },
@@ -161,7 +157,9 @@ export async function pairMobileDevice(input: {
   });
 }
 
-export async function authenticateMobileSecret(secret: string): Promise<MobileAuthSubject | null> {
+export async function authenticateMobileSecret(
+  secret: string,
+): Promise<MobileAuthSubject | null> {
   const trimmed = secret.trim();
   if (!trimmed) return null;
 
@@ -173,7 +171,6 @@ export async function authenticateMobileSecret(secret: string): Promise<MobileAu
       ownerUserId: true,
       pairedOrganizationId: true,
       revokedAt: true,
-      clientType: true,
     },
   });
 
@@ -187,23 +184,18 @@ export async function authenticateMobileSecret(secret: string): Promise<MobileAu
   });
 
   return {
-    kind: "device",
-    clientType: device.clientType,
+    kind: "mobile",
     userId: device.ownerUserId,
     pairedOrganizationId: device.pairedOrganizationId,
     deviceId: device.id,
   };
 }
 
-export async function listMobileDevices(input: {
-  ownerUserId: string;
-  clientType?: ClientDeviceType;
-}) {
+export async function listMobileDevices(input: { ownerUserId: string }) {
   return prisma.mobileDevice.findMany({
     where: {
       ownerUserId: input.ownerUserId,
       revokedAt: null,
-      ...(input.clientType ? { clientType: input.clientType } : {}),
     },
     orderBy: [{ lastSeenAt: "desc" }, { createdAt: "desc" }],
     select: {
@@ -212,7 +204,6 @@ export async function listMobileDevices(input: {
       deviceName: true,
       platform: true,
       appVersion: true,
-      clientType: true,
       lastSeenAt: true,
       createdAt: true,
     },

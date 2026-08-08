@@ -1,16 +1,12 @@
 #!/usr/bin/env node
 import { artifactCommand } from "./commands/artifact.js";
-import { authCommands } from "./commands/auth.js";
 import { contextCommand } from "./commands/context.js";
-import { orgCommands } from "./commands/org.js";
 import { sessionCommands } from "./commands/session.js";
 import { CliError, ExitCode } from "./errors.js";
 import { createCommandContext, type Command } from "./runtime.js";
 
 export const commands: readonly Command[] = [
-  ...authCommands,
   contextCommand,
-  ...orgCommands,
   ...sessionCommands,
   artifactCommand,
 ];
@@ -22,9 +18,9 @@ function help(): string {
     "Commands:",
     ...commands.map((command) => `  ${command.path.join(" ").padEnd(22)} ${command.description}`),
     "",
-    "Global options: --server URL, --org ID, --json",
+    "Global option: --json",
     "",
-    "Additional command families register by exporting Command objects and adding them to this registry.",
+    "This command is available inside Trace-managed AI sessions.",
   ].join("\n");
 }
 

@@ -5,7 +5,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "../lib/db.js";
 import { redis } from "../lib/redis.js";
 import {
-  authenticateAccessToken,
+  authenticateUserAccessToken,
   createBridgeAuthToken,
   getRequestToken,
   getSessionCookieOptions,
@@ -236,11 +236,11 @@ function readOrganizationIdHeader(req: Request): string | null {
 
 async function resolveAuthenticatedUser(req: Request): Promise<{
   token: string;
-  auth: Exclude<Awaited<ReturnType<typeof authenticateAccessToken>>, null>;
+  auth: Exclude<Awaited<ReturnType<typeof authenticateUserAccessToken>>, null>;
 } | null> {
   const token = getRequestToken(req);
   if (!token) return null;
-  const auth = await authenticateAccessToken(token);
+  const auth = await authenticateUserAccessToken(token);
   if (!auth) return null;
   return { token, auth };
 }
@@ -257,7 +257,7 @@ function rejectExternalLocalModeRequest(
     res.status(401).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
     return true;
   }
-  if (authenticated.auth.kind !== "device") {
+  if (authenticated.auth.kind !== "mobile") {
     res.status(403).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
     return true;
   }
@@ -362,11 +362,7 @@ router.post("/auth/mobile/pairing-token", async (req: Request, res: Response) =>
   await createMobilePairingTokenForRequest(req, res);
 });
 
-async function pairMobileDeviceForRequest(
-  req: Request,
-  res: Response,
-  clientType: "mobile" | "cli" = "mobile",
-): Promise<void> {
+async function pairMobileDeviceForRequest(req: Request, res: Response): Promise<void> {
   const pairingToken = typeof req.body?.pairingToken === "string" ? req.body.pairingToken : "";
   const installId = typeof req.body?.installId === "string" ? req.body.installId : "";
   const deviceName = typeof req.body?.deviceName === "string" ? req.body.deviceName : undefined;
@@ -390,7 +386,6 @@ async function pairMobileDeviceForRequest(
       deviceName,
       appVersion,
       platform,
-      clientType,
     });
     res.json(result);
   } catch (error) {
@@ -404,10 +399,6 @@ async function pairMobileDeviceForRequest(
 
 router.post("/auth/mobile/pair", async (req: Request, res: Response) => {
   await pairMobileDeviceForRequest(req, res);
-});
-
-router.post("/auth/client/pair", async (req: Request, res: Response) => {
-  await pairMobileDeviceForRequest(req, res, "cli");
 });
 
 async function listMobileDevicesForRequest(req: Request, res: Response): Promise<void> {
@@ -721,12 +712,9 @@ router.get("/auth/me", async (req: Request, res: Response) => {
     }
 
     const canonicalOrgId = isLocalMode() ? await getCanonicalLocalOrganizationId() : null;
-    const orgMemberships =
-      authenticated.auth.kind === "agent"
-        ? []
-        : canonicalOrgId
-          ? user.orgMemberships.filter((membership) => membership.organizationId === canonicalOrgId)
-          : user.orgMemberships;
+    const orgMemberships = canonicalOrgId
+      ? user.orgMemberships.filter((membership) => membership.organizationId === canonicalOrgId)
+      : user.orgMemberships;
 
     res.json({
       user: {
@@ -747,10 +735,6 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
   if (!authenticated) {
     return res.status(401).json({ error: "Not authenticated" });
   }
-  if (authenticated.auth.kind === "agent") {
-    return res.status(403).json({ error: "Session credentials cannot create bridge tokens" });
-  }
-
   const organizationId = await resolveRequestedOrganizationId(
     authenticated.auth.userId,
     readOrganizationIdHeader(req),
@@ -795,10 +779,7 @@ router.post("/auth/logout", async (req: Request, res: Response) => {
   if (rejectExternalLocalModeRequest(req, res, authenticated)) {
     return;
   }
-  if (authenticated?.auth.kind === "agent") {
-    return res.status(403).json({ error: "Session credentials are managed by Trace" });
-  }
-  if (authenticated?.auth.kind === "device") {
+  if (authenticated?.auth.kind === "mobile") {
     await revokeMobileDeviceByToken(authenticated.token);
   }
   if (authenticated && pushToken) {
