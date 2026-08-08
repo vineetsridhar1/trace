@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { realtimeBackplane } from "./realtime-backplane.js";
-import { RuntimeDirectory, type RuntimeDescriptor } from "./runtime-directory.js";
+import {
+  RUNTIME_DIRECTORY_REGISTER_SCRIPT,
+  RuntimeDirectory,
+  type RuntimeDescriptor,
+} from "./runtime-directory.js";
 
 function descriptor(overrides: Partial<RuntimeDescriptor> = {}): RuntimeDescriptor {
   const now = Date.now();
@@ -47,5 +51,11 @@ describe("RuntimeDirectory descriptor ordering", () => {
     });
 
     expect(directory.get(current.key)?.lastHeartbeat).toBe(current.lastHeartbeat);
+  });
+
+  it("preserves empty JSON arrays when claiming through Redis Lua", () => {
+    expect(RUNTIME_DIRECTORY_REGISTER_SCRIPT).toContain(
+      "cjson.encode_empty_table_as_object(false);",
+    );
   });
 });

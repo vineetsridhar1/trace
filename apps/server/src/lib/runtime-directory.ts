@@ -7,6 +7,12 @@ const DIRECTORY_KEY_PREFIX = "trace:runtime:v1";
 const DIRECTORY_EPOCH_KEY = "trace:runtime-epoch:v1";
 const PRESENCE_CHANGED = "runtime_presence_changed";
 
+// Redis Lua's cjson encoder treats empty Lua tables as JSON objects by
+// default. Runtime descriptors contain empty arrays during cloud startup
+// (notably supportedTools and registeredRepoIds), so preserve array shape
+// before storing any descriptor mutated inside Lua.
+const PRESERVE_JSON_ARRAYS_IN_LUA = "cjson.encode_empty_table_as_object(false); ";
+
 export type RuntimeDescriptor = {
   key: string;
   id: string;
@@ -26,6 +32,8 @@ export type RuntimeDescriptor = {
   lastHeartbeat: number;
   expiresAt: number;
 };
+
+export const RUNTIME_DIRECTORY_REGISTER_SCRIPT = `${PRESERVE_JSON_ARRAYS_IN_LUA}local epoch=redis.call('incr',KEYS[2]); local descriptor=cjson.decode(ARGV[1]); descriptor.ownershipEpoch=epoch; local encoded=cjson.encode(descriptor); redis.call('set',KEYS[1],encoded,'PX',ARGV[2]); return encoded`;
 
 type PresenceMessage =
   | { action: "upsert"; descriptor: RuntimeDescriptor }
@@ -135,7 +143,7 @@ export class RuntimeDirectory {
   async register(descriptor: RuntimeDescriptor, ttlMs: number): Promise<RuntimeDescriptor> {
     if (!realtimeBackplane.enabled) return this.registerLocal(descriptor);
     const result = await redis.eval(
-      "local epoch=redis.call('incr',KEYS[2]); local descriptor=cjson.decode(ARGV[1]); descriptor.ownershipEpoch=epoch; local encoded=cjson.encode(descriptor); redis.call('set',KEYS[1],encoded,'PX',ARGV[2]); return encoded",
+      RUNTIME_DIRECTORY_REGISTER_SCRIPT,
       2,
       this.redisKey(descriptor.key),
       DIRECTORY_EPOCH_KEY,
@@ -226,7 +234,7 @@ export class RuntimeDirectory {
 
     if (realtimeBackplane.enabled) {
       const result = await redis.eval(
-        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.lastHeartbeat=math.max(tonumber(ARGV[2]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[3]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[4]); return encoded",
+        `${PRESERVE_JSON_ARRAYS_IN_LUA}local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.lastHeartbeat=math.max(tonumber(ARGV[2]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[3]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[4]); return encoded`,
         1,
         this.redisKey(runtimeKey),
         connectionGeneration,
@@ -264,7 +272,7 @@ export class RuntimeDirectory {
     };
     if (realtimeBackplane.enabled) {
       const result = await redis.eval(
-        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.registeredRepoIds=cjson.decode(ARGV[2]); current.lastHeartbeat=math.max(tonumber(ARGV[3]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded",
+        `${PRESERVE_JSON_ARRAYS_IN_LUA}local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.registeredRepoIds=cjson.decode(ARGV[2]); current.lastHeartbeat=math.max(tonumber(ARGV[3]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded`,
         1,
         this.redisKey(runtimeKey),
         connectionGeneration,
@@ -309,7 +317,7 @@ export class RuntimeDirectory {
     };
     if (realtimeBackplane.enabled) {
       const result = await redis.eval(
-        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; local status=cjson.decode(ARGV[2]); local statuses=current.linkedCheckoutStatuses or {}; local updated={}; for i=1,#statuses do if statuses[i].repoId ~= status.repoId then table.insert(updated,statuses[i]) end end; table.insert(updated,status); current.linkedCheckoutStatuses=updated; current.linkedCheckoutStatusObservedAt=current.linkedCheckoutStatusObservedAt or {}; current.linkedCheckoutStatusObservedAt[status.repoId]=tonumber(ARGV[3]); current.lastHeartbeat=math.max(tonumber(ARGV[3]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded",
+        `${PRESERVE_JSON_ARRAYS_IN_LUA}local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; local status=cjson.decode(ARGV[2]); local statuses=current.linkedCheckoutStatuses or {}; local updated={}; for i=1,#statuses do if statuses[i].repoId ~= status.repoId then table.insert(updated,statuses[i]) end end; table.insert(updated,status); current.linkedCheckoutStatuses=updated; current.linkedCheckoutStatusObservedAt=current.linkedCheckoutStatusObservedAt or {}; current.linkedCheckoutStatusObservedAt[status.repoId]=tonumber(ARGV[3]); current.lastHeartbeat=math.max(tonumber(ARGV[3]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded`,
         1,
         this.redisKey(runtimeKey),
         connectionGeneration,
