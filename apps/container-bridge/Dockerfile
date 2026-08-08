@@ -12,8 +12,15 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gh && \
     rm -rf /var/lib/apt/lists/*
 
-# Install coding tool CLIs
-RUN npm install -g pnpm@10.7.0 @anthropic-ai/claude-code @openai/codex @earendil-works/pi-coding-agent
+# Install coding tool CLIs and the exact Playwright CLI/media runtime validated by
+# the image smoke below. Browser downloads stay disabled: Trace uses Debian's
+# system Chromium and installs only Playwright's matching FFmpeg build.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+RUN npm install -g pnpm@10.7.0 @anthropic-ai/claude-code @openai/codex \
+    @earendil-works/pi-coding-agent @playwright/cli@0.1.18 \
+    playwright@1.63.0-alpha-2026-08-05 && \
+    playwright install ffmpeg && \
+    chmod -R a+rX /opt/ms-playwright
 
 WORKDIR /app
 
@@ -27,6 +34,7 @@ COPY packages/shared/package.json ./node_modules/@trace/shared/
 
 # Copy pre-built container-bridge
 COPY apps/container-bridge/dist/ ./dist/
+COPY apps/container-bridge/playwright-cli.config.json /opt/trace/playwright-cli.config.json
 
 # Entrypoint boots the app-session backing services (Redis, Postgres) before the bridge.
 COPY apps/container-bridge/docker-entrypoint.sh /usr/local/bin/trace-entrypoint
@@ -66,6 +74,22 @@ RUN mkdir -p /home/coder/.claude/skills /home/coder/.codex/skills && \
     cp -R /opt/trace/skills/author-design-system /home/coder/.claude/skills/author-design-system && \
     cp -R /opt/trace/skills/author-design-system /home/coder/.codex/skills/author-design-system
 RUN mkdir -p /home/coder/.ssh && chmod 700 /home/coder/.ssh
+
+# Fail the image build if system Chromium, the pinned CLI, or FFmpeg recording
+# cannot work together without downloading anything during an agent session.
+RUN set -eu; \
+    smoke_dir=/tmp/trace-playwright-image-smoke; \
+    mkdir -p "$smoke_dir"; \
+    export PLAYWRIGHT_CLI_SESSION=trace-image-smoke; \
+    export PLAYWRIGHT_MCP_OUTPUT_DIR="$smoke_dir"; \
+    playwright-cli --config=/opt/trace/playwright-cli.config.json open about:blank; \
+    playwright-cli video-start "$smoke_dir/smoke.webm"; \
+    playwright-cli run-code "async (page) => { await page.setContent('<main><button>Record</button></main>'); await page.getByRole('button').click(); await page.waitForTimeout(250); }"; \
+    playwright-cli video-stop; \
+    test -s "$smoke_dir/smoke.webm"; \
+    playwright-cli close; \
+    playwright-cli delete-data; \
+    rm -rf "$smoke_dir"
 
 # Pre-warm the pnpm content-addressed store from the starter lockfile so the
 # first `pnpm install` in a session hardlinks from cache instead of hitting the

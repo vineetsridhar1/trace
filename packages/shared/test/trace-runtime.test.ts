@@ -21,6 +21,16 @@ describe("ensureTraceRuntime", () => {
     const runtime = await ensureTraceRuntime(join(parent, "runtime"));
 
     expect(await readFile(join(runtime.binDir, "trace"), "utf8")).toContain("TRACE_NODE_BINARY");
+    const browserVideoSkill = await readFile(
+      join(runtime.skillsDir, "browser-video", "SKILL.md"),
+      "utf8",
+    );
+    expect(browserVideoSkill).toContain("Choose one disposition");
+    expect(browserVideoSkill).toContain("Browser-app fit");
+    expect(browserVideoSkill).toContain("Third-party controllability");
+    expect(browserVideoSkill).toContain("Reversible data plan");
+    expect(browserVideoSkill).toContain('artifact push video "$TRACE_BROWSER_VIDEO_DIR');
+    expect(browserVideoSkill).toContain("Never override the session name");
     const visualPlanSkill = await readFile(
       join(runtime.skillsDir, "visual-plan", "SKILL.md"),
       "utf8",

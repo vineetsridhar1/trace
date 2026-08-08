@@ -49,6 +49,8 @@ describe("buildChildProcessEnv", () => {
       TRACE_API_URL: "https://trace.example/",
       TRACE_INVOCATION_TOKEN: "trace-token",
       TRACE_SKILLS_DIR: "/trace/runtime/skills",
+      PLAYWRIGHT_CLI_SESSION: "trace-123",
+      PLAYWRIGHT_MCP_OUTPUT_DIR: "/tmp/trace-playwright/123",
       LARGE_ONE: "a".repeat(15 * 1024),
       LARGE_TWO: "b".repeat(15 * 1024),
       LARGE_THREE: "c".repeat(15 * 1024),
@@ -62,5 +64,7 @@ describe("buildChildProcessEnv", () => {
     expect(env.TRACE_API_URL).toBe("https://trace.example/");
     expect(env.TRACE_INVOCATION_TOKEN).toBe("trace-token");
     expect(env.TRACE_SKILLS_DIR).toBe("/trace/runtime/skills");
+    expect(env.PLAYWRIGHT_CLI_SESSION).toBe("trace-123");
+    expect(env.PLAYWRIGHT_MCP_OUTPUT_DIR).toBe("/tmp/trace-playwright/123");
   });
 });

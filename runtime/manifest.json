@@ -1,10 +1,12 @@
 {
   "schemaVersion": 1,
-  "version": 11,
+  "version": 12,
   "protocolVersion": 1,
   "files": [
     "bin/trace",
     "bin/trace.mjs",
+    "skills/browser-video/SKILL.md",
+    "skills/browser-video/agents/openai.yaml",
     "skills/request-user-input/SKILL.md",
     "skills/trace-artifacts/SKILL.md",
     "skills/visual-plan/SKILL.md",

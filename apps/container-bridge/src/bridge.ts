@@ -64,6 +64,11 @@ import { exportPdfToTarget } from "./pdf-export.js";
 import { exportSelfContainedHtmlToTarget } from "./self-contained-export.js";
 import { materializeDesignSystemPackage } from "./design-system-package.js";
 import { prepareReadOnlySourceCheckout } from "./design-system-source.js";
+import {
+  cleanupPlaywrightInvocationSession,
+  createPlaywrightInvocationSession,
+  type PlaywrightInvocationSession,
+} from "./playwright-session.js";
 
 const execFileAsync = promisify(execFile);
 const BRIDGE_PROTOCOL_VERSION = 2;
@@ -118,6 +123,7 @@ export class ContainerBridge implements IBridgeClient {
   private reportedToolSessionIds = new Map<string, string>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private shutdownPromise: Promise<void> | null = null;
   private consecutiveFailures = 0;
   /** Max consecutive connection failures before the process exits, allowing the machine to stop. */
   private static MAX_RECONNECT_FAILURES = 20;
@@ -137,6 +143,7 @@ export class ContainerBridge implements IBridgeClient {
   private pendingInputToolUseIds = new Map<string, string>();
   private sessionRunSequence = new Map<string, number>();
   private activeRuns = new Map<string, number>();
+  private playwrightSessions = new Map<string, PlaywrightInvocationSession>();
   private outbox = new BridgeOutbox();
   private terminalManager: TerminalManager;
   private managedProcessManager: ManagedProcessManager;
@@ -224,6 +231,15 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   disconnect(): void {
+    void this.shutdown();
+  }
+
+  shutdown(): Promise<void> {
+    this.shutdownPromise ??= this.performShutdown();
+    return this.shutdownPromise;
+  }
+
+  private async performShutdown(): Promise<void> {
     this.stopHeartbeat();
     this.terminalManager.destroyAll();
     this.managedProcessManager.destroyAll();
@@ -235,11 +251,15 @@ export class ContainerBridge implements IBridgeClient {
       this.cancelRun(sessionId);
       adapter.abort();
     }
+    const browserCleanup = [...this.playwrightSessions.keys()].map((sessionId) =>
+      this.cleanupPlaywrightSession(sessionId),
+    );
     this.adapters.clear();
     this.outbox.clear();
     this.ws?.close();
     this.ws = null;
     this.pendingInputToolUseIds.clear();
+    await Promise.allSettled(browserCleanup);
   }
 
   send(data: BridgeMessage): void {
@@ -265,7 +285,7 @@ export class ContainerBridge implements IBridgeClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectTimer) return;
+    if (this.reconnectTimer || this.shutdownPromise) return;
     this.consecutiveFailures++;
 
     if (this.consecutiveFailures >= ContainerBridge.MAX_RECONNECT_FAILURES) {
@@ -322,6 +342,28 @@ export class ContainerBridge implements IBridgeClient {
     this.activeRuns.delete(sessionId);
   }
 
+  private async preparePlaywrightSession(
+    sessionId: string,
+    invocationId: string | undefined,
+  ): Promise<PlaywrightInvocationSession | null> {
+    await this.cleanupPlaywrightSession(sessionId);
+    if (!invocationId) return null;
+
+    const session = await createPlaywrightInvocationSession({ invocationId });
+    this.playwrightSessions.set(sessionId, session);
+    return session;
+  }
+
+  private async cleanupPlaywrightSession(
+    sessionId: string,
+    expected?: PlaywrightInvocationSession | null,
+  ): Promise<void> {
+    const current = this.playwrightSessions.get(sessionId);
+    if (!current || (expected && current !== expected)) return;
+    this.playwrightSessions.delete(sessionId);
+    await cleanupPlaywrightInvocationSession(current);
+  }
+
   private isCurrentRun(sessionId: string, adapter: CodingToolAdapter, runId: number): boolean {
     return this.adapters.get(sessionId) === adapter && this.activeRuns.get(sessionId) === runId;
   }
@@ -367,6 +409,7 @@ export class ContainerBridge implements IBridgeClient {
           runtimeEnv: cmd.runtimeEnv,
         }).catch((err) => {
           console.error(`[container-bridge] runPrompt failed for ${cmd.sessionId}:`, err);
+          void this.cleanupPlaywrightSession(cmd.sessionId);
           this.send({
             type: "session_output",
             sessionId: cmd.sessionId,
@@ -586,6 +629,7 @@ export class ContainerBridge implements IBridgeClient {
           this.cancelRun(cmd.sessionId);
           adapter.abort();
         }
+        void this.cleanupPlaywrightSession(cmd.sessionId);
         break;
       }
 
@@ -595,6 +639,7 @@ export class ContainerBridge implements IBridgeClient {
           this.cancelRun(cmd.sessionId);
           adapter.abort();
         }
+        void this.cleanupPlaywrightSession(cmd.sessionId);
         break;
       }
 
@@ -614,6 +659,7 @@ export class ContainerBridge implements IBridgeClient {
         this.reportedToolSessionIds.delete(cmd.sessionId);
         this.pendingInputToolUseIds.delete(cmd.sessionId);
         this.sessionRunSequence.delete(cmd.sessionId);
+        void this.cleanupPlaywrightSession(cmd.sessionId);
         const wasReadOnly = this.readOnlySessions.has(cmd.sessionId);
         this.readOnlySessions.delete(cmd.sessionId);
         // Capture the workdir before dropping it from the map — the app
@@ -1057,8 +1103,12 @@ export class ContainerBridge implements IBridgeClient {
     const resolvedTool = tool ?? this.defaultTool;
     await ensureToolReady(resolvedTool);
     const traceRuntime = await this.traceRuntime;
+    const playwrightSession = await this.preparePlaywrightSession(
+      sessionId,
+      runtimeEnv?.TRACE_INVOCATION_ID,
+    );
     const invocationEnv = buildTraceInvocationEnv({
-      runtimeEnv,
+      runtimeEnv: { ...runtimeEnv, ...playwrightSession?.env },
       serverUrl: this.serverUrl,
       skillsDir: traceRuntime.skillsDir,
       binDir: traceRuntime.binDir,
@@ -1128,6 +1178,7 @@ export class ContainerBridge implements IBridgeClient {
     const runId = this.startRun(sessionId);
     adapter.abort();
 
+    let browserCleanupStarted = false;
     const completeRun = () => {
       const complete = () => this.send({ type: "session_complete", sessionId });
       if (resolvedTool !== "codex") {
@@ -1138,6 +1189,17 @@ export class ContainerBridge implements IBridgeClient {
         console.warn("[container-bridge] failed to persist Codex session credential:", error);
         complete();
       });
+    };
+    const completeRunAfterBrowserCleanup = () => {
+      if (browserCleanupStarted) return;
+      browserCleanupStarted = true;
+      void this.cleanupPlaywrightSession(sessionId, playwrightSession).then(
+        completeRun,
+        (error: unknown) => {
+          console.warn("[container-bridge] failed to clean Playwright session:", error);
+          completeRun();
+        },
+      );
     };
 
     const activeAdapter = adapter;
@@ -1152,6 +1214,7 @@ export class ContainerBridge implements IBridgeClient {
       this.reportedToolSessionIds.delete(sessionId);
       this.pendingInputToolUseIds.delete(sessionId);
       cleanupImages();
+      void this.cleanupPlaywrightSession(sessionId, playwrightSession);
       this.send({
         type: "tool_session_missing",
         sessionId,
@@ -1232,7 +1295,7 @@ export class ContainerBridge implements IBridgeClient {
             this.pendingInputToolUseIds.delete(sessionId);
           }
           this.finishRun(sessionId, runId);
-          completeRun();
+          completeRunAfterBrowserCleanup();
           activeAdapter.abort();
           cleanupImages();
         }
@@ -1244,7 +1307,7 @@ export class ContainerBridge implements IBridgeClient {
           this.pendingInputToolUseIds.delete(sessionId);
         }
         this.finishRun(sessionId, runId);
-        completeRun();
+        completeRunAfterBrowserCleanup();
         cleanupImages();
       },
       interactionMode: interactionMode as "code" | "plan" | "ask" | undefined,
