@@ -104,11 +104,6 @@ export async function discoverRuntimeProviderCatalog(input: {
   const entries = await Promise.all(
     input.tools.map(async (tool): Promise<CodingToolCatalogEntry> => {
       if (tool === "custom") {
-        const native = tool === "codex"
-          ? await discoverCodexModels(executable)
-          : tool === "pi"
-            ? { models: await discoverPiModels(executable), reasoningEfforts: ["off", "minimal", "low", "medium", "high", "xhigh"] }
-            : null;
         return {
           tool,
           availability: "ready",
@@ -142,6 +137,14 @@ export async function discoverRuntimeProviderCatalog(input: {
           timeout: PROBE_TIMEOUT_MS,
           windowsHide: true,
         });
+        const native = tool === "codex"
+          ? await discoverCodexModels(executable)
+          : tool === "pi"
+            ? {
+                models: await discoverPiModels(executable),
+                reasoningEfforts: ["off", "minimal", "low", "medium", "high", "xhigh"],
+              }
+            : null;
         return {
           tool,
           availability: "ready",
