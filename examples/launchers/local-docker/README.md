@@ -118,3 +118,6 @@ docker ps --filter name=trace-rt- -q | xargs -r docker rm -f
   `localhost`.
 - **Bridge URL rejected at start** — the server refuses `localhost`/private-IP bridge URLs; use the
   `host.docker.internal` public URL as above, or set `TRACE_CLOUD_BRIDGE_URL` explicitly.
+- **`TRACE_SKILLS_DIR` is unset** — rebuild `trace-agent-runtime:dev` using step 1 and start a new
+  session. Updating the local Trace server does not rebuild an existing runtime image, and running
+  containers keep the bridge and environment from the image they started with.
