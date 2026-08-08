@@ -570,7 +570,9 @@ export class SessionRouter {
     const descriptor = realtimeBackplane.enabled
       ? await runtimeDirectory.register(pendingDescriptor, SessionRouter.DIRECTORY_TTL_MS)
       : runtimeDirectory.registerLocal(pendingDescriptor);
-    if (runtimeDirectory.get(runtimeKey)?.connectionGeneration !== descriptor.connectionGeneration) {
+    if (
+      runtimeDirectory.get(runtimeKey)?.connectionGeneration !== descriptor.connectionGeneration
+    ) {
       if (runtime.ws.readyState === runtime.ws.OPEN) {
         runtime.ws.close(1012, "Runtime ownership replaced");
       }
@@ -1359,8 +1361,8 @@ export class SessionRouter {
     return this.requestRuntimeResponse(
       runtimeId,
       {
-      type: "list_branches",
-      repoId,
+        type: "list_branches",
+        repoId,
       },
       this.pendingBranchRequests,
       timeoutMs,
@@ -1520,41 +1522,19 @@ export class SessionRouter {
    * Ask a runtime to list files in a working directory.
    * Returns a promise that resolves when the bridge responds with files_result.
    */
-  async listFiles(
+  listFiles(
     runtimeId: string,
     sessionId: string,
     workdirHint?: string,
     timeoutMs = 15_000,
   ): Promise<string[]> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: "list_files",
-      requestId,
-      sessionId,
-      workdirHint,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<string[]>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingFileRequests.delete(requestId);
-        reject(new Error("File list request timed out"));
-      }, timeoutMs);
-
-      this.pendingFileRequests.set(requestId, {
-        runtimeId,
-        resolve: (files) => {
-          clearTimeout(timer);
-          resolve(files);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      { type: "list_files", sessionId, workdirHint },
+      this.pendingFileRequests,
+      timeoutMs,
+      "File list request timed out",
+    );
   }
 
   /** Resolve a pending file list request (called from bridge handler). */
@@ -1579,43 +1559,20 @@ export class SessionRouter {
    * Ask a runtime to read a file's contents.
    * Returns a promise that resolves when the bridge responds with file_content_result.
    */
-  async readFile(
+  readFile(
     runtimeId: string,
     sessionId: string,
     relativePath: string,
     workdirHint?: string,
     timeoutMs = 15_000,
   ): Promise<string> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: "read_file",
-      requestId,
-      sessionId,
-      relativePath,
-      workdirHint,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingFileContentRequests.delete(requestId);
-        reject(new Error("File read request timed out"));
-      }, timeoutMs);
-
-      this.pendingFileContentRequests.set(requestId, {
-        runtimeId,
-        resolve: (content) => {
-          clearTimeout(timer);
-          resolve(content);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      { type: "read_file", sessionId, relativePath, workdirHint },
+      this.pendingFileContentRequests,
+      timeoutMs,
+      "File read request timed out",
+    );
   }
 
   /** Resolve a pending file content request (called from bridge handler). */
@@ -1639,7 +1596,7 @@ export class SessionRouter {
   /**
    * Ask a runtime to write a file's contents to its live workspace.
    */
-  async writeFile(
+  writeFile(
     runtimeId: string,
     sessionId: string,
     relativePath: string,
@@ -1648,38 +1605,20 @@ export class SessionRouter {
     expectedContent?: string,
     timeoutMs = 15_000,
   ): Promise<void> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: expectedContent === undefined ? "write_file" : "write_file_guarded",
-      requestId,
-      sessionId,
-      relativePath,
-      content,
-      workdirHint,
-      ...(expectedContent === undefined ? {} : { expectedContent }),
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingFileWriteRequests.delete(requestId);
-        reject(new Error("File write request timed out"));
-      }, timeoutMs);
-
-      this.pendingFileWriteRequests.set(requestId, {
-        runtimeId,
-        resolve: () => {
-          clearTimeout(timer);
-          resolve();
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      {
+        type: expectedContent === undefined ? "write_file" : "write_file_guarded",
+        sessionId,
+        relativePath,
+        content,
+        workdirHint,
+        ...(expectedContent === undefined ? {} : { expectedContent }),
+      },
+      this.pendingFileWriteRequests,
+      timeoutMs,
+      "File write request timed out",
+    );
   }
 
   /** Resolve a pending file write request (called from bridge handler). */
@@ -1698,7 +1637,7 @@ export class SessionRouter {
   /**
    * Ask a runtime to commit the current file changes in its live workspace.
    */
-  async commitFileChanges(
+  commitFileChanges(
     runtimeId: string,
     sessionId: string,
     message?: string | null,
@@ -1706,37 +1645,19 @@ export class SessionRouter {
     paths?: string[],
     timeoutMs = 60_000,
   ): Promise<string> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: paths?.length ? "commit_scoped_file_changes" : "commit_file_changes",
-      requestId,
-      sessionId,
-      message,
-      workdirHint,
-      ...(paths?.length ? { paths } : {}),
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingFileCommitRequests.delete(requestId);
-        reject(new Error("File commit request timed out"));
-      }, timeoutMs);
-
-      this.pendingFileCommitRequests.set(requestId, {
-        runtimeId,
-        resolve: (commitSha) => {
-          clearTimeout(timer);
-          resolve(commitSha);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      {
+        type: paths?.length ? "commit_scoped_file_changes" : "commit_file_changes",
+        sessionId,
+        message,
+        workdirHint,
+        ...(paths?.length ? { paths } : {}),
+      },
+      this.pendingFileCommitRequests,
+      timeoutMs,
+      "File commit request timed out",
+    );
   }
 
   /** Resolve a pending file commit request (called from bridge handler). */
@@ -1759,41 +1680,19 @@ export class SessionRouter {
     }
   }
 
-  async listWorktreeChanges(
+  listWorktreeChanges(
     runtimeId: string,
     sessionId: string,
     workdirHint?: string,
     timeoutMs = 15_000,
   ): Promise<BridgeWorktreeChangesPayload> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: "worktree_changes",
-      requestId,
-      sessionId,
-      workdirHint,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<BridgeWorktreeChangesPayload>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingWorktreeChangesRequests.delete(requestId);
-        reject(new Error("Worktree changes request timed out"));
-      }, timeoutMs);
-
-      this.pendingWorktreeChangesRequests.set(requestId, {
-        runtimeId,
-        resolve: (result) => {
-          clearTimeout(timer);
-          resolve(result);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      { type: "worktree_changes", sessionId, workdirHint },
+      this.pendingWorktreeChangesRequests,
+      timeoutMs,
+      "Worktree changes request timed out",
+    );
   }
 
   resolveWorktreeChangesRequest(
@@ -1815,43 +1714,20 @@ export class SessionRouter {
     }
   }
 
-  async revertWorktreeFile(
+  revertWorktreeFile(
     runtimeId: string,
     sessionId: string,
     filePath: string,
     workdirHint?: string,
     timeoutMs = 15_000,
   ): Promise<void> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: "revert_worktree_file",
-      requestId,
-      sessionId,
-      filePath,
-      workdirHint,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingRevertWorktreeFileRequests.delete(requestId);
-        reject(new Error("Revert file request timed out"));
-      }, timeoutMs);
-
-      this.pendingRevertWorktreeFileRequests.set(requestId, {
-        runtimeId,
-        resolve: () => {
-          clearTimeout(timer);
-          resolve();
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      { type: "revert_worktree_file", sessionId, filePath, workdirHint },
+      this.pendingRevertWorktreeFileRequests,
+      timeoutMs,
+      "Revert file request timed out",
+    );
   }
 
   resolveRevertWorktreeFileRequest(
@@ -1873,43 +1749,20 @@ export class SessionRouter {
   /**
    * Ask a runtime to compute the branch diff (changed files vs base branch).
    */
-  async branchDiff(
+  branchDiff(
     runtimeId: string,
     sessionId: string,
     baseBranch: string,
     workdirHint?: string,
     timeoutMs = 30_000,
   ): Promise<BridgeBranchDiffFile[]> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: "branch_diff",
-      requestId,
-      sessionId,
-      baseBranch,
-      workdirHint,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<BridgeBranchDiffFile[]>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingBranchDiffRequests.delete(requestId);
-        reject(new Error("Branch diff request timed out"));
-      }, timeoutMs);
-
-      this.pendingBranchDiffRequests.set(requestId, {
-        runtimeId,
-        resolve: (files) => {
-          clearTimeout(timer);
-          resolve(files);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      { type: "branch_diff", sessionId, baseBranch, workdirHint },
+      this.pendingBranchDiffRequests,
+      timeoutMs,
+      "Branch diff request timed out",
+    );
   }
 
   /** Resolve a pending branch diff request (called from bridge handler). */
@@ -1933,7 +1786,7 @@ export class SessionRouter {
   /**
    * Ask a runtime to read a file's content at a specific git ref.
    */
-  async fileAtRef(
+  fileAtRef(
     runtimeId: string,
     sessionId: string,
     filePath: string,
@@ -1941,37 +1794,13 @@ export class SessionRouter {
     workdirHint?: string,
     timeoutMs = 15_000,
   ): Promise<string> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: "file_at_ref",
-      requestId,
-      sessionId,
-      filePath,
-      ref,
-      workdirHint,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingFileAtRefRequests.delete(requestId);
-        reject(new Error("File at ref request timed out"));
-      }, timeoutMs);
-
-      this.pendingFileAtRefRequests.set(requestId, {
-        runtimeId,
-        resolve: (content) => {
-          clearTimeout(timer);
-          resolve(content);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      { type: "file_at_ref", sessionId, filePath, ref, workdirHint },
+      this.pendingFileAtRefRequests,
+      timeoutMs,
+      "File at ref request timed out",
+    );
   }
 
   /** Resolve a pending file-at-ref request (called from bridge handler). */
@@ -1995,7 +1824,7 @@ export class SessionRouter {
   /**
    * Ask a runtime to list skills (user + project SKILL.md files).
    */
-  async listSkills(
+  listSkills(
     runtimeId: string,
     sessionId: string,
     options?: {
@@ -2011,37 +1840,13 @@ export class SessionRouter {
       includeProjectSkills = true,
       timeoutMs = 15_000,
     } = options ?? {};
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: "list_skills",
-      requestId,
-      sessionId,
-      workdirHint,
-      includeUserSkills,
-      includeProjectSkills,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<BridgeSkillInfo[]>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingSkillsRequests.delete(requestId);
-        reject(new Error("Skills list request timed out"));
-      }, timeoutMs);
-
-      this.pendingSkillsRequests.set(requestId, {
-        runtimeId,
-        resolve: (skills) => {
-          clearTimeout(timer);
-          resolve(skills);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      { type: "list_skills", sessionId, workdirHint, includeUserSkills, includeProjectSkills },
+      this.pendingSkillsRequests,
+      timeoutMs,
+      "Skills list request timed out",
+    );
   }
 
   /** Resolve a pending skills list request (called from bridge handler). */
@@ -2062,39 +1867,18 @@ export class SessionRouter {
     }
   }
 
-  async getLinkedCheckoutStatus(
+  getLinkedCheckoutStatus(
     runtimeId: string,
     repoId: string,
     timeoutMs = 15_000,
   ): Promise<BridgeLinkedCheckoutStatus> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: "linked_checkout_status",
-      requestId,
-      repoId,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<BridgeLinkedCheckoutStatus>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingLinkedCheckoutStatusRequests.delete(requestId);
-        reject(new Error("Linked checkout status request timed out"));
-      }, timeoutMs);
-
-      this.pendingLinkedCheckoutStatusRequests.set(requestId, {
-        runtimeId,
-        resolve: (status) => {
-          clearTimeout(timer);
-          resolve(status);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      { type: "linked_checkout_status", repoId },
+      this.pendingLinkedCheckoutStatusRequests,
+      timeoutMs,
+      "Linked checkout status request timed out",
+    );
   }
 
   resolveLinkedCheckoutStatusRequest(
@@ -2110,41 +1894,19 @@ export class SessionRouter {
     pending.resolve(status);
   }
 
-  async getLinkedCheckoutChangedFile(
+  getLinkedCheckoutChangedFile(
     runtimeId: string,
     repoId: string,
     filePath: string,
     timeoutMs = 15_000,
   ): Promise<BridgeLinkedCheckoutChangedFilePreview> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: "linked_checkout_changed_file",
-      requestId,
-      repoId,
-      filePath,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<BridgeLinkedCheckoutChangedFilePreview>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingLinkedCheckoutChangedFileRequests.delete(requestId);
-        reject(new Error("Linked checkout changed file request timed out"));
-      }, timeoutMs);
-
-      this.pendingLinkedCheckoutChangedFileRequests.set(requestId, {
-        runtimeId,
-        resolve: (file) => {
-          clearTimeout(timer);
-          resolve(file);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      { type: "linked_checkout_changed_file", repoId, filePath },
+      this.pendingLinkedCheckoutChangedFileRequests,
+      timeoutMs,
+      "Linked checkout changed file request timed out",
+    );
   }
 
   resolveLinkedCheckoutChangedFileRequest(
@@ -2207,38 +1969,18 @@ export class SessionRouter {
     );
   }
 
-  private async requestLinkedCheckoutAction(
+  private requestLinkedCheckoutAction(
     runtimeId: string,
     command: Record<string, unknown>,
     timeoutMs = 30_000,
   ): Promise<BridgeLinkedCheckoutActionResultPayload> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      ...command,
-      requestId,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<BridgeLinkedCheckoutActionResultPayload>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingLinkedCheckoutActionRequests.delete(requestId);
-        reject(new Error("Linked checkout action request timed out"));
-      }, timeoutMs);
-
-      this.pendingLinkedCheckoutActionRequests.set(requestId, {
-        runtimeId,
-        resolve: (actionResult) => {
-          clearTimeout(timer);
-          resolve(actionResult);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      command,
+      this.pendingLinkedCheckoutActionRequests,
+      timeoutMs,
+      "Linked checkout action request timed out",
+    );
   }
 
   linkLinkedCheckoutRepo(
@@ -2355,7 +2097,7 @@ export class SessionRouter {
     pending.resolve(result);
   }
 
-  async inspectSessionCurrentBranch(
+  inspectSessionCurrentBranch(
     runtimeId: string,
     input: {
       sessionId: string;
@@ -2363,35 +2105,17 @@ export class SessionRouter {
     },
     timeoutMs = 5_000,
   ): Promise<string | null> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: "session_current_branch",
-      requestId,
-      sessionId: input.sessionId,
-      workdirHint: input.workdirHint ?? undefined,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<string | null>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingSessionCurrentBranchRequests.delete(requestId);
-        reject(new Error("Session current branch request timed out"));
-      }, timeoutMs);
-
-      this.pendingSessionCurrentBranchRequests.set(requestId, {
-        runtimeId,
-        resolve: (branch) => {
-          clearTimeout(timer);
-          resolve(branch);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      {
+        type: "session_current_branch",
+        sessionId: input.sessionId,
+        workdirHint: input.workdirHint ?? undefined,
+      },
+      this.pendingSessionCurrentBranchRequests,
+      timeoutMs,
+      "Session current branch request timed out",
+    );
   }
 
   resolveSessionCurrentBranchRequest(
@@ -2411,7 +2135,7 @@ export class SessionRouter {
     }
   }
 
-  async inspectSessionGitSyncStatus(
+  inspectSessionGitSyncStatus(
     runtimeId: string,
     input: {
       sessionId: string;
@@ -2419,35 +2143,17 @@ export class SessionRouter {
     },
     timeoutMs = 15_000,
   ): Promise<BridgeSessionGitSyncStatus> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
-      type: "session_git_sync_status",
-      requestId,
-      sessionId: input.sessionId,
-      workdirHint: input.workdirHint ?? undefined,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<BridgeSessionGitSyncStatus>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingSessionGitSyncStatusRequests.delete(requestId);
-        reject(new Error("Session git sync status request timed out"));
-      }, timeoutMs);
-
-      this.pendingSessionGitSyncStatusRequests.set(requestId, {
-        runtimeId,
-        resolve: (status) => {
-          clearTimeout(timer);
-          resolve(status);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+    return this.requestRuntimeResponse(
+      runtimeId,
+      {
+        type: "session_git_sync_status",
+        sessionId: input.sessionId,
+        workdirHint: input.workdirHint ?? undefined,
+      },
+      this.pendingSessionGitSyncStatusRequests,
+      timeoutMs,
+      "Session git sync status request timed out",
+    );
   }
 
   resolveSessionGitSyncStatusRequest(

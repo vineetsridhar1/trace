@@ -187,9 +187,9 @@ describe("SessionRouter distributed ownership fencing", () => {
         "repo-1",
       ),
     ).toBe(true);
-    const now = vi.spyOn(Date, "now").mockReturnValue(
-      observedAt + SessionRouter.LINKED_CHECKOUT_SNAPSHOT_TTL_MS + 1,
-    );
+    const now = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(observedAt + SessionRouter.LINKED_CHECKOUT_SNAPSHOT_TTL_MS + 1);
     expect(
       router.isLinkedCheckoutStatusFresh(
         router.getRuntimeMetadata("runtime-reconnected", "org-reconnected")!,
@@ -200,9 +200,9 @@ describe("SessionRouter distributed ownership fencing", () => {
 
     const replacementWs = makeWs();
     await router.registerRuntime({ ...registration, ws: replacementWs });
-    expect(
-      router.getRuntime("runtime-reconnected", "org-reconnected")?.linkedCheckouts.size,
-    ).toBe(0);
+    expect(router.getRuntime("runtime-reconnected", "org-reconnected")?.linkedCheckouts.size).toBe(
+      0,
+    );
     router.dispose();
   });
 
@@ -474,6 +474,26 @@ describe("SessionRouter org-scoped runtime keys", () => {
 });
 
 describe("SessionRouter runtime-pinned bridge responses", () => {
+  it("registers reply correlation before a bridge can respond", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    (ws.send as unknown as ReturnType<typeof vi.fn>).mockImplementation((payload: string) => {
+      const command = JSON.parse(payload) as { requestId: string };
+      router.resolveFileRequest(command.requestId, ["README.md"], undefined, "runtime-1");
+    });
+
+    await router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      organizationId: "org-1",
+      supportedTools: ["codex"],
+    });
+
+    await expect(router.listFiles("runtime-1", "session-1")).resolves.toEqual(["README.md"]);
+  });
+
   it("ignores branch responses from a runtime that did not receive the request", async () => {
     const router = new SessionRouter();
     const ws = makeWs();

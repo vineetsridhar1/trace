@@ -31,6 +31,8 @@ type PresenceMessage =
   | { action: "upsert"; descriptor: RuntimeDescriptor }
   | { action: "remove"; runtimeKey: string; connectionGeneration: string };
 
+type DescriptorUpdate = "installed" | "current" | "stale";
+
 function descriptorFrom(value: unknown): RuntimeDescriptor | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
@@ -115,11 +117,7 @@ export class RuntimeDirectory {
   createDescriptor(
     input: Omit<
       RuntimeDescriptor,
-      | "ownerReplicaId"
-      | "connectionGeneration"
-      | "ownershipEpoch"
-      | "lastHeartbeat"
-      | "expiresAt"
+      "ownerReplicaId" | "connectionGeneration" | "ownershipEpoch" | "lastHeartbeat" | "expiresAt"
     >,
     ttlMs: number,
   ): RuntimeDescriptor {
@@ -149,10 +147,8 @@ export class RuntimeDirectory {
     const stored = descriptorFrom(JSON.parse(result));
     if (!stored) throw new Error("Redis returned an invalid runtime ownership descriptor");
     claimed = stored;
-    const current = this.descriptors.get(claimed.key);
-    if (!current || current.ownershipEpoch <= claimed.ownershipEpoch) {
-      this.descriptors.set(claimed.key, claimed);
-    }
+    const update = this.applyDescriptor(claimed);
+    if (update === "stale") return claimed;
     try {
       await realtimeBackplane.broadcast(PRESENCE_CHANGED, {
         action: "upsert",
@@ -175,7 +171,9 @@ export class RuntimeDirectory {
     this.descriptors.set(claimed.key, claimed);
     void realtimeBackplane
       .broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor: claimed })
-      .catch((error) => console.error("[runtime-directory] local presence broadcast failed:", error));
+      .catch((error) =>
+        console.error("[runtime-directory] local presence broadcast failed:", error),
+      );
     return claimed;
   }
 
@@ -187,7 +185,7 @@ export class RuntimeDirectory {
 
     if (realtimeBackplane.enabled) {
       const result = await redis.eval(
-        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.lastHeartbeat=tonumber(ARGV[2]); current.expiresAt=tonumber(ARGV[3]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[4]); return encoded",
+        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.lastHeartbeat=math.max(tonumber(ARGV[2]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[3]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[4]); return encoded",
         1,
         this.redisKey(runtimeKey),
         connectionGeneration,
@@ -201,7 +199,9 @@ export class RuntimeDirectory {
       descriptor = stored;
     }
 
-    this.descriptors.set(runtimeKey, descriptor);
+    const update = this.applyDescriptor(descriptor);
+    if (update === "stale") return false;
+    if (update === "current") return true;
     await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor });
     return true;
   }
@@ -223,7 +223,7 @@ export class RuntimeDirectory {
     };
     if (realtimeBackplane.enabled) {
       const result = await redis.eval(
-        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.registeredRepoIds=cjson.decode(ARGV[2]); current.lastHeartbeat=tonumber(ARGV[3]); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded",
+        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.registeredRepoIds=cjson.decode(ARGV[2]); current.lastHeartbeat=math.max(tonumber(ARGV[3]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded",
         1,
         this.redisKey(runtimeKey),
         connectionGeneration,
@@ -237,7 +237,9 @@ export class RuntimeDirectory {
       if (!stored) return false;
       descriptor = stored;
     }
-    this.descriptors.set(runtimeKey, descriptor);
+    const update = this.applyDescriptor(descriptor);
+    if (update === "stale") return false;
+    if (update === "current") return true;
     await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor });
     return true;
   }
@@ -266,7 +268,7 @@ export class RuntimeDirectory {
     };
     if (realtimeBackplane.enabled) {
       const result = await redis.eval(
-        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; local status=cjson.decode(ARGV[2]); local statuses=current.linkedCheckoutStatuses or {}; local updated={}; for i=1,#statuses do if statuses[i].repoId ~= status.repoId then table.insert(updated,statuses[i]) end end; table.insert(updated,status); current.linkedCheckoutStatuses=updated; current.linkedCheckoutStatusObservedAt=current.linkedCheckoutStatusObservedAt or {}; current.linkedCheckoutStatusObservedAt[status.repoId]=tonumber(ARGV[3]); current.lastHeartbeat=tonumber(ARGV[3]); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded",
+        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; local status=cjson.decode(ARGV[2]); local statuses=current.linkedCheckoutStatuses or {}; local updated={}; for i=1,#statuses do if statuses[i].repoId ~= status.repoId then table.insert(updated,statuses[i]) end end; table.insert(updated,status); current.linkedCheckoutStatuses=updated; current.linkedCheckoutStatusObservedAt=current.linkedCheckoutStatusObservedAt or {}; current.linkedCheckoutStatusObservedAt[status.repoId]=tonumber(ARGV[3]); current.lastHeartbeat=math.max(tonumber(ARGV[3]),(tonumber(current.lastHeartbeat) or 0)+1); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded",
         1,
         this.redisKey(runtimeKey),
         connectionGeneration,
@@ -280,7 +282,9 @@ export class RuntimeDirectory {
       if (!stored) return false;
       descriptor = stored;
     }
-    this.descriptors.set(runtimeKey, descriptor);
+    const update = this.applyDescriptor(descriptor);
+    if (update === "stale") return false;
+    if (update === "current") return true;
     await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor });
     return true;
   }
@@ -341,6 +345,28 @@ export class RuntimeDirectory {
     return `${DIRECTORY_KEY_PREFIX}:${Buffer.from(runtimeKey).toString("base64url")}`;
   }
 
+  /**
+   * Install only descriptors that are at least as new as local state. A Redis
+   * operation may complete after a replacement connection has already claimed
+   * a higher ownership epoch, so completion order cannot determine ownership.
+   */
+  private applyDescriptor(descriptor: RuntimeDescriptor): DescriptorUpdate {
+    const current = this.descriptors.get(descriptor.key);
+    if (!current) {
+      this.descriptors.set(descriptor.key, descriptor);
+      return "installed";
+    }
+    if (current.ownershipEpoch > descriptor.ownershipEpoch) return "stale";
+    if (current.ownershipEpoch < descriptor.ownershipEpoch) {
+      this.descriptors.set(descriptor.key, descriptor);
+      return "installed";
+    }
+    if (current.connectionGeneration !== descriptor.connectionGeneration) return "stale";
+    if (current.lastHeartbeat > descriptor.lastHeartbeat) return "current";
+    this.descriptors.set(descriptor.key, descriptor);
+    return "installed";
+  }
+
   private applyPresenceEnvelope(envelope: BackplaneEnvelope): void {
     const payload = envelope.payload;
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
@@ -348,14 +374,7 @@ export class RuntimeDirectory {
     if (message.action === "upsert") {
       const descriptor = descriptorFrom(message.descriptor);
       if (!descriptor) return;
-      const current = this.descriptors.get(descriptor.key);
-      if (
-        !current ||
-        current.ownershipEpoch < descriptor.ownershipEpoch ||
-        (current.ownershipEpoch === descriptor.ownershipEpoch &&
-          current.lastHeartbeat <= descriptor.lastHeartbeat)
-      ) {
-        this.descriptors.set(descriptor.key, descriptor);
+      if (this.applyDescriptor(descriptor) === "installed") {
         this.emit({ action: "upsert", descriptor });
       }
       return;
