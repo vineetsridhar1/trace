@@ -6,6 +6,18 @@ import { cn } from "../../../lib/utils";
 import { LAYER_TRANSITION, ToolIcon, getToolLabel, type ToolOptionValue } from "./pickerShared";
 import { useListboxNav } from "./useListboxNav";
 
+function displayModelName(value: string): string {
+  return value
+    .split(/[-_/]/)
+    .map((part) => {
+      if (/^gpt$/i.test(part)) return part.toUpperCase();
+      if (/^\d/.test(part)) return part;
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
+    .join("-")
+    .replace(/-([A-Z])/gu, " $1");
+}
+
 interface ModelLayerProps {
   pickerTool: ToolOptionValue;
   headerLabel: string;
@@ -72,7 +84,12 @@ export function ModelLayer({
           const firstDiscovered = index === recommendedCount;
           const selected = activeModel === option.value;
           return (
-            <div key={option.value}>
+            <motion.div
+              key={option.value}
+              initial={firstDiscovered ? { opacity: 0, height: 0 } : false}
+              animate={{ opacity: 1, height: "auto" }}
+              transition={{ duration: 0.18, delay: firstDiscovered ? 0.03 : 0 }}
+            >
               {firstDiscovered ? (
                 <div className="mb-1 mt-2 border-t border-border/60 px-2 pt-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
                   All available
@@ -90,10 +107,10 @@ export function ModelLayer({
                   selected ? "text-foreground" : "text-muted-foreground",
                 )}
               >
-                <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                <span className="min-w-0 flex-1 truncate">{displayModelName(option.label)}</span>
                 {selected ? <Check className="size-4" /> : null}
               </button>
-            </div>
+            </motion.div>
           );
         })}
         {modelOptions.length > recommendedCount && !showAll ? (
