@@ -55,10 +55,7 @@ export function PendingInputBar({ sessionId, keyboardVisible = false }: PendingI
       return;
     }
     const controller = new AbortController();
-    const planPath = latestPlan.manifest.files.some((file) => file.path === "plan.html")
-      ? "plan.html"
-      : "plan.mdx";
-    const path = `${getActiveApiUrl()}/artifacts/${encodeURIComponent(latestPlan.id)}/files/${planPath}`;
+    const path = `${getActiveApiUrl()}/artifacts/${encodeURIComponent(latestPlan.id)}/files/plan.html`;
     fetch(path, {
       headers: getAuthHeaders(),
       signal: controller.signal,

@@ -26,6 +26,12 @@ import { designSystemService } from "./design-system.js";
 import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
 import { designCommitPreviewUrl } from "../lib/design-checkpoint-preview-url.js";
 
+async function sendSessionCommand(...args: Parameters<typeof sessionRouter.send>) {
+  return sessionRouter.sendAsync
+    ? sessionRouter.sendAsync(...args)
+    : Promise.resolve(sessionRouter.send(...args));
+}
+
 const JWT_SECRET = resolveJwtSecret();
 
 // Runtime liveness is checked against the session's persisted connection on
@@ -55,7 +61,11 @@ async function deletePdfObject(key: string): Promise<void> {
   }
 }
 
-function isAnimationStorageKeyForGroup(key: string, organizationId: string, sessionGroupId: string) {
+function isAnimationStorageKeyForGroup(
+  key: string,
+  organizationId: string,
+  sessionGroupId: string,
+) {
   return key.startsWith(`animation-previews/${organizationId}/${sessionGroupId}/`);
 }
 
@@ -628,7 +638,7 @@ class ManagedGitService {
           typeof connection.runtimeInstanceId === "string"
             ? connection.runtimeInstanceId
             : undefined;
-        const delivery = sessionRouter.send(
+        const delivery = await sendSessionCommand(
           session.id,
           {
             type: "pdf_export",
@@ -992,7 +1002,7 @@ class ManagedGitService {
           typeof connection.runtimeInstanceId === "string"
             ? connection.runtimeInstanceId
             : undefined;
-        const delivery = sessionRouter.send(
+        const delivery = await sendSessionCommand(
           session.id,
           {
             type: "animation_export",
@@ -1165,7 +1175,10 @@ class ManagedGitService {
         kind: "animation",
         OR: [
           { animationPreviewStatus: { in: ["pending", "failed"] } },
-          { animationPreviewStatus: "publishing", animationPreviewAttemptedAt: { lt: retryBefore } },
+          {
+            animationPreviewStatus: "publishing",
+            animationPreviewAttemptedAt: { lt: retryBefore },
+          },
         ],
       },
       select: { id: true },
@@ -1199,9 +1212,7 @@ class ManagedGitService {
       payload: {
         sessionGroupId: group.id,
         animationPreviewStatus: group.animationPreviewStatus,
-        animationPreviewUrl: group.animationPreviewKey
-          ? animationCommitPreviewUrl(group.id)
-          : null,
+        animationPreviewUrl: group.animationPreviewKey ? animationCommitPreviewUrl(group.id) : null,
         animationPreviewCommitSha: group.animationPreviewCommitSha,
         animationPreviewCapturedAt: group.animationPreviewCapturedAt?.toISOString() ?? null,
         animationPreviewError: group.animationPreviewError,
@@ -1300,7 +1311,7 @@ class ManagedGitService {
           typeof connection.runtimeInstanceId === "string"
             ? connection.runtimeInstanceId
             : undefined;
-        const delivery = sessionRouter.send(
+        const delivery = await sendSessionCommand(
           session.id,
           {
             type: "design_system_export",

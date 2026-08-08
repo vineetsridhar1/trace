@@ -582,7 +582,6 @@ describe("SessionRouter runtime adapter dispatch", () => {
 
   it("delegates provisioned startup through the injected adapter registry", async () => {
     const provisionedStart = vi.fn().mockResolvedValue({ status: "provisioning" });
-    const provisionedStop = vi.fn().mockResolvedValue({ ok: true, status: "stopping" });
     const provisionedAdapter: RuntimeAdapter = {
       type: "provisioned",
       async validateConfig() {},

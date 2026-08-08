@@ -44,6 +44,7 @@ import {
   movePackagedMacAppToApplicationsFolder,
   shouldMovePackagedMacAppToApplicationsFolder,
 } from "./mac-install-location.js";
+import { getCodingToolStatuses, installOrUpdateCodingTool } from "./coding-tools.js";
 
 let mainWindow: BrowserWindow | null = null;
 const PROJECT_PARENT_SELECTION_TTL_MS = 10 * 60 * 1000;
@@ -395,6 +396,13 @@ ipcMain.handle("login-codex-with-chatgpt", async () => {
   } finally {
     await rm(codexHome, { force: true, recursive: true });
   }
+});
+
+ipcMain.handle("get-coding-tool-statuses", () => getCodingToolStatuses());
+ipcMain.handle("install-or-update-coding-tool", async (_event, toolId: string) => {
+  const status = await installOrUpdateCodingTool(toolId);
+  bridge.refreshCapabilities();
+  return status;
 });
 
 ipcMain.handle("get-bridge-status", () => bridge.getStatus());

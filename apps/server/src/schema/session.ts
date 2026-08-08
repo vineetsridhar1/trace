@@ -969,7 +969,7 @@ export const sessionTypeResolvers = {
               sessions?: SessionGroupStatusSource[];
             } | null
           )?.sessions ?? []);
-      return deriveSessionGroupStatus(sessions, group.prUrl ?? null, group.archivedAt ?? null);
+      return deriveSessionGroupStatus(sessions, group.archivedAt ?? null, group.prUrl ?? null);
     },
     sessions: async (group: { id: string; sessions?: unknown[] }, _args: unknown, ctx: Context) => {
       if (Array.isArray(group.sessions)) return group.sessions;

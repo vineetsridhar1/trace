@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Boxes, Download } from "lucide-react";
 import { artifactFileUrl } from "../../artifact/artifact-file-url";
-import { sandboxedPlanHtml } from "../../artifact/plan-html";
+import { PLAN_IFRAME_SANDBOX, sandboxedPlanHtml } from "../../artifact/plan-html";
 import { useVisualPlanDocument } from "../../artifact/useVisualPlanDocument";
 import { ArtifactCardActions } from "./ArtifactCardActions";
 import { artifactFileName } from "./artifact-card-utils";
@@ -18,11 +18,8 @@ export function PlanArtifactUploadedCard({
   timestamp: string;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
-  const isHtml = filePath !== "plan.mdx";
-  const displayName = artifactFileName(filePath, "visual-plan.html");
-  const preferredPath =
-    filePath === "plan.html" ? "plan.html" : filePath === "plan.mdx" ? "plan.mdx" : undefined;
-  const { html } = useVisualPlanDocument(artifactId, preferredPath);
+  const displayName = artifactFileName(filePath, "Implementation plan");
+  const { html } = useVisualPlanDocument(artifactId, filePath ?? null);
 
   const previewModal = (
     <PlanPreviewModal
@@ -32,31 +29,6 @@ export function PlanArtifactUploadedCard({
       onOpenChange={setPreviewOpen}
     />
   );
-
-  if (!isHtml) {
-    return (
-      <>
-        <article className="group relative w-full overflow-hidden rounded-[14px] border border-[#2d3138] bg-[#171a1f] shadow-[0_18px_48px_rgb(0_0_0/0.28)] transition-colors hover:border-[#69717d]">
-          <div className="flex items-center gap-4 p-4">
-            <Boxes className="size-6 shrink-0 text-accent" strokeWidth={1.8} />
-            <PlanArtifactIdentity timestamp={timestamp} />
-            <PlanDownloadButton
-              artifactId={artifactId}
-              filePath={filePath}
-              displayName={displayName}
-            />
-            <ArtifactCardActions
-              artifactId={artifactId}
-              openLabel="Open plan"
-              onOpen={() => setPreviewOpen(true)}
-            />
-          </div>
-          <div className="h-px bg-gradient-to-r from-accent/60 via-accent/15 to-transparent" />
-        </article>
-        {previewModal}
-      </>
-    );
-  }
 
   return (
     <article className="w-full overflow-hidden rounded-[14px] border border-[#2d3138] bg-[#171a1f] shadow-[0_18px_48px_rgb(0_0_0/0.28)]">
@@ -84,7 +56,7 @@ export function PlanArtifactUploadedCard({
             <iframe
               title="Implementation plan preview"
               srcDoc={sandboxedPlanHtml(html)}
-              sandbox=""
+              sandbox={PLAN_IFRAME_SANDBOX}
               tabIndex={-1}
               className="pointer-events-none size-full border-0 bg-[#0d0f12]"
             />

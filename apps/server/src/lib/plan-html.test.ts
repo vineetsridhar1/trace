@@ -15,11 +15,16 @@ describe("validatePlanHtml", () => {
     ).not.toThrow();
   });
 
-  it("rejects scripts, which the sandboxed viewer would silently ignore", () => {
-    expect(() => validatePlanHtml(page("<script>alert(1)</script>"))).toThrow("must not contain");
-    expect(() => validatePlanHtml(page('<script src="./app.js"></script>'))).toThrow(
-      "must not contain",
-    );
+  it("accepts inline scripts and rejects script sources", () => {
+    expect(() =>
+      validatePlanHtml(
+        page("<button id=toggle>Toggle</button><script>toggle.hidden=true</script>"),
+      ),
+    ).not.toThrow();
+    expect(() => validatePlanHtml(page('<script src="./app.js"></script>'))).toThrow("inline");
+    expect(() =>
+      validatePlanHtml(page('<script src="data:text/javascript,alert(1)"></script>')),
+    ).toThrow("inline");
   });
 
   it("rejects references that cannot survive as a single file", () => {

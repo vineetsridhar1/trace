@@ -1,0 +1,41 @@
+{
+  "direction": {
+    "name": "Instrument panel",
+    "rationale": "A utilitarian maintenance surface for a dark developer desktop app: monospace version numbers as the primary data, status carried by glyph plus label rather than color alone, and exactly one primary action per group so the actionable work is obvious. Neutral colors inherit Trace Default and already match the supplied Trace screenshot. Secondary is set to the app's existing blue and surface radius tightened to 12px to match the observed dialog and active-nav treatment."
+  },
+  "color": {
+    "background": "#09090b",
+    "surface": "#18181b",
+    "foreground": "#fafafa",
+    "muted": "#a1a1aa",
+    "border": "#3f3f46",
+    "primary": "#fafafa",
+    "primaryForeground": "#09090b",
+    "secondary": "#3b82f6",
+    "success": "#22c55e",
+    "warning": "#f59e0b",
+    "danger": "#ef4444",
+    "dangerForeground": "#ffffff"
+  },
+  "typography": {
+    "display": "ui-sans-serif, system-ui, sans-serif",
+    "body": "ui-sans-serif, system-ui, sans-serif",
+    "mono": "ui-monospace, SFMono-Regular, Menlo, monospace",
+    "scale": "1.2"
+  },
+  "spacing": {
+    "base": 4,
+    "density": "compact"
+  },
+  "radius": {
+    "control": 8,
+    "surface": 12
+  },
+  "elevation": {
+    "surface": "0 16px 48px rgb(0 0 0 / 0.24)"
+  },
+  "motion": {
+    "duration": 180,
+    "easing": "cubic-bezier(0.2, 0.8, 0.2, 1)"
+  }
+}

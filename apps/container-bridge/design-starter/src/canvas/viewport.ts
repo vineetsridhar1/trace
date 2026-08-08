@@ -18,6 +18,31 @@ export function clampCanvasZoom(zoom: number): number {
   return Math.min(MAX_CANVAS_ZOOM, Math.max(MIN_CANVAS_ZOOM, zoom));
 }
 
+// Canvas labels counter-scale with zoom so they stay readable, which means their
+// canvas-space size is `fontSize / zoom` and grows as you zoom out. Once a label would
+// dwarf the artboard it names, hide it instead — the way Figma drops frame names.
+export const MAX_LABEL_CANVAS_FONT_SIZE = 96;
+
+export function isCanvasLabelVisible({
+  fontSize,
+  blockHeight,
+  clearanceAbove,
+  zoom,
+}: {
+  fontSize: number;
+  /** Screen-space height the label occupies above its artboard, gap included. */
+  blockHeight: number;
+  /** Canvas-space room above the artboard before the artboards above it start. */
+  clearanceAbove: number;
+  zoom: number;
+}): boolean {
+  if (zoom <= 0) return false;
+  if (fontSize / zoom > MAX_LABEL_CANVAS_FONT_SIZE) return false;
+  // The label keeps its screen size while the room above shrinks with zoom, so it
+  // disappears the moment it would run into the artboards above.
+  return blockHeight <= clearanceAbove * zoom;
+}
+
 export function panCanvasViewport(
   viewport: CanvasViewport,
   deltaX: number,

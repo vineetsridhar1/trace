@@ -39,6 +39,9 @@ import { isGeneratedProjectKind } from "./generated-project.js";
 import { runtimeDebug } from "./runtime-debug.js";
 import { ProvisionedLauncherError, runtimeAdapterRegistry } from "./runtime-adapters.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
+import { realtimeBackplane, type BackplaneEnvelope } from "./realtime-backplane.js";
+import { runtimeDirectory, type RuntimeDescriptor } from "./runtime-directory.js";
+import { correlatedResponseRelay } from "./correlated-response-relay.js";
 import {
   RuntimeAdapterRegistry,
   type RuntimeAdapter,
@@ -110,6 +113,7 @@ export interface RuntimeInstance {
   /** Repo IDs this runtime has locally registered. Cloud runtimes use empty (supports all). */
   registeredRepoIds: string[];
   lastHeartbeat: number;
+  connectionGeneration: string;
   boundSessions: Set<string>;
   /**
    * Sessions that received a run/send command on this live runtime connection.
@@ -262,6 +266,10 @@ function optionalConnectionString(
   return typeof value === "string" && value.trim() ? value : undefined;
 }
 
+function runtimeResponseMatches(expectedRuntimeId: string, sourceRuntimeId: string): boolean {
+  return expectedRuntimeId === sourceRuntimeId || sourceRuntimeId.endsWith(`:${expectedRuntimeId}`);
+}
+
 function lifecycleSnapshotFromConnection(
   connection: Record<string, unknown> | null,
 ): RuntimeLifecycleUpdate {
@@ -318,7 +326,22 @@ function shouldSkipProvisionedStopForPolicy(
  * and which sessions they own. Replaces the old bridge-only socket map.
  */
 export class SessionRouter {
-  constructor(private readonly runtimeAdapters = runtimeAdapterRegistry) {}
+  constructor(private readonly runtimeAdapters = runtimeAdapterRegistry) {
+    realtimeBackplane.on("runtime_command", (envelope) => this.receiveRuntimeCommand(envelope));
+    realtimeBackplane.on("runtime_command_ack", (envelope) =>
+      this.receiveRuntimeCommandAck(envelope),
+    );
+    runtimeDirectory.onPresence((message) => {
+      if (message.action !== "upsert") return;
+      for (const [sessionId, pending] of this.pendingWaits) {
+        if (pending.expectedRuntimeId && pending.expectedRuntimeId !== message.descriptor.id)
+          continue;
+        this.sessionRuntime.set(sessionId, message.descriptor.key);
+        this.pendingWaits.delete(sessionId);
+        pending.resolve();
+      }
+    });
+  }
 
   private runtimes = new Map<string, RuntimeInstance>();
   /** Maps sessionId → runtimeId */
@@ -334,6 +357,11 @@ export class SessionRouter {
       reject: (err: Error) => void;
     }
   >();
+  private pendingRemoteDeliveries = new Map<
+    string,
+    { resolve: (result: DeliveryResult) => void; timer: NodeJS.Timeout }
+  >();
+  private runtimeCommandQueues = new Map<string, Promise<void>>();
   /** Pending branch list requests: requestId → resolve/reject */
   private pendingBranchRequests = new Map<
     string,
@@ -455,6 +483,7 @@ export class SessionRouter {
 
   /** Heartbeat timeout in ms — if no heartbeat in this window, runtime is considered stale */
   static HEARTBEAT_TIMEOUT_MS = 30_000;
+  static DIRECTORY_TTL_MS = 45_000;
 
   registerRuntime(runtime: {
     key?: string;
@@ -486,6 +515,21 @@ export class SessionRouter {
         preservedBoundSessions: [...boundSessions],
       });
     }
+    const descriptor = runtimeDirectory.createDescriptor(
+      {
+        key: runtimeKey,
+        id: runtime.id,
+        organizationId: runtime.organizationId ?? existing?.organizationId,
+        label: runtime.label,
+        hostingMode: runtime.hostingMode,
+        ownerUserId: runtime.ownerUserId ?? existing?.ownerUserId,
+        bridgeRuntimeId: runtime.bridgeRuntimeId ?? existing?.bridgeRuntimeId,
+        supportedTools: runtime.supportedTools,
+        protocolVersion: runtime.protocolVersion,
+        registeredRepoIds: runtime.registeredRepoIds ?? existing?.registeredRepoIds ?? [],
+      },
+      SessionRouter.DIRECTORY_TTL_MS,
+    );
     this.runtimes.set(runtimeKey, {
       ...runtime,
       key: runtimeKey,
@@ -494,9 +538,13 @@ export class SessionRouter {
       bridgeRuntimeId: runtime.bridgeRuntimeId ?? existing?.bridgeRuntimeId,
       registeredRepoIds: runtime.registeredRepoIds ?? existing?.registeredRepoIds ?? [],
       lastHeartbeat: Date.now(),
+      connectionGeneration: descriptor.connectionGeneration,
       boundSessions,
       commandDeliveredSessions,
       linkedCheckouts,
+    });
+    void runtimeDirectory.register(descriptor, SessionRouter.DIRECTORY_TTL_MS).catch((error) => {
+      console.error("[runtime-directory] failed to register runtime:", error);
     });
     runtimeDebug("registered runtime", {
       runtimeId: runtime.id,
@@ -523,6 +571,14 @@ export class SessionRouter {
       return false;
     }
     runtime.lastHeartbeat = Date.now();
+    void runtimeDirectory
+      .renew(runtime.key, runtime.connectionGeneration, SessionRouter.DIRECTORY_TTL_MS)
+      .then((renewed) => {
+        if (!renewed && runtime.ws.readyState === runtime.ws.OPEN) {
+          runtime.ws.close(1012, "Runtime ownership replaced");
+        }
+      })
+      .catch((error) => console.error("[runtime-directory] heartbeat renewal failed:", error));
     return true;
   }
 
@@ -539,6 +595,14 @@ export class SessionRouter {
     }
     if (!runtime.registeredRepoIds.includes(repoId)) {
       runtime.registeredRepoIds.push(repoId);
+      void runtimeDirectory
+        .updateRegisteredRepoIds(
+          runtime.key,
+          runtime.connectionGeneration,
+          runtime.registeredRepoIds,
+          SessionRouter.DIRECTORY_TTL_MS,
+        )
+        .catch((error) => console.error("[runtime-directory] repo update failed:", error));
       runtimeDebug("registered repo on runtime", {
         runtimeId,
         repoId,
@@ -573,6 +637,11 @@ export class SessionRouter {
       const runtime = this.runtimes.get(runtimeId);
       if (runtime && runtime.ws.readyState === runtime.ws.OPEN) {
         this.bindSession(sessionId, runtimeId);
+        return Promise.resolve();
+      }
+      const descriptor = realtimeBackplane.enabled ? runtimeDirectory.find(runtimeId) : undefined;
+      if (descriptor) {
+        this.sessionRuntime.set(sessionId, descriptor.key);
         return Promise.resolve();
       }
     }
@@ -630,6 +699,9 @@ export class SessionRouter {
       this.sessionRuntime.delete(sessionId);
     }
     this.runtimes.delete(runtimeId);
+    void runtimeDirectory
+      .remove(runtime.key, runtime.connectionGeneration)
+      .catch((error) => console.error("[runtime-directory] failed to unregister runtime:", error));
     runtimeDebug("unregistered runtime", {
       runtimeId,
       label: runtime.label,
@@ -733,8 +805,24 @@ export class SessionRouter {
   /** True when the given runtime is registered and its websocket is open. */
   isRuntimeAvailable(runtimeId: string, organizationId?: string | null): boolean {
     const runtime = this.getRuntime(runtimeId, organizationId);
-    if (!runtime) return false;
-    return runtime.ws.readyState === runtime.ws.OPEN;
+    if (runtime) return runtime.ws.readyState === runtime.ws.OPEN;
+    return runtimeDirectory.find(runtimeId, organizationId) !== undefined;
+  }
+
+  getRuntimeDescriptor(
+    runtimeId: string,
+    organizationId?: string | null,
+  ): RuntimeDescriptor | undefined {
+    return runtimeDirectory.find(runtimeId, organizationId);
+  }
+
+  getRuntimeMetadata(
+    runtimeId: string,
+    organizationId?: string | null,
+  ): RuntimeInstance | RuntimeDescriptor | undefined {
+    return (
+      this.getRuntime(runtimeId, organizationId) ?? runtimeDirectory.find(runtimeId, organizationId)
+    );
   }
 
   /**
@@ -799,6 +887,24 @@ export class SessionRouter {
     } catch {
       return "delivery_failed";
     }
+  }
+
+  async sendAsync(
+    sessionId: string,
+    command: SessionCommand,
+    options?: { expectedHomeRuntimeId?: string; organizationId?: string | null },
+  ): Promise<DeliveryResult> {
+    const localResult = this.send(sessionId, command, options);
+    if (localResult === "delivered" || !options?.expectedHomeRuntimeId) return localResult;
+    const descriptor = runtimeDirectory.find(options.expectedHomeRuntimeId, options.organizationId);
+    if (!descriptor || descriptor.ownerReplicaId === realtimeBackplane.replicaId) {
+      return localResult;
+    }
+    return this.sendToRuntimeAsync(
+      options.expectedHomeRuntimeId,
+      command as unknown as Record<string, unknown>,
+      options.organizationId,
+    );
   }
 
   /** Find a connected runtime that has a given repo registered (or any cloud runtime). */
@@ -940,13 +1046,136 @@ export class SessionRouter {
     }
   }
 
+  async sendToRuntimeAsync(
+    runtimeId: string,
+    command: Record<string, unknown>,
+    organizationId?: string | null,
+  ): Promise<DeliveryResult> {
+    const local = this.sendToRuntime(runtimeId, command, organizationId);
+    if (local === "delivered" || local === "delivery_failed") return local;
+
+    const descriptor = runtimeDirectory.find(runtimeId, organizationId);
+    if (!descriptor) return "no_runtime";
+    if (descriptor.ownerReplicaId === realtimeBackplane.replicaId) return "runtime_disconnected";
+    const requiredTool = typeof command.tool === "string" ? command.tool : undefined;
+    if (requiredTool && !descriptor.supportedTools.includes(requiredTool)) return "no_runtime";
+    if (
+      command.type === "prepare_app" &&
+      (command.designSystemPackage || command.sourceRepository) &&
+      (descriptor.protocolVersion ?? 1) < 2
+    ) {
+      return "unsupported_runtime";
+    }
+
+    const deliveryId = randomUUID();
+    const timeoutMs = Number(process.env.TRACE_RUNTIME_COMMAND_TIMEOUT_MS) || 3_000;
+    const result = new Promise<DeliveryResult>((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingRemoteDeliveries.delete(deliveryId);
+        resolve("delivery_failed");
+      }, timeoutMs);
+      this.pendingRemoteDeliveries.set(deliveryId, { resolve, timer });
+    });
+    try {
+      const routedCommand =
+        typeof command.requestId === "string"
+          ? {
+              ...command,
+              requestId: correlatedResponseRelay.routeRequestId(command.type, command.requestId),
+            }
+          : command;
+      await realtimeBackplane.send(descriptor.ownerReplicaId, "runtime_command", {
+        deliveryId,
+        runtimeKey: descriptor.key,
+        organizationId: descriptor.organizationId,
+        connectionGeneration: descriptor.connectionGeneration,
+        command: routedCommand,
+      });
+    } catch {
+      const pending = this.pendingRemoteDeliveries.get(deliveryId);
+      if (pending) {
+        clearTimeout(pending.timer);
+        this.pendingRemoteDeliveries.delete(deliveryId);
+        pending.resolve("delivery_failed");
+      }
+    }
+    return result;
+  }
+
+  private receiveRuntimeCommand(envelope: BackplaneEnvelope): void {
+    const payload = envelope.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
+    const input = payload as Record<string, unknown>;
+    if (
+      typeof input.deliveryId !== "string" ||
+      typeof input.runtimeKey !== "string" ||
+      typeof input.connectionGeneration !== "string" ||
+      !input.command ||
+      typeof input.command !== "object" ||
+      Array.isArray(input.command)
+    ) {
+      return;
+    }
+
+    const previous = this.runtimeCommandQueues.get(input.runtimeKey) ?? Promise.resolve();
+    const delivery = previous.then(async () => {
+      const runtime = this.runtimes.get(input.runtimeKey as string);
+      let result: DeliveryResult = "runtime_disconnected";
+      if (
+        runtime &&
+        runtime.connectionGeneration === input.connectionGeneration &&
+        runtime.ws.readyState === runtime.ws.OPEN
+      ) {
+        result = this.sendToRuntime(runtime.key, input.command as Record<string, unknown>);
+      }
+      await realtimeBackplane.send(envelope.sourceReplicaId, "runtime_command_ack", {
+        deliveryId: input.deliveryId,
+        result,
+      });
+    });
+    this.runtimeCommandQueues.set(input.runtimeKey, delivery);
+    void delivery.finally(() => {
+      if (this.runtimeCommandQueues.get(input.runtimeKey as string) === delivery) {
+        this.runtimeCommandQueues.delete(input.runtimeKey as string);
+      }
+    });
+  }
+
+  private receiveRuntimeCommandAck(envelope: BackplaneEnvelope): void {
+    const payload = envelope.payload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
+    const input = payload as Record<string, unknown>;
+    if (typeof input.deliveryId !== "string" || typeof input.result !== "string") return;
+    const pending = this.pendingRemoteDeliveries.get(input.deliveryId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pendingRemoteDeliveries.delete(input.deliveryId);
+    const allowed: DeliveryResult[] = [
+      "delivered",
+      "no_runtime",
+      "runtime_disconnected",
+      "session_unbound",
+      "unsupported_runtime",
+      "delivery_failed",
+    ];
+    pending.resolve(
+      allowed.includes(input.result as DeliveryResult)
+        ? (input.result as DeliveryResult)
+        : "delivery_failed",
+    );
+  }
+
   /**
    * Ask a runtime to list branches for a given repo.
    * Returns a promise that resolves when the bridge responds with branches_result.
    */
-  listBranches(runtimeId: string, repoId: string, timeoutMs = 10_000): Promise<string[]> {
+  async listBranches(runtimeId: string, repoId: string, timeoutMs = 10_000): Promise<string[]> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, { type: "list_branches", requestId, repoId });
+    const result = await this.sendToRuntimeAsync(runtimeId, {
+      type: "list_branches",
+      requestId,
+      repoId,
+    });
     if (result !== "delivered") {
       return Promise.reject(new Error(`Runtime not available: ${result}`));
     }
@@ -980,7 +1209,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingBranchRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingBranchRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -994,19 +1223,16 @@ export class SessionRouter {
    * Used before durable session-group slug allocation so local bridge state
    * participates in the server-owned reservation.
    */
-  listWorkspaceSlugs(
+  async listWorkspaceSlugs(
     runtimeId: string,
     repoId: string,
     organizationId?: string | null,
     timeoutMs = 10_000,
   ): Promise<string[]> {
     const requestId = randomUUID();
-    const runtime = this.getRuntime(runtimeId, organizationId);
+    const runtime = runtimeDirectory.find(runtimeId, organizationId);
     if (!runtime) {
       return Promise.reject(new Error("Runtime not available: no_runtime"));
-    }
-    if (runtime.ws.readyState !== runtime.ws.OPEN) {
-      return Promise.reject(new Error("Runtime not available: runtime_disconnected"));
     }
 
     const promise = new Promise<string[]>((resolve, reject) => {
@@ -1028,9 +1254,12 @@ export class SessionRouter {
       });
     });
 
-    try {
-      runtime.ws.send(JSON.stringify({ type: "list_workspace_slugs", requestId, repoId }));
-    } catch {
+    const delivery = await this.sendToRuntimeAsync(
+      runtimeId,
+      { type: "list_workspace_slugs", requestId, repoId },
+      organizationId,
+    );
+    if (delivery !== "delivered") {
       const pending = this.pendingWorkspaceSlugRequests.get(requestId);
       this.pendingWorkspaceSlugRequests.delete(requestId);
       pending?.reject(new Error("Runtime not available: delivery_failed"));
@@ -1048,7 +1277,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingWorkspaceSlugRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingWorkspaceSlugRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1058,18 +1287,15 @@ export class SessionRouter {
   }
 
   /** Ask a runtime to list the on-disk git worktrees for a repo. */
-  listRepoWorktrees(
+  async listRepoWorktrees(
     runtimeId: string,
     repoId: string,
     timeoutMs = 10_000,
   ): Promise<BridgeRepoWorktree[]> {
     const requestId = randomUUID();
-    const runtime = this.getRuntime(runtimeId);
+    const runtime = runtimeDirectory.find(runtimeId);
     if (!runtime) {
       return Promise.reject(new Error("Runtime not available: no_runtime"));
-    }
-    if (runtime.ws.readyState !== runtime.ws.OPEN) {
-      return Promise.reject(new Error("Runtime not available: runtime_disconnected"));
     }
 
     const promise = new Promise<BridgeRepoWorktree[]>((resolve, reject) => {
@@ -1091,9 +1317,12 @@ export class SessionRouter {
       });
     });
 
-    try {
-      runtime.ws.send(JSON.stringify({ type: "list_worktrees", requestId, repoId }));
-    } catch {
+    const delivery = await this.sendToRuntimeAsync(runtimeId, {
+      type: "list_worktrees",
+      requestId,
+      repoId,
+    });
+    if (delivery !== "delivered") {
       const pending = this.pendingWorktreeListRequests.get(requestId);
       this.pendingWorktreeListRequests.delete(requestId);
       pending?.reject(new Error("Runtime not available: delivery_failed"));
@@ -1110,7 +1339,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingWorktreeListRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingWorktreeListRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1123,14 +1352,14 @@ export class SessionRouter {
    * Ask a runtime to list files in a working directory.
    * Returns a promise that resolves when the bridge responds with files_result.
    */
-  listFiles(
+  async listFiles(
     runtimeId: string,
     sessionId: string,
     workdirHint?: string,
     timeoutMs = 15_000,
   ): Promise<string[]> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: "list_files",
       requestId,
       sessionId,
@@ -1169,7 +1398,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingFileRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingFileRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1182,7 +1411,7 @@ export class SessionRouter {
    * Ask a runtime to read a file's contents.
    * Returns a promise that resolves when the bridge responds with file_content_result.
    */
-  readFile(
+  async readFile(
     runtimeId: string,
     sessionId: string,
     relativePath: string,
@@ -1190,7 +1419,7 @@ export class SessionRouter {
     timeoutMs = 15_000,
   ): Promise<string> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: "read_file",
       requestId,
       sessionId,
@@ -1230,7 +1459,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingFileContentRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingFileContentRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1242,7 +1471,7 @@ export class SessionRouter {
   /**
    * Ask a runtime to write a file's contents to its live workspace.
    */
-  writeFile(
+  async writeFile(
     runtimeId: string,
     sessionId: string,
     relativePath: string,
@@ -1252,7 +1481,7 @@ export class SessionRouter {
     timeoutMs = 15_000,
   ): Promise<void> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: expectedContent === undefined ? "write_file" : "write_file_guarded",
       requestId,
       sessionId,
@@ -1289,7 +1518,7 @@ export class SessionRouter {
   resolveFileWriteRequest(requestId: string, error?: string, sourceRuntimeId?: string): void {
     const pending = this.pendingFileWriteRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingFileWriteRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1301,7 +1530,7 @@ export class SessionRouter {
   /**
    * Ask a runtime to commit the current file changes in its live workspace.
    */
-  commitFileChanges(
+  async commitFileChanges(
     runtimeId: string,
     sessionId: string,
     message?: string | null,
@@ -1310,7 +1539,7 @@ export class SessionRouter {
     timeoutMs = 60_000,
   ): Promise<string> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: paths?.length ? "commit_scoped_file_changes" : "commit_file_changes",
       requestId,
       sessionId,
@@ -1351,7 +1580,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingFileCommitRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingFileCommitRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1362,14 +1591,14 @@ export class SessionRouter {
     }
   }
 
-  listWorktreeChanges(
+  async listWorktreeChanges(
     runtimeId: string,
     sessionId: string,
     workdirHint?: string,
     timeoutMs = 15_000,
   ): Promise<BridgeWorktreeChangesPayload> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: "worktree_changes",
       requestId,
       sessionId,
@@ -1409,7 +1638,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingWorktreeChangesRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingWorktreeChangesRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1418,7 +1647,7 @@ export class SessionRouter {
     }
   }
 
-  revertWorktreeFile(
+  async revertWorktreeFile(
     runtimeId: string,
     sessionId: string,
     filePath: string,
@@ -1426,7 +1655,7 @@ export class SessionRouter {
     timeoutMs = 15_000,
   ): Promise<void> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: "revert_worktree_file",
       requestId,
       sessionId,
@@ -1464,7 +1693,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingRevertWorktreeFileRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingRevertWorktreeFileRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1476,7 +1705,7 @@ export class SessionRouter {
   /**
    * Ask a runtime to compute the branch diff (changed files vs base branch).
    */
-  branchDiff(
+  async branchDiff(
     runtimeId: string,
     sessionId: string,
     baseBranch: string,
@@ -1484,7 +1713,7 @@ export class SessionRouter {
     timeoutMs = 30_000,
   ): Promise<BridgeBranchDiffFile[]> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: "branch_diff",
       requestId,
       sessionId,
@@ -1524,7 +1753,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingBranchDiffRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingBranchDiffRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1536,7 +1765,7 @@ export class SessionRouter {
   /**
    * Ask a runtime to read a file's content at a specific git ref.
    */
-  fileAtRef(
+  async fileAtRef(
     runtimeId: string,
     sessionId: string,
     filePath: string,
@@ -1545,7 +1774,7 @@ export class SessionRouter {
     timeoutMs = 15_000,
   ): Promise<string> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: "file_at_ref",
       requestId,
       sessionId,
@@ -1586,7 +1815,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingFileAtRefRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingFileAtRefRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1598,7 +1827,7 @@ export class SessionRouter {
   /**
    * Ask a runtime to list skills (user + project SKILL.md files).
    */
-  listSkills(
+  async listSkills(
     runtimeId: string,
     sessionId: string,
     options?: {
@@ -1615,7 +1844,7 @@ export class SessionRouter {
       timeoutMs = 15_000,
     } = options ?? {};
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: "list_skills",
       requestId,
       sessionId,
@@ -1656,7 +1885,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingSkillsRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingSkillsRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1665,13 +1894,13 @@ export class SessionRouter {
     }
   }
 
-  getLinkedCheckoutStatus(
+  async getLinkedCheckoutStatus(
     runtimeId: string,
     repoId: string,
     timeoutMs = 15_000,
   ): Promise<BridgeLinkedCheckoutStatus> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: "linked_checkout_status",
       requestId,
       repoId,
@@ -1707,20 +1936,20 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingLinkedCheckoutStatusRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingLinkedCheckoutStatusRequests.delete(requestId);
     this.cacheLinkedCheckoutStatus(pending.runtimeId, status);
     pending.resolve(status);
   }
 
-  getLinkedCheckoutChangedFile(
+  async getLinkedCheckoutChangedFile(
     runtimeId: string,
     repoId: string,
     filePath: string,
     timeoutMs = 15_000,
   ): Promise<BridgeLinkedCheckoutChangedFilePreview> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: "linked_checkout_changed_file",
       requestId,
       repoId,
@@ -1758,7 +1987,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingLinkedCheckoutChangedFileRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingLinkedCheckoutChangedFileRequests.delete(requestId);
     if (error || !file) {
       pending.reject(new Error(error ?? "Missing linked checkout changed file"));
@@ -1778,13 +2007,13 @@ export class SessionRouter {
     runtime.linkedCheckouts.set(status.repoId, status);
   }
 
-  private requestLinkedCheckoutAction(
+  private async requestLinkedCheckoutAction(
     runtimeId: string,
     command: Record<string, unknown>,
     timeoutMs = 30_000,
   ): Promise<BridgeLinkedCheckoutActionResultPayload> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       ...command,
       requestId,
     });
@@ -1920,13 +2149,13 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingLinkedCheckoutActionRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingLinkedCheckoutActionRequests.delete(requestId);
     if (result.status) this.cacheLinkedCheckoutStatus(pending.runtimeId, result.status);
     pending.resolve(result);
   }
 
-  inspectSessionCurrentBranch(
+  async inspectSessionCurrentBranch(
     runtimeId: string,
     input: {
       sessionId: string;
@@ -1935,7 +2164,7 @@ export class SessionRouter {
     timeoutMs = 5_000,
   ): Promise<string | null> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: "session_current_branch",
       requestId,
       sessionId: input.sessionId,
@@ -1973,7 +2202,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingSessionCurrentBranchRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingSessionCurrentBranchRequests.delete(requestId);
     if (error) {
       pending.reject(new Error(error));
@@ -1982,7 +2211,7 @@ export class SessionRouter {
     }
   }
 
-  inspectSessionGitSyncStatus(
+  async inspectSessionGitSyncStatus(
     runtimeId: string,
     input: {
       sessionId: string;
@@ -1991,7 +2220,7 @@ export class SessionRouter {
     timeoutMs = 15_000,
   ): Promise<BridgeSessionGitSyncStatus> {
     const requestId = randomUUID();
-    const result = this.sendToRuntime(runtimeId, {
+    const result = await this.sendToRuntimeAsync(runtimeId, {
       type: "session_git_sync_status",
       requestId,
       sessionId: input.sessionId,
@@ -2029,7 +2258,7 @@ export class SessionRouter {
   ): void {
     const pending = this.pendingSessionGitSyncStatusRequests.get(requestId);
     if (!pending) return;
-    if (sourceRuntimeId && pending.runtimeId !== sourceRuntimeId) return;
+    if (sourceRuntimeId && !runtimeResponseMatches(pending.runtimeId, sourceRuntimeId)) return;
     this.pendingSessionGitSyncStatusRequests.delete(requestId);
     if (error || !status) {
       pending.reject(new Error(error ?? "Missing session git sync status"));

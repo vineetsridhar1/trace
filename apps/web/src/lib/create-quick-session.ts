@@ -28,7 +28,7 @@ export function getChannelRepoId(channelId: string): string | undefined {
  */
 export async function createQuickSession(
   channelId: string,
-  options: { visibility?: "public" | "private" } = {},
+  options: { visibility?: "public" | "private"; tool?: string } = {},
 ): Promise<void> {
   if (pendingQuickSessionChannels.has(channelId)) return;
   pendingQuickSessionChannels.add(channelId);
@@ -43,6 +43,7 @@ export async function createQuickSession(
           channelId,
           repoId: channelRepoId ?? undefined,
           visibility: options.visibility,
+          tool: options.tool,
         },
       })
       .toPromise();

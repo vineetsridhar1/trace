@@ -32,4 +32,11 @@ describe("container runtime dependencies", () => {
       expect(owned.has(root), `${root} must be owned by coder`).toBe(true);
     }
   });
+
+  it("declares the runtime-managed skills path for cloud sessions", async () => {
+    const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
+
+    expect(dockerfile).toContain("ENV TRACE_SKILLS_DIR=/trace/runtime/skills/");
+    expect(dockerfile).not.toContain("COPY runtime/skills/ /trace/runtime/skills/");
+  });
 });

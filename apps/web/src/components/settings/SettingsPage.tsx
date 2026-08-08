@@ -11,6 +11,7 @@ import {
   Shield,
   SlidersHorizontal,
   Users,
+  Wrench,
 } from "lucide-react";
 import { useAuthStore, type AuthState, type OrgMembership } from "@trace/client-core";
 import { useUIStore } from "../../stores/ui";
@@ -23,6 +24,7 @@ import { BridgeAccessSection } from "./BridgeAccessSection";
 import { AgentEnvironmentsSection } from "./AgentEnvironmentsSection";
 import { OrgSecretsSection } from "./OrgSecretsSection";
 import { IntegrationsSection } from "./IntegrationsSection";
+import { CodingToolsSection } from "./CodingToolsSection";
 import { isLocalMode } from "../../lib/runtime-mode";
 
 type SettingsTab =
@@ -33,7 +35,8 @@ type SettingsTab =
   | "bridge-access"
   | "agent-environments"
   | "org-secrets"
-  | "integrations";
+  | "integrations"
+  | "coding-tools";
 
 type Tab = {
   id: SettingsTab;
@@ -56,6 +59,7 @@ const TABS: readonly Tab[] = [
   },
   { id: "api-keys", label: "API keys", icon: Key, group: "Your account" },
   { id: "bridge-access", label: "Devices & access", icon: Laptop, group: "Your account" },
+  { id: "coding-tools", label: "Coding tools", icon: Wrench, group: "Your account" },
 ];
 
 const TAB_DETAILS: Record<SettingsTab, { title: string; description: string; wide?: boolean }> = {
@@ -97,6 +101,11 @@ const TAB_DETAILS: Record<SettingsTab, { title: string; description: string; wid
   "bridge-access": {
     title: "Devices & access",
     description: "Review connected devices and approve access to your local bridge.",
+    wide: true,
+  },
+  "coding-tools": {
+    title: "Coding tools",
+    description: "Install and update coding tools available to local sessions.",
     wide: true,
   },
 };
@@ -308,6 +317,7 @@ export function SettingsPage() {
               {activeTab === "agent-environments" && <AgentEnvironmentsSection />}
               {activeTab === "org-secrets" && <OrgSecretsSection />}
               {activeTab === "integrations" && <IntegrationsSection />}
+              {activeTab === "coding-tools" && <CodingToolsSection />}
             </div>
           </div>
         </main>

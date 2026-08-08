@@ -97,7 +97,7 @@ export function ProjectPreviewWorkspace({
 
   if (!isMobile && canvasRevealed && !manualEditing) {
     return (
-      <div className="relative h-full min-h-0 overflow-hidden">
+      <div className="relative isolate h-full min-h-0 overflow-hidden">
         <motion.main
           key={canvasKey}
           initial={reduceMotion ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.99 }}
@@ -105,7 +105,7 @@ export function ProjectPreviewWorkspace({
           transition={
             reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 240, damping: 30 }
           }
-          className="h-full min-w-0 bg-surface-deep"
+          className="relative z-0 h-full min-w-0 [contain:paint] bg-surface-deep"
         >
           {canvas}
         </motion.main>

@@ -1,0 +1,810 @@
+<!doctype html>
+<!--
+  Trace visual plan canvas.
+
+  Copy this file into the change-specific folder under docs/ with a descriptive
+  filename, then replace the sample content. This file is the agent's authoring canvas. Keep the <style> block;
+  it is the component vocabulary. Every class below is demonstrated once in the
+  body so you can see what it renders as.
+
+  Rules that are enforced on upload:
+    - Exactly one HTML document per plan folder.
+    - No external references. Images must be inline data: URLs or CSS shapes.
+    - Scripts must be inline and may modify only this document's DOM.
+    - No network, storage, parent-frame access, navigation, popups, downloads,
+      external assets, frames, or forms.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Multi-replica realtime routing implementation plan</title>
+    <style>
+      :root {
+        --bg: #171717;
+        --surface: #1f1f1f;
+        --raised: #262626;
+        --fg: #e4e4e7;
+        --muted: #a1a1aa;
+        --faint: #71717a;
+        --border: #2e2e2e;
+        --accent: #3b82f6;
+        --add: #22c55e;
+        --change: #eab308;
+        --remove: #ef4444;
+        --radius: 8px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 40px 32px 72px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.65 ui-sans-serif,
+          -apple-system,
+          "Segoe UI",
+          system-ui,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .plan {
+        max-width: 860px;
+        margin: 0 auto;
+      }
+
+      /* ── Title block ── */
+      .plan-title {
+        margin: 0 0 8px;
+        font-size: 28px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .plan-summary {
+        margin: 0 0 20px;
+        color: var(--muted);
+        font-size: 16px;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 36px;
+      }
+      .chip {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .chip strong {
+        color: var(--fg);
+        font-weight: 550;
+      }
+
+      /* ── Scan-level metrics ── */
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin: -20px 0 36px;
+      }
+      .metric {
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: linear-gradient(145deg, var(--surface), var(--raised));
+      }
+      .metric b {
+        display: block;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+      .metric span {
+        color: var(--faint);
+        font-size: 12px;
+      }
+
+      /* ── Sections ── */
+      section {
+        margin-bottom: 40px;
+      }
+      h2 {
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      h3 {
+        margin: 0 0 6px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      code {
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.9em;
+      }
+      button {
+        color: inherit;
+        font: inherit;
+      }
+      button:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+
+      /* ── Two-column split (scope vs non-goals, etc.) ── */
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .card {
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .card h3 {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .card ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .card li {
+        margin-bottom: 4px;
+      }
+
+      /* ── Flow diagram: horizontal boxes joined by arrows ── */
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 0;
+        margin: 4px 0 8px;
+      }
+      .node {
+        flex: 1 1 0;
+        min-width: 120px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .node b {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .node span {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .node.is-new {
+        border-color: var(--accent);
+      }
+      .arrow {
+        flex: 0 0 28px;
+        align-self: center;
+        text-align: center;
+        color: var(--faint);
+      }
+
+      /* ── Diagrams: use SVG for branches, HTML for ordered interactions ── */
+      .diagram {
+        overflow-x: auto;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .diagram-svg {
+        display: block;
+        width: 100%;
+        min-width: 620px;
+        height: auto;
+      }
+      .diagram-svg .edge {
+        fill: none;
+        stroke: var(--faint);
+        stroke-width: 1.5;
+      }
+      .diagram-svg .box {
+        fill: var(--raised);
+        stroke: var(--border);
+        stroke-width: 1.5;
+      }
+      .diagram-svg .box.is-new {
+        stroke: var(--accent);
+      }
+      .diagram-svg .decision {
+        fill: color-mix(in srgb, var(--change) 10%, var(--surface));
+        stroke: var(--change);
+        stroke-width: 1.5;
+      }
+      .diagram-svg text {
+        fill: var(--fg);
+        font-family: inherit;
+        font-size: 12px;
+        text-anchor: middle;
+      }
+      .diagram-svg .edge-label {
+        fill: var(--faint);
+        font-size: 10px;
+      }
+      .sequence {
+        display: grid;
+        gap: 8px;
+        min-width: 560px;
+      }
+      .sequence-row {
+        display: grid;
+        grid-template-columns: 110px 1fr 110px;
+        align-items: center;
+        gap: 12px;
+      }
+      .sequence-party {
+        padding: 7px 9px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--raised);
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+      }
+      .sequence-message {
+        position: relative;
+        padding-bottom: 5px;
+        border-bottom: 1px solid var(--faint);
+        color: var(--muted);
+        font-size: 11px;
+        text-align: center;
+      }
+      .sequence-message::after {
+        content: "";
+        position: absolute;
+        right: -1px;
+        bottom: -4px;
+        width: 7px;
+        height: 7px;
+        border-top: 1px solid var(--faint);
+        border-right: 1px solid var(--faint);
+        transform: rotate(45deg);
+      }
+      .sequence-row.reverse .sequence-party:first-child {
+        grid-column: 3;
+      }
+      .sequence-row.reverse .sequence-message {
+        grid-column: 2;
+        grid-row: 1;
+        transform: scaleX(-1);
+      }
+      .sequence-row.reverse .sequence-message span {
+        display: inline-block;
+        transform: scaleX(-1);
+      }
+      .sequence-row.reverse .sequence-party:last-child {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      /* ── Switchable before/after or alternative views ── */
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .toolbar button {
+        cursor: pointer;
+        padding: 5px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .toolbar button:hover {
+        border-color: var(--faint);
+        color: var(--fg);
+      }
+      .toolbar button[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+        color: var(--fg);
+      }
+      .view-panel {
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      /* ── Quantitative bars (only for real, sourced values) ── */
+      .bar-chart {
+        display: grid;
+        gap: 9px;
+      }
+      .bar-row {
+        display: grid;
+        grid-template-columns: minmax(100px, 0.8fr) 2fr 32px;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+      }
+      .bar-track {
+        height: 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--raised);
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+      }
+      .bar-value {
+        color: var(--faint);
+        text-align: right;
+      }
+
+      /* ── Phases ── */
+      .phase {
+        position: relative;
+        padding: 0 0 20px 26px;
+        border-left: 1px solid var(--border);
+      }
+      .phase:last-child {
+        border-left-color: transparent;
+        padding-bottom: 0;
+      }
+      .phase::before {
+        content: attr(data-step);
+        position: absolute;
+        left: -11px;
+        top: 0;
+        width: 21px;
+        height: 21px;
+        border-radius: 50%;
+        background: var(--raised);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 21px;
+        text-align: center;
+      }
+
+      /* ── Progressive disclosure ── */
+      details {
+        margin-top: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: color-mix(in srgb, var(--raised) 55%, transparent);
+      }
+      summary {
+        cursor: pointer;
+        padding: 10px 12px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 550;
+      }
+      summary::marker {
+        color: var(--accent);
+      }
+      .detail-body {
+        padding: 0 12px 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .detail-body p:last-child,
+      .detail-body ul:last-child {
+        margin-bottom: 0;
+      }
+
+      /* ── Tables: file maps, risks, verification ── */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      td code {
+        background: none;
+        padding: 0;
+        color: var(--muted);
+      }
+      .tag {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .tag.add {
+        color: var(--add);
+      }
+      .tag.change {
+        color: var(--change);
+      }
+      .tag.remove {
+        color: var(--remove);
+      }
+
+      /* ── Callout ── */
+      .callout {
+        padding: 12px 16px;
+        border-left: 2px solid var(--accent);
+        border-radius: 0 var(--radius) var(--radius) 0;
+        background: var(--surface);
+        color: var(--muted);
+      }
+      .callout.risk {
+        border-left-color: var(--change);
+      }
+      .callout strong {
+        color: var(--fg);
+      }
+
+      @media (max-width: 640px) {
+        .split {
+          grid-template-columns: 1fr;
+        }
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+        .bar-row {
+          grid-template-columns: 90px 1fr 28px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <article class="plan">
+      <h1 class="plan-title">Multi-replica realtime routing</h1>
+      <p class="plan-summary">
+        Keep WebSockets inside Trace’s API replicas and add a Redis-backed runtime directory plus
+        directed replica inboxes. Any healthy replica can then reach the replica holding a bridge,
+        terminal, or preview connection while Postgres remains the durable business-state boundary.
+      </p>
+      <div class="meta">
+        <span class="chip"><strong>5</strong> implementation slices</span>
+        <span class="chip"><strong>3</strong> in-memory routing surfaces</span>
+        <span class="chip"><strong>0</strong> GraphQL schema breaks</span>
+        <span class="chip">Feature-flagged rollout</span>
+      </div>
+      <div class="metrics" aria-label="Change summary">
+        <div class="metric"><b>2+</b><span>server replicas after rollout</span></div>
+        <div class="metric"><b>10 s</b><span>existing bridge heartbeat</span></div>
+        <div class="metric"><b>30 s</b><span>existing stale-runtime boundary</span></div>
+      </div>
+
+      <section>
+        <h2>Decision</h2>
+        <div class="callout">
+          <strong>Approve combined API/WebSocket replicas with a Redis backplane.</strong> Do not
+          extract a separate WebSocket service in this change. Introduce a <code>RuntimeTransport</code>
+          boundary so a dedicated gateway remains possible later without rewriting business services.
+        </div>
+        <div class="split">
+          <div class="card">
+            <h3>In scope</h3>
+            <ul>
+              <li>Runtime presence, fenced ownership, command acknowledgements, and replies.</li>
+              <li>Distributed terminal metadata, attachments, output, and scrollback.</li>
+              <li>Cross-replica preview HTTP and WebSocket proxy traffic.</li>
+              <li>Readiness, graceful drain, singleton jobs, rollout, and rollback.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Non-goals</h3>
+            <ul>
+              <li>No TCP/WebSocket migration; clients reconnect with existing behavior.</li>
+              <li>No exactly-once socket delivery or automatic replay of non-idempotent commands.</li>
+              <li>No new GraphQL mutations, event types, or client state model.</li>
+              <li>No replacement of Postgres events as durable truth.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Current state, grounded in the repository</h2>
+        <table>
+          <thead><tr><th>Surface</th><th>Evidence</th><th>Multi-replica consequence</th></tr></thead>
+          <tbody>
+            <tr><td>GraphQL events</td><td><code>lib/pubsub.ts</code> uses Redis outside local mode.</td><td>Already fans out to subscribers on different replicas.</td></tr>
+            <tr><td>Runtime routing</td><td><code>lib/session-router.ts</code> stores sockets, bindings, waits, and pending replies in Maps.</td><td>A mutation on A cannot reach a bridge socket on B.</td></tr>
+            <tr><td>Terminals</td><td><code>lib/terminal-relay.ts</code> stores auth context, indexes, browser sockets, callbacks, and 50 KiB scrollback in Maps.</td><td>Create, attach, and runtime output must hit one process.</td></tr>
+            <tr><td>Preview proxy</td><td><code>services/endpoint-proxy.ts</code> stores pending HTTP responses and WebSockets locally.</td><td>Bridge responses disappear when their request originated elsewhere.</td></tr>
+            <tr><td>Readiness</td><td><code>index.ts</code> returns HTTP 200 even when <code>startupReady</code> is false.</td><td>A load balancer can route before Redis/startup work is ready.</td></tr>
+            <tr><td>Drain</td><td>Apollo’s drain hook closes sockets with 1012, but no SIGTERM/SIGINT handler invokes shutdown.</td><td>Deploy termination may bypass the intended reconnect path.</td></tr>
+            <tr><td>Singletons</td><td>Every task rehydrates Slack event bridges; several preview/artifact loops lack a lease.</td><td>Two replicas can duplicate external side effects or work.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Architecture</h2>
+        <div class="toolbar" data-view-switcher="architecture" aria-label="Architecture view">
+          <button type="button" data-view="current" aria-pressed="false">Current failure</button>
+          <button type="button" data-view="proposed" aria-pressed="true">Proposed routing</button>
+        </div>
+        <div class="view-panel" data-view-group="architecture" data-view-panel="current">
+          <div class="flow">
+            <div class="node"><b>Mutation on A</b><span>service calls SessionRouter</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><b>Local Map</b><span>runtime absent</span></div>
+            <div class="arrow">✕</div>
+            <div class="node"><b>Bridge on B</b><span>socket is unreachable</span></div>
+          </div>
+        </div>
+        <div class="view-panel" data-view-group="architecture" data-view-panel="proposed">
+          <div class="flow">
+            <div class="node"><b>Service on A</b><span>explicit org + runtime</span></div>
+            <div class="arrow">→</div>
+            <div class="node is-new"><b>RuntimeTransport</b><span>local fast path or route</span></div>
+            <div class="arrow">↔</div>
+            <div class="node is-new"><b>Redis backplane</b><span>presence + B inbox</span></div>
+            <div class="arrow">↔</div>
+            <div class="node"><b>Socket owner B</b><span>fence, queue, send, ack</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><b>Bridge</b><span>wire protocol unchanged</span></div>
+          </div>
+          <p>
+            Runtime descriptors are serializable data: organization, runtime key/ID, owner replica,
+            connection generation, hosting mode, capabilities, registered repos, linked-checkout
+            cache, heartbeat, and expiry. A remote runtime is never represented as a fake WebSocket.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Critical flows</h2>
+        <div class="toolbar" data-view-switcher="flow" aria-label="Critical routing flow">
+          <button type="button" data-view="command" aria-pressed="true">Runtime command</button>
+          <button type="button" data-view="terminal" aria-pressed="false">Terminal</button>
+          <button type="button" data-view="proxy" aria-pressed="false">Preview proxy</button>
+        </div>
+        <div class="diagram" data-view-group="flow" data-view-panel="command">
+          <div class="sequence" aria-label="Cross-replica runtime command">
+            <div class="sequence-row"><span class="sequence-party">Replica A</span><span class="sequence-message"><span>lookup org-scoped descriptor</span></span><span class="sequence-party">Redis</span></div>
+            <div class="sequence-row reverse"><span class="sequence-party">Redis</span><span class="sequence-message"><span>owner B + generation</span></span><span class="sequence-party">Replica A</span></div>
+            <div class="sequence-row"><span class="sequence-party">Replica A</span><span class="sequence-message"><span>v1 command envelope</span></span><span class="sequence-party">Replica B</span></div>
+            <div class="sequence-row"><span class="sequence-party">Replica B</span><span class="sequence-message"><span>validate tenant/generation; queued write</span></span><span class="sequence-party">Bridge</span></div>
+            <div class="sequence-row reverse"><span class="sequence-party">Replica B</span><span class="sequence-message"><span>delivered or fenced failure</span></span><span class="sequence-party">Replica A</span></div>
+            <div class="sequence-row reverse"><span class="sequence-party">Bridge</span><span class="sequence-message"><span>transient result → request origin</span></span><span class="sequence-party">Replica A</span></div>
+          </div>
+        </div>
+        <div class="diagram" data-view-group="flow" data-view-panel="terminal">
+          <div class="sequence" aria-label="Cross-replica terminal">
+            <div class="sequence-row"><span class="sequence-party">Mutation replica</span><span class="sequence-message"><span>create descriptor + indexes</span></span><span class="sequence-party">Redis</span></div>
+            <div class="sequence-row"><span class="sequence-party">Browser replica</span><span class="sequence-message"><span>authorize and claim frontend lease</span></span><span class="sequence-party">Redis</span></div>
+            <div class="sequence-row"><span class="sequence-party">Browser replica</span><span class="sequence-message"><span>input via RuntimeTransport</span></span><span class="sequence-party">Runtime owner</span></div>
+            <div class="sequence-row reverse"><span class="sequence-party">Runtime owner</span><span class="sequence-message"><span>output + capped scrollback</span></span><span class="sequence-party">Browser replica</span></div>
+          </div>
+        </div>
+        <div class="diagram" data-view-group="flow" data-view-panel="proxy">
+          <div class="sequence" aria-label="Cross-replica preview proxy">
+            <div class="sequence-row"><span class="sequence-party">HTTP owner A</span><span class="sequence-message"><span>origin-routed request ID</span></span><span class="sequence-party">Runtime owner B</span></div>
+            <div class="sequence-row"><span class="sequence-party">Runtime owner B</span><span class="sequence-message"><span>request over local bridge socket</span></span><span class="sequence-party">App runtime</span></div>
+            <div class="sequence-row reverse"><span class="sequence-party">Runtime owner B</span><span class="sequence-message"><span>bounded 256 KiB internal chunks</span></span><span class="sequence-party">HTTP owner A</span></div>
+            <div class="sequence-row reverse"><span class="sequence-party">HTTP owner A</span><span class="sequence-message"><span>complete local response/socket</span></span><span class="sequence-party">Browser</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Required contracts</h2>
+        <table>
+          <thead><tr><th>Concern</th><th>Planned behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Tenant isolation</td><td>Every key/envelope carries organization, runtime key, owner replica, and generation. Ambiguity fails closed.</td></tr>
+            <tr><td>Presence</td><td>Authenticated <code>runtime_hello</code> registers a TTL descriptor. Heartbeats renew through compare-generation Lua; stale renewal closes the old socket.</td></tr>
+            <tr><td>Delivery</td><td>Remote dispatch resolves after the owner acknowledges its socket write. Ack timeout returns existing unavailable/delivery-failed behavior.</td></tr>
+            <tr><td>Ordering</td><td>One per-runtime queue serializes local and remote writes on the socket owner.</td></tr>
+            <tr><td>Replies</td><td>Transient file/branch/checkout/proxy replies route to the request origin. DB-backed setup/process/export results execute on the bridge owner.</td></tr>
+            <tr><td>Large payloads</td><td>Internal frames target 256 KiB; receivers cap total bytes, chunk count, and assembly lifetime using current 25 MiB endpoint and 64 MiB bridge limits.</td></tr>
+            <tr><td>Local mode</td><td><code>TRACE_LOCAL_MODE</code> uses an in-memory implementation and does not require Redis.</td></tr>
+            <tr><td>Redis failure</td><td>Local socket delivery continues where possible; remote delivery fails quickly and never guesses another runtime.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Implementation slices</h2>
+        <div class="phase" data-step="1">
+          <h3>Lifecycle foundation and compatibility flag</h3>
+          <p>Fix startup/readiness and prove graceful shutdown before distributing any socket state.</p>
+          <details><summary>Readiness, signals, drain order, and verification</summary><div class="detail-body"><ul>
+            <li>Keep <code>/health</code> as the readiness-compatible path: 503 before startup and after drain begins; optionally add <code>/health/live</code>.</li>
+            <li>Install one idempotent SIGTERM/SIGINT handler that marks unready, rejects upgrades, stops mutating loops, closes sockets with 1012, stops backplane/Redis, then closes HTTP with a bounded force timeout.</li>
+            <li>Add <code>TRACE_REALTIME_BACKPLANE_ENABLED</code>; deploy code disabled before changing replica count.</li>
+            <li>Tests: pre-ready, ready, draining, duplicate signals, upgrade rejection, and 1012 reconnect.</li>
+          </ul></div></details>
+        </div>
+        <div class="phase" data-step="2">
+          <h3>Backplane, runtime directory, and async dispatch</h3>
+          <p>Add replica identity, versioned inboxes, generation-fenced presence, local/remote delivery parity, and correlated replies.</p>
+          <details><summary>Migrate the full runtime API blast radius</summary><div class="detail-body"><ul>
+            <li>Add <code>realtime-backplane.ts</code> and <code>runtime-directory.ts</code>; initialize the inbox before readiness.</li>
+            <li>Broadcast presence updates so <code>waitForBridge</code> resolves when a bridge connects elsewhere.</li>
+            <li>Convert <code>send</code>, <code>sendToRuntime</code>, availability, listing, and request methods to async descriptor-backed operations.</li>
+            <li>Audit all production callers in session, application, managed-git, terminal, runtime-access, connections, bridge-access, endpoint proxy, and Slack routes. Services pass explicit org and persisted home runtime; local binding is not distributed truth.</li>
+            <li>Preserve protocol-version gates and source-runtime validation for every pending response.</li>
+          </ul></div></details>
+        </div>
+        <div class="phase" data-step="3">
+          <h3>Distributed terminal directory and relay</h3>
+          <p>Move serializable terminal state and indexes to Redis while actual browser WebSockets remain local.</p>
+          <details><summary>Interactive, restored, and headless terminal cases</summary><div class="detail-body"><ul>
+            <li>Store terminal kind, org, session/channel, runtime, owner user, state, frontend owner generation, expiry, and capped 50 KiB scrollback.</li>
+            <li>Maintain session, session-group, and channel/runtime indexes atomically with cleanup.</li>
+            <li>Attach on any replica: load descriptor, perform existing owner/capability checks, claim frontend lease, replay scrollback, route output to its local socket.</li>
+            <li>Rehydrate <code>activeTerminals</code> only from organization-scoped DB records. Preserve restored-terminal, revoked-capability, and cross-org denial tests.</li>
+            <li>Headless <code>executeCommand</code> gets a short-lived callback owner; owner death causes timeout/cleanup, never duplicate execution.</li>
+          </ul></div></details>
+        </div>
+        <div class="phase" data-step="4">
+          <h3>Preview proxy and singleton ownership</h3>
+          <p>Route preview responses to the HTTP/WebSocket owner and prevent two replicas from duplicating side effects.</p>
+          <details><summary>Proxy framing and job leadership</summary><div class="detail-body"><ul>
+            <li>Keep <code>pendingHttp</code>/<code>pendingWs</code> local; use origin-routable request IDs and bounded chunk reassembly.</li>
+            <li>Drop late responses when the origin replica is gone—its client connection is already gone.</li>
+            <li>Add a renewable leader lease for <code>slackEventBridge.rehydrate()</code>; detach local iterators immediately on lease loss.</li>
+            <li>Wrap design preview, PDF, animation/design-system preview, and design-system artifact reconciler iterations in named distributed locks, following existing cleanup/deprovision jobs.</li>
+            <li>Start singleton subscribers/intervals only after Redis/backplane readiness and stop them first during drain.</li>
+          </ul></div></details>
+        </div>
+        <div class="phase" data-step="5">
+          <h3>Staged two-replica rollout</h3>
+          <p>Enable compatibility on one task first, then raise desired count and run placement/failure tests.</p>
+          <details><summary>Rollout and rollback runbook</summary><div class="detail-body"><ol>
+            <li>Deploy code with the flag off; verify lifecycle behavior.</li>
+            <li>Enable the flag with desired count one; validate presence, inbox subscription, local fast path, and telemetry.</li>
+            <li>Scale to two with minimum healthy 100%, temporary surge capacity, readiness health checks, deregistration delay, and failure-domain spread.</li>
+            <li>Force API A / bridge B / terminal frontend A-and-B placements; kill each owner independently.</li>
+            <li>Perform a rolling deploy with active GraphQL subscriptions, sessions, terminal, preview HTTP, and preview WebSocket traffic.</li>
+            <li>Rollback in reverse: reduce to one compatible task before disabling the flag or deploying code that cannot read v1 envelopes.</li>
+          </ol><p>Production ECS/IaC is not present in this repository; platform settings are an explicit operations deliverable. The checked-in EC2 Compose file currently describes one backend.</p></div></details>
+        </div>
+      </section>
+
+      <section>
+        <h2>File impact</h2>
+        <div class="toolbar" data-file-filters aria-label="Filter file changes">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="add" aria-pressed="false">New</button>
+          <button type="button" data-filter="change" aria-pressed="false">Changed</button>
+          <button type="button" data-filter="remove" aria-pressed="false">Operations</button>
+        </div>
+        <table data-file-table>
+          <thead><tr><th>File / group</th><th>Change</th><th>Responsibility and proof</th></tr></thead>
+          <tbody>
+            <tr data-change="add"><td><code>lib/realtime-backplane.ts</code> + tests</td><td><span class="tag add">new</span></td><td>Replica inbox, ack waits, bounded chunks, lifecycle; two-instance and malformed-frame tests.</td></tr>
+            <tr data-change="add"><td><code>lib/runtime-directory.ts</code> + tests</td><td><span class="tag add">new</span></td><td>Descriptors, TTL, generation CAS, presence notifications; crash/reconnect/stale-owner tests.</td></tr>
+            <tr data-change="add"><td><code>lib/terminal-directory.ts</code> + tests</td><td><span class="tag add">new</span></td><td>Descriptors, indexes, frontend leases, scrollback, expiry; remote attach/replay/cleanup tests.</td></tr>
+            <tr data-change="add"><td><code>lib/leader-lease.ts</code> + tests</td><td><span class="tag add">new</span></td><td>Renewable long-lived ownership; acquire/renew/loss/takeover tests.</td></tr>
+            <tr data-change="change"><td><code>lib/redis.ts</code>, <code>lib/pubsub.ts</code>, <code>test/helpers.ts</code></td><td><span class="tag change">edit</span></td><td>Backplane lifecycle and typed mocks without breaking GraphQL pub/sub or local mode.</td></tr>
+            <tr data-change="change"><td><code>lib/session-router.ts</code>, <code>lib/bridge-handler.ts</code></td><td><span class="tag change">edit</span></td><td>Local socket registry vs distributed descriptors, async dispatch, presence fencing, result routing.</td></tr>
+            <tr data-change="change"><td><code>lib/terminal-relay.ts</code>, <code>lib/terminal-handler.ts</code>, <code>services/terminal.ts</code></td><td><span class="tag change">edit</span></td><td>Distributed terminal state with local socket handles and unchanged authorization guarantees.</td></tr>
+            <tr data-change="change"><td><code>services/endpoint-proxy.ts</code></td><td><span class="tag change">edit</span></td><td>Origin-routed HTTP/WS results, chunk bounds, timeout and owner-loss tests.</td></tr>
+            <tr data-change="change"><td><code>services/session.ts</code>, <code>session-applications.ts</code>, <code>managed-git.ts</code></td><td><span class="tag change">edit</span></td><td>Await delivery and supply org/persisted runtime target; existing suites gain remote-owner cases.</td></tr>
+            <tr data-change="change"><td><code>services/runtime-access.ts</code>, <code>connections.ts</code>, <code>schema/bridge-access.ts</code>, <code>schema/session.ts</code></td><td><span class="tag change">edit</span></td><td>Descriptor-backed availability/capabilities/repo/status reads; no GraphQL schema change.</td></tr>
+            <tr data-change="change"><td><code>lib/slack/event-bridge.ts</code>, <code>index.ts</code></td><td><span class="tag change">edit</span></td><td>Detach-all leadership, readiness, signals, initialization, locks, ordered drain.</td></tr>
+            <tr data-change="remove"><td><code>deployment platform</code></td><td><span class="tag remove">ops</span></td><td>Desired count ≥2, 100% minimum healthy, surge, readiness path, drain delay, and placement spread.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Verification and acceptance</h2>
+        <table>
+          <tbody>
+            <tr><td><code>pnpm --filter @trace/server test:unit</code></td><td>Existing router/bridge/terminal/proxy/service suites plus two-replica, fencing, chunk, lease, and failover cases.</td></tr>
+            <tr><td><code>pnpm --filter @trace/server build</code></td><td>Completeness gate for the broad sync-to-async call-site migration and no <code>any</code> shortcuts.</td></tr>
+            <tr><td><code>pnpm build</code></td><td>Compatibility with shared bridge types, web, desktop, mobile, and container bridge.</td></tr>
+            <tr><td>Cross-replica staging</td><td>A mutation succeeds with its bridge on B; file results return to A; browser terminal can attach on either task.</td></tr>
+            <tr><td>Failure injection</td><td>Kill request origin, runtime owner, terminal frontend owner, Redis connection, and Slack leader independently.</td></tr>
+            <tr><td>Rolling deploy</td><td>At least one task stays ready; new HTTP requests continue; long-lived sockets receive 1012 and reconnect.</td></tr>
+            <tr><td>Isolation</td><td>The same runtime ID in two organizations never shares presence, commands, terminals, or metadata.</td></tr>
+            <tr><td>Side effects</td><td>Two replicas produce one Slack post and one claimed reconciler iteration per key.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Risks requiring reviewer acceptance</h2>
+        <div class="callout risk"><strong>Broad async migration.</strong> Many services synchronously inspect local <code>RuntimeInstance</code>. Add descriptors first, migrate by domain, and use the full server build as the completeness gate.</div>
+        <div class="callout risk"><strong>At-most-once Redis delivery.</strong> Ack makes uncertainty visible and generations fence old owners, but a crash can occur around a socket write. Do not auto-retry non-idempotent commands; durable streams plus bridge deduplication are later scope.</div>
+        <div class="callout risk"><strong>Redis bandwidth.</strong> Preview bodies can reach 25 MiB. Bounded chunks prevent single-message spikes, but sustained preview traffic is the trigger for a dedicated gateway or private inter-replica stream.</div>
+        <div class="callout risk"><strong>Mixed versions.</strong> Old tasks do not understand v1 inboxes. The flag-first rollout and scale-down-before-incompatible-rollback rule are mandatory.</div>
+        <details><summary>Approve these choices, or return the plan for revision</summary><div class="detail-body"><ul>
+          <li>Keep WebSockets in API replicas and use Redis for presence plus directed traffic.</li>
+          <li>Accept reconnect—not connection migration—as the deploy guarantee.</li>
+          <li>Accept acknowledged at-most-once delivery in this release.</li>
+          <li>Use Redis chunking for endpoint traffic initially.</li>
+          <li>Treat multi-replica self-hosted Docker Compose support as separate unless explicitly added.</li>
+        </ul></div></details>
+      </section>
+    </article>
+    <script>
+      (() => {
+        document.querySelectorAll("[data-view-switcher]").forEach((switcher) => {
+          const group = switcher.dataset.viewSwitcher;
+          const buttons = [...switcher.querySelectorAll("[data-view]")];
+          const panels = [...document.querySelectorAll(`[data-view-group="${group}"]`)];
+
+          const selectView = (view) => {
+            buttons.forEach((button) => {
+              button.setAttribute("aria-pressed", String(button.dataset.view === view));
+            });
+            panels.forEach((panel) => {
+              panel.hidden = panel.dataset.viewPanel !== view;
+            });
+          };
+
+          buttons.forEach((button) => {
+            button.addEventListener("click", () => selectView(button.dataset.view));
+          });
+          selectView(
+            buttons.find((button) => button.getAttribute("aria-pressed") === "true")?.dataset.view,
+          );
+        });
+
+        document.querySelectorAll("[data-file-filters]").forEach((filters) => {
+          const buttons = [...filters.querySelectorAll("[data-filter]")];
+          const rows = [...document.querySelectorAll("[data-file-table] [data-change]")];
+
+          buttons.forEach((button) => {
+            button.addEventListener("click", () => {
+              const filter = button.dataset.filter;
+              buttons.forEach((candidate) => {
+                candidate.setAttribute("aria-pressed", String(candidate === button));
+              });
+              rows.forEach((row) => {
+                row.hidden = filter !== "all" && row.dataset.change !== filter;
+              });
+            });
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>

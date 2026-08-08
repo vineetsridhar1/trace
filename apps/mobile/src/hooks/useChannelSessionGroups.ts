@@ -10,25 +10,14 @@ import {
 export type ActiveSegment = "all" | "mine";
 export type MergedArchivedSegment = "merged" | "archived";
 
-export type SessionGroupSectionStatus =
-  | "needs_input"
-  | "in_review"
-  | "in_progress"
-  | "failed"
-  | "stopped";
+export type SessionGroupSectionStatus = "needs_input" | "in_review" | "in_progress";
 
 export interface SessionGroupSection {
   status: SessionGroupSectionStatus;
   ids: string[];
 }
 
-const SECTION_ORDER: SessionGroupSectionStatus[] = [
-  "needs_input",
-  "in_review",
-  "in_progress",
-  "failed",
-  "stopped",
-];
+const SECTION_ORDER: SessionGroupSectionStatus[] = ["needs_input", "in_review", "in_progress"];
 
 function isArchived(group: SessionGroupEntity): boolean {
   return Boolean(group.archivedAt) || group.status === "archived";
@@ -98,8 +87,6 @@ export function useActiveSessionGroupIds(
 function sectionForStatus(status: string | null | undefined): SessionGroupSectionStatus {
   if (status === "needs_input") return "needs_input";
   if (status === "in_review") return "in_review";
-  if (status === "failed") return "failed";
-  if (status === "stopped") return "stopped";
   return "in_progress";
 }
 
@@ -119,7 +106,7 @@ function areSectionsEqual(a: SessionGroupSection[], b: SessionGroupSection[]): b
 
 /**
  * Active session groups bucketed by display status, in priority order
- * (`needs_input` → `in_review` → `in_progress` → `failed` → `stopped`).
+ * (`needs_input` → `in_review` → `in_progress`).
  * Empty sections are omitted. Uses a custom equality fn so downstream
  * consumers only re-render when membership actually changes.
  */
@@ -135,8 +122,6 @@ export function useChannelSessionGroupSections(
         needs_input: [],
         in_review: [],
         in_progress: [],
-        failed: [],
-        stopped: [],
       };
 
       for (const group of Object.values(state.sessionGroups) as SessionGroupEntity[]) {

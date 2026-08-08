@@ -17,7 +17,14 @@ function artifactEvent(id: string, type = "trace.visual-plan.v1"): Event {
         createdAt: `2026-08-02T00:00:0${id}.000Z`,
         manifest: {
           schemaVersion: 1,
-          files: [{ path: "plan.html", mediaType: "text/html", size: 1, digest: "digest" }],
+          files: [
+            {
+              path: "implementation-approach.html",
+              mediaType: "text/html",
+              size: 1,
+              digest: "digest",
+            },
+          ],
         },
       },
     },
@@ -37,6 +44,16 @@ function questionEvent(id: string): Event {
       type: "assistant",
       message: { content: [{ type: "question", questions: [] }] },
     },
+  };
+}
+
+function messageEvent(id: string): Event {
+  return {
+    ...artifactEvent(id),
+    id: `message-${id}`,
+    eventType: "message_sent",
+    payload: { text: "Continue with a different direction" },
+    actor: { type: "user", id: "user-1", name: null, avatarUrl: null },
   };
 }
 
@@ -69,5 +86,22 @@ describe("findLatestTimelineInputRequest", () => {
     const image = artifactEvent("1", "trace.image.v1");
 
     expect(findLatestTimelineInputRequest([image.id], { [image.id]: image })).toBeNull();
+  });
+
+  it("keeps a question pending until a later user message makes it stale", () => {
+    const question = questionEvent("1");
+    const message = messageEvent("2");
+
+    expect(
+      findLatestTimelineInputRequest([question.id], {
+        [question.id]: question,
+      }),
+    ).toEqual({ kind: "question" });
+    expect(
+      findLatestTimelineInputRequest([question.id, message.id], {
+        [question.id]: question,
+        [message.id]: message,
+      }),
+    ).toBeNull();
   });
 });

@@ -1,14 +1,6 @@
 import TurndownService from "turndown";
 import { gfm } from "@truto/turndown-plugin-gfm";
 
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 const planTurndown = new TurndownService({
   headingStyle: "atx",
   bulletListMarker: "-",
@@ -24,16 +16,22 @@ export function planMarkdownForImplementation(html: string): string {
 }
 
 const PLAN_CSP =
-  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
+
+const PLAN_SCROLL_GUARD = "<style>html,body{overscroll-behavior:contain}</style>";
+
+/** Let a plan modify only its opaque-origin document; all other sandbox capabilities stay denied. */
+export const PLAN_IFRAME_SANDBOX = "allow-scripts";
 
 /** Defense in depth: the upload validator rejects network references, and the frame also forbids them. */
 export function sandboxedPlanHtml(html: string): string {
   const policy = `<meta http-equiv="Content-Security-Policy" content="${PLAN_CSP}">`;
+  const headContents = `${policy}${PLAN_SCROLL_GUARD}`;
   if (/<head\b[^>]*>/i.test(html)) {
-    return html.replace(/<head\b[^>]*>/i, (head) => `${head}${policy}`);
+    return html.replace(/<head\b[^>]*>/i, (head) => `${head}${headContents}`);
   }
   if (/<html\b[^>]*>/i.test(html)) {
-    return html.replace(/<html\b[^>]*>/i, (root) => `${root}<head>${policy}</head>`);
+    return html.replace(/<html\b[^>]*>/i, (root) => `${root}<head>${headContents}</head>`);
   }
-  return `<!doctype html><html><head>${policy}</head><body>${html}</body></html>`;
+  return `<!doctype html><html><head>${headContents}</head><body>${html}</body></html>`;
 }

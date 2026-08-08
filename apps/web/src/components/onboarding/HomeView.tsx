@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { toast } from "sonner";
 import { normalizeTool } from "../session/picker/pickerShared";
@@ -26,6 +26,7 @@ import type { ToolOptionValue } from "../session/picker/pickerShared";
 import type { HomeCreatableKind } from "../home/home-kinds";
 
 export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
   const activeOrgId = useAuthStore((state: AuthState) => state.activeOrgId);
   const currentUserId = useAuthStore((state: AuthState) => state.user?.id);
   const defaultTool = useAuthStore((state: AuthState) => state.user?.defaultSessionTool);
@@ -86,6 +87,10 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
     channelTargets.find((target) => target.key === selectedChannelTargetKey) ?? null;
   const selectedChannelRepoId = selectedChannelTarget?.repoId ?? null;
   const isCreateMode = mode === "create";
+
+  useLayoutEffect(() => {
+    if (isCreateMode) scrollViewportRef.current?.scrollTo({ top: 0 });
+  }, [isCreateMode]);
 
   useEffect(() => {
     if (!isCreateMode) return;
@@ -198,7 +203,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--th-surface-mid)]">
       <HomeHeader people={people} title={isCreateMode ? "New session" : "Home"} />
-      <div className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+      <div ref={scrollViewportRef} className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="pointer-events-none absolute left-1/2 top-[-70px] h-[420px] w-[min(900px,100vw)] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,color-mix(in_srgb,var(--th-accent)_8%,transparent),transparent_70%)]" />
         <main
           className={`relative mx-auto flex min-h-full w-full flex-col px-4 pb-7 sm:px-6 ${

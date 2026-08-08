@@ -89,6 +89,12 @@
   --trace-window-bg: rgb(39 39 42 / 0.74);
 }
 
+.structured-question {
+  --question-sunken: color-mix(in srgb, var(--th-surface-deep) 55%, var(--th-surface));
+  --question-selection: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+
 @theme inline {
   --font-sans: "Geist Variable", sans-serif;
 

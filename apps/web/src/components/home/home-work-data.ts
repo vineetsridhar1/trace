@@ -143,17 +143,19 @@ function resolveStatus(group: SessionGroupEntity, sessions: SessionEntity[]): st
   ) {
     return "needs_input";
   }
+  if (group.prUrl || sessions.some((session) => session.prUrl)) {
+    return "in_review";
+  }
   if (
     group.status === "in_review" ||
-    group.prUrl ||
-    sessions.some((session) => session.sessionStatus === "in_review" || session.prUrl)
+    sessions.some((session) => session.sessionStatus === "in_review")
   ) {
     return "in_review";
   }
-  if (group.status === "failed" || sessions.some((session) => session.agentStatus === "failed")) {
+  if (sessions.some((session) => session.agentStatus === "failed")) {
     return "failed";
   }
-  if (group.status === "stopped" || sessions.some((session) => session.agentStatus === "stopped")) {
+  if (sessions.some((session) => session.agentStatus === "stopped")) {
     return "stopped";
   }
   return "in_progress";

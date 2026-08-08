@@ -403,7 +403,7 @@ export function isTraceManagedWorktreePath(repoId: string, workdir: string): boo
  */
 export async function adoptWorktree({
   repoPath,
-  repoId,
+  repoId: _repoId,
   worktreePath,
   slug,
   gitHooksEnabled,

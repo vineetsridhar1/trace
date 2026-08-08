@@ -1,7 +1,7 @@
 import { load } from "cheerio";
 import { ValidationError } from "./errors.js";
 
-const FORBIDDEN_TAGS = new Set(["script", "iframe", "embed", "object", "form"]);
+const FORBIDDEN_TAGS = new Set(["iframe", "embed", "object", "form"]);
 const URL_ATTRIBUTES = new Set([
   "action",
   "background",
@@ -26,19 +26,19 @@ function validateCss(source: string): void {
   for (const match of source.matchAll(/url\(\s*["']?([^)'"\s]+)["']?\s*\)/gi)) {
     if (!isInlineReference(match[1])) {
       throw new ValidationError(
-        `plan.html must be self-contained; remove the external CSS asset ${match[1]}`,
+        `Visual plan HTML must be self-contained; remove the external CSS asset ${match[1]}`,
       );
     }
   }
   if (/@import\s+(?:url\s*\(|["'])/i.test(source)) {
-    throw new ValidationError("plan.html must be self-contained; remove the CSS @import");
+    throw new ValidationError("Visual plan HTML must be self-contained; remove the CSS @import");
   }
 }
 
 /**
- * A plan renders in a sandboxed frame with scripting disabled and no sibling files, so anything
- * it cannot carry inline would silently disappear at review time. Reject it at upload instead,
- * where the agent still gets a structured error it can act on.
+ * A plan renders in a sandboxed frame with scripting and network access disabled. The uploaded
+ * folder may contain supporting files, but the rendered document must carry its visual assets
+ * inline. Reject broken or unsafe markup while the agent can still act on the upload error.
  */
 export function validatePlanHtml(source: string): void {
   const $ = load(source);
@@ -46,20 +46,25 @@ export function validatePlanHtml(source: string): void {
     if (!("tagName" in element)) return;
     const tag = element.tagName.toLowerCase();
     if (FORBIDDEN_TAGS.has(tag)) {
-      throw new ValidationError(`plan.html must not contain <${tag}>`);
+      throw new ValidationError(`Visual plan HTML must not contain <${tag}>`);
+    }
+    if (tag === "script" && "src" in element.attribs) {
+      throw new ValidationError("Visual plan scripts must be inline; remove the script src");
     }
     if (tag === "meta" && $(element).attr("http-equiv")?.trim().toLowerCase() === "refresh") {
-      throw new ValidationError("plan.html must not contain meta refresh navigation");
+      throw new ValidationError("Visual plan HTML must not contain meta refresh navigation");
     }
     for (const [rawName, value] of Object.entries(element.attribs)) {
       const name = rawName.toLowerCase();
       if (name === "style") validateCss(value);
       if (name === "srcset") {
-        throw new ValidationError("plan.html must not contain srcset; inline one image with src");
+        throw new ValidationError(
+          "Visual plan HTML must not contain srcset; inline one image with src",
+        );
       }
       if ((URL_ATTRIBUTES.has(name) || name.endsWith(":href")) && !isInlineReference(value)) {
         throw new ValidationError(
-          `plan.html must be self-contained; remove the external reference to ${value}`,
+          `Visual plan HTML must be self-contained; remove the external reference to ${value}`,
         );
       }
     }

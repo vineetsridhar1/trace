@@ -16,8 +16,6 @@ const SECTION_LABELS: Record<SessionGroupSectionStatus, string> = {
   needs_input: "Needs Input",
   in_review: "In Review",
   in_progress: "In Progress",
-  failed: "Failed",
-  stopped: "Stopped",
 };
 
 export interface SessionGroupSectionHeaderProps {

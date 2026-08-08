@@ -66,6 +66,7 @@ try {
   } catch (error) {
     throw new Error(
       `Could not reach the dev server at ${baseUrl} — is it still running on port 3000? (${error instanceof Error ? error.message : String(error)})`,
+      { cause: error },
     );
   }
   await page.waitForTimeout(300);

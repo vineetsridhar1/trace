@@ -3,8 +3,16 @@ export type {
   Question,
   QuestionBlock,
   QuestionOption,
+  QuestionType,
+  TraceInputResponse,
 } from "./adapters/coding-tool.js";
-export { hasPlanBlock, hasQuestionBlock, parseQuestion } from "./adapters/coding-tool.js";
+export {
+  hasPlanBlock,
+  hasQuestionBlock,
+  parseQuestion,
+  parseTraceRequestInputs,
+  parseTraceInputResponses,
+} from "./adapters/coding-tool.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
 export {
@@ -25,10 +33,7 @@ export {
   isSupportedModel,
   isSupportedReasoningEffort,
 } from "./models.js";
-export {
-  PROVISIONED_RUNTIME_PREFIX,
-  isProvisionedRuntimeId,
-} from "./runtime-ids.js";
+export { PROVISIONED_RUNTIME_PREFIX, isProvisionedRuntimeId } from "./runtime-ids.js";
 export type { BuiltinSlashCommand } from "./slash-commands.js";
 export { BUILTIN_SLASH_COMMANDS } from "./slash-commands.js";
 export type { GitCheckpointContext, GitCheckpointTrigger } from "./git-checkpoint.js";

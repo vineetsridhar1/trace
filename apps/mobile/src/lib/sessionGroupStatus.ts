@@ -18,11 +18,8 @@ export function statusIndicatorColor(
       return theme.colors.statusInReview;
     case "in_progress":
       return theme.colors.statusActive;
-    case "failed":
-      return theme.colors.statusFailed;
     case "merged":
       return theme.colors.statusMerged;
-    case "stopped":
     case "archived":
     default:
       return theme.colors.dimForeground;
@@ -49,9 +46,6 @@ export function mapStatusToChipVariant(
       return "inReview";
     case "merged":
       return "merged";
-    case "failed":
-    case "stopped":
-      return "failed";
     default:
       return null;
   }

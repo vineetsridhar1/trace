@@ -183,7 +183,6 @@ export function GroupTabStrip({
                 session.agentStatus,
                 session.sessionStatus,
                 null,
-                null,
                 session,
               );
               const color = agentStatusColor[displayAgentStatus] ?? "text-muted-foreground";

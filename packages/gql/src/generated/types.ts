@@ -1835,10 +1835,12 @@ export type QueryAgentEnvironmentsArgs = {
 };
 
 export type QueryAnimationSessionGroupsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
 };
 
 export type QueryAppSessionGroupsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -1912,6 +1914,7 @@ export type QueryDesignElementTextSourceArgs = {
 };
 
 export type QueryDesignSessionGroupsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -1995,6 +1998,7 @@ export type QueryPdfSessionDownloadUrlArgs = {
 };
 
 export type QueryPdfSessionGroupsArgs = {
+  includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
 };
 
@@ -2563,12 +2567,10 @@ export type SessionGroupKind = "animation" | "app" | "coding" | "design" | "desi
 
 export type SessionGroupStatus =
   | "archived"
-  | "failed"
   | "in_progress"
   | "in_review"
   | "merged"
-  | "needs_input"
-  | "stopped";
+  | "needs_input";
 
 export type SessionGroupVisibility = "private" | "public";
 

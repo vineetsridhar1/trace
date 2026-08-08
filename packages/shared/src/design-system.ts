@@ -276,7 +276,8 @@ function validateComponents(
             const parts = [...entryDirectory, ...specifier.split("/")];
             const resolved: string[] = [];
             for (const part of parts)
-              part === "." ? undefined : part === ".." ? resolved.pop() : resolved.push(part);
+              if (part === "..") resolved.pop();
+              else if (part !== ".") resolved.push(part);
             const candidate = resolved.join("/");
             return ![
               candidate,

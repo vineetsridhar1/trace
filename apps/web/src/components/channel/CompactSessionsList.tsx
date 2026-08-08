@@ -11,16 +11,15 @@ import { getSessionLastActivityAt } from "./session-cell-data";
 function CompactSessionRow({
   row,
   channelId,
-  status,
 }: {
   key?: string | number;
   row: SessionGroupRow;
   channelId: string;
-  status: string;
 }) {
   const isActive = useUIStore((s: UIState) => s.activeSessionGroupId === row.id);
   const hasDoneBadge = useUIStore((s: UIState) => !!s.sessionGroupDoneBadges[row.id]);
-  const rowColor = sessionStatusColor[status] ?? "text-muted-foreground";
+  const rowColor =
+    sessionStatusColor[row.displaySessionStatus ?? "in_progress"] ?? "text-muted-foreground";
 
   return (
     <button
@@ -87,7 +86,7 @@ export function CompactSessionsList({
               <span className="text-xs text-muted-foreground">{items.length}</span>
             </div>
             {items.map((row: SessionGroupRow) => (
-              <CompactSessionRow key={row.id} row={row} channelId={channelId} status={status} />
+              <CompactSessionRow key={row.id} row={row} channelId={channelId} />
             ))}
           </div>
         );

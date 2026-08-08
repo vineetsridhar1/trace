@@ -14,6 +14,7 @@ import { GitCheckpointChips } from "./messages/GitCheckpointChips";
 import { ArtifactUploadedCard } from "./messages/ArtifactUploadedCard";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
+import { structuredResponseSummary } from "./structuredResponseSummary";
 
 const AGENT_NAMES = new Set(["agent", "task"]);
 
@@ -290,7 +291,7 @@ export const SessionMessage = memo(function SessionMessage({
     case "message_sent":
       return (
         <UserBubble
-          text={str(payload?.text)}
+          text={structuredResponseSummary(str(payload?.text))}
           timestamp={timestamp}
           actorId={actor?.id}
           actorName={actor?.name}
@@ -309,7 +310,7 @@ export const SessionMessage = memo(function SessionMessage({
           return false;
         }
         if (artifactType === "trace.visual-plan.v1") {
-          return file.path === "plan.html" || file.path === "plan.mdx";
+          return file.mediaType === "text/html";
         }
         return file.mediaType.startsWith(artifactType === "trace.image.v1" ? "image/" : "video/");
       });

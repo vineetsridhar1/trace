@@ -39,6 +39,7 @@ import {
   inspectSessionGitSyncStatus,
   BridgeOutbox,
 } from "@trace/shared";
+import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
 import type { GitExecFn } from "@trace/shared";
 import { getUsedSlugs } from "@trace/shared/animal-names";
@@ -250,7 +251,7 @@ export async function getGithubAuthToken(): Promise<string> {
     }
     return token;
   } catch (error) {
-    throw new Error(extractExecErrorMessage(error));
+    throw new Error(extractExecErrorMessage(error), { cause: error });
   }
 }
 
@@ -283,7 +284,7 @@ async function inspectLocalPrStatus(workdir: string): Promise<{
     if (isNoPullRequestError(message)) {
       return { branch, pr: null };
     }
-    throw new Error(message);
+    throw new Error(message, { cause: error });
   }
 
   const parsed = JSON.parse(stdout) as {
@@ -617,6 +618,12 @@ export class BridgeClient implements IBridgeClient {
     }
   }
 
+  refreshCapabilities() {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.sendRuntimeHello();
+    }
+  }
+
   private cancelPendingReconnect() {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -944,20 +951,15 @@ export class BridgeClient implements IBridgeClient {
     }
     const workdir = cwd ?? os.homedir();
     const traceRuntime = await this.traceRuntime;
-    const traceApiUrl = new URL(this.serverUrl);
-    if (traceApiUrl.protocol === "wss:") traceApiUrl.protocol = "https:";
-    if (traceApiUrl.protocol === "ws:") traceApiUrl.protocol = "http:";
-    traceApiUrl.pathname = "/";
-    traceApiUrl.search = "";
-    traceApiUrl.hash = "";
-    const invocationEnv = {
-      ...runtimeEnv,
-      TRACE_API_URL: traceApiUrl.toString(),
-      TRACE_SKILLS_DIR: traceRuntime.skillsDir,
-      TRACE_NODE_BINARY: process.execPath,
-      TRACE_ELECTRON_RUN_AS_NODE: "1",
-      PATH: `${traceRuntime.binDir}${path.delimiter}${process.env.PATH ?? ""}`,
-    };
+    const invocationEnv = buildTraceInvocationEnv({
+      runtimeEnv,
+      serverUrl: this.serverUrl,
+      skillsDir: traceRuntime.skillsDir,
+      binDir: traceRuntime.binDir,
+      nodeBinary: process.execPath,
+      basePath: process.env.PATH,
+      electronRunAsNode: true,
+    });
 
     if (checkpointContext && cwd) {
       try {

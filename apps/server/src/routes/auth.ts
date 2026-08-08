@@ -154,7 +154,7 @@ async function consumeRateLimit(
   subject = rateLimitClientKey(req),
 ): Promise<boolean> {
   const key = `${RATE_LIMIT_KEY_PREFIX}:${config.keyPrefix}:${subject}`;
-  let limited = false;
+  let limited: boolean;
   let retryAfter = config.windowSeconds;
 
   try {

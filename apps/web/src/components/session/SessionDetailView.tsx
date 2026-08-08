@@ -7,6 +7,7 @@ import { useSessionPromptIndex } from "../../hooks/useSessionPromptIndex";
 import {
   useEntityStore,
   useEntityField,
+  useAuthStore,
   useScopedEvents,
   eventScopeKey,
   type SessionEntity,
@@ -35,6 +36,7 @@ import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { TraceLoader } from "../ui/trace-loader";
 import { SessionRuntimePicker } from "./SessionRuntimePicker";
 import { useVisualPlanDocument } from "../artifact/useVisualPlanDocument";
+import { visualPlanHtmlPath } from "../artifact/visual-plan-file";
 import { findMessageActionsEventIds } from "./messageActions";
 import type { MarkdownSteerBlock, MarkdownSteerCommentsByBlock } from "../ui/markdownSteering";
 import { client } from "../../lib/urql";
@@ -43,14 +45,16 @@ import {
   MOVE_SESSION_TO_CLOUD_MUTATION,
   RETRY_SESSION_CONNECTION_MUTATION,
   RETRY_SESSION_GROUP_SETUP_MUTATION,
-  SEND_SESSION_MESSAGE_MUTATION,
 } from "@trace/client-core";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { CLOUD_REPO_REMOTE_REQUIRED, repoRemoteKnownMissing } from "../../lib/repo-capabilities";
-import { cn } from "../../lib/utils";
 import { findLatestTimelineInputRequest } from "./visualPlanReview";
 import { CondensedSessionMessages } from "./CondensedSessionMessages";
 import { buildCompactChatSummary } from "./compact-chat-summary";
+import { uploadFile } from "../../lib/upload";
+import type { FileAttachment } from "./ImageAttachmentBar";
+import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
+import { findActiveQuestion, findReplacedQuestionIds } from "./questionHistory";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -316,16 +320,8 @@ export function SessionDetailView({
         : timelineInputRequest
           ? null
           : latestPlanArtifact;
-  const visiblePlanPath = visiblePlanArtifact?.manifest.files.some(
-    (file) => file.path === "plan.html",
-  )
-    ? "plan.html"
-    : "plan.mdx";
   const { implementationContent: artifactPlanContent, error: artifactPlanError } =
-    useVisualPlanDocument(
-      visiblePlanArtifact?.id ?? null,
-      visiblePlanArtifact ? visiblePlanPath : undefined,
-    );
+    useVisualPlanDocument(visiblePlanArtifact?.id ?? null, visualPlanHtmlPath(visiblePlanArtifact));
   const gitCheckpoints = useEntityField("sessions", sessionId, "gitCheckpoints") as
     | GitCheckpoint[]
     | undefined;
@@ -565,13 +561,12 @@ export function SessionDetailView({
     : (activePlan?.node.planContent ?? "");
 
   const activeQuestion = useMemo(() => {
-    if (sessionStatus !== "needs_input") return null;
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      const node = nodes[i];
-      if (node.kind === "ask-user-question") return { node, index: i };
-    }
-    return null;
-  }, [nodes, sessionStatus]);
+    return findActiveQuestion(nodes, sessionStatus, timelineInputRequest?.kind ?? null);
+  }, [nodes, sessionStatus, timelineInputRequest]);
+  const replacedQuestionIds = useMemo(
+    () => findReplacedQuestionIds(nodes, events),
+    [events, nodes],
+  );
 
   const [planComments, setPlanComments] = useState<MarkdownSteerCommentsByBlock>({});
 
@@ -619,6 +614,12 @@ export function SessionDetailView({
     if (activePlan && activePlan.index > activeQuestion.index) return null;
     return activeQuestion.node;
   })();
+  const pinnedQuestion =
+    activeQuestion?.node.id === dismissedQuestionId &&
+    timelineInputRequest?.kind !== "visual-plan" &&
+    !(activePlan && activePlan.index > activeQuestion.index)
+      ? activeQuestion.node
+      : null;
 
   const latestTodos = useMemo(
     () =>
@@ -647,6 +648,32 @@ export function SessionDetailView({
   }, [sessionId]);
 
   const addAttachments = useAddAttachments(sessionId);
+  const handleQuestionResponse = useCallback(
+    async (text: string, attachments: FileAttachment[] = []) => {
+      try {
+        const organizationId = useAuthStore.getState().activeOrgId;
+        const attachmentKeys = await Promise.all(
+          attachments.map((attachment) => uploadFile(attachment.file, organizationId ?? undefined)),
+        );
+        await sendOptimisticSessionMessage({
+          sessionId,
+          text,
+          imageKeys: attachmentKeys.length > 0 ? attachmentKeys : undefined,
+          imagePreviewUrls:
+            attachmentKeys.length > 0
+              ? attachments.map((attachment) => attachment.previewUrl)
+              : undefined,
+        });
+        for (const attachment of attachments) URL.revokeObjectURL(attachment.previewUrl);
+      } catch (questionError) {
+        toast.error(
+          questionError instanceof Error ? questionError.message : "Failed to send answers",
+        );
+        throw questionError;
+      }
+    },
+    [sessionId],
+  );
   // Mirror the conditions under which the composer (with its attachment bar) is
   // actually shown and can accept input. Otherwise dropped files would land in a
   // draft with no visible attachment bar (recovery panel) or no way to send
@@ -725,6 +752,7 @@ export function SessionDetailView({
                   scrollToEventId={scrollToEventId}
                   onScrollComplete={onScrollComplete}
                   activePlanId={activePlan?.node.id}
+                  replacedQuestionIds={replacedQuestionIds}
                   planComments={planComments}
                   onAddPlanComment={handleAddPlanComment}
                   onRemovePlanComment={handleRemovePlanComment}
@@ -794,22 +822,35 @@ export function SessionDetailView({
             )}
           </div>
           <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
-            {showQuestion ? (
-              <AskUserQuestionBar
-                node={showQuestion}
-                onResponse={(text) => {
-                  client
-                    .mutation(SEND_SESSION_MESSAGE_MUTATION, {
-                      sessionId,
-                      text,
-                      interactionMode: activePlan ? "plan" : undefined,
-                    })
-                    .toPromise();
-                }}
-                onDismiss={() => {
-                  setDismissedQuestionId(showQuestion.id);
-                }}
-              />
+            {showQuestion || pinnedQuestion ? (
+              <>
+                <AskUserQuestionBar
+                  key={(showQuestion ?? pinnedQuestion!).id}
+                  node={showQuestion ?? pinnedQuestion!}
+                  collapsed={Boolean(pinnedQuestion)}
+                  onResponse={handleQuestionResponse}
+                  onDismiss={() => {
+                    setDismissedQuestionId((showQuestion ?? pinnedQuestion)!.id);
+                  }}
+                  onResume={() => setDismissedQuestionId(null)}
+                />
+                {pinnedQuestion ? (
+                  <>
+                    {!condensed && agentStatus === "active" && latestTodos ? (
+                      <StickyTodoList todos={latestTodos} />
+                    ) : null}
+                    <QueuedMessagesList sessionId={sessionId} condensed={condensed} />
+                    <SessionInput
+                      sessionId={sessionId}
+                      onStop={handleStop}
+                      bridgeAccess={bridgeAccess}
+                      sessionGroupId={sessionGroupId ?? null}
+                      onAccessRequested={refreshBridgeAccess}
+                      condensed={condensed}
+                    />
+                  </>
+                ) : null}
+              </>
             ) : activePlan || visiblePlanArtifact ? (
               planReviewContent ? (
                 <PlanResponseBar

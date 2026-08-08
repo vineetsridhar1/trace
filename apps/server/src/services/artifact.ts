@@ -34,16 +34,7 @@ function normalizeType(input: string): string {
 
 export function validateType(type: string, manifest: ArtifactBundleManifest): void {
   if (type === "trace.visual-plan.v1") {
-    // A plan is one self-contained page: no sibling stylesheet, script, or image to go missing.
-    if (!manifest.files.some((file) => file.path === "plan.html")) {
-      throw new ValidationError("Visual plan artifacts require plan.html at the root");
-    }
-    const stray = manifest.files.find((file) => file.path !== "plan.html");
-    if (stray) {
-      throw new ValidationError(
-        `Visual plans contain only plan.html, with everything inlined. Remove ${stray.path}`,
-      );
-    }
+    visualPlanHtmlPath(manifest);
   }
   if (
     type === "trace.image.v1" &&
@@ -57,6 +48,17 @@ export function validateType(type: string, manifest: ArtifactBundleManifest): vo
   ) {
     throw new ValidationError("Video artifacts require a video file");
   }
+}
+
+export function visualPlanHtmlPath(manifest: ArtifactBundleManifest): string {
+  const htmlFiles = manifest.files.filter((file) => file.mediaType === "text/html");
+  if (htmlFiles.length === 0) {
+    throw new ValidationError("Visual plan artifacts require one HTML file");
+  }
+  if (htmlFiles.length > 1) {
+    throw new ValidationError("Visual plan artifacts contain more than one HTML file");
+  }
+  return htmlFiles[0].path;
 }
 
 export class ArtifactService {
@@ -103,8 +105,9 @@ export class ArtifactService {
     const parsed = await parseArtifactArchive(input.archive);
     validateType(type, parsed.manifest);
     if (type === "trace.visual-plan.v1") {
-      const plan = parsed.files.get("plan.html");
-      if (!plan) throw new ValidationError("plan.html could not be read from the bundle");
+      const planPath = visualPlanHtmlPath(parsed.manifest);
+      const plan = parsed.files.get(planPath);
+      if (!plan) throw new ValidationError("Visual plan HTML could not be read from the bundle");
       validatePlanHtml(plan.toString("utf8"));
     }
     const artifactId = randomUUID();
