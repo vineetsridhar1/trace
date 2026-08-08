@@ -301,6 +301,35 @@ describe("ProvisionedRuntimeAdapter", () => {
     ).rejects.toThrow("statusUrl must use HTTPS");
   });
 
+  it("allows exact loopback HTTP provisioned URLs in production with an explicit opt-in", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TRACE_LOCAL_MODE", "");
+    vi.stubEnv("TRACE_ALLOW_INSECURE_LOOPBACK_PROVISIONER", "1");
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.validateConfig({
+        ...provisionedConfig,
+        startUrl: "http://127.0.0.1:4567/start",
+        stopUrl: "http://localhost:4567/stop",
+        statusUrl: "http://[::1]:4567/status",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("keeps non-loopback HTTP blocked when the local provisioner opt-in is enabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TRACE_ALLOW_INSECURE_LOOPBACK_PROVISIONER", "true");
+    const adapter = new ProvisionedRuntimeAdapter();
+
+    await expect(
+      adapter.validateConfig({
+        ...provisionedConfig,
+        startUrl: "http://localhost.example.com:4567/start",
+      }),
+    ).rejects.toThrow("startUrl must use HTTPS");
+  });
+
   it("starts with bearer auth, stable idempotency, and separate runtime bridge token", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     try {

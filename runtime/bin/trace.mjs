@@ -29,6 +29,14 @@ const apiUrl = process.env.TRACE_API_URL;
 const token = process.env.TRACE_INVOCATION_TOKEN;
 if (!apiUrl || !token) fail("this command is only available inside an active Trace session");
 
+if (type === "video" || type === "trace.video.v1") {
+  if (!statSync(source).isFile()) fail("video artifacts require one video file");
+  const validator = process.env.TRACE_BROWSER_VIDEO_VALIDATE;
+  if (!validator) fail("browser video validation is unavailable");
+  const validated = spawnSync(validator, [source], { stdio: "inherit", env: process.env });
+  if (validated.status !== 0) fail("video validation failed; artifact was not uploaded");
+}
+
 const temp = mkdtempSync(join(tmpdir(), "trace-artifact-"));
 const archivePath = join(temp, "artifact.tar.gz");
 try {

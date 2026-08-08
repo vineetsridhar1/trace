@@ -39,4 +39,55 @@ describe("container runtime dependencies", () => {
     expect(dockerfile).toContain("ENV TRACE_SKILLS_DIR=/trace/runtime/skills/");
     expect(dockerfile).not.toContain("COPY runtime/skills/ /trace/runtime/skills/");
   });
+
+  it("pins and smoke-tests the browser video runtime without session-time downloads", async () => {
+    const [dockerfile, dockerignore, config, smokeConfig] = await Promise.all([
+      readFile(new URL("../Dockerfile", import.meta.url), "utf8"),
+      readFile(new URL("../../../.dockerignore", import.meta.url), "utf8"),
+      readFile(new URL("../playwright-cli.config.json", import.meta.url), "utf8").then(
+        (value) =>
+          JSON.parse(value) as {
+            browser: {
+              isolated: boolean;
+              launchOptions: {
+                executablePath: string;
+                headless: boolean;
+                args: string[];
+              };
+            };
+            allowUnrestrictedFileAccess: boolean;
+          },
+      ),
+      readFile(new URL("../playwright-cli.build-smoke.config.json", import.meta.url), "utf8").then(
+        (value) =>
+          JSON.parse(value) as {
+            browser: { launchOptions: { args: string[] } };
+          },
+      ),
+    ]);
+
+    expect(dockerfile).toContain("@playwright/cli@0.1.18");
+    expect(dockerfile).toContain("playwright@1.63.0-alpha-2026-08-05");
+    expect(dockerfile).toContain("playwright install ffmpeg");
+    expect(dockerfile).toContain("chromium chromium-sandbox ffmpeg");
+    expect(dockerfile).toContain(
+      "COPY apps/container-bridge/playwright-cli.build-smoke.config.json",
+    );
+    expect(dockerfile).toContain(
+      "COPY apps/container-bridge/playwright-cli.config.json /opt/trace/playwright-cli.config.json",
+    );
+    expect(dockerfile).toContain("playwright-cli video-start");
+    expect(dockerfile).toContain("playwright-cli video-stop");
+    expect(dockerfile).toContain("trace-browser-video-validate");
+    expect(dockerfile).toContain("playwright-cli snapshot");
+    expect(dockerfile).toContain("playwright-cli screenshot");
+    expect(dockerignore).toContain("!apps/container-bridge/playwright-cli.config.json");
+    expect(config.browser.isolated).toBe(true);
+    expect(config.browser.launchOptions).toEqual(
+      expect.objectContaining({ executablePath: "/usr/bin/chromium", headless: true }),
+    );
+    expect(config.browser.launchOptions.args).not.toContain("--no-sandbox");
+    expect(smokeConfig.browser.launchOptions.args).toContain("--no-sandbox");
+    expect(config.allowUnrestrictedFileAccess).toBe(false);
+  });
 });

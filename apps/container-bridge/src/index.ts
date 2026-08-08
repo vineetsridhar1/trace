@@ -104,8 +104,11 @@ async function main(): Promise<void> {
                 reason,
               }),
             );
-            bridge?.disconnect();
-            process.exit(0);
+            if (!bridge) {
+              process.exit(0);
+              return;
+            }
+            void bridge.shutdown().finally(() => process.exit(0));
           },
         })
       : null;
@@ -147,15 +150,13 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => {
     console.log("[container-bridge] received SIGTERM, shutting down");
     leaseWatchdog?.stop();
-    bridge.disconnect();
-    process.exit(0);
+    void bridge.shutdown().finally(() => process.exit(0));
   });
 
   process.on("SIGINT", () => {
     console.log("[container-bridge] received SIGINT, shutting down");
     leaseWatchdog?.stop();
-    bridge.disconnect();
-    process.exit(0);
+    void bridge.shutdown().finally(() => process.exit(0));
   });
 }
 

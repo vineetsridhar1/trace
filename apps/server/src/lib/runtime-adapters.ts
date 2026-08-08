@@ -215,7 +215,7 @@ function assertHttpsUrl(value: unknown, key: string): string {
   } catch {
     throw new Error(`Provisioned agent environment ${key} must be a valid URL`);
   }
-  if (url.protocol === "http:" && isDevelopmentLoopbackUrl(url)) {
+  if (url.protocol === "http:" && isAllowedLoopbackUrl(url)) {
     return value;
   }
   if (url.protocol !== "https:") {
@@ -224,9 +224,18 @@ function assertHttpsUrl(value: unknown, key: string): string {
   return value;
 }
 
-function isDevelopmentLoopbackUrl(url: URL): boolean {
-  if (process.env.NODE_ENV === "production" && !isLocalMode()) return false;
-  return url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "::1";
+function isAllowedLoopbackUrl(url: URL): boolean {
+  const isLoopback =
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    url.hostname === "::1" ||
+    url.hostname === "[::1]";
+  if (!isLoopback) return false;
+  if (process.env.NODE_ENV !== "production" || isLocalMode()) return true;
+  return (
+    process.env.TRACE_ALLOW_INSECURE_LOOPBACK_PROVISIONER === "1" ||
+    process.env.TRACE_ALLOW_INSECURE_LOOPBACK_PROVISIONER === "true"
+  );
 }
 
 function assertProvisionedAuthConfig(value: unknown): ProvisionedAuthConfig {
