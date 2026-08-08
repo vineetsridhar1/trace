@@ -1544,23 +1544,32 @@ export function isFullyUnloadedSession(
 export class SessionService {
   private manualElementSaveQueues = new Map<string, Promise<void>>();
 
-  private async prepareArtifactInvocation(
+  private async prepareInvocation(
     sessionId: string,
     organizationId: string,
+    sessionGroupId: string | null,
   ): Promise<{ invocationId: string; runtimeEnv: Record<string, string> }> {
     const invocationId = randomUUID();
     await prisma.session.updateMany({
       where: { id: sessionId, organizationId },
       data: { activeInvocationId: invocationId },
     });
+    const serverUrl =
+      process.env.TRACE_SERVER_PUBLIC_URL?.trim() ||
+      `http://localhost:${process.env.PORT?.trim() || "4000"}`;
     return {
       invocationId,
       runtimeEnv: {
         TRACE_SESSION_ID: sessionId,
+        TRACE_SESSION_GROUP_ID: sessionGroupId ?? "",
+        TRACE_ORGANIZATION_ID: organizationId,
+        TRACE_SERVER_URL: serverUrl,
+        TRACE_API_URL: serverUrl,
         TRACE_INVOCATION_ID: invocationId,
         TRACE_INVOCATION_TOKEN: createAgentInvocationToken({
           organizationId,
           sessionId,
+          sessionGroupId,
           invocationId,
         }),
       },
@@ -5137,7 +5146,11 @@ export class SessionService {
       startMeta,
     });
 
-    const invocation = await this.prepareArtifactInvocation(id, session.organizationId);
+    const invocation = await this.prepareInvocation(
+      id,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const command = {
       type: "run" as const,
       sessionId: id,
@@ -6699,7 +6712,11 @@ export class SessionService {
     // runtime prevents silent bridge hijack when the home is offline and a
     // different bridge (e.g. Laptop B) is now the only connected runtime.
     const expectedRuntimeId = runtimeBinding.runtimeId ?? conn.runtimeInstanceId;
-    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
+    const invocation = await this.prepareInvocation(
+      sessionId,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const deliveryCommand = {
       type: "send" as const,
       sessionId,
@@ -8197,7 +8214,11 @@ export class SessionService {
       data: { toolSessionId: null },
     });
 
-    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
+    const invocation = await this.prepareInvocation(
+      sessionId,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const deliveryResult = await sendSessionCommand(
       sessionId,
       {
@@ -11466,7 +11487,11 @@ export class SessionService {
       .filter((instruction): instruction is string => !!instruction)
       .join("\n\n");
 
-    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
+    const invocation = await this.prepareInvocation(
+      sessionId,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const command = {
       type: pending.type,
       sessionId,

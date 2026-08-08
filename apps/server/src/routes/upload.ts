@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { prisma } from "../lib/db.js";
 import {
-  authenticateAccessToken,
+  authenticateUserAccessToken,
   getRequestToken,
   isExternalLocalModeRequest,
 } from "../lib/auth.js";
@@ -46,11 +46,11 @@ router.post("/uploads/presign", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
-  const auth = await authenticateAccessToken(token);
+  const auth = await authenticateUserAccessToken(token);
   if (!auth) {
     return res.status(401).json({ error: "Invalid token" });
   }
-  if (isExternalLocalModeRequest(req) && auth.kind !== "mobile") {
+  if (isExternalLocalModeRequest(req) && auth.kind !== "device") {
     return res.status(403).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
   }
 
@@ -127,11 +127,11 @@ router.get("/uploads/url", async (req: Request, res: Response) => {
     return res.status(401).json({ error: "Not authenticated" });
   }
 
-  const auth = await authenticateAccessToken(token);
+  const auth = await authenticateUserAccessToken(token);
   if (!auth) {
     return res.status(401).json({ error: "Invalid token" });
   }
-  if (isExternalLocalModeRequest(req) && auth.kind !== "mobile") {
+  if (isExternalLocalModeRequest(req) && auth.kind !== "device") {
     return res.status(403).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
   }
 

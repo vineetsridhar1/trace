@@ -1193,6 +1193,7 @@ model MobileDevice {
   deviceName           String?
   platform             PushPlatform?
   appVersion           String?
+  clientType           ClientDeviceType @default(mobile)
   tokenHash            String        @unique
   lastSeenAt           DateTime?
   revokedAt            DateTime?
@@ -1202,6 +1203,12 @@ model MobileDevice {
 
   @@unique([ownerUserId, installId])
   @@index([ownerUserId, revokedAt, lastSeenAt])
+  @@index([ownerUserId, clientType, revokedAt, lastSeenAt])
+}
+
+enum ClientDeviceType {
+  mobile
+  cli
 }
 
 model BridgeAccessGrant {

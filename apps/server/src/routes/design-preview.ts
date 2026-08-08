@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type Router as RouterType } from "express";
-import { authenticateAccessToken, getRequestToken } from "../lib/auth.js";
+import { authenticateUserAccessToken, getRequestToken } from "../lib/auth.js";
 import { prisma } from "../lib/db.js";
 import { storage } from "../lib/storage/index.js";
 import { canViewSessionGroup } from "../services/access.js";
@@ -34,7 +34,7 @@ router.get("/design-previews/:checkpointId", async (req: Request, res: Response)
   if (!checkpointId) return res.status(404).end();
   const token = getRequestToken(req);
   if (!token) return res.status(401).json({ error: "Not authenticated" });
-  const auth = await authenticateAccessToken(token);
+  const auth = await authenticateUserAccessToken(token);
   if (!auth) return res.status(401).json({ error: "Invalid token" });
 
   const checkpoint = await prisma.gitCheckpoint.findUnique({
@@ -86,7 +86,7 @@ router.get("/design-previews/groups/:sessionGroupId", async (req: Request, res: 
   if (!sessionGroupId) return res.status(404).end();
   const token = getRequestToken(req);
   if (!token) return res.status(401).json({ error: "Not authenticated" });
-  const auth = await authenticateAccessToken(token);
+  const auth = await authenticateUserAccessToken(token);
   if (!auth) return res.status(401).json({ error: "Invalid token" });
 
   const sessionGroup = await prisma.sessionGroup.findUnique({

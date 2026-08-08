@@ -23,6 +23,10 @@ import {
   createChatMembershipLoader,
 } from "./dataloader.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
+import {
+  authenticateAgentInvocationToken,
+  type AgentInvocationAuthSubject,
+} from "./agent-invocation-auth.js";
 
 const JWT_SECRET = resolveJwtSecret();
 const BRIDGE_AUTH_TOKEN_TTL_SECONDS = 5 * 60;
@@ -49,7 +53,10 @@ type SessionAuthSubject = {
   userId: string;
 };
 
-export type AccessTokenAuthSubject = SessionAuthSubject | MobileAuthSubject;
+export type AccessTokenAuthSubject =
+  | SessionAuthSubject
+  | MobileAuthSubject
+  | AgentInvocationAuthSubject;
 
 type RequestAuthSource = {
   headers: IncomingHttpHeaders;
@@ -256,7 +263,16 @@ export async function authenticateAccessToken(
     };
   }
 
-  return authenticateMobileSecret(token);
+  const device = await authenticateMobileSecret(token);
+  if (device) return device;
+  return authenticateAgentInvocationToken(token);
+}
+
+export async function authenticateUserAccessToken(
+  token: string,
+): Promise<Exclude<AccessTokenAuthSubject, AgentInvocationAuthSubject> | null> {
+  const subject = await authenticateAccessToken(token);
+  return subject?.kind === "agent" ? null : subject;
 }
 
 export function createBridgeAuthToken(input: {
@@ -365,7 +381,7 @@ export async function buildContext({
   }
 
   if (isExternalLocalModeRequest(req)) {
-    if (authSubject?.kind !== "mobile") {
+    if (authSubject?.kind !== "device") {
       throw new AuthenticationError("External local-mode access requires a paired mobile token");
     }
   }
@@ -391,7 +407,12 @@ export async function buildContext({
   let role: Context["role"] = null;
 
   const localModeMembership = await getLocalModeOrgMembership(user.id);
-  if (localModeMembership) {
+  if (authSubject?.kind === "agent") {
+    if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
+      throw new AuthenticationError("Agent credential is bound to another organization");
+    }
+    organizationId = authSubject.organizationId;
+  } else if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
   } else if (requestedOrgId) {
@@ -415,7 +436,9 @@ export async function buildContext({
     organizationId,
     clientSource: readClientSource(req.headers),
     role,
-    actorType: "user",
+    actorType: authSubject?.kind === "agent" ? "agent" : "user",
+    agentSessionId: authSubject?.kind === "agent" ? authSubject.sessionId : null,
+    agentCapabilities: authSubject?.kind === "agent" ? authSubject.capabilities : [],
     userLoader: createUserLoader(),
     sessionLoader: createSessionLoader(),
     sessionGroupLoader: createSessionGroupLoader(),
@@ -443,7 +466,7 @@ export async function buildWsContext(
   if (!authSubject) {
     throw new AuthenticationError("Invalid token");
   }
-  if (request && isExternalLocalModeRequest(request) && authSubject.kind !== "mobile") {
+  if (request && isExternalLocalModeRequest(request) && authSubject.kind !== "device") {
     throw new AuthenticationError("External local-mode access requires a paired mobile token");
   }
   const userId = authSubject.userId;
@@ -461,7 +484,12 @@ export async function buildWsContext(
   let role: Context["role"] = null;
 
   const localModeMembership = await getLocalModeOrgMembership(user.id);
-  if (localModeMembership) {
+  if (authSubject.kind === "agent") {
+    if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
+      throw new AuthenticationError("Agent credential is bound to another organization");
+    }
+    organizationId = authSubject.organizationId;
+  } else if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
   } else if (requestedOrgId) {
@@ -487,7 +515,9 @@ export async function buildWsContext(
         ? connectionParams.clientSource.trim()
         : null,
     role,
-    actorType: "user",
+    actorType: authSubject.kind === "agent" ? "agent" : "user",
+    agentSessionId: authSubject.kind === "agent" ? authSubject.sessionId : null,
+    agentCapabilities: authSubject.kind === "agent" ? authSubject.capabilities : [],
     userLoader: createUserLoader(),
     sessionLoader: createSessionLoader(),
     sessionGroupLoader: createSessionGroupLoader(),

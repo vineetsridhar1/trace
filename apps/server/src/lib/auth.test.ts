@@ -139,11 +139,13 @@ describe("auth helpers", () => {
       ownerUserId: "user-1",
       pairedOrganizationId: "org-1",
       revokedAt: null,
+      clientType: "mobile",
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
 
     await expect(authenticateAccessToken("opaque-device-secret")).resolves.toEqual({
-      kind: "mobile",
+      kind: "device",
+      clientType: "mobile",
       userId: "user-1",
       pairedOrganizationId: "org-1",
       deviceId: "device-1",
@@ -446,6 +448,7 @@ describe("auth helpers", () => {
       ownerUserId: "user-4",
       pairedOrganizationId: "org-paired-from",
       revokedAt: null,
+      clientType: "mobile",
     });
     prismaMock.mobileDevice.updateMany.mockResolvedValueOnce({ count: 1 });
     prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-4", email: "local@trace.dev" });

@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import { authenticateAccessToken, isExternalLocalModeRequest, parseCookieToken } from "./auth.js";
+import { authenticateUserAccessToken, isExternalLocalModeRequest, parseCookieToken } from "./auth.js";
 import { terminalRelay } from "./terminal-relay.js";
 import { prisma } from "./db.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
@@ -106,13 +106,13 @@ export function handleTerminalConnection(
     if (authReady || authPending) return;
     authPending = true;
     try {
-      const auth = await authenticateAccessToken(token);
+      const auth = await authenticateUserAccessToken(token);
       if (!auth) {
         clearAuthTimeout();
         sendFatalError("Invalid token");
         return;
       }
-      if (isExternalLocalModeRequest(req) && auth.kind !== "mobile") {
+      if (isExternalLocalModeRequest(req) && auth.kind !== "device") {
         clearAuthTimeout();
         sendFatalError(EXTERNAL_LOCAL_MODE_AUTH_ERROR);
         return;

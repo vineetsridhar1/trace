@@ -257,7 +257,7 @@ function rejectExternalLocalModeRequest(
     res.status(401).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
     return true;
   }
-  if (authenticated.auth.kind !== "mobile") {
+  if (authenticated.auth.kind !== "device") {
     res.status(403).json({ error: EXTERNAL_LOCAL_MODE_AUTH_ERROR });
     return true;
   }
@@ -362,7 +362,11 @@ router.post("/auth/mobile/pairing-token", async (req: Request, res: Response) =>
   await createMobilePairingTokenForRequest(req, res);
 });
 
-async function pairMobileDeviceForRequest(req: Request, res: Response): Promise<void> {
+async function pairMobileDeviceForRequest(
+  req: Request,
+  res: Response,
+  clientType: "mobile" | "cli" = "mobile",
+): Promise<void> {
   const pairingToken = typeof req.body?.pairingToken === "string" ? req.body.pairingToken : "";
   const installId = typeof req.body?.installId === "string" ? req.body.installId : "";
   const deviceName = typeof req.body?.deviceName === "string" ? req.body.deviceName : undefined;
@@ -386,6 +390,7 @@ async function pairMobileDeviceForRequest(req: Request, res: Response): Promise<
       deviceName,
       appVersion,
       platform,
+      clientType,
     });
     res.json(result);
   } catch (error) {
@@ -399,6 +404,10 @@ async function pairMobileDeviceForRequest(req: Request, res: Response): Promise<
 
 router.post("/auth/mobile/pair", async (req: Request, res: Response) => {
   await pairMobileDeviceForRequest(req, res);
+});
+
+router.post("/auth/client/pair", async (req: Request, res: Response) => {
+  await pairMobileDeviceForRequest(req, res, "cli");
 });
 
 async function listMobileDevicesForRequest(req: Request, res: Response): Promise<void> {
@@ -712,9 +721,12 @@ router.get("/auth/me", async (req: Request, res: Response) => {
     }
 
     const canonicalOrgId = isLocalMode() ? await getCanonicalLocalOrganizationId() : null;
-    const orgMemberships = canonicalOrgId
-      ? user.orgMemberships.filter((membership) => membership.organizationId === canonicalOrgId)
-      : user.orgMemberships;
+    const orgMemberships =
+      authenticated.auth.kind === "agent"
+        ? []
+        : canonicalOrgId
+          ? user.orgMemberships.filter((membership) => membership.organizationId === canonicalOrgId)
+          : user.orgMemberships;
 
     res.json({
       user: {
@@ -734,6 +746,9 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
   }
   if (!authenticated) {
     return res.status(401).json({ error: "Not authenticated" });
+  }
+  if (authenticated.auth.kind === "agent") {
+    return res.status(403).json({ error: "Session credentials cannot create bridge tokens" });
   }
 
   const organizationId = await resolveRequestedOrganizationId(
@@ -780,7 +795,10 @@ router.post("/auth/logout", async (req: Request, res: Response) => {
   if (rejectExternalLocalModeRequest(req, res, authenticated)) {
     return;
   }
-  if (authenticated?.auth.kind === "mobile") {
+  if (authenticated?.auth.kind === "agent") {
+    return res.status(403).json({ error: "Session credentials are managed by Trace" });
+  }
+  if (authenticated?.auth.kind === "device") {
     await revokeMobileDeviceByToken(authenticated.token);
   }
   if (authenticated && pushToken) {
