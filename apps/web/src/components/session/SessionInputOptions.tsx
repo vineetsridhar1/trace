@@ -403,7 +403,9 @@ export function SessionInputOptions({
   }, [activeOrgId, isDesignSession, isNotStarted, upsertMany]);
 
   const fetchAvailableRuntimes = useCallback(() => {
-    if (!canChangeRuntime || isOptimistic) return Promise.resolve();
+    // Even when a session's runtime is locked, its catalog drives the model
+    // picker. Runtime mutability only controls the selector UI below.
+    if (isOptimistic) return Promise.resolve();
     return client
       .query(AVAILABLE_RUNTIMES_QUERY, {
         tool: currentTool,
@@ -417,7 +419,7 @@ export function SessionInputOptions({
       .catch((error: unknown) => {
         console.error("Failed to fetch available runtimes:", error);
       });
-  }, [canChangeRuntime, isOptimistic, currentTool, sessionGroupId]);
+  }, [isOptimistic, currentTool, sessionGroupId]);
 
   useEffect(() => {
     void fetchAvailableRuntimes();
