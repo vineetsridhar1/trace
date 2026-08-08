@@ -436,9 +436,11 @@ class RuntimeAccessService {
       repoIds.map(async (repoId) => {
         const cached = currentLocalRuntime?.linkedCheckouts.get(repoId);
         if (cached) return cached;
-        return sessionRouter
-          .getLinkedCheckoutStatus(runtime.key, repoId, BRIDGE_CHECKOUT_QUERY_TIMEOUT_MS)
-          .catch(() => null);
+        return sessionRouter.getLinkedCheckoutStatus(
+          runtime.key,
+          repoId,
+          BRIDGE_CHECKOUT_QUERY_TIMEOUT_MS,
+        );
       }),
     );
     return statuses.filter((status): status is BridgeLinkedCheckoutStatus =>

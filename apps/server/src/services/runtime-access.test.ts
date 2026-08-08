@@ -183,6 +183,27 @@ describe("runtimeAccessService", () => {
     );
   });
 
+  it("rejects a bridge snapshot when a checkout status refresh fails", async () => {
+    sessionRouterMock.getRuntime.mockReturnValueOnce(null);
+    sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      key: "org-1:runtime-remote",
+      id: "runtime-remote",
+      organizationId: "org-1",
+      registeredRepoIds: ["repo-1"],
+    });
+    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-1" }]);
+    sessionRouterMock.getLinkedCheckoutStatus.mockRejectedValueOnce(
+      new Error("temporary replica timeout"),
+    );
+
+    await expect(
+      runtimeAccessService.listLinkedCheckoutStatuses({
+        runtimeInstanceId: "runtime-remote",
+        organizationId: "org-1",
+      }),
+    ).rejects.toThrow("temporary replica timeout");
+  });
+
   it("creates a bridge runtime row for the same instance in a different organization", async () => {
     prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce(null);
     prismaMock.bridgeRuntime.create.mockResolvedValueOnce({
