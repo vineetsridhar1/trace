@@ -48,6 +48,7 @@ vi.mock("../lib/session-router.js", () => ({
     isRuntimeAvailable: vi.fn().mockReturnValue(true),
     getRuntimeDiagnostics: vi.fn().mockReturnValue({}),
     listRuntimes: vi.fn().mockReturnValue([]),
+    listRuntimeMetadata: vi.fn().mockReturnValue(undefined),
     listWorkspaceSlugs: vi.fn().mockResolvedValue([]),
     listBranches: vi.fn().mockResolvedValue([]),
     listFiles: vi.fn().mockResolvedValue([]),
@@ -13460,6 +13461,44 @@ describe("SessionService", () => {
   });
 
   describe("listRuntimesForTool", () => {
+    it("includes a local runtime connected to another replica", async () => {
+      sessionRouterMock.listRuntimeMetadata.mockReturnValueOnce([
+        {
+          key: "org-1:runtime-remote",
+          id: "runtime-remote",
+          label: "Vineet Laptop",
+          organizationId: "org-1",
+          hostingMode: "local",
+          ownerReplicaId: "replica-b",
+          connectionGeneration: "generation-1",
+          ownerUserId: "user-1",
+          supportedTools: ["codex"],
+          registeredRepoIds: ["repo-1"],
+          lastHeartbeat: Date.now(),
+          expiresAt: Date.now() + 30_000,
+        },
+      ]);
+      runtimeAccessServiceMock.getAccessState.mockResolvedValueOnce({
+        runtimeInstanceId: "runtime-remote",
+        hostingMode: "local",
+        connected: true,
+        allowed: true,
+        isOwner: true,
+        capabilities: ["session", "terminal"],
+      });
+
+      const result = await service.listRuntimesForTool("codex", "org-1", "user-1");
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          id: "runtime-remote",
+          label: "Vineet Laptop",
+          connected: true,
+        }),
+      ]);
+      expect(sessionRouterMock.listRuntimes).not.toHaveBeenCalled();
+    });
+
     it("returns compatible same-org local runtimes with access state even before access is granted", async () => {
       sessionRouterMock.listRuntimes.mockReturnValueOnce([
         {

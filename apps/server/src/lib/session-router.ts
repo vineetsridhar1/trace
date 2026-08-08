@@ -930,6 +930,25 @@ export class SessionRouter {
     return results;
   }
 
+  /**
+   * List connected runtime metadata across every replica. Local runtime
+   * instances replace their directory descriptors so callers on the socket
+   * owner can still use richer process-local state without hiding runtimes
+   * connected elsewhere.
+   */
+  listRuntimeMetadata(filter?: {
+    hostingMode?: string;
+  }): Array<RuntimeInstance | RuntimeDescriptor> {
+    const results = new Map<string, RuntimeInstance | RuntimeDescriptor>();
+    for (const descriptor of runtimeDirectory.list(filter)) {
+      results.set(descriptor.key, descriptor);
+    }
+    for (const runtime of this.listRuntimes(filter)) {
+      results.set(runtime.key, runtime);
+    }
+    return [...results.values()];
+  }
+
   /** Check for stale runtimes that have missed heartbeats. Returns affected session IDs. */
   checkStaleRuntimes(): StaleRuntimeSnapshot[] {
     const now = Date.now();

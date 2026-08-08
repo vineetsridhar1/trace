@@ -9581,8 +9581,8 @@ export class SessionService {
     // runtime lacks the tool, the send path surfaces a ToolNotInstalledError with
     // install instructions. `supportedTools` is still returned so callers can
     // reflect install state in the UI.
-    const allRuntimes = sessionRouter
-      .listRuntimes()
+    const distributedRuntimes = sessionRouter.listRuntimeMetadata?.({ hostingMode: "local" });
+    const allRuntimes = (distributedRuntimes ?? sessionRouter.listRuntimes())
       .filter(
         (runtime) =>
           runtime.hostingMode === "local" &&
@@ -9591,18 +9591,24 @@ export class SessionService {
             runtime.ownerUserId === scopedGroup.ownerUserId),
       );
 
-    const sessionIds = allRuntimes.flatMap((runtime) => [...runtime.boundSessions]);
     const sessions =
-      sessionIds.length === 0
+      allRuntimes.length === 0
         ? []
         : await prisma.session.findMany({
             where: {
-              id: { in: sessionIds },
               organizationId,
+              OR: allRuntimes.map((runtime) => ({
+                connection: { path: ["runtimeInstanceId"], equals: runtime.id },
+              })),
             },
-            select: { id: true },
+            select: { connection: true },
           });
-    const orgSessionIds = new Set(sessions.map((session: { id: string }) => session.id));
+    const sessionCounts = new Map<string, number>();
+    for (const session of sessions) {
+      const runtimeInstanceId = this.getConnectionRuntimeInstanceId(session.connection);
+      if (!runtimeInstanceId) continue;
+      sessionCounts.set(runtimeInstanceId, (sessionCounts.get(runtimeInstanceId) ?? 0) + 1);
+    }
 
     const result = await Promise.all(
       allRuntimes.map(async (r) => {
@@ -9623,9 +9629,8 @@ export class SessionService {
           label: r.label,
           hostingMode: r.hostingMode,
           supportedTools: r.supportedTools,
-          connected: r.ws.readyState === r.ws.OPEN,
-          sessionCount: [...r.boundSessions].filter((sessionId) => orgSessionIds.has(sessionId))
-            .length,
+          connected: "ws" in r ? r.ws.readyState === r.ws.OPEN : r.expiresAt > Date.now(),
+          sessionCount: sessionCounts.get(r.id) ?? 0,
           registeredRepoIds,
           access,
         };
