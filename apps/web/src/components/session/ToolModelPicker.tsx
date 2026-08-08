@@ -29,6 +29,7 @@ interface ToolModelPickerProps {
   model?: string | null;
   reasoningEffort?: string | null;
   reasoningEffortOptions?: readonly ReasoningEffortOption[];
+  runtimeModels?: readonly ModelOption[];
   disabled?: boolean;
   compact?: boolean;
   alwaysExpanded?: boolean;
@@ -42,6 +43,7 @@ export function ToolModelPicker({
   model,
   reasoningEffort,
   reasoningEffortOptions = [],
+  runtimeModels,
   disabled,
   compact = false,
   alwaysExpanded = false,
@@ -64,7 +66,10 @@ export function ToolModelPicker({
     providerGroups.find((group) => group.value === pickerProvider) ??
     getModelProviderForModel(pickerTool, activeModel) ??
     providerGroups[0];
-  const modelOptions = activeProvider?.models ?? getModelsForTool(pickerTool);
+  const modelOptions =
+    pickerTool === tool && runtimeModels?.length
+      ? runtimeModels
+      : (activeProvider?.models ?? getModelsForTool(pickerTool));
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -185,7 +190,7 @@ export function ToolModelPicker({
       >
         <ToolIcon tool={tool} className="size-3.5 shrink-0" />
         <span className="truncate">{getToolLabel(tool)}</span>
-        {getModelsForTool(tool).length > 0 ? (
+        {(runtimeModels?.length ?? getModelsForTool(tool).length) > 0 ? (
           <>
             <span className="text-muted-foreground/60">/</span>
             <span className="truncate">{modelLabel}</span>

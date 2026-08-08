@@ -4,6 +4,7 @@ import { AlertTriangle, Cloud, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { gql } from "@urql/core";
 import type { DesignSystem, SessionConnection, SessionRuntimeInstance } from "@trace/gql";
+import type { ModelOption } from "@trace/shared";
 import {
   hasSelectedSessionGroupRuntime,
   useAuthStore,
@@ -69,6 +70,18 @@ const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 const CLOUD_RUNTIME_ID = "__cloud__";
 
 const EFFORT_LINE_HEIGHT = 16;
+
+function catalogModels(catalog: unknown, tool: string): ModelOption[] | undefined {
+  if (!catalog || typeof catalog !== "object" || Array.isArray(catalog)) return undefined;
+  const entries = (catalog as { entries?: unknown }).entries;
+  if (!Array.isArray(entries)) return undefined;
+  const entry = entries.find((item) =>
+    !!item && typeof item === "object" && (item as { tool?: unknown }).tool === tool,
+  ) as { availability?: unknown; models?: unknown } | undefined;
+  if (entry?.availability !== "ready" || !Array.isArray(entry.models)) return undefined;
+  const models = entry.models.filter((model): model is string => typeof model === "string");
+  return models.length ? models.map((value) => ({ value, label: value })) : undefined;
+}
 
 function EffortDots({ index, total }: { index: number; total: number }) {
   return (
@@ -148,6 +161,7 @@ interface ComposerInputOptionsProps {
   model: string | null | undefined;
   reasoningEffort: string | null | undefined;
   reasoningEffortOptions: readonly ReasoningEffortOption[];
+  runtimeModels?: readonly ModelOption[];
   disabled?: boolean;
   compact?: boolean;
   showMode?: boolean;
@@ -166,6 +180,7 @@ export function ComposerInputOptions({
   model,
   reasoningEffort,
   reasoningEffortOptions,
+  runtimeModels,
   disabled,
   compact = false,
   showMode = true,
@@ -215,6 +230,7 @@ export function ComposerInputOptions({
         model={model}
         reasoningEffort={reasoningEffort}
         reasoningEffortOptions={reasoningEffortOptions}
+        runtimeModels={runtimeModels}
         disabled={disabled}
         compact={compact}
         alwaysExpanded={alwaysExpandToolModel}
@@ -328,6 +344,8 @@ export function SessionInputOptions({
   // a new, unbound group. Sibling sessions inherit the group's bridge.
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const connectedLocalRuntimes = runtimes.filter(isAccessibleLocalRuntime);
+  const runtimeCatalog = runtimes.find((runtime) => runtime.id === connection?.runtimeInstanceId)?.providerCatalog;
+  const runtimeModels = catalogModels(runtimeCatalog, currentTool);
 
   const handleDesignSystemChange = useCallback(
     async (value: string) => {
@@ -611,6 +629,7 @@ export function SessionInputOptions({
       model={currentModel}
       reasoningEffort={currentReasoningEffort}
       reasoningEffortOptions={reasoningEffortOptions}
+      runtimeModels={runtimeModels}
       disabled={isActive || isOptimistic}
       onModeChange={onModeChange}
       onToolChange={handleToolChange}
