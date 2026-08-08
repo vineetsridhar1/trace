@@ -37,5 +37,6 @@ describe("container runtime dependencies", () => {
     const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
 
     expect(dockerfile).toContain("COPY runtime/skills/ /trace/runtime/skills/");
+    expect(dockerfile).toContain("ENV TRACE_SKILLS_DIR=/trace/runtime/skills/");
   });
 });

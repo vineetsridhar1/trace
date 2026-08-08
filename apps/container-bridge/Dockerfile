@@ -45,6 +45,7 @@ COPY .claude/skills/author-design-system/ /opt/trace/skills/author-design-system
 # Keep the bundled runtime skills at the path exported by the entrypoint so
 # cloud session instructions can load their supporting guidance.
 COPY runtime/skills/ /trace/runtime/skills/
+ENV TRACE_SKILLS_DIR=/trace/runtime/skills/
 
 # Create non-root user — Claude Code refuses --dangerously-skip-permissions as root.
 # Scope sudo to exactly the Postgres bootstrap commands the entrypoint runs. App
