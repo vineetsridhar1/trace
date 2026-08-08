@@ -272,6 +272,10 @@ function runtimeResponseMatches(expectedRuntimeId: string, sourceRuntimeId: stri
   return expectedRuntimeId === sourceRuntimeId || sourceRuntimeId.endsWith(`:${expectedRuntimeId}`);
 }
 
+function linkedCheckoutSnapshot(status: BridgeLinkedCheckoutStatus): BridgeLinkedCheckoutStatus {
+  return { ...status, changedFiles: [] };
+}
+
 function lifecycleSnapshotFromConnection(
   connection: Record<string, unknown> | null,
 ): RuntimeLifecycleUpdate {
@@ -329,32 +333,37 @@ function shouldSkipProvisionedStopForPolicy(
  */
 export class SessionRouter {
   constructor(private readonly runtimeAdapters = runtimeAdapterRegistry) {
-    realtimeBackplane.on("runtime_command", (envelope) => this.receiveRuntimeCommand(envelope));
-    realtimeBackplane.on("runtime_command_ack", (envelope) =>
-      this.receiveRuntimeCommandAck(envelope),
+    this.unsubscribers.push(
+      realtimeBackplane.on("runtime_command", (envelope) => this.receiveRuntimeCommand(envelope)),
+      realtimeBackplane.on("runtime_command_ack", (envelope) =>
+        this.receiveRuntimeCommandAck(envelope),
+      ),
     );
-    runtimeDirectory.onPresence((message) => {
-      if (message.action !== "upsert") return;
-      const localRuntime = this.runtimes.get(message.descriptor.key);
-      if (
-        localRuntime &&
-        localRuntime.connectionGeneration !== message.descriptor.connectionGeneration
-      ) {
-        this.runtimes.delete(message.descriptor.key);
-        if (localRuntime.ws.readyState === localRuntime.ws.OPEN) {
-          localRuntime.ws.close(1012, "Runtime ownership replaced");
+    this.unsubscribers.push(
+      runtimeDirectory.onPresence((message) => {
+        if (message.action !== "upsert") return;
+        const localRuntime = this.runtimes.get(message.descriptor.key);
+        if (
+          localRuntime &&
+          localRuntime.connectionGeneration !== message.descriptor.connectionGeneration
+        ) {
+          this.runtimes.delete(message.descriptor.key);
+          if (localRuntime.ws.readyState === localRuntime.ws.OPEN) {
+            localRuntime.ws.close(1012, "Runtime ownership replaced");
+          }
         }
-      }
-      for (const [sessionId, pending] of this.pendingWaits) {
-        if (pending.expectedRuntimeId && pending.expectedRuntimeId !== message.descriptor.id)
-          continue;
-        this.sessionRuntime.set(sessionId, message.descriptor.key);
-        this.pendingWaits.delete(sessionId);
-        pending.resolve();
-      }
-    });
+        for (const [sessionId, pending] of this.pendingWaits) {
+          if (pending.expectedRuntimeId && pending.expectedRuntimeId !== message.descriptor.id)
+            continue;
+          this.sessionRuntime.set(sessionId, message.descriptor.key);
+          this.pendingWaits.delete(sessionId);
+          pending.resolve();
+        }
+      }),
+    );
   }
 
+  private readonly unsubscribers: Array<() => void> = [];
   private runtimes = new Map<string, RuntimeInstance>();
   /** Maps sessionId → runtimeId */
   private sessionRuntime = new Map<string, string>();
@@ -373,6 +382,10 @@ export class SessionRouter {
     string,
     { resolve: (result: DeliveryResult) => void; timer: NodeJS.Timeout }
   >();
+
+  dispose(): void {
+    for (const unsubscribe of this.unsubscribers.splice(0)) unsubscribe();
+  }
   private runtimeCommandQueues = new Map<string, Promise<void>>();
   /** Pending branch list requests: requestId → resolve/reject */
   private pendingBranchRequests = new Map<
@@ -512,13 +525,17 @@ export class SessionRouter {
   }) {
     const runtimeKey = runtime.key ?? runtime.id;
     const existing = this.runtimes.get(runtimeKey);
+    const existingDescriptor = runtimeDirectory.get(runtimeKey);
     const boundSessions = existing?.boundSessions ?? new Set<string>();
     const commandDeliveredSessions =
       existing && existing.ws === runtime.ws
         ? (existing.commandDeliveredSessions ?? new Set<string>())
         : new Set<string>();
     const linkedCheckouts =
-      existing?.linkedCheckouts ?? new Map<string, BridgeLinkedCheckoutStatus>();
+      existing?.linkedCheckouts ??
+      new Map(
+        (existingDescriptor?.linkedCheckoutStatuses ?? []).map((status) => [status.repoId, status]),
+      );
     if (existing && existing.ws !== runtime.ws) {
       runtimeDebug("replacing runtime websocket", {
         runtimeId: runtime.id,
@@ -542,6 +559,7 @@ export class SessionRouter {
         supportedTools: runtime.supportedTools,
         protocolVersion: runtime.protocolVersion,
         registeredRepoIds: runtime.registeredRepoIds ?? existing?.registeredRepoIds ?? [],
+        linkedCheckoutStatuses: [...linkedCheckouts.values()].map(linkedCheckoutSnapshot),
       },
       SessionRouter.DIRECTORY_TTL_MS,
     );
@@ -816,6 +834,21 @@ export class SessionRouter {
         (organizationId == null || runtime.organizationId === organizationId),
     );
     return matches.length === 1 ? matches[0] : undefined;
+  }
+
+  isCurrentRuntimeSocket(runtimeId: string, ws: WebSocket): boolean {
+    return this.getCurrentRuntimeConnectionGeneration(runtimeId, ws) !== undefined;
+  }
+
+  getCurrentRuntimeConnectionGeneration(runtimeId: string, ws: WebSocket): string | undefined {
+    const runtime = this.runtimes.get(runtimeId);
+    return runtime && runtime.ws === ws && this.isCurrentLocalOwner(runtime)
+      ? runtime.connectionGeneration
+      : undefined;
+  }
+
+  isRuntimeGenerationCurrent(runtimeId: string, connectionGeneration: string): boolean {
+    return runtimeDirectory.get(runtimeId)?.connectionGeneration === connectionGeneration;
   }
 
   private isCurrentLocalOwner(
@@ -2066,6 +2099,25 @@ export class SessionRouter {
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) return;
     runtime.linkedCheckouts.set(status.repoId, status);
+  }
+
+  recordLinkedCheckoutStatus(
+    runtimeId: string,
+    status: BridgeLinkedCheckoutStatus,
+    ws?: WebSocket,
+  ): boolean {
+    const runtime = this.runtimes.get(runtimeId);
+    if (!runtime || (ws && runtime.ws !== ws) || !this.isCurrentLocalOwner(runtime)) return false;
+    runtime.linkedCheckouts.set(status.repoId, status);
+    void runtimeDirectory
+      .updateLinkedCheckoutStatus(
+        runtime.key,
+        runtime.connectionGeneration,
+        linkedCheckoutSnapshot(status),
+        SessionRouter.DIRECTORY_TTL_MS,
+      )
+      .catch((error) => console.error("[runtime-directory] linked checkout update failed:", error));
+    return true;
   }
 
   private async requestLinkedCheckoutAction(

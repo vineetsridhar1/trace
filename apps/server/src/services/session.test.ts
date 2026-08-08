@@ -13624,6 +13624,7 @@ describe("SessionService", () => {
           ownerUserId: "user-1",
           supportedTools: ["codex"],
           registeredRepoIds: ["repo-1"],
+          linkedCheckoutStatuses: [],
           lastHeartbeat: Date.now(),
           expiresAt: Date.now() + 30_000,
         },

@@ -90,6 +90,13 @@ function jsonRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function linkedCheckoutStatus(value: unknown): BridgeLinkedCheckoutStatus | null {
+  const status = jsonRecord(value);
+  return status && typeof status.repoId === "string" && typeof status.isAttached === "boolean"
+    ? (status as unknown as BridgeLinkedCheckoutStatus)
+    : null;
+}
+
 function isTerminalConnectionState(connection: unknown): boolean {
   const state = jsonRecord(connection)?.state;
   return state === "failed" || state === "timed_out" || state === "stopped";
@@ -248,7 +255,8 @@ function dispatchRelayedCorrelatedResponse(msg: Record<string, unknown>, runtime
   }
 }
 
-correlatedResponseRelay.onResponse(({ message, runtimeKey }) => {
+correlatedResponseRelay.onResponse(({ message, runtimeKey, connectionGeneration }) => {
+  if (!sessionRouter.isRuntimeGenerationCurrent(runtimeKey, connectionGeneration)) return;
   dispatchRelayedCorrelatedResponse(message, runtimeKey);
 });
 
@@ -259,6 +267,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
   let registered = false;
   const bridgeAuth = req?.bridgeAuth;
   let lastLeaseAuthorizationAt = 0;
+  let localConnectionStartedAt: Date | null = null;
 
   function renewCloudRuntimeLease(): void {
     if (bridgeAuth?.kind !== "cloud" || ws.readyState !== ws.OPEN) return;
@@ -456,6 +465,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
                 registeredRepoIds,
               },
             });
+            localConnectionStartedAt = bridgeRuntime.connectedAt;
             await agentEnvironmentService
               .ensureLocalBridgeEnvironment(
                 {
@@ -727,10 +737,31 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       // to it so a compromised runtime can't touch another tenant's rows.
       if (!bridgeAuth) return;
 
+      const connectionGeneration = sessionRouter.getCurrentRuntimeConnectionGeneration(
+        runtimeKey,
+        ws,
+      );
+      if (!connectionGeneration) {
+        runtimeDebug("bridge ignored message from stale websocket", {
+          runtimeId,
+          messageType: typeof msg.type === "string" ? msg.type : "unknown",
+        });
+        return;
+      }
+
+      const status =
+        msg.type === "linked_checkout_status_result"
+          ? linkedCheckoutStatus(msg.status)
+          : msg.type === "linked_checkout_action_result"
+            ? linkedCheckoutStatus(jsonRecord(msg.result)?.status)
+            : null;
+      if (status) sessionRouter.recordLinkedCheckoutStatus(runtimeKey, status, ws);
+
       // Request IDs for cross-replica commands encode the caller replica. Send
       // correlated responses back there before consulting this replica's
       // in-memory pending-request maps.
-      if (await correlatedResponseRelay.forwardIfRemote(msg, runtimeKey)) return;
+      if (await correlatedResponseRelay.forwardIfRemote(msg, runtimeKey, connectionGeneration))
+        return;
 
       if (msg.type === "repo_linked") {
         const repoId = typeof msg.repoId === "string" ? msg.repoId.trim() : "";
@@ -1338,15 +1369,20 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
       graceMs: DISCONNECT_GRACE_MS,
     });
     const closedRuntimeId = bridgeAuth?.kind === "local" ? bridgeAuth.instanceId : runtimeId;
+    const wasCurrentOwner = registered && sessionRouter.isCurrentRuntimeSocket(runtimeKey, ws);
     const affectedSessions = registered ? sessionRouter.unregisterRuntime(runtimeKey, ws) : [];
     runtimeDebug("bridge close affected sessions", {
       runtimeId: closedRuntimeId,
       affectedSessions,
     });
 
-    if (bridgeAuth?.kind === "local") {
+    if (bridgeAuth?.kind === "local" && wasCurrentOwner) {
       runtimeAccessService
-        .markRuntimeDisconnected(closedRuntimeId, bridgeAuth.organizationId)
+        .markRuntimeDisconnected(
+          closedRuntimeId,
+          bridgeAuth.organizationId,
+          localConnectionStartedAt,
+        )
         .catch((err) => {
           console.error("[bridge] failed to mark local runtime disconnected:", err);
         });

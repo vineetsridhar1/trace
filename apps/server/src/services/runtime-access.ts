@@ -9,8 +9,6 @@ import { eventService } from "./event.js";
 
 const BRIDGE_ACCESS_DENIED_ERROR =
   "Access denied: you do not have permission to use this local bridge";
-const BRIDGE_CHECKOUT_QUERY_TIMEOUT_MS = 3_000;
-
 type BridgeRuntimeWithOwner = Prisma.BridgeRuntimeGetPayload<{
   include: { ownerUser: true };
 }>;
@@ -368,9 +366,17 @@ class RuntimeAccessService {
     });
   }
 
-  async markRuntimeDisconnected(instanceId: string, organizationId?: string | null): Promise<void> {
+  async markRuntimeDisconnected(
+    instanceId: string,
+    organizationId?: string | null,
+    connectedAt?: Date | null,
+  ): Promise<void> {
     await prisma.bridgeRuntime.updateMany({
-      where: { instanceId, ...(organizationId ? { organizationId } : {}) },
+      where: {
+        instanceId,
+        ...(organizationId ? { organizationId } : {}),
+        ...(connectedAt ? { connectedAt } : {}),
+      },
       data: {
         disconnectedAt: new Date(),
         lastSeenAt: new Date(),
@@ -427,25 +433,10 @@ class RuntimeAccessService {
       runtimeInstanceId: runtime.id,
       organizationId: input.organizationId,
     });
-    const localRuntime = sessionRouter.getRuntime(runtime.id, input.organizationId);
-    const currentLocalRuntime =
-      localRuntime?.connectionGeneration === runtime.connectionGeneration
-        ? localRuntime
-        : undefined;
-    const statuses = await Promise.all(
-      repoIds.map(async (repoId) => {
-        const cached = currentLocalRuntime?.linkedCheckouts.get(repoId);
-        if (cached) return cached;
-        return sessionRouter.getLinkedCheckoutStatus(
-          runtime.key,
-          repoId,
-          BRIDGE_CHECKOUT_QUERY_TIMEOUT_MS,
-        );
-      }),
-    );
-    return statuses.filter((status): status is BridgeLinkedCheckoutStatus =>
-      Boolean(status?.isAttached),
-    );
+    const activeRepos = new Set(repoIds);
+    const statuses =
+      "ws" in runtime ? [...runtime.linkedCheckouts.values()] : runtime.linkedCheckoutStatuses;
+    return statuses.filter((status) => status.isAttached && activeRepos.has(status.repoId));
   }
 
   /**

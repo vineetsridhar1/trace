@@ -92,56 +92,30 @@ describe("runtimeAccessService", () => {
     });
   });
 
-  it("loads remote linked checkout statuses concurrently with a bounded timeout", async () => {
+  it("reads remote linked checkout statuses from the shared runtime snapshot", async () => {
     sessionRouterMock.getRuntime.mockReturnValueOnce(null);
     sessionRouterMock.getRuntimeMetadata.mockReturnValue({
       key: "org-1:runtime-remote",
       id: "runtime-remote",
       organizationId: "org-1",
       registeredRepoIds: ["repo-1", "repo-2"],
+      linkedCheckoutStatuses: [
+        { repoId: "repo-1", repoPath: "/repos/one", isAttached: true },
+        { repoId: "repo-2", repoPath: "/repos/two", isAttached: true },
+      ],
     });
     prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-1" }, { id: "repo-2" }]);
 
-    let resolveFirst!: (value: { repoId: string; repoPath: string; isAttached: boolean }) => void;
-    sessionRouterMock.getLinkedCheckoutStatus
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveFirst = resolve;
-          }),
-      )
-      .mockResolvedValueOnce({
-        repoId: "repo-2",
-        repoPath: "/repos/two",
-        isAttached: true,
-      });
-
-    const statusesPromise = runtimeAccessService.listLinkedCheckoutStatuses({
-      runtimeInstanceId: "runtime-remote",
-      organizationId: "org-1",
-    });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenCalledTimes(2);
-    expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenNthCalledWith(
-      1,
-      "org-1:runtime-remote",
-      "repo-1",
-      3_000,
-    );
-    expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenNthCalledWith(
-      2,
-      "org-1:runtime-remote",
-      "repo-2",
-      3_000,
-    );
-
-    resolveFirst({ repoId: "repo-1", repoPath: "/repos/one", isAttached: true });
-    await expect(statusesPromise).resolves.toEqual([
+    await expect(
+      runtimeAccessService.listLinkedCheckoutStatuses({
+        runtimeInstanceId: "runtime-remote",
+        organizationId: "org-1",
+      }),
+    ).resolves.toEqual([
       expect.objectContaining({ repoId: "repo-1" }),
       expect.objectContaining({ repoId: "repo-2" }),
     ]);
+    expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
   });
 
   it("does not read linked checkout state from a stale local generation", async () => {
@@ -151,57 +125,55 @@ describe("runtimeAccessService", () => {
       organizationId: "org-1",
       connectionGeneration: "generation-current",
       registeredRepoIds: ["repo-1"],
+      linkedCheckoutStatuses: [{ repoId: "repo-1", repoPath: "/repos/current", isAttached: true }],
     });
     sessionRouterMock.getRuntime.mockReturnValueOnce({
       connectionGeneration: "generation-stale",
       linkedCheckouts: new Map([
-        [
-          "repo-1",
-          { repoId: "repo-1", repoPath: "/repos/stale", isAttached: true },
-        ],
+        ["repo-1", { repoId: "repo-1", repoPath: "/repos/stale", isAttached: true }],
       ]),
     });
     prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-1" }]);
-    sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValueOnce({
-      repoId: "repo-1",
-      repoPath: "/repos/current",
-      isAttached: true,
-    });
-
     await expect(
       runtimeAccessService.listLinkedCheckoutStatuses({
         runtimeInstanceId: "runtime-remote",
         organizationId: "org-1",
       }),
-    ).resolves.toEqual([
-      expect.objectContaining({ repoId: "repo-1", repoPath: "/repos/current" }),
-    ]);
-    expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenCalledWith(
-      "org-1:runtime-remote",
-      "repo-1",
-      3_000,
-    );
+    ).resolves.toEqual([expect.objectContaining({ repoId: "repo-1", repoPath: "/repos/current" })]);
+    expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
   });
 
-  it("rejects a bridge snapshot when a checkout status refresh fails", async () => {
+  it("does not issue bridge status commands while reading a remote snapshot", async () => {
     sessionRouterMock.getRuntime.mockReturnValueOnce(null);
     sessionRouterMock.getRuntimeMetadata.mockReturnValue({
       key: "org-1:runtime-remote",
       id: "runtime-remote",
       organizationId: "org-1",
       registeredRepoIds: ["repo-1"],
+      linkedCheckoutStatuses: [],
     });
     prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-1" }]);
-    sessionRouterMock.getLinkedCheckoutStatus.mockRejectedValueOnce(
-      new Error("temporary replica timeout"),
-    );
-
     await expect(
       runtimeAccessService.listLinkedCheckoutStatuses({
         runtimeInstanceId: "runtime-remote",
         organizationId: "org-1",
       }),
-    ).rejects.toThrow("temporary replica timeout");
+    ).resolves.toEqual([]);
+    expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
+  });
+
+  it("marks a runtime disconnected only for the socket's database generation", async () => {
+    const connectedAt = new Date("2026-08-08T12:00:00.000Z");
+
+    await runtimeAccessService.markRuntimeDisconnected("runtime-1", "org-1", connectedAt);
+
+    expect(prismaMock.bridgeRuntime.updateMany).toHaveBeenCalledWith({
+      where: { instanceId: "runtime-1", organizationId: "org-1", connectedAt },
+      data: {
+        disconnectedAt: expect.any(Date),
+        lastSeenAt: expect.any(Date),
+      },
+    });
   });
 
   it("creates a bridge runtime row for the same instance in a different organization", async () => {

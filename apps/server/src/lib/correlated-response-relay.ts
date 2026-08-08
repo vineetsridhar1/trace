@@ -57,6 +57,7 @@ const ROUTED_COMMAND_TYPES = new Set([
 
 type RelayedResponse = {
   runtimeKey: string;
+  connectionGeneration: string;
   message: Record<string, unknown>;
 };
 
@@ -86,6 +87,7 @@ export class CorrelatedResponseRelay {
       const input = payload as Record<string, unknown>;
       if (
         typeof input.runtimeKey !== "string" ||
+        typeof input.connectionGeneration !== "string" ||
         !input.message ||
         typeof input.message !== "object" ||
         Array.isArray(input.message)
@@ -94,6 +96,7 @@ export class CorrelatedResponseRelay {
       }
       const response = {
         runtimeKey: input.runtimeKey,
+        connectionGeneration: input.connectionGeneration,
         message: input.message as Record<string, unknown>,
       };
       for (const handler of this.handlers) handler(response);
@@ -110,13 +113,18 @@ export class CorrelatedResponseRelay {
     return () => this.handlers.delete(handler);
   }
 
-  async forwardIfRemote(message: Record<string, unknown>, runtimeKey: string): Promise<boolean> {
+  async forwardIfRemote(
+    message: Record<string, unknown>,
+    runtimeKey: string,
+    connectionGeneration: string,
+  ): Promise<boolean> {
     if (typeof message.type !== "string" || !RELAYED_RESPONSE_TYPES.has(message.type)) return false;
     if (typeof message.requestId !== "string") return false;
     const route = parseRoutedRequestId(message.requestId);
     if (!route || route.replicaId === realtimeBackplane.replicaId) return false;
     await realtimeBackplane.send(route.replicaId, "bridge_correlated_response", {
       runtimeKey,
+      connectionGeneration,
       message: { ...message, requestId: route.requestId },
     });
     return true;

@@ -108,6 +108,7 @@ describe("SessionRouter distributed ownership fencing", () => {
       hostingMode: "local" as const,
       supportedTools: ["codex"],
       registeredRepoIds: ["repo-1"],
+      linkedCheckoutStatuses: [],
       lastHeartbeat: Date.now() + 1,
       expiresAt: Date.now() + 30_000,
     };
@@ -123,13 +124,15 @@ describe("SessionRouter distributed ownership fencing", () => {
     );
 
     await runtimeDirectory.remove(runtimeKey, remoteDescriptor.connectionGeneration);
+    router.dispose();
   });
 
-  it("closes the previous socket when a runtime reconnects on the same replica", () => {
+  it("closes the previous socket when a runtime reconnects on the same replica", async () => {
     const router = new SessionRouter();
     const oldWs = makeWs();
     const newWs = makeWs();
     const registration = {
+      key: "org-reconnected:runtime-reconnected",
       id: "runtime-reconnected",
       organizationId: "org-reconnected",
       label: "Laptop",
@@ -140,8 +143,40 @@ describe("SessionRouter distributed ownership fencing", () => {
     router.registerRuntime({ ...registration, ws: oldWs });
     router.registerRuntime({ ...registration, ws: newWs });
 
+    const status = {
+      repoId: "repo-1",
+      repoPath: "/repos/trace",
+      isAttached: true,
+      attachedSessionGroupId: "group-1",
+      targetBranch: "trace/spotlight",
+      autoSyncEnabled: true,
+      currentBranch: "trace/spotlight",
+      currentCommitSha: "abc123",
+      lastSyncedCommitSha: "abc123",
+      lastSyncError: null,
+      restoreBranch: "main",
+      restoreCommitSha: "def456",
+      hasUncommittedChanges: false,
+      changedFiles: [],
+      changedFilesTotalCount: 0,
+      changedFilesTruncated: false,
+    };
+
     expect(oldWs.close).toHaveBeenCalledWith(1012, "Runtime ownership replaced");
     expect(router.getRuntime("runtime-reconnected", "org-reconnected")?.ws).toBe(newWs);
+    expect(router.isCurrentRuntimeSocket("org-reconnected:runtime-reconnected", oldWs)).toBe(false);
+    expect(router.isCurrentRuntimeSocket("org-reconnected:runtime-reconnected", newWs)).toBe(true);
+    expect(
+      router.recordLinkedCheckoutStatus("org-reconnected:runtime-reconnected", status, oldWs),
+    ).toBe(false);
+    expect(
+      router.recordLinkedCheckoutStatus("org-reconnected:runtime-reconnected", status, newWs),
+    ).toBe(true);
+    await flushPromises();
+    expect(
+      runtimeDirectory.get("org-reconnected:runtime-reconnected")?.linkedCheckoutStatuses,
+    ).toContainEqual(status);
+    router.dispose();
   });
 });
 

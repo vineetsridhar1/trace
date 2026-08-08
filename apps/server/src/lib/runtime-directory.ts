@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { BridgeLinkedCheckoutStatus } from "@trace/shared";
 import { redis } from "./redis.js";
 import { realtimeBackplane, type BackplaneEnvelope } from "./realtime-backplane.js";
 
@@ -18,6 +19,7 @@ export type RuntimeDescriptor = {
   supportedTools: string[];
   protocolVersion?: number;
   registeredRepoIds: string[];
+  linkedCheckoutStatuses: BridgeLinkedCheckoutStatus[];
   lastHeartbeat: number;
   expiresAt: number;
 };
@@ -43,7 +45,12 @@ function descriptorFrom(value: unknown): RuntimeDescriptor | null {
   ) {
     return null;
   }
-  return item as unknown as RuntimeDescriptor;
+  return {
+    ...item,
+    linkedCheckoutStatuses: Array.isArray(item.linkedCheckoutStatuses)
+      ? (item.linkedCheckoutStatuses as BridgeLinkedCheckoutStatus[])
+      : [],
+  } as unknown as RuntimeDescriptor;
 }
 
 export class RuntimeDirectory {
@@ -124,18 +131,22 @@ export class RuntimeDirectory {
     const current = this.descriptors.get(runtimeKey);
     if (!current || current.connectionGeneration !== connectionGeneration) return false;
     const now = Date.now();
-    const descriptor = { ...current, lastHeartbeat: now, expiresAt: now + ttlMs };
+    let descriptor = { ...current, lastHeartbeat: now, expiresAt: now + ttlMs };
 
     if (realtimeBackplane.enabled) {
       const result = await redis.eval(
-        "local value=redis.call('get',KEYS[1]); if not value then return 0 end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return 0 end; redis.call('set',KEYS[1],ARGV[2],'PX',ARGV[3]); return 1",
+        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.lastHeartbeat=tonumber(ARGV[2]); current.expiresAt=tonumber(ARGV[3]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[4]); return encoded",
         1,
         this.redisKey(runtimeKey),
         connectionGeneration,
-        JSON.stringify(descriptor),
+        String(now),
+        String(now + ttlMs),
         String(ttlMs),
       );
-      if (result !== 1) return false;
+      if (typeof result !== "string") return false;
+      const stored = descriptorFrom(JSON.parse(result));
+      if (!stored) return false;
+      descriptor = stored;
     }
 
     this.descriptors.set(runtimeKey, descriptor);
@@ -152,7 +163,7 @@ export class RuntimeDirectory {
     const current = this.descriptors.get(runtimeKey);
     if (!current || current.connectionGeneration !== connectionGeneration) return false;
     const now = Date.now();
-    const descriptor = {
+    let descriptor = {
       ...current,
       registeredRepoIds: [...registeredRepoIds],
       lastHeartbeat: now,
@@ -160,14 +171,58 @@ export class RuntimeDirectory {
     };
     if (realtimeBackplane.enabled) {
       const result = await redis.eval(
-        "local value=redis.call('get',KEYS[1]); if not value then return 0 end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return 0 end; redis.call('set',KEYS[1],ARGV[2],'PX',ARGV[3]); return 1",
+        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; current.registeredRepoIds=cjson.decode(ARGV[2]); current.lastHeartbeat=tonumber(ARGV[3]); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded",
         1,
         this.redisKey(runtimeKey),
         connectionGeneration,
-        JSON.stringify(descriptor),
+        JSON.stringify(registeredRepoIds),
+        String(now),
+        String(now + ttlMs),
         String(ttlMs),
       );
-      if (result !== 1) return false;
+      if (typeof result !== "string") return false;
+      const stored = descriptorFrom(JSON.parse(result));
+      if (!stored) return false;
+      descriptor = stored;
+    }
+    this.descriptors.set(runtimeKey, descriptor);
+    await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor });
+    return true;
+  }
+
+  async updateLinkedCheckoutStatus(
+    runtimeKey: string,
+    connectionGeneration: string,
+    status: BridgeLinkedCheckoutStatus,
+    ttlMs: number,
+  ): Promise<boolean> {
+    const current = this.descriptors.get(runtimeKey);
+    if (!current || current.connectionGeneration !== connectionGeneration) return false;
+    const now = Date.now();
+    let descriptor = {
+      ...current,
+      linkedCheckoutStatuses: [
+        ...current.linkedCheckoutStatuses.filter((item) => item.repoId !== status.repoId),
+        status,
+      ],
+      lastHeartbeat: now,
+      expiresAt: now + ttlMs,
+    };
+    if (realtimeBackplane.enabled) {
+      const result = await redis.eval(
+        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; local status=cjson.decode(ARGV[2]); local statuses=current.linkedCheckoutStatuses or {}; local updated={}; for i=1,#statuses do if statuses[i].repoId ~= status.repoId then table.insert(updated,statuses[i]) end end; table.insert(updated,status); current.linkedCheckoutStatuses=updated; current.lastHeartbeat=tonumber(ARGV[3]); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded",
+        1,
+        this.redisKey(runtimeKey),
+        connectionGeneration,
+        JSON.stringify(status),
+        String(now),
+        String(now + ttlMs),
+        String(ttlMs),
+      );
+      if (typeof result !== "string") return false;
+      const stored = descriptorFrom(JSON.parse(result));
+      if (!stored) return false;
+      descriptor = stored;
     }
     this.descriptors.set(runtimeKey, descriptor);
     await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor });

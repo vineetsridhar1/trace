@@ -60,8 +60,8 @@ const POLL_INTERVAL_MS = 10_000;
 
 /**
  * Polls the user's owned bridges plus the linked-checkout currently attached
- * on each of their repos. The server caches checkout status in-memory and
- * warms it on bridge connect, so this is a single cheap query per poll.
+ * on each of their repos. Bridge owners publish checkout snapshots into the
+ * shared runtime directory, so polling does not issue per-repo bridge commands.
  */
 export function useMyBridges(): {
   bridges: MyBridgeSummary[];
