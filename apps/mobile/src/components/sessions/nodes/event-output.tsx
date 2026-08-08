@@ -21,6 +21,11 @@ export function renderSessionOutput(payload: JsonObject, context: NodeRenderCont
     const message = typeof payload.message === "string" ? payload.message : "";
     return <CompletionRow error={message} />;
   }
+  if (type === "auth_required") {
+    return (
+      <SystemBadge text="The coding tool isn't logged in. Open this session on your computer and run /login, then resend your message." />
+    );
+  }
   if (type === "workspace_restored_from_base") {
     const message = typeof payload.message === "string" ? payload.message : "";
     if (message) return <SystemBadge text={message} />;

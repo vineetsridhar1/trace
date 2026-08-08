@@ -7,6 +7,9 @@ export interface BuiltinSlashCommand {
 export const BUILTIN_SLASH_COMMANDS: BuiltinSlashCommand[] = [
   // Special — handled locally by the UI so the app stays consistent with the new session model.
   { name: "clear", description: "Start a new session", category: "special" },
+  // Intercepted by the composer — opens an in-session terminal running the
+  // CLI's interactive login flow.
+  { name: "login", description: "Log in to Claude Code in a terminal", category: "terminal" },
   // Trace drives Claude Code through `claude -p --resume`, not the interactive terminal UI.
   // Only surface built-ins that still make sense as prompt-oriented session actions here.
   {

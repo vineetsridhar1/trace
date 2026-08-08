@@ -200,10 +200,12 @@ function isCompletionEvent(event: PrismaEvent): boolean {
   );
 }
 
-function isErrorEvent(event: PrismaEvent): boolean {
+function isFailureEvent(event: PrismaEvent): boolean {
   const payload = asObject(event.payload);
   return (
-    event.eventType === "session_output" && event.parentId == null && payload?.type === "error"
+    event.eventType === "session_output" &&
+    event.parentId == null &&
+    (payload?.type === "error" || payload?.type === "auth_required")
   );
 }
 
@@ -268,7 +270,7 @@ function compactVisibleEvents(candidates: PrismaEvent[]): PrismaEvent[] {
       continue;
     }
 
-    if (isErrorEvent(event) || isCompletionEvent(event)) {
+    if (isFailureEvent(event) || isCompletionEvent(event)) {
       flushAssistant();
       visibleIds.add(event.id);
     }
@@ -297,6 +299,7 @@ function compactCandidateWhere(
         OR: [
           { payload: { path: ["type"], equals: "assistant" } },
           { payload: { path: ["type"], equals: "error" } },
+          { payload: { path: ["type"], equals: "auth_required" } },
           { payload: { path: ["type"], equals: "result" } },
         ],
       },

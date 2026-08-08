@@ -9,7 +9,7 @@ import type {
   MessageBlock,
   TokenUsage,
 } from "./coding-tool.js";
-import { parseQuestion } from "./coding-tool.js";
+import { isToolAuthError, parseQuestion } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 /** Types we drop entirely — not relevant to the frontend */
@@ -109,7 +109,16 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     let processClosed = false;
     let finished = false;
     let stderrEmitted = false;
+    let authRequiredEmitted = false;
     let exitFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const emitOutput = (output: ToolOutput) => {
+      if (output.type === "auth_required") {
+        if (authRequiredEmitted) return;
+        authRequiredEmitted = true;
+      }
+      onOutput(output);
+    };
 
     const isCurrentProcess = () =>
       this.processGeneration === processGeneration && this.process === child;
@@ -125,7 +134,12 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       if (stderrEmitted) return;
       stderrEmitted = true;
       if (exitCode !== 0 && exitCode !== null && stderrChunks.length > 0) {
-        onOutput({ type: "error", message: stderrChunks.join("\n") });
+        const message = stderrChunks.join("\n");
+        if (isToolAuthError(message)) {
+          emitOutput({ type: "auth_required", message });
+        } else {
+          emitOutput({ type: "error", message });
+        }
       }
     };
 
@@ -135,7 +149,9 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
       finished = true;
       clearExitFallbackTimer();
       emitStderrIfNeeded();
-      if (!this.resultEmitted) {
+      // Skip the fallback result row after an auth failure — the
+      // auth_required event already renders a login call-to-action.
+      if (!this.resultEmitted && !authRequiredEmitted) {
         onOutput({
           type: "result",
           subtype: exitCode === 0 || exitCode === null ? "success" : "error",
@@ -163,11 +179,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
           if (Array.isArray(parsed)) {
             for (const item of parsed) {
               if (item && typeof item === "object") {
-                this.processEvent(item as Record<string, unknown>, onOutput);
+                this.processEvent(item as Record<string, unknown>, emitOutput);
               }
             }
           } else {
-            this.processEvent(parsed, onOutput);
+            this.processEvent(parsed, emitOutput);
           }
         } catch {
           // Non-JSON text from stdout
@@ -365,6 +381,11 @@ export class ClaudeCodeAdapter implements CodingToolAdapter {
     if (type === "result") {
       const isError = data.is_error === true || data.subtype === "error";
       this.resultEmitted = true;
+      const resultText = typeof data.result === "string" ? data.result : "";
+      if (isError && isToolAuthError(resultText)) {
+        onOutput({ type: "auth_required", message: resultText });
+        return;
+      }
       const usage = parseClaudeUsage(data.usage);
       const includeUsage = usage && !this.emittedIncrementalUsage;
       onOutput({
