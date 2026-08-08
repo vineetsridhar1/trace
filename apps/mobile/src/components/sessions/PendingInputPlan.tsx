@@ -7,6 +7,7 @@ import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { alpha, useTheme } from "@/theme";
 import { PendingInputShell, pendingInputStyles } from "./PendingInputShell";
+import { VisualPlanViewer } from "./VisualPlanViewer";
 import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
 import { styles as composerStyles } from "./session-input-composer/styles";
 import { gql } from "@urql/core";
@@ -15,6 +16,7 @@ interface PendingInputPlanProps {
   sessionId: string;
   planContent: string;
   artifactId?: string;
+  visualPlanHtml?: string;
   keyboardVisible?: boolean;
 }
 
@@ -56,6 +58,7 @@ export function PendingInputPlan({
   sessionId,
   planContent,
   artifactId,
+  visualPlanHtml,
   keyboardVisible = false,
 }: PendingInputPlanProps) {
   const theme = useTheme();
@@ -63,6 +66,7 @@ export function PendingInputPlan({
   const [selectedAction, setSelectedAction] = useState<PlanAction | null>("new-session");
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
+  const [viewerVisible, setViewerVisible] = useState(false);
 
   const trimmed = feedback.trim();
   const isTypingMore = trimmed.length > 0;
@@ -157,6 +161,26 @@ export function PendingInputPlan({
       <View style={[styles.menuContainer, theme.shadows.lg]}>
         <Glass preset="card" interactive style={styles.menuSurface}>
           <View style={styles.menuContent}>
+            {visualPlanHtml ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="View visual plan"
+                disabled={sending}
+                onPress={() => setViewerVisible(true)}
+                style={({ pressed }) => [
+                  styles.visualPlanButton,
+                  {
+                    backgroundColor: pressed
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(255, 255, 255, 0.04)",
+                  },
+                ]}
+              >
+                <Text variant="subheadline" color="accent">
+                  View visual plan
+                </Text>
+              </Pressable>
+            ) : null}
             {PLAN_OPTIONS.map((option, index) => {
               const selected = selectedAction === option.value;
               return (
@@ -256,6 +280,13 @@ export function PendingInputPlan({
           tint={alpha(theme.colors.success, 0.18)}
         />
       </View>
+      {visualPlanHtml ? (
+        <VisualPlanViewer
+          html={visualPlanHtml}
+          visible={viewerVisible}
+          onClose={() => setViewerVisible(false)}
+        />
+      ) : null}
     </PendingInputShell>
   );
 }
@@ -276,6 +307,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  visualPlanButton: {
+    borderRadius: 8,
+    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
   menuCopy: {
     flex: 1,
