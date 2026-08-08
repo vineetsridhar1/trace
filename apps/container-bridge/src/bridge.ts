@@ -1044,11 +1044,22 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "list_skills": {
-        void handleListSkills(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
-          userSkillsDir: null,
-          fs,
-          path,
-        });
+        void this.traceRuntime
+          .then((traceRuntime) =>
+            handleListSkills(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
+              userSkillsDir: traceRuntime.skillsDir,
+              fs,
+              path,
+            }),
+          )
+          .catch((error: unknown) => {
+            this.send({
+              type: "skills_result",
+              requestId: cmd.requestId,
+              skills: [],
+              error: error instanceof Error ? error.message : "Failed to load Trace runtime",
+            });
+          });
         break;
       }
 
