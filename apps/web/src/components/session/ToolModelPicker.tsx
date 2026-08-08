@@ -66,10 +66,12 @@ export function ToolModelPicker({
     providerGroups.find((group) => group.value === pickerProvider) ??
     getModelProviderForModel(pickerTool, activeModel) ??
     providerGroups[0];
-  const modelOptions =
+  const recommendedModels = activeProvider?.models ?? getModelsForTool(pickerTool);
+  const discoveredModels =
     pickerTool === tool && runtimeModels?.length
-      ? runtimeModels
-      : (activeProvider?.models ?? getModelsForTool(pickerTool));
+      ? runtimeModels.filter((model) => !recommendedModels.some((recommended) => recommended.value === model.value))
+      : [];
+  const modelOptions = [...recommendedModels, ...discoveredModels];
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
@@ -223,6 +225,7 @@ export function ToolModelPicker({
               pickerTool={pickerTool}
               headerLabel={activeProvider?.label ?? getToolLabel(pickerTool)}
               modelOptions={modelOptions}
+              recommendedCount={recommendedModels.length}
               activeModel={activeModel}
               pending={pending}
               hasProviders={providerGroups.length > 0}

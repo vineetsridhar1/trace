@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown } from "lucide-react";
+import { useState } from "react";
 import type { ModelOption } from "@trace/shared";
 import { cn } from "../../../lib/utils";
 import { LAYER_TRANSITION, ToolIcon, getToolLabel, type ToolOptionValue } from "./pickerShared";
@@ -9,6 +10,7 @@ interface ModelLayerProps {
   pickerTool: ToolOptionValue;
   headerLabel: string;
   modelOptions: readonly ModelOption[];
+  recommendedCount?: number;
   activeModel: string | undefined;
   pending: boolean;
   hasProviders: boolean;
@@ -20,17 +22,20 @@ export function ModelLayer({
   pickerTool,
   headerLabel,
   modelOptions,
+  recommendedCount = modelOptions.length,
   activeModel,
   pending,
   hasProviders,
   onBack,
   onSelect,
 }: ModelLayerProps) {
+  const [showAll, setShowAll] = useState(activeModel ? modelOptions.slice(recommendedCount).some((model) => model.value === activeModel) : false);
+  const visibleModels = showAll ? modelOptions : modelOptions.slice(0, recommendedCount);
   const selectedIndex = Math.max(
     0,
-    modelOptions.findIndex((option) => option.value === activeModel),
+    visibleModels.findIndex((option) => option.value === activeModel),
   );
-  const { containerProps, registerItem } = useListboxNav(modelOptions.length, selectedIndex);
+  const { containerProps, registerItem } = useListboxNav(visibleModels.length, selectedIndex);
 
   return (
     <motion.div
@@ -58,7 +63,7 @@ export function ModelLayer({
         aria-label={`Select ${headerLabel || getToolLabel(pickerTool)} model`}
         {...containerProps}
       >
-        {modelOptions.map((option, index) => {
+        {visibleModels.map((option, index) => {
           const selected = activeModel === option.value;
           return (
             <button
@@ -79,6 +84,11 @@ export function ModelLayer({
             </button>
           );
         })}
+        {modelOptions.length > recommendedCount && !showAll ? (
+          <button type="button" onClick={() => setShowAll(true)} className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-muted-foreground hover:bg-white/10 hover:text-foreground">
+            <ChevronDown className="size-4" /> All available models ({modelOptions.length - recommendedCount} more)
+          </button>
+        ) : null}
       </div>
     </motion.div>
   );
