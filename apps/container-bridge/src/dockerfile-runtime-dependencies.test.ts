@@ -32,4 +32,10 @@ describe("container runtime dependencies", () => {
       expect(owned.has(root), `${root} must be owned by coder`).toBe(true);
     }
   });
+
+  it("ships the bundled skills at the path exported to cloud sessions", async () => {
+    const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
+
+    expect(dockerfile).toContain("COPY runtime/skills/ /trace/runtime/skills/");
+  });
 });
