@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getRuntime: vi.fn(),
   send: vi.fn(() => "delivered"),
+  sendAsync: vi.fn(),
   sendToRuntime: vi.fn(() => "delivered"),
+  sendToRuntimeAsync: vi.fn(),
   sessionFindMany: vi.fn(),
   channelFindMany: vi.fn(),
 }));
@@ -12,7 +14,9 @@ vi.mock("./session-router.js", () => ({
   sessionRouter: {
     getRuntime: mocks.getRuntime,
     send: mocks.send,
+    sendAsync: mocks.sendAsync,
     sendToRuntime: mocks.sendToRuntime,
+    sendToRuntimeAsync: mocks.sendToRuntimeAsync,
   },
 }));
 
@@ -53,6 +57,12 @@ describe("TerminalRelay runtime identity", () => {
     });
     mocks.sessionFindMany.mockResolvedValue([]);
     mocks.channelFindMany.mockResolvedValue([]);
+    mocks.sendAsync.mockImplementation((...args: unknown[]) =>
+      Promise.resolve(mocks.send(...args)),
+    );
+    mocks.sendToRuntimeAsync.mockImplementation((...args: unknown[]) =>
+      Promise.resolve(mocks.sendToRuntime(...args)),
+    );
   });
 
   it("accepts bridge terminal messages from the org-scoped runtime key", () => {

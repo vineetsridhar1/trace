@@ -1,5 +1,5 @@
 import { Prisma, type BridgeAccessCapability, type BridgeAccessScopeType } from "@prisma/client";
-import { isProvisionedRuntimeId } from "@trace/shared";
+import { isProvisionedRuntimeId, type BridgeLinkedCheckoutStatus } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -9,7 +9,6 @@ import { eventService } from "./event.js";
 
 const BRIDGE_ACCESS_DENIED_ERROR =
   "Access denied: you do not have permission to use this local bridge";
-
 type BridgeRuntimeWithOwner = Prisma.BridgeRuntimeGetPayload<{
   include: { ownerUser: true };
 }>;
@@ -193,7 +192,7 @@ function runtimeHostingMode(
   organizationId: string,
   persisted: { id: string } | null,
 ): "cloud" | "local" | null {
-  const runtime = sessionRouter.getRuntime(runtimeInstanceId, organizationId);
+  const runtime = sessionRouter.getRuntimeMetadata(runtimeInstanceId, organizationId);
   if (runtime) return runtime.hostingMode;
   if (persisted) return "local";
   if (isProvisionedRuntimeId(runtimeInstanceId)) return "cloud";
@@ -367,9 +366,17 @@ class RuntimeAccessService {
     });
   }
 
-  async markRuntimeDisconnected(instanceId: string, organizationId?: string | null): Promise<void> {
+  async markRuntimeDisconnected(
+    instanceId: string,
+    organizationId?: string | null,
+    connectedAt?: Date | null,
+  ): Promise<void> {
     await prisma.bridgeRuntime.updateMany({
-      where: { instanceId, ...(organizationId ? { organizationId } : {}) },
+      where: {
+        instanceId,
+        ...(organizationId ? { organizationId } : {}),
+        ...(connectedAt ? { connectedAt } : {}),
+      },
       data: {
         disconnectedAt: new Date(),
         lastSeenAt: new Date(),
@@ -382,6 +389,59 @@ class RuntimeAccessService {
       where: { id },
       include: { ownerUser: true },
     });
+  }
+
+  isRuntimeConnected(runtimeInstanceId: string, organizationId: string): boolean {
+    return sessionRouter.isRuntimeAvailable(runtimeInstanceId, organizationId);
+  }
+
+  async listRuntimeRegisteredRepoIds(input: {
+    runtimeInstanceId: string;
+    organizationId: string;
+    persistedMetadata?: unknown;
+  }): Promise<string[]> {
+    const runtime = sessionRouter.getRuntimeMetadata(input.runtimeInstanceId, input.organizationId);
+    const persistedMetadata =
+      input.persistedMetadata &&
+      typeof input.persistedMetadata === "object" &&
+      !Array.isArray(input.persistedMetadata)
+        ? (input.persistedMetadata as Record<string, unknown>)
+        : {};
+    const repoIds = runtime
+      ? runtime.registeredRepoIds
+      : stringList(persistedMetadata.registeredRepoIds);
+    if (repoIds.length === 0) return [];
+
+    const repos = await prisma.repo.findMany({
+      where: { id: { in: [...new Set(repoIds)] }, organizationId: input.organizationId },
+      select: { id: true },
+    });
+    const allowed = new Set(repos.map((repo) => repo.id));
+    return repoIds.filter(
+      (repoId, index) => allowed.has(repoId) && repoIds.indexOf(repoId) === index,
+    );
+  }
+
+  async listLinkedCheckoutStatuses(input: {
+    runtimeInstanceId: string;
+    organizationId: string;
+  }): Promise<BridgeLinkedCheckoutStatus[]> {
+    const runtime = sessionRouter.getRuntimeMetadata(input.runtimeInstanceId, input.organizationId);
+    if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id, input.organizationId)) return [];
+
+    const repoIds = await this.listRuntimeRegisteredRepoIds({
+      runtimeInstanceId: runtime.id,
+      organizationId: input.organizationId,
+    });
+    const activeRepos = new Set(repoIds);
+    const statuses =
+      "ws" in runtime ? [...runtime.linkedCheckouts.values()] : runtime.linkedCheckoutStatuses;
+    return statuses.filter(
+      (status) =>
+        status.isAttached &&
+        activeRepos.has(status.repoId) &&
+        sessionRouter.isLinkedCheckoutStatusFresh(runtime, status.repoId),
+    );
   }
 
   /**

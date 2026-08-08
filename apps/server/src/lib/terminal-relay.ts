@@ -194,35 +194,19 @@ export class TerminalRelay {
     }
 
     // Send terminal_create command to the bridge, pinned to the authorized runtime.
-    const createDelivery = sessionRouter.sendAsync
-      ? sessionRouter.sendAsync(
-          sessionId,
-          {
-            type: "terminal_create",
-            terminalId,
-            sessionId,
-            ownerUserId,
-            cols,
-            rows,
-            cwd: cwd ?? "",
-          },
-          { expectedHomeRuntimeId: runtimeInstanceId, organizationId },
-        )
-      : Promise.resolve(
-          sessionRouter.send(
-            sessionId,
-            {
-              type: "terminal_create",
-              terminalId,
-              sessionId,
-              ownerUserId,
-              cols,
-              rows,
-              cwd: cwd ?? "",
-            },
-            { expectedHomeRuntimeId: runtimeInstanceId, organizationId },
-          ),
-        );
+    const createDelivery = sessionRouter.sendAsync(
+      sessionId,
+      {
+        type: "terminal_create",
+        terminalId,
+        sessionId,
+        ownerUserId,
+        cols,
+        rows,
+        cwd: cwd ?? "",
+      },
+      { expectedHomeRuntimeId: runtimeInstanceId, organizationId },
+    );
     void createDelivery.then((result) => {
       if (result === "delivered") return;
       // Bridge not available — buffer an error so the frontend gets feedback on attach

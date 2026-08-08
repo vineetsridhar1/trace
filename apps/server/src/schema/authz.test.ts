@@ -113,6 +113,7 @@ vi.mock("../lib/db.js", () => ({
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     getRuntime: vi.fn(),
+    getRuntimeMetadata: vi.fn(),
     getRuntimeForSession: vi.fn(),
     listSkills: vi.fn(),
   },
@@ -243,7 +244,7 @@ describe("GraphQL authz guards", () => {
       sessionGroupId: "group-1",
       connection: { runtimeInstanceId: "runtime-1" },
     });
-    vi.mocked(sessionRouter.getRuntime).mockReturnValueOnce({
+    vi.mocked(sessionRouter.getRuntimeMetadata).mockReturnValueOnce({
       key: "org-1:runtime-1",
       id: "runtime-1",
       label: "Laptop",

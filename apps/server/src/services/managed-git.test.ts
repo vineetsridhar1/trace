@@ -21,9 +21,15 @@ vi.mock("../lib/storage/index.js", () => ({
   },
 }));
 
-vi.mock("../lib/session-router.js", () => ({
-  sessionRouter: { send: vi.fn().mockReturnValue("delivered") },
-}));
+vi.mock("../lib/session-router.js", () => {
+  const send = vi.fn().mockReturnValue("delivered");
+  return {
+    sessionRouter: {
+      send,
+      sendAsync: vi.fn((...args: unknown[]) => Promise.resolve(send(...args))),
+    },
+  };
+});
 
 vi.mock("../lib/git-storage/index.js", () => ({
   gitStorage: {

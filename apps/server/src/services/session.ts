@@ -39,6 +39,7 @@ import {
   type RuntimeLifecycleEventType,
   type RuntimeLifecycleUpdate,
 } from "../lib/session-router.js";
+import type { RuntimeDescriptor } from "../lib/runtime-directory.js";
 import type { RuntimeAdapterType } from "../lib/runtime-adapter-registry.js";
 import { inboxService } from "./inbox.js";
 import { runtimeDebug } from "../lib/runtime-debug.js";
@@ -1507,24 +1508,24 @@ function selectRuntimeSupportedTool(
   return LOCAL_TOOL_FALLBACK_ORDER.find((tool) => runtime.supportedTools.includes(tool)) ?? null;
 }
 
-function runtimeMetadata(...args: Parameters<typeof sessionRouter.getRuntime>) {
-  return sessionRouter.getRuntimeMetadata?.(...args) ?? sessionRouter.getRuntime(...args);
+function runtimeMetadata(...args: Parameters<typeof sessionRouter.getRuntimeMetadata>) {
+  return sessionRouter.getRuntimeMetadata(...args);
+}
+
+function listRuntimeMetadata(filter?: { hostingMode?: string }) {
+  return sessionRouter.listRuntimeMetadata(filter);
 }
 
 async function sendSessionCommand(
   ...args: Parameters<typeof sessionRouter.send>
 ): Promise<DeliveryResult> {
-  return sessionRouter.sendAsync
-    ? sessionRouter.sendAsync(...args)
-    : Promise.resolve(sessionRouter.send(...args));
+  return sessionRouter.sendAsync(...args);
 }
 
 async function sendRuntimeCommand(
   ...args: Parameters<typeof sessionRouter.sendToRuntime>
 ): Promise<DeliveryResult> {
-  return sessionRouter.sendToRuntimeAsync
-    ? sessionRouter.sendToRuntimeAsync(...args)
-    : Promise.resolve(sessionRouter.sendToRuntime(...args));
+  return sessionRouter.sendToRuntimeAsync(...args);
 }
 
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
@@ -1828,11 +1829,23 @@ export class SessionService {
     repoId: string;
   }): Promise<string[]> {
     if (params.hosting !== "local") return [];
-    const runtime = sessionRouter.getRuntimeForSession(params.sessionId);
-    if (!runtime) {
+    const localRuntime = sessionRouter.getRuntimeForSession(params.sessionId);
+    const session = localRuntime
+      ? null
+      : await prisma.session.findUnique({
+          where: { id: params.sessionId },
+          select: { connection: true },
+        });
+    const runtimeInstanceId =
+      localRuntime?.id ?? this.getConnectionRuntimeInstanceId(session?.connection);
+    if (!runtimeInstanceId) {
       throw new Error("Cannot allocate a local workspace slug before selecting a runtime");
     }
-    return sessionRouter.listWorkspaceSlugs(runtime.id, params.repoId, params.organizationId);
+    return sessionRouter.listWorkspaceSlugs(
+      runtimeInstanceId,
+      params.repoId,
+      params.organizationId,
+    );
   }
 
   /**
@@ -2662,14 +2675,14 @@ export class SessionService {
     tool?: string;
     repoId?: string | null;
     sessionGroupId?: string | null;
-  }): Promise<RuntimeInstance | undefined> {
+  }): Promise<RuntimeInstance | RuntimeDescriptor | undefined> {
     const accessibleRuntimeIds = await runtimeAccessService.listAccessibleRuntimeInstanceIds({
       userId: params.userId,
       organizationId: params.organizationId,
       sessionGroupId: params.sessionGroupId,
     });
 
-    for (const runtime of sessionRouter.listRuntimes({ hostingMode: "local" })) {
+    for (const runtime of listRuntimeMetadata({ hostingMode: "local" })) {
       if (runtime.organizationId !== params.organizationId) continue;
       if (!accessibleRuntimeIds.has(runtime.id)) continue;
       if (params.tool && !runtime.supportedTools.includes(params.tool)) continue;
@@ -2977,16 +2990,13 @@ export class SessionService {
     }
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
-    const ownedRuntimesForRepo = sessionRouter
-      .listRuntimes({ hostingMode: "local" })
+    const ownedRuntimesForRepo = listRuntimeMetadata({ hostingMode: "local" })
       .filter((candidate) => {
         if (candidate.organizationId !== organizationId) return false;
         if (candidate.ownerUserId !== userId) return false;
         if (options.requireRegisteredRepo && !candidate.registeredRepoIds.includes(repoId)) {
           return false;
         }
-        if (candidate.ws.readyState !== candidate.ws.OPEN) return false;
-
         return true;
       });
     const runtime = options.runtimeInstanceId
@@ -3048,14 +3058,11 @@ export class SessionService {
     const ownerRuntimeInstanceId = this.getConnectionRuntimeInstanceId(params.group.connection);
     if (!ownerRuntimeInstanceId) return null;
 
-    const ownerRuntime = sessionRouter
-      .listRuntimes()
-      .find(
-        (candidate) =>
-          candidate.organizationId === params.organizationId &&
-          candidate.id === ownerRuntimeInstanceId &&
-          candidate.ws.readyState === candidate.ws.OPEN,
-      );
+    const ownerRuntime = listRuntimeMetadata().find(
+      (candidate) =>
+        candidate.organizationId === params.organizationId &&
+        candidate.id === ownerRuntimeInstanceId,
+    );
     if (!ownerRuntime) return null;
 
     let branch: string | null;
@@ -4907,7 +4914,8 @@ export class SessionService {
             state: "connecting",
             runtimeInstanceId: input.runtimeInstanceId,
             runtimeLabel:
-              sessionRouter.getRuntime(input.runtimeInstanceId)?.label ?? conn.runtimeLabel,
+              runtimeMetadata(input.runtimeInstanceId, session.organizationId)?.label ??
+              conn.runtimeLabel,
           }),
         },
         include: SESSION_INCLUDE,
@@ -5173,7 +5181,10 @@ export class SessionService {
 
     // Only transition to active after successful delivery
     // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
-    const boundRuntime = sessionRouter.getRuntimeForSession(id);
+    const expectedRuntimeId = runtimeBinding.runtimeId ?? conn.runtimeInstanceId;
+    const boundRuntime =
+      sessionRouter.getRuntimeForSession(id) ??
+      (expectedRuntimeId ? runtimeMetadata(expectedRuntimeId, session.organizationId) : undefined);
     const updated = await prisma.session.update({
       where: { id },
       data: {
@@ -6765,7 +6776,9 @@ export class SessionService {
 
     // Only mark active after successful delivery
     // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
-    const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
+    const boundRuntime =
+      sessionRouter.getRuntimeForSession(sessionId) ??
+      (expectedRuntimeId ? runtimeMetadata(expectedRuntimeId, session.organizationId) : undefined);
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -6858,6 +6871,7 @@ export class SessionService {
         toolSessionId: true,
         worktreeDeleted: true,
         pendingRun: true,
+        connection: true,
       },
     });
     if (
@@ -6871,7 +6885,16 @@ export class SessionService {
     ) {
       return "session_unavailable";
     }
-    if (!sessionRouter.getRuntimeForSession(session.id)) return "runtime_unavailable";
+    const runtimeInstanceId =
+      this.getConnectionRuntimeInstanceId(session.connection) ??
+      sessionRouter.getRuntimeForSession(session.id)?.id ??
+      null;
+    if (
+      !runtimeInstanceId ||
+      !sessionRouter.isRuntimeAvailable(runtimeInstanceId, session.organizationId)
+    ) {
+      return "runtime_unavailable";
+    }
 
     await this.storePendingCommand(
       session.id,
@@ -9570,7 +9593,7 @@ export class SessionService {
     // install instructions. `supportedTools` is still returned so callers can
     // reflect install state in the UI.
     const allRuntimes = sessionRouter
-      .listRuntimes()
+      .listRuntimeMetadata({ hostingMode: "local" })
       .filter(
         (runtime) =>
           runtime.hostingMode === "local" &&
@@ -9579,18 +9602,24 @@ export class SessionService {
             runtime.ownerUserId === scopedGroup.ownerUserId),
       );
 
-    const sessionIds = allRuntimes.flatMap((runtime) => [...runtime.boundSessions]);
     const sessions =
-      sessionIds.length === 0
+      allRuntimes.length === 0
         ? []
         : await prisma.session.findMany({
             where: {
-              id: { in: sessionIds },
               organizationId,
+              OR: allRuntimes.map((runtime) => ({
+                connection: { path: ["runtimeInstanceId"], equals: runtime.id },
+              })),
             },
-            select: { id: true },
+            select: { connection: true },
           });
-    const orgSessionIds = new Set(sessions.map((session: { id: string }) => session.id));
+    const sessionCounts = new Map<string, number>();
+    for (const session of sessions) {
+      const runtimeInstanceId = this.getConnectionRuntimeInstanceId(session.connection);
+      if (!runtimeInstanceId) continue;
+      sessionCounts.set(runtimeInstanceId, (sessionCounts.get(runtimeInstanceId) ?? 0) + 1);
+    }
 
     const result = await Promise.all(
       allRuntimes.map(async (r) => {
@@ -9611,9 +9640,8 @@ export class SessionService {
           label: r.label,
           hostingMode: r.hostingMode,
           supportedTools: r.supportedTools,
-          connected: r.ws.readyState === r.ws.OPEN,
-          sessionCount: [...r.boundSessions].filter((sessionId) => orgSessionIds.has(sessionId))
-            .length,
+          connected: "ws" in r ? r.ws.readyState === r.ws.OPEN : r.expiresAt > Date.now(),
+          sessionCount: sessionCounts.get(r.id) ?? 0,
           registeredRepoIds,
           access,
         };
@@ -9690,8 +9718,7 @@ export class SessionService {
         organizationId,
         sessionGroupId,
       });
-      const runtime = sessionRouter
-        .listRuntimes()
+      const runtime = listRuntimeMetadata()
         .find(
           (runtime) =>
             runtime.organizationId === organizationId &&
@@ -9730,8 +9757,7 @@ export class SessionService {
         userId,
         organizationId,
       });
-      const runtime = sessionRouter
-        .listRuntimes()
+      const runtime = listRuntimeMetadata()
         .find(
           (runtime) =>
             runtime.organizationId === organizationId &&
@@ -10906,7 +10932,7 @@ export class SessionService {
 
     const runtimeInstanceId = targetConnection.runtimeInstanceId;
     const runtime = runtimeInstanceId
-      ? sessionRouter.getRuntime(runtimeInstanceId, effects.sessionsToRebind[0]?.organizationId)
+      ? runtimeMetadata(runtimeInstanceId, effects.sessionsToRebind[0]?.organizationId)
       : null;
     for (const session of effects.sessionsToRebind) {
       sessionRouter.unbindSession(session.id);
@@ -11099,7 +11125,7 @@ export class SessionService {
     if (shouldRebindSessions) {
       const runtimeInstanceId = this.getConnectionRuntimeInstanceId(patch.connection);
       const runtime = runtimeInstanceId
-        ? sessionRouter.getRuntime(runtimeInstanceId, sessionsToRebind[0]?.organizationId)
+        ? runtimeMetadata(runtimeInstanceId, sessionsToRebind[0]?.organizationId)
         : null;
       for (const session of sessionsToRebind) {
         sessionRouter.unbindSession(session.id);
@@ -11527,7 +11553,10 @@ export class SessionService {
       return deliveryResult;
     }
 
-    const boundRuntime = sessionRouter.getRuntimeForSession(sessionId);
+    const expectedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+    const boundRuntime =
+      sessionRouter.getRuntimeForSession(sessionId) ??
+      (expectedRuntimeId ? runtimeMetadata(expectedRuntimeId, session.organizationId) : undefined);
     const resumedSessionStatus = getRunningSessionStatus(session.sessionStatus);
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
