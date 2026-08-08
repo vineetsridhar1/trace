@@ -8,6 +8,9 @@ vi.mock("../lib/db.js", async () => {
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     listRuntimes: vi.fn(),
+    listRuntimeMetadata: vi.fn(),
+    getRuntime: vi.fn(),
+    getLinkedCheckoutStatus: vi.fn(),
   },
 }));
 
@@ -18,11 +21,21 @@ import { connectionsService } from "./connections.js";
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const sessionRouterMock = sessionRouter as unknown as {
   listRuntimes: ReturnType<typeof vi.fn>;
+  listRuntimeMetadata: ReturnType<typeof vi.fn>;
+  getRuntime: ReturnType<typeof vi.fn>;
+  getLinkedCheckoutStatus: ReturnType<typeof vi.fn>;
 };
 
 describe("connectionsService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionRouterMock.getLinkedCheckoutStatus.mockImplementation(
+      (_runtimeId: string, repoId: string) => {
+        const runtimes = sessionRouterMock.listRuntimeMetadata.mock.results[0]?.value ?? [];
+        const status = runtimes[0]?.linkedCheckouts?.get(repoId) ?? null;
+        return Promise.resolve(status);
+      },
+    );
   });
 
   it("returns connected bridge repos visible through user member channels", async () => {
@@ -66,8 +79,9 @@ describe("connectionsService", () => {
       ])
       .mockResolvedValueOnce([]);
 
-    sessionRouterMock.listRuntimes.mockReturnValueOnce([
+    sessionRouterMock.listRuntimeMetadata.mockReturnValueOnce([
       {
+        key: "runtime-1",
         id: "runtime-1",
         organizationId: "org-1",
         registeredRepoIds: ["repo-1", "repo-hidden"],
@@ -144,6 +158,7 @@ describe("connectionsService", () => {
         }),
       }),
     );
+    expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenCalledWith("runtime-1", "repo-1");
   });
 
   it("returns bridges granted to the user as work bridges", async () => {
@@ -175,7 +190,7 @@ describe("connectionsService", () => {
         ],
       },
     ]);
-    sessionRouterMock.listRuntimes.mockReturnValueOnce([]);
+    sessionRouterMock.listRuntimeMetadata.mockReturnValueOnce([]);
 
     const result = await connectionsService.listMine({
       userId: "user-1",
@@ -233,8 +248,9 @@ describe("connectionsService", () => {
           accessGrants: [],
         },
       ]);
-    sessionRouterMock.listRuntimes.mockReturnValueOnce([
+    sessionRouterMock.listRuntimeMetadata.mockReturnValueOnce([
       {
+        key: "runtime-3",
         id: "runtime-3",
         organizationId: "org-1",
         registeredRepoIds: ["repo-1"],

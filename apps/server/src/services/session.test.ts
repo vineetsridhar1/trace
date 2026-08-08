@@ -51,6 +51,7 @@ vi.mock("../lib/session-router.js", () => ({
     listRuntimeMetadata: vi.fn().mockReturnValue(undefined),
     listWorkspaceSlugs: vi.fn().mockResolvedValue([]),
     listBranches: vi.fn().mockResolvedValue([]),
+    listRepoWorktrees: vi.fn().mockResolvedValue([]),
     listFiles: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockResolvedValue(""),
     writeFile: vi.fn().mockResolvedValue(undefined),
@@ -4953,6 +4954,32 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).not.toHaveBeenCalled();
       expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
       expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
+    it("queues when the persisted runtime is connected to another replica", async () => {
+      prismaMock.session.findFirst.mockResolvedValueOnce(
+        makeSession({
+          agentStatus: "active",
+          workdir: "/workspace",
+          toolSessionId: "tool-session-1",
+          connection: { runtimeInstanceId: "runtime-remote" },
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(makeSession());
+      sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
+      sessionRouterMock.isRuntimeAvailable.mockReturnValueOnce(true);
+
+      await expect(
+        service.queueInternalMessage({
+          sessionGroupId: "group-1",
+          organizationId: "org-1",
+          text: "repair package",
+          clientSource: "internal:design-system-repair",
+        }),
+      ).resolves.toBe("queued");
+
+      expect(sessionRouterMock.isRuntimeAvailable).toHaveBeenCalledWith("runtime-remote", "org-1");
+      expect(prismaMock.session.update).toHaveBeenCalled();
     });
 
     it("keeps an idle repair durably queued if its live runtime disconnects during send", async () => {
@@ -12062,6 +12089,8 @@ describe("SessionService", () => {
       sessionRouterMock.getRuntime.mockReturnValue(null);
       sessionRouterMock.listRuntimes.mockReset();
       sessionRouterMock.listRuntimes.mockReturnValue([]);
+      sessionRouterMock.listRuntimeMetadata.mockReset();
+      sessionRouterMock.listRuntimeMetadata.mockReturnValue(undefined);
       sessionRouterMock.getLinkedCheckoutStatus.mockReset();
       sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue(null);
       sessionRouterMock.inspectSessionCurrentBranch.mockReset();
@@ -12137,6 +12166,41 @@ describe("SessionService", () => {
         "runtime-home",
         "repo-1",
       );
+    });
+
+    it("uses a linked checkout runtime connected to another replica", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-1",
+        repoId: "repo-1",
+        connection: { runtimeInstanceId: "runtime-remote" },
+        visibility: "public",
+        ownerUserId: "user-1",
+        sessions: [{ id: "session-1", repoId: "repo-1", workdir: "/workspace" }],
+      });
+      sessionRouterMock.listRuntimeMetadata.mockReturnValue([
+        {
+          key: "org-1:runtime-remote",
+          id: "runtime-remote",
+          hostingMode: "local",
+          organizationId: "org-1",
+          ownerUserId: "user-1",
+          registeredRepoIds: ["repo-1"],
+        },
+      ]);
+      sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValueOnce({
+        repoId: "repo-1",
+        repoPath: "/workspace",
+        isAttached: true,
+      });
+
+      await service.getLinkedCheckoutStatus("group-1", "repo-1", "org-1", "user-1");
+
+      expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenCalledWith(
+        "org-1:runtime-remote",
+        "repo-1",
+      );
+      expect(sessionRouterMock.listRuntimes).not.toHaveBeenCalled();
     });
 
     it("rejects linked-checkout access when the repo does not belong to the session group", async () => {
@@ -13682,6 +13746,27 @@ describe("SessionService", () => {
       expect(branches).toEqual(["main"]);
     });
 
+    it("auto-selects a repo runtime connected to another replica", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-a" });
+      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValueOnce(
+        new Set(["runtime-remote"]),
+      );
+      sessionRouterMock.listRuntimeMetadata.mockReturnValueOnce([
+        {
+          key: "org-1:runtime-remote",
+          id: "runtime-remote",
+          organizationId: "org-1",
+          hostingMode: "local",
+          registeredRepoIds: ["repo-a"],
+        },
+      ]);
+      sessionRouterMock.listBranches.mockResolvedValueOnce(["main"]);
+
+      await expect(service.listBranches("repo-a", "org-1", "user-2")).resolves.toEqual(["main"]);
+      expect(sessionRouterMock.listBranches).toHaveBeenCalledWith("org-1:runtime-remote", "repo-a");
+      expect(sessionRouterMock.listRuntimes).not.toHaveBeenCalled();
+    });
+
     it("throws when no connected runtime has the repo registered", async () => {
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-a" });
       runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValueOnce(new Set());
@@ -13693,6 +13778,38 @@ describe("SessionService", () => {
         "Repo not cloned on any connected runtime",
       );
       expect(sessionRouterMock.listBranches).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("listRepoWorktrees", () => {
+    it("lists worktrees from a local runtime connected to another replica", async () => {
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-a" });
+      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValueOnce(
+        new Set(["runtime-remote"]),
+      );
+      sessionRouterMock.listRuntimeMetadata.mockReturnValueOnce([
+        {
+          key: "org-1:runtime-remote",
+          id: "runtime-remote",
+          organizationId: "org-1",
+          hostingMode: "local",
+          registeredRepoIds: ["repo-a"],
+        },
+      ]);
+      sessionRouterMock.listRepoWorktrees.mockResolvedValueOnce([
+        { path: "/worktrees/feature", branch: "feature", isTraceManaged: false, isMain: false },
+        { path: "/repo", branch: "main", isTraceManaged: false, isMain: true },
+      ]);
+
+      await expect(
+        service.listRepoWorktrees("repo-a", "org-1", "user-2"),
+      ).resolves.toEqual([
+        expect.objectContaining({ path: "/worktrees/feature", branch: "feature" }),
+      ]);
+      expect(sessionRouterMock.listRepoWorktrees).toHaveBeenCalledWith(
+        "org-1:runtime-remote",
+        "repo-a",
+      );
     });
   });
 

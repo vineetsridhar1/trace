@@ -9,6 +9,8 @@ vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     isRuntimeAvailable: vi.fn(),
     getRuntime: vi.fn(),
+    getRuntimeMetadata: vi.fn(),
+    getLinkedCheckoutStatus: vi.fn(),
   },
 }));
 
@@ -20,11 +22,17 @@ const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").c
 const sessionRouterMock = sessionRouter as unknown as {
   isRuntimeAvailable: ReturnType<typeof vi.fn>;
   getRuntime: ReturnType<typeof vi.fn>;
+  getRuntimeMetadata: ReturnType<typeof vi.fn>;
+  getLinkedCheckoutStatus: ReturnType<typeof vi.fn>;
 };
 
 describe("bridge access resolvers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionRouterMock.getRuntimeMetadata.mockImplementation((...args: unknown[]) =>
+      sessionRouterMock.getRuntime(...args),
+    );
+    sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
   });
 
   it("filters persisted bridge registered repo ids to the runtime organization", async () => {
@@ -45,8 +53,10 @@ describe("bridge access resolvers", () => {
   });
 
   it("filters live bridge registered repo ids to the runtime organization", async () => {
-    sessionRouterMock.getRuntime.mockReturnValueOnce({
+    sessionRouterMock.getRuntime.mockReturnValue({
+      key: "runtime-1",
       instanceId: "runtime-1",
+      id: "runtime-1",
       organizationId: "org-1",
       registeredRepoIds: ["repo-visible", "repo-hidden"],
       linkedCheckouts: new Map(),
@@ -64,8 +74,10 @@ describe("bridge access resolvers", () => {
   });
 
   it("filters live linked checkouts to repos in the runtime organization", async () => {
-    sessionRouterMock.getRuntime.mockReturnValueOnce({
+    sessionRouterMock.getRuntime.mockReturnValue({
+      key: "runtime-1",
       instanceId: "runtime-1",
+      id: "runtime-1",
       organizationId: "org-1",
       registeredRepoIds: ["repo-visible", "repo-hidden"],
       linkedCheckouts: new Map([
@@ -102,5 +114,32 @@ describe("bridge access resolvers", () => {
         isAttached: true,
       },
     ]);
+  });
+
+  it("loads linked checkout status through the owning replica", async () => {
+    sessionRouterMock.getRuntime.mockReturnValue(null);
+    sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      key: "org-1:runtime-remote",
+      id: "runtime-remote",
+      organizationId: "org-1",
+      registeredRepoIds: ["repo-visible"],
+    });
+    sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue({
+      repoId: "repo-visible",
+      repoPath: "/repos/visible",
+      isAttached: true,
+    });
+    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-visible" }]);
+
+    await expect(
+      bridgeAccessTypeResolvers.BridgeRuntime.linkedCheckouts({
+        instanceId: "runtime-remote",
+        organizationId: "org-1",
+      }),
+    ).resolves.toEqual([expect.objectContaining({ repoId: "repo-visible", isAttached: true })]);
+    expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenCalledWith(
+      "org-1:runtime-remote",
+      "repo-visible",
+    );
   });
 });

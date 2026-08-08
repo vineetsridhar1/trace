@@ -13,6 +13,7 @@ vi.mock("../lib/session-router.js", () => ({
       label: "Laptop",
       hostingMode: "local",
     }),
+    getRuntimeMetadata: vi.fn(),
   },
 }));
 
@@ -41,6 +42,7 @@ const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").c
 const sessionRouterMock = sessionRouter as unknown as {
   isRuntimeAvailable: ReturnType<typeof vi.fn>;
   getRuntime: ReturnType<typeof vi.fn>;
+  getRuntimeMetadata: ReturnType<typeof vi.fn>;
 };
 const eventServiceMock = eventService as unknown as {
   create: ReturnType<typeof vi.fn>;
@@ -60,6 +62,9 @@ describe("runtimeAccessService", () => {
       label: "Laptop",
       hostingMode: "local",
     });
+    sessionRouterMock.getRuntimeMetadata.mockImplementation(
+      (...args: unknown[]) => sessionRouterMock.getRuntime(...args),
+    );
   });
 
   it("creates a bridge runtime row for the same instance in a different organization", async () => {
@@ -320,6 +325,23 @@ describe("runtimeAccessService", () => {
     expect(access.allowed).toBe(false);
     expect(access.isOwner).toBe(false);
     expect(access.capabilities).toEqual([]);
+  });
+
+  it("uses distributed runtime metadata to classify a remote cloud runtime", async () => {
+    prismaMock.bridgeRuntime.findFirst.mockResolvedValueOnce(null);
+    sessionRouterMock.getRuntime.mockReturnValue(null);
+    sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      id: "runtime-remote",
+      hostingMode: "cloud",
+    });
+
+    const access = await runtimeAccessService.getAccessState({
+      userId: "user-2",
+      organizationId: "org-1",
+      runtimeInstanceId: "runtime-remote",
+    });
+
+    expect(access.hostingMode).toBe("cloud");
   });
 
   it("emits an owner-only bridge request event when access is requested", async () => {

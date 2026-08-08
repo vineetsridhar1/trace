@@ -193,7 +193,7 @@ function runtimeHostingMode(
   organizationId: string,
   persisted: { id: string } | null,
 ): "cloud" | "local" | null {
-  const runtime = sessionRouter.getRuntime(runtimeInstanceId, organizationId);
+  const runtime = sessionRouter.getRuntimeMetadata(runtimeInstanceId, organizationId);
   if (runtime) return runtime.hostingMode;
   if (persisted) return "local";
   if (isProvisionedRuntimeId(runtimeInstanceId)) return "cloud";

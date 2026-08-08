@@ -108,7 +108,7 @@ function rawRegisteredRepoIds(runtime: {
   organizationId: string;
   metadata?: unknown;
 }): string[] {
-  const live = sessionRouter.getRuntime(runtime.instanceId, runtime.organizationId);
+  const live = sessionRouter.getRuntimeMetadata(runtime.instanceId, runtime.organizationId);
   if (live) return live.registeredRepoIds;
   if (
     !runtime.metadata ||
@@ -147,15 +147,23 @@ export const bridgeAccessTypeResolvers = {
       return filterRepoIdsToOrganization(rawRegisteredRepoIds(runtime), runtime.organizationId);
     },
     linkedCheckouts: async (runtime: { instanceId: string; organizationId: string }) => {
-      const live = sessionRouter.getRuntime(runtime.instanceId, runtime.organizationId);
-      if (!live || live.ws.readyState !== live.ws.OPEN) return [];
+      const live = sessionRouter.getRuntimeMetadata(runtime.instanceId, runtime.organizationId);
+      if (!live || !sessionRouter.isRuntimeAvailable(live.id, runtime.organizationId)) return [];
       // Filter by current registeredRepoIds so stale cache entries from
       // previously-linked-but-now-unlinked repos don't surface.
       const activeRepos = new Set(
         await filterRepoIdsToOrganization(live.registeredRepoIds, runtime.organizationId),
       );
-      return [...live.linkedCheckouts.values()].filter(
-        (status) => status.isAttached && activeRepos.has(status.repoId),
+      const localRuntime = sessionRouter.getRuntime(live.id, runtime.organizationId);
+      const statuses = await Promise.all(
+        [...activeRepos].map(async (repoId) => {
+          const cached = localRuntime?.linkedCheckouts.get(repoId);
+          if (cached) return cached;
+          return sessionRouter.getLinkedCheckoutStatus(live.key, repoId).catch(() => null);
+        }),
+      );
+      return statuses.filter((status): status is NonNullable<typeof status> =>
+        Boolean(status?.isAttached),
       );
     },
   },

@@ -8,6 +8,8 @@ vi.mock("../lib/db.js", async () => {
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     getRuntime: vi.fn(),
+    getRuntimeMetadata: vi.fn(),
+    isRuntimeAvailable: vi.fn().mockReturnValue(true),
     sendToRuntime: vi.fn().mockReturnValue("delivered"),
   },
 }));
@@ -31,6 +33,8 @@ import {
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const sessionRouterMock = sessionRouter as unknown as {
   getRuntime: ReturnType<typeof vi.fn>;
+  getRuntimeMetadata: ReturnType<typeof vi.fn>;
+  isRuntimeAvailable: ReturnType<typeof vi.fn>;
   sendToRuntime: ReturnType<typeof vi.fn>;
 };
 const eventServiceMock = eventService as unknown as {
@@ -98,6 +102,10 @@ describe("SessionApplicationService", () => {
       hostingMode: "cloud",
       ws: { readyState: 1, OPEN: 1 },
     });
+    sessionRouterMock.getRuntimeMetadata.mockImplementation((...args: unknown[]) =>
+      sessionRouterMock.getRuntime(...args),
+    );
+    sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
     sessionRouterMock.sendToRuntime.mockReturnValue("delivered");
     prismaMock.sessionEndpoint.findUnique.mockResolvedValue(null);
     prismaMock.sessionEndpoint.create.mockResolvedValue({
@@ -196,6 +204,26 @@ describe("SessionApplicationService", () => {
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: "session_endpoint_created" }),
       prismaMock,
+    );
+  });
+
+  it("starts a process when another replica owns the cloud runtime", async () => {
+    sessionRouterMock.getRuntime.mockReturnValue(null);
+    sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      key: "org-1:runtime-1",
+      id: "runtime-1",
+      organizationId: "org-1",
+      hostingMode: "cloud",
+    });
+
+    await expect(
+      new SessionApplicationService().startProcess("group-1", "web", "dev", "org-1", "user-1"),
+    ).resolves.toEqual(expect.objectContaining({ id: "process-1" }));
+
+    expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+      "org-1:runtime-1",
+      expect.objectContaining({ type: "app_process_start" }),
+      "org-1",
     );
   });
 

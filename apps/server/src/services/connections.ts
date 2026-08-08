@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/db.js";
 import { sessionRouter, type RuntimeInstance } from "../lib/session-router.js";
+import type { RuntimeDescriptor } from "../lib/runtime-directory.js";
 import type { BridgeLinkedCheckoutStatus } from "@trace/shared";
 
 type BridgeWithAccess = Prisma.BridgeRuntimeGetPayload<{
@@ -153,8 +154,8 @@ class ConnectionsService {
             },
           });
 
-    const liveById = new Map<string, RuntimeInstance>();
-    for (const runtime of sessionRouter.listRuntimes({})) {
+    const liveById = new Map<string, RuntimeInstance | RuntimeDescriptor>();
+    for (const runtime of sessionRouter.listRuntimeMetadata({})) {
       if (runtime.organizationId !== input.organizationId) continue;
       liveById.set(runtime.id, runtime);
     }
@@ -186,32 +187,37 @@ class ConnectionsService {
       channelByRepoId.set(channel.repoId, channel);
     }
 
-    return bridges.map((bridge) => {
-      const runtime = liveById.get(bridge.instanceId);
-      const repos: ConnectionsRepoEntry[] = [];
+    return Promise.all(
+      bridges.map(async (bridge) => {
+        const runtime = liveById.get(bridge.instanceId);
+        const repos: ConnectionsRepoEntry[] = [];
 
-      if (runtime && hasBridgeWorkAccess(bridge, input.userId)) {
-        for (const repoId of runtime.registeredRepoIds) {
-          const channel = channelByRepoId.get(repoId);
-          if (!channel?.repo) continue;
-          const checkout = runtime.linkedCheckouts.get(repoId) ?? null;
-          repos.push({
-            repo: channel.repo,
-            channel,
-            runScripts: channel.runScripts,
-            linkedCheckout: checkout?.isAttached ? checkout : null,
-          });
+        if (runtime && hasBridgeWorkAccess(bridge, input.userId)) {
+          for (const repoId of runtime.registeredRepoIds) {
+            const channel = channelByRepoId.get(repoId);
+            if (!channel?.repo) continue;
+            const localRuntime = sessionRouter.getRuntime(runtime.id, input.organizationId);
+            const checkout =
+              localRuntime?.linkedCheckouts.get(repoId) ??
+              (await sessionRouter.getLinkedCheckoutStatus(runtime.key, repoId).catch(() => null));
+            repos.push({
+              repo: channel.repo,
+              channel,
+              runScripts: channel.runScripts,
+              linkedCheckout: checkout?.isAttached ? checkout : null,
+            });
+          }
         }
-      }
 
-      return {
-        bridge,
-        repos,
-        canTerminal:
-          bridge.ownerUserId === input.userId ||
-          bridge.accessGrants.some((grant) => grant.capabilities.includes("terminal")),
-      };
-    });
+        return {
+          bridge,
+          repos,
+          canTerminal:
+            bridge.ownerUserId === input.userId ||
+            bridge.accessGrants.some((grant) => grant.capabilities.includes("terminal")),
+        };
+      }),
+    );
   }
 }
 

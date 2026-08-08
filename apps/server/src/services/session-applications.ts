@@ -1227,8 +1227,8 @@ export class SessionApplicationService {
     if (!session) throw new ValidationError("Session group does not have a connected runtime");
     const runtimeId = connectionRuntimeInstanceId(session.connection);
     if (!runtimeId) throw new ValidationError("Session group does not have a connected runtime");
-    const runtime = sessionRouter.getRuntime(runtimeId, organizationId);
-    if (!runtime || runtime.ws.readyState !== runtime.ws.OPEN) {
+    const runtime = sessionRouter.getRuntimeMetadata(runtimeId, organizationId);
+    if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id, organizationId)) {
       throw new ValidationError("Session group runtime is not connected");
     }
     if (runtime.hostingMode !== "cloud") {

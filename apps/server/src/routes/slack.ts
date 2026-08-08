@@ -1806,7 +1806,7 @@ async function listAccessibleLocalRuntimeOptions(input: {
     organizationId: input.organizationId,
   });
   return sessionRouter
-    .listRuntimes({ hostingMode: "local" })
+    .listRuntimeMetadata({ hostingMode: "local" })
     .filter((runtime) => runtime.organizationId === input.organizationId)
     .filter((runtime) => accessibleIds.has(runtime.id))
     .filter((runtime) => !input.tool || runtime.supportedTools.includes(input.tool))
@@ -2413,7 +2413,7 @@ async function recommendedSettingsSummaryForDraft(
     } else {
       const runtime =
         settings.runtimeInstanceId
-          ? sessionRouter.getRuntime(settings.runtimeInstanceId, draft.organizationId)
+          ? sessionRouter.getRuntimeMetadata(settings.runtimeInstanceId, draft.organizationId)
           : null;
       lines.push(`- *Bridge:* ${runtime?.label ?? "Auto-select local bridge"}`);
     }
