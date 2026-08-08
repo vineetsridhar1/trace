@@ -1,6 +1,5 @@
 import type { BridgeAccessCapability } from "@prisma/client";
 import type { Context } from "../context.js";
-import { prisma } from "../lib/db.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import { runtimeAccessService } from "../services/runtime-access.js";

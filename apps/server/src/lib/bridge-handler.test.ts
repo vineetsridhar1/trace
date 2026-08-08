@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getRuntime: vi.fn(() => undefined),
   isCurrentRuntimeSocket: vi.fn(() => true),
   getCurrentRuntimeConnectionGeneration: vi.fn(() => "generation-1"),
+  confirmCurrentRuntimeSocket: vi.fn(() => Promise.resolve("generation-1")),
   isRuntimeGenerationCurrent: vi.fn(() => true),
   recordLinkedCheckoutStatus: vi.fn(() => true),
   getRuntimeForSession: vi.fn(() => undefined),
@@ -43,6 +44,7 @@ vi.mock("./session-router.js", () => ({
     getRuntime: mocks.getRuntime,
     isCurrentRuntimeSocket: mocks.isCurrentRuntimeSocket,
     getCurrentRuntimeConnectionGeneration: mocks.getCurrentRuntimeConnectionGeneration,
+    confirmCurrentRuntimeSocket: mocks.confirmCurrentRuntimeSocket,
     isRuntimeGenerationCurrent: mocks.isRuntimeGenerationCurrent,
     recordLinkedCheckoutStatus: mocks.recordLinkedCheckoutStatus,
     getRuntimeForSession: mocks.getRuntimeForSession,
@@ -150,6 +152,7 @@ describe("bridge handler auth", () => {
     mocks.registerRuntime.mockResolvedValue(true);
     mocks.isCurrentRuntimeSocket.mockReturnValue(true);
     mocks.getCurrentRuntimeConnectionGeneration.mockReturnValue("generation-1");
+    mocks.confirmCurrentRuntimeSocket.mockResolvedValue("generation-1");
     mocks.isRuntimeGenerationCurrent.mockReturnValue(true);
     mocks.listIdleActiveRunSessionIds.mockResolvedValue([]);
     mocks.authorizeRuntimeLease.mockResolvedValue({ authorized: true });
@@ -1000,7 +1003,9 @@ describe("bridge handler auth", () => {
       activeSessionIds: ["session-2"],
     });
 
-    expect(mocks.recordHeartbeat).toHaveBeenCalledWith("org-1:bridge-owned", ws);
+    await vi.waitFor(() =>
+      expect(mocks.recordHeartbeat).toHaveBeenCalledWith("org-1:bridge-owned", ws),
+    );
     expect(mocks.listIdleActiveRunSessionIds).toHaveBeenCalledWith({
       sessionIds: ["session-1", "session-2"],
       activeSessionIds: ["session-2"],
@@ -1045,7 +1050,9 @@ describe("bridge handler auth", () => {
       activeSessionIds: [],
     });
 
-    expect(mocks.recordHeartbeat).toHaveBeenCalledWith("org-1:bridge-owned", ws);
+    await vi.waitFor(() =>
+      expect(mocks.recordHeartbeat).toHaveBeenCalledWith("org-1:bridge-owned", ws),
+    );
     expect(mocks.listIdleActiveRunSessionIds).not.toHaveBeenCalled();
   });
 
@@ -1087,7 +1094,9 @@ describe("bridge handler auth", () => {
       activeSessionIds: [],
     });
 
-    expect(mocks.recordHeartbeat).toHaveBeenCalledWith("org-1:bridge-owned", ws);
+    await vi.waitFor(() =>
+      expect(mocks.recordHeartbeat).toHaveBeenCalledWith("org-1:bridge-owned", ws),
+    );
     expect(mocks.listIdleActiveRunSessionIds).not.toHaveBeenCalled();
   });
 
@@ -1219,14 +1228,17 @@ describe("bridge handler auth", () => {
       expect(mocks.relayFromBridge).toHaveBeenCalledWith(
         expect.objectContaining({ type: "terminal_output", terminalId: "term-1", data: "one" }),
         "runtime_owned",
+        "generation-1",
       );
       expect(mocks.relayFromBridge).toHaveBeenCalledWith(
         expect.objectContaining({ type: "terminal_output", terminalId: "term-2", data: "two" }),
         "runtime_owned",
+        "generation-1",
       );
       expect(mocks.relayFromBridge).toHaveBeenCalledWith(
         expect.objectContaining({ type: "terminal_exit", terminalId: "term-1", exitCode: 0 }),
         "runtime_owned",
+        "generation-1",
       );
     });
   });

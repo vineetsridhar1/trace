@@ -134,7 +134,6 @@ export class RuntimeDirectory {
 
   async register(descriptor: RuntimeDescriptor, ttlMs: number): Promise<RuntimeDescriptor> {
     if (!realtimeBackplane.enabled) return this.registerLocal(descriptor);
-    let claimed = descriptor;
     const result = await redis.eval(
       "local epoch=redis.call('incr',KEYS[2]); local descriptor=cjson.decode(ARGV[1]); descriptor.ownershipEpoch=epoch; local encoded=cjson.encode(descriptor); redis.call('set',KEYS[1],encoded,'PX',ARGV[2]); return encoded",
       2,
@@ -146,7 +145,7 @@ export class RuntimeDirectory {
     if (typeof result !== "string") throw new Error("Failed to claim runtime ownership");
     const stored = descriptorFrom(JSON.parse(result));
     if (!stored) throw new Error("Redis returned an invalid runtime ownership descriptor");
-    claimed = stored;
+    const claimed = stored;
     const update = this.applyDescriptor(claimed);
     if (update === "stale") return claimed;
     try {
@@ -160,6 +159,48 @@ export class RuntimeDirectory {
       console.error("[runtime-directory] ownership presence broadcast failed:", error);
     }
     return claimed;
+  }
+
+  /**
+   * Confirm a local socket still owns Redis immediately before writing to it.
+   * Pub/sub presence is only an invalidation accelerator; it is not the
+   * authority because a presence publish can fail after a newer lease commits.
+   */
+  async isCurrentOwner(
+    runtimeKey: string,
+    connectionGeneration: string,
+    ownerReplicaId: string,
+  ): Promise<boolean> {
+    const cached = this.descriptors.get(runtimeKey);
+    if (!realtimeBackplane.enabled) {
+      return (
+        cached?.connectionGeneration === connectionGeneration &&
+        cached.ownerReplicaId === ownerReplicaId
+      );
+    }
+
+    try {
+      const value = await redis.get(this.redisKey(runtimeKey));
+      if (!value) return false;
+      const descriptor = descriptorFrom(JSON.parse(value));
+      if (!descriptor || descriptor.expiresAt <= Date.now()) return false;
+      if (this.applyDescriptor(descriptor) === "installed") {
+        this.emit({ action: "upsert", descriptor });
+      }
+      return (
+        descriptor.connectionGeneration === connectionGeneration &&
+        descriptor.ownerReplicaId === ownerReplicaId
+      );
+    } catch (error) {
+      // Preserve the plan's local-delivery behavior during a total Redis
+      // outage. Once Redis is reachable, the next write/heartbeat fences any
+      // superseded socket.
+      console.error("[runtime-directory] ownership validation failed:", error);
+      return (
+        cached?.connectionGeneration === connectionGeneration &&
+        cached.ownerReplicaId === ownerReplicaId
+      );
+    }
   }
 
   registerLocal(descriptor: RuntimeDescriptor): RuntimeDescriptor {

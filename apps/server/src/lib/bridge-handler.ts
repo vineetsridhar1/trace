@@ -677,6 +677,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
       if (msg.type === "runtime_heartbeat") {
         if (!registered) return;
+        if (!(await sessionRouter.confirmCurrentRuntimeSocket(runtimeKey, ws))) return;
         const recorded = sessionRouter.recordHeartbeat(runtimeKey, ws);
         if (!recorded) return;
         if (bridgeAuth?.kind === "cloud" && !(await revalidateAndRenewCloudRuntimeLease())) {
@@ -1247,9 +1248,10 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
         msg.type === "terminal_exit" ||
         msg.type === "terminal_error"
       ) {
-        terminalRelay.relayFromBridge(
+        await terminalRelay.relayFromBridge(
           msg as { type: string; terminalId: string; [key: string]: unknown },
           runtimeKey,
+          connectionGeneration,
         );
         return;
       }
