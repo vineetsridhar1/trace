@@ -4,6 +4,11 @@
 # must not stop the bridge from connecting (the agent can always start its own).
 set -u
 
+# Make bundled Trace skills available to every process in the cloud runtime,
+# including terminals and tools started outside the bridge adapter.
+TRACE_RUNTIME_ROOT="${TRACE_RUNTIME_DIR:-/trace/runtime}"
+export TRACE_SKILLS_DIR="${TRACE_SKILLS_DIR:-${TRACE_RUNTIME_ROOT}/skills}"
+
 # Redis — preinstalled; start it so the app can use it without manual steps.
 if command -v redis-server >/dev/null 2>&1; then
   redis-server --daemonize yes >/dev/null 2>&1 || true
