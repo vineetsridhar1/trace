@@ -4,7 +4,6 @@ import {
   Activity,
   FilePlus2,
   FileCode,
-  FileText,
   GitCompareArrows,
   MessageSquarePlus,
   Plus,
@@ -30,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { ArtifactTab } from "../artifact/ArtifactTab";
 
 export interface OpenFileTab {
   filePath: string;
@@ -240,32 +240,18 @@ export function GroupTabStrip({
             {openArtifactIds.map((artifactId) => {
               const isActive = activeArtifactId === artifactId;
               return (
-                <div
+                <ArtifactTab
                   key={artifactId}
-                  ref={(el: HTMLElement | null) => setTabRef(artifactId, el)}
+                  artifactId={artifactId}
                   className={cn(
                     tabBase,
                     "max-w-[260px] gap-0 p-0",
                     isActive ? tabActive : tabInactive,
                   )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onSelectArtifact(artifactId)}
-                    className="inline-flex min-w-0 items-center gap-2 px-3 py-2"
-                  >
-                    <FileText size={12} className="shrink-0" />
-                    <span className="truncate">Plan</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onCloseArtifact(artifactId)}
-                    className="mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-sm opacity-60 transition-opacity hover:bg-surface-hover hover:opacity-100"
-                    title="Close plan tab"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
+                  onRef={setTabRef}
+                  onSelect={onSelectArtifact}
+                  onClose={onCloseArtifact}
+                />
               );
             })}
 
