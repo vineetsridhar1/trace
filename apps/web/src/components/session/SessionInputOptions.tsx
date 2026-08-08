@@ -66,6 +66,22 @@ const DESIGN_SYSTEMS_QUERY = gql`
   }
 `;
 
+const RUNTIME_CATALOG_QUERY = gql`
+  query SessionRuntimeCatalog($tool: CodingTool!, $sessionGroupId: ID) {
+    availableRuntimes(tool: $tool, sessionGroupId: $sessionGroupId) {
+      id
+      label
+      hostingMode
+      supportedTools
+      providerCatalog
+      connected
+      sessionCount
+      registeredRepoIds
+      access { allowed isOwner }
+    }
+  }
+`;
+
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 const CLOUD_RUNTIME_ID = "__cloud__";
 
@@ -407,7 +423,7 @@ export function SessionInputOptions({
     // picker. Runtime mutability only controls the selector UI below.
     if (isOptimistic) return Promise.resolve();
     return client
-      .query(AVAILABLE_RUNTIMES_QUERY, {
+      .query(RUNTIME_CATALOG_QUERY, {
         tool: currentTool,
         sessionGroupId: sessionGroupId ?? null,
       })
