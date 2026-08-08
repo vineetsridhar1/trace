@@ -25,6 +25,8 @@ import { prisma } from "./db.js";
 import { SessionRouter, runtimeRouterKey } from "./session-router.js";
 import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
 import { ProvisionedRuntimeAdapter } from "./runtime-adapters.js";
+import { realtimeBackplane } from "./realtime-backplane.js";
+import { runtimeDirectory } from "./runtime-directory.js";
 import { orgSecretService } from "../services/org-secret.js";
 import { codexCredentialService } from "../services/codex-credential.js";
 import type { createPrismaMock } from "../../test/helpers.js";
@@ -890,6 +892,172 @@ describe("SessionRouter runtime adapter dispatch", () => {
       runtimeId: "provider-runtime-1",
       reason: "session_deleted",
     });
+  });
+
+  it("delivers a session command to a runtime owned by another replica", async () => {
+    const router = new SessionRouter();
+    const descriptor = {
+      key: "org-1:runtime-remote",
+      id: "runtime-remote",
+      organizationId: "org-1",
+      ownerReplicaId: "replica-remote",
+      connectionGeneration: "generation-remote",
+      label: "Remote provisioned runtime",
+      hostingMode: "cloud" as const,
+      supportedTools: ["codex"],
+      protocolVersion: 2,
+      registeredRepoIds: [],
+      lastHeartbeat: Date.now(),
+      expiresAt: Date.now() + 30_000,
+    };
+    await runtimeDirectory.register(descriptor, 30_000);
+    const backplaneSend = vi
+      .spyOn(realtimeBackplane, "send")
+      .mockImplementation(async (_targetReplicaId, kind, payload) => {
+        if (kind !== "runtime_command") return;
+        const deliveryId = (payload as { deliveryId: string }).deliveryId;
+        await realtimeBackplane.broadcast("runtime_command_ack", {
+          deliveryId,
+          result: "delivered",
+        });
+      });
+
+    await expect(
+      router.sendAsync(
+        "session-1",
+        {
+          type: "prepare_app",
+          sessionId: "session-1",
+          sessionGroupKind: "design",
+          repoId: "managed-repo-1",
+          repoRemoteUrl: "https://trace.example/git/managed-repo-1.git",
+          defaultBranch: "main",
+        },
+        { expectedHomeRuntimeId: "runtime-remote", organizationId: "org-1" },
+      ),
+    ).resolves.toBe("delivered");
+    expect(backplaneSend).toHaveBeenCalledWith(
+      "replica-remote",
+      "runtime_command",
+      expect.objectContaining({
+        runtimeKey: descriptor.key,
+        organizationId: "org-1",
+        connectionGeneration: "generation-remote",
+        command: expect.objectContaining({ type: "prepare_app", sessionId: "session-1" }),
+      }),
+    );
+
+    await runtimeDirectory.remove(descriptor.key, descriptor.connectionGeneration);
+  });
+
+  it("routes generated-project preparation through the runtime owner replica", async () => {
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession(input) {
+        return {
+          runtimeInstanceId: input.runtimeInstanceId,
+          providerRuntimeId: "provider-runtime-1",
+          status: "provisioning",
+        };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "provisioning" };
+      },
+    };
+    const localAdapter: RuntimeAdapter = {
+      type: "local",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "unknown" };
+      },
+    };
+    const router = new SessionRouter(
+      new RuntimeAdapterRegistry([localAdapter, provisionedAdapter]),
+    );
+    const synchronousSend = vi.spyOn(router, "send").mockReturnValue("runtime_disconnected");
+    const distributedSend = vi.spyOn(router, "sendAsync").mockResolvedValue("delivered");
+    const onFailed = vi.fn();
+    const lifecycleEvents: Array<{ eventType: string; runtimeInstanceId?: string }> = [];
+
+    router.createRuntime({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      sessionGroupKind: "design",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      environment: {
+        id: "env-1",
+        name: "Provisioned",
+        adapterType: "provisioned",
+        config: { startupTimeoutSeconds: 5 },
+      },
+      tool: "codex",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      prepareAppGit: async () => ({
+        repoId: "managed-repo-1",
+        repoRemoteUrl: "https://trace.example/git/managed-repo-1.git",
+        defaultBranch: "main",
+      }),
+      onLifecycle: (eventType, update) => {
+        lifecycleEvents.push({ eventType, runtimeInstanceId: update?.runtimeInstanceId });
+      },
+      onFailed,
+    });
+
+    await vi.waitFor(() => {
+      expect(lifecycleEvents.map((event) => event.eventType)).toEqual([
+        "session_runtime_start_requested",
+        "session_runtime_provisioning",
+      ]);
+    });
+    const runtimeInstanceId = lifecycleEvents[0]?.runtimeInstanceId;
+    if (!runtimeInstanceId) throw new Error("Expected runtime instance ID");
+    router.registerRuntime({
+      id: runtimeInstanceId,
+      label: "Provisioned runtime",
+      ws: makeWs(),
+      hostingMode: "cloud",
+      organizationId: "org-1",
+      supportedTools: ["codex"],
+      protocolVersion: 2,
+    });
+    router.bindSession("session-1", runtimeInstanceId);
+
+    await vi.waitFor(() => {
+      expect(distributedSend).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "prepare_app",
+          sessionId: "session-1",
+          sessionGroupKind: "design",
+          repoId: "managed-repo-1",
+        }),
+        {
+          expectedHomeRuntimeId: runtimeInstanceId,
+          organizationId: "org-1",
+        },
+      );
+    });
+    expect(synchronousSend).not.toHaveBeenCalled();
+    expect(onFailed).not.toHaveBeenCalled();
   });
 
   it("times out startup using environment config and emits timed_out", async () => {

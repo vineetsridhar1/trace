@@ -2398,7 +2398,7 @@ export class SessionRouter {
           const appGit = await options.prepareAppGit(runtimeInstanceId);
           const designSystemPackage = await options.prepareDesignSystemPackage?.();
           const sourceRepository = await options.prepareSourceRepository?.();
-          const result = this.send(
+          const result = await this.sendAsync(
             options.sessionId,
             {
               type: "prepare_app",
@@ -2411,16 +2411,26 @@ export class SessionRouter {
               ...(designSystemPackage ? { designSystemPackage } : {}),
               ...(sourceRepository ? { sourceRepository } : {}),
             },
-            { expectedHomeRuntimeId: startResult.runtimeInstanceId },
+            {
+              expectedHomeRuntimeId: startResult.runtimeInstanceId,
+              organizationId: options.organizationId,
+            },
           );
           if (result !== "delivered") {
+            logAgentEnvironmentTelemetry("provisioned.workspace_prepare_delivery_failed", {
+              organizationId: options.organizationId,
+              sessionId: options.sessionId,
+              runtimeInstanceId: startResult.runtimeInstanceId,
+              commandType: "prepare_app",
+              result,
+            });
             options.onFailed(`prepare_app: ${result}`);
           }
           return;
         }
 
         if (options.repo) {
-          const result = this.send(
+          const result = await this.sendAsync(
             options.sessionId,
             {
               type: "prepare",
@@ -2437,9 +2447,19 @@ export class SessionRouter {
               readOnly: options.readOnly,
               adoptWorktreePath: options.adoptWorktreePath,
             },
-            { expectedHomeRuntimeId: startResult.runtimeInstanceId },
+            {
+              expectedHomeRuntimeId: startResult.runtimeInstanceId,
+              organizationId: options.organizationId,
+            },
           );
           if (result !== "delivered") {
+            logAgentEnvironmentTelemetry("provisioned.workspace_prepare_delivery_failed", {
+              organizationId: options.organizationId,
+              sessionId: options.sessionId,
+              runtimeInstanceId: startResult.runtimeInstanceId,
+              commandType: "prepare",
+              result,
+            });
             options.onFailed(`prepare: ${result}`);
           }
           return;
