@@ -42,9 +42,8 @@ COPY apps/container-bridge/design-default-package/ /opt/trace/design-default-pac
 COPY apps/container-bridge/pdf-starter/ /opt/trace/pdf-starter/
 COPY apps/container-bridge/animation-starter/ /opt/trace/animation-starter/
 COPY .claude/skills/author-design-system/ /opt/trace/skills/author-design-system/
-# Keep the bundled runtime skills at the path exported by the entrypoint so
-# cloud session instructions can load their supporting guidance.
-COPY runtime/skills/ /trace/runtime/skills/
+# The bridge installs and atomically replaces this directory at startup.
+# Declare its eventual skills location without pre-populating the directory.
 ENV TRACE_SKILLS_DIR=/trace/runtime/skills/
 
 # Create non-root user — Claude Code refuses --dangerously-skip-permissions as root.

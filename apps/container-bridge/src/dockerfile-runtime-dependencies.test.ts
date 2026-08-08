@@ -33,10 +33,10 @@ describe("container runtime dependencies", () => {
     }
   });
 
-  it("ships the bundled skills at the path exported to cloud sessions", async () => {
+  it("declares the runtime-managed skills path for cloud sessions", async () => {
     const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
 
-    expect(dockerfile).toContain("COPY runtime/skills/ /trace/runtime/skills/");
     expect(dockerfile).toContain("ENV TRACE_SKILLS_DIR=/trace/runtime/skills/");
+    expect(dockerfile).not.toContain("COPY runtime/skills/ /trace/runtime/skills/");
   });
 });
