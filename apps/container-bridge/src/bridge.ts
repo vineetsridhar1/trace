@@ -69,6 +69,7 @@ import {
   createPlaywrightInvocationSession,
   type PlaywrightInvocationSession,
 } from "./playwright-session.js";
+import { installRuntimeSkillsForCodingTools } from "./runtime-skills.js";
 
 const execFileAsync = promisify(execFile);
 const BRIDGE_PROTOCOL_VERSION = 2;
@@ -147,7 +148,12 @@ export class ContainerBridge implements IBridgeClient {
   private outbox = new BridgeOutbox();
   private terminalManager: TerminalManager;
   private managedProcessManager: ManagedProcessManager;
-  private traceRuntime = ensureTraceRuntime(process.env.TRACE_RUNTIME_DIR ?? "/trace/runtime");
+  private traceRuntime = ensureTraceRuntime(process.env.TRACE_RUNTIME_DIR ?? "/trace/runtime").then(
+    async (runtime) => {
+      await installRuntimeSkillsForCodingTools(runtime.skillsDir, os.homedir());
+      return runtime;
+    },
+  );
   private gitExec: GitExecFn = (args, cwd) =>
     new Promise((resolve, reject) => {
       execFile("git", args, { cwd, maxBuffer: 5 * 1024 * 1024 }, (err, stdout) => {
