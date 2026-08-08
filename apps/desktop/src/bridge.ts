@@ -50,9 +50,9 @@ import {
   CursorComposerAdapter,
   PiAdapter,
   resolveExecutable,
+  discoverRuntimeProviderCatalog,
 } from "@trace/shared/adapters";
 import { CODING_TOOL_IDS } from "@trace/shared";
-import { discoverRuntimeProviderCatalog } from "@trace/shared/runtime-provider-catalog";
 import { getBridgeLabel, getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import {
   commitLinkedCheckoutChanges,
