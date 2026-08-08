@@ -131,10 +131,16 @@ no audio.
 
 ## Validate, upload, and clean up
 
-1. Confirm `video-stop` succeeded and the WebM is non-empty. Use available media metadata/playback
-   inspection to check duration, dimensions, codec, and visual content.
-2. Run gate 10. If anything is sensitive, misleading, corrupt, or oversized, do not upload it.
-3. Upload through the authenticated Trace CLI only:
+1. Confirm `video-stop` succeeded, then run the mandatory validator. It rejects files outside this
+   invocation, oversized or zero-duration output, unsupported codecs/dimensions, and videos whose
+   first frame cannot be decoded:
+
+```bash
+"$TRACE_BROWSER_VIDEO_VALIDATE" "$TRACE_BROWSER_VIDEO_DIR/browser-proof.webm"
+```
+
+Also visually inspect the recording for content that metadata cannot identify. 2. Run gate 10. If validation fails or anything is sensitive, misleading, corrupt, or oversized,
+do not upload it. 3. Upload through the authenticated Trace CLI only:
 
 ```bash
 "$TRACE_CLI" artifact push video "$TRACE_BROWSER_VIDEO_DIR/browser-proof.webm" --key browser-proof

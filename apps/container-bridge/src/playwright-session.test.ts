@@ -20,7 +20,7 @@ describe("Playwright invocation sessions", () => {
       outputRoot,
     });
 
-    expect(first.sessionName).toMatch(/^trace-[a-f0-9]{20}$/);
+    expect(first.sessionName).toMatch(/^trace-[a-f0-9]{32}$/);
     expect(first.sessionName).not.toBe(second.sessionName);
     expect(first.outputDir).not.toBe(second.outputDir);
     expect(first.env).toMatchObject({
@@ -30,6 +30,7 @@ describe("Playwright invocation sessions", () => {
       PLAYWRIGHT_MCP_ISOLATED: "true",
       PLAYWRIGHT_MCP_OUTPUT_DIR: first.outputDir,
       TRACE_BROWSER_VIDEO_DIR: first.outputDir,
+      TRACE_BROWSER_VIDEO_VALIDATE: "/usr/local/bin/trace-browser-video-validate",
     });
   });
 
@@ -46,15 +47,10 @@ describe("Playwright invocation sessions", () => {
     expect(run).toHaveBeenNthCalledWith(
       1,
       "playwright-cli",
-      [`-s=${session.sessionName}`, "close"],
+      ["close"],
       expect.objectContaining({ PLAYWRIGHT_CLI_SESSION: session.sessionName }),
     );
-    expect(run).toHaveBeenNthCalledWith(
-      2,
-      "playwright-cli",
-      [`-s=${session.sessionName}`, "delete-data"],
-      expect.any(Object),
-    );
+    expect(run).toHaveBeenNthCalledWith(2, "playwright-cli", ["delete-data"], expect.any(Object));
     await expect(stat(session.outputDir)).rejects.toMatchObject({ code: "ENOENT" });
   });
 

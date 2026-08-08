@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -20,10 +20,6 @@ type CleanupDependencies = {
   remove?: (target: string) => Promise<void>;
 };
 
-function invocationKey(invocationId: string): string {
-  return createHash("sha256").update(invocationId).digest("hex").slice(0, 20);
-}
-
 export async function createPlaywrightInvocationSession(input: {
   invocationId: string;
   outputRoot?: string;
@@ -31,7 +27,7 @@ export async function createPlaywrightInvocationSession(input: {
 }): Promise<PlaywrightInvocationSession> {
   if (!input.invocationId.trim()) throw new Error("Trace invocation ID is required");
 
-  const key = invocationKey(input.invocationId);
+  const key = randomBytes(16).toString("hex");
   const outputDir = join(input.outputRoot ?? DEFAULT_OUTPUT_ROOT, key);
   await mkdir(outputDir, { recursive: true, mode: 0o700 });
 
@@ -51,6 +47,7 @@ export async function createPlaywrightInvocationSession(input: {
       PLAYWRIGHT_MCP_TIMEOUT_NAVIGATION: "60000",
       PLAYWRIGHT_MCP_VIEWPORT_SIZE: "1440x900",
       TRACE_BROWSER_VIDEO_DIR: outputDir,
+      TRACE_BROWSER_VIDEO_VALIDATE: "/usr/local/bin/trace-browser-video-validate",
     },
   };
 }
@@ -67,7 +64,7 @@ export async function cleanupPlaywrightInvocationSession(
 
   for (const command of ["close", "delete-data"]) {
     try {
-      await run("playwright-cli", [`-s=${session.sessionName}`, command], env);
+      await run("playwright-cli", [command], env);
     } catch {
       // Cleanup must remain best-effort when the daemon or CLI already exited.
     }

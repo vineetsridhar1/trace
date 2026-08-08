@@ -21,6 +21,9 @@ coverage/
 !apps/container-bridge/
 !apps/container-bridge/Dockerfile
 !apps/container-bridge/package.json
+!apps/container-bridge/bin/
+!apps/container-bridge/bin/**
+!apps/container-bridge/playwright-cli.build-smoke.config.json
 !apps/container-bridge/playwright-cli.config.json
 !apps/container-bridge/dist/
 !apps/container-bridge/dist/**

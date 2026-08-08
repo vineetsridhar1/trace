@@ -5,7 +5,7 @@
     "launchOptions": {
       "headless": true,
       "executablePath": "/usr/bin/chromium",
-      "args": ["--disable-dev-shm-usage"]
+      "args": ["--disable-dev-shm-usage", "--no-sandbox"]
     },
     "contextOptions": {
       "viewport": {
@@ -14,7 +14,7 @@
       }
     }
   },
-  "outputDir": "/tmp/trace-playwright",
+  "outputDir": "/tmp/trace-playwright-build-smoke",
   "outputMode": "stdout",
   "allowUnrestrictedFileAccess": false,
   "codegen": "none"

@@ -2,7 +2,7 @@ FROM node:22-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git ca-certificates curl openssh-client \
-    python3 make g++ gpg sudo redis-server tini chromium \
+    python3 make g++ gpg sudo redis-server tini chromium chromium-sandbox ffmpeg \
     postgresql postgresql-client sqlite3 && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
@@ -20,7 +20,8 @@ RUN npm install -g pnpm@10.7.0 @anthropic-ai/claude-code @openai/codex \
     @earendil-works/pi-coding-agent @playwright/cli@0.1.18 \
     playwright@1.63.0-alpha-2026-08-05 && \
     playwright install ffmpeg && \
-    chmod -R a+rX /opt/ms-playwright
+    chmod -R a+rX /opt/ms-playwright && \
+    mv /usr/local/bin/playwright-cli /usr/local/bin/playwright-cli-raw
 
 WORKDIR /app
 
@@ -35,6 +36,10 @@ COPY packages/shared/package.json ./node_modules/@trace/shared/
 # Copy pre-built container-bridge
 COPY apps/container-bridge/dist/ ./dist/
 COPY apps/container-bridge/playwright-cli.config.json /opt/trace/playwright-cli.config.json
+COPY apps/container-bridge/playwright-cli.build-smoke.config.json /opt/trace/playwright-cli.build-smoke.config.json
+COPY apps/container-bridge/bin/playwright-cli /usr/local/bin/playwright-cli
+COPY apps/container-bridge/bin/trace-browser-video-validate /usr/local/bin/trace-browser-video-validate
+RUN chmod 0755 /usr/local/bin/playwright-cli /usr/local/bin/trace-browser-video-validate
 
 # Entrypoint boots the app-session backing services (Redis, Postgres) before the bridge.
 COPY apps/container-bridge/docker-entrypoint.sh /usr/local/bin/trace-entrypoint
@@ -77,19 +82,24 @@ RUN mkdir -p /home/coder/.ssh && chmod 700 /home/coder/.ssh
 
 # Fail the image build if system Chromium, the pinned CLI, or FFmpeg recording
 # cannot work together without downloading anything during an agent session.
-# Chromium's process sandbox is disabled in its config because Depot BuildKit and
-# the deployed machine deny the nested PID/network namespaces it requires. The
-# browser still runs as non-root inside the per-session machine boundary.
+# Depot BuildKit cannot create Chromium's sandbox namespaces, so this image-build
+# smoke alone uses a dedicated no-sandbox config. The shipped runtime config keeps
+# Chromium's sandbox enabled and the image explicitly installs chromium-sandbox.
 RUN set -eu; \
     smoke_dir=/tmp/trace-playwright-image-smoke; \
     mkdir -p "$smoke_dir"; \
     export PLAYWRIGHT_CLI_SESSION=trace-image-smoke; \
     export PLAYWRIGHT_MCP_OUTPUT_DIR="$smoke_dir"; \
-    playwright-cli --config=/opt/trace/playwright-cli.config.json open about:blank; \
+    export PLAYWRIGHT_CLI_CONFIG=/opt/trace/playwright-cli.build-smoke.config.json; \
+    playwright-cli --config="$PLAYWRIGHT_CLI_CONFIG" open about:blank; \
+    playwright-cli snapshot --filename="$smoke_dir/snapshot.yml"; \
+    playwright-cli screenshot --filename="$smoke_dir/screenshot.png"; \
+    playwright-cli console warning; \
+    playwright-cli requests; \
     playwright-cli video-start "$smoke_dir/smoke.webm"; \
     playwright-cli run-code "async (page) => { await page.setContent('<main><button>Record</button></main>'); await page.getByRole('button').click(); await page.waitForTimeout(250); }"; \
     playwright-cli video-stop; \
-    test -s "$smoke_dir/smoke.webm"; \
+    TRACE_BROWSER_VIDEO_DIR="$smoke_dir" trace-browser-video-validate "$smoke_dir/smoke.webm"; \
     playwright-cli close; \
     playwright-cli delete-data; \
     rm -rf "$smoke_dir"

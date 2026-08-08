@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Artifact } from "@trace/gql";
+import type { Artifact, Session, User } from "@trace/gql";
 import { describe, expect, it, vi } from "vitest";
 import { ArtifactTabContent } from "./ArtifactTabContent";
 
@@ -10,7 +10,14 @@ vi.mock("@trace/client-core", () => ({
     selector({
       artifacts: {
         "video-1": {
+          bundleDigest: "sha256:bundle",
+          byteSize: 1024,
+          createdAt: "2026-08-08T00:00:00.000Z",
+          createdBy: {} as User,
           id: "video-1",
+          organizationId: "org-1",
+          session: {} as Session,
+          sessionId: "session-1",
           type: "trace.video.v1",
           key: "browser-proof",
           manifest: {
@@ -20,11 +27,11 @@ vi.mock("@trace/client-core", () => ({
                 path: "browser-proof.webm",
                 mediaType: "video/webm",
                 size: 1024,
-                sha256: "digest",
+                digest: "sha256:digest",
               },
             ],
           },
-        } as unknown as Artifact,
+        } satisfies Artifact,
       },
     }),
 }));

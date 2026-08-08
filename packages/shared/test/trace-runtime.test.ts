@@ -31,6 +31,7 @@ describe("ensureTraceRuntime", () => {
     expect(browserVideoSkill).toContain("Reversible data plan");
     expect(browserVideoSkill).toContain('artifact push video "$TRACE_BROWSER_VIDEO_DIR');
     expect(browserVideoSkill).toContain("Never override the session name");
+    expect(browserVideoSkill).toContain('"$TRACE_BROWSER_VIDEO_VALIDATE"');
     const visualPlanSkill = await readFile(
       join(runtime.skillsDir, "visual-plan", "SKILL.md"),
       "utf8",
