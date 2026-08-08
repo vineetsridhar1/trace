@@ -9,7 +9,7 @@
     "url": "https://github.com/vineetsridhar1/trace.git"
   },
   "scripts": {
-    "dev": "pnpm --filter @trace/shared build && tsc -b && electron-forge start",
+    "dev": "pnpm --filter @trace/shared build && tsc -b && CI=1 electron-forge start",
     "build": "pnpm --filter @trace/shared build && tsc -b",
     "package": "node scripts/forge-release.mjs package",
     "make": "node scripts/forge-release.mjs make",
