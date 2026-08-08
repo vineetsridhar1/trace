@@ -2,7 +2,7 @@ FROM node:22-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git ca-certificates curl openssh-client \
-    python3 make g++ gpg sudo redis-server tini chromium chromium-sandbox \
+    python3 make g++ gpg sudo redis-server tini chromium \
     postgresql postgresql-client sqlite3 && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
@@ -77,6 +77,9 @@ RUN mkdir -p /home/coder/.ssh && chmod 700 /home/coder/.ssh
 
 # Fail the image build if system Chromium, the pinned CLI, or FFmpeg recording
 # cannot work together without downloading anything during an agent session.
+# Chromium's process sandbox is disabled in its config because Depot BuildKit and
+# the deployed machine deny the nested PID/network namespaces it requires. The
+# browser still runs as non-root inside the per-session machine boundary.
 RUN set -eu; \
     smoke_dir=/tmp/trace-playwright-image-smoke; \
     mkdir -p "$smoke_dir"; \

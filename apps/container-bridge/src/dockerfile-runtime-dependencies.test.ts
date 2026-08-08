@@ -63,7 +63,6 @@ describe("container runtime dependencies", () => {
     expect(dockerfile).toContain("@playwright/cli@0.1.18");
     expect(dockerfile).toContain("playwright@1.63.0-alpha-2026-08-05");
     expect(dockerfile).toContain("playwright install ffmpeg");
-    expect(dockerfile).toMatch(/\bchromium-sandbox\b/);
     expect(dockerfile).toContain(
       "COPY apps/container-bridge/playwright-cli.config.json /opt/trace/playwright-cli.config.json",
     );
@@ -75,7 +74,7 @@ describe("container runtime dependencies", () => {
     expect(config.browser.launchOptions).toEqual(
       expect.objectContaining({ executablePath: "/usr/bin/chromium", headless: true }),
     );
-    expect(config.browser.launchOptions.args).not.toContain("--no-sandbox");
+    expect(config.browser.launchOptions.args).toContain("--no-sandbox");
     expect(config.allowUnrestrictedFileAccess).toBe(false);
   });
 });
