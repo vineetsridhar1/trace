@@ -10,6 +10,7 @@ import {
 import type { Artifact } from "@trace/gql";
 import { getActiveApiUrl } from "@/lib/connection-target";
 import { findMostRecentPendingInput } from "@/lib/pending-input";
+import { visualPlanHtmlPath } from "@/lib/visual-plan-file";
 import { PendingInputPlan } from "./PendingInputPlan";
 import { PendingInputQuestion } from "./PendingInputQuestion";
 
@@ -55,7 +56,15 @@ export function PendingInputBar({ sessionId, keyboardVisible = false }: PendingI
       return;
     }
     const controller = new AbortController();
-    const path = `${getActiveApiUrl()}/artifacts/${encodeURIComponent(latestPlan.id)}/files/plan.html`;
+    const htmlPath = visualPlanHtmlPath(latestPlan);
+    if (!htmlPath) {
+      setArtifactContent("");
+      return;
+    }
+    const path = `${getActiveApiUrl()}/artifacts/${encodeURIComponent(latestPlan.id)}/files/${htmlPath
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`;
     fetch(path, {
       headers: getAuthHeaders(),
       signal: controller.signal,
@@ -72,6 +81,7 @@ export function PendingInputBar({ sessionId, keyboardVisible = false }: PendingI
         sessionId={sessionId}
         artifactId={latestPlan.id}
         planContent={artifactContent}
+        visualPlanHtml={artifactContent}
         keyboardVisible={keyboardVisible}
       />
     );
