@@ -499,6 +499,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               supportedTools,
               protocolVersion: typeof msg.protocolVersion === "number" ? msg.protocolVersion : 1,
               registeredRepoIds,
+              connectedAt: bridgeRuntime.connectedAt,
             });
             if (!claimedOwnership) return;
           } else if (bridgeAuth.kind === "cloud") {

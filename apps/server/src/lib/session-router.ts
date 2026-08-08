@@ -99,6 +99,12 @@ export type DeliveryResult =
   | "unsupported_runtime"
   | "delivery_failed";
 
+type PendingRuntimeRequest<T> = {
+  runtimeId: string;
+  resolve: (value: T) => void;
+  reject: (err: Error) => void;
+};
+
 export interface RuntimeInstance {
   key: string;
   id: string;
@@ -114,6 +120,7 @@ export interface RuntimeInstance {
   registeredRepoIds: string[];
   lastHeartbeat: number;
   connectionGeneration: string;
+  connectedAt?: Date | null;
   boundSessions: Set<string>;
   /**
    * Sessions that received a run/send command on this live runtime connection.
@@ -128,6 +135,7 @@ export interface RuntimeInstance {
    * answer without a per-call WebSocket round-trip.
    */
   linkedCheckouts: Map<string, BridgeLinkedCheckoutStatus>;
+  linkedCheckoutObservedAt: Map<string, number>;
 }
 
 export type RuntimeMetadata = RuntimeInstance | RuntimeDescriptor;
@@ -138,6 +146,7 @@ export interface StaleRuntimeSnapshot {
   organizationId?: string;
   sessionIds: string[];
   lastHeartbeat: number;
+  connectedAt?: Date | null;
 }
 
 export interface StaleRuntimeEvictionResult {
@@ -509,6 +518,8 @@ export class SessionRouter {
   /** Heartbeat timeout in ms — if no heartbeat in this window, runtime is considered stale */
   static HEARTBEAT_TIMEOUT_MS = 30_000;
   static DIRECTORY_TTL_MS = 45_000;
+  static LINKED_CHECKOUT_SNAPSHOT_REFRESH_MS = 30_000;
+  static LINKED_CHECKOUT_SNAPSHOT_TTL_MS = 120_000;
 
   async registerRuntime(runtime: {
     key?: string;
@@ -522,6 +533,7 @@ export class SessionRouter {
     supportedTools: string[];
     protocolVersion?: number;
     registeredRepoIds?: string[];
+    connectedAt?: Date | null;
   }): Promise<boolean> {
     const runtimeKey = runtime.key ?? runtime.id;
     const existing = this.runtimes.get(runtimeKey);
@@ -531,11 +543,13 @@ export class SessionRouter {
       existing && existing.ws === runtime.ws
         ? (existing.commandDeliveredSessions ?? new Set<string>())
         : new Set<string>();
-    const linkedCheckouts =
-      existing?.linkedCheckouts ??
-      new Map(
-        (existingDescriptor?.linkedCheckoutStatuses ?? []).map((status) => [status.repoId, status]),
-      );
+    const sameConnection = existing?.ws === runtime.ws;
+    const linkedCheckouts = sameConnection
+      ? existing.linkedCheckouts
+      : new Map<string, BridgeLinkedCheckoutStatus>();
+    const linkedCheckoutObservedAt = sameConnection
+      ? existing.linkedCheckoutObservedAt
+      : new Map<string, number>();
     const pendingDescriptor = runtimeDirectory.createDescriptor(
       {
         key: runtimeKey,
@@ -549,6 +563,7 @@ export class SessionRouter {
         protocolVersion: runtime.protocolVersion,
         registeredRepoIds: runtime.registeredRepoIds ?? existing?.registeredRepoIds ?? [],
         linkedCheckoutStatuses: [...linkedCheckouts.values()].map(linkedCheckoutSnapshot),
+        linkedCheckoutStatusObservedAt: Object.fromEntries(linkedCheckoutObservedAt),
       },
       SessionRouter.DIRECTORY_TTL_MS,
     );
@@ -584,7 +599,13 @@ export class SessionRouter {
       boundSessions,
       commandDeliveredSessions,
       linkedCheckouts,
+      linkedCheckoutObservedAt,
+      connectedAt: runtime.connectedAt,
     });
+    this.linkedCheckoutRefreshAfter.set(
+      runtimeKey,
+      Date.now() + SessionRouter.LINKED_CHECKOUT_SNAPSHOT_REFRESH_MS,
+    );
     runtimeDebug("registered runtime", {
       runtimeId: runtime.id,
       label: runtime.label,
@@ -619,7 +640,25 @@ export class SessionRouter {
         }
       })
       .catch((error) => console.error("[runtime-directory] heartbeat renewal failed:", error));
+    this.refreshLinkedCheckoutSnapshots(runtime);
     return true;
+  }
+
+  private linkedCheckoutRefreshAfter = new Map<string, number>();
+
+  private refreshLinkedCheckoutSnapshots(runtime: RuntimeInstance): void {
+    if (runtime.hostingMode !== "local" || runtime.registeredRepoIds.length === 0) return;
+    const now = Date.now();
+    if ((this.linkedCheckoutRefreshAfter.get(runtime.key) ?? 0) > now) return;
+    this.linkedCheckoutRefreshAfter.set(
+      runtime.key,
+      now + SessionRouter.LINKED_CHECKOUT_SNAPSHOT_REFRESH_MS,
+    );
+    void Promise.allSettled(
+      runtime.registeredRepoIds.map((repoId) =>
+        this.getLinkedCheckoutStatus(runtime.key, repoId, 10_000),
+      ),
+    );
   }
 
   /** Add a newly linked repo to a runtime's registeredRepoIds (called when bridge sends repo_linked). */
@@ -739,6 +778,7 @@ export class SessionRouter {
       this.sessionRuntime.delete(sessionId);
     }
     this.runtimes.delete(runtimeId);
+    this.linkedCheckoutRefreshAfter.delete(runtime.key);
     void runtimeDirectory
       .remove(runtime.key, runtime.connectionGeneration)
       .catch((error) => console.error("[runtime-directory] failed to unregister runtime:", error));
@@ -1050,6 +1090,7 @@ export class SessionRouter {
           organizationId: runtime.organizationId,
           sessionIds: [...runtime.boundSessions],
           lastHeartbeat: runtime.lastHeartbeat,
+          connectedAt: runtime.connectedAt,
         });
       }
     }
@@ -1266,39 +1307,65 @@ export class SessionRouter {
     );
   }
 
+  /** Register reply correlation before delivery so a fast bridge response cannot be lost. */
+  private requestRuntimeResponse<T>(
+    runtimeId: string,
+    command: Record<string, unknown>,
+    pendingRequests: Map<string, PendingRuntimeRequest<T>>,
+    timeoutMs: number,
+    timeoutMessage: string,
+  ): Promise<T> {
+    const requestId = randomUUID();
+    return new Promise<T>((resolve, reject) => {
+      let pending!: PendingRuntimeRequest<T>;
+      const timer = setTimeout(() => {
+        if (pendingRequests.get(requestId) !== pending) return;
+        pendingRequests.delete(requestId);
+        reject(new Error(timeoutMessage));
+      }, timeoutMs);
+
+      pending = {
+        runtimeId,
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      };
+      pendingRequests.set(requestId, pending);
+
+      void this.sendToRuntimeAsync(runtimeId, { ...command, requestId })
+        .then((result) => {
+          if (result === "delivered" || pendingRequests.get(requestId) !== pending) return;
+          pendingRequests.delete(requestId);
+          pending.reject(new Error(`Runtime not available: ${result}`));
+        })
+        .catch((error: unknown) => {
+          if (pendingRequests.get(requestId) !== pending) return;
+          pendingRequests.delete(requestId);
+          pending.reject(error instanceof Error ? error : new Error(String(error)));
+        });
+    });
+  }
+
   /**
    * Ask a runtime to list branches for a given repo.
    * Returns a promise that resolves when the bridge responds with branches_result.
    */
-  async listBranches(runtimeId: string, repoId: string, timeoutMs = 10_000): Promise<string[]> {
-    const requestId = randomUUID();
-    const result = await this.sendToRuntimeAsync(runtimeId, {
+  listBranches(runtimeId: string, repoId: string, timeoutMs = 10_000): Promise<string[]> {
+    return this.requestRuntimeResponse(
+      runtimeId,
+      {
       type: "list_branches",
-      requestId,
       repoId,
-    });
-    if (result !== "delivered") {
-      return Promise.reject(new Error(`Runtime not available: ${result}`));
-    }
-
-    return new Promise<string[]>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pendingBranchRequests.delete(requestId);
-        reject(new Error("Branch list request timed out"));
-      }, timeoutMs);
-
-      this.pendingBranchRequests.set(requestId, {
-        runtimeId,
-        resolve: (branches) => {
-          clearTimeout(timer);
-          resolve(branches);
-        },
-        reject: (err) => {
-          clearTimeout(timer);
-          reject(err);
-        },
-      });
-    });
+      },
+      this.pendingBranchRequests,
+      timeoutMs,
+      "Branch list request timed out",
+    );
   }
 
   /** Resolve a pending branch list request (called from bridge handler). */
@@ -2106,6 +2173,7 @@ export class SessionRouter {
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) return;
     runtime.linkedCheckouts.set(status.repoId, status);
+    runtime.linkedCheckoutObservedAt.set(status.repoId, Date.now());
   }
 
   recordLinkedCheckoutStatus(
@@ -2116,6 +2184,7 @@ export class SessionRouter {
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime || (ws && runtime.ws !== ws) || !this.isCurrentLocalOwner(runtime)) return false;
     runtime.linkedCheckouts.set(status.repoId, status);
+    runtime.linkedCheckoutObservedAt.set(status.repoId, Date.now());
     void runtimeDirectory
       .updateLinkedCheckoutStatus(
         runtime.key,
@@ -2125,6 +2194,17 @@ export class SessionRouter {
       )
       .catch((error) => console.error("[runtime-directory] linked checkout update failed:", error));
     return true;
+  }
+
+  isLinkedCheckoutStatusFresh(runtime: RuntimeMetadata, repoId: string): boolean {
+    const observedAt =
+      "ws" in runtime
+        ? runtime.linkedCheckoutObservedAt.get(repoId)
+        : runtime.linkedCheckoutStatusObservedAt[repoId];
+    return (
+      typeof observedAt === "number" &&
+      Date.now() - observedAt <= SessionRouter.LINKED_CHECKOUT_SNAPSHOT_TTL_MS
+    );
   }
 
   private async requestLinkedCheckoutAction(

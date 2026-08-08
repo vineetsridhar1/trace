@@ -111,6 +111,7 @@ describe("SessionRouter distributed ownership fencing", () => {
       supportedTools: ["codex"],
       registeredRepoIds: ["repo-1"],
       linkedCheckoutStatuses: [],
+      linkedCheckoutStatusObservedAt: {},
       lastHeartbeat: Date.now() + 1,
       expiresAt: Date.now() + 30_000,
     };
@@ -178,6 +179,30 @@ describe("SessionRouter distributed ownership fencing", () => {
     expect(
       runtimeDirectory.get("org-reconnected:runtime-reconnected")?.linkedCheckoutStatuses,
     ).toContainEqual(status);
+
+    const observedAt = Date.now();
+    expect(
+      router.isLinkedCheckoutStatusFresh(
+        router.getRuntimeMetadata("runtime-reconnected", "org-reconnected")!,
+        "repo-1",
+      ),
+    ).toBe(true);
+    const now = vi.spyOn(Date, "now").mockReturnValue(
+      observedAt + SessionRouter.LINKED_CHECKOUT_SNAPSHOT_TTL_MS + 1,
+    );
+    expect(
+      router.isLinkedCheckoutStatusFresh(
+        router.getRuntimeMetadata("runtime-reconnected", "org-reconnected")!,
+        "repo-1",
+      ),
+    ).toBe(false);
+    now.mockRestore();
+
+    const replacementWs = makeWs();
+    await router.registerRuntime({ ...registration, ws: replacementWs });
+    expect(
+      router.getRuntime("runtime-reconnected", "org-reconnected")?.linkedCheckouts.size,
+    ).toBe(0);
     router.dispose();
   });
 
@@ -196,6 +221,7 @@ describe("SessionRouter distributed ownership fencing", () => {
       supportedTools: ["codex"],
       registeredRepoIds: [],
       linkedCheckoutStatuses: [],
+      linkedCheckoutStatusObservedAt: {},
       lastHeartbeat: 1_000,
       expiresAt: Date.now() + 30_000,
     };
@@ -322,6 +348,25 @@ describe("SessionRouter stale runtime eviction", () => {
     expect(eviction).toEqual({ evicted: true, affectedSessions: ["session-1"] });
     expect(router.getRuntime("runtime-1")).toBeUndefined();
     expect(router.getRuntimeForSession("session-1")).toBeUndefined();
+  });
+
+  it("carries the database connection generation through stale eviction", () => {
+    const router = new SessionRouter();
+    const now = vi.spyOn(Date, "now");
+    const connectedAt = new Date("2026-08-08T12:00:00.000Z");
+
+    now.mockReturnValue(0);
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws: makeWs(),
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      connectedAt,
+    });
+
+    now.mockReturnValue(SessionRouter.HEARTBEAT_TIMEOUT_MS + 1);
+    expect(router.checkStaleRuntimes()[0]?.connectedAt).toBe(connectedAt);
   });
 
   it("reports eviction even when the stale runtime had no bound sessions", () => {

@@ -171,4 +171,43 @@ describe("linked checkout status refresh", () => {
       attachedStatus,
     );
   });
+
+  it("does not reapply a stale successful recovery refresh after a newer update", async () => {
+    let resolveRefresh!: (value: { data: { linkedCheckoutStatus: typeof attachedStatus } }) => void;
+    mocks.mutation.mockReturnValueOnce({
+      toPromise: vi.fn().mockResolvedValue({ error: new Error("sync replica unavailable") }),
+    });
+    mocks.query.mockReturnValueOnce({
+      toPromise: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveRefresh = resolve;
+          }),
+      ),
+    });
+
+    const sync = syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      runtimeInstanceId: "runtime-1",
+      branch: "trace/spotlight",
+      autoSyncEnabled: true,
+    });
+    await vi.waitFor(() => expect(mocks.query).toHaveBeenCalled());
+    useLinkedCheckoutStore.getState().setStatus("runtime-1:repo-1", attachedStatus);
+    resolveRefresh({
+      data: {
+        linkedCheckoutStatus: {
+          ...attachedStatus,
+          isAttached: false,
+        },
+      },
+    });
+
+    const result = await sync;
+    expect(result.status).toEqual(attachedStatus);
+    expect(useLinkedCheckoutStore.getState().statusByKey["runtime-1:repo-1"]).toEqual(
+      attachedStatus,
+    );
+  });
 });

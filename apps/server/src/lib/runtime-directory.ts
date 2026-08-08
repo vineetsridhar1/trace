@@ -22,6 +22,7 @@ export type RuntimeDescriptor = {
   protocolVersion?: number;
   registeredRepoIds: string[];
   linkedCheckoutStatuses: BridgeLinkedCheckoutStatus[];
+  linkedCheckoutStatusObservedAt: Record<string, number>;
   lastHeartbeat: number;
   expiresAt: number;
 };
@@ -53,6 +54,12 @@ function descriptorFrom(value: unknown): RuntimeDescriptor | null {
     linkedCheckoutStatuses: Array.isArray(item.linkedCheckoutStatuses)
       ? (item.linkedCheckoutStatuses as BridgeLinkedCheckoutStatus[])
       : [],
+    linkedCheckoutStatusObservedAt:
+      item.linkedCheckoutStatusObservedAt &&
+      typeof item.linkedCheckoutStatusObservedAt === "object" &&
+      !Array.isArray(item.linkedCheckoutStatusObservedAt)
+        ? (item.linkedCheckoutStatusObservedAt as Record<string, number>)
+        : {},
   } as unknown as RuntimeDescriptor;
 }
 
@@ -146,7 +153,16 @@ export class RuntimeDirectory {
     if (!current || current.ownershipEpoch <= claimed.ownershipEpoch) {
       this.descriptors.set(claimed.key, claimed);
     }
-    await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor: claimed });
+    try {
+      await realtimeBackplane.broadcast(PRESENCE_CHANGED, {
+        action: "upsert",
+        descriptor: claimed,
+      });
+    } catch (error) {
+      // The Redis lease is already authoritative. Keep the connection alive;
+      // its next heartbeat will retry the presence broadcast.
+      console.error("[runtime-directory] ownership presence broadcast failed:", error);
+    }
     return claimed;
   }
 
@@ -241,12 +257,16 @@ export class RuntimeDirectory {
         ...current.linkedCheckoutStatuses.filter((item) => item.repoId !== status.repoId),
         status,
       ],
+      linkedCheckoutStatusObservedAt: {
+        ...current.linkedCheckoutStatusObservedAt,
+        [status.repoId]: now,
+      },
       lastHeartbeat: now,
       expiresAt: now + ttlMs,
     };
     if (realtimeBackplane.enabled) {
       const result = await redis.eval(
-        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; local status=cjson.decode(ARGV[2]); local statuses=current.linkedCheckoutStatuses or {}; local updated={}; for i=1,#statuses do if statuses[i].repoId ~= status.repoId then table.insert(updated,statuses[i]) end end; table.insert(updated,status); current.linkedCheckoutStatuses=updated; current.lastHeartbeat=tonumber(ARGV[3]); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded",
+        "local value=redis.call('get',KEYS[1]); if not value then return false end; local current=cjson.decode(value); if current.connectionGeneration ~= ARGV[1] then return false end; local status=cjson.decode(ARGV[2]); local statuses=current.linkedCheckoutStatuses or {}; local updated={}; for i=1,#statuses do if statuses[i].repoId ~= status.repoId then table.insert(updated,statuses[i]) end end; table.insert(updated,status); current.linkedCheckoutStatuses=updated; current.linkedCheckoutStatusObservedAt=current.linkedCheckoutStatusObservedAt or {}; current.linkedCheckoutStatusObservedAt[status.repoId]=tonumber(ARGV[3]); current.lastHeartbeat=tonumber(ARGV[3]); current.expiresAt=tonumber(ARGV[4]); local encoded=cjson.encode(current); redis.call('set',KEYS[1],encoded,'PX',ARGV[5]); return encoded",
         1,
         this.redisKey(runtimeKey),
         connectionGeneration,

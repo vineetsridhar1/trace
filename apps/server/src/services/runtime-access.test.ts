@@ -15,6 +15,7 @@ vi.mock("../lib/session-router.js", () => ({
     }),
     getRuntimeMetadata: vi.fn(),
     getLinkedCheckoutStatus: vi.fn(),
+    isLinkedCheckoutStatusFresh: vi.fn().mockReturnValue(true),
   },
 }));
 
@@ -45,6 +46,7 @@ const sessionRouterMock = sessionRouter as unknown as {
   getRuntime: ReturnType<typeof vi.fn>;
   getRuntimeMetadata: ReturnType<typeof vi.fn>;
   getLinkedCheckoutStatus: ReturnType<typeof vi.fn>;
+  isLinkedCheckoutStatusFresh: ReturnType<typeof vi.fn>;
 };
 const eventServiceMock = eventService as unknown as {
   create: ReturnType<typeof vi.fn>;
@@ -68,6 +70,7 @@ describe("runtimeAccessService", () => {
       sessionRouterMock.getRuntime(...args),
     );
     sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue(null);
+    sessionRouterMock.isLinkedCheckoutStatusFresh.mockReturnValue(true);
   });
 
   it("filters and deduplicates registered repos against the runtime organization", async () => {
@@ -160,6 +163,27 @@ describe("runtimeAccessService", () => {
       }),
     ).resolves.toEqual([]);
     expect(sessionRouterMock.getLinkedCheckoutStatus).not.toHaveBeenCalled();
+  });
+
+  it("does not expose an expired linked checkout snapshot", async () => {
+    sessionRouterMock.getRuntimeMetadata.mockReturnValue({
+      key: "org-1:runtime-remote",
+      id: "runtime-remote",
+      organizationId: "org-1",
+      registeredRepoIds: ["repo-1"],
+      linkedCheckoutStatuses: [
+        { repoId: "repo-1", repoPath: "/repos/one", isAttached: true },
+      ],
+    });
+    sessionRouterMock.isLinkedCheckoutStatusFresh.mockReturnValue(false);
+    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-1" }]);
+
+    await expect(
+      runtimeAccessService.listLinkedCheckoutStatuses({
+        runtimeInstanceId: "runtime-remote",
+        organizationId: "org-1",
+      }),
+    ).resolves.toEqual([]);
   });
 
   it("marks a runtime disconnected only for the socket's database generation", async () => {

@@ -436,7 +436,12 @@ class RuntimeAccessService {
     const activeRepos = new Set(repoIds);
     const statuses =
       "ws" in runtime ? [...runtime.linkedCheckouts.values()] : runtime.linkedCheckoutStatuses;
-    return statuses.filter((status) => status.isAttached && activeRepos.has(status.repoId));
+    return statuses.filter(
+      (status) =>
+        status.isAttached &&
+        activeRepos.has(status.repoId) &&
+        sessionRouter.isLinkedCheckoutStatusFresh(runtime, status.repoId),
+    );
   }
 
   /**
