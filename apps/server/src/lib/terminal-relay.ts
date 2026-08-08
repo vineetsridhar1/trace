@@ -76,7 +76,11 @@ export class TerminalRelay {
         return;
       }
       const message = input.message as { type: string; terminalId: string; [key: string]: unknown };
-      this.relayFromBridge(message, input.sourceRuntimeInstanceId);
+      void this.relayFromBridge(
+        message,
+        input.sourceRuntimeInstanceId,
+        typeof input.connectionGeneration === "string" ? input.connectionGeneration : undefined,
+      );
     });
     realtimeBackplane.on("terminal_frontend_attach", (envelope) => {
       const input = this.backplanePayload(envelope.payload);
@@ -194,35 +198,19 @@ export class TerminalRelay {
     }
 
     // Send terminal_create command to the bridge, pinned to the authorized runtime.
-    const createDelivery = sessionRouter.sendAsync
-      ? sessionRouter.sendAsync(
-          sessionId,
-          {
-            type: "terminal_create",
-            terminalId,
-            sessionId,
-            ownerUserId,
-            cols,
-            rows,
-            cwd: cwd ?? "",
-          },
-          { expectedHomeRuntimeId: runtimeInstanceId, organizationId },
-        )
-      : Promise.resolve(
-          sessionRouter.send(
-            sessionId,
-            {
-              type: "terminal_create",
-              terminalId,
-              sessionId,
-              ownerUserId,
-              cols,
-              rows,
-              cwd: cwd ?? "",
-            },
-            { expectedHomeRuntimeId: runtimeInstanceId, organizationId },
-          ),
-        );
+    const createDelivery = sessionRouter.sendAsync(
+      sessionId,
+      {
+        type: "terminal_create",
+        terminalId,
+        sessionId,
+        ownerUserId,
+        cols,
+        rows,
+        cwd: cwd ?? "",
+      },
+      { expectedHomeRuntimeId: runtimeInstanceId, organizationId },
+    );
     void createDelivery.then((result) => {
       if (result === "delivered") return;
       // Bridge not available — buffer an error so the frontend gets feedback on attach
@@ -720,10 +708,18 @@ export class TerminalRelay {
   }
 
   /** Forward a message from the bridge to the attached frontend WebSocket. */
-  relayFromBridge(
+  async relayFromBridge(
     msg: { type: string; terminalId: string; [key: string]: unknown },
     sourceRuntimeInstanceId?: string,
-  ): void {
+    connectionGeneration?: string,
+  ): Promise<void> {
+    if (
+      sourceRuntimeInstanceId &&
+      connectionGeneration &&
+      !sessionRouter.isRuntimeGenerationCurrent(sourceRuntimeInstanceId, connectionGeneration)
+    ) {
+      return;
+    }
     const entry = this.terminals.get(msg.terminalId);
     if (!entry) {
       void terminalDirectory
@@ -732,6 +728,7 @@ export class TerminalRelay {
           if (!descriptor || descriptor.frontendReplicaId === realtimeBackplane.replicaId) return;
           return realtimeBackplane.send(descriptor.frontendReplicaId, "terminal_bridge_message", {
             sourceRuntimeInstanceId,
+            connectionGeneration,
             message: msg,
           });
         })

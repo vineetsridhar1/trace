@@ -27,9 +27,7 @@ import { animationCommitPreviewUrl } from "../lib/animation-preview-url.js";
 import { designCommitPreviewUrl } from "../lib/design-checkpoint-preview-url.js";
 
 async function sendSessionCommand(...args: Parameters<typeof sessionRouter.send>) {
-  return sessionRouter.sendAsync
-    ? sessionRouter.sendAsync(...args)
-    : Promise.resolve(sessionRouter.send(...args));
+  return sessionRouter.sendAsync(...args);
 }
 
 const JWT_SECRET = resolveJwtSecret();

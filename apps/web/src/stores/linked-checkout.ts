@@ -39,6 +39,7 @@ type LinkedCheckoutMutationData = Partial<
 interface LinkedCheckoutState {
   statusByKey: Record<string, DesktopLinkedCheckoutStatus | null | undefined>;
   pendingByKey: Record<string, boolean>;
+  statusRevisionByKey: Record<string, number>;
   setStatus: (key: string, status: DesktopLinkedCheckoutStatus | null) => void;
   setPending: (key: string, pending: boolean) => void;
 }
@@ -144,12 +145,17 @@ async function runLinkedCheckoutMutation(
 export const useLinkedCheckoutStore = create<LinkedCheckoutState>((set) => ({
   statusByKey: {},
   pendingByKey: {},
+  statusRevisionByKey: {},
 
   setStatus: (key, status) =>
     set((state) => ({
       statusByKey: {
         ...state.statusByKey,
         [key]: status,
+      },
+      statusRevisionByKey: {
+        ...state.statusRevisionByKey,
+        [key]: (state.statusRevisionByKey[key] ?? 0) + 1,
       },
     })),
 
@@ -161,6 +167,8 @@ export const useLinkedCheckoutStore = create<LinkedCheckoutState>((set) => ({
       },
     })),
 }));
+
+const latestStatusRefreshByKey = new Map<string, symbol>();
 
 function isLinkedCheckoutPending(
   repoId: string | null | undefined,
@@ -178,14 +186,27 @@ export async function refreshLinkedCheckoutStatus(
 ): Promise<DesktopLinkedCheckoutStatus | null> {
   const key = getStoreKey(repoId, runtimeInstanceId);
   if (!key) return null;
+  const refreshToken = Symbol(key);
+  const startingRevision = useLinkedCheckoutStore.getState().statusRevisionByKey[key] ?? 0;
+  latestStatusRefreshByKey.set(key, refreshToken);
 
+  // A failed refresh says nothing about whether the checkout is still linked.
+  // Only replace the last successful status after a successful query so a
+  // transient replica/network failure cannot make Spotlight flicker to Link.
   try {
     const status = await queryLinkedCheckoutStatus(sessionGroupId, repoId, runtimeInstanceId);
-    useLinkedCheckoutStore.getState().setStatus(key, status);
+    const state = useLinkedCheckoutStore.getState();
+    if (
+      latestStatusRefreshByKey.get(key) === refreshToken &&
+      (state.statusRevisionByKey[key] ?? 0) === startingRevision
+    ) {
+      state.setStatus(key, status);
+    }
     return status;
-  } catch (error) {
-    useLinkedCheckoutStore.getState().setStatus(key, null);
-    throw error;
+  } finally {
+    if (latestStatusRefreshByKey.get(key) === refreshToken) {
+      latestStatusRefreshByKey.delete(key);
+    }
   }
 }
 
@@ -247,13 +268,16 @@ export async function syncLinkedCheckout(
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const status =
-      (await refreshLinkedCheckoutStatus(
-        request.repoId,
-        request.sessionGroupId,
-        request.runtimeInstanceId,
-      ).catch(() => null)) ?? emptyStatus(request.repoId);
-    useLinkedCheckoutStore.getState().setStatus(key, status);
+    await refreshLinkedCheckoutStatus(
+      request.repoId,
+      request.sessionGroupId,
+      request.runtimeInstanceId,
+    ).catch(() => null);
+    const currentStatus = useLinkedCheckoutStore.getState().statusByKey[key];
+    const status = currentStatus ?? emptyStatus(request.repoId);
+    if (currentStatus === undefined) {
+      useLinkedCheckoutStore.getState().setStatus(key, status);
+    }
     return { ok: false, error: message, status };
   } finally {
     useLinkedCheckoutStore.getState().setPending(key, false);

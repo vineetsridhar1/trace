@@ -22,6 +22,8 @@ vi.mock("../services/codex-credential.js", () => ({
 
 import type WebSocket from "ws";
 import { prisma } from "./db.js";
+import { runtimeDirectory } from "./runtime-directory.js";
+import { realtimeBackplane } from "./realtime-backplane.js";
 import { SessionRouter, runtimeRouterKey } from "./session-router.js";
 import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
 import { ProvisionedRuntimeAdapter } from "./runtime-adapters.js";
@@ -42,6 +44,7 @@ function makeWs() {
     OPEN: 1,
     readyState: 1,
     send: vi.fn(),
+    close: vi.fn(),
   } as unknown as WebSocket;
 }
 
@@ -78,11 +81,223 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("SessionRouter design-system protocol gate", () => {
-  it("keeps protocol v1 available for ordinary commands but rejects package preparation", () => {
+describe("SessionRouter distributed ownership fencing", () => {
+  it("checks authoritative ownership before writing to a local socket", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
-    router.registerRuntime({
+    await router.registerRuntime({
+      key: "org-authoritative:runtime-authoritative",
+      id: "runtime-authoritative",
+      organizationId: "org-authoritative",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      supportedTools: ["codex"],
+    });
+    const ownershipSpy = vi.spyOn(runtimeDirectory, "isCurrentOwner").mockResolvedValueOnce(false);
+
+    await expect(
+      router.sendToRuntimeAsync("runtime-authoritative", { type: "test" }, "org-authoritative"),
+    ).resolves.toBe("runtime_disconnected");
+
+    expect(ws.send).not.toHaveBeenCalled();
+    expect(ws.close).toHaveBeenCalledWith(1012, "Runtime ownership replaced");
+    expect(router.getRuntime("runtime-authoritative", "org-authoritative")).toBeUndefined();
+    ownershipSpy.mockRestore();
+    router.dispose();
+  });
+
+  it("rejects an in-flight request when the runtime socket is replaced", async () => {
+    const router = new SessionRouter();
+    const oldWs = makeWs();
+    const registration = {
+      key: "org-request:runtime-request",
+      id: "runtime-request",
+      organizationId: "org-request",
+      label: "Laptop",
+      hostingMode: "local" as const,
+      supportedTools: ["codex"],
+    };
+    await router.registerRuntime({ ...registration, ws: oldWs });
+    const request = router.listWorkspaceSlugs("runtime-request", "repo-1", "org-request");
+    await vi.waitFor(() => expect(oldWs.send).toHaveBeenCalledOnce());
+    const rejection = expect(request).rejects.toThrow("Runtime ownership replaced");
+
+    await router.registerRuntime({ ...registration, ws: makeWs() });
+
+    await rejection;
+    router.dispose();
+  });
+
+  it("closes and ignores a local socket after another replica owns its generation", async () => {
+    await runtimeDirectory.start();
+    const router = new SessionRouter();
+    const ws = makeWs();
+    const runtimeKey = runtimeRouterKey("runtime-fenced", "org-fenced");
+    await router.registerRuntime({
+      key: runtimeKey,
+      id: "runtime-fenced",
+      organizationId: "org-fenced",
+      label: "Old laptop connection",
+      ws,
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+    });
+    await flushPromises();
+
+    const remoteDescriptor = {
+      key: runtimeKey,
+      id: "runtime-fenced",
+      organizationId: "org-fenced",
+      ownerReplicaId: "replica-new-owner",
+      connectionGeneration: "generation-new-owner",
+      ownershipEpoch: 2,
+      label: "New laptop connection",
+      hostingMode: "local" as const,
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+      linkedCheckoutStatuses: [],
+      linkedCheckoutStatusObservedAt: {},
+      lastHeartbeat: Date.now() + 1,
+      expiresAt: Date.now() + 30_000,
+    };
+
+    await runtimeDirectory.register(remoteDescriptor, 30_000);
+
+    expect(ws.close).toHaveBeenCalledWith(1012, "Runtime ownership replaced");
+    expect(router.getRuntime("runtime-fenced", "org-fenced")).toBeUndefined();
+    expect(router.getRuntimeMetadata("runtime-fenced", "org-fenced")).toEqual(remoteDescriptor);
+    expect(router.listRuntimeMetadata()).toContainEqual(remoteDescriptor);
+    expect(router.sendToRuntime("runtime-fenced", { type: "test" }, "org-fenced")).toBe(
+      "no_runtime",
+    );
+
+    await runtimeDirectory.remove(runtimeKey, remoteDescriptor.connectionGeneration);
+    router.dispose();
+  });
+
+  it("closes the previous socket when a runtime reconnects on the same replica", async () => {
+    const router = new SessionRouter();
+    const oldWs = makeWs();
+    const newWs = makeWs();
+    const registration = {
+      key: "org-reconnected:runtime-reconnected",
+      id: "runtime-reconnected",
+      organizationId: "org-reconnected",
+      label: "Laptop",
+      hostingMode: "local" as const,
+      supportedTools: ["codex"],
+    };
+
+    router.registerRuntime({ ...registration, ws: oldWs });
+    router.registerRuntime({ ...registration, ws: newWs });
+
+    const status = {
+      repoId: "repo-1",
+      repoPath: "/repos/trace",
+      isAttached: true,
+      attachedSessionGroupId: "group-1",
+      targetBranch: "trace/spotlight",
+      autoSyncEnabled: true,
+      currentBranch: "trace/spotlight",
+      currentCommitSha: "abc123",
+      lastSyncedCommitSha: "abc123",
+      lastSyncError: null,
+      restoreBranch: "main",
+      restoreCommitSha: "def456",
+      hasUncommittedChanges: false,
+      changedFiles: [],
+      changedFilesTotalCount: 0,
+      changedFilesTruncated: false,
+    };
+
+    expect(oldWs.close).toHaveBeenCalledWith(1012, "Runtime ownership replaced");
+    expect(router.getRuntime("runtime-reconnected", "org-reconnected")?.ws).toBe(newWs);
+    expect(router.isCurrentRuntimeSocket("org-reconnected:runtime-reconnected", oldWs)).toBe(false);
+    expect(router.isCurrentRuntimeSocket("org-reconnected:runtime-reconnected", newWs)).toBe(true);
+    expect(
+      router.recordLinkedCheckoutStatus("org-reconnected:runtime-reconnected", status, oldWs),
+    ).toBe(false);
+    expect(
+      router.recordLinkedCheckoutStatus("org-reconnected:runtime-reconnected", status, newWs),
+    ).toBe(true);
+    await flushPromises();
+    expect(
+      runtimeDirectory.get("org-reconnected:runtime-reconnected")?.linkedCheckoutStatuses,
+    ).toContainEqual(status);
+
+    const observedAt = Date.now();
+    expect(
+      router.isLinkedCheckoutStatusFresh(
+        router.getRuntimeMetadata("runtime-reconnected", "org-reconnected")!,
+        "repo-1",
+      ),
+    ).toBe(true);
+    const now = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(observedAt + SessionRouter.LINKED_CHECKOUT_SNAPSHOT_TTL_MS + 1);
+    expect(
+      router.isLinkedCheckoutStatusFresh(
+        router.getRuntimeMetadata("runtime-reconnected", "org-reconnected")!,
+        "repo-1",
+      ),
+    ).toBe(false);
+    now.mockRestore();
+
+    const replacementWs = makeWs();
+    await router.registerRuntime({ ...registration, ws: replacementWs });
+    expect(router.getRuntime("runtime-reconnected", "org-reconnected")?.linkedCheckouts.size).toBe(
+      0,
+    );
+    router.dispose();
+  });
+
+  it("ignores an older ownership epoch even when its heartbeat timestamp is newer", async () => {
+    await runtimeDirectory.start();
+    const runtimeKey = "org-epoch:runtime-epoch";
+    const currentDescriptor = {
+      key: runtimeKey,
+      id: "runtime-epoch",
+      organizationId: "org-epoch",
+      ownerReplicaId: "replica-current",
+      connectionGeneration: "generation-current",
+      ownershipEpoch: 20,
+      label: "Current owner",
+      hostingMode: "local" as const,
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+      linkedCheckoutStatuses: [],
+      linkedCheckoutStatusObservedAt: {},
+      lastHeartbeat: 1_000,
+      expiresAt: Date.now() + 30_000,
+    };
+
+    await realtimeBackplane.broadcast("runtime_presence_changed", {
+      action: "upsert",
+      descriptor: currentDescriptor,
+    });
+    await realtimeBackplane.broadcast("runtime_presence_changed", {
+      action: "upsert",
+      descriptor: {
+        ...currentDescriptor,
+        ownerReplicaId: "replica-stale",
+        connectionGeneration: "generation-stale",
+        ownershipEpoch: 19,
+        lastHeartbeat: 100_000,
+      },
+    });
+
+    expect(runtimeDirectory.get(runtimeKey)).toEqual(currentDescriptor);
+    await runtimeDirectory.remove(runtimeKey, currentDescriptor.connectionGeneration);
+  });
+});
+
+describe("SessionRouter design-system protocol gate", () => {
+  it("keeps protocol v1 available for ordinary commands but rejects package preparation", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    await router.registerRuntime({
       id: "runtime-1",
       label: "Older runtime",
       ws,
@@ -121,12 +336,12 @@ describe("SessionRouter stale runtime eviction", () => {
     vi.clearAllMocks();
   });
 
-  it("does not evict a runtime that reconnected after the stale snapshot", () => {
+  it("does not evict a runtime that reconnected after the stale snapshot", async () => {
     const router = new SessionRouter();
     const now = vi.spyOn(Date, "now");
 
     now.mockReturnValue(0);
-    router.registerRuntime({
+    await router.registerRuntime({
       id: "runtime-1",
       label: "Laptop",
       ws: makeWs(),
@@ -145,7 +360,7 @@ describe("SessionRouter stale runtime eviction", () => {
 
     const reconnectedWs = makeWs();
     now.mockReturnValue(SessionRouter.HEARTBEAT_TIMEOUT_MS + 2);
-    router.registerRuntime({
+    await router.registerRuntime({
       id: "runtime-1",
       label: "Laptop",
       ws: reconnectedWs,
@@ -180,6 +395,25 @@ describe("SessionRouter stale runtime eviction", () => {
     expect(eviction).toEqual({ evicted: true, affectedSessions: ["session-1"] });
     expect(router.getRuntime("runtime-1")).toBeUndefined();
     expect(router.getRuntimeForSession("session-1")).toBeUndefined();
+  });
+
+  it("carries the database connection generation through stale eviction", () => {
+    const router = new SessionRouter();
+    const now = vi.spyOn(Date, "now");
+    const connectedAt = new Date("2026-08-08T12:00:00.000Z");
+
+    now.mockReturnValue(0);
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws: makeWs(),
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      connectedAt,
+    });
+
+    now.mockReturnValue(SessionRouter.HEARTBEAT_TIMEOUT_MS + 1);
+    expect(router.checkStaleRuntimes()[0]?.connectedAt).toBe(connectedAt);
   });
 
   it("reports eviction even when the stale runtime had no bound sessions", () => {
@@ -287,6 +521,26 @@ describe("SessionRouter org-scoped runtime keys", () => {
 });
 
 describe("SessionRouter runtime-pinned bridge responses", () => {
+  it("registers reply correlation before a bridge can respond", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    (ws.send as unknown as ReturnType<typeof vi.fn>).mockImplementation((payload: string) => {
+      const command = JSON.parse(payload) as { requestId: string };
+      router.resolveFileRequest(command.requestId, ["README.md"], undefined, "runtime-1");
+    });
+
+    await router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      organizationId: "org-1",
+      supportedTools: ["codex"],
+    });
+
+    await expect(router.listFiles("runtime-1", "session-1")).resolves.toEqual(["README.md"]);
+  });
+
   it("ignores branch responses from a runtime that did not receive the request", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
@@ -310,6 +564,7 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
 
     const promise = router.listBranches("runtime-1", "repo-1");
     const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
     const command = JSON.parse(send.mock.calls[0]?.[0] as string) as { requestId: string };
 
     let settled = false;
@@ -329,7 +584,7 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
     const router = new SessionRouter();
     const ws = makeWs();
 
-    router.registerRuntime({
+    await router.registerRuntime({
       id: "runtime-1",
       label: "Laptop",
       ws,
@@ -337,7 +592,7 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
       organizationId: "org-1",
       supportedTools: ["codex"],
     });
-    router.registerRuntime({
+    await router.registerRuntime({
       id: "runtime-2",
       label: "Other laptop",
       ws: makeWs(),
@@ -348,6 +603,7 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
 
     const promise = router.listWorkspaceSlugs("runtime-1", "repo-1", "org-1");
     const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
     const command = JSON.parse(send.mock.calls[0]?.[0] as string) as {
       requestId: string;
       type: string;
@@ -378,7 +634,7 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
       router.resolveWorkspaceSlugRequest(command.requestId, ["warm"], undefined, "runtime-1");
     });
 
-    router.registerRuntime({
+    await router.registerRuntime({
       id: "runtime-1",
       label: "Laptop",
       ws,
@@ -397,7 +653,7 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
     const ws = makeWs();
     const runtimeKey = runtimeRouterKey("bridge-1", "org-1");
 
-    router.registerRuntime({
+    await router.registerRuntime({
       key: runtimeKey,
       id: "bridge-1",
       label: "Laptop",
@@ -409,6 +665,7 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
 
     const promise = router.listWorkspaceSlugs("bridge-1", "repo-1", "org-1");
     const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
     const command = JSON.parse(send.mock.calls[0]?.[0] as string) as {
       requestId: string;
       type: string;
@@ -431,6 +688,30 @@ describe("SessionRouter runtime-pinned bridge responses", () => {
 });
 
 describe("SessionRouter runtime adapter dispatch", () => {
+  it("routes lifecycle commands to the persisted runtime across replicas", async () => {
+    const router = new SessionRouter();
+    prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce({
+      connection: { runtimeInstanceId: "runtime-remote" },
+      createdById: "user-1",
+      organizationId: "org-1",
+      tool: "codex",
+      model: null,
+      reasoningEffort: null,
+    });
+    const sendAsync = vi.spyOn(router, "sendAsync").mockResolvedValue("delivered");
+
+    await expect(router.transitionRuntime("session-1", "local", "pause")).resolves.toBe(
+      "delivered",
+    );
+
+    expect(sendAsync).toHaveBeenCalledWith(
+      "session-1",
+      { type: "pause", sessionId: "session-1" },
+      { expectedHomeRuntimeId: "runtime-remote", organizationId: "org-1" },
+    );
+    router.dispose();
+  });
+
   it("waits for a prebound provisioned runtime to register before resolving bridge readiness", async () => {
     const router = new SessionRouter();
     router.bindSession("session-1", "runtime-1");
@@ -444,7 +725,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     await Promise.resolve();
     expect(settled).toBe(false);
 
-    router.registerRuntime({
+    await router.registerRuntime({
       id: "runtime-1",
       label: "Provisioned runtime",
       ws: makeWs(),
@@ -513,7 +794,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       onFailed: (error) => failures.push(error),
     });
 
-    await Promise.resolve();
+    await vi.waitFor(() => expect(ws.send).toHaveBeenCalledOnce());
 
     expect(failures).toEqual([]);
     const send = ws.send as unknown as ReturnType<typeof vi.fn>;
@@ -532,7 +813,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     const authorizedWs = makeWs();
     const configuredWs = makeWs();
 
-    router.registerRuntime({
+    await router.registerRuntime({
       id: "runtime-authorized",
       label: "Authorized laptop",
       ws: authorizedWs,
@@ -540,7 +821,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       supportedTools: ["codex"],
       registeredRepoIds: ["repo-1"],
     });
-    router.registerRuntime({
+    await router.registerRuntime({
       id: "runtime-from-config",
       label: "Config laptop",
       ws: configuredWs,
@@ -573,7 +854,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       onFailed: vi.fn(),
     });
 
-    await Promise.resolve();
+    await vi.waitFor(() => expect(authorizedWs.send).toHaveBeenCalledOnce());
 
     expect(router.getRuntimeForSession("session-1")?.id).toBe("runtime-authorized");
     expect(authorizedWs.send).toHaveBeenCalledTimes(1);

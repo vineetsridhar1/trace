@@ -108,6 +108,8 @@ vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     getRuntime: vi.fn(),
     listRuntimes: vi.fn(() => []),
+    getRuntimeMetadata: vi.fn(),
+    listRuntimeMetadata: vi.fn(() => []),
   },
 }));
 

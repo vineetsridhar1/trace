@@ -322,6 +322,7 @@ async function main() {
         void runtimeAccessService.markRuntimeDisconnected(
           stale.runtimeInstanceId,
           stale.organizationId,
+          stale.connectedAt,
         );
       }
       for (const sessionId of eviction.affectedSessions) {

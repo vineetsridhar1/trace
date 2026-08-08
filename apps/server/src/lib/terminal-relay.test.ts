@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getRuntime: vi.fn(),
   send: vi.fn(() => "delivered"),
+  sendAsync: vi.fn(),
   sendToRuntime: vi.fn(() => "delivered"),
+  sendToRuntimeAsync: vi.fn(),
+  isRuntimeGenerationCurrent: vi.fn(() => true),
   sessionFindMany: vi.fn(),
   channelFindMany: vi.fn(),
 }));
@@ -12,7 +15,10 @@ vi.mock("./session-router.js", () => ({
   sessionRouter: {
     getRuntime: mocks.getRuntime,
     send: mocks.send,
+    sendAsync: mocks.sendAsync,
     sendToRuntime: mocks.sendToRuntime,
+    sendToRuntimeAsync: mocks.sendToRuntimeAsync,
+    isRuntimeGenerationCurrent: mocks.isRuntimeGenerationCurrent,
   },
 }));
 
@@ -53,9 +59,16 @@ describe("TerminalRelay runtime identity", () => {
     });
     mocks.sessionFindMany.mockResolvedValue([]);
     mocks.channelFindMany.mockResolvedValue([]);
+    mocks.sendAsync.mockImplementation((...args: unknown[]) =>
+      Promise.resolve(mocks.send(...args)),
+    );
+    mocks.sendToRuntimeAsync.mockImplementation((...args: unknown[]) =>
+      Promise.resolve(mocks.sendToRuntime(...args)),
+    );
+    mocks.isRuntimeGenerationCurrent.mockReturnValue(true);
   });
 
-  it("accepts bridge terminal messages from the org-scoped runtime key", () => {
+  it("accepts bridge terminal messages from the org-scoped runtime key", async () => {
     const relay = new TerminalRelay();
     const ws = createOpenWs();
 
@@ -71,14 +84,43 @@ describe("TerminalRelay runtime identity", () => {
     );
     relay.attachFrontend(terminalId, ws as never, "user-1");
 
-    relay.relayFromBridge({ type: "terminal_ready", terminalId }, "org-1:bridge-1");
-    relay.relayFromBridge(
+    await relay.relayFromBridge({ type: "terminal_ready", terminalId }, "org-1:bridge-1");
+    await relay.relayFromBridge(
       { type: "terminal_output", terminalId, data: "hello" },
       "org-1:bridge-1",
     );
 
     expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "ready" }));
     expect(ws.send).toHaveBeenCalledWith(JSON.stringify({ type: "output", data: "hello" }));
+  });
+
+  it("ignores terminal messages from a superseded runtime generation", async () => {
+    const relay = new TerminalRelay();
+    const ws = createOpenWs();
+    const terminalId = relay.createTerminal(
+      "session-1",
+      "group-1",
+      "org-1",
+      "bridge-1",
+      "user-1",
+      80,
+      24,
+      "/repo",
+    );
+    relay.attachFrontend(terminalId, ws as never, "user-1");
+    mocks.isRuntimeGenerationCurrent.mockReturnValue(false);
+
+    await relay.relayFromBridge(
+      { type: "terminal_output", terminalId, data: "stale" },
+      "org-1:bridge-1",
+      "generation-old",
+    );
+
+    expect(mocks.isRuntimeGenerationCurrent).toHaveBeenCalledWith(
+      "org-1:bridge-1",
+      "generation-old",
+    );
+    expect(ws.send).not.toHaveBeenCalled();
   });
 
   it("keeps restored terminal auth IDs external while matching the org-scoped runtime key", async () => {
@@ -92,7 +134,7 @@ describe("TerminalRelay runtime identity", () => {
       { terminalId: "term-1", sessionId: "session-1", ownerUserId: "user-1" },
     ]);
     relay.attachFrontend("term-1", ws as never, "user-1");
-    relay.relayFromBridge({ type: "terminal_ready", terminalId: "term-1" }, "org-1:bridge-1");
+    await relay.relayFromBridge({ type: "terminal_ready", terminalId: "term-1" }, "org-1:bridge-1");
 
     expect(relay.getTerminalAuthContext("term-1")).toMatchObject({
       kind: "session",
