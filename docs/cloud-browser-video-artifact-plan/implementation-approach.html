@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Open-source cloud browser video artifacts — implementation plan</title>
+    <title>Gated cloud browser video artifacts — implementation plan</title>
     <style>
       :root { --bg:#171717; --surface:#1f1f1f; --raised:#262626; --fg:#e4e4e7; --muted:#a1a1aa; --faint:#71717a; --border:#2e2e2e; --accent:#3b82f6; --add:#22c55e; --change:#eab308; --remove:#ef4444; --radius:8px; }
       * { box-sizing:border-box; }
@@ -62,7 +62,7 @@
       td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
       td code { padding:0; background:none; color:var(--muted); }
       .tag { display:inline-block; padding:1px 7px; border-radius:4px; background:var(--raised); font-size:11px; font-weight:600; }
-      .tag.add { color:var(--add); } .tag.change { color:var(--change); }
+      .tag.add,.tag.pass { color:var(--add); } .tag.change,.tag.limit { color:var(--change); } .tag.stop { color:var(--remove); }
       .callout { padding:12px 16px; border-left:2px solid var(--accent); border-radius:0 var(--radius) var(--radius) 0; background:var(--surface); color:var(--muted); }
       .callout.risk { border-left-color:var(--change); }
       .callout strong { color:var(--fg); }
@@ -72,25 +72,53 @@
   </head>
   <body>
     <article class="plan">
-      <h1 class="plan-title">Use Playwright CLI for cloud browser control and video</h1>
-      <p class="plan-summary">Adopt Microsoft’s open-source Playwright CLI as the browser engine instead of building a Trace-specific automation protocol. Trace supplies the cloud-image packaging, invocation isolation, state-aware skill, lifecycle cleanup, and artifact upload; upstream supplies the persistent browser, snapshots, ref-based actions, debugging, and WebM recording.</p>
+      <h1 class="plan-title">Gate browser video before Playwright ever acts</h1>
+      <p class="plan-summary">Adopt Microsoft’s open-source Playwright CLI for eligible web flows, but make the Trace skill abstain by default. A staged preflight decides whether the target is a controllable browser app, the environment and identities are authorized, deterministic data can be prepared safely, third-party dependencies are reachable in an approved sandbox, and the final recording can avoid secrets. Only then may the agent mutate state, authenticate, rehearse, record, and upload.</p>
       <div class="meta">
         <span class="chip"><strong>Apache-2.0</strong> upstream</span>
+        <span class="chip"><strong>10</strong> mandatory gates</span>
         <span class="chip"><strong>10</strong> implementation files</span>
         <span class="chip"><strong>4</strong> phases</span>
         <span class="chip">Pinned dependency</span>
         <span class="chip">No GraphQL or DB migration</span>
       </div>
       <div class="metrics" aria-label="Decision summary">
+        <div class="metric"><b>4</b><span>explicit dispositions: real, limited, alternate, blocked</span></div>
+        <div class="metric"><b>0</b><span>state changes allowed before authority and data gates pass</span></div>
         <div class="metric"><b>None</b><span>custom browser protocol, ref engine, or video encoder</span></div>
-        <div class="metric"><b>1</b><span>cross-agent CLI + Trace skill workflow</span></div>
-        <div class="metric"><b>0</b><span>browser-control code forks to maintain</span></div>
       </div>
 
       <section>
         <h2>Decision</h2>
-        <div class="callout"><strong>Recommended:</strong> pin <code>@playwright/cli</code> in the provisioned runtime image and invoke <code>playwright-cli</code> directly from the bundled <code>browser-video</code> skill. Its named sessions preserve cookies and storage across commands; snapshots provide deterministic element refs; built-in console/request/screenshot commands provide inspection; built-in <code>video-start</code>, chapters, action annotations, <code>run-code</code>, and <code>video-stop</code> produce WebM.</div>
+        <div class="callout"><strong>Recommended:</strong> make <code>browser-video</code> a gated proof workflow, not a universal post-coding step. For an eligible web flow, pin <code>@playwright/cli</code> in the provisioned runtime image and invoke it directly. For a native/mobile/CLI/backend target, unavailable third party, interactive MFA/CAPTCHA, unauthorized environment, unsafe data setup, or unreviewable sensitive output, the skill must not improvise—it selects an alternate proof or stops with a precise prerequisite.</div>
         <p style="margin-top:12px">This is precisely the upstream project’s intended use: its official README calls CLI + skills the best fit for coding agents because it avoids adapter-specific MCP registration and large tool schemas. Trace does not wrap every browser action or copy Playwright internals.</p>
+      </section>
+
+      <section>
+        <h2>Mandatory eligibility gates</h2>
+        <div class="callout risk"><strong>Fail closed:</strong> the agent evaluates these gates in order using read-only discovery first. A failed gate forbids later side effects. “The browser can click it” is never sufficient authority to access an account, change third-party state, expose customer data, or claim an integration works.</div>
+        <table style="margin-top:14px"><thead><tr><th>Gate</th><th>Pass evidence</th><th>If it fails</th></tr></thead><tbody>
+          <tr><td><strong>0 · Requested and useful</strong></td><td>The user asked for browser proof, or the task explicitly requires validating a visible web flow; video adds evidence beyond tests.</td><td><span class="tag stop">skip</span> Do not record routinely. Report normal test evidence.</td></tr>
+          <tr><td><strong>1 · Browser-app fit</strong></td><td>The behavior is rendered in Chromium at a concrete URL reachable from the cloud session.</td><td><span class="tag stop">alternate</span> Native desktop/mobile, CLI, API-only, worker, hardware, and Electron-only behavior need their own test/log/screenshot tooling. A web facade does not prove the non-web target.</td></tr>
+          <tr><td><strong>2 · Runtime readiness</strong></td><td>App server is healthy; exact URL, Chromium, recorder, disk budget, and artifact CLI pass read-only checks.</td><td><span class="tag limit">repair once</span> Start/recover an in-scope server, then recheck; otherwise stop with the failed prerequisite.</td></tr>
+          <tr><td><strong>3 · Authority and scope</strong></td><td>The environment, DB, domains, tenant, accounts, and intended side effects are inside the user-authorized task scope.</td><td><span class="tag stop">blocked</span> Do not browse, log in, mutate, or infer permission. Request the missing authorization or narrower sandbox.</td></tr>
+          <tr><td><strong>4 · Access path</strong></td><td>Required credentials are already available through approved environment/app mechanisms and auth can complete without exposing secrets.</td><td><span class="tag stop">blocked</span> Never bypass CAPTCHA, MFA, email/SMS approval, hardware keys, human consent, or missing invitations. State exactly what access is needed.</td></tr>
+          <tr><td><strong>5 · Third-party controllability</strong></td><td>An authorized test tenant/sandbox is reachable, or the repository already provides an accepted mock/fixture for the boundary.</td><td><span class="tag limit">limit/alternate</span> Test only the app-owned boundary. A mock video is labeled “mocked”; an unavailable provider can never be presented as real end-to-end proof.</td></tr>
+          <tr><td><strong>6 · Reversible data plan</strong></td><td>The agent can name the initial state, exact scoped mutations, verification query, and cleanup before changing data.</td><td><span class="tag stop">blocked</span> No production reset, broad delete, guessed schema write, irreversible transaction, or mutation without cleanup.</td></tr>
+          <tr><td><strong>7 · Privacy and consequence</strong></td><td>The viewport uses synthetic/test data and will not expose secrets, PII, customer content, payments, messages, or high-impact administrative actions.</td><td><span class="tag stop">alternate</span> Use a sanitized fixture or non-video evidence; do not rely on post-upload deletion or visual review to make a sensitive run safe.</td></tr>
+          <tr><td><strong>8 · Deterministic proof</strong></td><td>Assertions pass in rehearsal, locators are stable, initial state can be reset, and the video can truthfully demonstrate the claim.</td><td><span class="tag stop">no recording</span> Preserve failing diagnostics and report the defect/uncertainty instead of producing a misleading success reel.</td></tr>
+          <tr><td><strong>9 · Upload readiness</strong></td><td>The stopped WebM passes codec/size/duration/playback checks and a final visual inspection shows no secret or unrelated content.</td><td><span class="tag stop">do not upload</span> Delete the unsafe/invalid temp recording; retry only if the cause is safe and understood.</td></tr>
+        </tbody></table>
+      </section>
+
+      <section>
+        <h2>Allowed outcomes</h2>
+        <div class="split">
+          <div class="card"><h3><span class="tag pass">real proof</span></h3><p>All gates pass against the actual app-owned web flow and approved sandbox dependencies. Record and upload with a claim that matches what was observed.</p></div>
+          <div class="card"><h3><span class="tag limit">limited proof</span></h3><p>An existing accepted mock or sandbox substitutes for a dependency. Record only if useful, label the limitation in the artifact description/response, and never call it production end-to-end.</p></div>
+          <div class="card"><h3><span class="tag change">alternate proof</span></h3><p>The feature is not browser-visible or video is unsafe/weak evidence. Run the appropriate unit, integration, API, CLI, log, trace, or platform-specific test instead; no fake browser demo.</p></div>
+          <div class="card"><h3><span class="tag stop">blocked</span></h3><p>Missing authority, credentials, human auth, safe state, or reachable services requires user/environment action. Stop before side effects and report the exact gate, evidence, and smallest prerequisite.</p></div>
+        </div>
       </section>
 
       <section>
@@ -111,12 +139,22 @@
           <button type="button" data-view="trace" aria-pressed="true">Trace owns</button>
         </div>
         <div class="view-panel" data-view-group="ownership" data-view-panel="upstream"><h3>Use upstream directly</h3><div class="flow"><div class="node"><b>Named sessions</b><span>browser + cookies + storage</span></div><div class="arrow">·</div><div class="node"><b>Snapshot + refs</b><span>observe and target</span></div><div class="arrow">·</div><div class="node"><b>Actions + diagnostics</b><span>click/fill/goto/console/requests</span></div><div class="arrow">·</div><div class="node"><b>Video + run-code</b><span>WebM hero script</span></div></div></div>
-        <div class="view-panel" data-view-group="ownership" data-view-panel="trace"><h3>Keep product policy in Trace</h3><div class="flow"><div class="node is-new"><b>Runtime packaging</b><span>pinned CLI + browser media deps</span></div><div class="arrow">·</div><div class="node is-new"><b>Invocation config</b><span>session/output isolation</span></div><div class="arrow">·</div><div class="node is-new"><b>State-aware skill</b><span>DB, URL, auth, reasoning loop</span></div><div class="arrow">·</div><div class="node"><b>Artifact upload</b><span>existing video service + UI</span></div></div></div>
+        <div class="view-panel" data-view-group="ownership" data-view-panel="trace"><h3>Keep product policy in Trace</h3><div class="flow"><div class="node is-new"><b>Runtime packaging</b><span>pinned CLI + browser media deps</span></div><div class="arrow">·</div><div class="node is-new"><b>Invocation config</b><span>session/output isolation</span></div><div class="arrow">·</div><div class="node is-new"><b>Gate-first skill</b><span>fit, scope, access, safety, DB, proof</span></div><div class="arrow">·</div><div class="node"><b>Artifact upload</b><span>existing video service + UI</span></div></div></div>
         <p style="margin-top:12px">Trace will not add a parallel <code>trace browser</code> command, custom socket protocol, semantic-tree implementation, stale-ref registry, or CDP video encoder. Those were removed from the previous plan.</p>
       </section>
 
       <section>
-        <h2>End-to-end AI workflow</h2>
+        <h2>What is enforced where</h2>
+        <div class="split">
+          <div class="card"><h3>Runtime guardrails · code-enforced</h3><ul><li>Invocation-owned browser session/profile/output paths.</li><li>Headless isolated Chromium with bounded timeouts.</li><li>Cleanup on completion, abort, replacement, timeout, and shutdown.</li><li>Recorder/tool availability and output validation before upload.</li><li>Existing Trace artifact authentication, media validation, and size policy.</li></ul></div>
+          <div class="card"><h3>Workflow gates · skill-enforced</h3><ul><li>Whether video fits the target and adds credible evidence.</li><li>Whether user authority covers the domain, identity, DB, and side effects.</li><li>Whether third-party access is real, sandboxed, mocked, or unavailable.</li><li>Whether data setup, auth, privacy, and claims are safe and truthful.</li><li>Which of the four dispositions the agent must report.</li></ul></div>
+        </div>
+        <div class="callout risk" style="margin-top:14px"><strong>Explicit boundary:</strong> a skill governs a cooperative coding agent; it is not a security sandbox. V1 must not claim that prose prevents a compromised agent or page from bypassing network policy. Existing session permissions remain the security boundary. A future domain-egress enforcement layer is separate infrastructure work and is not required to ship the gated workflow.</div>
+      </section>
+
+      <section>
+        <h2>Eligible-flow execution</h2>
+        <div class="flow" aria-label="Gate disposition flow"><div class="node"><b>Read-only discovery</b><span>target, route, runtime, auth, schema, dependencies</span></div><div class="arrow">→</div><div class="node is-new"><b>Evaluate gates 0–7</b><span>no login, DB mutation, or external action yet</span></div><div class="arrow">→</div><div class="node"><b>Choose disposition</b><span>real · limited · alternate · blocked</span></div><div class="arrow">→</div><div class="node is-new"><b>Only real/limited continue</b><span>prepare, rehearse, gate 8, record, gate 9</span></div></div>
         <div class="diagram" aria-label="State preparation, Playwright exploration, hero recording, and artifact upload">
           <svg class="diagram-svg" viewBox="0 0 900 390" role="img">
             <title>State-aware Playwright CLI workflow</title>
@@ -140,22 +178,23 @@
             <text class="edge-label" x="390" y="54">yes</text><text class="edge-label" x="235" y="126">no: add app-owned setup</text><text class="edge-label" x="390" y="290">yes</text><text class="edge-label" x="255" y="360">no: repair + inspect again</text>
           </svg>
         </div>
-        <p style="margin-top:12px">Exploration stays adaptive: after each Playwright command the CLI writes a snapshot containing URL/title and ref-addressable page state. The agent can request a fresh snapshot, screenshot, console messages, or requests, compare that with source and DB queries, update data or URL, reload, and continue in the same authenticated browser session.</p>
+        <p style="margin-top:12px">This diagram begins only after the preflight selects real or explicitly limited proof. Exploration stays adaptive: after each Playwright command the CLI writes a snapshot containing URL/title and ref-addressable page state. The agent can request a fresh snapshot, screenshot, console messages, or requests, compare that with source and DB queries, update data or URL, reload, and continue in the same authenticated browser session.</p>
       </section>
 
       <section>
-        <h2>Database, URL, auth, and video policy in the skill</h2>
+        <h2>Database, URL, auth, integration, and video policy</h2>
         <div class="split">
-          <div class="card"><h3>Before browser work</h3><ol><li>Read schema/migrations/services/seeds/API/router/auth code.</li><li>Classify the DB hostname without printing <code>DATABASE_URL</code>.</li><li>Prefer an app-owned seed/fixture/service/API; use narrow parameterized SQL only as fallback.</li><li>For external DBs: no reset/drop/truncate/broad delete; namespace reversible demo rows.</li><li>Query back required records and relationships; derive and <code>curl</code> the exact route.</li></ol></div>
-          <div class="card"><h3>Browser and proof</h3><ol><li>Open the exact URL in the invocation’s named Playwright session.</li><li>Use snapshot refs; inspect PNG for layout; inspect console/request summaries for failure.</li><li>Establish auth through the supported UI/API and preserve cookies in the same session.</li><li>Rehearse until DB/source/browser evidence agrees; generate stable locators.</li><li>Reset to initial demo state, create the hero script, dry-run, reset again, then start video and execute it in one <code>run-code</code> command.</li><li>Stop video, inspect metadata/playback, upload with <code>$TRACE_CLI artifact push video</code>, close, and clean namespaced external data.</li></ol></div>
+          <div class="card"><h3>Before side effects</h3><ol><li>Read target/runtime/schema/migrations/services/seeds/API/router/auth/integration code.</li><li>Inventory every required origin, identity, credential, callback, provider, and human step.</li><li>Classify DB hostname without printing <code>DATABASE_URL</code>; write the scoped setup/verification/cleanup plan.</li><li>Choose real sandbox, accepted existing mock, alternate proof, or blocked—never silently replace a missing provider.</li><li>Run gates 0–7 and state the disposition before login, mutation, or third-party action.</li></ol></div>
+          <div class="card"><h3>After eligibility passes</h3><ol><li>Prepare app-owned state via seed/fixture/service/API; narrow parameterized SQL is last resort. External DBs forbid reset/drop/truncate/broad delete.</li><li>Query back records and relationships; derive and <code>curl</code> the exact route.</li><li>Open the exact URL, establish supported non-interactive auth, and preserve cookies in the same invocation session.</li><li>Inspect snapshot, PNG, console, requests, source, and DB until the expected flow passes; do not cross an unapproved origin.</li><li>Run gate 8, reset, dry-run the hero script, reset again, record, then run gate 9.</li><li>Upload only a valid sanitized WebM, close the browser, remove temp data, and run planned namespaced cleanup.</li></ol></div>
         </div>
         <div class="callout risk" style="margin-top:14px"><strong>Why a hero script:</strong> Playwright’s own video guidance recommends rehearsing interactively, then recording one scripted proof with deliberate pauses and annotations. The model does all open-ended reasoning before recording, so the final video has no minutes of dead air and does not require Trace to invent an action-clock encoder.</div>
+        <details><summary>Third-party examples: prove only the boundary actually under control</summary><div class="detail-body"><ul><li><strong>Allowed real proof:</strong> an authorized Stripe/Slack/etc. test tenant is already configured, credentials are available through approved mechanisms, no human challenge is required, and the requested side effects are scoped and reversible.</li><li><strong>Allowed limited proof:</strong> the repository already uses a mock OAuth/provider server and the task accepts it. The response and artifact label say the provider was mocked.</li><li><strong>App-boundary proof only:</strong> show that the app emits the expected request or handles a provider error, but do not claim the external system received or processed it.</li><li><strong>Blocked:</strong> missing invitation/API key, production-only account, MFA/CAPTCHA/consent prompt, inaccessible email/SMS callback, paid transaction, customer tenant, or provider outage.</li></ul></div></details>
       </section>
 
       <section>
         <h2>Cloud integration</h2>
-        <div class="flow"><div class="node"><b>Container image</b><span>pinned Playwright CLI + system Chromium + matching FFmpeg runtime</span></div><div class="arrow">→</div><div class="node is-new"><b>Invocation env</b><span>unique session + temp output + config</span></div><div class="arrow">→</div><div class="node is-new"><b>browser-video skill</b><span>state-aware operational workflow</span></div><div class="arrow">→</div><div class="node"><b>Artifact CLI</b><span>existing authenticated video upload</span></div></div>
-        <p>The bridge derives <code>PLAYWRIGHT_CLI_SESSION</code> and output paths from <code>TRACE_INVOCATION_ID</code>, never from agent-supplied names. A baked config selects <code>/usr/bin/chromium</code>, headless isolated profiles, a fixed viewport, bounded timeouts, workspace-restricted file access, and loopback origins. On completion/abort/replacement, the bridge closes that exact Playwright session and removes its temp output after the agent has uploaded the video.</p>
+        <div class="flow"><div class="node"><b>Container image</b><span>pinned Playwright CLI + system Chromium + matching FFmpeg runtime</span></div><div class="arrow">→</div><div class="node is-new"><b>Invocation env</b><span>unique session + temp output + config</span></div><div class="arrow">→</div><div class="node is-new"><b>gate-first skill</b><span>disposition before side effects</span></div><div class="arrow">→</div><div class="node"><b>Artifact CLI</b><span>existing authenticated video upload</span></div></div>
+        <p>The bridge derives <code>PLAYWRIGHT_CLI_SESSION</code> and output paths from <code>TRACE_INVOCATION_ID</code>, never from agent-supplied names. A baked config selects <code>/usr/bin/chromium</code>, headless isolated profiles, a fixed viewport, bounded timeouts, and workspace-restricted file access. The skill defaults to the app’s loopback preview origins; an external origin is eligible only when the user’s task scope and an approved sandbox configuration identify it. On completion/abort/replacement, the bridge closes that exact Playwright session and removes its temp output after upload or abstention.</p>
         <details><summary>Dependency policy: pin, build offline, and smoke the exact browser/video combination</summary><div class="detail-body"><p>Do not use <code>@latest</code> or <code>npx -y</code> at session time. The researched npm release is <code>@playwright/cli@0.1.18</code> (Apache-2.0, Node ≥18, Playwright 1.63 alpha dated 2026-08-05); pin that exact resolved package after the implementation smoke confirms it. Use the existing system Chromium through upstream <code>executablePath</code> configuration, install the matching Playwright FFmpeg artifact during image build, and run open/snapshot/click/video/run-code/stop in CI without network access. Keep the upstream license in the installed npm package.</p></div></details>
       </section>
 
@@ -163,8 +202,8 @@
         <h2>Implementation phases</h2>
         <div class="phase" data-step="1"><h3>Prove the upstream CLI in the Trace image</h3><p>Pin Playwright CLI; configure system Chromium and isolated output; install its matching recording runtime; add an image smoke covering named sessions, snapshot refs, actions, console, screenshot, hero script, and WebM.</p><details><summary>Exit criterion: no package or browser download occurs during an agent session</summary><div class="detail-body"><p>The smoke runs with network package access disabled and verifies playable WebM metadata. If the pinned CLI cannot reliably use the image’s Chromium, use the matching Playwright Chromium installed at image build rather than adding custom automation code.</p></div></details></div>
         <div class="phase" data-step="2"><h3>Add invocation scoping and cleanup</h3><p>Derive a unique Playwright session/config/output directory for each active invocation and close it from every bridge completion, abort, replacement, timeout, and shutdown path.</p><details><summary>Isolation test: parallel cloud sessions retain separate tabs, cookies, storage, and output files</summary><div class="detail-body"><p>Test that one invocation cannot select another’s session via environment or CLI defaults, and that stale sessions are removed even when the coding tool exits unexpectedly.</p></div></details></div>
-        <div class="phase" data-step="3"><h3>Write and bundle the state-aware Trace skill</h3><p>Teach database safety, state verification, exact-route/auth setup, Playwright exploration, ref-based action, visual/error inspection, hero-script generation, video recording, artifact upload, and cleanup.</p><details><summary>The skill supplements upstream Playwright guidance rather than copying it</summary><div class="detail-body"><p>The Trace skill names product-specific invariants and tells the agent to consult <code>playwright-cli --help</code> and the installed upstream skill for command details. It never teaches a second command vocabulary.</p></div></details></div>
-        <div class="phase" data-step="4"><h3>Verify adaptive state repair and proof upload</h3><p>A fixture app begins with wrong relational DB state, requires auth, and redirects to a parameterized route. The agent/test driver must discover, repair, inspect, rehearse, record, and upload; the unchanged Trace player must play the video.</p></div>
+        <div class="phase" data-step="3"><h3>Write and bundle the gate-first Trace skill</h3><p>Encode the ordered gates and four dispositions first; only the passing path teaches database safety, state verification, exact-route/auth setup, Playwright exploration, ref-based action, visual/error inspection, hero-script generation, video recording, artifact upload, and cleanup.</p><details><summary>The skill supplements upstream Playwright guidance rather than copying it</summary><div class="detail-body"><p>The Trace skill names product-specific invariants and tells the agent to consult <code>playwright-cli --help</code> and the installed upstream skill for command details. It never teaches a second command vocabulary. It includes a concise decision-report template: disposition, failed/limited gate, observed evidence, side effects already taken (normally none), and smallest next prerequisite.</p></div></details></div>
+        <div class="phase" data-step="4"><h3>Verify positive, limited, alternate, and blocked paths</h3><p>The positive fixture begins with wrong relational DB state, requires auth, and redirects to a parameterized route; it must be repaired, rehearsed, recorded, uploaded, and played. Negative fixtures cover native/API-only targets, unavailable third parties, existing mocks, MFA, external DB danger, sensitive viewport data, unstable rehearsal, and invalid recordings; each must select the expected disposition without prohibited side effects.</p></div>
       </section>
 
       <section>
@@ -177,7 +216,7 @@
           <tr data-change="add"><td><code>apps/container-bridge/src/playwright-session.test.ts</code></td><td><span class="tag add">new</span></td><td>Session-name bounds, env isolation, cleanup lifecycle, failure tolerance, parallel invocations.</td></tr>
           <tr data-change="change"><td><code>apps/container-bridge/src/bridge.ts</code></td><td><span class="tag change">edit</span></td><td>Attach Playwright session env to each run and cleanup on every terminal lifecycle path.</td></tr>
           <tr data-change="change"><td><code>apps/container-bridge/src/dockerfile-runtime-dependencies.test.ts</code></td><td><span class="tag change">edit</span></td><td>Assert pinned CLI/config/Chromium/recording runtime are present; add offline browser-video smoke.</td></tr>
-          <tr data-change="change"><td><code>runtime/skills/browser-video/SKILL.md</code></td><td><span class="tag change">runtime</span></td><td>Trace-specific DB/URL/auth/reasoning/rehearsal/record/upload/cleanup workflow using upstream CLI.</td></tr>
+          <tr data-change="change"><td><code>runtime/skills/browser-video/SKILL.md</code></td><td><span class="tag change">runtime</span></td><td>Ordered eligibility gates, four dispositions, decision report, and passing-path DB/URL/auth/reasoning/rehearsal/record/upload/cleanup workflow.</td></tr>
           <tr data-change="change"><td><code>runtime/manifest.json</code></td><td><span class="tag change">edit</span></td><td>Include the skill and bump runtime version.</td></tr>
           <tr data-change="change"><td><code>packages/shared/src/trace-runtime.generated.ts</code></td><td><span class="tag change">generated</span></td><td>Embed the new skill for cloud invocation installation.</td></tr>
           <tr data-change="change"><td><code>packages/shared/test/trace-runtime.test.ts</code></td><td><span class="tag change">edit</span></td><td>Verify runtime installation/upgrade includes the browser-video skill.</td></tr>
@@ -189,8 +228,13 @@
         <table><thead><tr><th>Concern</th><th>Proof</th></tr></thead><tbody>
           <tr><td>Open-source capability</td><td>Pinned CLI prints version/license; open/snapshot/ref action/screenshot/console/requests/storage/video/chapters/run-code work in the built image.</td></tr>
           <tr><td>Isolation</td><td>Parallel invocation names cannot collide; cookies/output stay separate; completion/abort/replacement closes only the caller’s session.</td></tr>
+          <tr><td>Browser fit gate</td><td>Web fixture proceeds; native, mobile, CLI, API-only, worker, and Electron-only fixtures select alternate proof without launching Chromium.</td></tr>
+          <tr><td>Access and authority gates</td><td>Missing credentials, ambiguous tenant, MFA/CAPTCHA/human consent, inaccessible callback, and production-only accounts stop before login or mutation and name the missing prerequisite.</td></tr>
+          <tr><td>Third-party gate</td><td>Authorized sandbox is real proof; repository mock is explicitly limited proof; unavailable provider tests only the app boundary or blocks—never claims end-to-end success.</td></tr>
           <tr><td>State reasoning</td><td>Fixture starts wrong; DB query, UI snapshot, redirect URL, console/requests lead to a corrective state mutation and successful re-inspection.</td></tr>
           <tr><td>DB safety</td><td>Loopback DB allows scoped reset; external-host classification forbids destructive operations and proves namespaced cleanup.</td></tr>
+          <tr><td>Privacy and consequence gate</td><td>Fixtures containing tokens, PII, customer data, payment/admin actions, or unrelated tabs abstain or sanitize before recording; unsafe temp video is deleted and never uploaded.</td></tr>
+          <tr><td>Determinism gate</td><td>Failed assertions, unstable locators, or a non-resettable initial state produce diagnostics, not a polished success recording.</td></tr>
           <tr><td>Video quality</td><td>Dry-run hero script succeeds; reset; recording includes explicit chapters/action callouts and intended pauses but no model reasoning time; WebM passes metadata/playback and artifact limits.</td></tr>
           <tr><td>Artifact handoff</td><td>Existing <code>artifact push video</code> produces <code>trace.video.v1</code>; unchanged timeline card and artifact dialog play it.</td></tr>
         </tbody></table>
@@ -201,7 +245,9 @@
         <div class="stack">
           <div class="callout risk"><strong>Upstream maturity.</strong> Playwright CLI is young and currently tracks a fast-moving Playwright dependency. Pin an exact reviewed version, smoke the full command/video surface, and upgrade deliberately.</div>
           <div class="callout risk"><strong>Database damage.</strong> Keep the prior guardrails: classify without logging secrets, prefer app-owned state setup, prohibit destructive external-DB operations, namespace and clean demo data.</div>
-          <div class="callout risk"><strong>Prompt injection from page content.</strong> Treat snapshots, console, and page text as untrusted application data, browse loopback previews only, and never interpret page text as instructions that override the skill or user request.</div>
+          <div class="callout risk"><strong>False proof.</strong> A browser video proves only what appears and is asserted in that run. Label mocks/sandboxes, do not infer backend or provider success from UI appearance, and choose alternate evidence for non-browser behavior.</div>
+          <div class="callout risk"><strong>Uncontrolled third parties.</strong> Missing credentials, provider outages, MFA/CAPTCHA, consent screens, and production tenants are expected abstention cases—not automation bugs to route around.</div>
+          <div class="callout risk"><strong>Prompt injection from page content.</strong> Treat snapshots, console, and page text as untrusted application data, browse only the approved app/sandbox origins, and never interpret page text as instructions that override the skill or user request.</div>
           <div class="callout risk"><strong>Secrets in scripts or video.</strong> Prepare auth before recording when possible, keep hero scripts in invocation temp output, do not print DB URLs/cookies/tokens, and review the WebM before upload.</div>
           <div class="callout risk"><strong>Orphaned sessions.</strong> Explicit skill cleanup is insufficient alone; the bridge must close the invocation’s named Playwright session on every terminal path and runtime shutdown.</div>
         </div>
