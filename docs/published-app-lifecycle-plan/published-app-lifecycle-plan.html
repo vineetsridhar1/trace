@@ -1,0 +1,987 @@
+<!doctype html>
+<!--
+  Trace visual plan canvas.
+
+  Copy this file into the change-specific folder under docs/ with a descriptive
+  filename, then replace the sample content. This file is the agent's authoring canvas. Keep the <style> block;
+  it is the component vocabulary. Every class below is demonstrated once in the
+  body so you can see what it renders as.
+
+  Rules that are enforced on upload:
+    - Exactly one HTML document per plan folder.
+    - No external references. Images must be inline data: URLs or CSS shapes.
+    - Scripts must be inline and may modify only this document's DOM.
+    - No network, storage, parent-frame access, navigation, popups, downloads,
+      external assets, frames, or forms.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Durable published applications — implementation plan</title>
+    <style>
+      :root {
+        --bg: #171717;
+        --surface: #1f1f1f;
+        --raised: #262626;
+        --fg: #e4e4e7;
+        --muted: #a1a1aa;
+        --faint: #71717a;
+        --border: #2e2e2e;
+        --accent: #3b82f6;
+        --add: #22c55e;
+        --change: #eab308;
+        --remove: #ef4444;
+        --radius: 8px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 40px 32px 72px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.65 ui-sans-serif,
+          -apple-system,
+          "Segoe UI",
+          system-ui,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .plan {
+        max-width: 860px;
+        margin: 0 auto;
+      }
+
+      /* ── Title block ── */
+      .plan-title {
+        margin: 0 0 8px;
+        font-size: 28px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .plan-summary {
+        margin: 0 0 20px;
+        color: var(--muted);
+        font-size: 16px;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 36px;
+      }
+      .chip {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .chip strong {
+        color: var(--fg);
+        font-weight: 550;
+      }
+
+      /* ── Scan-level metrics ── */
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin: -20px 0 36px;
+      }
+      .metric {
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: linear-gradient(145deg, var(--surface), var(--raised));
+      }
+      .metric b {
+        display: block;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+      .metric span {
+        color: var(--faint);
+        font-size: 12px;
+      }
+
+      /* ── Sections ── */
+      section {
+        margin-bottom: 40px;
+      }
+      h2 {
+        margin: 0 0 14px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      h3 {
+        margin: 0 0 6px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      code {
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.9em;
+      }
+      button {
+        color: inherit;
+        font: inherit;
+      }
+      button:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+
+      /* ── Two-column split (scope vs non-goals, etc.) ── */
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .card {
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .card h3 {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .card ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .card li {
+        margin-bottom: 4px;
+      }
+
+      /* ── Flow diagram: horizontal boxes joined by arrows ── */
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 0;
+        margin: 4px 0 8px;
+      }
+      .node {
+        flex: 1 1 0;
+        min-width: 120px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .node b {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .node span {
+        color: var(--faint);
+        font-size: 12px;
+      }
+      .node.is-new {
+        border-color: var(--accent);
+      }
+      .arrow {
+        flex: 0 0 28px;
+        align-self: center;
+        text-align: center;
+        color: var(--faint);
+      }
+
+      /* ── Diagrams: use SVG for branches, HTML for ordered interactions ── */
+      .diagram {
+        overflow-x: auto;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .diagram-svg {
+        display: block;
+        width: 100%;
+        min-width: 620px;
+        height: auto;
+      }
+      .diagram-svg .edge {
+        fill: none;
+        stroke: var(--faint);
+        stroke-width: 1.5;
+      }
+      .diagram-svg .box {
+        fill: var(--raised);
+        stroke: var(--border);
+        stroke-width: 1.5;
+      }
+      .diagram-svg .box.is-new {
+        stroke: var(--accent);
+      }
+      .diagram-svg .decision {
+        fill: color-mix(in srgb, var(--change) 10%, var(--surface));
+        stroke: var(--change);
+        stroke-width: 1.5;
+      }
+      .diagram-svg text {
+        fill: var(--fg);
+        font-family: inherit;
+        font-size: 12px;
+        text-anchor: middle;
+      }
+      .diagram-svg .edge-label {
+        fill: var(--faint);
+        font-size: 10px;
+      }
+      .sequence {
+        display: grid;
+        gap: 8px;
+        min-width: 560px;
+      }
+      .sequence-row {
+        display: grid;
+        grid-template-columns: 110px 1fr 110px;
+        align-items: center;
+        gap: 12px;
+      }
+      .sequence-party {
+        padding: 7px 9px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--raised);
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+      }
+      .sequence-message {
+        position: relative;
+        padding-bottom: 5px;
+        border-bottom: 1px solid var(--faint);
+        color: var(--muted);
+        font-size: 11px;
+        text-align: center;
+      }
+      .sequence-message::after {
+        content: "";
+        position: absolute;
+        right: -1px;
+        bottom: -4px;
+        width: 7px;
+        height: 7px;
+        border-top: 1px solid var(--faint);
+        border-right: 1px solid var(--faint);
+        transform: rotate(45deg);
+      }
+      .sequence-row.reverse .sequence-party:first-child {
+        grid-column: 3;
+      }
+      .sequence-row.reverse .sequence-message {
+        grid-column: 2;
+        grid-row: 1;
+        transform: scaleX(-1);
+      }
+      .sequence-row.reverse .sequence-message span {
+        display: inline-block;
+        transform: scaleX(-1);
+      }
+      .sequence-row.reverse .sequence-party:last-child {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      /* ── Switchable before/after or alternative views ── */
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .toolbar button {
+        cursor: pointer;
+        padding: 5px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .toolbar button:hover {
+        border-color: var(--faint);
+        color: var(--fg);
+      }
+      .toolbar button[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+        color: var(--fg);
+      }
+      .view-panel {
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      /* ── Quantitative bars (only for real, sourced values) ── */
+      .bar-chart {
+        display: grid;
+        gap: 9px;
+      }
+      .bar-row {
+        display: grid;
+        grid-template-columns: minmax(100px, 0.8fr) 2fr 32px;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+      }
+      .bar-track {
+        height: 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--raised);
+      }
+      .bar-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+      }
+      .bar-value {
+        color: var(--faint);
+        text-align: right;
+      }
+
+      /* ── Phases ── */
+      .phase {
+        position: relative;
+        padding: 0 0 20px 26px;
+        border-left: 1px solid var(--border);
+      }
+      .phase:last-child {
+        border-left-color: transparent;
+        padding-bottom: 0;
+      }
+      .phase::before {
+        content: attr(data-step);
+        position: absolute;
+        left: -11px;
+        top: 0;
+        width: 21px;
+        height: 21px;
+        border-radius: 50%;
+        background: var(--raised);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 21px;
+        text-align: center;
+      }
+
+      /* ── Progressive disclosure ── */
+      details {
+        margin-top: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: color-mix(in srgb, var(--raised) 55%, transparent);
+      }
+      summary {
+        cursor: pointer;
+        padding: 10px 12px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 550;
+      }
+      summary::marker {
+        color: var(--accent);
+      }
+      .detail-body {
+        padding: 0 12px 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .detail-body p:last-child,
+      .detail-body ul:last-child {
+        margin-bottom: 0;
+      }
+
+      /* ── Tables: file maps, risks, verification ── */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-align: left;
+        text-transform: uppercase;
+      }
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      td code {
+        background: none;
+        padding: 0;
+        color: var(--muted);
+      }
+      .tag {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 4px;
+        background: var(--raised);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .tag.add {
+        color: var(--add);
+      }
+      .tag.change {
+        color: var(--change);
+      }
+      .tag.remove {
+        color: var(--remove);
+      }
+
+      /* ── Callout ── */
+      .callout {
+        padding: 12px 16px;
+        border-left: 2px solid var(--accent);
+        border-radius: 0 var(--radius) var(--radius) 0;
+        background: var(--surface);
+        color: var(--muted);
+      }
+      .callout.risk {
+        border-left-color: var(--change);
+      }
+      .callout strong {
+        color: var(--fg);
+      }
+      .callout + .callout {
+        margin-top: 10px;
+      }
+      .eyebrow {
+        margin-bottom: 8px;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 10px;
+        color: var(--faint);
+        font-size: 11px;
+      }
+      .legend i {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin-right: 5px;
+        border-radius: 50%;
+        background: var(--faint);
+      }
+      .legend .new i { background: var(--accent); }
+      .legend .durable i { background: var(--add); }
+      .legend .ephemeral i { background: var(--change); }
+      .status-line {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin: 10px 0;
+      }
+      .status-step {
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .status-step.live { border-color: var(--add); color: var(--add); }
+      .status-step.fail { border-color: var(--remove); color: var(--remove); }
+      .status-arrow { color: var(--faint); font-size: 11px; }
+      .decision-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .decision-option {
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+      .decision-option.recommended {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+      }
+      .decision-option p { color: var(--muted); font-size: 13px; }
+      .decision-option small { color: var(--faint); }
+      .compact-list { margin: 6px 0 0; padding-left: 18px; }
+      .compact-list li { margin-bottom: 5px; }
+      .repo-label {
+        color: var(--faint);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      @media (max-width: 640px) {
+        .split {
+          grid-template-columns: 1fr;
+        }
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+        .bar-row {
+          grid-template-columns: 90px 1fr 28px;
+        }
+        .decision-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <article class="plan">
+      <p class="eyebrow">Plan for review · no product implementation yet</p>
+      <h1 class="plan-title">Durable published applications</h1>
+      <p class="plan-summary">
+        Turn Publish into an independent AWS deployment: an immutable commit becomes an image, gets
+        isolated PostgreSQL data, passes migrations and health checks, and is promoted to a stable
+        app URL. Development sessions can then hibernate without stopping the published app.
+      </p>
+      <div class="meta">
+        <span class="chip"><strong>2</strong> coordinated repositories</span>
+        <span class="chip"><strong>8</strong> implementation phases</span>
+        <span class="chip">Schema + infrastructure migrations</span>
+        <span class="chip">Redis excluded from app contract</span>
+      </div>
+      <div class="metrics" aria-label="Plan outcome summary">
+        <div class="metric"><b>1 app</b><span>one ECS service + one database identity</span></div>
+        <div class="metric"><b>0 coupling</b><span>to the development session after publish</span></div>
+        <div class="metric"><b>1 gate</b><span>route changes only after migration + health</span></div>
+      </div>
+
+      <section>
+        <h2>Approval decision</h2>
+        <div class="callout">
+          <strong>Recommended v1:</strong> use a database and login per app on the shared app-data
+          Aurora cluster, with direct TLS connections and a tiny application pool. Keep the current
+          RDS Proxy out of generated-app traffic until its authentication model is redesigned.
+        </div>
+        <div class="decision-grid" style="margin-top: 12px">
+          <div class="decision-option recommended">
+            <h3>Direct Aurora TLS · recommended</h3>
+            <p>One secret per app, injected only into that app's ECS task definition. Simple tenant isolation and no dynamic proxy-auth registration.</p>
+            <small>Tradeoff: cap each app pool (initially 2) and monitor aggregate connections.</small>
+          </div>
+          <div class="decision-option">
+            <h3>RDS Proxy per-app credentials</h3>
+            <p>The current proxy registers only the cluster admin secret. Registering every app secret expands operational and quota pressure.</p>
+            <small>Defer until IAM end-to-end auth or another scalable proxy identity design is approved.</small>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Scope</h2>
+        <div class="split">
+          <div class="card">
+            <h3>In scope</h3>
+            <ul>
+              <li>Publish only an immutable Git checkpoint.</li>
+              <li>Build and store a digest-addressed image in ECR.</li>
+              <li>Provision one PostgreSQL database, role, and secret per app.</li>
+              <li>Run an idempotent migration task before serving traffic.</li>
+              <li>Create/update one private ECS Fargate service per app.</li>
+              <li>Promote a stable <code>*.apps.&lt;domain&gt;</code> route after health passes.</li>
+              <li>Preserve data across task restarts, republishes, and dev-session hibernation.</li>
+              <li>Expose lifecycle status through Trace events and the application card.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Not doing</h3>
+            <ul>
+              <li>No Redis service or <code>REDIS_URL</code> for generated apps.</li>
+              <li>No durable local-development database promise.</li>
+              <li>No multi-region failover or per-app autoscaling in v1.</li>
+              <li>No persistent file/object storage in this slice.</li>
+              <li>No destructive migration rollback; schema changes follow expand/migrate/contract.</li>
+              <li>No silent database deletion on unpublish.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>What exists today</h2>
+        <div class="toolbar" data-view-switcher="current-state" aria-label="Repository view">
+          <button type="button" data-view="trace" aria-pressed="true">Trace</button>
+          <button type="button" data-view="ops" aria-pressed="false">trace-ops</button>
+          <button type="button" data-view="gap" aria-pressed="false">Missing boundary</button>
+        </div>
+        <div class="view-panel" data-view-group="current-state" data-view-panel="trace">
+          <h3>Request and status foundation is present</h3>
+          <ul class="compact-list">
+            <li><code>apps/server/src/services/app-deployment.ts</code> selects a Git checkpoint, serializes publishes with advisory locks, and enforces monotonic callbacks.</li>
+            <li><code>apps/server/src/services/app-deployment-dispatcher.ts</code> streams a size-limited Git archive to S3 and enqueues a versioned SQS job.</li>
+            <li><code>apps/server/src/routes/app-deployment-callback.ts</code> authenticates internal deployment status updates.</li>
+            <li><code>AppDeploymentCard.tsx</code> displays queued/building/deploying/live/failed state and the live URL.</li>
+          </ul>
+        </div>
+        <div class="view-panel" data-view-group="current-state" data-view-panel="ops">
+          <h3>Build and data primitives are present</h3>
+          <ul class="compact-list">
+            <li><code>infra/lib/app-deployment-stack.ts</code> owns the queue, worker, CodeBuild project, ECR repository, ECS cluster, and shared task roles.</li>
+            <li><code>infra/lambda/app-deployment-worker/index.ts</code> validates provenance and starts CodeBuild idempotently.</li>
+            <li><code>infra/lib/data-stack.ts</code> can create a separate Aurora PostgreSQL app-data cluster and proxy when <code>enableAppData</code> is enabled.</li>
+            <li>Wildcard app DNS reaches the ALB, but the listener deliberately returns the placeholder “App gateway is not deployed.”</li>
+          </ul>
+        </div>
+        <div class="view-panel" data-view-group="current-state" data-view-panel="gap">
+          <h3>The current workflow stops at “deploying”</h3>
+          <p>No component provisions an app database, runs migrations, creates an ECS service, verifies health, or promotes the wildcard route. The Aurora feature is intentionally disabled in production examples.</p>
+          <p>The smoke script is also stale: <code>scripts/smoke-cloud-app-session.mjs</code> still expects the old public-preview mutation and a development Redis process.</p>
+        </div>
+        <div class="callout risk" style="margin-top: 12px">
+          <strong>Repository prerequisite:</strong> both open feature branches are behind their
+          respective default branches. Implementation starts by rebasing the Trace and trace-ops
+          work, resolving contracts together, and rerunning both suites before adding behavior.
+        </div>
+      </section>
+
+      <section>
+        <h2>System boundary</h2>
+        <div class="toolbar" data-view-switcher="architecture" aria-label="Architecture view">
+          <button type="button" data-view="development" aria-pressed="false">Development</button>
+          <button type="button" data-view="published" aria-pressed="true">Published</button>
+        </div>
+        <div class="view-panel" data-view-group="architecture" data-view-panel="development">
+          <h3>Disposable development path</h3>
+          <div class="flow">
+            <div class="node"><b>Canvas / session</b><span>live workspace</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><b>Cloud runtime</b><span>Vite + local services</span></div>
+            <div class="arrow">→</div>
+            <div class="node"><b>Preview URL</b><span>dies on hibernation</span></div>
+          </div>
+          <p>The last committed checkpoint remains durable; local runtime processes and its local PostgreSQL data do not.</p>
+        </div>
+        <div class="view-panel" data-view-group="architecture" data-view-panel="published">
+          <h3>Independent published path</h3>
+          <div class="flow">
+            <div class="node"><b>Trace service</b><span>desired state + events</span></div>
+            <div class="arrow">→</div>
+            <div class="node is-new"><b>AWS workflow</b><span>build · migrate · reconcile</span></div>
+            <div class="arrow">→</div>
+            <div class="node is-new"><b>ECS + Aurora</b><span>runtime + durable data</span></div>
+            <div class="arrow">→</div>
+            <div class="node is-new"><b>App gateway</b><span>stable public route</span></div>
+          </div>
+          <p>Session hibernation touches none of these resources. A publish is an explicit deployment, not a preview visibility toggle.</p>
+        </div>
+        <div class="legend">
+          <span class="new"><i></i>new durable boundary</span>
+          <span class="durable"><i></i>persists independently</span>
+          <span class="ephemeral"><i></i>development-only</span>
+        </div>
+      </section>
+
+      <section>
+        <h2>End-to-end publish flow</h2>
+        <div class="diagram" aria-label="Published app architecture">
+          <svg class="diagram-svg" viewBox="0 0 820 430" role="img">
+            <title>Durable published application architecture</title>
+            <desc>Trace records desired state and invokes an AWS workflow that builds, provisions data, migrates, deploys, verifies, and promotes a route.</desc>
+            <defs>
+              <marker id="plan-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)" />
+              </marker>
+            </defs>
+            <path class="edge" marker-end="url(#plan-arrow)" d="M160 65 H238" />
+            <path class="edge" marker-end="url(#plan-arrow)" d="M388 65 H462" />
+            <path class="edge" marker-end="url(#plan-arrow)" d="M612 65 H680 V145" />
+            <path class="edge" marker-end="url(#plan-arrow)" d="M605 175 H510" />
+            <path class="edge" marker-end="url(#plan-arrow)" d="M360 175 H265" />
+            <path class="edge" marker-end="url(#plan-arrow)" d="M190 205 V285" />
+            <path class="edge" marker-end="url(#plan-arrow)" d="M265 315 H360" />
+            <path class="edge" marker-end="url(#plan-arrow)" d="M510 315 H605" />
+            <path class="edge" marker-end="url(#plan-arrow)" d="M680 285 V220" />
+            <path class="edge" marker-end="url(#plan-arrow)" d="M605 355 H510 V390 H160 V95" />
+
+            <rect class="box" x="20" y="35" width="140" height="60" rx="8" />
+            <text x="90" y="61">Publish action</text><text class="edge-label" x="90" y="79">committed SHA only</text>
+            <rect class="box" x="238" y="35" width="150" height="60" rx="8" />
+            <text x="313" y="61">Trace service</text><text class="edge-label" x="313" y="79">event + desired state</text>
+            <rect class="box is-new" x="462" y="35" width="150" height="60" rx="8" />
+            <text x="537" y="61">S3 + SQS</text><text class="edge-label" x="537" y="79">source + v2 job</text>
+            <rect class="box is-new" x="605" y="145" width="150" height="60" rx="8" />
+            <text x="680" y="171">Step Functions</text><text class="edge-label" x="680" y="189">durable orchestration</text>
+            <rect class="box is-new" x="360" y="145" width="150" height="60" rx="8" />
+            <text x="435" y="171">CodeBuild → ECR</text><text class="edge-label" x="435" y="189">immutable digest</text>
+            <rect class="box is-new" x="115" y="145" width="150" height="60" rx="8" />
+            <text x="190" y="171">Data provisioner</text><text class="edge-label" x="190" y="189">DB + role + secret</text>
+            <rect class="box is-new" x="115" y="285" width="150" height="60" rx="8" />
+            <text x="190" y="311">Migration task</text><text class="edge-label" x="190" y="329">same image, no traffic</text>
+            <rect class="box is-new" x="360" y="285" width="150" height="60" rx="8" />
+            <text x="435" y="311">ECS service</text><text class="edge-label" x="435" y="329">private Fargate task</text>
+            <rect class="box is-new" x="605" y="285" width="150" height="60" rx="8" />
+            <text x="680" y="311">App gateway</text><text class="edge-label" x="680" y="329">atomic route promotion</text>
+            <text class="edge-label" x="335" y="382">authenticated callbacks: phase, digest, runtime identity, URL, failure</text>
+          </svg>
+        </div>
+        <ol>
+          <li>Trace locks the app, chooses the latest checkpoint, creates a deployment record, uploads the source archive, and enqueues a versioned job.</li>
+          <li>A Standard Step Functions execution named by deployment ID owns retries and ordering: build → provision/reuse data → migrate → reconcile ECS → verify → promote.</li>
+          <li>Each phase calls Trace’s internal callback. The service layer validates the transition, records it, and emits the event consumed by the UI.</li>
+          <li>The previous live route remains active until the replacement passes all gates. Any failure marks the attempt failed without taking the prior revision down.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>PostgreSQL lifecycle</h2>
+        <div class="split">
+          <div class="card">
+            <h3>Identity and isolation</h3>
+            <ul>
+              <li>Stable app UUID maps to a generated database name and login role; slugs never become SQL identifiers.</li>
+              <li>A VPC-only provisioner uses the Aurora admin secret. The app never receives it.</li>
+              <li>The app receives only its own <code>DATABASE_URL</code> through ECS secret injection.</li>
+              <li>The execution role may read the generated-app secret prefix; the container task role receives no Secrets Manager or control-plane data permission.</li>
+              <li>Connections require TLS and the starter caps its pool at two connections.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Creation, reuse, deletion</h3>
+            <ul>
+              <li>First publish: create database, login, grants, and secret idempotently.</li>
+              <li>Republish/rollback: reuse the same data binding and run the target image's migration command.</li>
+              <li>Task replacement or dev hibernation: no database change.</li>
+              <li>Unpublish: remove route and stop ECS; retain database by default.</li>
+              <li>Permanent app deletion: explicit destructive flow revokes role, schedules final backup/retention, then drops data.</li>
+            </ul>
+          </div>
+        </div>
+        <details>
+          <summary>Conclusion: the app’s data survives every runtime lifecycle event except explicit permanent deletion</summary>
+          <div class="detail-body">
+            <p>The authoritative app-to-database mapping lives in Trace as an <code>AppDataBinding</code>. It records the shard, generated identifiers, secret ARN, and lifecycle state—but never the password. Provisioning uses PostgreSQL advisory locking plus existence/ownership checks so queue retries cannot create divergent identities.</p>
+          </div>
+        </details>
+      </section>
+
+      <section>
+        <h2>State and failure semantics</h2>
+        <div class="status-line" aria-label="Deployment state machine">
+          <span class="status-step">queued</span><span class="status-arrow">→</span>
+          <span class="status-step">building</span><span class="status-arrow">→</span>
+          <span class="status-step">provisioning_data</span><span class="status-arrow">→</span>
+          <span class="status-step">migrating</span><span class="status-arrow">→</span>
+          <span class="status-step">deploying</span><span class="status-arrow">→</span>
+          <span class="status-step">verifying</span><span class="status-arrow">→</span>
+          <span class="status-step live">live</span>
+        </div>
+        <div class="callout risk">
+          <strong>Every non-terminal phase may fail.</strong> Trace records a safe error summary and
+          external execution ID. Source secrets and database URLs are scrubbed. A failed attempt
+          never promotes its route, and the last live revision remains served.
+        </div>
+        <details>
+          <summary>Conclusion: supersede pending attempts, never supersede the last live deployment until promotion succeeds</summary>
+          <div class="detail-body">
+            <ul>
+              <li>A new publish supersedes older queued/in-progress desired state, but running AWS executions receive a cancellation signal and still finish cleanup.</li>
+              <li>Republishing the same deployment ID or checkpoint is idempotent across SQS delivery, Step Functions start, database provisioning, task-definition registration, and route promotion.</li>
+              <li>Migration failure leaves the current ECS service and route unchanged. Rollback deploys a previous image as a new attempt and reuses the database; it does not automatically reverse schema.</li>
+            </ul>
+          </div>
+        </details>
+      </section>
+
+      <section>
+        <h2>Implementation phases</h2>
+        <div class="phase" data-step="0">
+          <h3>Rebase and establish a green baseline</h3>
+          <p>Bring both open branches onto current default branches, resolve shared contract drift, and prove existing deployment tests still pass.</p>
+          <details><summary>Gate: no feature work proceeds on stale branch assumptions</summary><div class="detail-body"><p>Revalidate PR #728 in Trace and PR #5 in trace-ops, including generated GraphQL types, Prisma migration history, CDK synthesis, worker tests, and current production configuration.</p></div></details>
+        </div>
+        <div class="phase" data-step="1">
+          <h3>Define durable contracts and desired state</h3>
+          <p>Add <code>AppDataBinding</code>, richer deployment phases/runtime identifiers, full event payloads, and a backward-compatible v2 deployment job.</p>
+          <details><summary>Gate: service transitions, concurrency, authorization, and event replay are covered by tests</summary><div class="detail-body"><p>GraphQL resolvers remain thin. The service layer alone creates deployments and events. Job parsing supports v1 only for safe draining during rollout; all new jobs are v2.</p></div></details>
+        </div>
+        <div class="phase" data-step="2">
+          <h3>Make the app source contract deployable</h3>
+          <p>Version <code>.trace/app-starter.json</code> with runtime port, health path, migration command, and PostgreSQL requirement; teach validation to reject an unstartable image before build.</p>
+          <details><summary>Gate: the starter app demonstrates durable reads/writes and idempotent migrations</summary><div class="detail-body"><p>Replace the in-memory-only note path with a small PostgreSQL-backed example, add a migration command, bound the <code>pg</code> pool, and document that local development data is disposable while published data is durable.</p></div></details>
+        </div>
+        <div class="phase" data-step="3">
+          <h3>Provision isolated PostgreSQL data</h3>
+          <p>Enable the app-data cluster behind an environment flag and add a VPC provisioner that creates/reuses the database, login, grants, and per-app secret.</p>
+          <details><summary>Gate: retrying the same request returns the same binding; app A cannot connect to app B</summary><div class="detail-body"><p>Use UUID-derived identifiers, quoted SQL identifiers, advisory locks, TLS, explicit statement/connect timeouts, secret rotation metadata, and no admin credential in deployment payloads or logs.</p></div></details>
+        </div>
+        <div class="phase" data-step="4">
+          <h3>Orchestrate build and migrations durably</h3>
+          <p>Replace the one-hop Lambda flow with a Standard Step Functions execution: CodeBuild sync, provision data, run migration task, and report guarded phase callbacks.</p>
+          <details><summary>Gate: timeouts and duplicate SQS delivery converge; migration failure preserves the old live app</summary><div class="detail-body"><p>Use execution names derived from deployment IDs. Disable execution-data logging for secrets, sanitize callbacks, put bounded retries only around transient AWS/database errors, and send deterministic failures to Trace and the DLQ.</p></div></details>
+        </div>
+        <div class="phase" data-step="5">
+          <h3>Reconcile the private ECS service</h3>
+          <p>Register a digest-pinned task definition, inject only the app secret, create/update one desired-count-1 Fargate service, and wait for ECS and application health.</p>
+          <details><summary>Gate: forced task replacement retains data and the container cannot reach control-plane PostgreSQL or Redis</summary><div class="detail-body"><p>Use private subnets, no public IP, app-runtime and app-data security groups, deployment circuit breaker, CloudWatch logs, resource bounds, health endpoint, and shared task role with no app secrets available to container code.</p></div></details>
+        </div>
+        <div class="phase" data-step="6">
+          <h3>Deploy the app gateway and promote routes</h3>
+          <p>Replace the wildcard ALB 404 target with a dedicated gateway service. App tasks establish authenticated outbound registrations; promotion atomically switches the app slug only after health.</p>
+          <details><summary>Gate: old revision serves until the new revision is ready; invalid registration cannot claim another slug</summary><div class="detail-body"><p>The durable slug-to-deployment mapping stays in Trace/PostgreSQL. Runtime registrations are transient gateway state. No generated app receives Trace's Redis URL; infrastructure may use the existing control-plane Redis later for gateway HA, but v1 can run one gateway task.</p></div></details>
+        </div>
+        <div class="phase" data-step="7">
+          <h3>Complete UI, lifecycle controls, and observability</h3>
+          <p>Show all phases and actionable failures; add unpublish/rollback/delete behavior; emit metrics and alarms for stuck workflows, unhealthy services, connection pressure, and DLQ messages.</p>
+          <details><summary>Gate: UI is event-driven and lifecycle actions have explicit retention semantics</summary><div class="detail-body"><p>The application card consumes full deployment events from Zustand, never mutation results. Unpublish retains data, rollback is a new deployment attempt, and permanent deletion is separately authorized and auditable.</p></div></details>
+        </div>
+        <div class="phase" data-step="8">
+          <h3>Prove persistence in staging, then canary production</h3>
+          <p>Rewrite the cloud-app smoke test around the durable deployment API and run a real AWS acceptance matrix before enabling the production flag.</p>
+          <details><summary>Gate: published app and its PostgreSQL data survive session hibernation, task replacement, and republish</summary><div class="detail-body"><p>Deploy disabled infrastructure first, enable one internal app, observe cost/connections/errors, then allow a small canary cohort. Remove the old preview-publish behavior only after the durable path is verified.</p></div></details>
+        </div>
+      </section>
+
+      <section>
+        <h2>Expected file impact</h2>
+        <div class="toolbar" data-file-filters aria-label="Filter file changes">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="add" aria-pressed="false">New</button>
+          <button type="button" data-filter="change" aria-pressed="false">Changed</button>
+        </div>
+        <table data-file-table>
+          <thead><tr><th>Repository / path</th><th>Change</th><th>Responsibility</th></tr></thead>
+          <tbody>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>apps/server/prisma/schema.prisma</code> + migration</td><td><span class="tag change">edit</span></td><td>Add data binding, deployment phases, and runtime/route identities.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>packages/gql/src/schema.graphql</code> + generated types</td><td><span class="tag change">edit</span></td><td>Expose lifecycle state and safe diagnostic metadata.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>packages/shared/src/app-deployment.ts</code></td><td><span class="tag change">edit</span></td><td>Version the deployment job and manifest contract.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>apps/server/src/services/app-deployment*.ts</code></td><td><span class="tag change">edit</span></td><td>Desired state, transition guards, cancellation, lifecycle actions, and full events.</td></tr>
+            <tr data-change="add"><td><span class="repo-label">Trace</span><br><code>apps/server/src/services/app-data.ts</code></td><td><span class="tag add">new</span></td><td>Own app-data binding state and callback validation.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>apps/web/src/components/session/applications/*</code></td><td><span class="tag change">edit</span></td><td>Phase progress, errors, URL, unpublish, and rollback controls via events.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>apps/container-bridge/app-starter/*</code></td><td><span class="tag change">edit</span></td><td>Deploy manifest, migration command, health endpoint, bounded PostgreSQL pool, durable sample.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>scripts/smoke-cloud-app-session.mjs</code></td><td><span class="tag change">rewrite</span></td><td>Wait for durable deployment, write/read data, hibernate session, replace task, republish.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">trace-ops</span><br><code>infra/lib/data-stack.ts</code></td><td><span class="tag change">edit</span></td><td>Wire app-runtime TLS access to Aurora and production feature flags.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">trace-ops</span><br><code>infra/lib/app-deployment-stack.ts</code></td><td><span class="tag change">edit</span></td><td>Add state machine, ECS reconciliation, migration tasks, gateway, IAM, alarms.</td></tr>
+            <tr data-change="add"><td><span class="repo-label">trace-ops</span><br><code>infra/lambda/app-data-provisioner/*</code></td><td><span class="tag add">new</span></td><td>Idempotent database/role/secret creation and teardown.</td></tr>
+            <tr data-change="add"><td><span class="repo-label">trace-ops</span><br><code>infra/lambda/app-runtime-reconciler/*</code></td><td><span class="tag add">new</span></td><td>Task definitions, ECS service health, cancellation, and route promotion.</td></tr>
+            <tr data-change="add"><td><span class="repo-label">Trace + trace-ops</span><br><code>apps/app-gateway/*</code> + gateway CDK resources</td><td><span class="tag add">new</span></td><td>Authenticated app registration and wildcard host routing.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Both</span><br><code>docs/*deployment*</code> + tests</td><td><span class="tag change">edit</span></td><td>Operational contract, recovery playbook, CDK assertions, and failure tests.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Verification matrix</h2>
+        <table>
+          <thead><tr><th>Gate</th><th>Proof</th></tr></thead>
+          <tbody>
+            <tr><td>Contract and service</td><td>Unit tests cover authorization, checkpoint selection, advisory locking, duplicate jobs, all valid/invalid transitions, event payload completeness, supersede, unpublish, rollback, and deletion.</td></tr>
+            <tr><td>Infrastructure</td><td>CDK assertions verify private networking, least-privilege roles, secret injection, no public task IP, state-machine catches/timeouts, DLQ, alarms, and feature-flagged production resources.</td></tr>
+            <tr><td>Database isolation</td><td>Integration test proves app A reads/writes A, cannot connect to B, cannot access the admin database, and receives no admin or control-plane credentials.</td></tr>
+            <tr><td>Migration safety</td><td>First publish migrates once; duplicate delivery converges; a failing migration leaves the previous live revision and route untouched.</td></tr>
+            <tr><td>Runtime durability</td><td>Create a counter, stop the ECS task, wait for replacement, and confirm the counter persists. Republish and confirm it persists again.</td></tr>
+            <tr><td>Session independence</td><td>Hibernate/deprovision the development session and confirm the public URL and database-backed read/write path remain available.</td></tr>
+            <tr><td>Promotion and rollback</td><td>New revision is invisible until healthy; route switches once; rollback deploys the old image without dropping data; unpublish removes route but preserves data.</td></tr>
+            <tr><td>Build quality</td><td><code>pnpm gql:codegen</code>, focused package tests, <code>pnpm build</code>, trace-ops unit tests, <code>cdk synth</code>, and the rewritten staging smoke command all pass.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Risks and mitigations</h2>
+        <div class="callout risk"><strong>Aurora connection exhaustion.</strong> Direct connections are simple but finite. Enforce a pool cap of two per task, desired count one, connection timeouts, Aurora alarms, and a canary concurrency gate; revisit proxying before autoscaling.</div>
+        <div class="callout risk"><strong>Cross-app credential exposure.</strong> Never pass the admin secret through jobs. ECS injects only the referenced app secret, the container task role has no Secrets Manager permission, SQL identities are UUID-derived, and isolation gets a negative integration test.</div>
+        <div class="callout risk"><strong>Migration damages shared live data.</strong> Run migrations before traffic, require idempotent expand/migrate/contract changes, keep timeouts and logs, and never attempt automatic down migrations on rollback.</div>
+        <div class="callout risk"><strong>Orchestrator retries create duplicate AWS resources.</strong> Use deployment ID as the Step Functions execution key and stable names for database, service, task family, and route; every reconciler performs describe-before-create/update.</div>
+        <div class="callout risk"><strong>Gateway becomes a new availability boundary.</strong> Start with one task only for the gated v1 rollout, add health/alarms and restart recovery, keep the route mapping durable in Trace, and require a tested HA design before wider production scale.</div>
+      </section>
+
+      <section>
+        <h2>Approval means</h2>
+        <div class="callout">
+          <strong>Proceed with this sequence and boundary:</strong> two coordinated repositories,
+          durable AWS orchestration, database-per-app on shared Aurora, direct TLS for v1, no
+          generated-app Redis, and route promotion only after migration and health. Implementation
+          will stop at each phase gate if the stated verification does not pass.
+        </div>
+      </section>
+    </article>
+    <script>
+      (() => {
+        document.querySelectorAll("[data-view-switcher]").forEach((switcher) => {
+          const group = switcher.dataset.viewSwitcher;
+          const buttons = [...switcher.querySelectorAll("[data-view]")];
+          const panels = [...document.querySelectorAll(`[data-view-group="${group}"]`)];
+
+          const selectView = (view) => {
+            buttons.forEach((button) => {
+              button.setAttribute("aria-pressed", String(button.dataset.view === view));
+            });
+            panels.forEach((panel) => {
+              panel.hidden = panel.dataset.viewPanel !== view;
+            });
+          };
+
+          buttons.forEach((button) => {
+            button.addEventListener("click", () => selectView(button.dataset.view));
+          });
+          selectView(
+            buttons.find((button) => button.getAttribute("aria-pressed") === "true")?.dataset.view,
+          );
+        });
+
+        document.querySelectorAll("[data-file-filters]").forEach((filters) => {
+          const buttons = [...filters.querySelectorAll("[data-filter]")];
+          const rows = [...document.querySelectorAll("[data-file-table] [data-change]")];
+
+          buttons.forEach((button) => {
+            button.addEventListener("click", () => {
+              const filter = button.dataset.filter;
+              buttons.forEach((candidate) => {
+                candidate.setAttribute("aria-pressed", String(candidate === button));
+              });
+              rows.forEach((row) => {
+                row.hidden = filter !== "all" && row.dataset.change !== filter;
+              });
+            });
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>
