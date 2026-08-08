@@ -9,6 +9,7 @@ import {
   type BridgeWorkspaceWarning,
   type BridgeRepoWorktree,
   type BridgeRuntimeLeaseCommand,
+  type CodingToolCatalog,
   type GitCheckpointContext,
 } from "@trace/shared";
 import { runtimeRouterKey, sessionRouter } from "./session-router.js";
@@ -79,6 +80,24 @@ function parseSupportedTools(value: unknown): CodingTool[] | null {
   // the tools the server *does* support (that silently dropped cursor_composer
   // and pi before). Returns null only when the field isn't a string array.
   return tools.filter((tool): tool is CodingTool => CODING_TOOLS.has(tool as CodingTool));
+}
+
+/** Reject raw provider output at the protocol boundary; catalog diagnostics are
+ * deliberately constrained to the normalized fields emitted by bridges. */
+function parseProviderCatalog(value: unknown): CodingToolCatalog | undefined {
+  const catalog = jsonRecord(value);
+  if (!catalog || (catalog.scope !== "global" && catalog.scope !== "workspace")) return undefined;
+  if (typeof catalog.fetchedAt !== "string" || typeof catalog.hash !== "string") return undefined;
+  if (!Array.isArray(catalog.entries) || catalog.entries.length > CODING_TOOL_IDS.length) return undefined;
+  if (!catalog.entries.every((entry) => {
+    const item = jsonRecord(entry);
+    return item && typeof item.tool === "string" &&
+      (item.availability === "ready" || item.availability === "unavailable" || item.availability === "error") &&
+      (item.source === "discovered" || item.source === "fallback") &&
+      Array.isArray(item.models) && Array.isArray(item.reasoningEfforts) && Array.isArray(item.features) &&
+      typeof item.discoveredAt === "string";
+  })) return undefined;
+  return catalog as unknown as CodingToolCatalog;
 }
 
 function isCompatibleProtocolVersion(value: unknown): boolean {
@@ -424,6 +443,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
             "custom",
           ];
           const registeredRepoIds = stringArray(msg.registeredRepoIds) ?? [];
+          const providerCatalog = parseProviderCatalog(msg.providerCatalog);
           const capabilities = stringArray(msg.capabilities) ?? [];
 
           runtimeDebug("received runtime_hello", {
@@ -497,6 +517,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               ownerUserId: bridgeRuntime.ownerUserId,
               bridgeRuntimeId: bridgeRuntime.id,
               supportedTools,
+              providerCatalog,
               protocolVersion: typeof msg.protocolVersion === "number" ? msg.protocolVersion : 1,
               registeredRepoIds,
               connectedAt: bridgeRuntime.connectedAt,
@@ -611,6 +632,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               organizationId: bridgeAuth.organizationId,
               ownerUserId: bridgeAuth.userId,
               supportedTools,
+              providerCatalog,
               protocolVersion: msg.protocolVersion as number | undefined,
               registeredRepoIds,
             });

@@ -2593,6 +2593,7 @@ export type SessionRuntimeInstance = {
   hostingMode: HostingMode;
   id: Scalars["ID"]["output"];
   label: Scalars["String"]["output"];
+  providerCatalog?: Maybe<Scalars["JSON"]["output"]>;
   registeredRepoIds: Array<Scalars["ID"]["output"]>;
   sessionCount: Scalars["Int"]["output"];
   supportedTools: Array<CodingTool>;
@@ -5718,6 +5719,7 @@ export type SessionRuntimeInstanceResolvers<
   hostingMode?: Resolver<ResolversTypes["HostingMode"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
   label?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  providerCatalog?: Resolver<Maybe<ResolversTypes["JSON"]>, ParentType, ContextType>;
   registeredRepoIds?: Resolver<Array<ResolversTypes["ID"]>, ParentType, ContextType>;
   sessionCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
   supportedTools?: Resolver<Array<ResolversTypes["CodingTool"]>, ParentType, ContextType>;

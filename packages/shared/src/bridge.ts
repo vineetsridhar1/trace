@@ -4,6 +4,7 @@
  */
 
 import type { GitCheckpointBridgePayload, GitCheckpointContext } from "./git-checkpoint.js";
+import type { CodingToolCatalog } from "./adapters/coding-tool.js";
 
 // --- Server → Bridge commands ---
 
@@ -532,6 +533,8 @@ export interface BridgeRuntimeHello {
   /** Optional protocol features this bridge has actively enabled. */
   capabilities?: string[];
   supportedTools: string[];
+  /** Sanitized provider catalog discovered on this runtime. */
+  providerCatalog?: CodingToolCatalog;
   /** Repo IDs this bridge has locally registered (device bridges only). Empty for cloud. */
   registeredRepoIds: string[];
   /** Active terminal ptys still running on this bridge (reported on reconnect). */

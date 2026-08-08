@@ -16,6 +16,9 @@ export type {
   QuestionBlock,
   TraceInputResponse,
   PlanBlock,
+  CodingToolCatalog,
+  CodingToolCatalogEntry,
+  DiscoverCatalogOptions,
 } from "./adapters/coding-tool.js";
 export {
   DESIGN_SYSTEM_LIMITS,

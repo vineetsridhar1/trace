@@ -423,6 +423,45 @@ export interface RunOptions {
   runtimeEnv?: Record<string, string>;
 }
 
+/** A sanitized, runtime-reported description of one coding-tool provider. */
+export type CodingToolCatalogEntry = {
+  tool: string;
+  availability: "ready" | "unavailable" | "error";
+  source: "discovered" | "fallback";
+  version?: string;
+  models: string[];
+  reasoningEfforts: string[];
+  features: string[];
+  discoveredAt: string;
+  diagnostic?: {
+    code:
+      | "executable_missing"
+      | "unsupported_version"
+      | "unauthenticated"
+      | "timeout"
+      | "malformed_response"
+      | "unknown";
+    message: string;
+    remediation?: string;
+  };
+};
+
+export type CodingToolCatalog = {
+  scope: "global" | "workspace";
+  workspacePath?: string;
+  entries: CodingToolCatalogEntry[];
+  fetchedAt: string;
+  hash: string;
+};
+
+export interface DiscoverCatalogOptions {
+  scope: "global" | "workspace";
+  /** A bridge must validate this path against its authorized workdir before use. */
+  workspacePath?: string;
+  force?: boolean;
+  signal?: AbortSignal;
+}
+
 /**
  * Interface for coding tool adapters (Claude Code, Cursor, etc.).
  * Implementations spawn and manage a coding tool process.
@@ -434,4 +473,6 @@ export interface CodingToolAdapter {
   abort(): void;
   /** Return the tool-specific session/thread ID for resume, if available */
   getSessionId?(): string | null;
+  /** Optional provider-native discovery. Generic fallback remains runtime-owned. */
+  discoverCatalog?(options: DiscoverCatalogOptions): Promise<CodingToolCatalogEntry>;
 }

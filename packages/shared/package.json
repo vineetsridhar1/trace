@@ -28,6 +28,11 @@
       "import": "./dist/adapters.js",
       "require": "./dist/cjs/adapters.js"
     },
+    "./runtime-provider-catalog": {
+      "types": "./dist/runtime-provider-catalog.d.ts",
+      "import": "./dist/runtime-provider-catalog.js",
+      "require": "./dist/cjs/runtime-provider-catalog.js"
+    },
     "./trace-runtime": {
       "types": "./dist/trace-runtime.d.ts",
       "import": "./dist/trace-runtime.js",

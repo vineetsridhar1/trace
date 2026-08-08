@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { BridgeLinkedCheckoutStatus } from "@trace/shared";
+import type { BridgeLinkedCheckoutStatus, CodingToolCatalog } from "@trace/shared";
 import { redis } from "./redis.js";
 import { realtimeBackplane, type BackplaneEnvelope } from "./realtime-backplane.js";
 
@@ -25,6 +25,7 @@ export type RuntimeDescriptor = {
   ownerUserId?: string;
   bridgeRuntimeId?: string;
   supportedTools: string[];
+  providerCatalog?: CodingToolCatalog;
   protocolVersion?: number;
   registeredRepoIds: string[];
   linkedCheckoutStatuses: BridgeLinkedCheckoutStatus[];
@@ -70,6 +71,10 @@ function descriptorFrom(value: unknown): RuntimeDescriptor | null {
       !Array.isArray(item.linkedCheckoutStatusObservedAt)
         ? (item.linkedCheckoutStatusObservedAt as Record<string, number>)
         : {},
+    providerCatalog:
+      item.providerCatalog && typeof item.providerCatalog === "object" && !Array.isArray(item.providerCatalog)
+        ? (item.providerCatalog as CodingToolCatalog)
+        : undefined,
   } as unknown as RuntimeDescriptor;
 }
 

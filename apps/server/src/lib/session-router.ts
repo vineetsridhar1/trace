@@ -33,6 +33,7 @@ import type {
   BridgePdfExportCommand,
   BridgeAnimationExportCommand,
   BridgeDesignSystemExportCommand,
+  type CodingToolCatalog,
 } from "@trace/shared";
 import { prisma } from "./db.js";
 import { isGeneratedProjectKind } from "./generated-project.js";
@@ -116,6 +117,7 @@ export interface RuntimeInstance {
   ownerUserId?: string;
   bridgeRuntimeId?: string;
   supportedTools: string[];
+  providerCatalog?: CodingToolCatalog;
   protocolVersion?: number;
   /** Repo IDs this runtime has locally registered. Cloud runtimes use empty (supports all). */
   registeredRepoIds: string[];
@@ -542,6 +544,7 @@ export class SessionRouter {
     ownerUserId?: string;
     bridgeRuntimeId?: string;
     supportedTools: string[];
+    providerCatalog?: CodingToolCatalog;
     protocolVersion?: number;
     registeredRepoIds?: string[];
     connectedAt?: Date | null;
@@ -570,6 +573,7 @@ export class SessionRouter {
         ownerUserId: runtime.ownerUserId ?? existing?.ownerUserId,
         bridgeRuntimeId: runtime.bridgeRuntimeId ?? existing?.bridgeRuntimeId,
         supportedTools: runtime.supportedTools,
+        providerCatalog: runtime.providerCatalog,
         protocolVersion: runtime.protocolVersion,
         registeredRepoIds: runtime.registeredRepoIds ?? existing?.registeredRepoIds ?? [],
         linkedCheckoutStatuses: [...linkedCheckouts.values()].map(linkedCheckoutSnapshot),

@@ -2592,6 +2592,7 @@ export type SessionRuntimeInstance = {
   hostingMode: HostingMode;
   id: Scalars["ID"]["output"];
   label: Scalars["String"]["output"];
+  providerCatalog?: Maybe<Scalars["JSON"]["output"]>;
   registeredRepoIds: Array<Scalars["ID"]["output"]>;
   sessionCount: Scalars["Int"]["output"];
   supportedTools: Array<CodingTool>;

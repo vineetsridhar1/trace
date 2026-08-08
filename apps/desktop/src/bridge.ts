@@ -51,6 +51,8 @@ import {
   PiAdapter,
   resolveExecutable,
 } from "@trace/shared/adapters";
+import { CODING_TOOL_IDS } from "@trace/shared";
+import { discoverRuntimeProviderCatalog } from "@trace/shared/runtime-provider-catalog";
 import { getBridgeLabel, getOrCreateInstanceId, getRepoConfig, readConfig } from "./config.js";
 import {
   commitLinkedCheckoutChanges,
@@ -478,7 +480,7 @@ export class BridgeClient implements IBridgeClient {
       console.log("[bridge] connected to server");
       runtimeDebug("desktop bridge websocket open", { instanceId: this.instanceId });
       this.setStatus("connected");
-      this.sendRuntimeHello();
+      void this.sendRuntimeHello();
       this.flushOutbox();
       this.startHeartbeat();
       this.startHookQueueDrain();
@@ -614,13 +616,13 @@ export class BridgeClient implements IBridgeClient {
 
   updateLabel() {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.sendRuntimeHello();
+      void this.sendRuntimeHello();
     }
   }
 
   refreshCapabilities() {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.sendRuntimeHello();
+      void this.sendRuntimeHello();
     }
   }
 
@@ -724,7 +726,7 @@ export class BridgeClient implements IBridgeClient {
     return this.adapters.get(sessionId) === adapter && this.activeRuns.get(sessionId) === runId;
   }
 
-  private sendRuntimeHello() {
+  private async sendRuntimeHello() {
     // Announce identity — the server restores session bindings from the DB
     // using our stable instanceId, so we don't need to report session lists.
     const config = readConfig();
@@ -735,10 +737,15 @@ export class BridgeClient implements IBridgeClient {
     if (hasExecutable("pi")) supportedTools.push("pi");
     if (hasExecutable("agy")) supportedTools.push("antigravity");
     if (hasExecutable("cursor-agent")) supportedTools.push("cursor_composer");
+    const providerCatalog = await discoverRuntimeProviderCatalog({
+      tools: CODING_TOOL_IDS,
+      resolveExecutable,
+    });
     runtimeDebug("desktop bridge sending runtime_hello", {
       instanceId: this.instanceId,
       label,
       supportedTools,
+      providerCatalog,
       registeredRepoIds: Object.keys(config.repos),
     });
     this.send({
@@ -747,6 +754,7 @@ export class BridgeClient implements IBridgeClient {
       label,
       hostingMode: "local",
       supportedTools,
+      providerCatalog,
       registeredRepoIds: Object.keys(config.repos),
       activeTerminals: this.terminalManager.getActiveTerminals(),
     });

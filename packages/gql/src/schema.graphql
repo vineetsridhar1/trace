@@ -1113,6 +1113,7 @@ type SessionRuntimeInstance {
   label: String!
   hostingMode: HostingMode!
   supportedTools: [CodingTool!]!
+  providerCatalog: JSON
   connected: Boolean!
   sessionCount: Int!
   registeredRepoIds: [ID!]!

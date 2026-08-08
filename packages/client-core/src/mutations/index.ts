@@ -233,6 +233,7 @@ export const AVAILABLE_SESSION_RUNTIMES_QUERY = gql`
       label
       hostingMode
       supportedTools
+      providerCatalog
       connected
       sessionCount
       registeredRepoIds

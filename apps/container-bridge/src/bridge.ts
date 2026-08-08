@@ -48,6 +48,8 @@ import {
   PiAdapter,
   resolveExecutable,
 } from "@trace/shared/adapters";
+import { CODING_TOOL_IDS } from "@trace/shared";
+import { discoverRuntimeProviderCatalog } from "@trace/shared/runtime-provider-catalog";
 import {
   ensureRepo,
   createWorktree,
@@ -191,29 +193,7 @@ export class ContainerBridge implements IBridgeClient {
     });
 
     this.ws.on("open", () => {
-      console.log("[container-bridge] connected to server");
-      this.consecutiveFailures = 0;
-      const supportedTools = ["claude_code", "codex"];
-      if (hasExecutable("pi")) supportedTools.push("pi");
-      if (hasExecutable("agy")) supportedTools.push("antigravity");
-      if (hasExecutable("cursor-agent")) supportedTools.push("cursor_composer");
-      // Announce as a cloud runtime. Provisioned runtimes clone on demand, so
-      // they intentionally register no pre-existing repos.
-      this.send({
-        type: "runtime_hello",
-        instanceId: this.runtimeInstanceId,
-        label: this.runtimeInstanceId,
-        hostingMode: "cloud",
-        protocolVersion: BRIDGE_PROTOCOL_VERSION,
-        agentVersion: AGENT_VERSION,
-        capabilities: this.runtimeLeaseEnabled ? [RUNTIME_LEASE_CAPABILITY] : [],
-        supportedTools,
-        registeredRepoIds: [],
-        activeTerminals: this.terminalManager.getActiveTerminals(),
-      });
-      this.flushOutbox();
-
-      this.startHeartbeat();
+      void this.sendRuntimeHello();
     });
 
     this.ws.on("message", (data) => {
@@ -226,7 +206,7 @@ export class ContainerBridge implements IBridgeClient {
     });
 
     this.ws.on("close", () => {
-      console.log("[container-bridge] disconnected");
+      console.log("[container-bridge] disconnected to server");
       this.stopHeartbeat();
       this.scheduleReconnect();
     });
@@ -234,6 +214,37 @@ export class ContainerBridge implements IBridgeClient {
     this.ws.on("error", (err) => {
       console.error("[container-bridge] error:", err.message);
     });
+  }
+
+  private async sendRuntimeHello(): Promise<void> {
+      console.log("[container-bridge] connected to server");
+      this.consecutiveFailures = 0;
+      const supportedTools = ["claude_code", "codex"];
+      if (hasExecutable("pi")) supportedTools.push("pi");
+      if (hasExecutable("agy")) supportedTools.push("antigravity");
+      if (hasExecutable("cursor-agent")) supportedTools.push("cursor_composer");
+      const providerCatalog = await discoverRuntimeProviderCatalog({
+        tools: CODING_TOOL_IDS,
+        resolveExecutable,
+      });
+      // Announce as a cloud runtime. Provisioned runtimes clone on demand, so
+      // they intentionally register no pre-existing repos.
+      this.send({
+        type: "runtime_hello",
+        instanceId: this.runtimeInstanceId,
+        label: this.runtimeInstanceId,
+        hostingMode: "cloud",
+        protocolVersion: BRIDGE_PROTOCOL_VERSION,
+        agentVersion: AGENT_VERSION,
+        capabilities: this.runtimeLeaseEnabled ? [RUNTIME_LEASE_CAPABILITY] : [],
+        supportedTools,
+        providerCatalog,
+        registeredRepoIds: [],
+        activeTerminals: this.terminalManager.getActiveTerminals(),
+      });
+      this.flushOutbox();
+
+      this.startHeartbeat();
   }
 
   disconnect(): void {

@@ -4273,6 +4273,20 @@ export class SessionService {
       ? validateReasoningEffortForTool(tool, input.reasoningEffort)
       : (resolveStoredReasoningEffortForTool(tool, userDefaults?.defaultSessionReasoningEffort) ??
         getDefaultReasoningEffort(tool));
+    const selectedRuntime = requestedRuntimeInstanceId
+      ? runtimeMetadata(requestedRuntimeInstanceId, input.organizationId)
+      : undefined;
+    const catalogEntry = selectedRuntime?.providerCatalog?.entries.find((entry) => entry.tool === tool);
+    if (catalogEntry?.availability === "ready" && model && catalogEntry.models.length > 0 && !catalogEntry.models.includes(model)) {
+      throw new ValidationError(
+        `Model "${model}" is no longer available for ${tool} on ${selectedRuntime?.label ?? "the selected runtime"}. Refresh the runtime catalog and choose an available model.`,
+      );
+    }
+    if (catalogEntry?.availability !== "ready" && input.model) {
+      throw new ValidationError(
+        `${tool} is not ready on ${selectedRuntime?.label ?? "the selected runtime"}: ${catalogEntry?.diagnostic?.message ?? "refresh the runtime catalog or install/authenticate the tool."}`,
+      );
+    }
 
     // Tracked so we can clean up the managed repo if the session transaction
     // below rolls back (it's created before the txn because it initializes
@@ -9640,6 +9654,7 @@ export class SessionService {
           label: r.label,
           hostingMode: r.hostingMode,
           supportedTools: r.supportedTools,
+          providerCatalog: r.providerCatalog ?? null,
           connected: "ws" in r ? r.ws.readyState === r.ws.OPEN : r.expiresAt > Date.now(),
           sessionCount: sessionCounts.get(r.id) ?? 0,
           registeredRepoIds,
