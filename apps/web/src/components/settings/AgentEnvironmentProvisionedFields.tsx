@@ -45,7 +45,8 @@ export function AgentEnvironmentProvisionedFields({ draft, orgSecrets, update }:
           />
         </div>
         <p className="mt-1.5 text-xs leading-4 text-muted-foreground">
-          Requests are sent with the bearer secret below. Paths can live on any host you control.
+          HTTPS is required. A locally running Trace server can opt in to HTTP for exact loopback
+          hosts only; hosted Trace cannot reach your computer&apos;s localhost.
         </p>
       </div>
 

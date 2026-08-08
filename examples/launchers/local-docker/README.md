@@ -56,6 +56,11 @@ node examples/launchers/local-docker/server.mjs
 
 ## 4. Configure a provisioned Agent Environment
 
+Development mode accepts the loopback HTTP URLs below. If the Trace server is intentionally running
+with `NODE_ENV=production` on the same machine for local QA, start it with
+`TRACE_ALLOW_INSECURE_LOOPBACK_PROVISIONER=1`. Do not set that flag on hosted Trace: there,
+`localhost` refers to the Trace server/container rather than your computer.
+
 In the web app: **Settings → Agent Environments → New**, adapter type **provisioned**. Set:
 
 - Start URL: `http://localhost:8787/trace/start-session`
