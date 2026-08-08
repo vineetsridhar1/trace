@@ -1828,11 +1828,23 @@ export class SessionService {
     repoId: string;
   }): Promise<string[]> {
     if (params.hosting !== "local") return [];
-    const runtime = sessionRouter.getRuntimeForSession(params.sessionId);
-    if (!runtime) {
+    const localRuntime = sessionRouter.getRuntimeForSession(params.sessionId);
+    const session = localRuntime
+      ? null
+      : await prisma.session.findUnique({
+          where: { id: params.sessionId },
+          select: { connection: true },
+        });
+    const runtimeInstanceId =
+      localRuntime?.id ?? this.getConnectionRuntimeInstanceId(session?.connection);
+    if (!runtimeInstanceId) {
       throw new Error("Cannot allocate a local workspace slug before selecting a runtime");
     }
-    return sessionRouter.listWorkspaceSlugs(runtime.id, params.repoId, params.organizationId);
+    return sessionRouter.listWorkspaceSlugs(
+      runtimeInstanceId,
+      params.repoId,
+      params.organizationId,
+    );
   }
 
   /**

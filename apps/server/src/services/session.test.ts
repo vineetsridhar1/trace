@@ -48,6 +48,7 @@ vi.mock("../lib/session-router.js", () => ({
     isRuntimeAvailable: vi.fn().mockReturnValue(true),
     getRuntimeDiagnostics: vi.fn().mockReturnValue({}),
     listRuntimes: vi.fn().mockReturnValue([]),
+    listWorkspaceSlugs: vi.fn().mockResolvedValue([]),
     listBranches: vi.fn().mockResolvedValue([]),
     listFiles: vi.fn().mockResolvedValue([]),
     readFile: vi.fn().mockResolvedValue(""),
@@ -827,6 +828,37 @@ describe("SessionService", () => {
   });
 
   describe("start", () => {
+    it("loads workspace slugs from a selected runtime owned by another replica", async () => {
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        connection: { runtimeInstanceId: "runtime-b" },
+      } as never);
+      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce(undefined);
+      sessionRouterMock.listWorkspaceSlugs.mockResolvedValueOnce(["otter", "panda"]);
+
+      const workspaceSlugs = await (
+        service as unknown as {
+          loadRuntimeWorkspaceSlugs(input: {
+            sessionId: string;
+            organizationId: string;
+            hosting: string;
+            repoId: string;
+          }): Promise<string[]>;
+        }
+      ).loadRuntimeWorkspaceSlugs({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        hosting: "local",
+        repoId: "repo-1",
+      });
+
+      expect(workspaceSlugs).toEqual(["otter", "panda"]);
+      expect(sessionRouterMock.listWorkspaceSlugs).toHaveBeenCalledWith(
+        "runtime-b",
+        "repo-1",
+        "org-1",
+      );
+    });
+
     it("rejects a project outside the session organization", async () => {
       prismaMock.project.findFirst.mockResolvedValueOnce(null);
 
