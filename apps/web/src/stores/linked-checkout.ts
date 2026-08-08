@@ -268,12 +268,15 @@ export async function syncLinkedCheckout(
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const cachedStatus = useLinkedCheckoutStore.getState().statusByKey[key] ?? null;
     const status =
       (await refreshLinkedCheckoutStatus(
         request.repoId,
         request.sessionGroupId,
         request.runtimeInstanceId,
-      ).catch(() => null)) ?? emptyStatus(request.repoId);
+      ).catch(() => null)) ??
+      cachedStatus ??
+      emptyStatus(request.repoId);
     useLinkedCheckoutStore.getState().setStatus(key, status);
     return { ok: false, error: message, status };
   } finally {

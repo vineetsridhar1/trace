@@ -510,7 +510,7 @@ export class SessionRouter {
   static HEARTBEAT_TIMEOUT_MS = 30_000;
   static DIRECTORY_TTL_MS = 45_000;
 
-  registerRuntime(runtime: {
+  async registerRuntime(runtime: {
     key?: string;
     id: string;
     label: string;
@@ -522,7 +522,7 @@ export class SessionRouter {
     supportedTools: string[];
     protocolVersion?: number;
     registeredRepoIds?: string[];
-  }) {
+  }): Promise<boolean> {
     const runtimeKey = runtime.key ?? runtime.id;
     const existing = this.runtimes.get(runtimeKey);
     const existingDescriptor = runtimeDirectory.get(runtimeKey);
@@ -536,18 +536,7 @@ export class SessionRouter {
       new Map(
         (existingDescriptor?.linkedCheckoutStatuses ?? []).map((status) => [status.repoId, status]),
       );
-    if (existing && existing.ws !== runtime.ws) {
-      runtimeDebug("replacing runtime websocket", {
-        runtimeId: runtime.id,
-        previousLabel: existing.label,
-        previousReadyState: existing.ws.readyState,
-        preservedBoundSessions: [...boundSessions],
-      });
-      if (existing.ws.readyState === existing.ws.OPEN) {
-        existing.ws.close(1012, "Runtime ownership replaced");
-      }
-    }
-    const descriptor = runtimeDirectory.createDescriptor(
+    const pendingDescriptor = runtimeDirectory.createDescriptor(
       {
         key: runtimeKey,
         id: runtime.id,
@@ -563,6 +552,26 @@ export class SessionRouter {
       },
       SessionRouter.DIRECTORY_TTL_MS,
     );
+    const descriptor = realtimeBackplane.enabled
+      ? await runtimeDirectory.register(pendingDescriptor, SessionRouter.DIRECTORY_TTL_MS)
+      : runtimeDirectory.registerLocal(pendingDescriptor);
+    if (runtimeDirectory.get(runtimeKey)?.connectionGeneration !== descriptor.connectionGeneration) {
+      if (runtime.ws.readyState === runtime.ws.OPEN) {
+        runtime.ws.close(1012, "Runtime ownership replaced");
+      }
+      return false;
+    }
+    if (existing && existing.ws !== runtime.ws) {
+      runtimeDebug("replacing runtime websocket", {
+        runtimeId: runtime.id,
+        previousLabel: existing.label,
+        previousReadyState: existing.ws.readyState,
+        preservedBoundSessions: [...boundSessions],
+      });
+      if (existing.ws.readyState === existing.ws.OPEN) {
+        existing.ws.close(1012, "Runtime ownership replaced");
+      }
+    }
     this.runtimes.set(runtimeKey, {
       ...runtime,
       key: runtimeKey,
@@ -576,9 +585,6 @@ export class SessionRouter {
       commandDeliveredSessions,
       linkedCheckouts,
     });
-    void runtimeDirectory.register(descriptor, SessionRouter.DIRECTORY_TTL_MS).catch((error) => {
-      console.error("[runtime-directory] failed to register runtime:", error);
-    });
     runtimeDebug("registered runtime", {
       runtimeId: runtime.id,
       label: runtime.label,
@@ -590,6 +596,7 @@ export class SessionRouter {
       totalRuntimes: this.runtimes.size,
       runtimeIds: [...this.runtimes.keys()],
     });
+    return true;
   }
 
   recordHeartbeat(runtimeId: string, ws?: WebSocket): boolean {

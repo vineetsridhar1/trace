@@ -23,6 +23,7 @@ vi.mock("../services/codex-credential.js", () => ({
 import type WebSocket from "ws";
 import { prisma } from "./db.js";
 import { runtimeDirectory } from "./runtime-directory.js";
+import { realtimeBackplane } from "./realtime-backplane.js";
 import { SessionRouter, runtimeRouterKey } from "./session-router.js";
 import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
 import { ProvisionedRuntimeAdapter } from "./runtime-adapters.js";
@@ -104,6 +105,7 @@ describe("SessionRouter distributed ownership fencing", () => {
       organizationId: "org-fenced",
       ownerReplicaId: "replica-new-owner",
       connectionGeneration: "generation-new-owner",
+      ownershipEpoch: 2,
       label: "New laptop connection",
       hostingMode: "local" as const,
       supportedTools: ["codex"],
@@ -177,6 +179,44 @@ describe("SessionRouter distributed ownership fencing", () => {
       runtimeDirectory.get("org-reconnected:runtime-reconnected")?.linkedCheckoutStatuses,
     ).toContainEqual(status);
     router.dispose();
+  });
+
+  it("ignores an older ownership epoch even when its heartbeat timestamp is newer", async () => {
+    await runtimeDirectory.start();
+    const runtimeKey = "org-epoch:runtime-epoch";
+    const currentDescriptor = {
+      key: runtimeKey,
+      id: "runtime-epoch",
+      organizationId: "org-epoch",
+      ownerReplicaId: "replica-current",
+      connectionGeneration: "generation-current",
+      ownershipEpoch: 20,
+      label: "Current owner",
+      hostingMode: "local" as const,
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+      linkedCheckoutStatuses: [],
+      lastHeartbeat: 1_000,
+      expiresAt: Date.now() + 30_000,
+    };
+
+    await realtimeBackplane.broadcast("runtime_presence_changed", {
+      action: "upsert",
+      descriptor: currentDescriptor,
+    });
+    await realtimeBackplane.broadcast("runtime_presence_changed", {
+      action: "upsert",
+      descriptor: {
+        ...currentDescriptor,
+        ownerReplicaId: "replica-stale",
+        connectionGeneration: "generation-stale",
+        ownershipEpoch: 19,
+        lastHeartbeat: 100_000,
+      },
+    });
+
+    expect(runtimeDirectory.get(runtimeKey)).toEqual(currentDescriptor);
+    await runtimeDirectory.remove(runtimeKey, currentDescriptor.connectionGeneration);
   });
 });
 

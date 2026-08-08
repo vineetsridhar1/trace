@@ -2,13 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  mutation: vi.fn(),
 }));
 
 vi.mock("../lib/urql", () => ({
-  client: { query: mocks.query },
+  client: { query: mocks.query, mutation: mocks.mutation },
 }));
 
-import { refreshLinkedCheckoutStatus, useLinkedCheckoutStore } from "./linked-checkout";
+import {
+  refreshLinkedCheckoutStatus,
+  syncLinkedCheckout,
+  useLinkedCheckoutStore,
+} from "./linked-checkout";
 
 const attachedStatus = {
   repoId: "repo-1",
@@ -138,6 +143,30 @@ describe("linked checkout status refresh", () => {
     });
     await refresh;
 
+    expect(useLinkedCheckoutStore.getState().statusByKey["runtime-1:repo-1"]).toEqual(
+      attachedStatus,
+    );
+  });
+
+  it("retains spotlight state when sync and its recovery refresh both fail", async () => {
+    useLinkedCheckoutStore.getState().setStatus("runtime-1:repo-1", attachedStatus);
+    mocks.mutation.mockReturnValueOnce({
+      toPromise: vi.fn().mockResolvedValue({ error: new Error("sync replica unavailable") }),
+    });
+    mocks.query.mockReturnValueOnce({
+      toPromise: vi.fn().mockResolvedValue({ error: new Error("refresh replica unavailable") }),
+    });
+
+    const result = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      runtimeInstanceId: "runtime-1",
+      branch: "trace/spotlight",
+      autoSyncEnabled: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toEqual(attachedStatus);
     expect(useLinkedCheckoutStore.getState().statusByKey["runtime-1:repo-1"]).toEqual(
       attachedStatus,
     );

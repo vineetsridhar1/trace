@@ -4,6 +4,7 @@ import { redis } from "./redis.js";
 import { realtimeBackplane, type BackplaneEnvelope } from "./realtime-backplane.js";
 
 const DIRECTORY_KEY_PREFIX = "trace:runtime:v1";
+const DIRECTORY_EPOCH_KEY = "trace:runtime-epoch:v1";
 const PRESENCE_CHANGED = "runtime_presence_changed";
 
 export type RuntimeDescriptor = {
@@ -12,6 +13,7 @@ export type RuntimeDescriptor = {
   organizationId?: string;
   ownerReplicaId: string;
   connectionGeneration: string;
+  ownershipEpoch: number;
   label: string;
   hostingMode: "cloud" | "local";
   ownerUserId?: string;
@@ -47,6 +49,7 @@ function descriptorFrom(value: unknown): RuntimeDescriptor | null {
   }
   return {
     ...item,
+    ownershipEpoch: typeof item.ownershipEpoch === "number" ? item.ownershipEpoch : 0,
     linkedCheckoutStatuses: Array.isArray(item.linkedCheckoutStatuses)
       ? (item.linkedCheckoutStatuses as BridgeLinkedCheckoutStatus[])
       : [],
@@ -105,7 +108,11 @@ export class RuntimeDirectory {
   createDescriptor(
     input: Omit<
       RuntimeDescriptor,
-      "ownerReplicaId" | "connectionGeneration" | "lastHeartbeat" | "expiresAt"
+      | "ownerReplicaId"
+      | "connectionGeneration"
+      | "ownershipEpoch"
+      | "lastHeartbeat"
+      | "expiresAt"
     >,
     ttlMs: number,
   ): RuntimeDescriptor {
@@ -114,17 +121,46 @@ export class RuntimeDirectory {
       ...input,
       ownerReplicaId: realtimeBackplane.replicaId,
       connectionGeneration: randomUUID(),
+      ownershipEpoch: 0,
       lastHeartbeat: now,
       expiresAt: now + ttlMs,
     };
   }
 
-  async register(descriptor: RuntimeDescriptor, ttlMs: number): Promise<void> {
-    this.descriptors.set(descriptor.key, descriptor);
-    if (realtimeBackplane.enabled) {
-      await redis.set(this.redisKey(descriptor.key), JSON.stringify(descriptor), "PX", ttlMs);
+  async register(descriptor: RuntimeDescriptor, ttlMs: number): Promise<RuntimeDescriptor> {
+    if (!realtimeBackplane.enabled) return this.registerLocal(descriptor);
+    let claimed = descriptor;
+    const result = await redis.eval(
+      "local epoch=redis.call('incr',KEYS[2]); local descriptor=cjson.decode(ARGV[1]); descriptor.ownershipEpoch=epoch; local encoded=cjson.encode(descriptor); redis.call('set',KEYS[1],encoded,'PX',ARGV[2]); return encoded",
+      2,
+      this.redisKey(descriptor.key),
+      DIRECTORY_EPOCH_KEY,
+      JSON.stringify(descriptor),
+      String(ttlMs),
+    );
+    if (typeof result !== "string") throw new Error("Failed to claim runtime ownership");
+    const stored = descriptorFrom(JSON.parse(result));
+    if (!stored) throw new Error("Redis returned an invalid runtime ownership descriptor");
+    claimed = stored;
+    const current = this.descriptors.get(claimed.key);
+    if (!current || current.ownershipEpoch <= claimed.ownershipEpoch) {
+      this.descriptors.set(claimed.key, claimed);
     }
-    await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor });
+    await realtimeBackplane.broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor: claimed });
+    return claimed;
+  }
+
+  registerLocal(descriptor: RuntimeDescriptor): RuntimeDescriptor {
+    const currentEpoch = this.descriptors.get(descriptor.key)?.ownershipEpoch ?? 0;
+    const claimed = {
+      ...descriptor,
+      ownershipEpoch: Math.max(descriptor.ownershipEpoch, currentEpoch + 1),
+    };
+    this.descriptors.set(claimed.key, claimed);
+    void realtimeBackplane
+      .broadcast(PRESENCE_CHANGED, { action: "upsert", descriptor: claimed })
+      .catch((error) => console.error("[runtime-directory] local presence broadcast failed:", error));
+    return claimed;
   }
 
   async renew(runtimeKey: string, connectionGeneration: string, ttlMs: number): Promise<boolean> {
@@ -293,7 +329,12 @@ export class RuntimeDirectory {
       const descriptor = descriptorFrom(message.descriptor);
       if (!descriptor) return;
       const current = this.descriptors.get(descriptor.key);
-      if (!current || current.lastHeartbeat <= descriptor.lastHeartbeat) {
+      if (
+        !current ||
+        current.ownershipEpoch < descriptor.ownershipEpoch ||
+        (current.ownershipEpoch === descriptor.ownershipEpoch &&
+          current.lastHeartbeat <= descriptor.lastHeartbeat)
+      ) {
         this.descriptors.set(descriptor.key, descriptor);
         this.emit({ action: "upsert", descriptor });
       }

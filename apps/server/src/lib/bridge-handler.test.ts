@@ -147,6 +147,7 @@ describe("bridge handler auth", () => {
     mocks.getBoundSessionIds.mockReturnValue([]);
     mocks.getHeartbeatReconcileSessionIds.mockReturnValue([]);
     mocks.recordHeartbeat.mockReturnValue(true);
+    mocks.registerRuntime.mockResolvedValue(true);
     mocks.isCurrentRuntimeSocket.mockReturnValue(true);
     mocks.getCurrentRuntimeConnectionGeneration.mockReturnValue("generation-1");
     mocks.isRuntimeGenerationCurrent.mockReturnValue(true);
@@ -674,7 +675,9 @@ describe("bridge handler auth", () => {
       supportedTools: ["codex"],
       registeredRepoIds: [],
     });
-    await Promise.resolve();
+    await vi.waitFor(() =>
+      expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "runtime_owned"),
+    );
 
     expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "runtime_owned");
     expect(mocks.registerRuntime).toHaveBeenCalledWith(
@@ -783,7 +786,9 @@ describe("bridge handler auth", () => {
       supportedTools: ["codex"],
       registeredRepoIds: [],
     });
-    await Promise.resolve();
+    await vi.waitFor(() =>
+      expect(mocks.bindSession).toHaveBeenCalledWith("session-1", "runtime_owned"),
+    );
 
     // The session's own runtime showing up late must reclaim, not be rejected —
     // otherwise the timed-out session can never recover.

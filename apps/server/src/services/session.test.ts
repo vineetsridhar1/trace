@@ -13621,6 +13621,7 @@ describe("SessionService", () => {
           hostingMode: "local",
           ownerReplicaId: "replica-b",
           connectionGeneration: "generation-1",
+          ownershipEpoch: 1,
           ownerUserId: "user-1",
           supportedTools: ["codex"],
           registeredRepoIds: ["repo-1"],

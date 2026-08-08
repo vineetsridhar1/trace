@@ -487,8 +487,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
             runtimeId = newId;
             runtimeKey = runtimeRouterKey(newId, bridgeAuth.organizationId);
-            const existingRuntime = sessionRouter.getRuntime(newId, bridgeAuth.organizationId);
-            sessionRouter.registerRuntime({
+            const claimedOwnership = await sessionRouter.registerRuntime({
               key: runtimeKey,
               id: runtimeId,
               label: bridgeRuntime.label,
@@ -501,15 +500,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               protocolVersion: typeof msg.protocolVersion === "number" ? msg.protocolVersion : 1,
               registeredRepoIds,
             });
-
-            if (existingRuntime && existingRuntime.ws !== ws) {
-              runtimeDebug("closing superseded websocket for runtime", {
-                runtimeId: newId,
-                previousLabel: existingRuntime.label,
-                previousReadyState: existingRuntime.ws.readyState,
-              });
-              existingRuntime.ws.close();
-            }
+            if (!claimedOwnership) return;
           } else if (bridgeAuth.kind === "cloud") {
             if (newId !== bridgeAuth.instanceId || hostingMode !== "cloud") {
               runtimeDebug("cloud bridge auth rejected runtime_hello mismatch", {
@@ -586,7 +577,6 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
 
             runtimeId = newId;
             runtimeKey = runtimeId;
-            const existingRuntime = sessionRouter.getRuntime(newId);
             if (bridgeAuth.sessionId) {
               const authorization = await sessionService.authorizeRuntimeLease({
                 sessionId: bridgeAuth.sessionId,
@@ -612,7 +602,7 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               }
               lastLeaseAuthorizationAt = Date.now();
             }
-            sessionRouter.registerRuntime({
+            const claimedOwnership = await sessionRouter.registerRuntime({
               id: runtimeId,
               label: (msg.label as string) ?? runtimeId,
               ws,
@@ -623,17 +613,9 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
               protocolVersion: msg.protocolVersion as number | undefined,
               registeredRepoIds,
             });
+            if (!claimedOwnership) return;
             if (bridgeAuth.sessionId) {
               sessionRouter.bindSession(bridgeAuth.sessionId, runtimeKey);
-            }
-
-            if (existingRuntime && existingRuntime.ws !== ws) {
-              runtimeDebug("closing superseded websocket for runtime", {
-                runtimeId: newId,
-                previousLabel: existingRuntime.label,
-                previousReadyState: existingRuntime.ws.readyState,
-              });
-              existingRuntime.ws.close();
             }
           }
 
