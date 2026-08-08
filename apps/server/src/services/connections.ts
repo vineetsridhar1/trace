@@ -3,6 +3,7 @@ import { prisma } from "../lib/db.js";
 import { sessionRouter, type RuntimeInstance } from "../lib/session-router.js";
 import type { RuntimeDescriptor } from "../lib/runtime-directory.js";
 import type { BridgeLinkedCheckoutStatus } from "@trace/shared";
+import { runtimeAccessService } from "./runtime-access.js";
 
 type BridgeWithAccess = Prisma.BridgeRuntimeGetPayload<{
   include: {
@@ -193,13 +194,17 @@ class ConnectionsService {
         const repos: ConnectionsRepoEntry[] = [];
 
         if (runtime && hasBridgeWorkAccess(bridge, input.userId)) {
+          const checkoutStatuses = await runtimeAccessService.listLinkedCheckoutStatuses({
+            runtimeInstanceId: runtime.id,
+            organizationId: input.organizationId,
+          });
+          const checkoutByRepoId = new Map(
+            checkoutStatuses.map((status) => [status.repoId, status]),
+          );
           for (const repoId of runtime.registeredRepoIds) {
             const channel = channelByRepoId.get(repoId);
             if (!channel?.repo) continue;
-            const localRuntime = sessionRouter.getRuntime(runtime.id, input.organizationId);
-            const checkout =
-              localRuntime?.linkedCheckouts.get(repoId) ??
-              (await sessionRouter.getLinkedCheckoutStatus(runtime.key, repoId).catch(() => null));
+            const checkout = checkoutByRepoId.get(repoId) ?? null;
             repos.push({
               repo: channel.repo,
               channel,

@@ -11,6 +11,7 @@ vi.mock("../lib/session-router.js", () => ({
     getRuntimeMetadata: vi.fn(),
     isRuntimeAvailable: vi.fn().mockReturnValue(true),
     sendToRuntime: vi.fn().mockReturnValue("delivered"),
+    sendToRuntimeAsync: vi.fn(),
   },
 }));
 
@@ -36,6 +37,7 @@ const sessionRouterMock = sessionRouter as unknown as {
   getRuntimeMetadata: ReturnType<typeof vi.fn>;
   isRuntimeAvailable: ReturnType<typeof vi.fn>;
   sendToRuntime: ReturnType<typeof vi.fn>;
+  sendToRuntimeAsync: ReturnType<typeof vi.fn>;
 };
 const eventServiceMock = eventService as unknown as {
   create: ReturnType<typeof vi.fn>;
@@ -95,6 +97,9 @@ function mockGroup() {
 describe("SessionApplicationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionRouterMock.sendToRuntimeAsync.mockImplementation((...args: unknown[]) =>
+      Promise.resolve(sessionRouterMock.sendToRuntime(...args)),
+    );
     mockGroup();
     sessionRouterMock.getRuntime.mockReturnValue({
       key: "runtime-1",

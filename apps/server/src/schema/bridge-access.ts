@@ -3,7 +3,6 @@ import type { Context } from "../context.js";
 import { prisma } from "../lib/db.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { requireOrgContext } from "../lib/require-org.js";
-import { sessionRouter } from "../lib/session-router.js";
 import { runtimeAccessService } from "../services/runtime-access.js";
 
 export const bridgeAccessQueries = {
@@ -103,69 +102,26 @@ export const bridgeAccessMutations = {
   },
 };
 
-function rawRegisteredRepoIds(runtime: {
-  instanceId: string;
-  organizationId: string;
-  metadata?: unknown;
-}): string[] {
-  const live = sessionRouter.getRuntimeMetadata(runtime.instanceId, runtime.organizationId);
-  if (live) return live.registeredRepoIds;
-  if (
-    !runtime.metadata ||
-    typeof runtime.metadata !== "object" ||
-    Array.isArray(runtime.metadata)
-  ) {
-    return [];
-  }
-  const registeredRepoIds = (runtime.metadata as Record<string, unknown>).registeredRepoIds;
-  return Array.isArray(registeredRepoIds)
-    ? registeredRepoIds.filter((repoId): repoId is string => typeof repoId === "string")
-    : [];
-}
-
-async function filterRepoIdsToOrganization(repoIds: string[], organizationId: string) {
-  const uniqueRepoIds = Array.from(new Set(repoIds));
-  if (uniqueRepoIds.length === 0) return [];
-
-  const repos = await prisma.repo.findMany({
-    where: { id: { in: uniqueRepoIds }, organizationId },
-    select: { id: true },
-  });
-  const allowed = new Set(repos.map((repo) => repo.id));
-  return uniqueRepoIds.filter((repoId) => allowed.has(repoId));
-}
-
 export const bridgeAccessTypeResolvers = {
   BridgeRuntime: {
     connected: (runtime: { instanceId: string; organizationId: string }) =>
-      sessionRouter.isRuntimeAvailable(runtime.instanceId, runtime.organizationId),
+      runtimeAccessService.isRuntimeConnected(runtime.instanceId, runtime.organizationId),
     registeredRepoIds: async (runtime: {
       instanceId: string;
       organizationId: string;
       metadata?: unknown;
     }) => {
-      return filterRepoIdsToOrganization(rawRegisteredRepoIds(runtime), runtime.organizationId);
+      return runtimeAccessService.listRuntimeRegisteredRepoIds({
+        runtimeInstanceId: runtime.instanceId,
+        organizationId: runtime.organizationId,
+        persistedMetadata: runtime.metadata,
+      });
     },
-    linkedCheckouts: async (runtime: { instanceId: string; organizationId: string }) => {
-      const live = sessionRouter.getRuntimeMetadata(runtime.instanceId, runtime.organizationId);
-      if (!live || !sessionRouter.isRuntimeAvailable(live.id, runtime.organizationId)) return [];
-      // Filter by current registeredRepoIds so stale cache entries from
-      // previously-linked-but-now-unlinked repos don't surface.
-      const activeRepos = new Set(
-        await filterRepoIdsToOrganization(live.registeredRepoIds, runtime.organizationId),
-      );
-      const localRuntime = sessionRouter.getRuntime(live.id, runtime.organizationId);
-      const statuses = await Promise.all(
-        [...activeRepos].map(async (repoId) => {
-          const cached = localRuntime?.linkedCheckouts.get(repoId);
-          if (cached) return cached;
-          return sessionRouter.getLinkedCheckoutStatus(live.key, repoId).catch(() => null);
-        }),
-      );
-      return statuses.filter((status): status is NonNullable<typeof status> =>
-        Boolean(status?.isAttached),
-      );
-    },
+    linkedCheckouts: (runtime: { instanceId: string; organizationId: string }) =>
+      runtimeAccessService.listLinkedCheckoutStatuses({
+        runtimeInstanceId: runtime.instanceId,
+        organizationId: runtime.organizationId,
+      }),
   },
   LinkedCheckoutStatus: {
     changedFiles: (status: { changedFiles?: unknown[] | null }) =>

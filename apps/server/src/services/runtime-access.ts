@@ -1,5 +1,5 @@
 import { Prisma, type BridgeAccessCapability, type BridgeAccessScopeType } from "@prisma/client";
-import { isProvisionedRuntimeId } from "@trace/shared";
+import { isProvisionedRuntimeId, type BridgeLinkedCheckoutStatus } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError } from "../lib/errors.js";
 import { sessionRouter } from "../lib/session-router.js";
@@ -9,6 +9,7 @@ import { eventService } from "./event.js";
 
 const BRIDGE_ACCESS_DENIED_ERROR =
   "Access denied: you do not have permission to use this local bridge";
+const BRIDGE_CHECKOUT_QUERY_TIMEOUT_MS = 3_000;
 
 type BridgeRuntimeWithOwner = Prisma.BridgeRuntimeGetPayload<{
   include: { ownerUser: true };
@@ -382,6 +383,67 @@ class RuntimeAccessService {
       where: { id },
       include: { ownerUser: true },
     });
+  }
+
+  isRuntimeConnected(runtimeInstanceId: string, organizationId: string): boolean {
+    return sessionRouter.isRuntimeAvailable(runtimeInstanceId, organizationId);
+  }
+
+  async listRuntimeRegisteredRepoIds(input: {
+    runtimeInstanceId: string;
+    organizationId: string;
+    persistedMetadata?: unknown;
+  }): Promise<string[]> {
+    const runtime = sessionRouter.getRuntimeMetadata(input.runtimeInstanceId, input.organizationId);
+    const persistedMetadata =
+      input.persistedMetadata &&
+      typeof input.persistedMetadata === "object" &&
+      !Array.isArray(input.persistedMetadata)
+        ? (input.persistedMetadata as Record<string, unknown>)
+        : {};
+    const repoIds = runtime
+      ? runtime.registeredRepoIds
+      : stringList(persistedMetadata.registeredRepoIds);
+    if (repoIds.length === 0) return [];
+
+    const repos = await prisma.repo.findMany({
+      where: { id: { in: [...new Set(repoIds)] }, organizationId: input.organizationId },
+      select: { id: true },
+    });
+    const allowed = new Set(repos.map((repo) => repo.id));
+    return repoIds.filter(
+      (repoId, index) => allowed.has(repoId) && repoIds.indexOf(repoId) === index,
+    );
+  }
+
+  async listLinkedCheckoutStatuses(input: {
+    runtimeInstanceId: string;
+    organizationId: string;
+  }): Promise<BridgeLinkedCheckoutStatus[]> {
+    const runtime = sessionRouter.getRuntimeMetadata(input.runtimeInstanceId, input.organizationId);
+    if (!runtime || !sessionRouter.isRuntimeAvailable(runtime.id, input.organizationId)) return [];
+
+    const repoIds = await this.listRuntimeRegisteredRepoIds({
+      runtimeInstanceId: runtime.id,
+      organizationId: input.organizationId,
+    });
+    const localRuntime = sessionRouter.getRuntime(runtime.id, input.organizationId);
+    const currentLocalRuntime =
+      localRuntime?.connectionGeneration === runtime.connectionGeneration
+        ? localRuntime
+        : undefined;
+    const statuses = await Promise.all(
+      repoIds.map(async (repoId) => {
+        const cached = currentLocalRuntime?.linkedCheckouts.get(repoId);
+        if (cached) return cached;
+        return sessionRouter
+          .getLinkedCheckoutStatus(runtime.key, repoId, BRIDGE_CHECKOUT_QUERY_TIMEOUT_MS)
+          .catch(() => null);
+      }),
+    );
+    return statuses.filter((status): status is BridgeLinkedCheckoutStatus =>
+      Boolean(status?.isAttached),
+    );
   }
 
   /**

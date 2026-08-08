@@ -28,14 +28,12 @@ import {
   webSocketProtocols,
 } from "./endpoint-utils.js";
 
-function runtimeDescriptor(...args: Parameters<typeof sessionRouter.getRuntime>) {
-  return sessionRouter.getRuntimeDescriptor?.(...args) ?? sessionRouter.getRuntime(...args);
+function runtimeDescriptor(...args: Parameters<typeof sessionRouter.getRuntimeDescriptor>) {
+  return sessionRouter.getRuntimeDescriptor(...args);
 }
 
 async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntime>) {
-  return sessionRouter.sendToRuntimeAsync
-    ? sessionRouter.sendToRuntimeAsync(...args)
-    : Promise.resolve(sessionRouter.sendToRuntime(...args));
+  return sessionRouter.sendToRuntimeAsync(...args);
 }
 
 type PendingHttp = {

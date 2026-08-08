@@ -22,6 +22,7 @@ vi.mock("../services/codex-credential.js", () => ({
 
 import type WebSocket from "ws";
 import { prisma } from "./db.js";
+import { runtimeDirectory } from "./runtime-directory.js";
 import { SessionRouter, runtimeRouterKey } from "./session-router.js";
 import { RuntimeAdapterRegistry, type RuntimeAdapter } from "./runtime-adapter-registry.js";
 import { ProvisionedRuntimeAdapter } from "./runtime-adapters.js";
@@ -42,6 +43,7 @@ function makeWs() {
     OPEN: 1,
     readyState: 1,
     send: vi.fn(),
+    close: vi.fn(),
   } as unknown as WebSocket;
 }
 
@@ -76,6 +78,71 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+});
+
+describe("SessionRouter distributed ownership fencing", () => {
+  it("closes and ignores a local socket after another replica owns its generation", async () => {
+    await runtimeDirectory.start();
+    const router = new SessionRouter();
+    const ws = makeWs();
+    const runtimeKey = runtimeRouterKey("runtime-fenced", "org-fenced");
+    router.registerRuntime({
+      key: runtimeKey,
+      id: "runtime-fenced",
+      organizationId: "org-fenced",
+      label: "Old laptop connection",
+      ws,
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+    });
+    await flushPromises();
+
+    const remoteDescriptor = {
+      key: runtimeKey,
+      id: "runtime-fenced",
+      organizationId: "org-fenced",
+      ownerReplicaId: "replica-new-owner",
+      connectionGeneration: "generation-new-owner",
+      label: "New laptop connection",
+      hostingMode: "local" as const,
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+      lastHeartbeat: Date.now() + 1,
+      expiresAt: Date.now() + 30_000,
+    };
+
+    await runtimeDirectory.register(remoteDescriptor, 30_000);
+
+    expect(ws.close).toHaveBeenCalledWith(1012, "Runtime ownership replaced");
+    expect(router.getRuntime("runtime-fenced", "org-fenced")).toBeUndefined();
+    expect(router.getRuntimeMetadata("runtime-fenced", "org-fenced")).toEqual(remoteDescriptor);
+    expect(router.listRuntimeMetadata()).toContainEqual(remoteDescriptor);
+    expect(router.sendToRuntime("runtime-fenced", { type: "test" }, "org-fenced")).toBe(
+      "no_runtime",
+    );
+
+    await runtimeDirectory.remove(runtimeKey, remoteDescriptor.connectionGeneration);
+  });
+
+  it("closes the previous socket when a runtime reconnects on the same replica", () => {
+    const router = new SessionRouter();
+    const oldWs = makeWs();
+    const newWs = makeWs();
+    const registration = {
+      id: "runtime-reconnected",
+      organizationId: "org-reconnected",
+      label: "Laptop",
+      hostingMode: "local" as const,
+      supportedTools: ["codex"],
+    };
+
+    router.registerRuntime({ ...registration, ws: oldWs });
+    router.registerRuntime({ ...registration, ws: newWs });
+
+    expect(oldWs.close).toHaveBeenCalledWith(1012, "Runtime ownership replaced");
+    expect(router.getRuntime("runtime-reconnected", "org-reconnected")?.ws).toBe(newWs);
+  });
 });
 
 describe("SessionRouter design-system protocol gate", () => {

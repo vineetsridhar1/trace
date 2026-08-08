@@ -19,9 +19,7 @@ import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
 import type { RepoEnvVar } from "@trace/gql";
 
 async function sendRuntimeCommand(...args: Parameters<typeof sessionRouter.sendToRuntime>) {
-  return sessionRouter.sendToRuntimeAsync
-    ? sessionRouter.sendToRuntimeAsync(...args)
-    : Promise.resolve(sessionRouter.sendToRuntime(...args));
+  return sessionRouter.sendToRuntimeAsync(...args);
 }
 
 type Tx = Prisma.TransactionClient;

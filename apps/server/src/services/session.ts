@@ -1508,28 +1508,24 @@ function selectRuntimeSupportedTool(
   return LOCAL_TOOL_FALLBACK_ORDER.find((tool) => runtime.supportedTools.includes(tool)) ?? null;
 }
 
-function runtimeMetadata(...args: Parameters<typeof sessionRouter.getRuntime>) {
-  return sessionRouter.getRuntimeMetadata?.(...args) ?? sessionRouter.getRuntime(...args);
+function runtimeMetadata(...args: Parameters<typeof sessionRouter.getRuntimeMetadata>) {
+  return sessionRouter.getRuntimeMetadata(...args);
 }
 
 function listRuntimeMetadata(filter?: { hostingMode?: string }) {
-  return sessionRouter.listRuntimeMetadata?.(filter) ?? sessionRouter.listRuntimes(filter);
+  return sessionRouter.listRuntimeMetadata(filter);
 }
 
 async function sendSessionCommand(
   ...args: Parameters<typeof sessionRouter.send>
 ): Promise<DeliveryResult> {
-  return sessionRouter.sendAsync
-    ? sessionRouter.sendAsync(...args)
-    : Promise.resolve(sessionRouter.send(...args));
+  return sessionRouter.sendAsync(...args);
 }
 
 async function sendRuntimeCommand(
   ...args: Parameters<typeof sessionRouter.sendToRuntime>
 ): Promise<DeliveryResult> {
-  return sessionRouter.sendToRuntimeAsync
-    ? sessionRouter.sendToRuntimeAsync(...args)
-    : Promise.resolve(sessionRouter.sendToRuntime(...args));
+  return sessionRouter.sendToRuntimeAsync(...args);
 }
 
 const FULLY_UNLOADED_AGENT_STATUSES: readonly AgentStatus[] = ["failed", "stopped"];
@@ -5185,7 +5181,7 @@ export class SessionService {
 
     // Only transition to active after successful delivery
     // Persist the runtime binding so restoreSessionsForRuntime can recover it after restart
-    const expectedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+    const expectedRuntimeId = runtimeBinding.runtimeId ?? conn.runtimeInstanceId;
     const boundRuntime =
       sessionRouter.getRuntimeForSession(id) ??
       (expectedRuntimeId ? runtimeMetadata(expectedRuntimeId, session.organizationId) : undefined);
@@ -9596,8 +9592,8 @@ export class SessionService {
     // runtime lacks the tool, the send path surfaces a ToolNotInstalledError with
     // install instructions. `supportedTools` is still returned so callers can
     // reflect install state in the UI.
-    const distributedRuntimes = sessionRouter.listRuntimeMetadata?.({ hostingMode: "local" });
-    const allRuntimes = (distributedRuntimes ?? sessionRouter.listRuntimes())
+    const allRuntimes = sessionRouter
+      .listRuntimeMetadata({ hostingMode: "local" })
       .filter(
         (runtime) =>
           runtime.hostingMode === "local" &&

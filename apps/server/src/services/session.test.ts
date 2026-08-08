@@ -36,19 +36,22 @@ vi.mock("./runtime-access.js", () => ({
 vi.mock("../lib/session-router.js", () => ({
   sessionRouter: {
     send: vi.fn().mockReturnValue("delivered"),
+    sendAsync: vi.fn(),
     sendToRuntime: vi.fn().mockReturnValue("delivered"),
+    sendToRuntimeAsync: vi.fn(),
     createRuntime: vi.fn(),
     destroyRuntime: vi.fn().mockResolvedValue(undefined),
     transitionRuntime: vi.fn().mockResolvedValue("delivered"),
     bindSession: vi.fn(),
     unbindSession: vi.fn(),
     getRuntime: vi.fn().mockReturnValue(null),
+    getRuntimeMetadata: vi.fn().mockReturnValue(null),
     getRuntimeForSession: vi.fn().mockReturnValue(null),
     getBoundSessionIds: vi.fn().mockReturnValue([]),
     isRuntimeAvailable: vi.fn().mockReturnValue(true),
     getRuntimeDiagnostics: vi.fn().mockReturnValue({}),
     listRuntimes: vi.fn().mockReturnValue([]),
-    listRuntimeMetadata: vi.fn().mockReturnValue(undefined),
+    listRuntimeMetadata: vi.fn().mockReturnValue([]),
     listWorkspaceSlugs: vi.fn().mockResolvedValue([]),
     listBranches: vi.fn().mockResolvedValue([]),
     listRepoWorktrees: vi.fn().mockResolvedValue([]),
@@ -382,9 +385,21 @@ describe("SessionService", () => {
     prismaMock.session.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.artifact.findMany.mockResolvedValue([]);
     sessionRouterMock.send.mockReturnValue("delivered");
+    sessionRouterMock.sendAsync.mockImplementation((...args) =>
+      Promise.resolve(sessionRouterMock.send(...args)),
+    );
+    sessionRouterMock.sendToRuntimeAsync.mockImplementation((...args) =>
+      Promise.resolve(sessionRouterMock.sendToRuntime(...args)),
+    );
     sessionRouterMock.transitionRuntime.mockResolvedValue("delivered");
     sessionRouterMock.getRuntimeForSession.mockReturnValue(null);
     sessionRouterMock.getRuntime.mockReturnValue(null);
+    sessionRouterMock.getRuntimeMetadata.mockImplementation((...args) =>
+      sessionRouterMock.getRuntime(...args),
+    );
+    sessionRouterMock.listRuntimeMetadata.mockImplementation((...args) =>
+      sessionRouterMock.listRuntimes(...args),
+    );
     sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
     sessionRouterMock.destroyRuntime.mockResolvedValue(undefined);
     sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValue(null);
@@ -4816,6 +4831,75 @@ describe("SessionService", () => {
   });
 
   describe("run", () => {
+    it("persists an auto-selected runtime connected to another replica", async () => {
+      const runtime = {
+        key: "org-1:runtime-remote",
+        id: "runtime-remote",
+        label: "Remote laptop",
+        hostingMode: "local" as const,
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        supportedTools: ["claude_code"],
+        registeredRepoIds: ["repo-1"],
+      };
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          agentStatus: "done",
+          workdir: "/workspace/session-1",
+          toolSessionId: "tool-session-1",
+          sessionGroupId: null,
+          sessionGroup: null,
+          connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
+        }),
+      );
+      prismaMock.session.update.mockResolvedValueOnce(
+        makeSession({
+          hosting: "local",
+          agentStatus: "active",
+          workdir: "/workspace/session-1",
+          toolSessionId: "tool-session-1",
+          sessionGroupId: null,
+          sessionGroup: null,
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-remote",
+            runtimeLabel: "Remote laptop",
+          },
+        }),
+      );
+      runtimeAccessServiceMock.listAccessibleRuntimeInstanceIds.mockResolvedValueOnce(
+        new Set(["runtime-remote"]),
+      );
+      sessionRouterMock.listRuntimeMetadata.mockReturnValueOnce([runtime]);
+      sessionRouterMock.getRuntimeMetadata.mockReturnValue(runtime);
+
+      await service.run("session-1", "Continue", undefined, {
+        userId: "user-1",
+        organizationId: "org-1",
+      });
+
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({ type: "run" }),
+        {
+          expectedHomeRuntimeId: "runtime-remote",
+          organizationId: "org-1",
+        },
+      );
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "session-1" },
+          data: expect.objectContaining({
+            connection: expect.objectContaining({
+              runtimeInstanceId: "runtime-remote",
+              runtimeLabel: "Remote laptop",
+            }),
+          }),
+        }),
+      );
+    });
+
     it("rejects deferred cloud runs for repos without remote urls", async () => {
       prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
         makeSession({
@@ -12090,7 +12174,9 @@ describe("SessionService", () => {
       sessionRouterMock.listRuntimes.mockReset();
       sessionRouterMock.listRuntimes.mockReturnValue([]);
       sessionRouterMock.listRuntimeMetadata.mockReset();
-      sessionRouterMock.listRuntimeMetadata.mockReturnValue(undefined);
+      sessionRouterMock.listRuntimeMetadata.mockImplementation((...args) =>
+        sessionRouterMock.listRuntimes(...args),
+      );
       sessionRouterMock.getLinkedCheckoutStatus.mockReset();
       sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue(null);
       sessionRouterMock.inspectSessionCurrentBranch.mockReset();

@@ -130,6 +130,8 @@ export interface RuntimeInstance {
   linkedCheckouts: Map<string, BridgeLinkedCheckoutStatus>;
 }
 
+export type RuntimeMetadata = RuntimeInstance | RuntimeDescriptor;
+
 export interface StaleRuntimeSnapshot {
   runtimeId: string;
   runtimeInstanceId: string;
@@ -333,6 +335,16 @@ export class SessionRouter {
     );
     runtimeDirectory.onPresence((message) => {
       if (message.action !== "upsert") return;
+      const localRuntime = this.runtimes.get(message.descriptor.key);
+      if (
+        localRuntime &&
+        localRuntime.connectionGeneration !== message.descriptor.connectionGeneration
+      ) {
+        this.runtimes.delete(message.descriptor.key);
+        if (localRuntime.ws.readyState === localRuntime.ws.OPEN) {
+          localRuntime.ws.close(1012, "Runtime ownership replaced");
+        }
+      }
       for (const [sessionId, pending] of this.pendingWaits) {
         if (pending.expectedRuntimeId && pending.expectedRuntimeId !== message.descriptor.id)
           continue;
@@ -514,6 +526,9 @@ export class SessionRouter {
         previousReadyState: existing.ws.readyState,
         preservedBoundSessions: [...boundSessions],
       });
+      if (existing.ws.readyState === existing.ws.OPEN) {
+        existing.ws.close(1012, "Runtime ownership replaced");
+      }
     }
     const descriptor = runtimeDirectory.createDescriptor(
       {
@@ -774,7 +789,8 @@ export class SessionRouter {
   getRuntimeForSession(sessionId: string): RuntimeInstance | undefined {
     const runtimeId = this.sessionRuntime.get(sessionId);
     if (!runtimeId) return undefined;
-    return this.runtimes.get(runtimeId);
+    const runtime = this.runtimes.get(runtimeId);
+    return runtime && this.isCurrentLocalOwner(runtime) ? runtime : undefined;
   }
 
   getBoundSessionIds(runtimeId: string): string[] {
@@ -802,11 +818,33 @@ export class SessionRouter {
     return matches.length === 1 ? matches[0] : undefined;
   }
 
+  private isCurrentLocalOwner(
+    runtime: RuntimeInstance,
+    descriptor = runtimeDirectory.find(runtime.id, runtime.organizationId),
+  ): boolean {
+    if (!descriptor) return !realtimeBackplane.enabled;
+    return (
+      descriptor.ownerReplicaId === realtimeBackplane.replicaId &&
+      descriptor.connectionGeneration === runtime.connectionGeneration
+    );
+  }
+
+  private getCurrentLocalRuntime(
+    runtimeId: string,
+    organizationId?: string | null,
+  ): RuntimeInstance | undefined {
+    const runtime = this.getRuntime(runtimeId, organizationId);
+    return runtime && this.isCurrentLocalOwner(runtime) ? runtime : undefined;
+  }
+
   /** True when the given runtime is registered and its websocket is open. */
   isRuntimeAvailable(runtimeId: string, organizationId?: string | null): boolean {
+    const descriptor = runtimeDirectory.find(runtimeId, organizationId);
     const runtime = this.getRuntime(runtimeId, organizationId);
-    if (runtime) return runtime.ws.readyState === runtime.ws.OPEN;
-    return runtimeDirectory.find(runtimeId, organizationId) !== undefined;
+    if (runtime && this.isCurrentLocalOwner(runtime, descriptor)) {
+      return runtime.ws.readyState === runtime.ws.OPEN;
+    }
+    return descriptor !== undefined;
   }
 
   getRuntimeDescriptor(
@@ -819,10 +857,10 @@ export class SessionRouter {
   getRuntimeMetadata(
     runtimeId: string,
     organizationId?: string | null,
-  ): RuntimeInstance | RuntimeDescriptor | undefined {
-    return (
-      this.getRuntime(runtimeId, organizationId) ?? runtimeDirectory.find(runtimeId, organizationId)
-    );
+  ): RuntimeMetadata | undefined {
+    const descriptor = runtimeDirectory.find(runtimeId, organizationId);
+    const runtime = this.getRuntime(runtimeId, organizationId);
+    return runtime && this.isCurrentLocalOwner(runtime, descriptor) ? runtime : descriptor;
   }
 
   /**
@@ -844,7 +882,7 @@ export class SessionRouter {
   ): DeliveryResult {
     const expectedHomeId = options?.expectedHomeRuntimeId;
     if (expectedHomeId) {
-      const expectedRuntime = this.getRuntime(expectedHomeId, options?.organizationId);
+      const expectedRuntime = this.getCurrentLocalRuntime(expectedHomeId, options?.organizationId);
       if (!expectedRuntime || expectedRuntime.ws.readyState !== expectedRuntime.ws.OPEN) {
         return "runtime_disconnected";
       }
@@ -861,6 +899,7 @@ export class SessionRouter {
 
     const runtime = this.runtimes.get(runtimeId);
     if (!runtime) return "session_unbound";
+    if (!this.isCurrentLocalOwner(runtime)) return "runtime_disconnected";
     if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
     if (requiredTool && !runtime.supportedTools.includes(requiredTool)) {
       // The bound runtime doesn't speak the requested tool. We used to silently
@@ -910,6 +949,7 @@ export class SessionRouter {
   /** Find a connected runtime that has a given repo registered (or any cloud runtime). */
   getRuntimeForRepo(repoId: string): RuntimeInstance | undefined {
     for (const runtime of this.runtimes.values()) {
+      if (!this.isCurrentLocalOwner(runtime)) continue;
       if (runtime.ws.readyState !== runtime.ws.OPEN) continue;
       // Cloud runtimes support all repos; local runtimes must have the repo registered
       if (runtime.hostingMode === "cloud" || runtime.registeredRepoIds.includes(repoId)) {
@@ -923,6 +963,7 @@ export class SessionRouter {
   listRuntimes(filter?: { hostingMode?: string }): RuntimeInstance[] {
     const results: RuntimeInstance[] = [];
     for (const runtime of this.runtimes.values()) {
+      if (!this.isCurrentLocalOwner(runtime)) continue;
       if (runtime.ws.readyState !== runtime.ws.OPEN) continue;
       if (filter?.hostingMode && runtime.hostingMode !== filter.hostingMode) continue;
       results.push(runtime);
@@ -936,15 +977,16 @@ export class SessionRouter {
    * owner can still use richer process-local state without hiding runtimes
    * connected elsewhere.
    */
-  listRuntimeMetadata(filter?: {
-    hostingMode?: string;
-  }): Array<RuntimeInstance | RuntimeDescriptor> {
-    const results = new Map<string, RuntimeInstance | RuntimeDescriptor>();
+  listRuntimeMetadata(filter?: { hostingMode?: string }): RuntimeMetadata[] {
+    const results = new Map<string, RuntimeMetadata>();
     for (const descriptor of runtimeDirectory.list(filter)) {
       results.set(descriptor.key, descriptor);
     }
     for (const runtime of this.listRuntimes(filter)) {
-      results.set(runtime.key, runtime);
+      const descriptor = runtimeDirectory.get(runtime.key);
+      if (!descriptor || this.isCurrentLocalOwner(runtime, descriptor)) {
+        results.set(runtime.key, runtime);
+      }
     }
     return [...results.values()];
   }
@@ -1054,7 +1096,7 @@ export class SessionRouter {
     command: Record<string, unknown>,
     organizationId?: string | null,
   ): DeliveryResult {
-    const runtime = this.getRuntime(runtimeId, organizationId);
+    const runtime = this.getCurrentLocalRuntime(runtimeId, organizationId);
     if (!runtime) return "no_runtime";
     if (runtime.ws.readyState !== runtime.ws.OPEN) return "runtime_disconnected";
     try {

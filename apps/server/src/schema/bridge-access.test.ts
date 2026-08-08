@@ -5,131 +5,66 @@ vi.mock("../lib/db.js", async () => {
   return { prisma: createPrismaMock() };
 });
 
-vi.mock("../lib/session-router.js", () => ({
-  sessionRouter: {
-    isRuntimeAvailable: vi.fn(),
-    getRuntime: vi.fn(),
-    getRuntimeMetadata: vi.fn(),
-    getLinkedCheckoutStatus: vi.fn(),
+vi.mock("../services/runtime-access.js", () => ({
+  runtimeAccessService: {
+    isRuntimeConnected: vi.fn(),
+    listRuntimeRegisteredRepoIds: vi.fn(),
+    listLinkedCheckoutStatuses: vi.fn(),
   },
 }));
 
-import { prisma } from "../lib/db.js";
-import { sessionRouter } from "../lib/session-router.js";
+import { runtimeAccessService } from "../services/runtime-access.js";
 import { bridgeAccessTypeResolvers } from "./bridge-access.js";
 
-const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
-const sessionRouterMock = sessionRouter as unknown as {
-  isRuntimeAvailable: ReturnType<typeof vi.fn>;
-  getRuntime: ReturnType<typeof vi.fn>;
-  getRuntimeMetadata: ReturnType<typeof vi.fn>;
-  getLinkedCheckoutStatus: ReturnType<typeof vi.fn>;
+const runtimeAccessServiceMock = runtimeAccessService as unknown as {
+  isRuntimeConnected: ReturnType<typeof vi.fn>;
+  listRuntimeRegisteredRepoIds: ReturnType<typeof vi.fn>;
+  listLinkedCheckoutStatuses: ReturnType<typeof vi.fn>;
 };
 
 describe("bridge access resolvers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    sessionRouterMock.getRuntimeMetadata.mockImplementation((...args: unknown[]) =>
-      sessionRouterMock.getRuntime(...args),
-    );
-    sessionRouterMock.isRuntimeAvailable.mockReturnValue(true);
   });
 
-  it("filters persisted bridge registered repo ids to the runtime organization", async () => {
-    sessionRouterMock.getRuntime.mockReturnValueOnce(null);
-    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-visible" }]);
+  it("delegates runtime connectivity to the service layer", () => {
+    runtimeAccessServiceMock.isRuntimeConnected.mockReturnValueOnce(true);
 
-    const result = await bridgeAccessTypeResolvers.BridgeRuntime.registeredRepoIds({
-      instanceId: "runtime-1",
+    expect(
+      bridgeAccessTypeResolvers.BridgeRuntime.connected({
+        instanceId: "runtime-1",
+        organizationId: "org-1",
+      }),
+    ).toBe(true);
+    expect(runtimeAccessServiceMock.isRuntimeConnected).toHaveBeenCalledWith("runtime-1", "org-1");
+  });
+
+  it("delegates registered repo filtering to the service layer", async () => {
+    runtimeAccessServiceMock.listRuntimeRegisteredRepoIds.mockResolvedValueOnce(["repo-visible"]);
+    const metadata = { registeredRepoIds: ["repo-visible", "repo-hidden"] };
+
+    await expect(
+      bridgeAccessTypeResolvers.BridgeRuntime.registeredRepoIds({
+        instanceId: "runtime-1",
+        organizationId: "org-1",
+        metadata,
+      }),
+    ).resolves.toEqual(["repo-visible"]);
+    expect(runtimeAccessServiceMock.listRuntimeRegisteredRepoIds).toHaveBeenCalledWith({
+      runtimeInstanceId: "runtime-1",
       organizationId: "org-1",
-      metadata: { registeredRepoIds: ["repo-visible", "repo-hidden", "repo-visible"] },
-    });
-
-    expect(result).toEqual(["repo-visible"]);
-    expect(prismaMock.repo.findMany).toHaveBeenCalledWith({
-      where: { id: { in: ["repo-visible", "repo-hidden"] }, organizationId: "org-1" },
-      select: { id: true },
+      persistedMetadata: metadata,
     });
   });
 
-  it("filters live bridge registered repo ids to the runtime organization", async () => {
-    sessionRouterMock.getRuntime.mockReturnValue({
-      key: "runtime-1",
-      instanceId: "runtime-1",
-      id: "runtime-1",
-      organizationId: "org-1",
-      registeredRepoIds: ["repo-visible", "repo-hidden"],
-      linkedCheckouts: new Map(),
-      ws: { readyState: 1, OPEN: 1 },
-    });
-    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-visible" }]);
-
-    const result = await bridgeAccessTypeResolvers.BridgeRuntime.registeredRepoIds({
-      instanceId: "runtime-1",
-      organizationId: "org-1",
-      metadata: { registeredRepoIds: ["repo-hidden"] },
-    });
-
-    expect(result).toEqual(["repo-visible"]);
-  });
-
-  it("filters live linked checkouts to repos in the runtime organization", async () => {
-    sessionRouterMock.getRuntime.mockReturnValue({
-      key: "runtime-1",
-      instanceId: "runtime-1",
-      id: "runtime-1",
-      organizationId: "org-1",
-      registeredRepoIds: ["repo-visible", "repo-hidden"],
-      linkedCheckouts: new Map([
-        [
-          "repo-visible",
-          {
-            repoId: "repo-visible",
-            repoPath: "/repos/visible",
-            isAttached: true,
-          },
-        ],
-        [
-          "repo-hidden",
-          {
-            repoId: "repo-hidden",
-            repoPath: "/repos/hidden",
-            isAttached: true,
-          },
-        ],
-      ]),
-      ws: { readyState: 1, OPEN: 1 },
-    });
-    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-visible" }]);
-
-    const result = await bridgeAccessTypeResolvers.BridgeRuntime.linkedCheckouts({
-      instanceId: "runtime-1",
-      organizationId: "org-1",
-    });
-
-    expect(result).toEqual([
+  it("delegates linked checkout loading to the service layer", async () => {
+    runtimeAccessServiceMock.listLinkedCheckoutStatuses.mockResolvedValueOnce([
       {
         repoId: "repo-visible",
         repoPath: "/repos/visible",
         isAttached: true,
       },
     ]);
-  });
-
-  it("loads linked checkout status through the owning replica", async () => {
-    sessionRouterMock.getRuntime.mockReturnValue(null);
-    sessionRouterMock.getRuntimeMetadata.mockReturnValue({
-      key: "org-1:runtime-remote",
-      id: "runtime-remote",
-      organizationId: "org-1",
-      registeredRepoIds: ["repo-visible"],
-    });
-    sessionRouterMock.getLinkedCheckoutStatus.mockResolvedValue({
-      repoId: "repo-visible",
-      repoPath: "/repos/visible",
-      isAttached: true,
-    });
-    prismaMock.repo.findMany.mockResolvedValueOnce([{ id: "repo-visible" }]);
 
     await expect(
       bridgeAccessTypeResolvers.BridgeRuntime.linkedCheckouts({
@@ -137,9 +72,9 @@ describe("bridge access resolvers", () => {
         organizationId: "org-1",
       }),
     ).resolves.toEqual([expect.objectContaining({ repoId: "repo-visible", isAttached: true })]);
-    expect(sessionRouterMock.getLinkedCheckoutStatus).toHaveBeenCalledWith(
-      "org-1:runtime-remote",
-      "repo-visible",
-    );
+    expect(runtimeAccessServiceMock.listLinkedCheckoutStatuses).toHaveBeenCalledWith({
+      runtimeInstanceId: "runtime-remote",
+      organizationId: "org-1",
+    });
   });
 });
