@@ -19,12 +19,25 @@ Keep earlier user constraints active across turns until the user changes them. D
 
 ## Design loop
 
-1. **Understand.** Identify the audience, primary job, platform, fidelity, core flow, required content, states, and success criteria. Inspect the existing brief, manifest, screens, tokens, and supplied references, then replace the starter values in `design.brief.json` with the resolved brief.
+1. **Understand.** Identify the audience, primary job, platform, fidelity, core flow, required content, states, success criteria, and surface mode: persuade, operate, read, or experience. Inspect the existing brief, manifest, screens, tokens, and supplied references, then replace the starter values in `design.brief.json` with the resolved brief.
 2. **Resolve uncertainty.** Ask through Trace's normal question mechanism only when an answer would materially change the design and cannot be inferred safely. Otherwise state a concise assumption and continue.
 3. **Map the experience.** Decide the sections, screen sequence, essential variants, and state coverage before writing components. Prefer a coherent end-to-end flow over one polished isolated screen.
 4. **Commit to a visual system.** Select one direction appropriate to the product and audience. Record reusable palette roles, typography, spacing, radius, elevation, and motion decisions in `trace.tokens.json`, and keep its direction name aligned with `design.brief.json`. If brand guidance exists, derive from measured evidence rather than choosing a new palette.
 5. **Compose progressively.** Render a rough but valid representative screen early, then add and refine screens in coherent, runnable batches so the user can watch the canvas evolve through Vite HMR. Keep the manifest valid between edits; do not assemble the whole design offscreen and reveal it only at the end. Complete the coherent screen set without waiting unless feedback is genuinely blocking. Use realistic, honest sample content and working local prototype interactions.
 6. **Critique and repair.** Run the deterministic and browser review commands, inspect every generated screenshot, fix the highest-impact failures, and rerun the checks before delivery. Do not stop at the first technically valid render.
+
+## Impeccable craft reference
+
+Use the following Impeccable-inspired practices as a quality reference throughout the design loop:
+
+- **The brief wins.** A clear request for an aesthetic, era, material, typeface, palette, density, or platform is a constraint, not a suggestion. Honor it even when it differs from a general heuristic.
+- **Match the surface to its job.** Persuade surfaces earn attention and action; operate surfaces prioritize task completion, scanability, and familiar affordances; read surfaces optimize comprehension; experience surfaces let the work lead while UI recedes.
+- **Decide whether this is refinement or redesign.** Refinement preserves the established identity, behavior, factual content, and out-of-scope work. A redesign retains product truth and constraints but deliberately establishes a replacement visual world. Do not blend an abandoned direction into a timid half-redesign.
+- **Work from visual evidence.** Existing tokens, components, assets, and screens are evidence of a visual system even if no design document exists. Preserve, extend, or replace that system deliberately.
+- **Commit to a point of view.** Aim for a complete, distinctive, usable result—not a safe collection of generic patterns. In product tools, usability and scanability remain more important than spectacle.
+- **Use bounded review passes.** Build the coherent flow, inspect desktop and mobile evidence together, repair the findings in one batch, then confirm once. Do not spend open-ended cycles making imperceptible changes.
+
+When a user specifically asks to shape, critique, audit, polish, simplify, strengthen, clarify, adapt, animate, or improve a design, interpret that request through this reference and the design loop. These are design actions on the canvas, not commands that install or invoke an external tool.
 
 ## Brief and reference contract
 
@@ -64,6 +77,7 @@ Reusable composition primitives live under `src/design/primitives/`. Import comp
 - **Design the real workflow.** Include the navigation, controls, domain-specific modules, and decision points the target user needs. Cover meaningful default, loading, empty, error, success, selected, open, or confirmation states where they clarify behavior.
 - **Use honest content.** Do not use lorem ipsum, vague filler, invented customer claims, or fabricated metrics. When a value is unknown, use a realistic value clearly presented as sample data or a labelled placeholder.
 - **Choose a point of view.** Let typography, density, spacing, color, imagery, and component shape express one deliberate direction. Variations should explore materially different ideas, not recolor the same layout.
+- **Refine with intent.** When asked to make a design bolder, quieter, simpler, clearer, or more delightful, make a focused change that preserves the brief and established visual world unless the user asks for a redesign.
 - **Avoid generic AI styling.** Do not default to purple gradient washes, decorative blobs, excessive glass effects, an icon beside every heading, uniformly rounded card grids, or warm beige canvases unrelated to the product. A single purposeful flourish is stronger than several competing effects.
 - **Use color by role.** Define background, surface, text, muted, border, primary action, secondary signal, and status roles. Use accents to guide attention rather than coloring every container.
 - **Treat typography as structure.** Establish a readable display/body hierarchy, keep line lengths and wrapping intentional, and ensure every string fits its container. Do not make a generic system font the entire visual concept unless the brief is intentionally utilitarian.

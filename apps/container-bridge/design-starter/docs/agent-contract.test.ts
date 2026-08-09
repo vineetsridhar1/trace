@@ -33,6 +33,9 @@ test("defines an artifact-first design workflow and quality gate", () => {
   assert.match(guidance, /Executable tokens and screen primitives/);
   assert.match(guidance, /docs\/playbooks\/README\.md/);
   assert.match(guidance, /Avoid generic AI styling/);
+  assert.match(guidance, /## Impeccable craft reference/);
+  assert.match(guidance, /surface mode: persuade, operate, read, or experience/);
+  assert.match(guidance, /Use bounded review passes/);
   assert.match(guidance, /## Final critique/);
   assert.match(guidance, /Brief fidelity/);
   assert.match(guidance, /Interaction and accessibility/);
@@ -51,4 +54,10 @@ test("preserves attribution for the adapted Open Design guidance", () => {
   assert.match(notice, /Apache License 2\.0/);
   assert.match(openDesignLicense, /Apache License/);
   assert.match(openDesignLicense, /Version 2\.0, January 2004/);
+});
+
+test("preserves attribution for the adapted Impeccable guidance", () => {
+  assert.match(notice, /Impeccable/);
+  assert.match(notice, /github\.com\/pbakaus\/impeccable/);
+  assert.match(notice, /Apache License 2\.0/);
 });
