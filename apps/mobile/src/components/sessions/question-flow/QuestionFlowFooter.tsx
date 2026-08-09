@@ -23,7 +23,7 @@ export function QuestionFlowFooter({
     <View style={[styles.dock, { paddingBottom: Math.max(12, bottomInset) }]}>
       {backVisible ? (
         <View style={styles.backShadow}>
-          <Glass preset="input" interactive style={styles.backGlass}>
+          <Glass preset="input" glassStyleEffect="clear" interactive style={styles.backGlass}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Previous question"
@@ -35,13 +35,15 @@ export function QuestionFlowFooter({
           </Glass>
         </View>
       ) : null}
-      <View style={styles.primaryShadow}>
+      <View style={[styles.primaryShadow, disabled && styles.primaryShadowDisabled]}>
         <Glass
           preset="input"
+          glassStyleEffect="clear"
           interactive={!disabled}
-          tint="rgba(0,116,225,0.76)"
-          style={[styles.glass, disabled && styles.disabled]}
+          tint={disabled ? "rgba(0,122,255,0.22)" : "rgba(0,122,255,0.46)"}
+          style={[styles.glass, disabled && styles.disabledGlass]}
         >
+          <View pointerEvents="none" style={styles.glassSheen} />
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled }}
@@ -49,7 +51,13 @@ export function QuestionFlowFooter({
             onPress={onPrimary}
             style={styles.action}
           >
-            <Text variant="body" align="center" style={styles.label}>{label}</Text>
+            <Text
+              variant="body"
+              align="center"
+              style={[styles.label, disabled && styles.disabledLabel]}
+            >
+              {label}
+            </Text>
           </Pressable>
         </Glass>
       </View>
@@ -91,19 +99,29 @@ const styles = StyleSheet.create({
   primaryShadow: {
     flex: 1,
     borderRadius: 26,
-    shadowColor: "#000000",
-    shadowOpacity: 0.42,
-    shadowRadius: 18,
+    shadowColor: questionColors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 9 },
     elevation: 9,
   },
+  primaryShadowDisabled: { shadowOpacity: 0.14 },
   glass: {
     minHeight: questionMetrics.actionHeight,
     borderRadius: 26,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.26)",
+    borderColor: "rgba(255,255,255,0.32)",
   },
-  disabled: { opacity: 0.45 },
+  disabledGlass: { borderColor: "rgba(255,255,255,0.14)" },
+  glassSheen: {
+    position: "absolute",
+    top: 1,
+    left: 18,
+    right: 18,
+    height: 1,
+    borderRadius: 1,
+    backgroundColor: "rgba(255,255,255,0.42)",
+  },
   action: {
     flex: 1,
     minHeight: questionMetrics.actionHeight,
@@ -112,4 +130,5 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   label: { color: questionColors.foreground, fontWeight: "600" },
+  disabledLabel: { opacity: 0.46 },
 });
