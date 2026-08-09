@@ -19,7 +19,7 @@ function forbidden(message: string): never {
   throw new GraphQLError(message, { extensions: { code: "FORBIDDEN" } });
 }
 
-function assertAllowedArguments(
+export function assertAllowedArguments(
   definition: TraceCliOperation,
   operation: RootOperation,
   field: string,
@@ -27,7 +27,13 @@ function assertAllowedArguments(
 ): void {
   const allowed = new Set(definition.argumentPaths);
 
-  const visit = (value: Record<string, unknown>, prefix: string): void => {
+  const visit = (value: unknown, prefix: string): void => {
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child, prefix);
+      return;
+    }
+    if (!value || typeof value !== "object" || value instanceof Date) return;
+
     for (const [name, child] of Object.entries(value)) {
       const path = prefix ? `${prefix}.${name}` : name;
       const isAllowed = allowed.has(path);
@@ -37,9 +43,7 @@ function assertAllowedArguments(
       if (!isAllowed && !hasAllowedChild) {
         forbidden(`The session credential cannot pass ${operation}.${field}.${path}`);
       }
-      if (child && typeof child === "object" && !Array.isArray(child) && !(child instanceof Date)) {
-        visit(child as Record<string, unknown>, path);
-      }
+      visit(child, path);
     }
   };
 

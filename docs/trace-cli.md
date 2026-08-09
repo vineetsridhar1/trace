@@ -20,6 +20,8 @@ sessions; and upload artifacts. It cannot call unrelated user or administration 
 prints the credential.
 
 AI guidance should invoke `"$TRACE_CLI"`, not rely on `trace` being present on the user's PATH.
+The command registry is available without authentication through `"$TRACE_CLI" --help --json`;
+command-specific schemas use `"$TRACE_CLI" <command> <subcommand> --help --json`.
 
 ## Commands
 
@@ -70,9 +72,12 @@ documents, even when the underlying resolver is otherwise available to the ownin
 Add each command as one focused module under `packages/cli/src/commands`, declare its options and
 positionals with `defineCommand`, and register it in `commands/index.ts`. Help, duplicate-option
 checks, choices, integer bounds, JSON handling, and unknown-option errors come from the shared
-command runtime. Add contract authorization coverage and command behavior coverage with the new
-operation. Build the repository before committing: the build produces `runtime/bin/trace.mjs`,
-updates the runtime content hash, and regenerates the desktop/container embedded copy.
+command runtime. Registration also adds it to the machine-readable help catalog used by agents.
+Add the GraphQL operation to `packages/cli-contract`; its document must validate against the
+canonical schema, and every permitted nested input path must be explicit. Add contract
+authorization coverage and command behavior coverage with the new operation. Build the repository
+before committing: the build produces `runtime/bin/trace.mjs`, updates the runtime content hash,
+and regenerates the desktop/container embedded copy.
 
 ## Automation contract
 

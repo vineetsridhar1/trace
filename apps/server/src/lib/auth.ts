@@ -408,6 +408,7 @@ export async function buildContext({ req, res }: ExpressContextFunctionArgument)
       throw new AuthenticationError("Agent credential is bound to another organization");
     }
     organizationId = authSubject.organizationId;
+    role = authSubject.role;
   } else if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
@@ -487,6 +488,7 @@ export async function buildWsContext(
       throw new AuthenticationError("Agent credential is bound to another organization");
     }
     organizationId = authSubject.organizationId;
+    role = authSubject.role;
   } else if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;

@@ -161,7 +161,10 @@ describe("auth helpers", () => {
       sessionGroupId: "group-1",
       invocationId: "invocation-1",
     });
-    prismaMock.session.findFirst.mockResolvedValueOnce({ createdById: "user-1" });
+    prismaMock.session.findFirst.mockResolvedValueOnce({
+      createdById: "user-1",
+      createdBy: { orgMemberships: [{ role: "member" }] },
+    } as never);
 
     await expect(authenticateUserAccessToken(token)).resolves.toBeNull();
   });
@@ -259,6 +262,38 @@ describe("auth helpers", () => {
     expect(context.actorType).toBe("user");
     expect(createUserLoaderMock).toHaveBeenCalled();
     expect(createSessionTicketsLoaderMock).toHaveBeenCalledWith("org-1");
+  });
+
+  it("builds agent context with the owner's current organization role", async () => {
+    const token = createAgentInvocationToken({
+      organizationId: "org-1",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      invocationId: "invocation-1",
+    });
+    prismaMock.session.findFirst.mockResolvedValueOnce({
+      createdById: "user-1",
+      createdBy: { orgMemberships: [{ role: "observer" }] },
+    } as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({ id: "user-1" });
+
+    const context = await buildContext({
+      req: {
+        headers: {
+          authorization: `Bearer ${token}`,
+          "x-organization-id": "org-1",
+        },
+        cookies: {},
+      },
+    } as unknown as Parameters<typeof buildContext>[0]);
+
+    expect(context).toMatchObject({
+      userId: "user-1",
+      organizationId: "org-1",
+      role: "observer",
+      actorType: "agent",
+      agentSessionId: "session-1",
+    });
   });
 
   it("reads the client source header into HTTP context", async () => {

@@ -2,6 +2,7 @@ import {
   TRACE_CLI_CAPABILITIES,
   type TraceCliCapability as AgentInvocationCapability,
 } from "@trace/cli-contract";
+import type { UserRole } from "@trace/gql";
 import jwt from "jsonwebtoken";
 import { prisma } from "./db.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
@@ -25,6 +26,7 @@ export type AgentInvocationToken = {
 export type AgentInvocationAuthSubject = AgentInvocationToken & {
   kind: "agent";
   userId: string;
+  role: UserRole;
 };
 
 export function createAgentInvocationToken(input: {
@@ -93,13 +95,26 @@ export async function authenticateAgentInvocationToken(
       activeInvocationId: payload.invocationId,
       agentStatus: { notIn: ["failed", "stopped"] },
     },
-    select: { createdById: true },
+    select: {
+      createdById: true,
+      createdBy: {
+        select: {
+          orgMemberships: {
+            where: { organizationId: payload.organizationId },
+            select: { role: true },
+            take: 1,
+          },
+        },
+      },
+    },
   });
-  if (!session) return null;
+  const membership = session?.createdBy?.orgMemberships[0];
+  if (!session || !membership) return null;
 
   return {
     ...payload,
     kind: "agent",
     userId: session.createdById,
+    role: membership.role,
   };
 }

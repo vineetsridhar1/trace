@@ -1,14 +1,13 @@
 import express, { Router, type Request, type Response, type Router as RouterType } from "express";
+import { TRACE_CLI_ARTIFACT_MAX_BYTES } from "@trace/cli-contract";
 import { authenticateAgentInvocationToken } from "../lib/agent-invocation-auth.js";
 import { artifactService } from "../services/artifact.js";
 import { ValidationError } from "../lib/errors.js";
 
 const router: RouterType = Router();
-const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
-
 router.post(
   "/agent/artifacts",
-  express.raw({ type: "application/gzip", limit: MAX_ARCHIVE_BYTES }),
+  express.raw({ type: "application/gzip", limit: TRACE_CLI_ARTIFACT_MAX_BYTES }),
   async (req: Request, res: Response) => {
     const authorization = req.header("authorization");
     const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : null;

@@ -82,18 +82,21 @@ export function assertCommandDefinitions(commands: readonly CommandDefinition[])
 export function parseGlobalOptions(argv: readonly string[]): {
   args: string[];
   options: GlobalOptions;
+  help: boolean;
 } {
   const args: string[] = [];
   const options: GlobalOptions = { json: false };
+  let help = false;
   let optionsEnded = false;
   for (const value of argv) {
     if (value === "--") {
       optionsEnded = true;
       args.push(value);
     } else if (!optionsEnded && value === "--json") options.json = true;
+    else if (!optionsEnded && (value === "--help" || value === "-h")) help = true;
     else args.push(value);
   }
-  return { args, options };
+  return { args, options, help };
 }
 
 export function findCommand(
@@ -231,6 +234,16 @@ export function commandHelp(command: CommandDefinition): string {
         ]
       : []),
   ].join("\n");
+}
+
+export function commandDescriptor(command: CommandDefinition) {
+  return {
+    path: command.path,
+    description: command.description,
+    usage: commandUsage(command),
+    positionals: command.positionals ?? [],
+    options: command.options ?? [],
+  };
 }
 
 export function createCommandContext(

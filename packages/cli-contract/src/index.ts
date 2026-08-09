@@ -11,6 +11,8 @@ export const TRACE_CLI_CAPABILITIES = [
   "session:archive",
 ] as const;
 
+export const TRACE_CLI_ARTIFACT_MAX_BYTES = 64 * 1024 * 1024;
+
 export type TraceCliCapability = (typeof TRACE_CLI_CAPABILITIES)[number];
 export type TraceCliOperationType = "query" | "mutation" | "subscription";
 

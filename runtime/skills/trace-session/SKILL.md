@@ -16,6 +16,19 @@ Use this skill when the user asks you to find, create, message, run, stop, monit
 - Starting, messaging, running, stopping, and archiving sessions change shared Trace state. Do them only when they are requested or are a necessary part of the requested workflow.
 - Do not create recursive agent loops or repeatedly spawn sessions unless the user explicitly authorizes that behavior.
 
+## Discover commands
+
+The CLI exposes its registered command surface as JSON. When the request needs a Trace capability
+that is not documented below, inspect the catalog instead of guessing command names or options:
+
+```sh
+"$TRACE_CLI" --help --json
+"$TRACE_CLI" <command> <subcommand> --help --json
+```
+
+If the catalog does not contain the capability, report that it is unavailable. Do not substitute
+an unrelated command or call Trace's GraphQL API directly.
+
 ## Discover context and destinations
 
 ```sh

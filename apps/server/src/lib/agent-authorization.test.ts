@@ -2,7 +2,7 @@ import { traceCliOperations } from "@trace/cli-contract";
 import { Kind, parse, type FieldNode, type GraphQLResolveInfo } from "graphql";
 import { describe, expect, it, vi } from "vitest";
 import type { Context } from "../context.js";
-import { restrictAgentRootResolvers } from "./agent-authorization.js";
+import { assertAllowedArguments, restrictAgentRootResolvers } from "./agent-authorization.js";
 
 function context(sessionId: string): Context {
   return {
@@ -50,6 +50,19 @@ const ROOT_OPERATION = {
 } as const;
 
 describe("agent GraphQL authorization", () => {
+  it("validates fields nested inside input arrays", () => {
+    const definition = {
+      ...traceCliOperations.startSession,
+      argumentPaths: ["input.items.id"],
+    };
+
+    expect(() =>
+      assertAllowedArguments(definition, "Mutation", "startSession", {
+        input: { items: [{ id: "allowed", privileged: true }] },
+      }),
+    ).toThrow("cannot pass Mutation.startSession.input.items.privileged");
+  });
+
   it("accepts every canonical managed CLI operation", () => {
     for (const definition of Object.values(traceCliOperations)) {
       const resolver = vi.fn(() => "ok");

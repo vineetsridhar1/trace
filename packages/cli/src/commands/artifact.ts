@@ -3,8 +3,11 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { TRACE_CLI_ARTIFACT_MAX_BYTES } from "@trace/cli-contract";
 import { CliError, ExitCode, usage } from "../errors.js";
 import { defineCommand, optionString } from "../runtime.js";
+
+const UPLOAD_TIMEOUT_MS = 2 * 60 * 1_000;
 
 export const artifactCommand = defineCommand({
   path: ["artifact", "push"],
@@ -71,6 +74,11 @@ export const artifactCommand = defineCommand({
         env: { ...ctx.env, COPYFILE_DISABLE: "1" },
       });
       if (packed.status !== 0) usage("Could not package artifact");
+      if (statSync(archivePath).size > TRACE_CLI_ARTIFACT_MAX_BYTES) {
+        usage(
+          `Artifact archive exceeds the ${TRACE_CLI_ARTIFACT_MAX_BYTES / 1024 / 1024} MiB upload limit`,
+        );
+      }
 
       const upload = () =>
         fetch(new URL("/agent/artifacts", apiUrl), {
@@ -83,6 +91,7 @@ export const artifactCommand = defineCommand({
             "X-Trace-Idempotency-Key": idempotencyKey,
           },
           body: readFileSync(archivePath),
+          signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
         });
       let response: Response;
       try {

@@ -58,6 +58,25 @@ describe("Trace CLI", () => {
     expect(output).toContain("Start a new session group");
   });
 
+  it("exposes the command registry as machine-readable help", async () => {
+    await expect(run(["--help", "--json"])).resolves.toBe(0);
+    expect(JSON.parse(stdout.mock.calls.flat().join(""))).toMatchObject({
+      commands: expect.arrayContaining([
+        expect.objectContaining({
+          path: ["session", "start"],
+          usage: expect.stringContaining("trace session start"),
+          options: expect.arrayContaining([expect.objectContaining({ flag: "--tool" })]),
+        }),
+      ]),
+    });
+
+    stdout.mockClear();
+    await expect(run(["session", "start", "--help", "--json"])).resolves.toBe(0);
+    expect(JSON.parse(stdout.mock.calls.flat().join(""))).toMatchObject({
+      command: { path: ["session", "start"] },
+    });
+  });
+
   it("starts a new group in the current session destination without exposing the bearer", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_SESSION_ID", "session-1");

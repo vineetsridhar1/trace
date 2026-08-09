@@ -57,6 +57,12 @@ describe("declarative command runtime", () => {
     expect(parseCommandInput(command, global.args).positionals).toEqual(["--json"]);
   });
 
+  it("does not interpret help after the option terminator", () => {
+    const global = parseGlobalOptions(["thing", "run", "--", "--help"]);
+    expect(global.help).toBe(false);
+    expect(parseCommandInput(command, global.args).positionals).toEqual(["--help"]);
+  });
+
   it.each([
     [["thing", "run", "--limit", "0"], "--limit must be at least 1"],
     [["thing", "run", "--mode", "unsafe"], "--mode must be one of: safe, fast"],

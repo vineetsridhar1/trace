@@ -56,11 +56,15 @@ describe("agent invocation auth", () => {
       sessionGroupId: "group-1",
       invocationId: "invocation-1",
     });
-    prismaMock.session.findFirst.mockResolvedValueOnce({ createdById: "owner-1" });
+    prismaMock.session.findFirst.mockResolvedValueOnce({
+      createdById: "owner-1",
+      createdBy: { orgMemberships: [{ role: "member" }] },
+    } as never);
 
     await expect(authenticateAgentInvocationToken(token)).resolves.toMatchObject({
       kind: "agent",
       userId: "owner-1",
+      role: "member",
       sessionId: "session-1",
     });
     expect(prismaMock.session.findFirst).toHaveBeenCalledWith({
@@ -71,10 +75,36 @@ describe("agent invocation auth", () => {
         activeInvocationId: "invocation-1",
         agentStatus: { notIn: ["failed", "stopped"] },
       },
-      select: { createdById: true },
+      select: {
+        createdById: true,
+        createdBy: {
+          select: {
+            orgMemberships: {
+              where: { organizationId: "org-1" },
+              select: { role: true },
+              take: 1,
+            },
+          },
+        },
+      },
     });
 
     prismaMock.session.findFirst.mockResolvedValueOnce(null);
+    await expect(authenticateAgentInvocationToken(token)).resolves.toBeNull();
+  });
+
+  it("rejects an active invocation after its owner loses organization membership", async () => {
+    const token = createAgentInvocationToken({
+      organizationId: "org-1",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      invocationId: "invocation-1",
+    });
+    prismaMock.session.findFirst.mockResolvedValueOnce({
+      createdById: "owner-1",
+      createdBy: { orgMemberships: [] },
+    } as never);
+
     await expect(authenticateAgentInvocationToken(token)).resolves.toBeNull();
   });
 });

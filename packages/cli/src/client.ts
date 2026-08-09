@@ -12,6 +12,7 @@ type GraphQlResponse<T> = {
 };
 
 const CONNECTION_ACK_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 30_000;
 
 function errorFromStatus(status: number, message: string): CliError {
   if (status === 401) return new CliError(message, ExitCode.authentication, "authentication");
@@ -61,6 +62,7 @@ export class TraceClient {
         method: init.method ?? "GET",
         headers: this.headers(),
         body: init.body === undefined ? undefined : JSON.stringify(init.body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch {
       throw new CliError(
@@ -93,6 +95,7 @@ export class TraceClient {
           query: operation.document,
           variables,
         }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch {
       throw new CliError(

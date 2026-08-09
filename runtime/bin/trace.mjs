@@ -7,524 +7,8 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
-// src/errors.ts
-var ExitCode = {
-  success: 0,
-  authentication: 2,
-  authorization: 3,
-  validation: 4,
-  connectivity: 5,
-  server: 6,
-  usage: 64
-};
-var CliError = class extends Error {
-  constructor(message, exitCode, category) {
-    super(message);
-    this.exitCode = exitCode;
-    this.category = category;
-    this.name = "CliError";
-  }
-};
-function usage(message) {
-  throw new CliError(message, ExitCode.usage, "usage");
-}
-
-// src/client.ts
-var CONNECTION_ACK_TIMEOUT_MS = 1e4;
-function errorFromStatus(status, message) {
-  if (status === 401) return new CliError(message, ExitCode.authentication, "authentication");
-  if (status === 403) return new CliError(message, ExitCode.authorization, "authorization");
-  if (status >= 400 && status < 500) {
-    return new CliError(message, ExitCode.validation, "validation");
-  }
-  return new CliError(message, ExitCode.server, "server");
-}
-function graphQlError(error) {
-  const message = typeof error.message === "string" ? error.message : "GraphQL request failed";
-  const code = error.extensions?.code;
-  if (code === "UNAUTHENTICATED") {
-    return new CliError(message, ExitCode.authentication, "authentication");
-  }
-  if (code === "FORBIDDEN") {
-    return new CliError(message, ExitCode.authorization, "authorization");
-  }
-  if (code === "BAD_USER_INPUT" || code === "NOT_FOUND") {
-    return new CliError(message, ExitCode.validation, "validation");
-  }
-  return new CliError(message, ExitCode.server, "server");
-}
-var TraceClient = class {
-  constructor(serverUrl, token, organizationId) {
-    this.serverUrl = serverUrl;
-    this.token = token;
-    this.organizationId = organizationId;
-  }
-  headers(extra) {
-    return {
-      Authorization: `Bearer ${this.token}`,
-      "Content-Type": "application/json",
-      "X-Trace-Client-Source": "cli",
-      ...this.organizationId ? { "X-Organization-Id": this.organizationId } : {},
-      ...extra
-    };
-  }
-  async http(path, init = {}) {
-    let response;
-    try {
-      response = await fetch(new URL(path, this.serverUrl), {
-        method: init.method ?? "GET",
-        headers: this.headers(),
-        body: init.body === void 0 ? void 0 : JSON.stringify(init.body)
-      });
-    } catch {
-      throw new CliError(
-        `Could not connect to ${this.serverUrl}`,
-        ExitCode.connectivity,
-        "connectivity"
-      );
-    }
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw errorFromStatus(
-        response.status,
-        typeof payload.error === "string" ? payload.error : `Server returned ${response.status}`
-      );
-    }
-    return payload;
-  }
-  async graphql(operation2, variables) {
-    let response;
-    try {
-      response = await fetch(new URL("/graphql", this.serverUrl), {
-        method: "POST",
-        headers: this.headers(),
-        body: JSON.stringify({
-          operationName: operation2.name,
-          query: operation2.document,
-          variables
-        })
-      });
-    } catch {
-      throw new CliError(
-        `Could not connect to ${this.serverUrl}`,
-        ExitCode.connectivity,
-        "connectivity"
-      );
-    }
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw errorFromStatus(response.status, `Server returned ${response.status}`);
-    }
-    if (payload.errors?.length) throw graphQlError(payload.errors[0] ?? {});
-    if (!payload.data) throw new CliError("Server returned no data", ExitCode.server, "server");
-    return payload.data;
-  }
-  async subscribe(operation2, variables, onData) {
-    const url = new URL("/graphql", this.serverUrl);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(url, "graphql-transport-ws");
-    await new Promise((resolve2, reject) => {
-      let acknowledged = false;
-      let completed = false;
-      let failed = false;
-      let stopped = false;
-      const fail = (error) => {
-        if (failed) return;
-        failed = true;
-        clearTimeout(ackTimeout);
-        reject(error);
-      };
-      const close = () => {
-        stopped = true;
-        clearTimeout(ackTimeout);
-        socket.close(1e3, "CLI stopped following");
-      };
-      const ackTimeout = setTimeout(() => {
-        fail(
-          new CliError(
-            `Trace did not acknowledge the subscription connection within ${CONNECTION_ACK_TIMEOUT_MS / 1e3} seconds`,
-            ExitCode.connectivity,
-            "connectivity"
-          )
-        );
-        socket.close(1e3, "Connection acknowledgement timed out");
-      }, CONNECTION_ACK_TIMEOUT_MS);
-      process.once("SIGINT", close);
-      socket.addEventListener("open", () => {
-        socket.send(
-          JSON.stringify({
-            type: "connection_init",
-            payload: {
-              token: this.token,
-              organizationId: this.organizationId,
-              clientSource: "cli"
-            }
-          })
-        );
-      });
-      socket.addEventListener("message", (message) => {
-        let payload;
-        try {
-          payload = JSON.parse(String(message.data));
-        } catch {
-          return;
-        }
-        if (payload.type === "connection_ack" && !acknowledged) {
-          acknowledged = true;
-          clearTimeout(ackTimeout);
-          socket.send(
-            JSON.stringify({
-              id: "trace-cli",
-              type: "subscribe",
-              payload: {
-                operationName: operation2.name,
-                query: operation2.document,
-                variables
-              }
-            })
-          );
-        } else if (payload.type === "next" && payload.payload && !Array.isArray(payload.payload) && payload.payload.data) {
-          onData(payload.payload.data);
-        } else if (payload.type === "error") {
-          const errors = Array.isArray(payload.payload) ? payload.payload : [];
-          fail(graphQlError(errors[0] ?? {}));
-          socket.close();
-        } else if (payload.type === "complete") {
-          completed = true;
-          socket.close(1e3, "Subscription completed");
-        }
-      });
-      socket.addEventListener("error", () => {
-        fail(
-          new CliError(`Could not connect to ${url.origin}`, ExitCode.connectivity, "connectivity")
-        );
-        socket.close();
-      });
-      socket.addEventListener("close", (event) => {
-        clearTimeout(ackTimeout);
-        process.removeListener("SIGINT", close);
-        if (failed) return;
-        if (stopped || completed) {
-          resolve2();
-          return;
-        }
-        if (!acknowledged && (event.code === 4401 || event.code === 4403)) {
-          fail(
-            new CliError(
-              event.reason || "Trace rejected the subscription credential",
-              ExitCode.authentication,
-              "authentication"
-            )
-          );
-          return;
-        }
-        fail(
-          new CliError(
-            event.reason || `Trace subscription closed unexpectedly (${event.code})`,
-            ExitCode.connectivity,
-            "connectivity"
-          )
-        );
-      });
-    });
-  }
-};
-
-// src/runtime.ts
-function defineCommand(definition) {
-  return definition;
-}
-function assertCommandDefinitions(commands2) {
-  const paths = /* @__PURE__ */ new Set();
-  for (const command of commands2) {
-    const path = command.path.join(" ");
-    if (!path || paths.has(path)) throw new Error(`Duplicate or empty command path: ${path}`);
-    paths.add(path);
-    const optionNames = /* @__PURE__ */ new Set();
-    const optionFlags = /* @__PURE__ */ new Set();
-    for (const option of command.options ?? []) {
-      if (optionNames.has(option.name) || optionFlags.has(option.flag)) {
-        throw new Error(`Duplicate option in command ${path}: ${option.flag}`);
-      }
-      optionNames.add(option.name);
-      optionFlags.add(option.flag);
-    }
-    const positionals = command.positionals ?? [];
-    const variadicIndex = positionals.findIndex((definition) => definition.variadic);
-    if (variadicIndex !== -1 && variadicIndex !== positionals.length - 1) {
-      throw new Error(`Variadic positional must be last for ${path}`);
-    }
-  }
-}
-function parseGlobalOptions(argv) {
-  const args = [];
-  const options = { json: false };
-  let optionsEnded = false;
-  for (const value of argv) {
-    if (value === "--") {
-      optionsEnded = true;
-      args.push(value);
-    } else if (!optionsEnded && value === "--json") options.json = true;
-    else args.push(value);
-  }
-  return { args, options };
-}
-function findCommand(commands2, args) {
-  return commands2.filter((candidate) => candidate.path.every((part, index) => args[index] === part)).sort((left, right) => right.path.length - left.path.length)[0];
-}
-function parseOptionValue(definition, raw) {
-  if (definition.kind === "boolean") return true;
-  if (definition.kind === "string") {
-    if (definition.choices && !definition.choices.includes(raw)) {
-      usage(`${definition.flag} must be one of: ${definition.choices.join(", ")}`);
-    }
-    return raw;
-  }
-  const value = Number(raw);
-  if (!Number.isInteger(value)) usage(`${definition.flag} requires an integer`);
-  if (definition.min !== void 0 && value < definition.min) {
-    usage(`${definition.flag} must be at least ${definition.min}`);
-  }
-  if (definition.max !== void 0 && value > definition.max) {
-    usage(`${definition.flag} must be at most ${definition.max}`);
-  }
-  return value;
-}
-function parseCommandInput(command, args) {
-  const definitions = new Map((command.options ?? []).map((option) => [option.flag, option]));
-  const options = {};
-  const providedOptions = /* @__PURE__ */ new Set();
-  const positionals = [];
-  let optionsEnded = false;
-  for (let index = command.path.length; index < args.length; index += 1) {
-    const raw = args[index] ?? "";
-    if (!optionsEnded && raw === "--") {
-      optionsEnded = true;
-      continue;
-    }
-    if (optionsEnded) {
-      positionals.push(raw);
-      continue;
-    }
-    const equals = raw.indexOf("=");
-    const flag = equals === -1 ? raw : raw.slice(0, equals);
-    const definition = definitions.get(flag);
-    if (!definition) {
-      if (raw.startsWith("--")) usage(`Unknown option: ${flag}`);
-      positionals.push(raw);
-      continue;
-    }
-    if (providedOptions.has(definition.name)) usage(`${definition.flag} may only be provided once`);
-    providedOptions.add(definition.name);
-    if (definition.kind === "boolean") {
-      if (equals !== -1) usage(`${definition.flag} does not accept a value`);
-      options[definition.name] = true;
-      continue;
-    }
-    const value = equals === -1 ? args[++index] : raw.slice(equals + 1);
-    if (!value) usage(`${definition.flag} requires ${definition.valueName}`);
-    options[definition.name] = parseOptionValue(definition, value);
-  }
-  const positionalDefinitions = command.positionals ?? [];
-  const variadicIndex = positionalDefinitions.findIndex((definition) => definition.variadic);
-  const minimum = positionalDefinitions.filter((definition) => definition.required).length;
-  if (positionals.length < minimum) {
-    const missing = positionalDefinitions.find(
-      (definition, index) => definition.required && index >= positionals.length
-    );
-    usage(`${missing?.name ?? "Argument"} is required`);
-  }
-  if (variadicIndex === -1 && positionals.length > positionalDefinitions.length) {
-    usage(`Unexpected argument: ${positionals[positionalDefinitions.length]}`);
-  }
-  return { positionals, options, providedOptions };
-}
-function optionString(input, name) {
-  const value = input.options[name];
-  if (value === void 0) return void 0;
-  if (typeof value !== "string") throw new Error(`Option ${name} is not a string`);
-  return value;
-}
-function optionInteger(input, name) {
-  const value = input.options[name];
-  if (value === void 0) return void 0;
-  if (typeof value !== "number") throw new Error(`Option ${name} is not a number`);
-  return value;
-}
-function optionBoolean(input, name) {
-  return input.options[name] === true;
-}
-function commandUsage(command) {
-  const positionals = (command.positionals ?? []).map((definition) => {
-    const value = definition.variadic ? `${definition.name}...` : definition.name;
-    return definition.required ? `<${value}>` : `[${value}]`;
-  });
-  const options = (command.options ?? []).map(
-    (definition) => definition.kind === "boolean" ? `[${definition.flag}]` : `[${definition.flag} ${definition.valueName}]`
-  );
-  return ["trace", ...command.path, ...positionals, ...options, "[--json]"].join(" ");
-}
-function commandHelp(command) {
-  const options = command.options ?? [];
-  return [
-    `Usage: ${commandUsage(command)}`,
-    "",
-    command.description,
-    ...options.length ? [
-      "",
-      "Options:",
-      ...options.map((definition) => {
-        const label = definition.kind === "boolean" ? definition.flag : `${definition.flag} ${definition.valueName}`;
-        return `  ${label.padEnd(30)} ${definition.description}`;
-      })
-    ] : []
-  ].join("\n");
-}
-function createCommandContext(options, env = process.env) {
-  return {
-    options,
-    env,
-    output(value, human) {
-      process.stdout.write(options.json ? `${JSON.stringify(value)}
-` : `${human}
-`);
-    },
-    async client(requireOrganization = true) {
-      const token = env.TRACE_INVOCATION_TOKEN;
-      if (!token) {
-        throw new CliError(
-          "This command is only available inside an active Trace AI session",
-          ExitCode.authentication,
-          "authentication"
-        );
-      }
-      const serverUrl = env.TRACE_API_URL || env.TRACE_SERVER_URL;
-      if (!serverUrl) {
-        throw new CliError(
-          "The Trace server URL is unavailable in this session",
-          ExitCode.authentication,
-          "authentication"
-        );
-      }
-      const organizationId = env.TRACE_ORGANIZATION_ID;
-      if (requireOrganization && !organizationId) {
-        throw new CliError(
-          "The Trace organization is unavailable in this session",
-          ExitCode.authentication,
-          "authentication"
-        );
-      }
-      return new TraceClient(serverUrl, token, organizationId);
-    }
-  };
-}
-
-// src/commands/artifact.ts
-var artifactCommand = defineCommand({
-  path: ["artifact", "push"],
-  description: "Upload an immutable artifact from an active Trace invocation",
-  positionals: [
-    { name: "type", required: true },
-    { name: "file-or-directory", required: true }
-  ],
-  options: [
-    {
-      name: "key",
-      flag: "--key",
-      kind: "string",
-      valueName: "KEY",
-      description: "Artifact slot key"
-    },
-    {
-      name: "idempotencyKey",
-      flag: "--idempotency-key",
-      kind: "string",
-      valueName: "KEY",
-      description: "Retry-safe upload key"
-    }
-  ],
-  async run(ctx, input) {
-    const type = input.positionals[0] ?? usage("Artifact type is required");
-    const sourceArg = input.positionals[1] ?? usage("Artifact file or directory is required");
-    const source = resolve(sourceArg);
-    const key = optionString(input, "key") ?? (type === "visual-plan" || type === "trace.visual-plan.v1" ? "primary" : "default");
-    const idempotencyKey = optionString(input, "idempotencyKey") ?? randomUUID();
-    if (idempotencyKey.length > 200) usage("--idempotency-key must be at most 200 characters");
-    if (!existsSync(source)) usage(`Path does not exist: ${source}`);
-    const apiUrl = ctx.env.TRACE_API_URL || ctx.env.TRACE_SERVER_URL;
-    const token = ctx.env.TRACE_INVOCATION_TOKEN;
-    if (!apiUrl || !token) {
-      throw new CliError(
-        "This command is only available inside an active Trace session",
-        ExitCode.authentication,
-        "authentication"
-      );
-    }
-    if (type === "video" || type === "trace.video.v1") {
-      if (!statSync(source).isFile()) usage("Video artifacts require one video file");
-      const validator = ctx.env.TRACE_BROWSER_VIDEO_VALIDATE;
-      if (!validator) usage("Browser video validation is unavailable");
-      const validated = spawnSync(validator, [source], { stdio: "inherit", env: ctx.env });
-      if (validated.status !== 0) {
-        throw new CliError("video validation failed; artifact was not uploaded", 1, "validation");
-      }
-    }
-    const temporary = mkdtempSync(join(tmpdir(), "trace-artifact-"));
-    const archivePath = join(temporary, "artifact.tar.gz");
-    try {
-      const sourceStat = statSync(source);
-      const tarArgs = sourceStat.isDirectory() ? ["-czf", archivePath, "-C", source, "."] : ["-czf", archivePath, "-C", dirname(source), basename(source)];
-      const packed = spawnSync("tar", tarArgs, {
-        stdio: "inherit",
-        env: { ...ctx.env, COPYFILE_DISABLE: "1" }
-      });
-      if (packed.status !== 0) usage("Could not package artifact");
-      const upload = () => fetch(new URL("/agent/artifacts", apiUrl), {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/gzip",
-          "X-Trace-Artifact-Type": type,
-          "X-Trace-Artifact-Key": key,
-          "X-Trace-Idempotency-Key": idempotencyKey
-        },
-        body: readFileSync(archivePath)
-      });
-      let response;
-      try {
-        response = await upload();
-        if (response.status >= 500) response = await upload();
-      } catch {
-        try {
-          response = await upload();
-        } catch {
-          throw new CliError(
-            `Could not connect to Trace; retry with --idempotency-key ${idempotencyKey}`,
-            ExitCode.connectivity,
-            "connectivity"
-          );
-        }
-      }
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || typeof result.artifact?.id !== "string") {
-        const error = response.status === 401 ? { exitCode: ExitCode.authentication, category: "authentication" } : response.status === 403 ? { exitCode: ExitCode.authorization, category: "authorization" } : response.status >= 400 && response.status < 500 ? { exitCode: ExitCode.validation, category: "validation" } : { exitCode: ExitCode.server, category: "server" };
-        throw new CliError(
-          `${typeof result.error === "string" ? result.error : "Artifact upload failed"}; retry with --idempotency-key ${idempotencyKey}`,
-          error.exitCode,
-          error.category
-        );
-      }
-      ctx.output(
-        { artifact: { id: result.artifact.id, type, key }, idempotencyKey },
-        result.artifact.id
-      );
-    } finally {
-      rmSync(temporary, { recursive: true, force: true });
-    }
-  }
-});
-
 // ../cli-contract/dist/index.js
+var TRACE_CLI_ARTIFACT_MAX_BYTES = 64 * 1024 * 1024;
 function operation(definition) {
   return definition;
 }
@@ -762,6 +246,544 @@ var traceCliOperations = {
   })
 };
 var operationsByName = new Map(Object.values(traceCliOperations).map((definition) => [definition.name, definition]));
+
+// src/errors.ts
+var ExitCode = {
+  success: 0,
+  authentication: 2,
+  authorization: 3,
+  validation: 4,
+  connectivity: 5,
+  server: 6,
+  usage: 64
+};
+var CliError = class extends Error {
+  constructor(message, exitCode, category) {
+    super(message);
+    this.exitCode = exitCode;
+    this.category = category;
+    this.name = "CliError";
+  }
+};
+function usage(message) {
+  throw new CliError(message, ExitCode.usage, "usage");
+}
+
+// src/client.ts
+var CONNECTION_ACK_TIMEOUT_MS = 1e4;
+var REQUEST_TIMEOUT_MS = 3e4;
+function errorFromStatus(status, message) {
+  if (status === 401) return new CliError(message, ExitCode.authentication, "authentication");
+  if (status === 403) return new CliError(message, ExitCode.authorization, "authorization");
+  if (status >= 400 && status < 500) {
+    return new CliError(message, ExitCode.validation, "validation");
+  }
+  return new CliError(message, ExitCode.server, "server");
+}
+function graphQlError(error) {
+  const message = typeof error.message === "string" ? error.message : "GraphQL request failed";
+  const code = error.extensions?.code;
+  if (code === "UNAUTHENTICATED") {
+    return new CliError(message, ExitCode.authentication, "authentication");
+  }
+  if (code === "FORBIDDEN") {
+    return new CliError(message, ExitCode.authorization, "authorization");
+  }
+  if (code === "BAD_USER_INPUT" || code === "NOT_FOUND") {
+    return new CliError(message, ExitCode.validation, "validation");
+  }
+  return new CliError(message, ExitCode.server, "server");
+}
+var TraceClient = class {
+  constructor(serverUrl, token, organizationId) {
+    this.serverUrl = serverUrl;
+    this.token = token;
+    this.organizationId = organizationId;
+  }
+  headers(extra) {
+    return {
+      Authorization: `Bearer ${this.token}`,
+      "Content-Type": "application/json",
+      "X-Trace-Client-Source": "cli",
+      ...this.organizationId ? { "X-Organization-Id": this.organizationId } : {},
+      ...extra
+    };
+  }
+  async http(path, init = {}) {
+    let response;
+    try {
+      response = await fetch(new URL(path, this.serverUrl), {
+        method: init.method ?? "GET",
+        headers: this.headers(),
+        body: init.body === void 0 ? void 0 : JSON.stringify(init.body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
+    } catch {
+      throw new CliError(
+        `Could not connect to ${this.serverUrl}`,
+        ExitCode.connectivity,
+        "connectivity"
+      );
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw errorFromStatus(
+        response.status,
+        typeof payload.error === "string" ? payload.error : `Server returned ${response.status}`
+      );
+    }
+    return payload;
+  }
+  async graphql(operation2, variables) {
+    let response;
+    try {
+      response = await fetch(new URL("/graphql", this.serverUrl), {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({
+          operationName: operation2.name,
+          query: operation2.document,
+          variables
+        }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
+    } catch {
+      throw new CliError(
+        `Could not connect to ${this.serverUrl}`,
+        ExitCode.connectivity,
+        "connectivity"
+      );
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw errorFromStatus(response.status, `Server returned ${response.status}`);
+    }
+    if (payload.errors?.length) throw graphQlError(payload.errors[0] ?? {});
+    if (!payload.data) throw new CliError("Server returned no data", ExitCode.server, "server");
+    return payload.data;
+  }
+  async subscribe(operation2, variables, onData) {
+    const url = new URL("/graphql", this.serverUrl);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(url, "graphql-transport-ws");
+    await new Promise((resolve2, reject) => {
+      let acknowledged = false;
+      let completed = false;
+      let failed = false;
+      let stopped = false;
+      const fail = (error) => {
+        if (failed) return;
+        failed = true;
+        clearTimeout(ackTimeout);
+        reject(error);
+      };
+      const close = () => {
+        stopped = true;
+        clearTimeout(ackTimeout);
+        socket.close(1e3, "CLI stopped following");
+      };
+      const ackTimeout = setTimeout(() => {
+        fail(
+          new CliError(
+            `Trace did not acknowledge the subscription connection within ${CONNECTION_ACK_TIMEOUT_MS / 1e3} seconds`,
+            ExitCode.connectivity,
+            "connectivity"
+          )
+        );
+        socket.close(1e3, "Connection acknowledgement timed out");
+      }, CONNECTION_ACK_TIMEOUT_MS);
+      process.once("SIGINT", close);
+      socket.addEventListener("open", () => {
+        socket.send(
+          JSON.stringify({
+            type: "connection_init",
+            payload: {
+              token: this.token,
+              organizationId: this.organizationId,
+              clientSource: "cli"
+            }
+          })
+        );
+      });
+      socket.addEventListener("message", (message) => {
+        let payload;
+        try {
+          payload = JSON.parse(String(message.data));
+        } catch {
+          return;
+        }
+        if (payload.type === "connection_ack" && !acknowledged) {
+          acknowledged = true;
+          clearTimeout(ackTimeout);
+          socket.send(
+            JSON.stringify({
+              id: "trace-cli",
+              type: "subscribe",
+              payload: {
+                operationName: operation2.name,
+                query: operation2.document,
+                variables
+              }
+            })
+          );
+        } else if (payload.type === "next" && payload.payload && !Array.isArray(payload.payload) && payload.payload.data) {
+          onData(payload.payload.data);
+        } else if (payload.type === "error") {
+          const errors = Array.isArray(payload.payload) ? payload.payload : [];
+          fail(graphQlError(errors[0] ?? {}));
+          socket.close();
+        } else if (payload.type === "complete") {
+          completed = true;
+          socket.close(1e3, "Subscription completed");
+        }
+      });
+      socket.addEventListener("error", () => {
+        fail(
+          new CliError(`Could not connect to ${url.origin}`, ExitCode.connectivity, "connectivity")
+        );
+        socket.close();
+      });
+      socket.addEventListener("close", (event) => {
+        clearTimeout(ackTimeout);
+        process.removeListener("SIGINT", close);
+        if (failed) return;
+        if (stopped || completed) {
+          resolve2();
+          return;
+        }
+        if (!acknowledged && (event.code === 4401 || event.code === 4403)) {
+          fail(
+            new CliError(
+              event.reason || "Trace rejected the subscription credential",
+              ExitCode.authentication,
+              "authentication"
+            )
+          );
+          return;
+        }
+        fail(
+          new CliError(
+            event.reason || `Trace subscription closed unexpectedly (${event.code})`,
+            ExitCode.connectivity,
+            "connectivity"
+          )
+        );
+      });
+    });
+  }
+};
+
+// src/runtime.ts
+function defineCommand(definition) {
+  return definition;
+}
+function assertCommandDefinitions(commands2) {
+  const paths = /* @__PURE__ */ new Set();
+  for (const command of commands2) {
+    const path = command.path.join(" ");
+    if (!path || paths.has(path)) throw new Error(`Duplicate or empty command path: ${path}`);
+    paths.add(path);
+    const optionNames = /* @__PURE__ */ new Set();
+    const optionFlags = /* @__PURE__ */ new Set();
+    for (const option of command.options ?? []) {
+      if (optionNames.has(option.name) || optionFlags.has(option.flag)) {
+        throw new Error(`Duplicate option in command ${path}: ${option.flag}`);
+      }
+      optionNames.add(option.name);
+      optionFlags.add(option.flag);
+    }
+    const positionals = command.positionals ?? [];
+    const variadicIndex = positionals.findIndex((definition) => definition.variadic);
+    if (variadicIndex !== -1 && variadicIndex !== positionals.length - 1) {
+      throw new Error(`Variadic positional must be last for ${path}`);
+    }
+  }
+}
+function parseGlobalOptions(argv) {
+  const args = [];
+  const options = { json: false };
+  let help = false;
+  let optionsEnded = false;
+  for (const value of argv) {
+    if (value === "--") {
+      optionsEnded = true;
+      args.push(value);
+    } else if (!optionsEnded && value === "--json") options.json = true;
+    else if (!optionsEnded && (value === "--help" || value === "-h")) help = true;
+    else args.push(value);
+  }
+  return { args, options, help };
+}
+function findCommand(commands2, args) {
+  return commands2.filter((candidate) => candidate.path.every((part, index) => args[index] === part)).sort((left, right) => right.path.length - left.path.length)[0];
+}
+function parseOptionValue(definition, raw) {
+  if (definition.kind === "boolean") return true;
+  if (definition.kind === "string") {
+    if (definition.choices && !definition.choices.includes(raw)) {
+      usage(`${definition.flag} must be one of: ${definition.choices.join(", ")}`);
+    }
+    return raw;
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value)) usage(`${definition.flag} requires an integer`);
+  if (definition.min !== void 0 && value < definition.min) {
+    usage(`${definition.flag} must be at least ${definition.min}`);
+  }
+  if (definition.max !== void 0 && value > definition.max) {
+    usage(`${definition.flag} must be at most ${definition.max}`);
+  }
+  return value;
+}
+function parseCommandInput(command, args) {
+  const definitions = new Map((command.options ?? []).map((option) => [option.flag, option]));
+  const options = {};
+  const providedOptions = /* @__PURE__ */ new Set();
+  const positionals = [];
+  let optionsEnded = false;
+  for (let index = command.path.length; index < args.length; index += 1) {
+    const raw = args[index] ?? "";
+    if (!optionsEnded && raw === "--") {
+      optionsEnded = true;
+      continue;
+    }
+    if (optionsEnded) {
+      positionals.push(raw);
+      continue;
+    }
+    const equals = raw.indexOf("=");
+    const flag = equals === -1 ? raw : raw.slice(0, equals);
+    const definition = definitions.get(flag);
+    if (!definition) {
+      if (raw.startsWith("--")) usage(`Unknown option: ${flag}`);
+      positionals.push(raw);
+      continue;
+    }
+    if (providedOptions.has(definition.name)) usage(`${definition.flag} may only be provided once`);
+    providedOptions.add(definition.name);
+    if (definition.kind === "boolean") {
+      if (equals !== -1) usage(`${definition.flag} does not accept a value`);
+      options[definition.name] = true;
+      continue;
+    }
+    const value = equals === -1 ? args[++index] : raw.slice(equals + 1);
+    if (!value) usage(`${definition.flag} requires ${definition.valueName}`);
+    options[definition.name] = parseOptionValue(definition, value);
+  }
+  const positionalDefinitions = command.positionals ?? [];
+  const variadicIndex = positionalDefinitions.findIndex((definition) => definition.variadic);
+  const minimum = positionalDefinitions.filter((definition) => definition.required).length;
+  if (positionals.length < minimum) {
+    const missing = positionalDefinitions.find(
+      (definition, index) => definition.required && index >= positionals.length
+    );
+    usage(`${missing?.name ?? "Argument"} is required`);
+  }
+  if (variadicIndex === -1 && positionals.length > positionalDefinitions.length) {
+    usage(`Unexpected argument: ${positionals[positionalDefinitions.length]}`);
+  }
+  return { positionals, options, providedOptions };
+}
+function optionString(input, name) {
+  const value = input.options[name];
+  if (value === void 0) return void 0;
+  if (typeof value !== "string") throw new Error(`Option ${name} is not a string`);
+  return value;
+}
+function optionInteger(input, name) {
+  const value = input.options[name];
+  if (value === void 0) return void 0;
+  if (typeof value !== "number") throw new Error(`Option ${name} is not a number`);
+  return value;
+}
+function optionBoolean(input, name) {
+  return input.options[name] === true;
+}
+function commandUsage(command) {
+  const positionals = (command.positionals ?? []).map((definition) => {
+    const value = definition.variadic ? `${definition.name}...` : definition.name;
+    return definition.required ? `<${value}>` : `[${value}]`;
+  });
+  const options = (command.options ?? []).map(
+    (definition) => definition.kind === "boolean" ? `[${definition.flag}]` : `[${definition.flag} ${definition.valueName}]`
+  );
+  return ["trace", ...command.path, ...positionals, ...options, "[--json]"].join(" ");
+}
+function commandHelp(command) {
+  const options = command.options ?? [];
+  return [
+    `Usage: ${commandUsage(command)}`,
+    "",
+    command.description,
+    ...options.length ? [
+      "",
+      "Options:",
+      ...options.map((definition) => {
+        const label = definition.kind === "boolean" ? definition.flag : `${definition.flag} ${definition.valueName}`;
+        return `  ${label.padEnd(30)} ${definition.description}`;
+      })
+    ] : []
+  ].join("\n");
+}
+function commandDescriptor(command) {
+  return {
+    path: command.path,
+    description: command.description,
+    usage: commandUsage(command),
+    positionals: command.positionals ?? [],
+    options: command.options ?? []
+  };
+}
+function createCommandContext(options, env = process.env) {
+  return {
+    options,
+    env,
+    output(value, human) {
+      process.stdout.write(options.json ? `${JSON.stringify(value)}
+` : `${human}
+`);
+    },
+    async client(requireOrganization = true) {
+      const token = env.TRACE_INVOCATION_TOKEN;
+      if (!token) {
+        throw new CliError(
+          "This command is only available inside an active Trace AI session",
+          ExitCode.authentication,
+          "authentication"
+        );
+      }
+      const serverUrl = env.TRACE_API_URL || env.TRACE_SERVER_URL;
+      if (!serverUrl) {
+        throw new CliError(
+          "The Trace server URL is unavailable in this session",
+          ExitCode.authentication,
+          "authentication"
+        );
+      }
+      const organizationId = env.TRACE_ORGANIZATION_ID;
+      if (requireOrganization && !organizationId) {
+        throw new CliError(
+          "The Trace organization is unavailable in this session",
+          ExitCode.authentication,
+          "authentication"
+        );
+      }
+      return new TraceClient(serverUrl, token, organizationId);
+    }
+  };
+}
+
+// src/commands/artifact.ts
+var UPLOAD_TIMEOUT_MS = 2 * 60 * 1e3;
+var artifactCommand = defineCommand({
+  path: ["artifact", "push"],
+  description: "Upload an immutable artifact from an active Trace invocation",
+  positionals: [
+    { name: "type", required: true },
+    { name: "file-or-directory", required: true }
+  ],
+  options: [
+    {
+      name: "key",
+      flag: "--key",
+      kind: "string",
+      valueName: "KEY",
+      description: "Artifact slot key"
+    },
+    {
+      name: "idempotencyKey",
+      flag: "--idempotency-key",
+      kind: "string",
+      valueName: "KEY",
+      description: "Retry-safe upload key"
+    }
+  ],
+  async run(ctx, input) {
+    const type = input.positionals[0] ?? usage("Artifact type is required");
+    const sourceArg = input.positionals[1] ?? usage("Artifact file or directory is required");
+    const source = resolve(sourceArg);
+    const key = optionString(input, "key") ?? (type === "visual-plan" || type === "trace.visual-plan.v1" ? "primary" : "default");
+    const idempotencyKey = optionString(input, "idempotencyKey") ?? randomUUID();
+    if (idempotencyKey.length > 200) usage("--idempotency-key must be at most 200 characters");
+    if (!existsSync(source)) usage(`Path does not exist: ${source}`);
+    const apiUrl = ctx.env.TRACE_API_URL || ctx.env.TRACE_SERVER_URL;
+    const token = ctx.env.TRACE_INVOCATION_TOKEN;
+    if (!apiUrl || !token) {
+      throw new CliError(
+        "This command is only available inside an active Trace session",
+        ExitCode.authentication,
+        "authentication"
+      );
+    }
+    if (type === "video" || type === "trace.video.v1") {
+      if (!statSync(source).isFile()) usage("Video artifacts require one video file");
+      const validator = ctx.env.TRACE_BROWSER_VIDEO_VALIDATE;
+      if (!validator) usage("Browser video validation is unavailable");
+      const validated = spawnSync(validator, [source], { stdio: "inherit", env: ctx.env });
+      if (validated.status !== 0) {
+        throw new CliError("video validation failed; artifact was not uploaded", 1, "validation");
+      }
+    }
+    const temporary = mkdtempSync(join(tmpdir(), "trace-artifact-"));
+    const archivePath = join(temporary, "artifact.tar.gz");
+    try {
+      const sourceStat = statSync(source);
+      const tarArgs = sourceStat.isDirectory() ? ["-czf", archivePath, "-C", source, "."] : ["-czf", archivePath, "-C", dirname(source), basename(source)];
+      const packed = spawnSync("tar", tarArgs, {
+        stdio: "inherit",
+        env: { ...ctx.env, COPYFILE_DISABLE: "1" }
+      });
+      if (packed.status !== 0) usage("Could not package artifact");
+      if (statSync(archivePath).size > TRACE_CLI_ARTIFACT_MAX_BYTES) {
+        usage(
+          `Artifact archive exceeds the ${TRACE_CLI_ARTIFACT_MAX_BYTES / 1024 / 1024} MiB upload limit`
+        );
+      }
+      const upload = () => fetch(new URL("/agent/artifacts", apiUrl), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/gzip",
+          "X-Trace-Artifact-Type": type,
+          "X-Trace-Artifact-Key": key,
+          "X-Trace-Idempotency-Key": idempotencyKey
+        },
+        body: readFileSync(archivePath),
+        signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS)
+      });
+      let response;
+      try {
+        response = await upload();
+        if (response.status >= 500) response = await upload();
+      } catch {
+        try {
+          response = await upload();
+        } catch {
+          throw new CliError(
+            `Could not connect to Trace; retry with --idempotency-key ${idempotencyKey}`,
+            ExitCode.connectivity,
+            "connectivity"
+          );
+        }
+      }
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || typeof result.artifact?.id !== "string") {
+        const error = response.status === 401 ? { exitCode: ExitCode.authentication, category: "authentication" } : response.status === 403 ? { exitCode: ExitCode.authorization, category: "authorization" } : response.status >= 400 && response.status < 500 ? { exitCode: ExitCode.validation, category: "validation" } : { exitCode: ExitCode.server, category: "server" };
+        throw new CliError(
+          `${typeof result.error === "string" ? result.error : "Artifact upload failed"}; retry with --idempotency-key ${idempotencyKey}`,
+          error.exitCode,
+          error.category
+        );
+      }
+      ctx.output(
+        { artifact: { id: result.artifact.id, type, key }, idempotencyKey },
+        result.artifact.id
+      );
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  }
+});
 
 // src/commands/organization.ts
 function requireOrganizationId(value) {
@@ -1520,25 +1542,35 @@ function globalHelp() {
     "This command is available inside Trace-managed AI sessions."
   ].join("\n");
 }
+function writeHelp(command, json) {
+  if (json) {
+    const value = command ? { command: commandDescriptor(command) } : {
+      commands: commands.map(commandDescriptor),
+      globalOptions: [{ flag: "--json", description: "Emit machine-readable JSON" }]
+    };
+    process.stdout.write(`${JSON.stringify(value)}
+`);
+    return;
+  }
+  process.stdout.write(`${command ? commandHelp(command) : globalHelp()}
+`);
+}
 async function run(argv = process.argv.slice(2)) {
   const parsed = parseGlobalOptions(argv);
-  const wantsHelp = parsed.args.includes("--help") || parsed.args.includes("-h");
-  const commandArgs = parsed.args.filter((value) => value !== "--help" && value !== "-h");
-  const command = findCommand(commands, commandArgs);
-  if (argv.length === 0 || wantsHelp) {
-    process.stdout.write(`${command ? commandHelp(command) : globalHelp()}
-`);
+  const command = findCommand(commands, parsed.args);
+  if (argv.length === 0 || parsed.help) {
+    writeHelp(command, parsed.options.json);
     return ExitCode.success;
   }
   try {
     if (!command) {
       throw new CliError(
-        `Unknown command: ${commandArgs.slice(0, 2).join(" ")}`,
+        `Unknown command: ${parsed.args.slice(0, 2).join(" ")}`,
         ExitCode.usage,
         "usage"
       );
     }
-    const input = parseCommandInput(command, commandArgs);
+    const input = parseCommandInput(command, parsed.args);
     const ctx = createCommandContext(parsed.options);
     await command.run(ctx, input);
     return ExitCode.success;
