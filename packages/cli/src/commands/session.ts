@@ -199,39 +199,88 @@ function parseSessionStart(ctx: CommandContext): StartSessionInput {
   return input;
 }
 
-async function resolveStartDestination(
+async function resolveStartDefaultsAndDestination(
   client: TraceClient,
   input: StartSessionInput,
   currentSessionId?: string,
 ): Promise<void> {
-  if (input.sessionGroupId || (input.kind && input.kind !== "coding")) return;
+  if (input.sessionGroupId) return;
+
+  const hasExplicitDestination = !!input.channelId || !!input.projectId || !!input.repoId;
+  const hasExplicitGeneratedKind = !!input.kind && input.kind !== "coding";
+  const hasExplicitTool = !!input.tool;
+  const hasExplicitRuntimeSelection =
+    !!input.environmentId || !!input.runtimeInstanceId || !!input.hosting;
 
   let impliedRepo: { id: string; name: string } | null = null;
-  if (!input.channelId && !input.projectId && !input.repoId) {
-    if (!currentSessionId) {
-      usage("Starting a coding session group requires --channel, --project, or --repo");
-    }
+  if (currentSessionId) {
     const result = await client.graphql<
       {
         session: {
           id: string;
+          tool: CodingTool;
+          model?: string | null;
+          reasoningEffort?: string | null;
+          hosting: HostingMode;
           channel?: {
             id: string;
             name: string;
             repo?: { id: string; name: string } | null;
           } | null;
           repo?: { id: string; name: string } | null;
+          projects: Array<{ id: string }>;
+          connection?: {
+            environmentId?: string | null;
+            runtimeInstanceId?: string | null;
+          } | null;
+          sessionGroup?: {
+            kind: SessionGroupKind;
+            visibility: SessionGroupVisibility;
+          } | null;
         } | null;
       },
       { id: string }
     >(
-      `query TraceCliStartContextSession($id: ID!) { session(id: $id) { id channel { id name repo { id name } } repo { id name } } }`,
+      `query TraceCliStartContextSession($id: ID!) {
+        session(id: $id) {
+          id tool model reasoningEffort hosting
+          channel { id name repo { id name } }
+          repo { id name }
+          projects { id }
+          connection { environmentId runtimeInstanceId }
+          sessionGroup { kind visibility }
+        }
+      }`,
       { id: currentSessionId },
     );
     if (!result.session) usage(`Current session not found: ${currentSessionId}`);
-    input.channelId = result.session.channel?.id;
-    input.repoId = result.session.repo?.id;
-    impliedRepo = result.session.channel?.repo ?? result.session.repo ?? null;
+    const current = result.session;
+
+    input.kind ??= current.sessionGroup?.kind;
+    input.visibility ??= current.sessionGroup?.visibility;
+    input.tool ??= current.tool;
+    if (!hasExplicitTool) {
+      input.model ??= current.model;
+      input.reasoningEffort ??= current.reasoningEffort;
+    }
+    if (!hasExplicitRuntimeSelection && !hasExplicitGeneratedKind) {
+      input.hosting ??= current.hosting;
+      input.environmentId ??= current.connection?.environmentId;
+      if (!input.environmentId && current.hosting === "local") {
+        input.runtimeInstanceId ??= current.connection?.runtimeInstanceId;
+      }
+    }
+    if (!hasExplicitDestination && (!input.kind || input.kind === "coding")) {
+      input.channelId = current.channel?.id;
+      input.repoId = current.repo?.id;
+      if (current.projects.length === 1) input.projectId = current.projects[0]?.id;
+      impliedRepo = current.channel?.repo ?? current.repo ?? null;
+    }
+  }
+
+  if (input.kind && input.kind !== "coding") return;
+  if (!input.channelId && !input.projectId && !input.repoId) {
+    usage("Starting a coding session group requires --channel, --project, or --repo");
   }
 
   if (input.channelId && !impliedRepo) {
@@ -243,7 +292,7 @@ async function resolveStartDestination(
     });
     if (!result.channel) usage(`Channel not found: ${input.channelId}`);
     impliedRepo = result.channel.repo ?? null;
-  } else if (input.projectId) {
+  } else if (input.projectId && !impliedRepo) {
     const result = await client.graphql<
       { project: { id: string; name: string; repo?: { id: string; name: string } | null } | null },
       { id: string }
@@ -355,7 +404,7 @@ export const sessionCommands: Command[] = [
     async run(ctx) {
       const client = await ctx.client();
       const input = parseSessionStart(ctx);
-      await resolveStartDestination(client, input, ctx.env.TRACE_SESSION_ID);
+      await resolveStartDefaultsAndDestination(client, input, ctx.env.TRACE_SESSION_ID);
       const result = await startSessionWithRetry(client, input);
       const runRequested = !!input.prompt;
       const uiPath = sessionUiPath(result.startSession);

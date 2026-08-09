@@ -76,12 +76,19 @@ describe("Trace CLI", () => {
             data: {
               session: {
                 id: "session-1",
+                tool: "claude_code",
+                model: "claude-sonnet-4-5",
+                reasoningEffort: "high",
+                hosting: "local",
                 channel: {
                   id: "channel-1",
                   name: "API",
                   repo: { id: "repo-1", name: "trace" },
                 },
                 repo: { id: "repo-1", name: "trace" },
+                projects: [{ id: "project-1" }],
+                connection: { environmentId: "environment-1", runtimeInstanceId: "runtime-1" },
+                sessionGroup: { kind: "coding", visibility: "private" },
               },
             },
           }),
@@ -93,9 +100,17 @@ describe("Trace CLI", () => {
         clientMutationId: expect.any(String),
         channelId: "channel-1",
         repoId: "repo-1",
+        projectId: "project-1",
         prompt: "Implement the API tests",
-        tool: "codex",
+        kind: "coding",
+        visibility: "private",
+        tool: "claude_code",
+        model: "claude-sonnet-4-5",
+        reasoningEffort: "high",
+        hosting: "local",
+        environmentId: "environment-1",
       });
+      expect(request.variables.input).not.toHaveProperty("runtimeInstanceId");
       expect(request.variables.input).not.toHaveProperty("sessionGroupId");
       expect(new Headers(init?.headers).get("Authorization")).toBe(
         "Bearer injected-agent-secret",
@@ -108,9 +123,9 @@ describe("Trace CLI", () => {
               name: "API tests",
               agentStatus: "active",
               sessionStatus: "in_progress",
-              tool: "codex",
-              model: null,
-              reasoningEffort: null,
+              tool: "claude_code",
+              model: "claude-sonnet-4-5",
+              reasoningEffort: "high",
               hosting: "local",
               branch: "trace-api-tests",
               sessionGroupId: "group-2",
@@ -127,7 +142,7 @@ describe("Trace CLI", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      run(["session", "start", "Implement", "the", "API", "tests", "--tool", "codex", "--json"]),
+      run(["session", "start", "Implement", "the", "API", "tests", "--json"]),
     ).resolves.toBe(0);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(stdout.mock.calls.flat().join("")).toContain('"id":"session-2"');
@@ -203,9 +218,67 @@ describe("Trace CLI", () => {
     );
   });
 
-  it("creates a new repo-targeted group without inheriting the current group", async () => {
+  it("does not inherit a coding runtime when an explicit generated kind needs its own runtime", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_SESSION_ID", "session-1");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as {
+        query: string;
+        variables: Record<string, unknown>;
+      };
+      if (request.query.includes("TraceCliStartContextSession")) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              session: {
+                id: "session-1",
+                tool: "codex",
+                model: null,
+                reasoningEffort: null,
+                hosting: "local",
+                channel: { id: "channel-1", name: "API", repo: null },
+                repo: null,
+                projects: [],
+                connection: { environmentId: "local-environment", runtimeInstanceId: "runtime-1" },
+                sessionGroup: { kind: "coding", visibility: "public" },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      expect(request.variables.input).toMatchObject({ kind: "app", tool: "codex" });
+      expect(request.variables.input).not.toHaveProperty("hosting");
+      expect(request.variables.input).not.toHaveProperty("environmentId");
+      expect(request.variables.input).not.toHaveProperty("runtimeInstanceId");
+      return new Response(
+        JSON.stringify({
+          data: {
+            startSession: {
+              id: "session-app",
+              name: "Build an app",
+              agentStatus: "not_started",
+              tool: "codex",
+              sessionGroupId: "group-app",
+              channel: null,
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      run(["session", "start", "Build", "an", "app", "--kind", "app", "--json"]),
+    ).resolves.toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("creates a new repo-targeted group without inheriting the current group", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-1");
     vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
     vi.stubEnv("TRACE_API_URL", "https://trace.test/");

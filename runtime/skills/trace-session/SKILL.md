@@ -46,6 +46,12 @@ pass `--group <group-id>` explicitly; use the `sessionGroupId` returned by `cont
 group. Do not combine `--group` with group-level options such as `--hosting`, `--runtime`,
 `--environment`, `--branch`, `--visibility`, or `--defer` because the new session inherits them.
 
+For a new group, omitted values default from the current session: kind and visibility; channel,
+repo, and its single project when unambiguous; tool, model, and reasoning effort; and hosting plus
+the agent environment (or local runtime for older sessions without an environment). Explicit flags
+always win. Trace intentionally creates a fresh branch for the new group instead of reusing the
+current worktree branch.
+
 Use `--channel`, `--project`, or `--repo` to choose a destination other than the current one. Prefer
 a channel so the result appears in the normal channel workflow. A channel or project supplies its
 linked repo; if it has none, also pass `--repo`.

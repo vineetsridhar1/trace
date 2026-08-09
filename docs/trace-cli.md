@@ -48,6 +48,12 @@ group requires explicit `--group`; those sessions inherit the group's hosting, r
 environment, branch, and visibility. Use `session start --help` for all creation options. Session
 lists exclude merged and archived sessions unless their include flags are supplied.
 
+New groups also default omitted kind, visibility, single-project association, tool, model, reasoning
+effort, hosting, and agent environment from the current session. Older local sessions without an
+environment reuse their local runtime. Explicit flags override these defaults. Branch is the
+intentional exception: every new group receives a fresh workspace branch rather than trying to
+check out the current group's branch twice.
+
 A prompt passed to `session start` requests its run immediately. The returned session can remain
 `not_started` while runtime provisioning is in progress; do not repeat the prompt with `session
 run`. The CLI automatically attaches an idempotency key and retries transient empty/server
