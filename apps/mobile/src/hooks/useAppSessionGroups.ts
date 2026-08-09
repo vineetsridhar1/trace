@@ -9,8 +9,8 @@ import { userFacingError } from "@/lib/requestError";
 import { getClient } from "@/lib/urql";
 
 const APP_SESSION_GROUPS_QUERY = gql`
-  query MobileAppSessionGroups($organizationId: ID!) {
-    appSessionGroups(organizationId: $organizationId) {
+  query MobileAppSessionGroups($organizationId: ID!, $includeArchived: Boolean) {
+    appSessionGroups(organizationId: $organizationId, includeArchived: $includeArchived) {
       id
       name
       slug
@@ -76,7 +76,7 @@ function areIdsEqual(a: string[], b: string[]): boolean {
   return a.every((id, index) => id === b[index]);
 }
 
-export function useAppSessionGroups(activeOrgId: string | null): {
+export function useAppSessionGroups(activeOrgId: string | null, includeArchived = false): {
   ids: string[];
   loading: boolean;
   error: string | null;
@@ -91,7 +91,7 @@ export function useAppSessionGroups(activeOrgId: string | null): {
     const result = await getClient()
       .query<AppSessionGroupsData>(
         APP_SESSION_GROUPS_QUERY,
-        { organizationId: activeOrgId },
+        { organizationId: activeOrgId, includeArchived },
         { requestPolicy: "network-only" },
       )
       .toPromise();
@@ -110,7 +110,7 @@ export function useAppSessionGroups(activeOrgId: string | null): {
     }
     setError(null);
     return { authorized: true };
-  }, [activeOrgId]);
+  }, [activeOrgId, includeArchived]);
 
   useEffect(() => {
     let cancelled = false;

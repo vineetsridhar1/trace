@@ -9,8 +9,8 @@ import { userFacingError } from "@/lib/requestError";
 import { getClient } from "@/lib/urql";
 
 const DESIGN_SESSION_GROUPS_QUERY = gql`
-  query MobileDesignSessionGroups($organizationId: ID!) {
-    designSessionGroups(organizationId: $organizationId) {
+  query MobileDesignSessionGroups($organizationId: ID!, $includeArchived: Boolean) {
+    designSessionGroups(organizationId: $organizationId, includeArchived: $includeArchived) {
       id
       name
       slug
@@ -76,7 +76,7 @@ function areIdsEqual(a: string[], b: string[]): boolean {
   return a.every((id, index) => id === b[index]);
 }
 
-export function useDesignSessionGroups(activeOrgId: string | null): {
+export function useDesignSessionGroups(activeOrgId: string | null, includeArchived = false): {
   ids: string[];
   loading: boolean;
   error: string | null;
@@ -91,7 +91,7 @@ export function useDesignSessionGroups(activeOrgId: string | null): {
     const result = await getClient()
       .query<DesignSessionGroupsData>(
         DESIGN_SESSION_GROUPS_QUERY,
-        { organizationId: activeOrgId },
+        { organizationId: activeOrgId, includeArchived },
         { requestPolicy: "network-only" },
       )
       .toPromise();
@@ -110,7 +110,7 @@ export function useDesignSessionGroups(activeOrgId: string | null): {
     }
     setError(null);
     return { authorized: true };
-  }, [activeOrgId]);
+  }, [activeOrgId, includeArchived]);
 
   useEffect(() => {
     let cancelled = false;

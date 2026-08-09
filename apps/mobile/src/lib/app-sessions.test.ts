@@ -4,6 +4,7 @@ import type { GitCheckpoint, SessionApplicationProcess, SessionEndpoint } from "
 import {
   appSessionSubtitle,
   buildAppSessionGroupIds,
+  buildCreationListItems,
   buildDesignSessionGroupIds,
   designPreviewModeUrl,
   findReadyAppPreviewUrl,
@@ -95,6 +96,52 @@ describe("buildDesignSessionGroupIds", () => {
     });
 
     expect(buildDesignSessionGroupIds(state)).toEqual(["newer", "older"]);
+  });
+});
+
+describe("buildCreationListItems", () => {
+  const state = stateWithGroups({
+    activeApp: {
+      id: "activeApp",
+      name: "Release dashboard",
+      kind: "app",
+      status: "in_progress",
+      updatedAt: "2026-07-10T12:00:00.000Z",
+    },
+    activeDesign: {
+      id: "activeDesign",
+      name: "Mobile panel",
+      kind: "design",
+      status: "needs_input",
+      updatedAt: "2026-07-11T12:00:00.000Z",
+    },
+    archivedDesign: {
+      id: "archivedDesign",
+      name: "Old mobile panel",
+      kind: "design",
+      status: "archived",
+      archivedAt: "2026-07-12T12:00:00.000Z",
+      updatedAt: "2026-07-12T12:00:00.000Z",
+    },
+  });
+
+  it("merges active apps and designs newest first", () => {
+    expect(buildCreationListItems(state, "all", false).map((item) => item.id)).toEqual([
+      "activeDesign",
+      "activeApp",
+    ]);
+  });
+
+  it("filters by creation kind", () => {
+    expect(buildCreationListItems(state, "app", false).map((item) => item.id)).toEqual([
+      "activeApp",
+    ]);
+  });
+
+  it("returns archived creations only when requested", () => {
+    expect(buildCreationListItems(state, "all", true).map((item) => item.id)).toEqual([
+      "archivedDesign",
+    ]);
   });
 });
 
