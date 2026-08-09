@@ -369,21 +369,26 @@ function parseSessionStart(ctx) {
       "--group cannot be combined with --kind, --hosting, --runtime, --environment, --branch, --visibility, or --defer; sessions inherit those settings from their group"
     );
   }
-  const generatedProject = !!input.kind && input.kind !== "coding";
-  if (!requestedGroup && !requestedDestination && !requestedGroupConfiguration && ctx.env.TRACE_SESSION_GROUP_ID) {
-    input.sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
-  } else if (!requestedGroup && !requestedDestination && !generatedProject) {
-    usage(
-      "Starting a new coding session group requires --channel, --project, or --repo; omit group-level options to start a sibling in the current group"
-    );
-  }
   input.clientMutationId ||= randomUUID2();
   return input;
 }
-async function resolveStartDestination(client, input) {
+async function resolveStartDestination(client, input, currentSessionId) {
   if (input.sessionGroupId || input.kind && input.kind !== "coding") return;
   let impliedRepo = null;
-  if (input.channelId) {
+  if (!input.channelId && !input.projectId && !input.repoId) {
+    if (!currentSessionId) {
+      usage("Starting a coding session group requires --channel, --project, or --repo");
+    }
+    const result = await client.graphql(
+      `query TraceCliStartContextSession($id: ID!) { session(id: $id) { id channel { id name repo { id name } } repo { id name } } }`,
+      { id: currentSessionId }
+    );
+    if (!result.session) usage(`Current session not found: ${currentSessionId}`);
+    input.channelId = result.session.channel?.id;
+    input.repoId = result.session.repo?.id;
+    impliedRepo = result.session.channel?.repo ?? result.session.repo ?? null;
+  }
+  if (input.channelId && !impliedRepo) {
     const result = await client.graphql(`query TraceCliStartChannel($id: ID!) { channel(id: $id) { id name repo { id name } } }`, {
       id: input.channelId
     });
@@ -483,11 +488,11 @@ var sessionCommands = [
   {
     path: ["session", "start"],
     usage: "trace session start [prompt] [--group ID | --channel ID | --project ID | --repo ID] [--tool TOOL] [--model MODEL] [--hosting MODE] [--runtime ID] [--environment ID] [--branch NAME] [--ticket ID] [--kind KIND] [--visibility VISIBILITY] [--interaction-mode MODE] [--defer] [--idempotency-key KEY] [--json]",
-    description: "Start a sibling session or create one in an explicit Trace destination",
+    description: "Start a new session group or add a session to an explicit group",
     async run(ctx) {
       const client = await ctx.client();
       const input = parseSessionStart(ctx);
-      await resolveStartDestination(client, input);
+      await resolveStartDestination(client, input, ctx.env.TRACE_SESSION_ID);
       const result = await startSessionWithRetry(client, input);
       const runRequested = !!input.prompt;
       const uiPath = sessionUiPath(result.startSession);

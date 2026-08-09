@@ -35,17 +35,20 @@ Session lists exclude merged and archived sessions by default. Add `--include-me
 
 ## Start sessions
 
-The simplest command starts a sibling in the current session group:
+The simplest command starts a new session group in the current session's channel/repo destination:
 
 ```sh
 "$TRACE_CLI" session start "Implement the API tests" --json
 ```
 
-Do not add group-level options such as `--hosting`, `--runtime`, `--branch`, `--visibility`, or
-`--defer` when you want a sibling to inherit the current group's environment. A new coding group
-must name exactly one destination with `--channel`, `--project`, or `--repo`. Prefer a channel so
-the result appears in the normal channel workflow. A channel or project supplies its linked repo;
-if it has none, also pass `--repo`.
+Bare `session start` never joins the current session group. To add a sibling to an existing group,
+pass `--group <group-id>` explicitly; use the `sessionGroupId` returned by `context` for the current
+group. Do not combine `--group` with group-level options such as `--hosting`, `--runtime`,
+`--environment`, `--branch`, `--visibility`, or `--defer` because the new session inherits them.
+
+Use `--channel`, `--project`, or `--repo` to choose a destination other than the current one. Prefer
+a channel so the result appears in the normal channel workflow. A channel or project supplies its
+linked repo; if it has none, also pass `--repo`.
 
 Select another existing group or an explicit destination when appropriate:
 

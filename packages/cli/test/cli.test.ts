@@ -53,10 +53,10 @@ describe("Trace CLI", () => {
     await expect(run(["session", "start", "--help"])).resolves.toBe(0);
     const output = stdout.mock.calls.flat().join("");
     expect(output).toContain("Usage: trace session start");
-    expect(output).toContain("Start a sibling session");
+    expect(output).toContain("Start a new session group");
   });
 
-  it("starts a sibling session with injected context without exposing the bearer", async () => {
+  it("starts a new group in the current session destination without exposing the bearer", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_SESSION_ID", "session-1");
     vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-1");
@@ -67,15 +67,36 @@ describe("Trace CLI", () => {
       expect(url.toString()).toBe("https://trace.test/graphql");
       const request = JSON.parse(String(init?.body)) as {
         query: string;
-        variables: { input: Record<string, unknown> };
+        variables: Record<string, unknown>;
       };
+      if (request.query.includes("TraceCliStartContextSession")) {
+        expect(request.variables).toEqual({ id: "session-1" });
+        return new Response(
+          JSON.stringify({
+            data: {
+              session: {
+                id: "session-1",
+                channel: {
+                  id: "channel-1",
+                  name: "API",
+                  repo: { id: "repo-1", name: "trace" },
+                },
+                repo: { id: "repo-1", name: "trace" },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
       expect(request.query).not.toContain("projects {");
       expect(request.variables.input).toMatchObject({
         clientMutationId: expect.any(String),
-        sessionGroupId: "group-1",
+        channelId: "channel-1",
+        repoId: "repo-1",
         prompt: "Implement the API tests",
         tool: "codex",
       });
+      expect(request.variables.input).not.toHaveProperty("sessionGroupId");
       expect(new Headers(init?.headers).get("Authorization")).toBe(
         "Bearer injected-agent-secret",
       );
@@ -92,11 +113,11 @@ describe("Trace CLI", () => {
               reasoningEffort: null,
               hosting: "local",
               branch: "trace-api-tests",
-              sessionGroupId: "group-1",
+              sessionGroupId: "group-2",
               createdAt: "2026-08-08T00:00:00.000Z",
               updatedAt: "2026-08-08T00:00:00.000Z",
-              channel: null,
-              repo: null,
+              channel: { id: "channel-1", name: "API" },
+              repo: { id: "repo-1", name: "trace" },
             },
           },
         }),
@@ -108,14 +129,16 @@ describe("Trace CLI", () => {
     await expect(
       run(["session", "start", "Implement", "the", "API", "tests", "--tool", "codex", "--json"]),
     ).resolves.toBe(0);
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(stdout.mock.calls.flat().join("")).toContain('"id":"session-2"');
     expect(stdout.mock.calls.flat().join("")).toContain('"runRequested":true');
-    expect(stdout.mock.calls.flat().join("")).toContain('"uiPath":"/g/group-1/s/session-2"');
+    expect(stdout.mock.calls.flat().join("")).toContain(
+      '"uiPath":"/c/channel-1/g/group-2/s/session-2"',
+    );
     expect(stdout.mock.calls.flat().join("")).not.toContain("injected-agent-secret");
   });
 
-  it("requires a destination when group-level options create a new coding group", async () => {
+  it("rejects group-level configuration when joining an explicit group", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_SESSION_ID", "session-1");
     vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-1");
@@ -124,11 +147,60 @@ describe("Trace CLI", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(run(["session", "start", "hello", "--hosting", "local", "--json"])).resolves.toBe(
-      64,
-    );
+    await expect(
+      run([
+        "session",
+        "start",
+        "hello",
+        "--group",
+        "group-1",
+        "--hosting",
+        "local",
+        "--json",
+      ]),
+    ).resolves.toBe(64);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(stderr.mock.calls.flat().join("")).toContain("requires --channel, --project, or --repo");
+    expect(stderr.mock.calls.flat().join("")).toContain("sessions inherit those settings");
+  });
+
+  it("joins a session group only when --group is explicit", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-current");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as {
+        variables: { input: Record<string, unknown> };
+      };
+      expect(request.variables.input).toMatchObject({
+        sessionGroupId: "group-target",
+        prompt: "Review this",
+      });
+      return new Response(
+        JSON.stringify({
+          data: {
+            startSession: {
+              id: "session-2",
+              name: "Review this",
+              agentStatus: "not_started",
+              tool: "codex",
+              sessionGroupId: "group-target",
+              channel: null,
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      run(["session", "start", "Review", "this", "--group", "group-target", "--json"]),
+    ).resolves.toBe(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(stdout.mock.calls.flat().join("")).toContain(
+      '"uiPath":"/g/group-target/s/session-2"',
+    );
   });
 
   it("creates a new repo-targeted group without inheriting the current group", async () => {

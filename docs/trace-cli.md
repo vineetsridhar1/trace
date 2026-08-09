@@ -40,13 +40,13 @@ AI guidance should invoke `"$TRACE_CLI"`, not rely on `trace` being present on t
 ```
 
 All commands accept `--json`. Commands with an optional session ID default to `TRACE_SESSION_ID`.
-Starting without an explicit destination or group-level configuration creates a sibling in
-`TRACE_SESSION_GROUP_ID`. Creating a new coding group requires `--channel`, `--project`, or
-`--repo`; prefer a channel for normal UI visibility. A channel or project's linked repo is derived
-automatically, and a destination without one requires `--repo`. Destination selection is mutually
-exclusive with `--group`, whose sessions inherit the group's hosting, runtime, environment, branch,
-and visibility. Use `session start --help` for all creation options. Session lists exclude merged
-and archived sessions unless their include flags are supplied.
+Starting without `--group` creates a new session group. With no explicit destination, the CLI
+derives the current session's channel and repo; use `--channel`, `--project`, or `--repo` to choose
+another destination. Prefer a channel for normal UI visibility. A channel or project's linked repo
+is derived automatically, and a destination without one requires `--repo`. Joining an existing
+group requires explicit `--group`; those sessions inherit the group's hosting, runtime,
+environment, branch, and visibility. Use `session start --help` for all creation options. Session
+lists exclude merged and archived sessions unless their include flags are supplied.
 
 A prompt passed to `session start` requests its run immediately. The returned session can remain
 `not_started` while runtime provisioning is in progress; do not repeat the prompt with `session
