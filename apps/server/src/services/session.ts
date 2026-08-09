@@ -616,6 +616,16 @@ function isRuntimeComputeGone(conn: SessionConnectionData): boolean {
 }
 
 /**
+ * True while the deprovision reconciler owns a runtime teardown. The idle
+ * sweep must not retry these states: doing so refreshes their teardown
+ * timestamps and can permanently starve the reconciler as well as the idle
+ * sweep's bounded candidate batch.
+ */
+function isRuntimeDeprovisionPending(conn: SessionConnectionData): boolean {
+  return conn.state === "stopping" || conn.state === "deprovision_failed";
+}
+
+/**
  * Grace window during which a starting-up runtime is shielded from the idle
  * sweep. Comfortably above the default 180s startup timeout so a healthy
  * cold-boot (image pull + connect) is always protected.
@@ -12026,6 +12036,18 @@ export class SessionService {
       where: {
         archivedAt: null,
         worktreeDeleted: false,
+        NOT: [
+          { connection: { path: ["state"], equals: "stopped" } },
+          { connection: { path: ["state"], equals: "deprovisioned" } },
+          {
+            AND: [
+              { connection: { path: ["state"], equals: "disconnected" } },
+              { connection: { path: ["deprovisionedAt"], not: Prisma.AnyNull } },
+            ],
+          },
+          { connection: { path: ["state"], equals: "stopping" } },
+          { connection: { path: ["state"], equals: "deprovision_failed" } },
+        ],
         sessions: {
           some: { hosting: "cloud" },
           none: {
@@ -12130,7 +12152,12 @@ export class SessionService {
       // Evaluated against the already-fetched candidate connection so dead
       // groups cost no extra query; the same predicate is re-checked
       // race-safely inside the conditional update below.
-      if (isRuntimeComputeGone(this.parseConnection(cloudSession.connection))) continue;
+      if (
+        isRuntimeComputeGone(this.parseConnection(cloudSession.connection)) ||
+        isRuntimeDeprovisionPending(this.parseConnection(cloudSession.connection))
+      ) {
+        continue;
+      }
 
       // Never reap a runtime that is still coming up. Reviving an idle group
       // provisions fresh compute without a new message, so the group keeps
@@ -12148,7 +12175,12 @@ export class SessionService {
       // idle, letting all three session-level guards pass and killing a
       // container seconds into its boot. Checked before completing sessions
       // below so a protected group is left entirely untouched.
-      if (isRuntimeStartingWithinGrace(groupConnection, now)) continue;
+      if (
+        isRuntimeStartingWithinGrace(groupConnection, now) ||
+        isRuntimeDeprovisionPending(groupConnection)
+      ) {
+        continue;
+      }
 
       // The bridge no longer reports these runs as complete, so settle their
       // session state before reclaiming the runtime. This prevents a stale
@@ -12180,6 +12212,7 @@ export class SessionService {
       // re-emit stopping/stopped events on every idle sweep without ever
       // settling, since an idle group is re-selected each tick.
       if (isRuntimeComputeGone(conn)) return null;
+      if (isRuntimeDeprovisionPending(conn)) return null;
       // A runtime that began starting up between selection and this update must
       // not be torn down mid-boot; leave it for a later sweep once it settles.
       if (isRuntimeStartingWithinGrace(conn, now)) return null;

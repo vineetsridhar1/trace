@@ -10381,6 +10381,88 @@ describe("SessionService", () => {
       // The early compute-gone skip aborts before touching the connection, so
       // no per-session read, update, or runtime teardown is issued.
       expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            NOT: expect.arrayContaining([
+              {
+                AND: [
+                  { connection: { path: ["state"], equals: "disconnected" } },
+                  { connection: expect.objectContaining({ path: ["deprovisionedAt"] }) },
+                ],
+              },
+            ]),
+          }),
+        }),
+      );
+      expect(prismaMock.session.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
+
+    it("leaves deprovision-pending groups to the deprovision reconciler", async () => {
+      // Regression: the idle sweep is bounded to 25 groups. Reprocessing a
+      // stopping/deprovision_failed group refreshes its teardown lifecycle,
+      // prevents the reconciler from making progress, and starves newer idle
+      // groups behind it in the batch.
+      const pendingConnection = {
+        state: "deprovision_failed",
+        adapterType: "provisioned",
+        environmentId: "env-1",
+        runtimeInstanceId: "runtime-1",
+        providerRuntimeId: "provider-runtime-1",
+        deprovisionFailedAt: "2026-05-12T11:32:00.000Z",
+        reconcileAttempts: 2,
+        autoRetryable: false,
+        version: 5,
+      };
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
+        {
+          id: "group-pending",
+          organizationId: "org-1",
+          updatedAt: new Date("2026-05-12T11:00:00.000Z"),
+          workdir: "/workspace/group-pending",
+          connection: pendingConnection,
+          sessions: [
+            {
+              id: "session-pending",
+              hosting: "cloud",
+              agentStatus: "done",
+              sessionStatus: "in_progress",
+              createdAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:00:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T11:30:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:31:00.000Z"),
+              connection: pendingConnection,
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 10 * 60 * 1000,
+        now: Date.parse("2026-05-12T11:45:00.000Z"),
+      });
+
+      expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            NOT: expect.arrayContaining([
+              { connection: { path: ["state"], equals: "stopped" } },
+              { connection: { path: ["state"], equals: "deprovisioned" } },
+              {
+                AND: [
+                  { connection: { path: ["state"], equals: "disconnected" } },
+                  { connection: expect.objectContaining({ path: ["deprovisionedAt"] }) },
+                ],
+              },
+              { connection: { path: ["state"], equals: "stopping" } },
+              { connection: { path: ["state"], equals: "deprovision_failed" } },
+            ]),
+          }),
+        }),
+      );
       expect(prismaMock.session.findUnique).not.toHaveBeenCalled();
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
