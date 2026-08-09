@@ -117,3 +117,4 @@ export {
 } from "./session/messages.js";
 export type { InteractionMode } from "./session/messages.js";
 export { useQuestionState } from "./session/question-state.js";
+export { structuredResponseSummary } from "./session/structured-response-summary.js";

@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo } from "react";
 import { StyleSheet, View, type NativeSyntheticEvent } from "react-native";
 import ContextMenu, { type ContextMenuOnPressNativeEvent } from "react-native-context-menu-view";
 import type { GitCheckpoint } from "@trace/gql";
-import { useAuthStore, type AuthState } from "@trace/client-core";
+import { structuredResponseSummary, useAuthStore, type AuthState } from "@trace/client-core";
 import { Text } from "@/components/design-system";
 import { alpha, useTheme } from "@/theme";
 import { CheckpointMarker } from "./CheckpointMarker";
@@ -38,7 +38,10 @@ export const UserMessageBubble = memo(function UserMessageBubble({
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const isMe = !actorId || actorId === currentUserId;
   const displayName = isMe ? "You" : (actorName ?? "Someone");
-  const displayText = useMemo(() => stripPromptWrapping(text), [text]);
+  const displayText = useMemo(
+    () => structuredResponseSummary(stripPromptWrapping(text)),
+    [text],
+  );
 
   const handleContextMenuPress = useCallback(
     (event: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
