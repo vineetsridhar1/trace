@@ -5,8 +5,10 @@ import {
   appSessionSubtitle,
   buildAppSessionGroupIds,
   buildDesignSessionGroupIds,
+  designPreviewModeUrl,
   findReadyAppPreviewUrl,
   findReadyAppPreviewEndpointId,
+  savedDesignPreviewUrl,
 } from "./app-sessions";
 
 function stateWithGroups(sessionGroups: Record<string, Record<string, unknown>>): EntityState {
@@ -146,5 +148,38 @@ describe("findReadyAppPreviewUrl", () => {
 describe("findReadyAppPreviewEndpointId", () => {
   it("returns the running endpoint ID used to create a preview credential", () => {
     expect(findReadyAppPreviewEndpointId("group", [endpoint()], [process()])).toBe("endpoint");
+  });
+});
+
+describe("savedDesignPreviewUrl", () => {
+  it("uses the group artifact when the runtime is unavailable", () => {
+    expect(savedDesignPreviewUrl("https://trace.test/design-previews/groups/design", [])).toBe(
+      "https://trace.test/design-previews/groups/design",
+    );
+  });
+
+  it("falls back to the most recent captured checkpoint artifact", () => {
+    expect(
+      savedDesignPreviewUrl(null, [
+        {
+          previewStatus: "captured",
+          previewUrl: "https://trace.test/design-previews/older",
+          committedAt: "2026-07-10T12:00:00.000Z",
+        },
+        {
+          previewStatus: "captured",
+          previewUrl: "https://trace.test/design-previews/newer",
+          committedAt: "2026-07-11T12:00:00.000Z",
+        },
+      ] as unknown as GitCheckpoint[]),
+    ).toBe("https://trace.test/design-previews/newer");
+  });
+});
+
+describe("designPreviewModeUrl", () => {
+  it("preserves the fragment while enabling saved-preview mode", () => {
+    expect(designPreviewModeUrl("https://trace.test/design#canvas")).toBe(
+      "https://trace.test/design?__trace_preview=1#canvas",
+    );
   });
 });

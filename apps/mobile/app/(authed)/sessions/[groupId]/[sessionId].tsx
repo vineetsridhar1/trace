@@ -3,7 +3,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEntityField } from "@trace/client-core";
-import type { Repo } from "@trace/gql";
+import type { GitCheckpoint, Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import PagerView from "react-native-pager-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,6 +14,11 @@ import { SessionPageHeader } from "@/components/sessions/SessionPageHeader";
 import { SessionSurface } from "@/components/sessions/SessionSurface";
 import { SessionTerminalPanel } from "@/components/sessions/SessionTerminalPanel";
 import { resolveBrowserUrl } from "@/lib/browser";
+import {
+  designPreviewModeUrl,
+  isLivePreviewRuntimeAvailable,
+  savedDesignPreviewUrl,
+} from "@/lib/app-sessions";
 import { dismissNotificationsForSession } from "@/lib/notifications";
 import { closeSessionPlayer } from "@/lib/sessionPlayer";
 import { useMobileUIStore } from "@/stores/ui";
@@ -75,9 +80,27 @@ export default function SessionStreamScreen() {
     | string
     | null
     | undefined;
+  const designPreviewUrl = useEntityField("sessionGroups", hydratedGroupId, "designPreviewUrl") as
+    | string
+    | null
+    | undefined;
+  const gitCheckpoints = useEntityField("sessionGroups", hydratedGroupId, "gitCheckpoints") as
+    | GitCheckpoint[]
+    | null
+    | undefined;
+  const runtimeState = useEntityField("sessionGroups", hydratedGroupId, "connection") as
+    | { state?: string | null }
+    | null
+    | undefined;
   const isGeneratedProjectGroup = groupKind === "app" || groupKind === "design";
   const isDesignGroup = groupKind === "design";
   const generatedProjectLabel = groupKind === "design" ? "design" : "app";
+  const savedPreviewUrl = useMemo(() => {
+    if (!isDesignGroup) return null;
+    const url = savedDesignPreviewUrl(designPreviewUrl, gitCheckpoints);
+    return url ? designPreviewModeUrl(url) : null;
+  }, [designPreviewUrl, gitCheckpoints, isDesignGroup]);
+  const livePreviewAvailable = isLivePreviewRuntimeAvailable(runtimeState?.state);
   const {
     url: appPreviewUrl,
     loading: appPreviewLoading,
@@ -86,7 +109,10 @@ export default function SessionStreamScreen() {
   } = useAppPreview(hydratedGroupId, isGeneratedProjectGroup);
   const resolvedBrowserUrl = useMemo(() => {
     const persistedUrl = browserUrlGroupId === hydratedGroupId ? browserUrl : null;
-    if (isGeneratedProjectGroup) return persistedUrl || appPreviewUrl || "";
+    if (isGeneratedProjectGroup) {
+      if (!livePreviewAvailable && savedPreviewUrl) return savedPreviewUrl;
+      return persistedUrl || appPreviewUrl || savedPreviewUrl || "";
+    }
     return resolveBrowserUrl(persistedUrl, prUrl, repo?.remoteUrl);
   }, [
     appPreviewUrl,
@@ -94,8 +120,10 @@ export default function SessionStreamScreen() {
     browserUrlGroupId,
     hydratedGroupId,
     isGeneratedProjectGroup,
+    livePreviewAvailable,
     prUrl,
     repo?.remoteUrl,
+    savedPreviewUrl,
   ]);
   useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
