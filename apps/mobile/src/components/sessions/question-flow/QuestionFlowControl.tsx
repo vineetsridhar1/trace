@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import type { Question } from "@trace/shared";
 import { Text } from "@/components/design-system";
+import { QuestionFlowConfirmOption } from "./QuestionFlowConfirmOption";
 import { QuestionFlowOption } from "./QuestionFlowOption";
 import { questionColors, questionMetrics } from "./tokens";
 
@@ -9,6 +10,28 @@ export function QuestionFlowControl({ question, type, selected, custom, ranking,
   if (type === "text") return <TextControl question={question} value={custom} onChange={onCustom} />;
   if (type === "ranking") return <View style={styles.control}>{ranking.map((value, index) => <View key={value} style={styles.rankRow}><Text variant="subheadline" style={styles.rankNumber}>{index + 1}</Text><Text variant="subheadline" style={styles.rankLabel}>{question.options.find((option) => (option.id ?? option.label) === value)?.label ?? value}</Text><Pressable disabled={index === 0} onPress={() => onMove(value, -1)}><Text variant="title2" style={styles.muted}>↑</Text></Pressable><Pressable disabled={index === ranking.length - 1} onPress={() => onMove(value, 1)}><Text variant="title2" style={styles.muted}>↓</Text></Pressable></View>)}</View>;
   const options = type === "confirm" && question.options.length === 0 ? [{ id: "yes", label: "Yes, continue", description: "Use this direction" }, { id: "no", label: "Not yet", description: "Keep exploring" }] : question.options;
+  if (type === "confirm") {
+    return (
+      <View style={styles.control}>
+        <View style={styles.confirm}>
+          {options.slice(0, 2).map((option, index) => {
+            const value = option.id ?? option.label;
+            const positive = value.toLowerCase() === "yes" || option.label.toLowerCase().startsWith("yes");
+            return (
+              <QuestionFlowConfirmOption
+                key={value}
+                label={option.label || (index === 0 ? "Yes, continue" : "Not yet")}
+                description={option.description || (positive ? "Use this direction" : "Keep exploring")}
+                positive={positive}
+                selected={selected.has(value)}
+                onPress={() => onToggle(value)}
+              />
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
   const multi = type === "multi-select";
   return <View style={styles.control}>{question.min != null || question.max != null ? <View style={styles.status}><Text variant="caption1" style={styles.muted}>{question.min != null && question.max != null ? `Pick ${question.min}–${question.max}` : question.min != null ? `Pick at least ${question.min}` : `Pick up to ${question.max}`}</Text><Text variant="caption1" style={{ color: isValidCount(selected.size, question.min, question.max) ? questionColors.success : questionColors.danger }}>{selected.size} selected</Text></View> : null}<View style={type === "confirm" ? styles.confirm : styles.options}>{options.map((option) => <QuestionFlowOption key={option.id ?? option.label} label={option.label} description={option.description} selected={selected.has(option.id ?? option.label)} multiple={multi} onPress={() => onToggle(option.id ?? option.label)} />)}{type === "select-with-other" || question.other ? <QuestionFlowOption label="Something else" description="Write a different answer" selected={selected.has("other")} onPress={() => onToggle("other")} /> : null}</View>{(type === "select-with-other" || question.other) && selected.has("other") ? <TextInput value={custom} onChangeText={onCustom} multiline placeholder="Write your own answer…" placeholderTextColor={questionColors.muted} style={styles.otherInput} /> : null}</View>;
 }
