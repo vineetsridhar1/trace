@@ -4,10 +4,11 @@ import { Text } from "@/components/design-system";
 import { QuestionFlowConfirmOption } from "./QuestionFlowConfirmOption";
 import { QuestionFlowOption } from "./QuestionFlowOption";
 import { QuestionFlowRanking } from "./QuestionFlowRanking";
+import { QuestionFlowReference } from "./QuestionFlowReference";
 import { questionColors, questionMetrics } from "./tokens";
 
 export function QuestionFlowControl({ question, type, selected, custom, ranking, onToggle, onCustom, onMove }: { question: Question; type: string; selected: ReadonlySet<string>; custom: string; ranking: readonly string[]; onToggle: (value: string) => void; onCustom: (value: string) => void; onMove: (value: string, direction: -1 | 1) => void }) {
-  if (type === "reference") return <ReferenceControl question={question} value={custom} onChange={onCustom} />;
+  if (type === "reference") return <QuestionFlowReference question={question} value={custom} onChange={onCustom} />;
   if (type === "text") return <TextControl question={question} value={custom} onChange={onCustom} />;
   if (type === "ranking") return <QuestionFlowRanking question={question} ranking={ranking} onMove={onMove} />;
   const options = type === "confirm" && question.options.length === 0 ? [{ id: "yes", label: "Yes, continue", description: "Use this direction" }, { id: "no", label: "Not yet", description: "Keep exploring" }] : question.options;
@@ -38,8 +39,6 @@ export function QuestionFlowControl({ question, type, selected, custom, ranking,
 }
 
 function TextControl({ question, value, onChange }: { question: Question; value: string; onChange: (value: string) => void }) { return <View style={styles.control}><TextInput value={value} onChangeText={onChange} multiline maxLength={question.maxLength} placeholder={question.placeholder ?? "Type your answer…"} placeholderTextColor={questionColors.muted} style={styles.textInput} /><View style={styles.suggestions}>{question.suggestions?.map((suggestion) => <Pressable key={suggestion} onPress={() => onChange(suggestion)} style={styles.suggestion}><Text variant="caption1" style={styles.muted}>{suggestion}</Text></Pressable>)}</View></View>; }
-
-function ReferenceControl({ question, value, onChange }: { question: Question; value: string; onChange: (value: string) => void }) { return <View style={styles.control}><View style={styles.sources}><Pressable onPress={async () => { const picker = await import("expo-image-picker"); const result = await picker.launchImageLibraryAsync({ mediaTypes: ["images"] }); if (!result.canceled) onChange(result.assets[0]?.fileName ?? "Photo Library image"); }} style={styles.sourceRow}><Text variant="body" style={styles.sourceIcon}>▧</Text><Text variant="body" style={styles.sourceLabel}>Photo Library</Text><Text variant="body" style={styles.muted}>›</Text></Pressable><Pressable onPress={async () => { const picker = await import("expo-document-picker"); const result = await picker.getDocumentAsync({ type: question.accept ?? ["image/png", "image/jpeg", "application/pdf"] }); if (!result.canceled) onChange(result.assets[0]?.name ?? "Reference file"); }} style={[styles.sourceRow, styles.last]}><Text variant="body" style={styles.sourceIcon}>⌁</Text><Text variant="body" style={styles.sourceLabel}>Choose File</Text><Text variant="body" style={styles.muted}>›</Text></Pressable></View><TextInput value={value} onChangeText={onChange} placeholder={question.placeholder ?? "Paste a reference URL"} placeholderTextColor={questionColors.muted} style={styles.referenceInput} />{value ? <View style={styles.attached}><Text variant="body" style={styles.attachedIcon}>▣</Text><View style={styles.attachedCopy}><Text variant="subheadline" style={styles.sourceLabel} numberOfLines={1}>{value}</Text><Text variant="footnote" style={styles.muted}>Reference · Added</Text></View><Pressable onPress={() => onChange("")}><Text variant="title2" style={styles.muted}>×</Text></Pressable></View> : null}</View>; }
 
 function isValidCount(count: number, min?: number, max?: number) { return !(min != null && count < min) && !(max != null && count > max); }
 
