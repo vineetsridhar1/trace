@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEntityField } from "@trace/client-core";
+import { getAuthHeaders, useEntityField } from "@trace/client-core";
 import type { GitCheckpoint, Repo } from "@trace/gql";
 import { Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import PagerView from "react-native-pager-view";
@@ -125,6 +125,8 @@ export default function SessionStreamScreen() {
     repo?.remoteUrl,
     savedPreviewUrl,
   ]);
+  const savedPreviewRequestHeaders =
+    savedPreviewUrl && resolvedBrowserUrl === savedPreviewUrl ? getAuthHeaders() : undefined;
   useEffect(() => {
     if (!groupId || !sessionId || sessionIds.length === 0) return;
     if (sessionIds.includes(sessionId)) return;
@@ -287,6 +289,7 @@ export default function SessionStreamScreen() {
                       showToolbar={!isDesignGroup}
                       hideExportHtml={isDesignGroup}
                       topInset={isDesignGroup ? 0 : overlayHeight}
+                      initialRequestHeaders={savedPreviewRequestHeaders}
                     />
                   ) : appPreviewLoading ? (
                     <View style={styles.center}>
