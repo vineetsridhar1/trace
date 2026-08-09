@@ -8,6 +8,8 @@ The applicable license is included at `licenses/open-design-APACHE-2.0.txt`.
 
 ## Impeccable
 
-The surface-mode model, brief-first decision making, refinement-versus-redesign distinction, visual-evidence practice, bounded review passes, and focused design-action vocabulary in `docs/ai-guidance.md` are adapted from [Impeccable](https://github.com/pbakaus/impeccable), licensed under the Apache License 2.0.
+This starter includes provider-native skill packages, command references, reviewer-agent definitions, and supporting scripts derived from [Impeccable](https://github.com/pbakaus/impeccable) at revision `1cbee02`, licensed under the Apache License 2.0.
 
-Trace adapts those concepts to its manifest-driven multi-artboard canvas and does not include Impeccable's CLI, agent skill runtime, hooks, browser extension, or detector implementation. The Apache License 2.0 terms applicable to this adaptation are included at `licenses/open-design-APACHE-2.0.txt`.
+Trace modifies the provider `SKILL.md` files with an explicit adapter for its immutable design-system package, `design.brief.json`, token contract, multi-artboard canvas, and existing HMR/review runtime. It invokes the vendored detector from the starter quality gate and does not install Impeccable's provider hooks or browser extension.
+
+The applicable license and upstream notice are included at `licenses/impeccable-APACHE-2.0.txt` and `licenses/impeccable-NOTICE.md`.

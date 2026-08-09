@@ -9,7 +9,7 @@ After resolving `design.brief.json`, read the one playbook that best matches the
 
 Also read:
 
-- `impeccable-workflow.md` for new surfaces, visual-direction decisions, critique, and targeted design improvements.
+- the installed Impeccable skill reference matching the requested design action; its Trace adapter explains how upstream workflows map onto this canvas.
 - `reference-grounding.md` whenever the user supplies a URL, screenshot, brand guide, or existing design.
 - `visual-directions.md` only when no brand or reference already determines the direction.
 

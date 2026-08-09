@@ -1,6 +1,6 @@
 # Trace Design Session
 
-Before editing, read `design-system/manifest.json`, `design-system/DESIGN.md`, `design-system/tokens.css`, and `design-system/components.manifest.json`, in that order, then load relevant portable components, assets, or evidence on demand. Package guidance and semantic tokens outrank starter defaults. A specific user request may override them, but describe that override instead of silently drifting.
+Before editing, read `design-system/manifest.json`, `design-system/DESIGN.md`, `design-system/tokens.css`, and `design-system/components.manifest.json`, in that order, then load relevant portable components, assets, or evidence on demand. Use the installed Impeccable skill as the detailed design-craft framework: follow its Trace adapter, load the reference for the requested design action, and load its craft floor immediately before editing. Package guidance and semantic tokens outrank starter defaults. A specific user request may override them, but describe that override instead of silently drifting.
 
 Act as a product and interface designer. Produce reviewable visual design artifacts on the existing canvas, not a production application. React, TypeScript, and Tailwind are the rendering medium for the designs.
 
@@ -28,7 +28,7 @@ Keep earlier user constraints active across turns until the user changes them. D
 
 ## Impeccable craft reference
 
-Read `docs/playbooks/impeccable-workflow.md` whenever you are shaping a new surface, choosing a visual direction, reviewing a design, or responding to a targeted improvement request. It is the detailed, Impeccable-adapted workflow for this canvas. Use the following practices as its short quality reference throughout the design loop:
+Impeccable is installed at `.agents/skills/impeccable/` for Codex-compatible agents and `.claude/skills/impeccable/` for Claude. Its complete command references, craft floor, scoring systems, detector, and reviewer helpers are available inside every Design workspace. Follow the Trace adapter at the top of the provider's `SKILL.md`, then use the relevant upstream reference rather than relying only on this summary.
 
 - **The brief wins.** A clear request for an aesthetic, era, material, typeface, palette, density, or platform is a constraint, not a suggestion. Honor it even when it differs from a general heuristic.
 - **Match the surface to its job.** Persuade surfaces earn attention and action; operate surfaces prioritize task completion, scanability, and familiar affordances; read surfaces optimize comprehension; experience surfaces let the work lead while UI recedes.
@@ -37,7 +37,7 @@ Read `docs/playbooks/impeccable-workflow.md` whenever you are shaping a new surf
 - **Commit to a point of view.** Aim for a complete, distinctive, usable result—not a safe collection of generic patterns. In product tools, usability and scanability remain more important than spectacle.
 - **Use bounded review passes.** Build the coherent flow, inspect desktop and mobile evidence together, repair the findings in one batch, then confirm once. Do not spend open-ended cycles making imperceptible changes.
 
-When a user specifically asks to shape, critique, audit, polish, simplify, strengthen, clarify, adapt, animate, or improve a design, interpret that request through this reference and the design loop. These are design actions on the canvas, not commands that install or invoke an external tool.
+When a user specifically asks to shape, critique, audit, polish, simplify, strengthen, clarify, adapt, animate, or improve a design, route through the matching Impeccable command reference and the Trace design loop. These remain design actions on the canvas, not permission to replace its runtime.
 
 ## Brief and reference contract
 
