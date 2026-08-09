@@ -38,10 +38,12 @@ export const UserMessageBubble = memo(function UserMessageBubble({
   const currentUserId = useAuthStore((s: AuthState) => s.user?.id);
   const isMe = !actorId || actorId === currentUserId;
   const displayName = isMe ? "You" : (actorName ?? "Someone");
+  const unwrappedText = useMemo(() => stripPromptWrapping(text), [text]);
   const displayText = useMemo(
-    () => structuredResponseSummary(stripPromptWrapping(text)),
-    [text],
+    () => structuredResponseSummary(unwrappedText),
+    [unwrappedText],
   );
+  const isStructuredResponse = displayText !== unwrappedText;
 
   const handleContextMenuPress = useCallback(
     (event: NativeSyntheticEvent<ContextMenuOnPressNativeEvent>) => {
@@ -55,6 +57,7 @@ export const UserMessageBubble = memo(function UserMessageBubble({
       collapsable={false}
       style={[
         styles.bubble,
+        isStructuredResponse && styles.structuredBubble,
         {
           backgroundColor: alpha(theme.colors.accent, 0.18),
           borderColor: alpha(theme.colors.accent, 0.32),
@@ -78,12 +81,13 @@ export const UserMessageBubble = memo(function UserMessageBubble({
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.column}>
+      <View style={[styles.column, isStructuredResponse && styles.structuredColumn]}>
         <ContextMenu
           actions={COPY_CONTEXT_MENU}
           borderRadius={theme.radius.lg}
           onPress={handleContextMenuPress}
           previewBackgroundColor="transparent"
+          style={isStructuredResponse ? styles.structuredMenu : undefined}
         >
           {bubble}
         </ContextMenu>
@@ -109,8 +113,17 @@ const styles = StyleSheet.create({
     maxWidth: "88%",
     alignItems: "flex-end",
   },
+  structuredColumn: {
+    width: "88%",
+  },
+  structuredMenu: {
+    width: "100%",
+  },
   bubble: {
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  structuredBubble: {
+    width: "100%",
   },
   meta: {
     flexDirection: "row",
