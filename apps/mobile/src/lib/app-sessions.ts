@@ -32,6 +32,45 @@ export function buildDesignSessionGroupIds(state: EntityState): string[] {
   return buildGeneratedProjectSessionGroupIds(state, "design");
 }
 
+export type CreationKindFilter = "all" | "app" | "design";
+
+export interface CreationListItem {
+  id: string;
+  kind: "app" | "design";
+  name: string;
+  status: string | null | undefined;
+  archived: boolean;
+}
+
+/** The merged Creations destination keeps app and design session groups in one list. */
+export function buildCreationListItems(
+  state: EntityState,
+  filter: CreationKindFilter,
+  archived: boolean,
+  query: string,
+): CreationListItem[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  return (Object.values(state.sessionGroups) as SessionGroupEntity[])
+    .filter((group) => {
+      if (group.kind !== "app" && group.kind !== "design") return false;
+      const isArchived = Boolean(group.archivedAt) || group.status === "archived";
+      if (isArchived !== archived || (filter !== "all" && group.kind !== filter)) return false;
+      return !normalizedQuery || group.name.toLocaleLowerCase().includes(normalizedQuery);
+    })
+    .sort(
+      (a, b) =>
+        timestamp(b._sortTimestamp ?? b.updatedAt ?? b.createdAt) -
+          timestamp(a._sortTimestamp ?? a.updatedAt ?? a.createdAt) || a.id.localeCompare(b.id),
+    )
+    .map((group) => ({
+      id: group.id,
+      kind: group.kind as "app" | "design",
+      name: group.name,
+      status: group.status,
+      archived: Boolean(group.archivedAt) || group.status === "archived",
+    }));
+}
+
 function buildGeneratedProjectSessionGroupIds(
   state: EntityState,
   kind: "app" | "design",
