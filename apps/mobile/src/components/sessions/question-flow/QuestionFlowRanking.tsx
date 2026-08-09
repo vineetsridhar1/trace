@@ -1,7 +1,8 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  LinearTransition,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -14,23 +15,40 @@ import { questionColors, questionMetrics } from "./tokens";
 
 const ROW_STRIDE = questionMetrics.rowHeight + 12;
 
-export function QuestionFlowRanking({
-  question,
-  ranking,
-  onMove,
-}: {
-  question: Question;
-  ranking: readonly string[];
-  onMove: (value: string, direction: -1 | 1) => void;
-}) {
-  const moveBy = useCallback(
-    (value: string, places: number) => {
-      const direction: -1 | 1 = places < 0 ? -1 : 1;
-      for (let index = 0; index < Math.abs(places); index += 1) onMove(value, direction);
-      void haptic.selection();
-    },
-    [onMove],
-  );
+export function QuestionFlowRanking({ question, ranking, onMove }: { question: Question; ranking: readonly string[]; onMove: (value: string, direction: -1 | 1) => void }) {
+  const dragRef = useRef<{ value: string; origin: number; target: number } | null>(null);
+  const [drag, setDrag] = useState<{ value: string; origin: number; target: number } | null>(null);
+  const beginDrag = useCallback((value: string, index: number) => {
+    const next = { value, origin: index, target: index };
+    dragRef.current = next;
+    setDrag(next);
+    void haptic.medium();
+  }, []);
+  const previewTarget = useCallback((offset: number) => {
+    const current = dragRef.current;
+    if (!current) return;
+    const target = Math.max(0, Math.min(ranking.length - 1, current.origin + Math.round(offset / ROW_STRIDE)));
+    if (target === current.target) return;
+    const next = { ...current, target };
+    dragRef.current = next;
+    setDrag(next);
+    void haptic.selection();
+  }, [ranking.length]);
+  const finishDrag = useCallback((value: string, offset: number) => {
+    const current = dragRef.current;
+    if (!current || current.value !== value) return;
+    const target = Math.max(0, Math.min(ranking.length - 1, current.origin + Math.round(offset / ROW_STRIDE)));
+    const places = target - current.origin;
+    const direction: -1 | 1 = places < 0 ? -1 : 1;
+    dragRef.current = null;
+    setDrag(null);
+    for (let step = 0; step < Math.abs(places); step += 1) onMove(value, direction);
+  }, [onMove, ranking.length]);
+  const cancelDrag = useCallback((value: string) => {
+    if (dragRef.current?.value !== value) return;
+    dragRef.current = null;
+    setDrag(null);
+  }, []);
 
   return (
     <View style={styles.list}>
@@ -41,44 +59,58 @@ export function QuestionFlowRanking({
           label={question.options.find((option) => (option.id ?? option.label) === value)?.label ?? value}
           index={index}
           count={ranking.length}
-          onMove={moveBy}
+          drag={drag}
+          onBegin={beginDrag}
+          onPreview={previewTarget}
+          onFinish={finishDrag}
+          onCancel={cancelDrag}
+          onMove={(places) => {
+            const direction: -1 | 1 = places < 0 ? -1 : 1;
+            for (let step = 0; step < Math.abs(places); step += 1) onMove(value, direction);
+          }}
         />
       ))}
     </View>
   );
 }
 
-function RankingRow({ value, label, index, count, onMove }: { value: string; label: string; index: number; count: number; onMove: (value: string, places: number) => void }) {
+function RankingRow({ value, label, index, count, drag, onBegin, onPreview, onFinish, onCancel, onMove }: { value: string; label: string; index: number; count: number; drag: { value: string; origin: number; target: number } | null; onBegin: (value: string, index: number) => void; onPreview: (offset: number) => void; onFinish: (value: string, offset: number) => void; onCancel: (value: string) => void; onMove: (places: number) => void }) {
   const translation = useSharedValue(0);
-  const active = useSharedValue(false);
-  const startDrag = () => void haptic.medium();
-  const finishDrag = (offset: number) => {
-    const places = Math.max(-index, Math.min(count - 1 - index, Math.round(offset / ROW_STRIDE)));
-    if (places !== 0) onMove(value, places);
-  };
+  const active = drag?.value === value;
+  const displaced = drag ? displacementFor(index, drag.origin, drag.target) : 0;
   const gesture = Gesture.Pan()
     .activateAfterLongPress(220)
-    .onStart(() => { active.value = true; runOnJS(startDrag)(); })
-    .onUpdate((event) => { translation.value = event.translationY; })
-    .onEnd(() => { runOnJS(finishDrag)(translation.value); })
-    .onFinalize(() => { active.value = false; translation.value = withSpring(0); });
+    .onStart(() => runOnJS(onBegin)(value, index))
+    .onUpdate((event) => {
+      translation.value = event.translationY;
+      runOnJS(onPreview)(event.translationY);
+    })
+    .onEnd(() => runOnJS(onFinish)(value, translation.value))
+    .onFinalize((_event, success) => {
+      translation.value = withSpring(0);
+      if (!success) runOnJS(onCancel)(value);
+    });
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translation.value }, { scale: withSpring(active.value ? 1.025 : 1) }],
-    zIndex: active.value ? 20 : 0,
-    shadowOpacity: active.value ? 0.42 : 0,
-  }));
+    transform: [
+      { translateY: active ? translation.value : withSpring(displaced) },
+      { scale: withSpring(active ? 1.025 : 1) },
+    ],
+    zIndex: active ? 20 : 0,
+    shadowOpacity: active ? 0.42 : 0,
+  }), [active, displaced]);
 
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View
+        layout={LinearTransition.springify().damping(20).stiffness(230)}
         accessible
         accessibilityRole="adjustable"
         accessibilityLabel={`${label}, position ${index + 1} of ${count}`}
         accessibilityHint="Press and hold, then drag to reorder"
         accessibilityActions={[{ name: "increment", label: "Move down" }, { name: "decrement", label: "Move up" }]}
         onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === "increment" && index < count - 1) onMove(value, 1);
-          if (event.nativeEvent.actionName === "decrement" && index > 0) onMove(value, -1);
+          if (event.nativeEvent.actionName === "increment" && index < count - 1) onMove(1);
+          if (event.nativeEvent.actionName === "decrement" && index > 0) onMove(-1);
         }}
         style={[styles.row, animatedStyle]}
       >
@@ -88,6 +120,12 @@ function RankingRow({ value, label, index, count, onMove }: { value: string; lab
       </Animated.View>
     </GestureDetector>
   );
+}
+
+function displacementFor(index: number, origin: number, target: number): number {
+  if (target > origin && index > origin && index <= target) return -ROW_STRIDE;
+  if (target < origin && index < origin && index >= target) return ROW_STRIDE;
+  return 0;
 }
 
 const styles = StyleSheet.create({
