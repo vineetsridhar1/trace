@@ -1,8 +1,8 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response, type Router as ExpressRouter } from "express";
 import { appIntegrationService } from "../services/integration-services.js";
 import { nangoConnectionProvider } from "../services/nango-connection-provider.js";
 
-export const nangoRouter = Router();
+export const nangoRouter: ExpressRouter = Router();
 
 nangoRouter.post("/", async (req: Request, res: Response) => {
   const rawBody = Buffer.isBuffer(req.body) ? req.body : null;

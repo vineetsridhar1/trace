@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response, type Router as ExpressRouter } from "express";
 import { prisma } from "../lib/db.js";
 import {
   AuthenticationError,
@@ -10,7 +10,7 @@ import type { SnowflakeQueryInput } from "../services/app-integrations.js";
 import { appIntegrationService } from "../services/integration-services.js";
 import { verifyAppViewerContextToken } from "../services/app-viewer-context.js";
 
-export const appIntegrationsRouter = Router();
+export const appIntegrationsRouter: ExpressRouter = Router();
 
 function bearerToken(request: Request): string | null {
   const authorization = request.get("authorization");
