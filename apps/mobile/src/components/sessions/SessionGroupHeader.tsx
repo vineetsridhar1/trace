@@ -168,8 +168,7 @@ export function SessionGroupHeader({
     sessionGroupKind === "coding" &&
     !!sessionId &&
     !sessionOptimistic &&
-    !mergedUnavailable &&
-    agentStatus !== "active";
+    !mergedUnavailable;
   const handleRunScripts = useCallback(() => {
     if (!sessionId || runScripts.length === 0) return;
     if (setupBlocking) {
