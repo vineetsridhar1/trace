@@ -183,6 +183,7 @@ enum ParticipantScope {
 }
 
 enum EventType {
+  session_converted
   message_sent
   message_edited
   message_deleted

@@ -330,6 +330,19 @@ export type ConnectionsRepoEntry = {
   runScripts?: Maybe<Scalars["JSON"]["output"]>;
 };
 
+export type ConvertSessionGroupInput = {
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
+  environmentId?: InputMaybe<Scalars["ID"]["input"]>;
+  kind: SessionGroupKind;
+  model?: InputMaybe<Scalars["String"]["input"]>;
+  projectId?: InputMaybe<Scalars["ID"]["input"]>;
+  reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
+  repoId?: InputMaybe<Scalars["ID"]["input"]>;
+  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+  tool?: InputMaybe<CodingTool>;
+};
+
 export type CreateAgentEnvironmentInput = {
   adapterType: AgentEnvironmentAdapterType;
   config: Scalars["JSON"]["input"];
@@ -761,6 +774,7 @@ export type EventType =
   | "session_application_process_failed"
   | "session_application_process_started"
   | "session_application_process_stopped"
+  | "session_converted"
   | "session_deleted"
   | "session_endpoint_access_updated"
   | "session_endpoint_created"
@@ -1004,6 +1018,7 @@ export type Mutation = {
   commentOnTicket: Event;
   commitLinkedCheckoutChanges: LinkedCheckoutActionResult;
   commitSessionGroupFileChanges: Scalars["String"]["output"];
+  convertSessionGroup: Session;
   createAgentEnvironment: AgentEnvironment;
   createChannel: Channel;
   createChannelGroup: ChannelGroup;
@@ -1189,6 +1204,10 @@ export type MutationCommitLinkedCheckoutChangesArgs = {
 export type MutationCommitSessionGroupFileChangesArgs = {
   message?: InputMaybe<Scalars["String"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
+};
+
+export type MutationConvertSessionGroupArgs = {
+  input: ConvertSessionGroupInput;
 };
 
 export type MutationCreateAgentEnvironmentArgs = {
@@ -2648,7 +2667,14 @@ export type SessionGroupFileTree = {
   truncated: Scalars["Boolean"]["output"];
 };
 
-export type SessionGroupKind = "animation" | "app" | "coding" | "design" | "design_system" | "pdf";
+export type SessionGroupKind =
+  | "animation"
+  | "app"
+  | "coding"
+  | "design"
+  | "design_system"
+  | "general"
+  | "pdf";
 
 export type SessionGroupStatus =
   | "archived"

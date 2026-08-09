@@ -389,6 +389,49 @@ describe("handleOrgEvent", () => {
     expect(group).toMatchObject({ id: "group-1" });
   });
 
+  it("updates the existing work unit from a session conversion event", () => {
+    useEntityStore.setState((state) => ({
+      sessions: {
+        ...state.sessions,
+        "session-1": {
+          id: "session-1",
+          sessionGroupId: "group-1",
+          name: "Discuss auth",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        } as never,
+      },
+      sessionGroups: {
+        ...state.sessionGroups,
+        "group-1": { id: "group-1", kind: "general", name: "Discuss auth" } as never,
+      },
+    }));
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "session_converted",
+        scopeId: "session-1",
+        payload: {
+          session: {
+            id: "session-1",
+            sessionGroupId: "group-1",
+            repo: { id: "repo-1", name: "trace" },
+            updatedAt: "2026-01-02T00:00:00.000Z",
+          },
+          sessionGroup: { id: "group-1", kind: "coding", repo: { id: "repo-1" } },
+        },
+      }),
+    );
+
+    expect(useEntityStore.getState().sessions["session-1"]).toMatchObject({
+      id: "session-1",
+      repo: { id: "repo-1" },
+    });
+    expect(useEntityStore.getState().sessionGroups["group-1"]).toMatchObject({
+      id: "group-1",
+      kind: "coding",
+    });
+  });
+
   it("auto-navigates to a continuation session when source is active", () => {
     const harness = installBindings({ activeSessionId: "session-old" });
     const event = makeEvent({
