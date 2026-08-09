@@ -67,7 +67,7 @@ export function QuestionReferenceControl({
     handleFiles(Array.from(event.dataTransfer.files));
   };
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-2 max-md:gap-4">
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -79,7 +79,7 @@ export function QuestionReferenceControl({
         onDragLeave={() => setDragging(false)}
         onDrop={dropFiles}
         className={cn(
-          "grid place-items-center gap-1 rounded-lg border border-dashed px-3 py-4 transition-colors",
+          "grid place-items-center gap-1 rounded-lg border border-dashed px-3 py-4 transition-colors max-md:min-h-28 max-md:rounded-2xl",
           dragging ? "border-foreground/40 bg-foreground/[0.08]" : "border-border",
         )}
       >
@@ -99,7 +99,7 @@ export function QuestionReferenceControl({
         }}
       />
       <form
-        className="flex gap-2"
+        className="flex gap-2 max-md:gap-3"
         onSubmit={(event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);
@@ -112,11 +112,11 @@ export function QuestionReferenceControl({
           name="reference-url"
           aria-label="Reference URL"
           placeholder="Paste a reference URL"
-          className="min-h-10 min-w-0 flex-1 rounded-lg border border-border bg-transparent px-3 text-[12px] outline-none focus:border-foreground/35"
+          className="min-h-10 min-w-0 flex-1 rounded-lg border border-border bg-transparent px-3 text-[12px] outline-none focus:border-foreground/35 max-md:min-h-12 max-md:rounded-xl max-md:px-4 max-md:text-[16px]"
         />
         <button
           type="submit"
-          className="min-h-10 rounded-lg border border-border px-3 text-[12px] font-medium text-muted-foreground"
+          className="min-h-10 rounded-lg border border-border px-3 text-[12px] font-medium text-muted-foreground max-md:min-h-12 max-md:rounded-xl max-md:px-4 max-md:text-[16px]"
         >
           Add
         </button>
