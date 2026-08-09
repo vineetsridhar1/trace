@@ -3,10 +3,12 @@ import type { SessionNode } from "./groupReadGlob";
 
 export function findActiveQuestion(
   nodes: readonly SessionNode[],
-  sessionStatus: string | undefined,
   latestInputKind: "question" | "native-plan" | "visual-plan" | null,
 ): { node: Extract<SessionNode, { kind: "ask-user-question" }>; index: number } | null {
-  if (sessionStatus !== "needs_input" || latestInputKind !== "question") return null;
+  // The event stream is authoritative here. A bridge can mark a run complete
+  // after it has emitted a question; the latest unanswered question remains
+  // actionable until a user message supersedes it.
+  if (latestInputKind !== "question") return null;
   for (let index = nodes.length - 1; index >= 0; index -= 1) {
     const node = nodes[index];
     if (node.kind === "ask-user-question") return { node, index };
