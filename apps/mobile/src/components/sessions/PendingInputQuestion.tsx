@@ -1,15 +1,15 @@
 import { useCallback, useState } from "react";
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SEND_SESSION_MESSAGE_MUTATION, useQuestionState } from "@trace/client-core";
 import type { Question } from "@trace/shared";
-import { Text } from "@/components/design-system";
+import { Glass, Text } from "@/components/design-system";
 import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { alpha, useTheme } from "@/theme";
@@ -19,6 +19,7 @@ interface PendingInputQuestionProps {
   questions: Question[];
   keyboardVisible?: boolean;
   hasActivePlan: boolean;
+  onClose: () => void;
 }
 
 /** Full-screen, touch-first answer flow for a pending structured question. */
@@ -26,8 +27,10 @@ export function PendingInputQuestion({
   sessionId,
   questions,
   hasActivePlan,
+  onClose,
 }: PendingInputQuestionProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [reviewing, setReviewing] = useState(false);
   const [sending, setSending] = useState(false);
   const {
@@ -69,8 +72,9 @@ export function PendingInputQuestion({
         .toPromise();
     } finally {
       setSending(false);
+      onClose();
     }
-  }, [buildResponse, hasActivePlan, hasAllAnswers, sending, sessionId]);
+  }, [buildResponse, hasActivePlan, hasAllAnswers, onClose, sending, sessionId]);
 
   const continueFlow = () => {
     if (!currentValid) return;
@@ -81,12 +85,12 @@ export function PendingInputQuestion({
   const step = total > 1 ? `${page + 1} of ${total}` : "Question";
 
   return (
-    <Modal animationType="slide" presentationStyle="fullScreen" visible>
-      <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
-        <View style={[styles.header, { backgroundColor: alpha(theme.colors.surfaceElevated, 0.9), borderColor: theme.colors.border }]}>
-          <Text variant="subheadline" color="mutedForeground">Question</Text>
+    <View style={[styles.root, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
+        <Glass preset="card" interactive style={[styles.header, { borderColor: alpha(theme.colors.foreground, 0.12), borderWidth: StyleSheet.hairlineWidth }]}>
+          <Pressable onPress={onClose} hitSlop={8}><Text variant="subheadline" color="foreground">Cancel</Text></Pressable>
+          <View style={styles.headerTitle}><Text variant="subheadline" color="foreground" align="center">Question</Text><Text variant="caption2" color="mutedForeground" align="center">Trace</Text></View>
           <Text variant="caption1" color="mutedForeground">{reviewing ? `${total} answers` : step}</Text>
-        </View>
+        </Glass>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {reviewing ? (
             <Review questions={questions} answers={answers} onEdit={(index) => { setPage(index); setReviewing(false); }} />
@@ -115,7 +119,7 @@ export function PendingInputQuestion({
             </>
           )}
         </ScrollView>
-        <View style={[styles.footer, { borderTopColor: theme.colors.border, backgroundColor: alpha(theme.colors.surface, 0.94) }]}>
+        <Glass preset="pinnedBar" interactive style={[styles.footer, { borderTopColor: theme.colors.border, borderTopWidth: StyleSheet.hairlineWidth, paddingBottom: Math.max(14, insets.bottom) }]}>
           {!reviewing && !isFirstPage ? <Pressable onPress={goPrev} style={styles.back}><Text variant="subheadline" color="mutedForeground">Back</Text></Pressable> : null}
           <Pressable
             disabled={sending || (reviewing ? !hasAllAnswers : !currentValid)}
@@ -126,9 +130,8 @@ export function PendingInputQuestion({
               {sending ? "Sending…" : reviewing ? `Send ${total} answer${total === 1 ? "" : "s"}` : isLastPage ? "Review answers" : "Continue"}
             </Text>
           </Pressable>
-        </View>
-      </View>
-    </Modal>
+        </Glass>
+    </View>
   );
 }
 
@@ -167,5 +170,5 @@ function Review({ questions, answers, onEdit }: { questions: Question[]; answers
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 }, header: { marginHorizontal: 12, marginTop: 12, minHeight: 54, borderRadius: 28, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, content: { paddingHorizontal: 16, paddingTop: 28, paddingBottom: 24 }, prompt: { gap: 10 }, statusDot: { width: 8, height: 8, borderRadius: 4 }, title: { fontWeight: "700", fontSize: 28, lineHeight: 34 }, control: { marginTop: 28, gap: 12 }, optionList: { gap: 12 }, confirmGrid: { flexDirection: "row", gap: 12 }, option: { minHeight: 62, borderWidth: StyleSheet.hairlineWidth, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }, optionCopy: { flex: 1, gap: 3 }, mark: { width: 24, height: 24, borderWidth: 1, alignItems: "center", justifyContent: "center" }, textInput: { minHeight: 144, borderWidth: 1, borderRadius: 16, padding: 14, fontSize: 16, textAlignVertical: "top" }, otherInput: { minHeight: 96, borderWidth: 1, borderRadius: 16, padding: 14, fontSize: 16, textAlignVertical: "top" }, suggestion: { alignSelf: "flex-start", minHeight: 40, borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, paddingHorizontal: 14, justifyContent: "center" }, error: { marginTop: 14 }, decide: { marginTop: 16, alignSelf: "flex-start", minHeight: 44, justifyContent: "center" }, rankRow: { minHeight: 62, borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, paddingHorizontal: 12, flexDirection: "row", gap: 12, alignItems: "center" }, rankNumber: { width: 26, textAlign: "center" }, rankLabel: { flex: 1 }, footer: { minHeight: 84, borderTopWidth: StyleSheet.hairlineWidth, paddingHorizontal: 16, paddingVertical: 14, flexDirection: "row", alignItems: "center", gap: 12 }, back: { minHeight: 52, justifyContent: "center", paddingHorizontal: 8 }, primary: { flex: 1, minHeight: 52, borderRadius: 26, justifyContent: "center", paddingHorizontal: 20 }, primaryText: { fontWeight: "700" }, reviewIntro: { marginTop: 10 }, reviewList: { marginTop: 24, borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, overflow: "hidden" }, reviewRow: { minHeight: 70, padding: 14, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: StyleSheet.hairlineWidth }, reviewCopy: { flex: 1, gap: 4 },
+  root: { flex: 1 }, header: { marginHorizontal: 12, marginTop: 12, minHeight: 54, borderRadius: 28, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, headerTitle: { position: "absolute", left: 84, right: 84, alignItems: "center" }, content: { paddingHorizontal: 16, paddingTop: 28, paddingBottom: 24 }, prompt: { gap: 10 }, statusDot: { width: 8, height: 8, borderRadius: 4 }, title: { fontWeight: "700", fontSize: 28, lineHeight: 34 }, control: { marginTop: 28, gap: 12 }, optionList: { gap: 12 }, confirmGrid: { flexDirection: "row", gap: 12 }, option: { minHeight: 62, borderWidth: StyleSheet.hairlineWidth, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }, optionCopy: { flex: 1, gap: 3 }, mark: { width: 24, height: 24, borderWidth: 1, alignItems: "center", justifyContent: "center" }, textInput: { minHeight: 144, borderWidth: 1, borderRadius: 16, padding: 14, fontSize: 16, textAlignVertical: "top" }, otherInput: { minHeight: 96, borderWidth: 1, borderRadius: 16, padding: 14, fontSize: 16, textAlignVertical: "top" }, suggestion: { alignSelf: "flex-start", minHeight: 40, borderWidth: StyleSheet.hairlineWidth, borderRadius: 20, paddingHorizontal: 14, justifyContent: "center" }, error: { marginTop: 14 }, decide: { marginTop: 16, alignSelf: "flex-start", minHeight: 44, justifyContent: "center" }, rankRow: { minHeight: 62, borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, paddingHorizontal: 12, flexDirection: "row", gap: 12, alignItems: "center" }, rankNumber: { width: 26, textAlign: "center" }, rankLabel: { flex: 1 }, footer: { minHeight: 84, paddingHorizontal: 16, paddingTop: 14, flexDirection: "row", alignItems: "center", gap: 12 }, back: { minHeight: 52, justifyContent: "center", paddingHorizontal: 8 }, primary: { flex: 1, minHeight: 52, borderRadius: 26, justifyContent: "center", paddingHorizontal: 20 }, primaryText: { fontWeight: "700" }, reviewIntro: { marginTop: 10 }, reviewList: { marginTop: 24, borderWidth: StyleSheet.hairlineWidth, borderRadius: 16, overflow: "hidden" }, reviewRow: { minHeight: 70, padding: 14, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: StyleSheet.hairlineWidth }, reviewCopy: { flex: 1, gap: 4 },
 });
