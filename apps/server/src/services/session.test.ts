@@ -845,6 +845,52 @@ describe("SessionService", () => {
   });
 
   describe("start", () => {
+    it("returns the original session for a repeated client mutation id", async () => {
+      const existingSession = makeSession({ id: "session-existing" });
+      prismaMock.event.findFirst.mockResolvedValueOnce({ scopeId: existingSession.id } as never);
+      prismaMock.session.findFirst.mockResolvedValueOnce(existingSession);
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          clientMutationId: "start-request-1",
+          prompt: "Build checkout",
+        } as unknown as StartSessionServiceInput),
+      ).resolves.toEqual(existingSession);
+
+      expect(prismaMock.event.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: "start-request-1",
+          organizationId: "org-1",
+          scopeType: "session",
+          eventType: "session_started",
+          actorId: "user-1",
+        },
+        select: { scopeId: true },
+      });
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+      expect(eventServiceMock.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects an explicit cloud start instead of downgrading it in local mode", async () => {
+      vi.stubEnv("TRACE_LOCAL_MODE", "1");
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          repoId: "repo-1",
+          hosting: "cloud",
+          prompt: "Build checkout",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Cloud sessions are disabled in local mode");
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+    });
+
     it("loads workspace slugs from a selected runtime owned by another replica", async () => {
       prismaMock.session.findUnique.mockResolvedValueOnce({
         connection: { runtimeInstanceId: "runtime-b" },
@@ -4877,6 +4923,7 @@ describe("SessionService", () => {
       await service.run("session-1", "Continue", undefined, {
         userId: "user-1",
         organizationId: "org-1",
+        actorType: "agent",
       });
 
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
@@ -4896,6 +4943,13 @@ describe("SessionService", () => {
               runtimeLabel: "Remote laptop",
             }),
           }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_resumed",
+          actorType: "agent",
+          actorId: "user-1",
         }),
       );
     });
@@ -5454,6 +5508,13 @@ describe("SessionService", () => {
           prompt: expect.stringContaining(
             "$TRACE_SKILLS_DIR/request-user-input/SKILL.md completely",
           ),
+        }),
+        expect.any(Object),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          prompt: expect.stringContaining("$TRACE_SKILLS_DIR/trace-session/SKILL.md completely"),
         }),
         expect.any(Object),
       );
@@ -7532,6 +7593,7 @@ describe("SessionService", () => {
         text: "inspect this",
         imageKeys: queuedMessage.imageKeys,
         actorId: "user-1",
+        actorType: "agent",
         interactionMode: "ask",
         organizationId: "org-1",
         clientSource: "web",
@@ -7547,6 +7609,7 @@ describe("SessionService", () => {
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "queued_message_added",
+          actorType: "agent",
           payload: expect.objectContaining({
             queuedMessage: expect.objectContaining({
               id: "queued-1",

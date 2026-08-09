@@ -5,7 +5,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "../lib/db.js";
 import { redis } from "../lib/redis.js";
 import {
-  authenticateAccessToken,
+  authenticateUserAccessToken,
   createBridgeAuthToken,
   getRequestToken,
   getSessionCookieOptions,
@@ -236,11 +236,11 @@ function readOrganizationIdHeader(req: Request): string | null {
 
 async function resolveAuthenticatedUser(req: Request): Promise<{
   token: string;
-  auth: Exclude<Awaited<ReturnType<typeof authenticateAccessToken>>, null>;
+  auth: Exclude<Awaited<ReturnType<typeof authenticateUserAccessToken>>, null>;
 } | null> {
   const token = getRequestToken(req);
   if (!token) return null;
-  const auth = await authenticateAccessToken(token);
+  const auth = await authenticateUserAccessToken(token);
   if (!auth) return null;
   return { token, auth };
 }
@@ -735,7 +735,6 @@ router.get("/auth/bridge-token", async (req: Request, res: Response) => {
   if (!authenticated) {
     return res.status(401).json({ error: "Not authenticated" });
   }
-
   const organizationId = await resolveRequestedOrganizationId(
     authenticated.auth.userId,
     readOrganizationIdHeader(req),

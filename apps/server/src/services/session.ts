@@ -1110,6 +1110,11 @@ const REQUEST_USER_INPUT_SKILL_INSTRUCTION = `\n\n<system-instruction>
 Before asking the user for information, a decision, confirmation, or references, first read $TRACE_SKILLS_DIR/request-user-input/SKILL.md completely. Follow that skill's guidance for deciding whether to ask, formatting structured questions, and waiting for the response. Use the skill whenever you need user input before continuing.
 </system-instruction>`;
 
+/** Teach managed agents about Trace's session-control surface without relying on PATH discovery. */
+const TRACE_SESSION_SKILL_INSTRUCTION = `\n\n<system-instruction>
+When the request involves discovering, creating, messaging, running, stopping, monitoring, or archiving Trace sessions, read $TRACE_SKILLS_DIR/trace-session/SKILL.md completely before acting. Invoke the managed CLI using \`"$TRACE_CLI"\` exactly; do not call a bare \`trace\` command and never print $TRACE_INVOCATION_TOKEN.
+</system-instruction>`;
+
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves each response. */
 const AUTO_SAVE_INSTRUCTION = `\n\n<system-instruction>
 Before completing every response that changes the workspace, silently save your work to the remote:
@@ -1185,6 +1190,7 @@ function appendPromptInstructions(
   let result = prompt + TITLE_INSTRUCTION;
   result += BACKGROUND_WORK_INSTRUCTION;
   result += REQUEST_USER_INPUT_SKILL_INSTRUCTION;
+  result += TRACE_SESSION_SKILL_INSTRUCTION;
   if (hasRepo && !isGeneratedProjectKind(sessionGroupKind)) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
@@ -1544,23 +1550,59 @@ export function isFullyUnloadedSession(
 export class SessionService {
   private manualElementSaveQueues = new Map<string, Promise<void>>();
 
-  private async prepareArtifactInvocation(
+  private async findIdempotentStartedSession(input: {
+    clientMutationId?: string | null;
+    organizationId: string;
+    createdById: string;
+  }): Promise<SessionWithInclude | null> {
+    if (!input.clientMutationId) return null;
+    const startEvent = await prisma.event.findFirst({
+      where: {
+        id: input.clientMutationId,
+        organizationId: input.organizationId,
+        scopeType: "session",
+        eventType: "session_started",
+        actorId: input.createdById,
+      },
+      select: { scopeId: true },
+    });
+    if (!startEvent) return null;
+    return prisma.session.findFirst({
+      where: {
+        id: startEvent.scopeId,
+        organizationId: input.organizationId,
+        createdById: input.createdById,
+      },
+      include: SESSION_INCLUDE,
+    });
+  }
+
+  private async prepareInvocation(
     sessionId: string,
     organizationId: string,
+    sessionGroupId: string | null,
   ): Promise<{ invocationId: string; runtimeEnv: Record<string, string> }> {
     const invocationId = randomUUID();
     await prisma.session.updateMany({
       where: { id: sessionId, organizationId },
       data: { activeInvocationId: invocationId },
     });
+    const serverUrl =
+      process.env.TRACE_SERVER_PUBLIC_URL?.trim() ||
+      `http://localhost:${process.env.PORT?.trim() || "4000"}`;
     return {
       invocationId,
       runtimeEnv: {
         TRACE_SESSION_ID: sessionId,
+        TRACE_SESSION_GROUP_ID: sessionGroupId ?? "",
+        TRACE_ORGANIZATION_ID: organizationId,
+        TRACE_SERVER_URL: serverUrl,
+        TRACE_API_URL: serverUrl,
         TRACE_INVOCATION_ID: invocationId,
         TRACE_INVOCATION_TOKEN: createAgentInvocationToken({
           organizationId,
           sessionId,
+          sessionGroupId,
           invocationId,
         }),
       },
@@ -3609,6 +3651,14 @@ export class SessionService {
   async start(input: StartSessionServiceInput) {
     validateUploadKeysForOrganization(input.imageKeys, input.organizationId);
 
+    const clientMutationId = input.clientMutationId?.trim() || null;
+    if (input.clientMutationId != null && (!clientMutationId || clientMutationId.length > 200)) {
+      throw new ValidationError("clientMutationId must be between 1 and 200 characters");
+    }
+    input.clientMutationId = clientMutationId;
+    const existingIdempotentSession = await this.findIdempotentStartedSession(input);
+    if (existingIdempotentSession) return existingIdempotentSession;
+
     if (input.restoreCheckpointId && input.sessionGroupId) {
       throw new Error("restoreCheckpointId cannot reuse an existing session group");
     }
@@ -3960,7 +4010,7 @@ export class SessionService {
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
     // default to local in TRACE_LOCAL_MODE and cloud everywhere else.
     if (isLocalMode() && input.hosting === "cloud") {
-      throw new Error("Cloud sessions are disabled in local mode");
+      throw new ValidationError("Cloud sessions are disabled in local mode");
     }
 
     const requestedRuntimeSelection =
@@ -4080,7 +4130,7 @@ export class SessionService {
       hosting = "local";
     }
     if (hosting === "cloud" && !requestedEnvironment && !reuseExistingGroupRuntimeSelection) {
-      throw new Error("No enabled cloud agent environment is configured");
+      throw new ValidationError("No enabled cloud agent environment is configured");
     }
 
     // Importing an existing on-disk worktree: adopt it as the workspace instead
@@ -4450,7 +4500,7 @@ export class SessionService {
           { sessionStatus: initialSessionStatus },
         ]);
 
-        const startEventId = input.startEventId ?? randomUUID();
+        const startEventId = input.startEventId ?? clientMutationId ?? randomUUID();
         const startEventPayload = {
           session: serializeSession(session),
           sessionGroup: sessionGroupSnapshot,
@@ -4484,7 +4534,7 @@ export class SessionService {
             eventType: "session_started",
             payload: startEventOverride?.payload ?? startEventPayload,
             metadata: startEventOverride?.metadata ?? startEventMetadata,
-            actorType: startEventOverride?.actorType ?? "user",
+            actorType: startEventOverride?.actorType ?? input.actorType ?? "user",
             actorId: startEventOverride?.actorId ?? input.createdById,
             timestamp: startEventOverride?.timestamp,
             deferPublish: true,
@@ -4516,6 +4566,8 @@ export class SessionService {
             })
             .catch(() => {});
         }
+        const existingSession = await this.findIdempotentStartedSession(input);
+        if (existingSession) return existingSession;
         throw error;
       });
 
@@ -4948,7 +5000,12 @@ export class SessionService {
     id: string,
     prompt?: string | null,
     interactionMode?: string,
-    access?: { userId: string; organizationId: string; clientSource?: string | null },
+    access?: {
+      userId: string;
+      organizationId: string;
+      clientSource?: string | null;
+      actorType?: ActorType;
+    },
     imageKeys?: string[] | null,
   ) {
     const session = await prisma.session.findUniqueOrThrow({
@@ -5140,7 +5197,11 @@ export class SessionService {
       startMeta,
     });
 
-    const invocation = await this.prepareArtifactInvocation(id, session.organizationId);
+    const invocation = await this.prepareInvocation(
+      id,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const command = {
       type: "run" as const,
       sessionId: id,
@@ -5222,8 +5283,8 @@ export class SessionService {
         clientSource: normalizeClientSource(access?.clientSource),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
-      actorType: "user",
-      actorId: session.createdById,
+      actorType: access?.actorType ?? "user",
+      actorId: access?.userId ?? session.createdById,
     });
 
     return updated;
@@ -6702,7 +6763,11 @@ export class SessionService {
     // runtime prevents silent bridge hijack when the home is offline and a
     // different bridge (e.g. Laptop B) is now the only connected runtime.
     const expectedRuntimeId = runtimeBinding.runtimeId ?? conn.runtimeInstanceId;
-    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
+    const invocation = await this.prepareInvocation(
+      sessionId,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const deliveryCommand = {
       type: "send" as const,
       sessionId,
@@ -6927,6 +6992,7 @@ export class SessionService {
     text,
     imageKeys,
     actorId,
+    actorType = "user",
     interactionMode,
     organizationId,
     clientSource,
@@ -6935,6 +7001,7 @@ export class SessionService {
     text: string;
     imageKeys?: string[];
     actorId: string;
+    actorType?: ActorType;
     interactionMode?: string;
     organizationId: string;
     clientSource?: string | null;
@@ -7007,7 +7074,7 @@ export class SessionService {
           createdAt: queuedMessage.createdAt.toISOString(),
         },
       },
-      actorType: "user",
+      actorType,
       actorId,
     });
 
@@ -8200,7 +8267,11 @@ export class SessionService {
       data: { toolSessionId: null },
     });
 
-    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
+    const invocation = await this.prepareInvocation(
+      sessionId,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const deliveryResult = await sendSessionCommand(
       sessionId,
       {
@@ -11470,7 +11541,11 @@ export class SessionService {
       .filter((instruction): instruction is string => !!instruction)
       .join("\n\n");
 
-    const invocation = await this.prepareArtifactInvocation(sessionId, session.organizationId);
+    const invocation = await this.prepareInvocation(
+      sessionId,
+      session.organizationId,
+      session.sessionGroupId,
+    );
     const command = {
       type: pending.type,
       sessionId,

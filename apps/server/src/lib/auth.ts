@@ -3,10 +3,7 @@ import type { CookieOptions, Request, Response } from "express";
 import type { IncomingHttpHeaders } from "http";
 import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
-import {
-  authenticateMobileSecret,
-  type MobileAuthSubject,
-} from "../services/mobile-auth.js";
+import { authenticateMobileSecret, type MobileAuthSubject } from "../services/mobile-auth.js";
 import { getCanonicalLocalOrganizationId } from "../services/local-bootstrap.js";
 import { AuthenticationError } from "./errors.js";
 import { prisma } from "./db.js";
@@ -19,10 +16,16 @@ import {
   createEventLoader,
   createChatMembersLoader,
   createSessionTicketsLoader,
+  createChannelProjectsLoader,
+  createSessionProjectsLoader,
   createChannelMembershipLoader,
   createChatMembershipLoader,
 } from "./dataloader.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
+import {
+  authenticateAgentInvocationToken,
+  type AgentInvocationAuthSubject,
+} from "./agent-invocation-auth.js";
 
 const JWT_SECRET = resolveJwtSecret();
 const BRIDGE_AUTH_TOKEN_TTL_SECONDS = 5 * 60;
@@ -49,7 +52,10 @@ type SessionAuthSubject = {
   userId: string;
 };
 
-export type AccessTokenAuthSubject = SessionAuthSubject | MobileAuthSubject;
+export type AccessTokenAuthSubject =
+  | SessionAuthSubject
+  | MobileAuthSubject
+  | AgentInvocationAuthSubject;
 
 type RequestAuthSource = {
   headers: IncomingHttpHeaders;
@@ -256,7 +262,16 @@ export async function authenticateAccessToken(
     };
   }
 
-  return authenticateMobileSecret(token);
+  const device = await authenticateMobileSecret(token);
+  if (device) return device;
+  return authenticateAgentInvocationToken(token);
+}
+
+export async function authenticateUserAccessToken(
+  token: string,
+): Promise<Exclude<AccessTokenAuthSubject, AgentInvocationAuthSubject> | null> {
+  const subject = await authenticateAccessToken(token);
+  return subject?.kind === "agent" ? null : subject;
 }
 
 export function createBridgeAuthToken(input: {
@@ -341,10 +356,7 @@ export function getRequestToken(req: Pick<Request, "headers" | "cookies">): stri
   return req.cookies?.trace_token ?? parseCookieToken(req.headers.cookie);
 }
 
-export async function buildContext({
-  req,
-  res,
-}: ExpressContextFunctionArgument): Promise<Context> {
+export async function buildContext({ req, res }: ExpressContextFunctionArgument): Promise<Context> {
   let userId: string | undefined;
   let authSubject: AccessTokenAuthSubject | null = null;
 
@@ -391,7 +403,13 @@ export async function buildContext({
   let role: Context["role"] = null;
 
   const localModeMembership = await getLocalModeOrgMembership(user.id);
-  if (localModeMembership) {
+  if (authSubject?.kind === "agent") {
+    if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
+      throw new AuthenticationError("Agent credential is bound to another organization");
+    }
+    organizationId = authSubject.organizationId;
+    role = authSubject.role;
+  } else if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
   } else if (requestedOrgId) {
@@ -415,7 +433,9 @@ export async function buildContext({
     organizationId,
     clientSource: readClientSource(req.headers),
     role,
-    actorType: "user",
+    actorType: authSubject?.kind === "agent" ? "agent" : "user",
+    agentSessionId: authSubject?.kind === "agent" ? authSubject.sessionId : null,
+    agentCapabilities: authSubject?.kind === "agent" ? authSubject.capabilities : [],
     userLoader: createUserLoader(),
     sessionLoader: createSessionLoader(),
     sessionGroupLoader: createSessionGroupLoader(),
@@ -423,6 +443,8 @@ export async function buildContext({
     eventLoader: createEventLoader(),
     chatMembersLoader: createChatMembersLoader(),
     sessionTicketsLoader: createSessionTicketsLoader(organizationId),
+    channelProjectsLoader: createChannelProjectsLoader(organizationId),
+    sessionProjectsLoader: createSessionProjectsLoader(organizationId),
     channelMembershipLoader: createChannelMembershipLoader(user.id),
     chatMembershipLoader: createChatMembershipLoader(user.id),
   };
@@ -461,7 +483,13 @@ export async function buildWsContext(
   let role: Context["role"] = null;
 
   const localModeMembership = await getLocalModeOrgMembership(user.id);
-  if (localModeMembership) {
+  if (authSubject.kind === "agent") {
+    if (requestedOrgId && requestedOrgId !== authSubject.organizationId) {
+      throw new AuthenticationError("Agent credential is bound to another organization");
+    }
+    organizationId = authSubject.organizationId;
+    role = authSubject.role;
+  } else if (localModeMembership) {
     organizationId = localModeMembership.organizationId;
     role = localModeMembership.role;
   } else if (requestedOrgId) {
@@ -487,7 +515,9 @@ export async function buildWsContext(
         ? connectionParams.clientSource.trim()
         : null,
     role,
-    actorType: "user",
+    actorType: authSubject.kind === "agent" ? "agent" : "user",
+    agentSessionId: authSubject.kind === "agent" ? authSubject.sessionId : null,
+    agentCapabilities: authSubject.kind === "agent" ? authSubject.capabilities : [],
     userLoader: createUserLoader(),
     sessionLoader: createSessionLoader(),
     sessionGroupLoader: createSessionGroupLoader(),
@@ -495,6 +525,8 @@ export async function buildWsContext(
     eventLoader: createEventLoader(),
     chatMembersLoader: createChatMembersLoader(),
     sessionTicketsLoader: createSessionTicketsLoader(organizationId),
+    channelProjectsLoader: createChannelProjectsLoader(organizationId),
+    sessionProjectsLoader: createSessionProjectsLoader(organizationId),
     channelMembershipLoader: createChannelMembershipLoader(user.id),
     chatMembershipLoader: createChatMembershipLoader(user.id),
   };

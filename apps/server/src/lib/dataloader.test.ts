@@ -6,7 +6,12 @@ vi.mock("./db.js", async () => {
 });
 
 import { prisma } from "./db.js";
-import { createSessionTicketsLoader, createUserLoader } from "./dataloader.js";
+import {
+  createChannelProjectsLoader,
+  createSessionProjectsLoader,
+  createSessionTicketsLoader,
+  createUserLoader,
+} from "./dataloader.js";
 
 const prismaMock = prisma as any;
 
@@ -68,5 +73,39 @@ describe("createSessionTicketsLoader", () => {
         links: true,
       },
     });
+  });
+});
+
+describe("project relation loaders", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("batches channel projects and preserves empty relations", async () => {
+    prismaMock.channelProject.findMany.mockResolvedValueOnce([
+      { channelId: "channel-2", project: { id: "project-2", repo: null } },
+      { channelId: "channel-1", project: { id: "project-1", repo: { id: "repo-1" } } },
+    ]);
+
+    const loader = createChannelProjectsLoader("org-1");
+    await expect(loader.loadMany(["channel-1", "channel-3", "channel-2"])).resolves.toEqual([
+      [{ id: "project-1", repo: { id: "repo-1" } }],
+      [],
+      [{ id: "project-2", repo: null }],
+    ]);
+    expect(prismaMock.channelProject.findMany).toHaveBeenCalledOnce();
+  });
+
+  it("batches session projects within the active organization", async () => {
+    prismaMock.sessionProject.findMany.mockResolvedValueOnce([
+      { sessionId: "session-1", project: { id: "project-1", repo: null } },
+    ]);
+
+    const loader = createSessionProjectsLoader("org-1");
+    await expect(loader.loadMany(["session-1", "session-2"])).resolves.toEqual([
+      [{ id: "project-1", repo: null }],
+      [],
+    ]);
+    expect(prismaMock.sessionProject.findMany).toHaveBeenCalledOnce();
   });
 });

@@ -1,0 +1,25 @@
+{
+  "name": "@trace/cli-contract",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "tsc -b",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "graphql": "^16.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
+  }
+}

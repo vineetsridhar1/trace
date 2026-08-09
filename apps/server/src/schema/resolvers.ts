@@ -59,6 +59,59 @@ import type { Context } from "../context.js";
 import { resolveActor } from "../services/actor.js";
 import { designSystemMutations, designSystemQueries } from "./design-system.js";
 import { artifactMutations, artifactQueries, artifactTypeResolvers } from "./artifact.js";
+import { restrictAgentRootResolvers } from "../lib/agent-authorization.js";
+
+const queries = {
+  ...organizationQueries,
+  ...agentEnvironmentQueries,
+  ...orgSecretQueries,
+  ...channelQueries,
+  ...channelGroupQueries,
+  ...sessionQueries,
+  ...bridgeAccessQueries,
+  ...ticketQueries,
+  ...eventQueries,
+  ...inboxQueries,
+  ...apiTokenQueries,
+  ...codexCredentialQueries,
+  ...terminalQueries,
+  ...sessionApplicationQueries,
+  ...connectionsQueries,
+  ...chatQueries,
+  ...participantQueries,
+  ...threadQueries,
+  ...designSystemQueries,
+  ...artifactQueries,
+};
+
+const mutations = {
+  ...organizationMutations,
+  ...agentEnvironmentMutations,
+  ...orgSecretMutations,
+  ...channelMutations,
+  ...channelGroupMutations,
+  ...sessionMutations,
+  ...bridgeAccessMutations,
+  ...ticketMutations,
+  ...inboxMutations,
+  ...apiTokenMutations,
+  ...codexCredentialMutations,
+  ...pushTokenMutations,
+  ...terminalMutations,
+  ...sessionApplicationMutations,
+  ...chatMutations,
+  ...participantMutations,
+  ...designSystemMutations,
+  ...artifactMutations,
+};
+
+const subscriptions = {
+  ...channelSubscriptions,
+  ...sessionSubscriptions,
+  ...ticketSubscriptions,
+  ...chatSubscriptions,
+  ...eventSubscriptions,
+};
 
 export const resolvers = {
   DateTime: DateTimeScalar,
@@ -92,54 +145,14 @@ export const resolvers = {
   },
 
   Query: {
-    ...organizationQueries,
-    ...agentEnvironmentQueries,
-    ...orgSecretQueries,
-    ...channelQueries,
-    ...channelGroupQueries,
-    ...sessionQueries,
-    ...bridgeAccessQueries,
-    ...ticketQueries,
-    ...eventQueries,
-    ...inboxQueries,
-    ...apiTokenQueries,
-    ...codexCredentialQueries,
-    ...terminalQueries,
-    ...sessionApplicationQueries,
-    ...connectionsQueries,
-    ...chatQueries,
-    ...participantQueries,
-    ...threadQueries,
-    ...designSystemQueries,
-    ...artifactQueries,
+    ...restrictAgentRootResolvers("Query", queries),
   },
 
   Mutation: {
-    ...organizationMutations,
-    ...agentEnvironmentMutations,
-    ...orgSecretMutations,
-    ...channelMutations,
-    ...channelGroupMutations,
-    ...sessionMutations,
-    ...bridgeAccessMutations,
-    ...ticketMutations,
-    ...inboxMutations,
-    ...apiTokenMutations,
-    ...codexCredentialMutations,
-    ...pushTokenMutations,
-    ...terminalMutations,
-    ...sessionApplicationMutations,
-    ...chatMutations,
-    ...participantMutations,
-    ...designSystemMutations,
-    ...artifactMutations,
+    ...restrictAgentRootResolvers("Mutation", mutations),
   },
 
   Subscription: {
-    ...channelSubscriptions,
-    ...sessionSubscriptions,
-    ...ticketSubscriptions,
-    ...chatSubscriptions,
-    ...eventSubscriptions,
+    ...restrictAgentRootResolvers("Subscription", subscriptions),
   },
 };

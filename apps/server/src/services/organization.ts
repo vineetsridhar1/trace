@@ -83,6 +83,32 @@ export class OrganizationService {
     });
   }
 
+  async listProjectsForChannels(channelIds: readonly string[], organizationId: string) {
+    return prisma.channelProject.findMany({
+      where: {
+        channelId: { in: [...channelIds] },
+        project: { organizationId },
+      },
+      select: {
+        channelId: true,
+        project: { include: { repo: true } },
+      },
+    });
+  }
+
+  async listProjectsForSessions(sessionIds: readonly string[], organizationId: string) {
+    return prisma.sessionProject.findMany({
+      where: {
+        sessionId: { in: [...sessionIds] },
+        project: { organizationId },
+      },
+      select: {
+        sessionId: true,
+        project: { include: { repo: true } },
+      },
+    });
+  }
+
   async getUserProfile(userId: string) {
     return prisma.user.findUniqueOrThrow({
       where: { id: userId },
@@ -336,7 +362,8 @@ export class OrganizationService {
           organizationId: repo.organizationId,
           scopeType: "system",
           scopeId: repo.id,
-          eventType: input.applicationConfig != null ? "application_config_updated" : "repo_updated",
+          eventType:
+            input.applicationConfig != null ? "application_config_updated" : "repo_updated",
           payload: {
             repo: {
               id: repo.id,

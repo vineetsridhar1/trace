@@ -77,6 +77,16 @@ export class ArtifactService {
       throw new ValidationError("Invalid idempotency key");
     }
 
+    const session = await prisma.session.findFirst({
+      where: {
+        id: input.sessionId,
+        organizationId: input.organizationId,
+        activeInvocationId: input.invocationId,
+      },
+      select: { id: true, name: true, createdById: true, sessionGroupId: true },
+    });
+    if (!session) throw new ValidationError("The artifact invocation is no longer active");
+
     const replay = await prisma.artifact.findUnique({
       where: { idempotencyKey: input.idempotencyKey },
     });
@@ -91,16 +101,6 @@ export class ArtifactService {
       }
       return replay;
     }
-
-    const session = await prisma.session.findFirst({
-      where: {
-        id: input.sessionId,
-        organizationId: input.organizationId,
-        activeInvocationId: input.invocationId,
-      },
-      select: { id: true, name: true, createdById: true, sessionGroupId: true },
-    });
-    if (!session) throw new ValidationError("The artifact invocation is no longer active");
 
     const parsed = await parseArtifactArchive(input.archive);
     validateType(type, parsed.manifest);

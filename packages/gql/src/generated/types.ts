@@ -2675,6 +2675,7 @@ export type StartSessionInput = {
   attachmentKeys?: InputMaybe<Array<Scalars["String"]["input"]>>;
   branch?: InputMaybe<Scalars["String"]["input"]>;
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
   designSessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   designSystemVersionId?: InputMaybe<Scalars["ID"]["input"]>;
@@ -2727,6 +2728,8 @@ export type SubscriptionOrgEventsArgs = {
 };
 
 export type SubscriptionSessionEventsArgs = {
+  after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
   organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };

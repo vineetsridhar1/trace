@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  authenticateAccessToken: vi.fn(),
+  authenticateUserAccessToken: vi.fn(),
   isExternalLocalModeRequest: vi.fn(() => false),
   parseCookieToken: vi.fn(),
   getTerminalAuthContext: vi.fn(() => null),
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./auth.js", () => ({
-  authenticateAccessToken: mocks.authenticateAccessToken,
+  authenticateUserAccessToken: mocks.authenticateUserAccessToken,
   isExternalLocalModeRequest: mocks.isExternalLocalModeRequest,
   parseCookieToken: mocks.parseCookieToken,
 }));
@@ -79,7 +79,7 @@ describe("terminal handler auth", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.parseCookieToken.mockReturnValue(undefined);
-    mocks.authenticateAccessToken.mockResolvedValue({ kind: "session", userId: "user-1" });
+    mocks.authenticateUserAccessToken.mockResolvedValue({ kind: "session", userId: "user-1" });
     mocks.attachFrontend.mockReturnValue(true);
     mocks.assertAccess.mockResolvedValue(undefined);
     prismaMock.user.findUnique.mockResolvedValue({ id: "user-1" });
@@ -98,7 +98,7 @@ describe("terminal handler auth", () => {
     await Promise.resolve();
 
     expect(mocks.parseCookieToken).toHaveBeenCalledWith("trace_token=cookie-token");
-    expect(mocks.authenticateAccessToken).toHaveBeenCalledWith("cookie-token");
+    expect(mocks.authenticateUserAccessToken).toHaveBeenCalledWith("cookie-token");
   });
 
   it("authenticates mobile terminal sockets from an auth message", async () => {
@@ -113,7 +113,7 @@ describe("terminal handler auth", () => {
 
     await Promise.resolve();
 
-    expect(mocks.authenticateAccessToken).toHaveBeenCalledWith("mobile-token");
+    expect(mocks.authenticateUserAccessToken).toHaveBeenCalledWith("mobile-token");
     expect(mocks.parseCookieToken).toHaveBeenCalledWith(undefined);
   });
 

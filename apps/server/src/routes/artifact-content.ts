@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type Router as RouterType } from "express";
-import { authenticateAccessToken, getRequestToken } from "../lib/auth.js";
+import { authenticateUserAccessToken, getRequestToken } from "../lib/auth.js";
 import { prisma } from "../lib/db.js";
 import { storage } from "../lib/storage/index.js";
 import { readArtifactFile } from "../lib/artifact-bundle.js";
@@ -9,7 +9,7 @@ const router: RouterType = Router();
 
 router.get("/artifacts/:artifactId/files/*path", async (req: Request, res: Response) => {
   const token = getRequestToken(req);
-  const auth = token ? await authenticateAccessToken(token) : null;
+  const auth = token ? await authenticateUserAccessToken(token) : null;
   if (!auth) return res.status(401).json({ error: "Not authenticated" });
 
   const artifactId = typeof req.params.artifactId === "string" ? req.params.artifactId : null;

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Trace Sessions"
+  short_description: "Discover and control Trace AI sessions"
+  default_prompt: "Use the Trace session CLI to complete the requested cross-session workflow."

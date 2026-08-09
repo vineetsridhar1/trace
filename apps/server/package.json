@@ -25,6 +25,7 @@
     "@graphql-tools/schema": "^10.0.14",
     "@prisma/client": "^6.19.2",
     "@slack/web-api": "^7.10.0",
+    "@trace/cli-contract": "workspace:*",
     "@trace/gql": "workspace:*",
     "@trace/shared": "workspace:*",
     "@types/cors": "^2.8.19",

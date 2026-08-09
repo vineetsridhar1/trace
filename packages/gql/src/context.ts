@@ -10,6 +10,9 @@ export interface Context {
   /** Role in the active organization. Null when organizationId is null. */
   role: UserRole | null;
   actorType: ActorType;
+  /** Present only for a restricted credential launched inside a coding session. */
+  agentSessionId?: string | null;
+  agentCapabilities?: readonly string[];
   userLoader: DataLoader<
     string,
     { id: string; name: string | null; avatarUrl: string | null } | null
@@ -20,6 +23,8 @@ export interface Context {
   eventLoader: DataLoader<string, unknown | null>;
   chatMembersLoader: DataLoader<string, Array<{ userId: string; joinedAt: Date }>>;
   sessionTicketsLoader: DataLoader<string, unknown[]>;
+  channelProjectsLoader: DataLoader<string, unknown[]>;
+  sessionProjectsLoader: DataLoader<string, unknown[]>;
   channelMembershipLoader: DataLoader<string, boolean>;
   chatMembershipLoader: DataLoader<string, boolean>;
 }

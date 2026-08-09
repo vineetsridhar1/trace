@@ -1,12 +1,10 @@
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "fs/promises";
+import { createHash } from "crypto";
 import { dirname, join } from "path";
 import {
   BUNDLED_TRACE_RUNTIME_FILES,
   BUNDLED_TRACE_RUNTIME_MANIFEST,
 } from "./trace-runtime.generated.js";
-
-const RUNTIME_REPOSITORY = "vineetsridhar1/trace";
-const RUNTIME_PROTOCOL_VERSION = 1;
 
 export type TraceRuntimePaths = {
   root: string;
@@ -18,18 +16,37 @@ type RuntimeManifest = {
   schemaVersion: 1;
   version: number;
   protocolVersion: number;
+  contentHash: string;
   files: readonly string[];
 };
 
-async function installedVersion(root: string): Promise<number> {
+type InstalledManifest = Pick<RuntimeManifest, "version" | "contentHash">;
+
+async function installedManifest(root: string): Promise<InstalledManifest | null> {
   try {
     const parsed = JSON.parse(await readFile(join(root, "manifest.json"), "utf8")) as {
       version?: unknown;
+      contentHash?: unknown;
     };
-    return typeof parsed.version === "number" ? parsed.version : 0;
+    return typeof parsed.version === "number" && typeof parsed.contentHash === "string"
+      ? { version: parsed.version, contentHash: parsed.contentHash }
+      : null;
   } catch {
-    return 0;
+    return null;
   }
+}
+
+function runtimeContentHash(manifest: RuntimeManifest, files: ReadonlyMap<string, string>): string {
+  const hash = createHash("sha256");
+  for (const relativePath of manifest.files) {
+    const content = files.get(relativePath);
+    if (content === undefined) throw new Error(`Missing Trace runtime file: ${relativePath}`);
+    hash.update(relativePath);
+    hash.update("\0");
+    hash.update(content);
+    hash.update("\0");
+  }
+  return hash.digest("hex");
 }
 
 async function installFiles(
@@ -60,65 +77,29 @@ async function installFiles(
 }
 
 async function installFallback(root: string): Promise<void> {
-  // The bundled copy ships with the bridge build, so a newer one means the runtime on disk is
-  // stale. Only skipping when nothing is installed would pin every existing machine to whatever
-  // version it first received, even as the skills it depends on change.
-  if ((await installedVersion(root)) >= BUNDLED_TRACE_RUNTIME_MANIFEST.version) return;
-  await installFiles(
-    root,
-    BUNDLED_TRACE_RUNTIME_MANIFEST,
-    new Map(Object.entries(BUNDLED_TRACE_RUNTIME_FILES)),
-  );
-}
-
-async function updateFromGitHub(root: string): Promise<void> {
-  const commitResponse = await fetch(
-    `https://api.github.com/repos/${RUNTIME_REPOSITORY}/commits/main`,
-    { headers: { Accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(3_000) },
-  );
-  if (!commitResponse.ok) return;
-  const commit = (await commitResponse.json()) as { sha?: unknown };
-  if (typeof commit.sha !== "string") return;
-
-  const base = `https://raw.githubusercontent.com/${RUNTIME_REPOSITORY}/${commit.sha}/runtime`;
-  const manifestResponse = await fetch(`${base}/manifest.json`, {
-    signal: AbortSignal.timeout(3_000),
-  });
-  if (!manifestResponse.ok) return;
-  const manifest = (await manifestResponse.json()) as RuntimeManifest;
+  // The bridge release owns runtime distribution. Reinstall when either the monotonic version or
+  // content hash changes so updates cannot be skipped because someone forgot to bump the version.
+  const installed = await installedManifest(root);
   if (
-    manifest.schemaVersion !== 1 ||
-    manifest.protocolVersion !== RUNTIME_PROTOCOL_VERSION ||
-    !Number.isInteger(manifest.version) ||
-    !Array.isArray(manifest.files) ||
-    manifest.version <= (await installedVersion(root))
+    installed &&
+    (installed.version > BUNDLED_TRACE_RUNTIME_MANIFEST.version ||
+      (installed.version === BUNDLED_TRACE_RUNTIME_MANIFEST.version &&
+        installed.contentHash === BUNDLED_TRACE_RUNTIME_MANIFEST.contentHash))
   ) {
     return;
   }
-
-  const files = new Map<string, string>();
-  await Promise.all(
-    manifest.files.map(async (relativePath) => {
-      if (
-        typeof relativePath !== "string" ||
-        relativePath.startsWith("/") ||
-        relativePath.includes("..")
-      ) {
-        throw new Error("Invalid Trace runtime manifest path");
-      }
-      const response = await fetch(`${base}/${relativePath}`, {
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (!response.ok) throw new Error(`Missing Trace runtime file: ${relativePath}`);
-      files.set(relativePath, await response.text());
-    }),
-  );
-  await installFiles(root, manifest, files);
+  const bundledFiles = new Map(Object.entries(BUNDLED_TRACE_RUNTIME_FILES));
+  if (
+    runtimeContentHash(BUNDLED_TRACE_RUNTIME_MANIFEST, bundledFiles) !==
+    BUNDLED_TRACE_RUNTIME_MANIFEST.contentHash
+  ) {
+    throw new Error("Bundled Trace runtime content does not match its manifest");
+  }
+  await installFiles(root, BUNDLED_TRACE_RUNTIME_MANIFEST, bundledFiles);
 }
 
 export async function ensureTraceRuntime(root: string): Promise<TraceRuntimePaths> {
   await mkdir(dirname(root), { recursive: true });
   await installFallback(root);
-  await updateFromGitHub(root).catch(() => undefined);
   return { root, binDir: join(root, "bin"), skillsDir: join(root, "skills") };
 }

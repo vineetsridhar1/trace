@@ -10,6 +10,7 @@ vi.mock("../lib/storage/index.js", () => ({
 vi.mock("../lib/pubsub.js", () => ({
   pubsub: {
     asyncIterator: vi.fn(() => "iterator"),
+    waitForSubscription: vi.fn(async () => undefined),
   },
   topics: {
     ticketEvents: (id: string) => `ticket:${id}:events`,
@@ -107,6 +108,12 @@ vi.mock("../lib/db.js", () => ({
     channel: {
       findFirst: vi.fn(),
     },
+    channelProject: {
+      findMany: vi.fn(),
+    },
+    sessionProject: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -138,10 +145,10 @@ vi.mock("../services/inbox.js", () => ({
 }));
 
 import { ticketMutations, ticketQueries, ticketSubscriptions } from "./ticket.js";
-import { sessionQueries, sessionSubscriptions } from "./session.js";
+import { sessionQueries, sessionSubscriptions, sessionTypeResolvers } from "./session.js";
 import { sessionMutations } from "./session.js";
 import { channelGroupQueries } from "./channelGroup.js";
-import { channelSubscriptions } from "./channel.js";
+import { channelSubscriptions, channelTypeResolvers } from "./channel.js";
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries } from "./inbox.js";
 import { assertChannelAccess, assertScopeAccess } from "../services/access.js";
@@ -160,11 +167,24 @@ const ctx = {
   organizationId: "org-1",
   role: "admin",
   actorType: "user",
+  channelProjectsLoader: { load: vi.fn(async () => []) },
+  sessionProjectsLoader: { load: vi.fn(async () => []) },
 } as any;
 
 describe("GraphQL authz guards", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("resolves missing channel and session project links as empty lists", async () => {
+    await expect(
+      channelTypeResolvers.Channel.projects({ id: "channel-1" }, {}, ctx),
+    ).resolves.toEqual([]);
+    await expect(
+      sessionTypeResolvers.Session.projects({ id: "session-1" }, {}, ctx),
+    ).resolves.toEqual([]);
+    expect(ctx.channelProjectsLoader.load).toHaveBeenCalledWith("channel-1");
+    expect(ctx.sessionProjectsLoader.load).toHaveBeenCalledWith("session-1");
   });
 
   it("rejects cross-org ticket list queries", async () => {
@@ -499,6 +519,104 @@ describe("GraphQL authz guards", () => {
     });
     await expect(filtered.next()).resolves.toEqual({ value: undefined, done: true });
     expect(prisma.sessionGroup.findFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it("replays persisted session events after the follow cursor and deduplicates live delivery", async () => {
+    const replayed = {
+      id: "event-2",
+      organizationId: "org-1",
+      scopeType: "session",
+      scopeId: "session-1",
+      eventType: "session_output" as const,
+      payload: {
+        sessionGroup: { id: "group-1", visibility: "public", ownerUserId: "owner-1" },
+      },
+      actorType: "agent" as const,
+      actorId: "agent-1",
+      parentId: null,
+      metadata: {},
+      timestamp: new Date("2026-08-09T00:00:02.000Z"),
+    };
+    const liveEvents = [
+      { sessionEvents: replayed },
+      {
+        sessionEvents: {
+          ...replayed,
+          id: "event-3",
+          timestamp: new Date("2026-08-09T00:00:03.000Z"),
+        },
+      },
+    ];
+    const liveIterator = {
+      async next() {
+        const value = liveEvents.shift();
+        return value ? { value, done: false } : { value: undefined, done: true };
+      },
+      async return() {
+        return { value: undefined, done: true };
+      },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+    } as AsyncIterableIterator<(typeof liveEvents)[number]>;
+    vi.mocked(pubsub.asyncIterator).mockReturnValueOnce(liveIterator);
+    vi.mocked(eventService.query).mockResolvedValueOnce([replayed]);
+
+    const filtered = await eventSubscriptions.sessionEvents.subscribe(
+      {},
+      {
+        sessionId: "session-1",
+        organizationId: "org-1",
+        after: new Date("2026-08-09T00:00:01.000Z"),
+        afterEventId: "event-1",
+      },
+      ctx,
+    );
+
+    await expect(filtered.next()).resolves.toMatchObject({ value: { sessionEvents: replayed } });
+    await expect(filtered.next()).resolves.toMatchObject({
+      value: { sessionEvents: { id: "event-3" } },
+    });
+    expect(eventService.query).toHaveBeenCalledWith("org-1", {
+      scopeType: "session",
+      scopeId: "session-1",
+      after: new Date("2026-08-09T00:00:01.000Z"),
+      afterEventId: "event-1",
+      limit: 500,
+    });
+  });
+
+  it("rejects an event replay that exceeds the bounded follow window", async () => {
+    const eventAt = (index: number) => ({
+      id: `event-${String(index).padStart(4, "0")}`,
+      organizationId: "org-1",
+      scopeType: "session",
+      scopeId: "session-1",
+      eventType: "session_output" as const,
+      payload: {},
+      actorType: "agent" as const,
+      actorId: "agent-1",
+      parentId: null,
+      metadata: {},
+      timestamp: new Date(1_700_000_000_000 + index),
+    });
+    vi.mocked(eventService.query)
+      .mockResolvedValueOnce(Array.from({ length: 500 }, (_, index) => eventAt(index + 1)))
+      .mockResolvedValueOnce(Array.from({ length: 500 }, (_, index) => eventAt(index + 501)))
+      .mockResolvedValueOnce([eventAt(1_001)]);
+
+    const filtered = await eventSubscriptions.sessionEvents.subscribe(
+      {},
+      {
+        sessionId: "session-1",
+        organizationId: "org-1",
+        after: new Date("2020-01-01T00:00:00.000Z"),
+      },
+      ctx,
+    );
+
+    await expect(filtered.next()).rejects.toThrow("replay exceeds 1000 events");
+    expect(eventService.query).toHaveBeenCalledTimes(3);
   });
 
   it("filters org event subscriptions for hidden private channel events", async () => {
