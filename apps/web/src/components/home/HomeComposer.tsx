@@ -106,7 +106,7 @@ export function HomeComposer({
         sendLabel="Start session"
         editorRef={editorRef}
         mode={mode}
-        placeholder="Describe what you want to make…"
+        placeholder={kind === "general" ? "Ask about your work…" : "Describe what you want to make…"}
         disabled={submitting}
         submitDisabled={!canSubmit}
         attachments={attachments}
@@ -150,6 +150,11 @@ export function HomeComposer({
                 onReasoningEffortChange={onReasoningEffortChange}
               />
             </>
+          ) : kind === "general" ? (
+            <>
+              <span className="shrink-0 text-[12px] text-muted-foreground">Context</span>
+              <HomeChannelPicker selectedKey={channelTargetKey} onSelect={onChannelTargetChange} />
+            </>
           ) : undefined
         }
         controls={
@@ -160,14 +165,14 @@ export function HomeComposer({
                 disabled={submitting}
                 onSelect={onDesignSystemChange}
               />
-            ) : (
+            ) : kind !== "general" ? (
               <HomeDesignPicker
                 selectedDesignId={designSessionGroupId}
                 disabled={submitting}
                 onSelect={onDesignChange}
               />
-            )}
-            {kind !== "coding" ? (
+            ) : null}
+            {kind !== "coding" && kind !== "general" ? (
               <ComposerInputOptions
                 mode={mode}
                 tool={tool}
