@@ -28,6 +28,8 @@ interface TerminalEntry {
   ready: boolean;
   /** True once the bridge has sent terminal_exit or terminal_error */
   terminated: boolean;
+  cols: number;
+  rows: number;
   /** Messages buffered before the frontend attaches */
   buffer: string[];
   /** Ring buffer of raw output chunks for scrollback replay on reconnect */
@@ -173,6 +175,8 @@ export class TerminalRelay {
       attachedUserId: null,
       ready: false,
       terminated: false,
+      cols,
+      rows,
       buffer: [],
       scrollback: [],
       scrollbackBytes: 0,
@@ -253,6 +257,8 @@ export class TerminalRelay {
       attachedUserId: null,
       ready: false,
       terminated: false,
+      cols,
+      rows,
       buffer: [],
       scrollback: [],
       scrollbackBytes: 0,
@@ -455,6 +461,8 @@ export class TerminalRelay {
           attachedUserId: null,
           ready: true,
           terminated: false,
+          cols: 80,
+          rows: 24,
           buffer: [],
           scrollback: [],
           scrollbackBytes: 0,
@@ -500,6 +508,8 @@ export class TerminalRelay {
         attachedUserId: null,
         ready: true, // Bridge says it's alive, so it's ready
         terminated: false,
+        cols: 80,
+        rows: 24,
         buffer: [],
         scrollback: [],
         scrollbackBytes: 0,
@@ -680,6 +690,48 @@ export class TerminalRelay {
     };
   }
 
+  getTerminalState(terminalId: string):
+    | { id: string; sessionId: string; status: string; cols: number; rows: number; connected: boolean; closed: boolean }
+    | null {
+    const entry = this.terminals.get(terminalId);
+    if (!entry) return null;
+    return {
+      id: terminalId,
+      sessionId: entry.sessionId,
+      status: entry.terminated ? "closed" : entry.ready ? "ready" : "connecting",
+      cols: entry.cols,
+      rows: entry.rows,
+      connected: !entry.terminated && sessionRouter.isRuntimeAvailable(entry.runtimeInstanceId, entry.organizationId),
+      closed: entry.terminated,
+    };
+  }
+
+  captureTerminal(terminalId: string, maxBytes: number): { output: string; byteCount: number; truncated: boolean; closed: boolean; connected: boolean } | null {
+    const entry = this.terminals.get(terminalId);
+    if (!entry) return null;
+    const source = entry.scrollback.join("");
+    const bytes = Buffer.byteLength(source);
+    const truncated = bytes > maxBytes;
+    const output = truncated ? this.utf8Tail(source, maxBytes) : source;
+    return { output, byteCount: Buffer.byteLength(output), truncated, closed: entry.terminated, connected: !entry.terminated && sessionRouter.isRuntimeAvailable(entry.runtimeInstanceId, entry.organizationId) };
+  }
+
+  sendInput(terminalId: string, data: string): boolean {
+    const entry = this.terminals.get(terminalId);
+    if (!entry || entry.terminated) return false;
+    this.sendTerminalCommand(entry, { type: "terminal_input", terminalId, data });
+    return true;
+  }
+
+  resizeTerminal(terminalId: string, cols: number, rows: number): boolean {
+    const entry = this.terminals.get(terminalId);
+    if (!entry || entry.terminated) return false;
+    entry.cols = cols;
+    entry.rows = rows;
+    this.sendTerminalCommand(entry, { type: "terminal_resize", terminalId, cols, rows });
+    return true;
+  }
+
   async getTerminalAuthContextDistributed(
     terminalId: string,
   ): Promise<ReturnType<TerminalRelay["getTerminalAuthContext"]>> {
@@ -747,13 +799,13 @@ export class TerminalRelay {
     if (msg.type === "terminal_output") {
       const data = msg.data as string;
       entry.scrollback.push(data);
-      entry.scrollbackBytes += data.length;
+      entry.scrollbackBytes += Buffer.byteLength(data);
       // Trim oldest chunks when over budget
       while (
         entry.scrollbackBytes > TerminalRelay.MAX_SCROLLBACK_BYTES &&
         entry.scrollback.length > 1
       ) {
-        entry.scrollbackBytes -= entry.scrollback.shift()!.length;
+        entry.scrollbackBytes -= Buffer.byteLength(entry.scrollback.shift()!);
       }
     }
 
@@ -1010,6 +1062,13 @@ export class TerminalRelay {
     return payload && typeof payload === "object" && !Array.isArray(payload)
       ? (payload as Record<string, unknown>)
       : null;
+  }
+
+  private utf8Tail(value: string, maxBytes: number): string {
+    const bytes = Buffer.from(value, "utf8");
+    let start = Math.max(0, bytes.length - maxBytes);
+    while (start < bytes.length && (bytes[start]! & 0xc0) === 0x80) start += 1;
+    return bytes.subarray(start).toString("utf8");
   }
 
   private removeTerminal(terminalId: string): void {

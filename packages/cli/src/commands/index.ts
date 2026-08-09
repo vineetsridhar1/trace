@@ -5,6 +5,7 @@ import { contextCommand } from "./context.js";
 import { integrationCommands } from "./integration/index.js";
 import { repoListCommand } from "./repo/list.js";
 import { sessionCommands } from "./session/index.js";
+import { terminalCommands } from "./terminal/index.js";
 
 export const commands: readonly CommandDefinition[] = [
   contextCommand,
@@ -12,6 +13,7 @@ export const commands: readonly CommandDefinition[] = [
   channelListCommand,
   repoListCommand,
   ...sessionCommands,
+  ...terminalCommands,
   artifactCommand,
 ];
 

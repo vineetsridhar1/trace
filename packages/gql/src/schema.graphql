@@ -1910,6 +1910,7 @@ type Query {
   myApiTokens: [ApiTokenStatus!]!
   myCodexCredential: CodexCredentialStatus
   sessionTerminals(sessionId: ID!): [Terminal!]!
+  terminalCapture(terminalId: ID!, maxBytes: Int, plainText: Boolean): TerminalCapture!
   channelTerminals(channelId: ID!, bridgeRuntimeId: ID!): [Terminal!]!
   sessionSetupScriptRuns(sessionGroupId: ID!): [SessionSetupScriptRun!]!
   sessionApplicationProcesses(sessionGroupId: ID!): [SessionApplicationProcess!]!
@@ -1930,6 +1931,20 @@ type Query {
 type Terminal {
   id: ID!
   sessionId: ID!
+  status: String!
+  cols: Int
+  rows: Int
+  connected: Boolean!
+}
+
+type TerminalCapture {
+  terminalId: ID!
+  output: String!
+  byteCount: Int!
+  truncated: Boolean!
+  capturedAt: DateTime!
+  closed: Boolean!
+  connected: Boolean!
 }
 
 type LinkedCheckoutStatus {
@@ -2176,6 +2191,8 @@ type Mutation {
   createTerminal(sessionId: ID!, cols: Int!, rows: Int!): Terminal!
   createChannelTerminal(channelId: ID!, bridgeRuntimeId: ID!, cols: Int!, rows: Int!): Terminal!
   destroyTerminal(terminalId: ID!): Boolean!
+  sendTerminalInput(terminalId: ID!, data: String!): Boolean!
+  resizeTerminal(terminalId: ID!, cols: Int!, rows: Int!): Boolean!
   runSessionGroupSetupScript(sessionGroupId: ID!, scriptId: ID!): Boolean!
   startSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
   stopSessionApplication(sessionGroupId: ID!, appConfigId: ID!): [SessionApplicationProcess!]!
