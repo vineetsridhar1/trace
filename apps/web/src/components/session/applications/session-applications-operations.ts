@@ -182,6 +182,20 @@ export const CREATE_PREVIEW_MUTATION = gql`
 
 export const APP_INTEGRATIONS_QUERY = gql`
   query AppIntegrations($sessionGroupId: ID!) {
+    supportedAppIntegrations {
+      id
+      name
+      provider
+      providerConfigKey
+      description
+      capabilities {
+        id
+        name
+        description
+        allowedMethods
+        allowedPathPrefixes
+      }
+    }
     integrationConnections {
       id
       ownerUserId

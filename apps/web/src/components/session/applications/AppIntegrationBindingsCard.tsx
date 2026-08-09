@@ -5,6 +5,7 @@ import { useAppIntegrationBindings } from "./useAppIntegrationBindings";
 
 export function AppIntegrationBindingsCard({ sessionGroupId }: { sessionGroupId: string }) {
   const state = useAppIntegrationBindings(sessionGroupId);
+  const existingProviderConfigKeys = state.bindings.map((binding) => binding.providerConfigKey);
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between px-1">
@@ -43,7 +44,6 @@ export function AppIntegrationBindingsCard({ sessionGroupId }: { sessionGroupId:
                 {binding.provider} · {binding.executionIdentity} ·{" "}
                 {binding.allowedMethods.join(", ")}
               </p>
-              <p className="truncate font-mono text-[10px] text-muted-foreground">{binding.id}</p>
             </div>
           </div>
           <Button
@@ -59,11 +59,14 @@ export function AppIntegrationBindingsCard({ sessionGroupId }: { sessionGroupId:
       ))}
       <AppIntegrationBindingForm
         connections={state.connections}
+        existingProviderConfigKeys={existingProviderConfigKeys}
+        integrations={state.supportedIntegrations}
         pending={state.pending}
         onSave={state.save}
       />
       <p className="px-1 text-[11px] text-muted-foreground">
-        App code calls <code>/__trace/integrations/&lt;binding-id&gt;/&lt;provider-path&gt;</code>.
+        Generated app code can reference the integration by name, such as <code>github</code> or{" "}
+        <code>snowflake</code>. Trace applies these permissions automatically.
       </p>
     </section>
   );

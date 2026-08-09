@@ -1,128 +1,113 @@
-import { useMemo, useState } from "react";
-import type { IntegrationConnection, IntegrationExecutionIdentity } from "@trace/gql";
+import { useState } from "react";
+import type { IntegrationConnection, SupportedAppIntegration } from "@trace/gql";
 import { Button } from "../../ui/button";
-import { Input } from "../../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
+import { AppIntegrationCapabilityPicker } from "./AppIntegrationCapabilityPicker";
+import { AppIntegrationIdentityPicker } from "./AppIntegrationIdentityPicker";
 import type { AppIntegrationBindingDraft } from "./useAppIntegrationBindings";
 
 const INITIAL_DRAFT: AppIntegrationBindingDraft = {
-  label: "",
-  provider: "",
-  providerConfigKey: "",
+  integrationId: "",
+  capabilityIds: [],
   executionIdentity: "viewer",
   sharedConnectionId: null,
-  allowedMethods: "GET",
-  allowedPathPrefixes: "",
 };
 
 export function AppIntegrationBindingForm({
   connections,
+  existingProviderConfigKeys,
+  integrations,
   pending,
   onSave,
 }: {
   connections: IntegrationConnection[];
+  existingProviderConfigKeys: string[];
+  integrations: SupportedAppIntegration[];
   pending: boolean;
   onSave: (draft: AppIntegrationBindingDraft) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState(INITIAL_DRAFT);
-  const eligibleConnections = useMemo(
-    () =>
-      connections.filter(
-        (connection) =>
-          connection.status === "active" &&
-          connection.providerConfigKey === draft.providerConfigKey &&
-          connection.kind === (draft.executionIdentity === "service" ? "service" : "personal"),
-      ),
-    [connections, draft.executionIdentity, draft.providerConfigKey],
-  );
+  const integration = integrations.find((candidate) => candidate.id === draft.integrationId);
   const requiresConnection = draft.executionIdentity !== "viewer";
   const canSave = Boolean(
-    draft.label.trim() &&
-    draft.provider.trim() &&
-    draft.providerConfigKey.trim() &&
-    draft.allowedMethods.trim() &&
-    draft.allowedPathPrefixes.trim() &&
+    integration &&
+    draft.capabilityIds.length > 0 &&
     (!requiresConnection || draft.sharedConnectionId),
   );
 
+  const selectIntegration = (integrationId: string | null) => {
+    if (!integrationId) return;
+    const selected = integrations.find((candidate) => candidate.id === integrationId);
+    setDraft({
+      ...INITIAL_DRAFT,
+      integrationId,
+      capabilityIds: selected?.capabilities[0] ? [selected.capabilities[0].id] : [],
+    });
+  };
+
+  const toggleCapability = (capabilityId: string) => {
+    setDraft((current) => ({
+      ...current,
+      capabilityIds: current.capabilityIds.includes(capabilityId)
+        ? current.capabilityIds.filter((id) => id !== capabilityId)
+        : [...current.capabilityIds, capabilityId],
+    }));
+  };
+
   return (
-    <div className="space-y-2 rounded-md border border-border bg-background/30 p-2.5">
-      <div className="grid grid-cols-2 gap-2">
-        <Input
-          value={draft.label}
-          placeholder="Label"
-          onChange={(event) => setDraft({ ...draft, label: event.target.value })}
-        />
-        <Input
-          value={draft.provider}
-          placeholder="Provider, e.g. GitHub"
-          onChange={(event) => setDraft({ ...draft, provider: event.target.value })}
-        />
-      </div>
-      <Input
-        value={draft.providerConfigKey}
-        placeholder="Nango integration key"
-        onChange={(event) =>
-          setDraft({ ...draft, providerConfigKey: event.target.value, sharedConnectionId: null })
-        }
-      />
-      <Select
-        value={draft.executionIdentity}
-        onValueChange={(value) =>
-          setDraft({
-            ...draft,
-            executionIdentity: value as IntegrationExecutionIdentity,
-            sharedConnectionId: null,
-          })
-        }
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="viewer">Each viewer’s permissions</SelectItem>
-          <SelectItem value="shared">Shared personal connection</SelectItem>
-          <SelectItem value="service">Service connection</SelectItem>
-        </SelectContent>
-      </Select>
-      {requiresConnection ? (
-        <Select
-          value={draft.sharedConnectionId ?? ""}
-          onValueChange={(value) => setDraft({ ...draft, sharedConnectionId: value || null })}
-        >
+    <div className="space-y-3 rounded-lg border border-border bg-background/30 p-3">
+      <div>
+        <p className="mb-1.5 text-xs font-medium text-foreground">Integration</p>
+        <Select value={draft.integrationId} onValueChange={selectIntegration}>
           <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select connection" />
+            <SelectValue placeholder="Choose an integration" />
           </SelectTrigger>
           <SelectContent>
-            {eligibleConnections.map((connection) => (
-              <SelectItem key={connection.id} value={connection.id}>
-                {connection.displayName}
+            {integrations.map((candidate) => (
+              <SelectItem
+                key={candidate.id}
+                value={candidate.id}
+                disabled={existingProviderConfigKeys.includes(candidate.providerConfigKey)}
+              >
+                {candidate.name}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        {integration ? (
+          <p className="mt-1.5 text-[11px] text-muted-foreground">{integration.description}</p>
+        ) : null}
+      </div>
+
+      {integration ? (
+        <AppIntegrationCapabilityPicker
+          integration={integration}
+          selectedIds={draft.capabilityIds}
+          onToggle={toggleCapability}
+        />
       ) : null}
-      <div className="grid grid-cols-2 gap-2">
-        <Input
-          value={draft.allowedMethods}
-          placeholder="Methods: GET, POST"
-          onChange={(event) => setDraft({ ...draft, allowedMethods: event.target.value })}
+
+      {integration ? (
+        <AppIntegrationIdentityPicker
+          connections={connections}
+          integration={integration}
+          identity={draft.executionIdentity}
+          sharedConnectionId={draft.sharedConnectionId}
+          onIdentityChange={(executionIdentity) =>
+            setDraft({ ...draft, executionIdentity, sharedConnectionId: null })
+          }
+          onConnectionChange={(sharedConnectionId) => setDraft({ ...draft, sharedConnectionId })}
         />
-        <Input
-          value={draft.allowedPathPrefixes}
-          placeholder="Paths: /api/data"
-          onChange={(event) => setDraft({ ...draft, allowedPathPrefixes: event.target.value })}
-        />
-      </div>
-      <div className="flex justify-end">
-        <Button
-          size="sm"
-          disabled={pending || !canSave}
-          onClick={() => void onSave(draft).then((saved) => saved && setDraft(INITIAL_DRAFT))}
-        >
-          Add data access
-        </Button>
-      </div>
+      ) : null}
+
+      <Button
+        className="w-full"
+        size="sm"
+        disabled={pending || !canSave}
+        onClick={() => void onSave(draft).then((saved) => saved && setDraft(INITIAL_DRAFT))}
+      >
+        Add integration
+      </Button>
     </div>
   );
 }

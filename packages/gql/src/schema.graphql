@@ -1099,6 +1099,23 @@ type NangoConnectSession {
   expiresAt: DateTime!
 }
 
+type SupportedIntegrationCapability {
+  id: String!
+  name: String!
+  description: String!
+  allowedMethods: [String!]!
+  allowedPathPrefixes: [String!]!
+}
+
+type SupportedAppIntegration {
+  id: String!
+  name: String!
+  provider: String!
+  providerConfigKey: String!
+  description: String!
+  capabilities: [SupportedIntegrationCapability!]!
+}
+
 type EndpointTrafficEntry {
   id: ID!
   endpointId: ID!
@@ -1718,21 +1735,24 @@ input CreateOrganizationInput {
 }
 
 input CreateNangoConnectSessionInput {
-  providerConfigKey: String!
-  displayName: String!
+  integrationId: String
+  providerConfigKey: String
+  displayName: String
   kind: IntegrationConnectionKind = personal
 }
 
 input UpsertAppIntegrationBindingInput {
   id: ID
   sessionGroupId: ID!
-  label: String!
-  provider: String!
-  providerConfigKey: String!
+  integrationId: String
+  capabilityIds: [String!]
+  label: String
+  provider: String
+  providerConfigKey: String
   executionIdentity: IntegrationExecutionIdentity!
   sharedConnectionId: ID
-  allowedMethods: [String!]!
-  allowedPathPrefixes: [String!]!
+  allowedMethods: [String!]
+  allowedPathPrefixes: [String!]
 }
 
 # --- Queries ---
@@ -1889,6 +1909,7 @@ type Query {
   sessionEndpoints(sessionGroupId: ID!): [SessionEndpoint!]!
   endpointTraffic(endpointId: ID!, limit: Int, before: DateTime): [EndpointTrafficEntry!]!
   nangoIntegrationConfigured: Boolean!
+  supportedAppIntegrations: [SupportedAppIntegration!]!
   integrationConnections: [IntegrationConnection!]!
   appIntegrationBindings(sessionGroupId: ID!): [AppIntegrationBinding!]!
   searchUsers(query: String!): [User!]!

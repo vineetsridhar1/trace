@@ -33,6 +33,17 @@ Call integrations only from server routes. Trace attaches the current signed-in 
 `/api/*` requests, and the server-only `trace` helper passes that identity to Trace without exposing
 credentials to browser code.
 
+For example, a GitHub route only needs the integration name and provider path:
+
+```ts
+app.get("/api/github-user", async (request, response) => {
+  const user = await trace.integrations.request(request, "github", {
+    path: "/user",
+  });
+  response.json(user);
+});
+```
+
 For a Snowflake binding, keep the SQL in the Node route and accept only its parameter values from
 the browser:
 
@@ -40,7 +51,7 @@ the browser:
 import { trace } from "./trace.js";
 
 app.get("/api/revenue", async (request, response) => {
-  const rows = await trace.integrations.snowflake.query(request, "<binding-id>", {
+  const rows = await trace.integrations.snowflake.query(request, "snowflake", {
     sql: "SELECT region, SUM(revenue) FROM analytics.sales WHERE sold_at >= ? GROUP BY region",
     parameters: [String(request.query.startDate)],
   });
@@ -48,9 +59,11 @@ app.get("/api/revenue", async (request, response) => {
 });
 ```
 
-Trace accepts one read-only `SELECT` statement, resolves the binding's viewer/shared/service
-connection, and sends the request through Nango. Do not accept SQL, binding IDs, database names,
-schema names, warehouse names, or connection identifiers from browser input.
+Use the integration name shown in Trace's Data access panel; generated code never needs a binding
+UUID or Nango configuration key. Trace accepts one read-only `SELECT` statement, resolves the
+binding's viewer/shared/service connection, and sends the request through Nango. Do not accept SQL,
+binding IDs, database names, schema names, warehouse names, or connection identifiers from browser
+input.
 
 ## Runtime
 

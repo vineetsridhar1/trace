@@ -17,6 +17,71 @@ function bearerToken(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
+async function runtimeRequestContext(request: Request) {
+  const token = bearerToken(request);
+  const context = token ? verifyAppViewerContextToken(token) : null;
+  if (!context) throw new AuthenticationError("Invalid app viewer context");
+  const endpoint = await prisma.sessionEndpoint.findFirst({
+    where: {
+      id: context.endpointId,
+      organizationId: context.organizationId,
+      sessionGroupId: context.sessionGroupId,
+      status: "enabled",
+    },
+    select: { organizationId: true, sessionGroupId: true },
+  });
+  if (!endpoint) throw new AuthorizationError("Application endpoint is unavailable");
+  const bindingId = Array.isArray(request.params.bindingId)
+    ? request.params.bindingId[0]
+    : request.params.bindingId;
+  if (!bindingId) throw new ValidationError("Integration is required");
+  return { bindingId, context, endpoint };
+}
+
+function sendIntegrationError(response: Response, error: unknown, fallback: string) {
+  const status =
+    error instanceof AuthenticationError
+      ? 401
+      : error instanceof AuthorizationError
+        ? 403
+        : error instanceof NotFoundError
+          ? 404
+          : error instanceof ValidationError
+            ? 400
+            : 502;
+  response
+    .status(status)
+    .set("Cache-Control", "no-store")
+    .json({ error: error instanceof Error ? error.message : fallback });
+}
+
+function integrationRequestInput(value: unknown) {
+  if (!value || typeof value !== "object") throw new ValidationError("Invalid integration request");
+  const body = value as Record<string, unknown>;
+  if (typeof body.method !== "string") throw new ValidationError("HTTP method is required");
+  if (typeof body.path !== "string") throw new ValidationError("Provider path is required");
+  const query = body.query;
+  const search = new URLSearchParams();
+  if (query !== undefined) {
+    if (!query || typeof query !== "object" || Array.isArray(query)) {
+      throw new ValidationError("Integration query parameters must be an object");
+    }
+    for (const [key, item] of Object.entries(query as Record<string, unknown>)) {
+      if (!["string", "number", "boolean"].includes(typeof item)) {
+        throw new ValidationError("Integration query parameters must be scalar values");
+      }
+      search.set(key, String(item));
+    }
+  }
+  return {
+    method: body.method,
+    path: body.path,
+    query: search.size > 0 ? search.toString() : null,
+    contentType: body.body === undefined ? null : "application/json",
+    body: body.body === undefined ? Buffer.alloc(0) : Buffer.from(JSON.stringify(body.body)),
+  };
+}
+
 function snowflakeQueryInput(value: unknown): SnowflakeQueryInput {
   if (!value || typeof value !== "object") throw new ValidationError("Invalid Snowflake query");
   const body = value as Record<string, unknown>;
@@ -55,26 +120,32 @@ function snowflakeQueryInput(value: unknown): SnowflakeQueryInput {
 }
 
 appIntegrationsRouter.post(
+  "/runtime/app-integrations/:bindingId/request",
+  async (request: Request, response: Response) => {
+    try {
+      const { bindingId, context, endpoint } = await runtimeRequestContext(request);
+      const result = await appIntegrationService.execute({
+        endpoint,
+        userId: context.userId,
+        bindingId,
+        ...integrationRequestInput(request.body as unknown),
+      });
+      response.status(result.status);
+      response.set("Cache-Control", "no-store");
+      response.set("X-Content-Type-Options", "nosniff");
+      if (result.contentType) response.set("Content-Type", result.contentType);
+      response.send(result.body);
+    } catch (error: unknown) {
+      sendIntegrationError(response, error, "Integration request failed");
+    }
+  },
+);
+
+appIntegrationsRouter.post(
   "/runtime/app-integrations/:bindingId/snowflake/query",
   async (request: Request, response: Response) => {
     try {
-      const token = bearerToken(request);
-      const context = token ? verifyAppViewerContextToken(token) : null;
-      if (!context) throw new AuthenticationError("Invalid app viewer context");
-      const endpoint = await prisma.sessionEndpoint.findFirst({
-        where: {
-          id: context.endpointId,
-          organizationId: context.organizationId,
-          sessionGroupId: context.sessionGroupId,
-          status: "enabled",
-        },
-        select: { organizationId: true, sessionGroupId: true },
-      });
-      if (!endpoint) throw new AuthorizationError("Application endpoint is unavailable");
-      const bindingId = Array.isArray(request.params.bindingId)
-        ? request.params.bindingId[0]
-        : request.params.bindingId;
-      if (!bindingId) throw new ValidationError("Integration binding is required");
+      const { bindingId, context, endpoint } = await runtimeRequestContext(request);
       const result = await appIntegrationService.executeSnowflakeQuery({
         endpoint,
         userId: context.userId,
@@ -87,22 +158,7 @@ appIntegrationsRouter.post(
       if (result.contentType) response.set("Content-Type", result.contentType);
       response.send(result.body);
     } catch (error: unknown) {
-      const status =
-        error instanceof AuthenticationError
-          ? 401
-          : error instanceof AuthorizationError
-            ? 403
-            : error instanceof NotFoundError
-              ? 404
-              : error instanceof ValidationError
-                ? 400
-                : 502;
-      response
-        .status(status)
-        .set("Cache-Control", "no-store")
-        .json({
-          error: error instanceof Error ? error.message : "Snowflake query failed",
-        });
+      sendIntegrationError(response, error, "Snowflake query failed");
     }
   },
 );

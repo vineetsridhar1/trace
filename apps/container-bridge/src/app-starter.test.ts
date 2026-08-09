@@ -26,6 +26,7 @@ describe("app starter styling", () => {
     const helper = readStarterFile("trace.ts");
     expect(helper).toContain("integrations:");
     expect(helper).toContain("snowflake:");
+    expect(helper).toContain("request: integrationRequest");
     expect(helper).toContain("x-trace-app-viewer-context");
     expect(helper).toContain("/runtime/app-integrations/");
     expect(readStarterFile("docs/trace-apps.md")).toContain("trace.integrations.snowflake.query");

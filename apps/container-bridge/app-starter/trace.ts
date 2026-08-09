@@ -11,6 +11,13 @@ export type SnowflakeQueryOptions = {
   timeoutSeconds?: number;
 };
 
+export type IntegrationRequestOptions = {
+  method?: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+  query?: Record<string, string | number | boolean>;
+  body?: unknown;
+};
+
 export class TraceIntegrationError extends Error {
   constructor(
     message: string,
@@ -32,7 +39,7 @@ async function responseError(response: Response): Promise<TraceIntegrationError>
 
 async function snowflakeQuery(
   request: Request,
-  bindingId: string,
+  integration: string,
   options: SnowflakeQueryOptions,
 ): Promise<unknown> {
   const viewerContext = request.get(APP_VIEWER_CONTEXT_HEADER);
@@ -47,7 +54,7 @@ async function snowflakeQuery(
     throw new Error("TRACE_SERVER_PUBLIC_URL is not configured");
   }
   const url = new URL(
-    `/runtime/app-integrations/${encodeURIComponent(bindingId)}/snowflake/query`,
+    `/runtime/app-integrations/${encodeURIComponent(integration)}/snowflake/query`,
     traceServerUrl,
   );
   const response = await fetch(url, {
@@ -62,8 +69,39 @@ async function snowflakeQuery(
   return response.json() as Promise<unknown>;
 }
 
+async function integrationRequest(
+  request: Request,
+  integration: string,
+  options: IntegrationRequestOptions,
+): Promise<unknown> {
+  const viewerContext = request.get(APP_VIEWER_CONTEXT_HEADER);
+  if (!viewerContext) {
+    throw new TraceIntegrationError(
+      "This request does not have an authenticated Trace app viewer",
+      401,
+    );
+  }
+  const traceServerUrl = process.env.TRACE_SERVER_PUBLIC_URL?.trim();
+  if (!traceServerUrl) throw new Error("TRACE_SERVER_PUBLIC_URL is not configured");
+  const response = await fetch(
+    new URL(`/runtime/app-integrations/${encodeURIComponent(integration)}/request`, traceServerUrl),
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${viewerContext}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ method: options.method ?? "GET", ...options }),
+    },
+  );
+  if (!response.ok) throw await responseError(response);
+  const contentType = response.headers.get("content-type");
+  return contentType?.includes("application/json") ? response.json() : response.text();
+}
+
 export const trace = {
   integrations: {
+    request: integrationRequest,
     snowflake: {
       query: snowflakeQuery,
     },

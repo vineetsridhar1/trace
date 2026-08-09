@@ -1,10 +1,16 @@
 import { create } from "zustand";
-import type { AppIntegrationBinding, IntegrationConnection } from "@trace/gql";
+import type {
+  AppIntegrationBinding,
+  IntegrationConnection,
+  SupportedAppIntegration,
+} from "@trace/gql";
 
 type IntegrationState = {
   connections: Record<string, IntegrationConnection>;
+  supported: Record<string, SupportedAppIntegration>;
   bindingsBySessionGroup: Record<string, Record<string, AppIntegrationBinding>>;
   setConnections: (connections: IntegrationConnection[]) => void;
+  setSupported: (integrations: SupportedAppIntegration[]) => void;
   removeConnection: (id: string) => void;
   setBindings: (sessionGroupId: string, bindings: AppIntegrationBinding[]) => void;
   upsertBinding: (binding: AppIntegrationBinding) => void;
@@ -13,11 +19,14 @@ type IntegrationState = {
 
 export const useIntegrationStore = create<IntegrationState>((set) => ({
   connections: {},
+  supported: {},
   bindingsBySessionGroup: {},
   setConnections: (connections) =>
     set({
       connections: Object.fromEntries(connections.map((connection) => [connection.id, connection])),
     }),
+  setSupported: (integrations) =>
+    set({ supported: Object.fromEntries(integrations.map((item) => [item.id, item])) }),
   removeConnection: (id) =>
     set((state) => {
       const connections = { ...state.connections };

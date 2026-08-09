@@ -8,7 +8,7 @@ vi.mock("../lib/db.js", async () => {
 });
 
 vi.mock("../services/app-integrations.js", () => ({
-  appIntegrationService: { executeSnowflakeQuery: vi.fn() },
+  appIntegrationService: { execute: vi.fn(), executeSnowflakeQuery: vi.fn() },
 }));
 
 import { prisma } from "../lib/db.js";
@@ -18,6 +18,7 @@ import { appIntegrationsRouter } from "./app-integrations.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const integrationMock = appIntegrationService as unknown as {
+  execute: ReturnType<typeof vi.fn>;
   executeSnowflakeQuery: ReturnType<typeof vi.fn>;
 };
 
@@ -52,6 +53,11 @@ describe("app integration runtime routes", () => {
       status: 200,
       contentType: "application/json",
       body: Buffer.from('{"data":[["east","42"]]}'),
+    });
+    integrationMock.execute.mockResolvedValue({
+      status: 200,
+      contentType: "application/json",
+      body: Buffer.from('{"login":"octocat"}'),
     });
   });
 
@@ -90,6 +96,37 @@ describe("app integration runtime routes", () => {
       userId: "viewer-1",
       bindingId: "binding-1",
       query: { sql: "SELECT region FROM analytics.sales", parameters: [] },
+    });
+  });
+
+  it("executes a catalog-named provider request with the signed viewer", async () => {
+    const token = createAppViewerContextToken({
+      tokenType: "app_viewer_context",
+      userId: "viewer-1",
+      organizationId: "org-1",
+      sessionGroupId: "app-1",
+      endpointId: "endpoint-1",
+    });
+    const response = await fetch(`${baseUrl}/runtime/app-integrations/github/request`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ method: "GET", path: "/user" }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ login: "octocat" });
+    expect(integrationMock.execute).toHaveBeenCalledWith({
+      endpoint: { organizationId: "org-1", sessionGroupId: "app-1" },
+      userId: "viewer-1",
+      bindingId: "github",
+      method: "GET",
+      path: "/user",
+      query: null,
+      contentType: null,
+      body: Buffer.alloc(0),
     });
   });
 });

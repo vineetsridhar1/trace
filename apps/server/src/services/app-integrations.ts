@@ -3,6 +3,10 @@ import type {
   IntegrationExecutionIdentity,
   UpsertAppIntegrationBindingInput,
 } from "@trace/gql";
+import {
+  supportedIntegration,
+  supportedIntegrations,
+} from "../config/supported-integrations.js";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { canViewSessionGroup } from "./access.js";
@@ -270,6 +274,10 @@ export class AppIntegrationService {
     return nangoConnectionProvider.isConfigured();
   }
 
+  listSupportedIntegrations() {
+    return supportedIntegrations();
+  }
+
   async listConnections(organizationId: string, userId: string, role: Role) {
     return prisma.integrationConnection.findMany({
       where: {
@@ -286,8 +294,9 @@ export class AppIntegrationService {
     userId: string,
     role: Role,
     input: {
-      providerConfigKey: string;
-      displayName: string;
+      integrationId?: string | null;
+      providerConfigKey?: string | null;
+      displayName?: string | null;
       kind?: IntegrationConnectionKind | null;
     },
   ) {
@@ -300,13 +309,21 @@ export class AppIntegrationService {
       select: { email: true, name: true },
     });
     if (!user) throw new NotFoundError("User", userId);
+    const integration = input.integrationId ? supportedIntegration(input.integrationId) : undefined;
+    if (input.integrationId && !integration) {
+      throw new ValidationError("This integration is not supported");
+    }
+    const providerConfigKey = integration?.providerConfigKey ?? input.providerConfigKey;
+    if (!providerConfigKey) throw new ValidationError("An integration is required");
     return nangoConnectionProvider.createConnectSession({
       organizationId,
       userId,
       userEmail: user.email,
       userName: user.name,
-      providerConfigKey: providerKey(input.providerConfigKey),
-      displayName: requiredText(input.displayName, "Connection name"),
+      providerConfigKey: providerKey(providerConfigKey),
+      displayName:
+        input.displayName?.trim() ||
+        `${integration?.name ?? "Integration"} ${kind === "service" ? "service account" : "account"}`,
       kind,
     });
   }
@@ -365,7 +382,13 @@ export class AppIntegrationService {
   ) {
     await this.assertCanManageApp(input.sessionGroupId, organizationId, userId, role);
     const identity = input.executionIdentity;
-    const normalizedProviderKey = providerKey(input.providerConfigKey);
+    const integration = input.integrationId ? supportedIntegration(input.integrationId) : undefined;
+    if (input.integrationId && !integration) {
+      throw new ValidationError("This integration is not supported");
+    }
+    const configuredProviderKey = integration?.providerConfigKey ?? input.providerConfigKey;
+    if (!configuredProviderKey) throw new ValidationError("An integration is required");
+    const normalizedProviderKey = providerKey(configuredProviderKey);
     const sharedConnectionId = input.sharedConnectionId ?? null;
     if (identity === "viewer" && sharedConnectionId) {
       throw new ValidationError("Viewer connections cannot specify a shared connection");
@@ -391,16 +414,35 @@ export class AppIntegrationService {
         throw new AuthorizationError("Only an org admin can share another user's connection");
       }
     }
-    const methods = [...new Set(input.allowedMethods.map(normalizeMethod))];
-    const paths = [...new Set(input.allowedPathPrefixes.map(normalizePathPrefix))];
+    const capabilityIds = input.capabilityIds ?? [];
+    const selectedCapabilities = integration
+      ? capabilityIds.map((id) => {
+          const capability = integration.capabilities.find((candidate) => candidate.id === id);
+          if (!capability) {
+            throw new ValidationError(`${integration.name} does not support capability ${id}`);
+          }
+          return capability;
+        })
+      : [];
+    if (integration && selectedCapabilities.length === 0) {
+      throw new ValidationError("Choose at least one integration capability");
+    }
+    const allowedMethods = integration
+      ? selectedCapabilities.flatMap((capability) => capability.allowedMethods)
+      : (input.allowedMethods ?? []);
+    const allowedPathPrefixes = integration
+      ? selectedCapabilities.flatMap((capability) => capability.allowedPathPrefixes)
+      : (input.allowedPathPrefixes ?? []);
+    const methods = [...new Set(allowedMethods.map(normalizeMethod))];
+    const paths = [...new Set(allowedPathPrefixes.map(normalizePathPrefix))];
     if (methods.length === 0) throw new ValidationError("At least one HTTP method is required");
     if (paths.length === 0) throw new ValidationError("At least one provider path is required");
     if (methods.length > 6 || paths.length > 20) throw new ValidationError("Too many permissions");
     const data = {
       organizationId,
       sessionGroupId: input.sessionGroupId,
-      label: requiredText(input.label, "Binding label"),
-      provider: requiredText(input.provider, "Provider", 128),
+      label: input.label?.trim() || integration?.name || "Integration",
+      provider: integration?.provider ?? requiredText(input.provider ?? "", "Provider", 128),
       providerConfigKey: normalizedProviderKey,
       executionIdentity: identity,
       sharedConnectionId,
@@ -472,9 +514,12 @@ export class AppIntegrationService {
       input.endpoint.organizationId,
       input.userId,
     );
+    const integration = supportedIntegration(input.bindingId);
     const binding = await prisma.appIntegrationBinding.findFirst({
       where: {
-        id: input.bindingId,
+        ...(integration
+          ? { providerConfigKey: integration.providerConfigKey }
+          : { id: input.bindingId }),
         organizationId: input.endpoint.organizationId,
         sessionGroupId: input.endpoint.sessionGroupId,
       },
@@ -533,9 +578,12 @@ export class AppIntegrationService {
       input.endpoint.organizationId,
       input.userId,
     );
+    const integration = supportedIntegration(input.bindingId);
     const binding = await prisma.appIntegrationBinding.findFirst({
       where: {
-        id: input.bindingId,
+        ...(integration
+          ? { providerConfigKey: integration.providerConfigKey }
+          : { id: input.bindingId }),
         organizationId: input.endpoint.organizationId,
         sessionGroupId: input.endpoint.sessionGroupId,
       },

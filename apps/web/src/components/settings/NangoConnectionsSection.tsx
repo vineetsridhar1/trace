@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { IntegrationConnection, IntegrationConnectionKind } from "@trace/gql";
-import { Database, ExternalLink, RefreshCw, Trash2 } from "lucide-react";
+import type {
+  IntegrationConnection,
+  IntegrationConnectionKind,
+  SupportedAppIntegration,
+} from "@trace/gql";
+import { useAuthStore } from "@trace/client-core";
+import { Database, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { useIntegrationStore } from "../../stores/integrations";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { IntegrationProviderCard } from "./IntegrationProviderCard";
 import { SettingsStatusPill } from "./SettingsStatusPill";
 import {
   CREATE_NANGO_CONNECT_SESSION_MUTATION,
@@ -15,15 +19,21 @@ import {
 } from "./integration-operations";
 
 export function NangoConnectionsSection() {
+  const activeOrgId = useAuthStore((state) => state.activeOrgId);
+  const canCreateService = useAuthStore(
+    (state) =>
+      state.orgMemberships.find((membership) => membership.organizationId === activeOrgId)?.role ===
+      "admin",
+  );
   const connectionTable = useIntegrationStore((state) => state.connections);
   const connections = useMemo(() => Object.values(connectionTable), [connectionTable]);
   const setConnections = useIntegrationStore((state) => state.setConnections);
   const removeConnection = useIntegrationStore((state) => state.removeConnection);
   const [configured, setConfigured] = useState<boolean | null>(null);
-  const [providerConfigKey, setProviderConfigKey] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [kind, setKind] = useState<IntegrationConnectionKind>("personal");
-  const [pending, setPending] = useState(false);
+  const supportedTable = useIntegrationStore((state) => state.supported);
+  const integrations = useMemo(() => Object.values(supportedTable), [supportedTable]);
+  const setSupported = useIntegrationStore((state) => state.setSupported);
+  const [pendingIntegrationId, setPendingIntegrationId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const result = await client
@@ -31,10 +41,13 @@ export function NangoConnectionsSection() {
       .toPromise();
     if (result.error) throw new Error(result.error.message);
     setConfigured(Boolean(result.data?.nangoIntegrationConfigured));
+    setSupported(
+      (result.data?.supportedAppIntegrations as SupportedAppIntegration[] | undefined) ?? [],
+    );
     setConnections(
       (result.data?.integrationConnections as IntegrationConnection[] | undefined) ?? [],
     );
-  }, [setConnections]);
+  }, [setConnections, setSupported]);
 
   useEffect(() => {
     void refresh().catch((error: unknown) =>
@@ -42,24 +55,27 @@ export function NangoConnectionsSection() {
     );
   }, [refresh]);
 
-  const connect = async () => {
-    setPending(true);
+  useEffect(() => {
+    const refreshOnFocus = () => void refresh();
+    window.addEventListener("focus", refreshOnFocus);
+    return () => window.removeEventListener("focus", refreshOnFocus);
+  }, [refresh]);
+
+  const connect = async (integrationId: string, kind: IntegrationConnectionKind) => {
+    setPendingIntegrationId(integrationId);
     try {
       const result = await client
-        .mutation(CREATE_NANGO_CONNECT_SESSION_MUTATION, {
-          input: { providerConfigKey, displayName, kind },
-        })
+        .mutation(CREATE_NANGO_CONNECT_SESSION_MUTATION, { input: { integrationId, kind } })
         .toPromise();
       if (result.error) throw new Error(result.error.message);
       const link = result.data?.createNangoConnectSession?.connectLink as string | undefined;
-      if (!link) throw new Error("Nango did not return a connect link");
+      if (!link) throw new Error("The connection provider did not return a connect link");
       window.open(link, "_blank", "noopener,noreferrer");
-      toast.success("Finish connecting in the new tab, then refresh this list");
-      setDisplayName("");
+      toast.success("Finish authorizing in the new tab. This page will update automatically.");
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Connection failed");
     } finally {
-      setPending(false);
+      setPendingIntegrationId(null);
     }
   };
 
@@ -82,16 +98,13 @@ export function NangoConnectionsSection() {
         <div>
           <div className="flex items-center gap-2">
             <Database size={16} />
-            <h2 className="text-sm font-semibold text-foreground">Application data connections</h2>
+            <h2 className="text-sm font-semibold text-foreground">Application data</h2>
             {configured === false ? (
-              <SettingsStatusPill tone="warning" label="Nango not configured" />
-            ) : (
-              <SettingsStatusPill tone="success" label="Nango" />
-            )}
+              <SettingsStatusPill tone="warning" label="Not configured" />
+            ) : null}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Personal connections can run as each viewer or be explicitly shared. Service connections
-            are managed organization identities.
+            Connect an account once, then choose what each Trace app may access.
           </p>
         </div>
         <Button
@@ -105,68 +118,26 @@ export function NangoConnectionsSection() {
       </div>
 
       {configured ? (
-        <div className="mt-4 grid gap-2 md:grid-cols-[1fr_1fr_9rem_auto]">
-          <Input
-            value={providerConfigKey}
-            placeholder="Nango integration key"
-            onChange={(event) => setProviderConfigKey(event.target.value)}
-          />
-          <Input
-            value={displayName}
-            placeholder="Connection name"
-            onChange={(event) => setDisplayName(event.target.value)}
-          />
-          <Select
-            value={kind}
-            onValueChange={(value) => setKind(value as IntegrationConnectionKind)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="personal">Personal</SelectItem>
-              <SelectItem value="service">Service</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            disabled={pending || !providerConfigKey.trim() || !displayName.trim()}
-            onClick={() => void connect()}
-          >
-            <ExternalLink size={14} />
-            Connect
-          </Button>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {integrations.map((integration) => (
+            <IntegrationProviderCard
+              key={integration.id}
+              canCreateService={canCreateService}
+              integration={integration}
+              connections={connections.filter(
+                (connection) => connection.providerConfigKey === integration.providerConfigKey,
+              )}
+              pending={pendingIntegrationId === integration.id}
+              onConnect={(integrationId, kind) => void connect(integrationId, kind)}
+              onDisconnect={(connection) => void disconnect(connection)}
+            />
+          ))}
         </div>
+      ) : configured === false ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Ask a Trace administrator to configure the connection provider.
+        </p>
       ) : null}
-
-      <div className="mt-4 space-y-2">
-        {connections.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No application data connections yet.</p>
-        ) : (
-          connections.map((connection) => (
-            <div
-              key={connection.id}
-              className="flex items-center justify-between rounded-md bg-background/40 px-3 py-2"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">
-                  {connection.displayName}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {connection.provider} · {connection.kind} · {connection.status}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Disconnect ${connection.displayName}`}
-                onClick={() => void disconnect(connection)}
-              >
-                <Trash2 size={14} />
-              </Button>
-            </div>
-          ))
-        )}
-      </div>
     </div>
   );
 }

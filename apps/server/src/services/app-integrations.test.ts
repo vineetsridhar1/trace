@@ -27,6 +27,7 @@ import { nangoConnectionProvider } from "./nango-connection-provider.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const nangoMock = nangoConnectionProvider as unknown as {
+  createConnectSession: ReturnType<typeof vi.fn>;
   proxy: ReturnType<typeof vi.fn>;
 };
 
@@ -43,7 +44,134 @@ function allowViewer() {
 describe("AppIntegrationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.NANGO_GITHUB_INTEGRATION_KEY;
     allowViewer();
+  });
+
+  it("creates a connect session from the supported integration catalog", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      email: "viewer@example.com",
+      name: "Viewer",
+    });
+    nangoMock.createConnectSession.mockResolvedValue({
+      connectLink: "https://connect.example.com",
+      expiresAt: new Date("2026-08-09T00:00:00Z"),
+    });
+
+    await new AppIntegrationService().createConnectSession("org-1", "viewer-1", "member", {
+      integrationId: "github",
+      kind: "personal",
+    });
+
+    expect(nangoMock.createConnectSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerConfigKey: "github-getting-started",
+        displayName: "GitHub account",
+      }),
+    );
+  });
+
+  it("expands selected capabilities into server-controlled binding permissions", async () => {
+    prismaMock.appIntegrationBinding.create.mockImplementation(
+      async (args: { data: Record<string, unknown> }) => ({
+        id: "binding-1",
+        ...args.data,
+        createdAt: new Date("2026-08-09T00:00:00Z"),
+        updatedAt: new Date("2026-08-09T00:00:00Z"),
+      }),
+    );
+
+    await new AppIntegrationService().upsertBinding("org-1", "owner-1", "member", {
+      sessionGroupId: "app-1",
+      integrationId: "github",
+      capabilityIds: ["profile", "repositories"],
+      executionIdentity: "viewer",
+    });
+
+    expect(prismaMock.appIntegrationBinding.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          label: "GitHub",
+          provider: "GitHub",
+          providerConfigKey: "github-getting-started",
+          allowedMethods: ["GET"],
+          allowedPathPrefixes: ["/user", "/repos", "/user/repos"],
+        }),
+      }),
+    );
+  });
+
+  it("keeps explicit legacy binding permissions compatible", async () => {
+    prismaMock.appIntegrationBinding.create.mockImplementation(
+      async (args: { data: Record<string, unknown> }) => ({
+        id: "binding-legacy",
+        ...args.data,
+        createdAt: new Date("2026-08-09T00:00:00Z"),
+        updatedAt: new Date("2026-08-09T00:00:00Z"),
+      }),
+    );
+
+    await new AppIntegrationService().upsertBinding("org-1", "owner-1", "member", {
+      sessionGroupId: "app-1",
+      label: "Custom provider",
+      provider: "Custom",
+      providerConfigKey: "custom-provider",
+      executionIdentity: "viewer",
+      allowedMethods: ["GET"],
+      allowedPathPrefixes: ["/records"],
+    });
+
+    expect(prismaMock.appIntegrationBinding.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          providerConfigKey: "custom-provider",
+          allowedMethods: ["GET"],
+          allowedPathPrefixes: ["/records"],
+        }),
+      }),
+    );
+  });
+
+  it("resolves a binding by its stable integration name", async () => {
+    prismaMock.appIntegrationBinding.findFirst.mockResolvedValue({
+      id: "binding-1",
+      organizationId: "org-1",
+      sessionGroupId: "app-1",
+      provider: "GitHub",
+      providerConfigKey: "github-getting-started",
+      executionIdentity: "viewer",
+      sharedConnectionId: null,
+      allowedMethods: ["GET"],
+      allowedPathPrefixes: ["/user"],
+    });
+    prismaMock.integrationConnection.findFirst.mockResolvedValue({
+      id: "viewer-connection",
+      nangoConnectionId: "nango-viewer-1",
+    });
+    nangoMock.proxy.mockResolvedValue({
+      status: 200,
+      contentType: "application/json",
+      body: Buffer.from("{}"),
+    });
+
+    await new AppIntegrationService().execute({
+      endpoint: { organizationId: "org-1", sessionGroupId: "app-1" },
+      userId: "viewer-1",
+      bindingId: "github",
+      method: "GET",
+      path: "/user",
+      query: null,
+      contentType: null,
+      body: Buffer.alloc(0),
+    });
+
+    expect(prismaMock.appIntegrationBinding.findFirst).toHaveBeenCalledWith({
+      where: {
+        providerConfigKey: "github-getting-started",
+        organizationId: "org-1",
+        sessionGroupId: "app-1",
+      },
+    });
   });
 
   it("rejects encoded path traversal before calling Nango", () => {

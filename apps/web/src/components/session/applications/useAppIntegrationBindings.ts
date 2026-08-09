@@ -3,6 +3,7 @@ import type {
   AppIntegrationBinding,
   IntegrationConnection,
   IntegrationExecutionIdentity,
+  SupportedAppIntegration,
 } from "@trace/gql";
 import { client } from "../../../lib/urql";
 import { useIntegrationStore } from "../../../stores/integrations";
@@ -13,13 +14,10 @@ import {
 } from "./session-applications-operations";
 
 export type AppIntegrationBindingDraft = {
-  label: string;
-  provider: string;
-  providerConfigKey: string;
+  integrationId: string;
+  capabilityIds: string[];
   executionIdentity: IntegrationExecutionIdentity;
   sharedConnectionId: string | null;
-  allowedMethods: string;
-  allowedPathPrefixes: string;
 };
 
 export function useAppIntegrationBindings(sessionGroupId: string) {
@@ -33,6 +31,9 @@ export function useAppIntegrationBindings(sessionGroupId: string) {
   const removeBinding = useIntegrationStore((state) => state.removeBinding);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const supportedTable = useIntegrationStore((state) => state.supported);
+  const supportedIntegrations = useMemo(() => Object.values(supportedTable), [supportedTable]);
+  const setSupported = useIntegrationStore((state) => state.setSupported);
 
   const refresh = useCallback(async () => {
     const result = await client
@@ -42,11 +43,14 @@ export function useAppIntegrationBindings(sessionGroupId: string) {
     setConnections(
       (result.data?.integrationConnections as IntegrationConnection[] | undefined) ?? [],
     );
+    setSupported(
+      (result.data?.supportedAppIntegrations as SupportedAppIntegration[] | undefined) ?? [],
+    );
     setBindings(
       sessionGroupId,
       (result.data?.appIntegrationBindings as AppIntegrationBinding[] | undefined) ?? [],
     );
-  }, [sessionGroupId, setBindings, setConnections]);
+  }, [sessionGroupId, setBindings, setConnections, setSupported]);
 
   useEffect(() => {
     void refresh().catch((cause: unknown) =>
@@ -62,20 +66,11 @@ export function useAppIntegrationBindings(sessionGroupId: string) {
         .mutation(UPSERT_APP_INTEGRATION_BINDING_MUTATION, {
           input: {
             sessionGroupId,
-            label: draft.label,
-            provider: draft.provider,
-            providerConfigKey: draft.providerConfigKey,
+            integrationId: draft.integrationId,
+            capabilityIds: draft.capabilityIds,
             executionIdentity: draft.executionIdentity,
             sharedConnectionId:
               draft.executionIdentity === "viewer" ? null : draft.sharedConnectionId,
-            allowedMethods: draft.allowedMethods
-              .split(",")
-              .map((value) => value.trim())
-              .filter(Boolean),
-            allowedPathPrefixes: draft.allowedPathPrefixes
-              .split(/[\n,]/)
-              .map((value) => value.trim())
-              .filter(Boolean),
           },
         })
         .toPromise();
@@ -107,5 +102,14 @@ export function useAppIntegrationBindings(sessionGroupId: string) {
     }
   };
 
-  return { bindings, connections, error, pending, refresh, remove, save };
+  return {
+    bindings,
+    connections,
+    error,
+    pending,
+    refresh,
+    remove,
+    save,
+    supportedIntegrations,
+  };
 }

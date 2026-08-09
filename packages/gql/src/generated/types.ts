@@ -370,9 +370,10 @@ export type CreateDesignSystemInput = {
 };
 
 export type CreateNangoConnectSessionInput = {
-  displayName: Scalars["String"]["input"];
+  displayName?: InputMaybe<Scalars["String"]["input"]>;
+  integrationId?: InputMaybe<Scalars["String"]["input"]>;
   kind?: InputMaybe<IntegrationConnectionKind>;
-  providerConfigKey: Scalars["String"]["input"];
+  providerConfigKey?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type CreateOrganizationInput = {
@@ -1901,6 +1902,7 @@ export type Query = {
   sessionTerminals: Array<Terminal>;
   sessionTimeline: SessionTimelinePage;
   sessions: Array<Session>;
+  supportedAppIntegrations: Array<SupportedAppIntegration>;
   threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
@@ -2834,6 +2836,25 @@ export type SubscriptionUserNotificationsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type SupportedAppIntegration = {
+  __typename?: "SupportedAppIntegration";
+  capabilities: Array<SupportedIntegrationCapability>;
+  description: Scalars["String"]["output"];
+  id: Scalars["String"]["output"];
+  name: Scalars["String"]["output"];
+  provider: Scalars["String"]["output"];
+  providerConfigKey: Scalars["String"]["output"];
+};
+
+export type SupportedIntegrationCapability = {
+  __typename?: "SupportedIntegrationCapability";
+  allowedMethods: Array<Scalars["String"]["output"]>;
+  allowedPathPrefixes: Array<Scalars["String"]["output"]>;
+  description: Scalars["String"]["output"];
+  id: Scalars["String"]["output"];
+  name: Scalars["String"]["output"];
+};
+
 export type Terminal = {
   __typename?: "Terminal";
   id: Scalars["ID"]["output"];
@@ -2935,13 +2956,15 @@ export type UpdateTicketInput = {
 };
 
 export type UpsertAppIntegrationBindingInput = {
-  allowedMethods: Array<Scalars["String"]["input"]>;
-  allowedPathPrefixes: Array<Scalars["String"]["input"]>;
+  allowedMethods?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  allowedPathPrefixes?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  capabilityIds?: InputMaybe<Array<Scalars["String"]["input"]>>;
   executionIdentity: IntegrationExecutionIdentity;
   id?: InputMaybe<Scalars["ID"]["input"]>;
-  label: Scalars["String"]["input"];
-  provider: Scalars["String"]["input"];
-  providerConfigKey: Scalars["String"]["input"];
+  integrationId?: InputMaybe<Scalars["String"]["input"]>;
+  label?: InputMaybe<Scalars["String"]["input"]>;
+  provider?: InputMaybe<Scalars["String"]["input"]>;
+  providerConfigKey?: InputMaybe<Scalars["String"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
   sharedConnectionId?: InputMaybe<Scalars["ID"]["input"]>;
 };

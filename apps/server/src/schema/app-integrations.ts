@@ -11,6 +11,10 @@ function requireUser(ctx: Context): string {
 
 export const appIntegrationQueries = {
   nangoIntegrationConfigured: () => appIntegrationService.nangoConfigured(),
+  supportedAppIntegrations: (_parent: unknown, _args: unknown, ctx: Context) => {
+    requireUser(ctx);
+    return appIntegrationService.listSupportedIntegrations();
+  },
   integrationConnections: (_parent: unknown, _args: unknown, ctx: Context) =>
     appIntegrationService.listConnections(requireOrgContext(ctx), requireUser(ctx), ctx.role),
   appIntegrationBindings: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>

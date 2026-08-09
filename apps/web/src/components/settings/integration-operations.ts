@@ -3,6 +3,20 @@ import { gql } from "@urql/core";
 export const INTEGRATION_CONNECTIONS_QUERY = gql`
   query IntegrationConnections {
     nangoIntegrationConfigured
+    supportedAppIntegrations {
+      id
+      name
+      provider
+      providerConfigKey
+      description
+      capabilities {
+        id
+        name
+        description
+        allowedMethods
+        allowedPathPrefixes
+      }
+    }
     integrationConnections {
       id
       ownerUserId

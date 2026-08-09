@@ -12,6 +12,8 @@ Set these variables on the Trace server:
 NANGO_SECRET_KEY="..."
 NANGO_WEBHOOK_SIGNING_KEY="..."
 NANGO_BASE_URL="https://api.nango.dev" # optional
+NANGO_GITHUB_INTEGRATION_KEY="github-getting-started" # optional override
+NANGO_SNOWFLAKE_INTEGRATION_KEY="snowflake" # optional override
 ```
 
 Configure the Nango environment's webhook URL as:
@@ -21,24 +23,22 @@ https://<trace-server>/webhooks/nango
 ```
 
 Enable new-connection auth webhooks. Trace verifies `X-Nango-Hmac-Sha256` against
-`NANGO_WEBHOOK_SIGNING_KEY`; unsigned or incorrectly signed requests are rejected. Create each
-supported provider integration in Nango and use its integration key when connecting it in Trace
-settings.
+`NANGO_WEBHOOK_SIGNING_KEY`; unsigned or incorrectly signed requests are rejected. Supported
+providers and their capabilities are defined in the server integration catalog. Customers select
+those providers in Trace and never enter Nango keys, HTTP methods, or provider paths.
 
 ## App request API
 
 App code calls this reserved same-origin route:
 
 ```text
-/__trace/integrations/<binding-id>/<provider-path>
+/__trace/integrations/<integration-name>/<provider-path>
 ```
 
 For example:
 
 ```ts
-const response = await fetch(
-  "/__trace/integrations/8e6907b0-1de7-4af5-89d2-a59e4d6a49c3/repos/acme/trace",
-);
+const response = await fetch("/__trace/integrations/github/repos/acme/trace");
 ```
 
 Trace authenticates the current viewer, verifies organization and application access, resolves the
@@ -63,14 +63,15 @@ context to Trace.
 Snowflake queries use:
 
 ```ts
-const result = await trace.integrations.snowflake.query(request, bindingId, {
+const result = await trace.integrations.snowflake.query(request, "snowflake", {
   sql: "SELECT name FROM analytics.customers WHERE created_at >= ?",
   parameters: [startDate],
   warehouse: "REPORTING_WH",
 });
 ```
 
-The binding must identify Snowflake and allow `POST /api/v2/statements`. Trace rejects the generic
+The Data access selection determines the underlying methods and paths; app code uses the stable
+integration name rather than a binding UUID. Trace rejects the generic
 proxy path for Snowflake statements, accepts only one `SELECT`/`WITH ... SELECT`, converts values to
 Snowflake SQL API bindings, resolves the configured execution identity, and submits the query via
 Nango. Browser code supplies application parameters to the Node route, never SQL or connection IDs.
