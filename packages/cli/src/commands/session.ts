@@ -127,12 +127,19 @@ function parseSessionStart(ctx: CommandContext): StartSessionInput {
     else if (flag === "--reasoning") input.reasoningEffort = optionValue(ctx.args, index++, flag);
     else if (flag === "--hosting") {
       input.hosting = choice(optionValue(ctx.args, index, flag), HOSTING_MODES, flag) as HostingMode;
+      hasExplicitDestination = true;
       index += 1;
-    } else if (flag === "--runtime") input.runtimeInstanceId = optionValue(ctx.args, index++, flag);
+    } else if (flag === "--runtime") {
+      input.runtimeInstanceId = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    }
     else if (flag === "--repo") {
       input.repoId = optionValue(ctx.args, index++, flag);
       hasExplicitDestination = true;
-    } else if (flag === "--branch") input.branch = optionValue(ctx.args, index++, flag);
+    } else if (flag === "--branch") {
+      input.branch = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    }
     else if (flag === "--channel") {
       input.channelId = optionValue(ctx.args, index++, flag);
       hasExplicitDestination = true;
@@ -147,16 +154,33 @@ function parseSessionStart(ctx: CommandContext): StartSessionInput {
       hasExplicitDestination = true;
     } else if (flag === "--visibility") {
       input.visibility = choice(optionValue(ctx.args, index, flag), VISIBILITIES, flag) as SessionGroupVisibility;
+      hasExplicitDestination = true;
       index += 1;
     } else if (flag === "--interaction-mode") input.interactionMode = optionValue(ctx.args, index++, flag);
     else if (flag === "--prompt") input.prompt = optionValue(ctx.args, index++, flag);
-    else if (flag === "--defer") input.deferRuntimeSelection = true;
+    else if (flag === "--defer") {
+      input.deferRuntimeSelection = true;
+      hasExplicitDestination = true;
+    }
     else if (flag.startsWith("--")) usage(`Unexpected argument: ${flag}`);
     else prompt.push(flag);
   }
   if (prompt.length) {
     if (input.prompt) usage("Provide the prompt either positionally or with --prompt, not both");
     input.prompt = prompt.join(" ");
+  }
+  if (
+    input.sessionGroupId &&
+    (input.kind ||
+      input.hosting ||
+      input.runtimeInstanceId ||
+      input.branch ||
+      input.visibility ||
+      input.deferRuntimeSelection)
+  ) {
+    usage(
+      "--group cannot be combined with --kind, --hosting, --runtime, --branch, --visibility, or --defer; sessions inherit those settings from their group",
+    );
   }
   if (!hasExplicitDestination && ctx.env.TRACE_SESSION_GROUP_ID) {
     input.sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;

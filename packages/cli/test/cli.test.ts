@@ -110,4 +110,48 @@ describe("Trace CLI", () => {
     expect(stdout.mock.calls.flat().join("")).toContain('"id":"session-2"');
     expect(stdout.mock.calls.flat().join("")).not.toContain("injected-agent-secret");
   });
+
+  it("does not inherit the current group when explicit hosting creates a new group", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_ID", "session-1");
+    vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-1");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as {
+        variables: { input: Record<string, unknown> };
+      };
+      expect(request.variables.input).toEqual({ prompt: "hello", hosting: "local" });
+      return new Response(
+        JSON.stringify({
+          data: {
+            startSession: {
+              id: "session-2",
+              name: "hello",
+              agentStatus: "active",
+              sessionStatus: "in_progress",
+              tool: "codex",
+              model: null,
+              reasoningEffort: null,
+              hosting: "local",
+              branch: null,
+              sessionGroupId: "group-2",
+              createdAt: "2026-08-08T00:00:00.000Z",
+              updatedAt: "2026-08-08T00:00:00.000Z",
+              channel: null,
+              repo: null,
+              projects: [],
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      run(["session", "start", "hello", "--hosting", "local", "--json"]),
+    ).resolves.toBe(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });

@@ -41,6 +41,10 @@ The simplest command starts a sibling in the current session group:
 "$TRACE_CLI" session start "Implement the API tests" --json
 ```
 
+Do not add group-level options such as `--hosting`, `--runtime`, `--branch`, `--visibility`, or
+`--defer` when you want a sibling to inherit the current group's environment. Supplying one of
+those options without `--group` creates a new session group.
+
 Select another existing group or an explicit destination when appropriate:
 
 ```sh
