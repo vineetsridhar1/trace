@@ -22,15 +22,15 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
     name: "integration",
     description: "Discover, connect, and configure data providers for the current Trace app",
     workflow: [
-      "Run integration list --json to inspect the live provider catalog, connected accounts, and current app access.",
-      "If the required account is missing, run integration connect and have the user complete the returned OAuth link.",
-      "Run integration add with only the capabilities required by the app.",
+      'Run "$TRACE_CLI" integration list --json to inspect the live provider catalog, connected accounts, and current app access.',
+      'If the required account is missing, run "$TRACE_CLI" integration connect and have the user complete the returned OAuth link.',
+      'Run "$TRACE_CLI" integration add with only the capabilities required by the app.',
       "Follow the integration and capability guides returned by integration list when writing the app's Node route.",
-      "Run integration list again to verify the final connection and app-access state.",
+      'Run "$TRACE_CLI" integration list again to verify the final connection and app-access state.',
     ],
     examples: [
-      "trace integration list --json",
-      "trace integration add github --capabilities profile --identity viewer --json",
+      '"$TRACE_CLI" integration list --json',
+      '"$TRACE_CLI" integration add github --capabilities profile --identity viewer --json',
     ],
     notes: [
       "The current app is selected automatically from TRACE_SESSION_GROUP_ID; never ask for a binding UUID.",
@@ -42,7 +42,10 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
   {
     name: "session",
     description: "Discover and control Trace AI sessions",
-    examples: ["trace session list --json", 'trace session start "Implement the API tests" --json'],
+    examples: [
+      '"$TRACE_CLI" session list --json',
+      '"$TRACE_CLI" session start "Implement the API tests" --json',
+    ],
     notes: [
       "Read command help before lifecycle mutations; session operations change shared Trace state.",
     ],

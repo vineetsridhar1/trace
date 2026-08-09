@@ -27,8 +27,6 @@ export function useAppIntegrationBindings(sessionGroupId: string) {
   const bindings = useMemo(() => Object.values(bindingTable ?? {}), [bindingTable]);
   const setConnections = useIntegrationStore((state) => state.setConnections);
   const setBindings = useIntegrationStore((state) => state.setBindings);
-  const upsertBinding = useIntegrationStore((state) => state.upsertBinding);
-  const removeBinding = useIntegrationStore((state) => state.removeBinding);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const supportedTable = useIntegrationStore((state) => state.supported);
@@ -75,8 +73,6 @@ export function useAppIntegrationBindings(sessionGroupId: string) {
         })
         .toPromise();
       if (result.error) throw new Error(result.error.message);
-      const binding = result.data?.upsertAppIntegrationBinding as AppIntegrationBinding | undefined;
-      if (binding) upsertBinding(binding);
       return true;
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Failed to save data integration");
@@ -94,7 +90,6 @@ export function useAppIntegrationBindings(sessionGroupId: string) {
         .mutation(DELETE_APP_INTEGRATION_BINDING_MUTATION, { id })
         .toPromise();
       if (result.error) throw new Error(result.error.message);
-      removeBinding(sessionGroupId, id);
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Failed to remove data integration");
     } finally {

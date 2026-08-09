@@ -4,6 +4,7 @@ import type { Event } from "@trace/gql";
 import { handleOrgEvent, useAuthStore } from "@trace/client-core";
 import { client } from "../lib/urql";
 import { reconcileManualElementSaved } from "../stores/design-editor";
+import { reconcileIntegrationEvent } from "../stores/integrations";
 
 const ORG_EVENTS_SUBSCRIPTION = gql`
   subscription OrgEvents($organizationId: ID!) {
@@ -41,6 +42,7 @@ export function useOrgEvents() {
         if (!result.data?.orgEvents) return;
         const event = result.data.orgEvents as Event;
         handleOrgEvent(event);
+        reconcileIntegrationEvent(event);
         if (event.eventType === "manual_element_saved") {
           reconcileManualElementSaved(event.payload);
         }

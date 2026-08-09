@@ -72,7 +72,7 @@ export const traceCliOperations = {
     argumentPaths: ["sessionGroupId"],
     document: `query TraceCliAppIntegrationBindings($sessionGroupId: ID!) {
       appIntegrationBindings(sessionGroupId: $sessionGroupId) {
-        id sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
+        id integrationId sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
         allowedMethods allowedPathPrefixes
       }
     }`,
@@ -102,7 +102,7 @@ export const traceCliOperations = {
     ],
     document: `mutation TraceCliUpsertAppIntegrationBinding($input: UpsertAppIntegrationBindingInput!) {
       upsertAppIntegrationBinding(input: $input) {
-        id sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
+        id integrationId sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
         allowedMethods allowedPathPrefixes
       }
     }`,

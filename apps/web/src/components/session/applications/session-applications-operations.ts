@@ -210,6 +210,7 @@ export const APP_INTEGRATIONS_QUERY = gql`
     }
     appIntegrationBindings(sessionGroupId: $sessionGroupId) {
       id
+      integrationId
       sessionGroupId
       label
       provider
@@ -228,6 +229,7 @@ export const UPSERT_APP_INTEGRATION_BINDING_MUTATION = gql`
   mutation UpsertAppIntegrationBinding($input: UpsertAppIntegrationBindingInput!) {
     upsertAppIntegrationBinding(input: $input) {
       id
+      integrationId
       sessionGroupId
       label
       provider

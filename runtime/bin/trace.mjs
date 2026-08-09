@@ -51,7 +51,7 @@ var traceCliOperations = {
     argumentPaths: ["sessionGroupId"],
     document: `query TraceCliAppIntegrationBindings($sessionGroupId: ID!) {
       appIntegrationBindings(sessionGroupId: $sessionGroupId) {
-        id sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
+        id integrationId sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
         allowedMethods allowedPathPrefixes
       }
     }`
@@ -81,7 +81,7 @@ var traceCliOperations = {
     ],
     document: `mutation TraceCliUpsertAppIntegrationBinding($input: UpsertAppIntegrationBindingInput!) {
       upsertAppIntegrationBinding(input: $input) {
-        id sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
+        id integrationId sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
         allowedMethods allowedPathPrefixes
       }
     }`
@@ -552,6 +552,7 @@ var TraceClient = class {
 };
 
 // src/runtime.ts
+var TRACE_CLI_EXECUTABLE = '"$TRACE_CLI"';
 function defineCommand(definition) {
   return definition;
 }
@@ -701,7 +702,10 @@ function commandUsage(command) {
   const options = (command.options ?? []).map(
     (definition) => definition.kind === "boolean" ? `[${definition.flag}]` : `[${definition.flag} ${definition.valueName}]`
   );
-  return ["trace", ...command.path, ...positionals, ...options, "[--json]"].join(" ");
+  return [TRACE_CLI_EXECUTABLE, ...command.path, ...positionals, ...options, "[--json]"].join(" ");
+}
+function commandExample(value) {
+  return value.replace(/^trace\b/, TRACE_CLI_EXECUTABLE);
 }
 function commandHelp(command) {
   const options = command.options ?? [];
@@ -717,7 +721,7 @@ function commandHelp(command) {
         return `  ${label.padEnd(30)} ${definition.description}`;
       })
     ] : [],
-    ...command.examples?.length ? ["", "Examples:", ...command.examples.map((x) => `  ${x}`)] : [],
+    ...command.examples?.length ? ["", "Examples:", ...command.examples.map((x) => `  ${commandExample(x)}`)] : [],
     ...command.effects?.length ? ["", "Effects:", ...command.effects.map((x) => `  - ${x}`)] : [],
     ...command.output ? ["", "Output:", `  ${command.output}`] : [],
     ...command.nextSteps?.length ? ["", "Next steps:", ...command.nextSteps.map((x) => `  - ${x}`)] : [],
@@ -731,7 +735,7 @@ function commandDescriptor(command) {
     usage: commandUsage(command),
     positionals: command.positionals ?? [],
     options: command.options ?? [],
-    examples: command.examples ?? [],
+    examples: (command.examples ?? []).map(commandExample),
     effects: command.effects ?? [],
     output: command.output ?? null,
     nextSteps: command.nextSteps ?? [],
@@ -742,9 +746,9 @@ function commandGroupDescriptor(group, commands2) {
   return {
     name: group.name,
     description: group.description,
-    usage: `trace ${group.name} <command> [options]`,
+    usage: `${TRACE_CLI_EXECUTABLE} ${group.name} <command> [options]`,
     workflow: group.workflow ?? [],
-    examples: group.examples ?? [],
+    examples: (group.examples ?? []).map(commandExample),
     notes: group.notes ?? [],
     commands: commands2.filter((command) => command.path[0] === group.name).map(commandDescriptor)
   };
@@ -764,7 +768,7 @@ function commandGroupHelp(group, commands2) {
     ...descriptor.examples.length ? ["", "Examples:", ...descriptor.examples.map((example) => `  ${example}`)] : [],
     ...descriptor.notes.length ? ["", "Notes:", ...descriptor.notes.map((note) => `  - ${note}`)] : [],
     "",
-    `Run trace ${group.name} <command> --help for exact arguments and effects.`
+    `Run ${TRACE_CLI_EXECUTABLE} ${group.name} <command> --help for exact arguments and effects.`
   ].join("\n");
 }
 function createCommandContext(options, env = process.env) {
@@ -1006,8 +1010,8 @@ var integrationAddCommand = defineCommand({
   path: ["integration", "add"],
   description: "Add or update a supported integration on the current Trace app",
   examples: [
-    "trace integration add github --capabilities profile --identity viewer --json",
-    "trace integration add snowflake --identity service --connection <connection-id> --json"
+    '"$TRACE_CLI" integration add github --capabilities profile --identity viewer --json',
+    '"$TRACE_CLI" integration add snowflake --identity service --connection <connection-id> --json'
   ],
   effects: [
     "Creates or updates one stable provider binding on the current app.",
@@ -1017,7 +1021,7 @@ var integrationAddCommand = defineCommand({
   nextSteps: [
     "Follow the returned guides to call the stable integration ID from a generated Node route.",
     "Have React call only that same-origin app route.",
-    "Run integration list --json to verify app access."
+    'Run "$TRACE_CLI" integration list --json to verify app access.'
   ],
   notes: [
     "Viewer identity is the default and must not include --connection.",
@@ -1076,7 +1080,7 @@ var integrationAddCommand = defineCommand({
       usage(`--connection is required with ${executionIdentity} identity`);
     }
     const existing = bindings.find(
-      (binding) => binding.providerConfigKey === integration.providerConfigKey
+      (binding) => binding.integrationId === integration.id || !binding.integrationId && binding.providerConfigKey === integration.providerConfigKey
     );
     const variables = {
       input: {
@@ -1107,8 +1111,8 @@ var integrationConnectCommand = defineCommand({
   path: ["integration", "connect"],
   description: "Create an authorization link for a personal or organization service account",
   examples: [
-    "trace integration connect github --json",
-    "trace integration connect github --service --json"
+    '"$TRACE_CLI" integration connect github --json',
+    '"$TRACE_CLI" integration connect github --service --json'
   ],
   effects: [
     "Creates a short-lived provider authorization session.",
@@ -1117,8 +1121,8 @@ var integrationConnectCommand = defineCommand({
   output: "The connectLink, its expiration time, integration ID, and personal or service kind.",
   nextSteps: [
     "Give connectLink to the user and wait for provider authorization to finish.",
-    "Run integration list --json to confirm the connection became active.",
-    "Run integration add to grant the current app least-privilege access."
+    'Run "$TRACE_CLI" integration list --json to confirm the connection became active.',
+    'Run "$TRACE_CLI" integration add to grant the current app least-privilege access.'
   ],
   notes: [
     "Use --service only when the user explicitly requests an organization-owned identity; organization-admin permission is required."
@@ -1154,12 +1158,12 @@ var integrationConnectCommand = defineCommand({
 var integrationListCommand = defineCommand({
   path: ["integration", "list"],
   description: "List supported integrations, connected accounts, usage guides, and current app access",
-  examples: ["trace integration list --json"],
+  examples: ['"$TRACE_CLI" integration list --json'],
   effects: ["Read-only; does not connect an account or change app access."],
   output: "Supported integrations with capability and implementation guides, visible connections, current-app bindings, and the selected sessionGroupId.",
   nextSteps: [
-    "Run integration connect <id> if a required account is missing.",
-    "Run integration add <id> with the minimum capability IDs when app access is missing."
+    'Run "$TRACE_CLI" integration connect <id> if a required account is missing.',
+    'Run "$TRACE_CLI" integration add <id> with the minimum capability IDs when app access is missing.'
   ],
   async run(ctx) {
     const client = await ctx.client();
@@ -1177,7 +1181,7 @@ var integrationListCommand = defineCommand({
           (connection) => connection.providerConfigKey === integration.providerConfigKey
         ),
         appAccess: bindings.filter(
-          (binding) => binding.providerConfigKey === integration.providerConfigKey
+          (binding) => binding.integrationId === integration.id || !binding.integrationId && binding.providerConfigKey === integration.providerConfigKey
         )
       })),
       sessionGroupId: sessionGroupId ?? null
@@ -1198,13 +1202,15 @@ var integrationListCommand = defineCommand({
 var integrationRemoveCommand = defineCommand({
   path: ["integration", "remove"],
   description: "Remove an integration from the current Trace app",
-  examples: ["trace integration remove github --json"],
+  examples: ['"$TRACE_CLI" integration remove github --json'],
   effects: [
     "Deletes the matching binding from the current app and emits a binding-deleted event.",
     "Does not disconnect the underlying provider account."
   ],
   output: "The removed binding ID and confirmation flag.",
-  nextSteps: ["Run integration list --json to verify that current-app access is absent."],
+  nextSteps: [
+    'Run "$TRACE_CLI" integration list --json to verify that current-app access is absent.'
+  ],
   positionals: [{ name: "integration", required: true }],
   async run(ctx, input) {
     const reference = input.positionals[0] ?? usage("Integration is required");
@@ -1216,7 +1222,7 @@ var integrationRemoveCommand = defineCommand({
     ]);
     const integration = catalog.find((candidate) => candidate.id === reference);
     const binding = bindings.find(
-      (candidate) => candidate.id === reference || integration && candidate.providerConfigKey === integration.providerConfigKey
+      (candidate) => candidate.id === reference || integration && (candidate.integrationId === integration.id || !candidate.integrationId && candidate.providerConfigKey === integration.providerConfigKey)
     );
     if (!binding) usage(`Integration is not configured on this app: ${reference}`);
     const variables = { id: binding.id, sessionGroupId };
@@ -1923,15 +1929,15 @@ var commandGroups = [
     name: "integration",
     description: "Discover, connect, and configure data providers for the current Trace app",
     workflow: [
-      "Run integration list --json to inspect the live provider catalog, connected accounts, and current app access.",
-      "If the required account is missing, run integration connect and have the user complete the returned OAuth link.",
-      "Run integration add with only the capabilities required by the app.",
+      'Run "$TRACE_CLI" integration list --json to inspect the live provider catalog, connected accounts, and current app access.',
+      'If the required account is missing, run "$TRACE_CLI" integration connect and have the user complete the returned OAuth link.',
+      'Run "$TRACE_CLI" integration add with only the capabilities required by the app.',
       "Follow the integration and capability guides returned by integration list when writing the app's Node route.",
-      "Run integration list again to verify the final connection and app-access state."
+      'Run "$TRACE_CLI" integration list again to verify the final connection and app-access state.'
     ],
     examples: [
-      "trace integration list --json",
-      "trace integration add github --capabilities profile --identity viewer --json"
+      '"$TRACE_CLI" integration list --json',
+      '"$TRACE_CLI" integration add github --capabilities profile --identity viewer --json'
     ],
     notes: [
       "The current app is selected automatically from TRACE_SESSION_GROUP_ID; never ask for a binding UUID.",
@@ -1943,7 +1949,10 @@ var commandGroups = [
   {
     name: "session",
     description: "Discover and control Trace AI sessions",
-    examples: ["trace session list --json", 'trace session start "Implement the API tests" --json'],
+    examples: [
+      '"$TRACE_CLI" session list --json',
+      '"$TRACE_CLI" session start "Implement the API tests" --json'
+    ],
     notes: [
       "Read command help before lifecycle mutations; session operations change shared Trace state."
     ]
@@ -1975,7 +1984,7 @@ assertCommandGroups(commandGroups, commands);
 function globalHelp() {
   const standalone = commands.filter((command) => command.path.length === 1);
   return [
-    "Usage: trace <command> [options]",
+    'Usage: "$TRACE_CLI" <command> [options]',
     "",
     "Command groups:",
     ...commandGroups.map((group) => `  ${group.name.padEnd(14)} ${group.description}`),
@@ -1987,7 +1996,7 @@ function globalHelp() {
       )
     ] : [],
     "",
-    "Run trace <group> --help to discover its subcommands.",
+    'Run "$TRACE_CLI" <group> --help to discover its subcommands.',
     "Add --json to any help command for machine-readable output.",
     "",
     "This command is available inside Trace-managed AI sessions."
@@ -1999,7 +2008,7 @@ function writeHelp(command, group, json) {
       groups: commandGroups.map((candidate) => ({
         name: candidate.name,
         description: candidate.description,
-        usage: `trace ${candidate.name} <command> [options]`
+        usage: `"$TRACE_CLI" ${candidate.name} <command> [options]`
       })),
       commands: commands.filter((candidate) => candidate.path.length === 1).map(commandDescriptor),
       globalOptions: [{ flag: "--json", description: "Emit machine-readable JSON" }]

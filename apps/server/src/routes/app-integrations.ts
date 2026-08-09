@@ -6,7 +6,8 @@ import {
   NotFoundError,
   ValidationError,
 } from "../lib/errors.js";
-import { appIntegrationService, type SnowflakeQueryInput } from "../services/app-integrations.js";
+import type { SnowflakeQueryInput } from "../services/app-integrations.js";
+import { appIntegrationService } from "../services/integration-services.js";
 import { verifyAppViewerContextToken } from "../services/app-viewer-context.js";
 
 export const appIntegrationsRouter = Router();

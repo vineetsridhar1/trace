@@ -28,6 +28,7 @@ export type IntegrationConnectionView = Pick<
 export type IntegrationBindingView = Pick<
   AppIntegrationBinding,
   | "id"
+  | "integrationId"
   | "sessionGroupId"
   | "label"
   | "provider"

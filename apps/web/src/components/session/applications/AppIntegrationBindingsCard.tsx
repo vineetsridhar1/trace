@@ -5,7 +5,13 @@ import { useAppIntegrationBindings } from "./useAppIntegrationBindings";
 
 export function AppIntegrationBindingsCard({ sessionGroupId }: { sessionGroupId: string }) {
   const state = useAppIntegrationBindings(sessionGroupId);
-  const existingProviderConfigKeys = state.bindings.map((binding) => binding.providerConfigKey);
+  const existingIntegrationIds = state.bindings.flatMap((binding) => {
+    if (binding.integrationId) return [binding.integrationId];
+    const integration = state.supportedIntegrations.find(
+      (candidate) => candidate.providerConfigKey === binding.providerConfigKey,
+    );
+    return integration ? [integration.id] : [];
+  });
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between px-1">
@@ -59,7 +65,7 @@ export function AppIntegrationBindingsCard({ sessionGroupId }: { sessionGroupId:
       ))}
       <AppIntegrationBindingForm
         connections={state.connections}
-        existingProviderConfigKeys={existingProviderConfigKeys}
+        existingIntegrationIds={existingIntegrationIds}
         integrations={state.supportedIntegrations}
         pending={state.pending}
         onSave={state.save}

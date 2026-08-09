@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { appIntegrationService } from "../services/app-integrations.js";
+import { appIntegrationService } from "../services/integration-services.js";
 import { nangoConnectionProvider } from "../services/nango-connection-provider.js";
 
 export const nangoRouter = Router();

@@ -2,7 +2,7 @@ import type { CreateNangoConnectSessionInput, UpsertAppIntegrationBindingInput }
 import type { Context } from "../context.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { requireOrgContext } from "../lib/require-org.js";
-import { appIntegrationService } from "../services/app-integrations.js";
+import { appIntegrationService } from "../services/integration-services.js";
 
 function requireUser(ctx: Context): string {
   if (!ctx.userId) throw new AuthenticationError();

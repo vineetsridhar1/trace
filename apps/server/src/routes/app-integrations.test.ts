@@ -7,12 +7,12 @@ vi.mock("../lib/db.js", async () => {
   return { prisma: createPrismaMock() };
 });
 
-vi.mock("../services/app-integrations.js", () => ({
+vi.mock("../services/integration-services.js", () => ({
   appIntegrationService: { execute: vi.fn(), executeSnowflakeQuery: vi.fn() },
 }));
 
 import { prisma } from "../lib/db.js";
-import { appIntegrationService } from "../services/app-integrations.js";
+import { appIntegrationService } from "../services/integration-services.js";
 import { createAppViewerContextToken } from "../services/app-viewer-context.js";
 import { appIntegrationsRouter } from "./app-integrations.js";
 

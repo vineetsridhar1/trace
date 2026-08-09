@@ -1,6 +1,8 @@
 import { TraceClient } from "./client.js";
 import { CliError, ExitCode, usage } from "./errors.js";
 
+const TRACE_CLI_EXECUTABLE = '"$TRACE_CLI"';
+
 export type GlobalOptions = { json: boolean };
 
 type BaseOption = {
@@ -244,7 +246,11 @@ export function commandUsage(command: CommandDefinition): string {
       ? `[${definition.flag}]`
       : `[${definition.flag} ${definition.valueName}]`,
   );
-  return ["trace", ...command.path, ...positionals, ...options, "[--json]"].join(" ");
+  return [TRACE_CLI_EXECUTABLE, ...command.path, ...positionals, ...options, "[--json]"].join(" ");
+}
+
+function commandExample(value: string): string {
+  return value.replace(/^trace\b/, TRACE_CLI_EXECUTABLE);
 }
 
 export function commandHelp(command: CommandDefinition): string {
@@ -267,7 +273,7 @@ export function commandHelp(command: CommandDefinition): string {
         ]
       : []),
     ...(command.examples?.length
-      ? ["", "Examples:", ...command.examples.map((x) => `  ${x}`)]
+      ? ["", "Examples:", ...command.examples.map((x) => `  ${commandExample(x)}`)]
       : []),
     ...(command.effects?.length ? ["", "Effects:", ...command.effects.map((x) => `  - ${x}`)] : []),
     ...(command.output ? ["", "Output:", `  ${command.output}`] : []),
@@ -285,7 +291,7 @@ export function commandDescriptor(command: CommandDefinition) {
     usage: commandUsage(command),
     positionals: command.positionals ?? [],
     options: command.options ?? [],
-    examples: command.examples ?? [],
+    examples: (command.examples ?? []).map(commandExample),
     effects: command.effects ?? [],
     output: command.output ?? null,
     nextSteps: command.nextSteps ?? [],
@@ -300,9 +306,9 @@ export function commandGroupDescriptor(
   return {
     name: group.name,
     description: group.description,
-    usage: `trace ${group.name} <command> [options]`,
+    usage: `${TRACE_CLI_EXECUTABLE} ${group.name} <command> [options]`,
     workflow: group.workflow ?? [],
-    examples: group.examples ?? [],
+    examples: (group.examples ?? []).map(commandExample),
     notes: group.notes ?? [],
     commands: commands.filter((command) => command.path[0] === group.name).map(commandDescriptor),
   };
@@ -332,7 +338,7 @@ export function commandGroupHelp(
       ? ["", "Notes:", ...descriptor.notes.map((note) => `  - ${note}`)]
       : []),
     "",
-    `Run trace ${group.name} <command> --help for exact arguments and effects.`,
+    `Run ${TRACE_CLI_EXECUTABLE} ${group.name} <command> --help for exact arguments and effects.`,
   ].join("\n");
 }
 

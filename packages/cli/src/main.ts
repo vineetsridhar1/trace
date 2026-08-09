@@ -20,7 +20,7 @@ assertCommandGroups(commandGroups, commands);
 function globalHelp(): string {
   const standalone = commands.filter((command) => command.path.length === 1);
   return [
-    "Usage: trace <command> [options]",
+    'Usage: "$TRACE_CLI" <command> [options]',
     "",
     "Command groups:",
     ...commandGroups.map((group) => `  ${group.name.padEnd(14)} ${group.description}`),
@@ -34,7 +34,7 @@ function globalHelp(): string {
         ]
       : []),
     "",
-    "Run trace <group> --help to discover its subcommands.",
+    'Run "$TRACE_CLI" <group> --help to discover its subcommands.',
     "Add --json to any help command for machine-readable output.",
     "",
     "This command is available inside Trace-managed AI sessions.",
@@ -55,7 +55,7 @@ function writeHelp(
             groups: commandGroups.map((candidate) => ({
               name: candidate.name,
               description: candidate.description,
-              usage: `trace ${candidate.name} <command> [options]`,
+              usage: `"$TRACE_CLI" ${candidate.name} <command> [options]`,
             })),
             commands: commands
               .filter((candidate) => candidate.path.length === 1)

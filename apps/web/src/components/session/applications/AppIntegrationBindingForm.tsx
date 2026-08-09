@@ -15,13 +15,13 @@ const INITIAL_DRAFT: AppIntegrationBindingDraft = {
 
 export function AppIntegrationBindingForm({
   connections,
-  existingProviderConfigKeys,
+  existingIntegrationIds,
   integrations,
   pending,
   onSave,
 }: {
   connections: IntegrationConnection[];
-  existingProviderConfigKeys: string[];
+  existingIntegrationIds: string[];
   integrations: SupportedAppIntegration[];
   pending: boolean;
   onSave: (draft: AppIntegrationBindingDraft) => Promise<boolean>;
@@ -67,7 +67,7 @@ export function AppIntegrationBindingForm({
               <SelectItem
                 key={candidate.id}
                 value={candidate.id}
-                disabled={existingProviderConfigKeys.includes(candidate.providerConfigKey)}
+                disabled={existingIntegrationIds.includes(candidate.id)}
               >
                 {candidate.name}
               </SelectItem>

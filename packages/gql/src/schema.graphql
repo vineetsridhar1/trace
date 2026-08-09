@@ -396,6 +396,7 @@ enum EventType {
   integration_connection_updated
   integration_connection_deleted
   app_integration_binding_updated
+  app_integration_request_started
   app_integration_request_executed
 }
 
@@ -1081,6 +1082,7 @@ type IntegrationConnection {
 
 type AppIntegrationBinding {
   id: ID!
+  integrationId: String
   sessionGroupId: ID!
   label: String!
   provider: String!
@@ -1737,8 +1739,7 @@ input CreateOrganizationInput {
 }
 
 input CreateNangoConnectSessionInput {
-  integrationId: String
-  providerConfigKey: String
+  integrationId: String!
   displayName: String
   kind: IntegrationConnectionKind = personal
 }
@@ -1746,15 +1747,11 @@ input CreateNangoConnectSessionInput {
 input UpsertAppIntegrationBindingInput {
   id: ID
   sessionGroupId: ID!
-  integrationId: String
-  capabilityIds: [String!]
+  integrationId: String!
+  capabilityIds: [String!]!
   label: String
-  provider: String
-  providerConfigKey: String
   executionIdentity: IntegrationExecutionIdentity!
   sharedConnectionId: ID
-  allowedMethods: [String!]
-  allowedPathPrefixes: [String!]
 }
 
 # --- Queries ---

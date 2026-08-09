@@ -1,5 +1,9 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { ValidationError } from "../lib/errors.js";
+import type {
+  IntegrationConnectionProvider,
+  IntegrationProxyResponse,
+} from "./integration-connection-provider.js";
 
 const DEFAULT_NANGO_BASE_URL = "https://api.nango.dev";
 const DEFAULT_NANGO_TIMEOUT_MS = 30_000;
@@ -10,12 +14,6 @@ type NangoConnectSessionResponse = {
     connect_link?: unknown;
     expires_at?: unknown;
   };
-};
-
-export type NangoProxyResponse = {
-  status: number;
-  contentType: string | null;
-  body: Buffer;
 };
 
 function nangoBaseUrl(): string {
@@ -78,7 +76,7 @@ async function nangoError(response: Response): Promise<Error> {
   return new Error(`Nango request failed (${response.status})${message ? `: ${message}` : ""}`);
 }
 
-export class NangoConnectionProvider {
+export class NangoConnectionProvider implements IntegrationConnectionProvider {
   isConfigured(): boolean {
     return Boolean(process.env.NANGO_SECRET_KEY?.trim());
   }
@@ -144,15 +142,15 @@ export class NangoConnectionProvider {
     query: string | null;
     contentType: string | null;
     body: Buffer;
-  }): Promise<NangoProxyResponse> {
+  }): Promise<IntegrationProxyResponse> {
     const url = new URL(`${nangoBaseUrl()}/proxy${input.path}`);
     if (input.query) url.search = input.query;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${nangoSecretKey()}`,
       "Connection-Id": input.connectionId,
       "Provider-Config-Key": input.providerConfigKey,
-      Retries: "2",
     };
+    if (input.method === "GET" || input.method === "HEAD") headers.Retries = "2";
     if (input.contentType) headers["Content-Type"] = input.contentType;
     const response = await fetch(url, {
       method: input.method,

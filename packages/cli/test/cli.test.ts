@@ -57,14 +57,14 @@ describe("Trace CLI", () => {
     stdout.mockClear();
     await expect(run(["integration", "--help"])).resolves.toBe(0);
     const groupOutput = stdout.mock.calls.flat().join("");
-    expect(groupOutput).toContain("Usage: trace integration <command>");
+    expect(groupOutput).toContain('Usage: "$TRACE_CLI" integration <command>');
     expect(groupOutput).toContain("integration list --json");
     expect(groupOutput).toContain("Put provider requests in generated Node routes");
 
     stdout.mockClear();
     await expect(run(["session", "start", "--help"])).resolves.toBe(0);
     const output = stdout.mock.calls.flat().join("");
-    expect(output).toContain("Usage: trace session start");
+    expect(output).toContain('Usage: "$TRACE_CLI" session start');
     expect(output).toContain("Start a new session group");
   });
 
@@ -74,7 +74,7 @@ describe("Trace CLI", () => {
       groups: expect.arrayContaining([
         expect.objectContaining({
           name: "integration",
-          usage: "trace integration <command> [options]",
+          usage: '"$TRACE_CLI" integration <command> [options]',
         }),
       ]),
     });

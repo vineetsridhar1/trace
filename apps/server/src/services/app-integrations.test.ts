@@ -18,6 +18,7 @@ vi.mock("./nango-connection-provider.js", () => ({
 
 import { prisma } from "../lib/db.js";
 import { AuthorizationError, ValidationError } from "../lib/errors.js";
+import { eventService } from "./event.js";
 import {
   AppIntegrationService,
   assertSnowflakeReadOnlyQuery,
@@ -30,6 +31,11 @@ const nangoMock = nangoConnectionProvider as unknown as {
   createConnectSession: ReturnType<typeof vi.fn>;
   proxy: ReturnType<typeof vi.fn>;
 };
+const eventMock = eventService as unknown as { create: ReturnType<typeof vi.fn> };
+
+function service() {
+  return new AppIntegrationService(nangoConnectionProvider);
+}
 
 function allowViewer() {
   prismaMock.orgMember.findUnique.mockResolvedValue({ userId: "viewer-1", role: "member" });
@@ -58,7 +64,7 @@ describe("AppIntegrationService", () => {
       expiresAt: new Date("2026-08-09T00:00:00Z"),
     });
 
-    await new AppIntegrationService().createConnectSession("org-1", "viewer-1", "member", {
+    await service().createConnectSession("org-1", "viewer-1", "member", {
       integrationId: "github",
       kind: "personal",
     });
@@ -72,61 +78,31 @@ describe("AppIntegrationService", () => {
   });
 
   it("expands selected capabilities into server-controlled binding permissions", async () => {
-    prismaMock.appIntegrationBinding.create.mockImplementation(
-      async (args: { data: Record<string, unknown> }) => ({
+    prismaMock.appIntegrationBinding.upsert.mockImplementation(
+      async (args: { create: Record<string, unknown> }) => ({
         id: "binding-1",
-        ...args.data,
+        ...args.create,
         createdAt: new Date("2026-08-09T00:00:00Z"),
         updatedAt: new Date("2026-08-09T00:00:00Z"),
       }),
     );
 
-    await new AppIntegrationService().upsertBinding("org-1", "owner-1", "member", {
+    await service().upsertBinding("org-1", "owner-1", "member", {
       sessionGroupId: "app-1",
       integrationId: "github",
       capabilityIds: ["profile", "repositories"],
       executionIdentity: "viewer",
     });
 
-    expect(prismaMock.appIntegrationBinding.create).toHaveBeenCalledWith(
+    expect(prismaMock.appIntegrationBinding.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
+        create: expect.objectContaining({
+          integrationId: "github",
           label: "GitHub",
           provider: "GitHub",
           providerConfigKey: "github-getting-started",
           allowedMethods: ["GET"],
           allowedPathPrefixes: ["/user", "/repos", "/user/repos"],
-        }),
-      }),
-    );
-  });
-
-  it("keeps explicit legacy binding permissions compatible", async () => {
-    prismaMock.appIntegrationBinding.create.mockImplementation(
-      async (args: { data: Record<string, unknown> }) => ({
-        id: "binding-legacy",
-        ...args.data,
-        createdAt: new Date("2026-08-09T00:00:00Z"),
-        updatedAt: new Date("2026-08-09T00:00:00Z"),
-      }),
-    );
-
-    await new AppIntegrationService().upsertBinding("org-1", "owner-1", "member", {
-      sessionGroupId: "app-1",
-      label: "Custom provider",
-      provider: "Custom",
-      providerConfigKey: "custom-provider",
-      executionIdentity: "viewer",
-      allowedMethods: ["GET"],
-      allowedPathPrefixes: ["/records"],
-    });
-
-    expect(prismaMock.appIntegrationBinding.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          providerConfigKey: "custom-provider",
-          allowedMethods: ["GET"],
-          allowedPathPrefixes: ["/records"],
         }),
       }),
     );
@@ -154,7 +130,7 @@ describe("AppIntegrationService", () => {
       body: Buffer.from("{}"),
     });
 
-    await new AppIntegrationService().execute({
+    await service().execute({
       endpoint: { organizationId: "org-1", sessionGroupId: "app-1" },
       userId: "viewer-1",
       bindingId: "github",
@@ -167,28 +143,119 @@ describe("AppIntegrationService", () => {
 
     expect(prismaMock.appIntegrationBinding.findFirst).toHaveBeenCalledWith({
       where: {
-        providerConfigKey: "github-getting-started",
+        OR: [
+          { integrationId: "github" },
+          { integrationId: null, providerConfigKey: "github-getting-started" },
+        ],
         organizationId: "org-1",
         sessionGroupId: "app-1",
       },
     });
   });
 
+  it("does not report a completed provider request as failed when completion auditing fails", async () => {
+    prismaMock.appIntegrationBinding.findFirst.mockResolvedValue({
+      id: "binding-1",
+      organizationId: "org-1",
+      sessionGroupId: "app-1",
+      provider: "GitHub",
+      providerConfigKey: "github-getting-started",
+      executionIdentity: "viewer",
+      sharedConnectionId: null,
+      allowedMethods: ["GET"],
+      allowedPathPrefixes: ["/user"],
+    });
+    prismaMock.integrationConnection.findFirst.mockResolvedValue({
+      id: "viewer-connection",
+      nangoConnectionId: "nango-viewer-1",
+    });
+    nangoMock.proxy.mockResolvedValue({
+      status: 200,
+      contentType: "application/json",
+      body: Buffer.from("{}"),
+    });
+    eventMock.create.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("audit failed"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(
+      service().execute({
+        endpoint: { organizationId: "org-1", sessionGroupId: "app-1" },
+        userId: "viewer-1",
+        bindingId: "github",
+        method: "GET",
+        path: "/user",
+        query: null,
+        contentType: null,
+        body: Buffer.alloc(0),
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+    expect(eventMock.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ eventType: "app_integration_request_started" }),
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      "[app-integrations] failed to record provider request completion",
+      expect.any(Error),
+    );
+  });
+
+  it.each([
+    { success: false, status: "error", lastError: "expired" },
+    { success: true, status: "active", lastError: null },
+  ])("reconciles credential refresh state through an event: $status", async (expected) => {
+    prismaMock.integrationConnection.findUnique.mockResolvedValue({
+      id: "connection-1",
+      organizationId: "org-1",
+      ownerUserId: "viewer-1",
+    });
+    prismaMock.integrationConnection.update.mockResolvedValue({
+      id: "connection-1",
+      organizationId: "org-1",
+      ownerUserId: "viewer-1",
+      provider: "github",
+      providerConfigKey: "github-getting-started",
+      displayName: "GitHub account",
+      kind: "personal",
+      status: expected.status,
+      lastError: expected.lastError,
+      createdAt: new Date("2026-08-09T00:00:00Z"),
+      updatedAt: new Date("2026-08-09T00:00:00Z"),
+    });
+
+    await service().reconcileNangoAuthWebhook({
+      type: "auth",
+      operation: "refresh",
+      success: expected.success,
+      connectionId: "nango-1",
+      providerConfigKey: "github-getting-started",
+      provider: "github",
+      error: expected.success ? null : { description: "expired" },
+      tags: { organization_id: "org-1", end_user_id: "viewer-1" },
+    });
+
+    expect(prismaMock.integrationConnection.update).toHaveBeenCalledWith({
+      where: { id: "connection-1" },
+      data: { status: expected.status, lastError: expected.lastError },
+    });
+    expect(eventMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: "integration_connection_updated" }),
+      expect.any(Object),
+    );
+  });
+
   it("rejects encoded path traversal before calling Nango", () => {
     expect(() => normalizeIntegrationPath("/repos/%2e%2e/admin")).toThrow(ValidationError);
+    expect(() => normalizeIntegrationPath("/repos/%252e%252e/admin")).toThrow(ValidationError);
   });
 
   it("does not allow a viewer binding to smuggle a shared connection", async () => {
     await expect(
-      new AppIntegrationService().upsertBinding("org-1", "owner-1", "member", {
+      service().upsertBinding("org-1", "owner-1", "member", {
         sessionGroupId: "app-1",
-        label: "GitHub",
-        provider: "GitHub",
-        providerConfigKey: "github",
+        integrationId: "github",
+        capabilityIds: ["repositories"],
         executionIdentity: "viewer",
         sharedConnectionId: "ceo-connection",
-        allowedMethods: ["GET"],
-        allowedPathPrefixes: ["/repos"],
       }),
     ).rejects.toThrow("Viewer connections cannot specify a shared connection");
   });
@@ -215,7 +282,7 @@ describe("AppIntegrationService", () => {
       body: Buffer.from("{}"),
     });
 
-    const response = await new AppIntegrationService().execute({
+    const response = await service().execute({
       endpoint: { organizationId: "org-1", sessionGroupId: "app-1" },
       userId: "viewer-1",
       bindingId: "binding-1",
@@ -250,7 +317,7 @@ describe("AppIntegrationService", () => {
     });
 
     await expect(
-      new AppIntegrationService().execute({
+      service().execute({
         endpoint: { organizationId: "org-1", sessionGroupId: "app-1" },
         userId: "viewer-1",
         bindingId: "binding-1",
@@ -310,7 +377,7 @@ describe("AppIntegrationService", () => {
       body: Buffer.from('{"data":[["east","42"]]}'),
     });
 
-    const response = await new AppIntegrationService().executeSnowflakeQuery({
+    const response = await service().executeSnowflakeQuery({
       endpoint: { organizationId: "org-1", sessionGroupId: "app-1" },
       userId: "viewer-1",
       bindingId: "binding-1",
@@ -356,7 +423,7 @@ describe("AppIntegrationService", () => {
     });
 
     await expect(
-      new AppIntegrationService().execute({
+      service().execute({
         endpoint: { organizationId: "org-1", sessionGroupId: "app-1" },
         userId: "viewer-1",
         bindingId: "binding-1",

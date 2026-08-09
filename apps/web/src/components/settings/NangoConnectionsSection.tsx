@@ -28,7 +28,6 @@ export function NangoConnectionsSection() {
   const connectionTable = useIntegrationStore((state) => state.connections);
   const connections = useMemo(() => Object.values(connectionTable), [connectionTable]);
   const setConnections = useIntegrationStore((state) => state.setConnections);
-  const removeConnection = useIntegrationStore((state) => state.removeConnection);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const supportedTable = useIntegrationStore((state) => state.supported);
   const integrations = useMemo(() => Object.values(supportedTable), [supportedTable]);
@@ -88,7 +87,6 @@ export function NangoConnectionsSection() {
       toast.error(result.error.message);
       return;
     }
-    removeConnection(connection.id);
     toast.success("Connection removed");
   };
 

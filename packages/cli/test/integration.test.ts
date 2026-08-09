@@ -92,7 +92,11 @@ describe("Trace CLI integrations", () => {
       if (request.operationName === "TraceCliAppIntegrationBindings") {
         return graphQlResponse({
           appIntegrationBindings: [
-            { id: "binding-1", providerConfigKey: "github-getting-started" },
+            {
+              id: "binding-1",
+              integrationId: "github",
+              providerConfigKey: "github-getting-started",
+            },
           ],
         });
       }

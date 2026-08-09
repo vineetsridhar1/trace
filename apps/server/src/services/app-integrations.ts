@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import type {
   IntegrationConnectionKind,
   IntegrationExecutionIdentity,
@@ -8,7 +9,10 @@ import { prisma } from "../lib/db.js";
 import { AuthorizationError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { canViewSessionGroup } from "./access.js";
 import { eventService } from "./event.js";
-import { nangoConnectionProvider, type NangoProxyResponse } from "./nango-connection-provider.js";
+import type {
+  IntegrationConnectionProvider,
+  IntegrationProxyResponse,
+} from "./integration-connection-provider.js";
 
 const PROVIDER_KEY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
@@ -184,13 +188,24 @@ function normalizeMethod(value: string): string {
 }
 
 export function normalizeIntegrationPath(value: string): string {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(value);
-  } catch {
-    throw new ValidationError("Integration path is not valid URL encoding");
+  if (value.length > 4096) throw new ValidationError("Integration path is too long");
+  let decoded = value;
+  for (let pass = 0; decoded.includes("%"); pass += 1) {
+    if (pass >= 16) throw new ValidationError("Integration path has too many encoding layers");
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch {
+      throw new ValidationError("Integration path is not valid URL encoding");
+    }
   }
-  if (!decoded.startsWith("/") || decoded.includes("\\")) {
+  if (
+    !decoded.startsWith("/") ||
+    decoded.includes("\\") ||
+    decoded.includes("?") ||
+    decoded.includes("#")
+  ) {
     throw new ValidationError("Integration path must be an absolute provider path");
   }
   if (decoded.split("/").some((segment) => segment === "." || segment === "..")) {
@@ -238,6 +253,7 @@ function publicConnection(connection: {
 
 function publicBinding(binding: {
   id: string;
+  integrationId: string | null;
   sessionGroupId: string;
   label: string;
   provider: string;
@@ -251,6 +267,7 @@ function publicBinding(binding: {
 }) {
   return {
     id: binding.id,
+    integrationId: binding.integrationId,
     sessionGroupId: binding.sessionGroupId,
     label: binding.label,
     provider: binding.provider,
@@ -267,8 +284,10 @@ function publicBinding(binding: {
 type Role = "admin" | "member" | "observer" | null | undefined;
 
 export class AppIntegrationService {
+  constructor(private readonly connectionProvider: IntegrationConnectionProvider) {}
+
   nangoConfigured(): boolean {
-    return nangoConnectionProvider.isConfigured();
+    return this.connectionProvider.isConfigured();
   }
 
   listSupportedIntegrations() {
@@ -291,8 +310,7 @@ export class AppIntegrationService {
     userId: string,
     role: Role,
     input: {
-      integrationId?: string | null;
-      providerConfigKey?: string | null;
+      integrationId: string;
       displayName?: string | null;
       kind?: IntegrationConnectionKind | null;
     },
@@ -306,21 +324,17 @@ export class AppIntegrationService {
       select: { email: true, name: true },
     });
     if (!user) throw new NotFoundError("User", userId);
-    const integration = input.integrationId ? supportedIntegration(input.integrationId) : undefined;
-    if (input.integrationId && !integration) {
-      throw new ValidationError("This integration is not supported");
-    }
-    const providerConfigKey = integration?.providerConfigKey ?? input.providerConfigKey;
-    if (!providerConfigKey) throw new ValidationError("An integration is required");
-    return nangoConnectionProvider.createConnectSession({
+    const integration = supportedIntegration(input.integrationId);
+    if (!integration) throw new ValidationError("This integration is not supported");
+    return this.connectionProvider.createConnectSession({
       organizationId,
       userId,
       userEmail: user.email,
       userName: user.name,
-      providerConfigKey: providerKey(providerConfigKey),
+      providerConfigKey: providerKey(integration.providerConfigKey),
       displayName:
         input.displayName?.trim() ||
-        `${integration?.name ?? "Integration"} ${kind === "service" ? "service account" : "account"}`,
+        `${integration.name} ${kind === "service" ? "service account" : "account"}`,
       kind,
     });
   }
@@ -337,7 +351,7 @@ export class AppIntegrationService {
     if (connection._count.sharedBindings > 0) {
       throw new ValidationError("Remove this connection from applications before disconnecting it");
     }
-    await nangoConnectionProvider.deleteConnection(
+    await this.connectionProvider.deleteConnection(
       connection.nangoConnectionId,
       connection.providerConfigKey,
     );
@@ -379,13 +393,9 @@ export class AppIntegrationService {
   ) {
     await this.assertCanManageApp(input.sessionGroupId, organizationId, userId, role);
     const identity = input.executionIdentity;
-    const integration = input.integrationId ? supportedIntegration(input.integrationId) : undefined;
-    if (input.integrationId && !integration) {
-      throw new ValidationError("This integration is not supported");
-    }
-    const configuredProviderKey = integration?.providerConfigKey ?? input.providerConfigKey;
-    if (!configuredProviderKey) throw new ValidationError("An integration is required");
-    const normalizedProviderKey = providerKey(configuredProviderKey);
+    const integration = supportedIntegration(input.integrationId);
+    if (!integration) throw new ValidationError("This integration is not supported");
+    const normalizedProviderKey = providerKey(integration.providerConfigKey);
     const sharedConnectionId = input.sharedConnectionId ?? null;
     if (identity === "viewer" && sharedConnectionId) {
       throw new ValidationError("Viewer connections cannot specify a shared connection");
@@ -411,25 +421,21 @@ export class AppIntegrationService {
         throw new AuthorizationError("Only an org admin can share another user's connection");
       }
     }
-    const capabilityIds = input.capabilityIds ?? [];
-    const selectedCapabilities = integration
-      ? capabilityIds.map((id) => {
-          const capability = integration.capabilities.find((candidate) => candidate.id === id);
-          if (!capability) {
-            throw new ValidationError(`${integration.name} does not support capability ${id}`);
-          }
-          return capability;
-        })
-      : [];
-    if (integration && selectedCapabilities.length === 0) {
+    const capabilityIds = input.capabilityIds;
+    const selectedCapabilities = capabilityIds.map((id) => {
+      const capability = integration.capabilities.find((candidate) => candidate.id === id);
+      if (!capability) {
+        throw new ValidationError(`${integration.name} does not support capability ${id}`);
+      }
+      return capability;
+    });
+    if (selectedCapabilities.length === 0) {
       throw new ValidationError("Choose at least one integration capability");
     }
-    const allowedMethods = integration
-      ? selectedCapabilities.flatMap((capability) => capability.allowedMethods)
-      : (input.allowedMethods ?? []);
-    const allowedPathPrefixes = integration
-      ? selectedCapabilities.flatMap((capability) => capability.allowedPathPrefixes)
-      : (input.allowedPathPrefixes ?? []);
+    const allowedMethods = selectedCapabilities.flatMap((capability) => capability.allowedMethods);
+    const allowedPathPrefixes = selectedCapabilities.flatMap(
+      (capability) => capability.allowedPathPrefixes,
+    );
     const methods = [...new Set(allowedMethods.map(normalizeMethod))];
     const paths = [...new Set(allowedPathPrefixes.map(normalizePathPrefix))];
     if (methods.length === 0) throw new ValidationError("At least one HTTP method is required");
@@ -438,8 +444,9 @@ export class AppIntegrationService {
     const data = {
       organizationId,
       sessionGroupId: input.sessionGroupId,
-      label: input.label?.trim() || integration?.name || "Integration",
-      provider: integration?.provider ?? requiredText(input.provider ?? "", "Provider", 128),
+      integrationId: integration.id,
+      label: input.label?.trim() || integration.name,
+      provider: integration.provider,
       providerConfigKey: normalizedProviderKey,
       executionIdentity: identity,
       sharedConnectionId,
@@ -453,8 +460,15 @@ export class AppIntegrationService {
             data,
             include: { sharedConnection: true },
           })
-        : await tx.appIntegrationBinding.create({
-            data: { ...data, createdByUserId: userId },
+        : await tx.appIntegrationBinding.upsert({
+            where: {
+              sessionGroupId_integrationId: {
+                sessionGroupId: input.sessionGroupId,
+                integrationId: integration.id,
+              },
+            },
+            create: { ...data, createdByUserId: userId },
+            update: data,
             include: { sharedConnection: true },
           });
       await eventService.create(
@@ -513,7 +527,7 @@ export class AppIntegrationService {
     query: string | null;
     contentType: string | null;
     body: Buffer;
-  }): Promise<NangoProxyResponse> {
+  }): Promise<IntegrationProxyResponse> {
     await this.assertCanViewApp(
       input.endpoint.sessionGroupId,
       input.endpoint.organizationId,
@@ -523,7 +537,12 @@ export class AppIntegrationService {
     const binding = await prisma.appIntegrationBinding.findFirst({
       where: {
         ...(integration
-          ? { providerConfigKey: integration.providerConfigKey }
+          ? {
+              OR: [
+                { integrationId: integration.id },
+                { integrationId: null, providerConfigKey: integration.providerConfigKey },
+              ],
+            }
           : { id: input.bindingId }),
         organizationId: input.endpoint.organizationId,
         sessionGroupId: input.endpoint.sessionGroupId,
@@ -544,32 +563,16 @@ export class AppIntegrationService {
       );
     }
     const connection = await this.resolveExecutionConnection(binding, input.userId);
-    const response = await nangoConnectionProvider.proxy({
-      connectionId: connection.nangoConnectionId,
-      providerConfigKey: binding.providerConfigKey,
+    return this.executeProviderRequest({
+      binding,
+      connection,
+      userId: input.userId,
       method,
       path,
       query: input.query,
       contentType: input.contentType,
       body: input.body,
     });
-    await eventService.create({
-      organizationId: binding.organizationId,
-      scopeType: "session",
-      scopeId: binding.sessionGroupId,
-      eventType: "app_integration_request_executed",
-      payload: {
-        bindingId: binding.id,
-        connectionId: connection.id,
-        executionIdentity: binding.executionIdentity,
-        method,
-        path,
-        status: response.status,
-      },
-      actorType: "user",
-      actorId: input.userId,
-    });
-    return response;
   }
 
   async executeSnowflakeQuery(input: {
@@ -577,7 +580,7 @@ export class AppIntegrationService {
     userId: string;
     bindingId: string;
     query: SnowflakeQueryInput;
-  }): Promise<NangoProxyResponse> {
+  }): Promise<IntegrationProxyResponse> {
     await this.assertCanViewApp(
       input.endpoint.sessionGroupId,
       input.endpoint.organizationId,
@@ -587,7 +590,12 @@ export class AppIntegrationService {
     const binding = await prisma.appIntegrationBinding.findFirst({
       where: {
         ...(integration
-          ? { providerConfigKey: integration.providerConfigKey }
+          ? {
+              OR: [
+                { integrationId: integration.id },
+                { integrationId: null, providerConfigKey: integration.providerConfigKey },
+              ],
+            }
           : { id: input.bindingId }),
         organizationId: input.endpoint.organizationId,
         sessionGroupId: input.endpoint.sessionGroupId,
@@ -626,32 +634,100 @@ export class AppIntegrationService {
         ? {}
         : { warehouse: optionalSnowflakeContext(input.query.warehouse, "Snowflake warehouse") }),
     };
-    const response = await nangoConnectionProvider.proxy({
-      connectionId: connection.nangoConnectionId,
-      providerConfigKey: binding.providerConfigKey,
+    return this.executeProviderRequest({
+      binding,
+      connection,
+      userId: input.userId,
       method: "POST",
       path: SNOWFLAKE_STATEMENTS_PATH,
       query: null,
       contentType: "application/json",
       body: Buffer.from(JSON.stringify(requestBody)),
     });
-    await eventService.create({
-      organizationId: binding.organizationId,
-      scopeType: "session",
-      scopeId: binding.sessionGroupId,
-      eventType: "app_integration_request_executed",
-      payload: {
-        bindingId: binding.id,
-        connectionId: connection.id,
-        executionIdentity: binding.executionIdentity,
-        method: "POST",
-        path: SNOWFLAKE_STATEMENTS_PATH,
-        status: response.status,
-      },
-      actorType: "user",
+  }
+
+  private async executeProviderRequest(input: {
+    binding: {
+      id: string;
+      organizationId: string;
+      sessionGroupId: string;
+      providerConfigKey: string;
+      executionIdentity: IntegrationExecutionIdentity;
+    };
+    connection: { id: string; nangoConnectionId: string };
+    userId: string;
+    method: string;
+    path: string;
+    query: string | null;
+    contentType: string | null;
+    body: Buffer;
+  }): Promise<IntegrationProxyResponse> {
+    const requestId = randomUUID();
+    const eventBase = {
+      organizationId: input.binding.organizationId,
+      scopeType: "session" as const,
+      scopeId: input.binding.sessionGroupId,
+      actorType: "user" as const,
       actorId: input.userId,
+    };
+    const auditPayload = {
+      requestId,
+      bindingId: input.binding.id,
+      connectionId: input.connection.id,
+      executionIdentity: input.binding.executionIdentity,
+      method: input.method,
+      path: input.path,
+    };
+    await eventService.create({
+      ...eventBase,
+      eventType: "app_integration_request_started",
+      payload: auditPayload,
     });
-    return response;
+    try {
+      const response = await this.connectionProvider.proxy({
+        connectionId: input.connection.nangoConnectionId,
+        providerConfigKey: input.binding.providerConfigKey,
+        method: input.method,
+        path: input.path,
+        query: input.query,
+        contentType: input.contentType,
+        body: input.body,
+      });
+      await this.recordExecutionCompletion(eventBase, {
+        ...auditPayload,
+        status: response.status,
+        outcome: "completed",
+      });
+      return response;
+    } catch (error: unknown) {
+      await this.recordExecutionCompletion(eventBase, {
+        ...auditPayload,
+        outcome: "failed",
+        error: "Provider request failed",
+      });
+      throw error;
+    }
+  }
+
+  private async recordExecutionCompletion(
+    eventBase: {
+      organizationId: string;
+      scopeType: "session";
+      scopeId: string;
+      actorType: "user";
+      actorId: string;
+    },
+    payload: Record<string, string | number>,
+  ): Promise<void> {
+    try {
+      await eventService.create({
+        ...eventBase,
+        eventType: "app_integration_request_executed",
+        payload,
+      });
+    } catch (error: unknown) {
+      console.error("[app-integrations] failed to record provider request completion", error);
+    }
   }
 
   async reconcileNangoAuthWebhook(payload: unknown) {
@@ -679,6 +755,9 @@ export class AppIntegrationService {
     if (typeof organizationId !== "string" || typeof ownerUserId !== "string") {
       throw new ValidationError("Nango webhook is missing Trace ownership tags");
     }
+    if (!supportedIntegrations().some((item) => item.providerConfigKey === providerConfigKey)) {
+      throw new ValidationError("Nango webhook references an unsupported integration");
+    }
     const membership = await prisma.orgMember.findUnique({
       where: { userId_organizationId: { userId: ownerUserId, organizationId } },
       select: { role: true },
@@ -695,10 +774,39 @@ export class AppIntegrationService {
       error && typeof error === "object" && "description" in error
         ? String((error as { description: unknown }).description)
         : null;
-    if (operation === "refresh" && success === false) {
-      await prisma.integrationConnection.updateMany({
-        where: { nangoConnectionId: connectionId, providerConfigKey },
-        data: { status: "error", lastError: lastError ?? "Credential refresh failed" },
+    if (operation === "refresh") {
+      const existing = await prisma.integrationConnection.findUnique({
+        where: {
+          providerConfigKey_nangoConnectionId: {
+            providerConfigKey,
+            nangoConnectionId: connectionId,
+          },
+        },
+      });
+      if (!existing) return;
+      if (existing.organizationId !== organizationId || existing.ownerUserId !== ownerUserId) {
+        throw new AuthorizationError("Nango connection ownership tags do not match Trace");
+      }
+      await prisma.$transaction(async (tx) => {
+        const connection = await tx.integrationConnection.update({
+          where: { id: existing.id },
+          data: {
+            status: success === false ? "error" : "active",
+            lastError: success === false ? (lastError ?? "Credential refresh failed") : null,
+          },
+        });
+        await eventService.create(
+          {
+            organizationId,
+            scopeType: "system",
+            scopeId: organizationId,
+            eventType: "integration_connection_updated",
+            payload: { connection: publicConnection(connection) },
+            actorType: "user",
+            actorId: ownerUserId,
+          },
+          tx,
+        );
       });
       return;
     }
@@ -711,8 +819,14 @@ export class AppIntegrationService {
       where: {
         providerConfigKey_nangoConnectionId: { providerConfigKey, nangoConnectionId: connectionId },
       },
-      select: { id: true },
+      select: { id: true, organizationId: true, ownerUserId: true },
     });
+    if (
+      existing &&
+      (existing.organizationId !== organizationId || existing.ownerUserId !== ownerUserId)
+    ) {
+      throw new AuthorizationError("Nango connection ownership tags do not match Trace");
+    }
     await prisma.$transaction(async (tx) => {
       const connection = await tx.integrationConnection.upsert({
         where: {
@@ -829,5 +943,3 @@ export class AppIntegrationService {
     }
   }
 }
-
-export const appIntegrationService = new AppIntegrationService();

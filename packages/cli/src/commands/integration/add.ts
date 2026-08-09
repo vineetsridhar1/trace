@@ -12,8 +12,8 @@ export const integrationAddCommand = defineCommand({
   path: ["integration", "add"],
   description: "Add or update a supported integration on the current Trace app",
   examples: [
-    "trace integration add github --capabilities profile --identity viewer --json",
-    "trace integration add snowflake --identity service --connection <connection-id> --json",
+    '"$TRACE_CLI" integration add github --capabilities profile --identity viewer --json',
+    '"$TRACE_CLI" integration add snowflake --identity service --connection <connection-id> --json',
   ],
   effects: [
     "Creates or updates one stable provider binding on the current app.",
@@ -23,7 +23,7 @@ export const integrationAddCommand = defineCommand({
   nextSteps: [
     "Follow the returned guides to call the stable integration ID from a generated Node route.",
     "Have React call only that same-origin app route.",
-    "Run integration list --json to verify app access.",
+    'Run "$TRACE_CLI" integration list --json to verify app access.',
   ],
   notes: [
     "Viewer identity is the default and must not include --connection.",
@@ -90,7 +90,9 @@ export const integrationAddCommand = defineCommand({
       usage(`--connection is required with ${executionIdentity} identity`);
     }
     const existing = bindings.find(
-      (binding) => binding.providerConfigKey === integration.providerConfigKey,
+      (binding) =>
+        binding.integrationId === integration.id ||
+        (!binding.integrationId && binding.providerConfigKey === integration.providerConfigKey),
     );
     const variables = {
       input: {

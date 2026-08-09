@@ -11,13 +11,13 @@ vi.mock("../lib/session-router.js", () => ({
   sessionRouter: { getRuntimeDescriptor: vi.fn(), sendToRuntimeAsync: vi.fn() },
 }));
 
-vi.mock("./app-integrations.js", () => ({
+vi.mock("./integration-services.js", () => ({
   appIntegrationService: { execute: vi.fn() },
 }));
 
 import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
-import { appIntegrationService } from "./app-integrations.js";
+import { appIntegrationService } from "./integration-services.js";
 import { verifyAppViewerContextToken } from "./app-viewer-context.js";
 import { createEndpointPreviewToken } from "./endpoint-preview-auth.js";
 import { EndpointProxyService } from "./endpoint-proxy.js";

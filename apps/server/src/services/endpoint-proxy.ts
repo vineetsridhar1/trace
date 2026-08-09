@@ -6,7 +6,7 @@ import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { parseCookieToken, verifyToken } from "../lib/auth.js";
 import { canViewSessionGroup } from "./access.js";
-import { appIntegrationService } from "./app-integrations.js";
+import { appIntegrationService } from "./integration-services.js";
 import { APP_VIEWER_CONTEXT_HEADER, createAppViewerContextToken } from "./app-viewer-context.js";
 import {
   AuthorizationError,

@@ -6,8 +6,8 @@ export const integrationConnectCommand = defineCommand({
   path: ["integration", "connect"],
   description: "Create an authorization link for a personal or organization service account",
   examples: [
-    "trace integration connect github --json",
-    "trace integration connect github --service --json",
+    '"$TRACE_CLI" integration connect github --json',
+    '"$TRACE_CLI" integration connect github --service --json',
   ],
   effects: [
     "Creates a short-lived provider authorization session.",
@@ -16,8 +16,8 @@ export const integrationConnectCommand = defineCommand({
   output: "The connectLink, its expiration time, integration ID, and personal or service kind.",
   nextSteps: [
     "Give connectLink to the user and wait for provider authorization to finish.",
-    "Run integration list --json to confirm the connection became active.",
-    "Run integration add to grant the current app least-privilege access.",
+    'Run "$TRACE_CLI" integration list --json to confirm the connection became active.',
+    'Run "$TRACE_CLI" integration add to grant the current app least-privilege access.',
   ],
   notes: [
     "Use --service only when the user explicitly requests an organization-owned identity; organization-admin permission is required.",

@@ -282,6 +282,7 @@ enum EventType {
   integration_connection_updated
   integration_connection_deleted
   app_integration_binding_updated
+  app_integration_request_started
   app_integration_request_executed
 }
 
@@ -1023,6 +1024,7 @@ model AppIntegrationBinding {
   sessionGroup        SessionGroup                 @relation(fields: [sessionGroupId], references: [id], onDelete: Cascade)
   createdByUserId     String
   createdByUser       User                         @relation("AppIntegrationBindingCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  integrationId       String?
   label               String
   provider            String
   providerConfigKey   String
@@ -1035,6 +1037,7 @@ model AppIntegrationBinding {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([sessionGroupId, integrationId])
   @@index([organizationId, sessionGroupId])
   @@index([sharedConnectionId])
 }

@@ -82,6 +82,7 @@ export type AppIntegrationBinding = {
   createdAt: Scalars["DateTime"]["output"];
   executionIdentity: IntegrationExecutionIdentity;
   id: Scalars["ID"]["output"];
+  integrationId?: Maybe<Scalars["String"]["output"]>;
   label: Scalars["String"]["output"];
   provider: Scalars["String"]["output"];
   providerConfigKey: Scalars["String"]["output"];
@@ -373,9 +374,8 @@ export type CreateDesignSystemInput = {
 
 export type CreateNangoConnectSessionInput = {
   displayName?: InputMaybe<Scalars["String"]["input"]>;
-  integrationId?: InputMaybe<Scalars["String"]["input"]>;
+  integrationId: Scalars["String"]["input"];
   kind?: InputMaybe<IntegrationConnectionKind>;
-  providerConfigKey?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type CreateOrganizationInput = {
@@ -706,6 +706,7 @@ export type EventType =
   | "animation_preview_updated"
   | "app_integration_binding_updated"
   | "app_integration_request_executed"
+  | "app_integration_request_started"
   | "application_config_updated"
   | "artifact_approved"
   | "artifact_created"
@@ -2961,15 +2962,11 @@ export type UpdateTicketInput = {
 };
 
 export type UpsertAppIntegrationBindingInput = {
-  allowedMethods?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  allowedPathPrefixes?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  capabilityIds?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  capabilityIds: Array<Scalars["String"]["input"]>;
   executionIdentity: IntegrationExecutionIdentity;
   id?: InputMaybe<Scalars["ID"]["input"]>;
-  integrationId?: InputMaybe<Scalars["String"]["input"]>;
+  integrationId: Scalars["String"]["input"];
   label?: InputMaybe<Scalars["String"]["input"]>;
-  provider?: InputMaybe<Scalars["String"]["input"]>;
-  providerConfigKey?: InputMaybe<Scalars["String"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
   sharedConnectionId?: InputMaybe<Scalars["ID"]["input"]>;
 };
@@ -4176,6 +4173,7 @@ export type AppIntegrationsQuery = {
   appIntegrationBindings: Array<{
     __typename?: "AppIntegrationBinding";
     id: string;
+    integrationId?: string | null;
     sessionGroupId: string;
     label: string;
     provider: string;
@@ -4198,6 +4196,7 @@ export type UpsertAppIntegrationBindingMutation = {
   upsertAppIntegrationBinding: {
     __typename?: "AppIntegrationBinding";
     id: string;
+    integrationId?: string | null;
     sessionGroupId: string;
     label: string;
     provider: string;
@@ -9291,6 +9290,7 @@ export const AppIntegrationsDocument = {
               kind: "SelectionSet",
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "integrationId" } },
                 { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
                 { kind: "Field", name: { kind: "Name", value: "label" } },
                 { kind: "Field", name: { kind: "Name", value: "provider" } },
@@ -9346,6 +9346,7 @@ export const UpsertAppIntegrationBindingDocument = {
               kind: "SelectionSet",
               selections: [
                 { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "integrationId" } },
                 { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
                 { kind: "Field", name: { kind: "Name", value: "label" } },
                 { kind: "Field", name: { kind: "Name", value: "provider" } },
