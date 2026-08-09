@@ -34,12 +34,14 @@ describe("Trace CLI", () => {
     vi.stubEnv("TRACE_SESSION_ID", "session-1");
     vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-1");
     vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
-    vi.stubEnv("TRACE_SERVER_URL", "https://trace.test");
+    vi.stubEnv("TRACE_SERVER_URL", "http://localhost:4000");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test");
 
     await expect(run(["context", "--json"])).resolves.toBe(0);
     const output = stdout.mock.calls.flat().join("");
     expect(output).toContain('"sessionId":"session-1"');
     expect(output).toContain('"authentication":"session"');
+    expect(output).toContain('"serverUrl":"https://trace.test"');
     expect(output).not.toContain("injected-agent-secret");
   });
 
@@ -59,8 +61,10 @@ describe("Trace CLI", () => {
     vi.stubEnv("TRACE_SESSION_ID", "session-1");
     vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-1");
     vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
-    vi.stubEnv("TRACE_SERVER_URL", "https://trace.test");
-    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+    vi.stubEnv("TRACE_SERVER_URL", "http://localhost:4000");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    const fetchMock = vi.fn(async (url: URL, init?: RequestInit) => {
+      expect(url.toString()).toBe("https://trace.test/graphql");
       const request = JSON.parse(String(init?.body)) as {
         variables: { input: Record<string, unknown> };
       };

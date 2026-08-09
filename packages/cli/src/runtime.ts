@@ -53,7 +53,10 @@ export async function createCommandContext(
           "authentication",
         );
       }
-      const serverUrl = env.TRACE_SERVER_URL || env.TRACE_API_URL;
+      // The bridge resolves its WebSocket server URL into an HTTP(S) API URL.
+      // Prefer that reachable runtime-specific value over the service fallback,
+      // which may point at localhost from inside a cloud container.
+      const serverUrl = env.TRACE_API_URL || env.TRACE_SERVER_URL;
       if (!serverUrl) {
         throw new CliError(
           "The Trace server URL is unavailable in this session",

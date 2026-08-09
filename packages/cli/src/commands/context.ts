@@ -6,7 +6,7 @@ export const contextCommand: Command = {
   description: "Show the selected Trace server, organization, and session context",
   async run(ctx) {
     const value = {
-      serverUrl: ctx.env.TRACE_SERVER_URL || ctx.env.TRACE_API_URL || null,
+      serverUrl: ctx.env.TRACE_API_URL || ctx.env.TRACE_SERVER_URL || null,
       organizationId: ctx.env.TRACE_ORGANIZATION_ID || null,
       sessionId: ctx.env.TRACE_SESSION_ID || null,
       sessionGroupId: ctx.env.TRACE_SESSION_GROUP_ID || null,
