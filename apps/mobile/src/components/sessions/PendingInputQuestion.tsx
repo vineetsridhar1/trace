@@ -46,6 +46,12 @@ export function PendingInputQuestion({ sessionId, questions, hasActivePlan, onCl
     if (isLastPage) setReviewing(true);
     else state.goNext();
   };
+  const letAgentDecide = () => {
+    void haptic.selection();
+    state.decideForMe();
+    if (isLastPage) setReviewing(true);
+    else state.goNext();
+  };
   const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
   const primaryLabel = sending
     ? "Sending…"
@@ -73,7 +79,7 @@ export function PendingInputQuestion({ sessionId, questions, hasActivePlan, onCl
             </View>
             <QuestionFlowControl question={question} type={type} selected={currentSelected} custom={currentCustom} ranking={currentRanking} onToggle={state.toggleOption} onCustom={state.setCustomText} onMove={state.moveRankOption} />
             {validationMessage ? <Text variant="caption1" style={styles.error}>{validationMessage}</Text> : null}
-            <Pressable onPress={state.decideForMe} style={styles.decide}><Text variant="subheadline" style={styles.muted}>You decide</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Let the agent decide" onPress={letAgentDecide} style={styles.decide}><Text variant="subheadline" style={styles.muted}>You decide</Text></Pressable>
           </>
         )}
       </ScrollView>
