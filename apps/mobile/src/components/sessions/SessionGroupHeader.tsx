@@ -10,6 +10,7 @@ import { getClient } from "@/lib/urql";
 import { useMobileUIStore } from "@/stores/ui";
 import { useTheme } from "@/theme";
 import { SessionActionsMenu, type SessionMenuAction } from "./SessionActionsMenu";
+import { DesignPickerSheetContent } from "./DesignPickerSheetContent";
 import { SessionMovePickerSheetContent } from "./SessionMovePickerSheetContent";
 import { SessionTabSwitcherSheet } from "./SessionTabSwitcherSheet";
 import { SessionGroupTitleMenu } from "./SessionGroupTitleMenu";
@@ -36,6 +37,10 @@ export function SessionGroupHeader({
   const theme = useTheme();
   const router = useRouter();
   const prUrl = useEntityField("sessionGroups", groupId, "prUrl");
+  const sessionGroupKind = useEntityField("sessionGroups", groupId, "kind") as
+    | string
+    | null
+    | undefined;
   const status = useEntityField("sessionGroups", groupId, "status");
   const archivedAt = useEntityField("sessionGroups", groupId, "archivedAt");
   const sessionGroupChannel = useEntityField("sessionGroups", groupId, "channel") as
@@ -68,6 +73,10 @@ export function SessionGroupHeader({
     | string
     | null
     | undefined;
+  const agentStatus = useEntityField("sessions", sessionId ?? "", "agentStatus") as
+    | string
+    | null
+    | undefined;
   const hosting = useEntityField("sessions", sessionId ?? "", "hosting") as
     | string
     | null
@@ -92,6 +101,7 @@ export function SessionGroupHeader({
   const [leadingWidth, setLeadingWidth] = useState(0);
   const [tabSwitcherOpen, setTabSwitcherOpen] = useState(false);
   const [moveSheetOpen, setMoveSheetOpen] = useState(false);
+  const [designPickerOpen, setDesignPickerOpen] = useState(false);
   const handleRowLayout = useCallback((e: LayoutChangeEvent) => {
     setRowWidth(e.nativeEvent.layout.width);
   }, []);
@@ -148,9 +158,18 @@ export function SessionGroupHeader({
   const handleOpenMoveSheet = useCallback(() => {
     setMoveSheetOpen(true);
   }, []);
+  const handleOpenDesignPicker = useCallback(() => {
+    setDesignPickerOpen(true);
+  }, []);
   const setupBlocking = Boolean(setupScript) && setupStatus === "running";
   const canRunScripts =
     runScripts.length > 0 && !!sessionId && !sessionOptimistic && !setupBlocking;
+  const canImplementDesign =
+    sessionGroupKind === "coding" &&
+    !!sessionId &&
+    !sessionOptimistic &&
+    !mergedUnavailable &&
+    agentStatus !== "active";
   const handleRunScripts = useCallback(() => {
     if (!sessionId || runScripts.length === 0) return;
     if (setupBlocking) {
@@ -202,6 +221,13 @@ export function SessionGroupHeader({
         onPress: handleRunScripts,
       });
     }
+    if (canImplementDesign) {
+      items.push({
+        title: "Implement a design",
+        systemIcon: "square.on.square",
+        onPress: handleOpenDesignPicker,
+      });
+    }
     if (canMoveSession) {
       items.push({
         title: "Move session",
@@ -230,8 +256,10 @@ export function SessionGroupHeader({
     canShowApplications,
     canMoveSession,
     canRunScripts,
+    canImplementDesign,
     handleArchive,
     handleOpenMoveSheet,
+    handleOpenDesignPicker,
     handleOpenApplications,
     handleOpenWorkspace,
     handleOpenTabSwitcher,
@@ -288,6 +316,17 @@ export function SessionGroupHeader({
           <SessionMovePickerSheetContent
             sessionId={sessionId}
             onClose={() => setMoveSheetOpen(false)}
+          />
+        </SessionComposerBottomSheet>
+      ) : null}
+      {sessionId ? (
+        <SessionComposerBottomSheet
+          visible={designPickerOpen}
+          onClose={() => setDesignPickerOpen(false)}
+        >
+          <DesignPickerSheetContent
+            sessionId={sessionId}
+            onClose={() => setDesignPickerOpen(false)}
           />
         </SessionComposerBottomSheet>
       ) : null}
