@@ -105,10 +105,11 @@ var artifactCommand = {
       }
       const result = await response.json().catch(() => ({}));
       if (!response.ok || typeof result.artifact?.id !== "string") {
+        const error = response.status === 401 ? { exitCode: ExitCode.authentication, category: "authentication" } : response.status === 403 ? { exitCode: ExitCode.authorization, category: "authorization" } : response.status >= 400 && response.status < 500 ? { exitCode: ExitCode.validation, category: "validation" } : { exitCode: ExitCode.server, category: "server" };
         throw new CliError(
           `${typeof result.error === "string" ? result.error : "Artifact upload failed"}; retry with --idempotency-key ${idempotencyKey}`,
-          response.status === 401 ? ExitCode.authentication : ExitCode.server,
-          response.status === 401 ? "authentication" : "server"
+          error.exitCode,
+          error.category
         );
       }
       ctx.output(
@@ -723,6 +724,7 @@ var sessionCommands = [
 ];
 
 // src/client.ts
+var CONNECTION_ACK_TIMEOUT_MS = 1e4;
 function errorFromStatus(status, message) {
   if (status === 401) return new CliError(message, ExitCode.authentication, "authentication");
   if (status === 403) return new CliError(message, ExitCode.authorization, "authorization");
@@ -812,8 +814,31 @@ var TraceClient = class {
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(url, "graphql-transport-ws");
     await new Promise((resolve2, reject) => {
-      let subscribed = false;
-      const close = () => socket.close(1e3, "CLI stopped following");
+      let acknowledged = false;
+      let completed = false;
+      let failed = false;
+      let stopped = false;
+      const fail = (error) => {
+        if (failed) return;
+        failed = true;
+        clearTimeout(ackTimeout);
+        reject(error);
+      };
+      const close = () => {
+        stopped = true;
+        clearTimeout(ackTimeout);
+        socket.close(1e3, "CLI stopped following");
+      };
+      const ackTimeout = setTimeout(() => {
+        fail(
+          new CliError(
+            `Trace did not acknowledge the subscription connection within ${CONNECTION_ACK_TIMEOUT_MS / 1e3} seconds`,
+            ExitCode.connectivity,
+            "connectivity"
+          )
+        );
+        socket.close(1e3, "Connection acknowledgement timed out");
+      }, CONNECTION_ACK_TIMEOUT_MS);
       process.once("SIGINT", close);
       socket.addEventListener("open", () => {
         socket.send(
@@ -834,8 +859,9 @@ var TraceClient = class {
         } catch {
           return;
         }
-        if (payload.type === "connection_ack" && !subscribed) {
-          subscribed = true;
+        if (payload.type === "connection_ack" && !acknowledged) {
+          acknowledged = true;
+          clearTimeout(ackTimeout);
           socket.send(
             JSON.stringify({ id: "trace-cli", type: "subscribe", payload: { query, variables } })
           );
@@ -843,20 +869,44 @@ var TraceClient = class {
           onData(payload.payload.data);
         } else if (payload.type === "error") {
           const errors = Array.isArray(payload.payload) ? payload.payload : [];
-          reject(graphQlError(errors[0] ?? {}));
+          fail(graphQlError(errors[0] ?? {}));
           socket.close();
         } else if (payload.type === "complete") {
+          completed = true;
           socket.close(1e3, "Subscription completed");
         }
       });
       socket.addEventListener("error", () => {
-        reject(
+        fail(
           new CliError(`Could not connect to ${url.origin}`, ExitCode.connectivity, "connectivity")
         );
+        socket.close();
       });
-      socket.addEventListener("close", () => {
+      socket.addEventListener("close", (event) => {
+        clearTimeout(ackTimeout);
         process.removeListener("SIGINT", close);
-        resolve2();
+        if (failed) return;
+        if (stopped || completed) {
+          resolve2();
+          return;
+        }
+        if (!acknowledged && (event.code === 4401 || event.code === 4403)) {
+          fail(
+            new CliError(
+              event.reason || "Trace rejected the subscription credential",
+              ExitCode.authentication,
+              "authentication"
+            )
+          );
+          return;
+        }
+        fail(
+          new CliError(
+            event.reason || `Trace subscription closed unexpectedly (${event.code})`,
+            ExitCode.connectivity,
+            "connectivity"
+          )
+        );
       });
     });
   }

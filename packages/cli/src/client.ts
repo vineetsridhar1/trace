@@ -10,6 +10,8 @@ type GraphQlResponse<T> = {
   errors?: GraphQlError[];
 };
 
+const CONNECTION_ACK_TIMEOUT_MS = 10_000;
+
 function errorFromStatus(status: number, message: string): CliError {
   if (status === 401) return new CliError(message, ExitCode.authentication, "authentication");
   if (status === 403) return new CliError(message, ExitCode.authorization, "authorization");
@@ -112,8 +114,31 @@ export class TraceClient {
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(url, "graphql-transport-ws");
     await new Promise<void>((resolve, reject) => {
-      let subscribed = false;
-      const close = () => socket.close(1000, "CLI stopped following");
+      let acknowledged = false;
+      let completed = false;
+      let failed = false;
+      let stopped = false;
+      const fail = (error: CliError) => {
+        if (failed) return;
+        failed = true;
+        clearTimeout(ackTimeout);
+        reject(error);
+      };
+      const close = () => {
+        stopped = true;
+        clearTimeout(ackTimeout);
+        socket.close(1000, "CLI stopped following");
+      };
+      const ackTimeout = setTimeout(() => {
+        fail(
+          new CliError(
+            `Trace did not acknowledge the subscription connection within ${CONNECTION_ACK_TIMEOUT_MS / 1_000} seconds`,
+            ExitCode.connectivity,
+            "connectivity",
+          ),
+        );
+        socket.close(1000, "Connection acknowledgement timed out");
+      }, CONNECTION_ACK_TIMEOUT_MS);
       process.once("SIGINT", close);
       socket.addEventListener("open", () => {
         socket.send(
@@ -137,8 +162,9 @@ export class TraceClient {
         } catch {
           return;
         }
-        if (payload.type === "connection_ack" && !subscribed) {
-          subscribed = true;
+        if (payload.type === "connection_ack" && !acknowledged) {
+          acknowledged = true;
+          clearTimeout(ackTimeout);
           socket.send(
             JSON.stringify({ id: "trace-cli", type: "subscribe", payload: { query, variables } }),
           );
@@ -151,20 +177,44 @@ export class TraceClient {
           onData(payload.payload.data);
         } else if (payload.type === "error") {
           const errors = Array.isArray(payload.payload) ? payload.payload : [];
-          reject(graphQlError(errors[0] ?? {}));
+          fail(graphQlError(errors[0] ?? {}));
           socket.close();
         } else if (payload.type === "complete") {
+          completed = true;
           socket.close(1000, "Subscription completed");
         }
       });
       socket.addEventListener("error", () => {
-        reject(
+        fail(
           new CliError(`Could not connect to ${url.origin}`, ExitCode.connectivity, "connectivity"),
         );
+        socket.close();
       });
-      socket.addEventListener("close", () => {
+      socket.addEventListener("close", (event) => {
+        clearTimeout(ackTimeout);
         process.removeListener("SIGINT", close);
-        resolve();
+        if (failed) return;
+        if (stopped || completed) {
+          resolve();
+          return;
+        }
+        if (!acknowledged && (event.code === 4401 || event.code === 4403)) {
+          fail(
+            new CliError(
+              event.reason || "Trace rejected the subscription credential",
+              ExitCode.authentication,
+              "authentication",
+            ),
+          );
+          return;
+        }
+        fail(
+          new CliError(
+            event.reason || `Trace subscription closed unexpectedly (${event.code})`,
+            ExitCode.connectivity,
+            "connectivity",
+          ),
+        );
       });
     });
   }

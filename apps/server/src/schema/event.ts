@@ -1,5 +1,6 @@
 import type { Context } from "../context.js";
 import type { ScopeInput, EventType } from "@trace/gql";
+import { GraphQLError } from "graphql";
 import { eventService } from "../services/event.js";
 import { sessionTimelineService } from "../services/session-timeline.js";
 import { pubsub, topics } from "../lib/pubsub.js";
@@ -14,6 +15,9 @@ import {
 } from "../services/access.js";
 import { assertOrgAccess, requireOrgContext } from "../lib/require-org.js";
 import { prisma } from "../lib/db.js";
+
+const SESSION_EVENT_REPLAY_BATCH_SIZE = 500;
+const SESSION_EVENT_REPLAY_LIMIT = 1_000;
 
 const CHANNEL_MESSAGE_EVENTS = new Set<EventType>([
   "message_sent",
@@ -546,22 +550,32 @@ export const eventSubscriptions = {
         let afterEventId = args.afterEventId ?? undefined;
         try {
           if (after) {
+            const replayed: Awaited<ReturnType<typeof eventService.query>> = [];
             while (true) {
+              const remaining = SESSION_EVENT_REPLAY_LIMIT - replayed.length;
+              const queryLimit = Math.min(SESSION_EVENT_REPLAY_BATCH_SIZE, remaining + 1);
               const replay = await eventService.query(args.organizationId, {
                 scopeType: "session",
                 scopeId: args.sessionId,
                 after,
                 afterEventId,
-                limit: 500,
+                limit: queryLimit,
               });
-              for (const event of replay) {
-                seenIds.add(event.id);
-                yield { sessionEvents: event };
+              if (replay.length > remaining) {
+                throw new GraphQLError(
+                  `Session event replay exceeds ${SESSION_EVENT_REPLAY_LIMIT} events; take a new snapshot and follow from its latest cursor`,
+                  { extensions: { code: "BAD_USER_INPUT" } },
+                );
               }
+              replayed.push(...replay);
               const last = replay.at(-1);
-              if (!last || replay.length < 500) break;
+              if (!last || replay.length < queryLimit) break;
               after = last.timestamp;
               afterEventId = last.id;
+            }
+            for (const event of replayed) {
+              seenIds.add(event.id);
+              yield { sessionEvents: event };
             }
           }
           for await (const payload of liveIterator) {

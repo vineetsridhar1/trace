@@ -586,6 +586,39 @@ describe("GraphQL authz guards", () => {
     });
   });
 
+  it("rejects an event replay that exceeds the bounded follow window", async () => {
+    const eventAt = (index: number) => ({
+      id: `event-${String(index).padStart(4, "0")}`,
+      organizationId: "org-1",
+      scopeType: "session",
+      scopeId: "session-1",
+      eventType: "session_output" as const,
+      payload: {},
+      actorType: "agent" as const,
+      actorId: "agent-1",
+      parentId: null,
+      metadata: {},
+      timestamp: new Date(1_700_000_000_000 + index),
+    });
+    vi.mocked(eventService.query)
+      .mockResolvedValueOnce(Array.from({ length: 500 }, (_, index) => eventAt(index + 1)))
+      .mockResolvedValueOnce(Array.from({ length: 500 }, (_, index) => eventAt(index + 501)))
+      .mockResolvedValueOnce([eventAt(1_001)]);
+
+    const filtered = await eventSubscriptions.sessionEvents.subscribe(
+      {},
+      {
+        sessionId: "session-1",
+        organizationId: "org-1",
+        after: new Date("2020-01-01T00:00:00.000Z"),
+      },
+      ctx,
+    );
+
+    await expect(filtered.next()).rejects.toThrow("replay exceeds 1000 events");
+    expect(eventService.query).toHaveBeenCalledTimes(3);
+  });
+
   it("filters org event subscriptions for hidden private channel events", async () => {
     const events = [
       {

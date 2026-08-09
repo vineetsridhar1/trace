@@ -75,6 +75,59 @@ const SESSION_SELECTIONS = [
 ] as const;
 const EVENT_SELECTIONS = ["id", "eventType", "scopeType", "scopeId", "timestamp", "payload"];
 
+const ALLOWED_ARGUMENTS: Record<RootOperation, Readonly<Record<string, readonly string[]>>> = {
+  Query: {
+    channels: ["organizationId", "memberOnly"],
+    channel: ["id"],
+    repos: ["organizationId"],
+    repo: ["id"],
+    projects: ["organizationId", "repoId"],
+    project: ["id"],
+    sessions: [
+      "organizationId",
+      "filters.agentStatus",
+      "filters.tool",
+      "filters.repoId",
+      "filters.channelId",
+      "filters.includeArchived",
+      "filters.includeMerged",
+      "filters.limit",
+    ],
+    session: ["id"],
+    events: ["organizationId", "scope.type", "scope.id", "limit", "before"],
+  },
+  Mutation: {
+    startSession: [
+      "input.clientMutationId",
+      "input.kind",
+      "input.tool",
+      "input.model",
+      "input.reasoningEffort",
+      "input.visibility",
+      "input.environmentId",
+      "input.hosting",
+      "input.runtimeInstanceId",
+      "input.deferRuntimeSelection",
+      "input.repoId",
+      "input.branch",
+      "input.ticketId",
+      "input.channelId",
+      "input.sessionGroupId",
+      "input.projectId",
+      "input.prompt",
+      "input.interactionMode",
+    ],
+    sendSessionMessage: ["sessionId", "text", "interactionMode", "clientMutationId"],
+    queueSessionMessage: ["sessionId", "text", "interactionMode"],
+    runSession: ["id", "prompt", "interactionMode"],
+    terminateSession: ["id"],
+    archiveSessionGroup: ["id"],
+  },
+  Subscription: {
+    sessionEvents: ["sessionId", "organizationId", "after", "afterEventId"],
+  },
+};
+
 const ALLOWED_SELECTIONS: Record<RootOperation, Readonly<Record<string, readonly string[]>>> = {
   Query: {
     ...RESOURCE_SELECTIONS,
@@ -97,6 +150,30 @@ const ALLOWED_SELECTIONS: Record<RootOperation, Readonly<Record<string, readonly
 
 function forbidden(message: string): never {
   throw new GraphQLError(message, { extensions: { code: "FORBIDDEN" } });
+}
+
+function assertAllowedArguments(
+  operation: RootOperation,
+  field: string,
+  args: Record<string, unknown>,
+): void {
+  const allowed = new Set(ALLOWED_ARGUMENTS[operation][field] ?? []);
+
+  const visit = (value: Record<string, unknown>, prefix: string): void => {
+    for (const [name, child] of Object.entries(value)) {
+      const path = prefix ? `${prefix}.${name}` : name;
+      const isAllowed = allowed.has(path);
+      const hasAllowedChild = [...allowed].some((candidate) => candidate.startsWith(`${path}.`));
+      if (!isAllowed && !hasAllowedChild) {
+        forbidden(`The session credential cannot pass ${operation}.${field}.${path}`);
+      }
+      if (child && typeof child === "object" && !Array.isArray(child) && !(child instanceof Date)) {
+        visit(child as Record<string, unknown>, path);
+      }
+    }
+  };
+
+  visit(args, "");
 }
 
 function assertAllowedSelectionSet(
@@ -146,6 +223,7 @@ function assertAgentRequest(
   if (!capability || !ctx.agentCapabilities?.includes(capability)) {
     forbidden(`The session credential cannot perform ${operation}.${field}`);
   }
+  assertAllowedArguments(operation, field, args);
   if (info) assertAllowedSelectionSet(operation, field, info);
 
   const input =

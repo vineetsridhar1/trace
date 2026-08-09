@@ -103,4 +103,39 @@ describe("agent GraphQL authorization", () => {
       ),
     ).toThrow("cannot select Query.channel.owner");
   });
+
+  it("allows only the start-session inputs exposed by the managed CLI", () => {
+    const resolver = vi.fn(() => "ok");
+    const restricted = restrictAgentRootResolvers("Mutation", { startSession: resolver });
+    const info = infoFor(`mutation { startSession(input: {}) { id } }`);
+
+    expect(
+      restricted.startSession(
+        null,
+        { input: { clientMutationId: "start-1", prompt: "Review", repoId: "repo-1" } },
+        context("session-a"),
+        info,
+      ),
+    ).toBe("ok");
+    expect(() =>
+      restricted.startSession(
+        null,
+        { input: { repoId: "repo-1", worktreePath: "/Users/owner/private" } },
+        context("session-a"),
+        info,
+      ),
+    ).toThrow("cannot pass Mutation.startSession.input.worktreePath");
+  });
+
+  it("rejects non-CLI nested query filters", () => {
+    const restricted = restrictAgentRootResolvers("Query", { sessions: () => [] });
+    expect(() =>
+      restricted.sessions(
+        null,
+        { organizationId: "org-1", filters: { includeArchived: true, userId: "owner-2" } },
+        context("session-a"),
+        infoFor(`query { sessions(organizationId: "org-1") { id } }`),
+      ),
+    ).toThrow("cannot pass Query.sessions.filters.userId");
+  });
 });

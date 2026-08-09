@@ -64,6 +64,8 @@ Explicit cloud requests fail if cloud is unavailable and are never downgraded to
 
 With `--json`, each successful command prints exactly one JSON object followed by a newline. Event
 follow mode prints the snapshot object first and then one `{ "event": ... }` object per event.
+If more than 1,000 events accumulated after the snapshot cursor, follow mode asks the caller to take
+a new snapshot instead of replaying an unbounded history.
 
 | Command          | JSON shape                                                                 |
 | ---------------- | -------------------------------------------------------------------------- |

@@ -91,10 +91,18 @@ export const artifactCommand: Command = {
         artifact?: { id?: unknown };
       };
       if (!response.ok || typeof result.artifact?.id !== "string") {
+        const error =
+          response.status === 401
+            ? { exitCode: ExitCode.authentication, category: "authentication" }
+            : response.status === 403
+              ? { exitCode: ExitCode.authorization, category: "authorization" }
+              : response.status >= 400 && response.status < 500
+                ? { exitCode: ExitCode.validation, category: "validation" }
+                : { exitCode: ExitCode.server, category: "server" };
         throw new CliError(
           `${typeof result.error === "string" ? result.error : "Artifact upload failed"}; retry with --idempotency-key ${idempotencyKey}`,
-          response.status === 401 ? ExitCode.authentication : ExitCode.server,
-          response.status === 401 ? "authentication" : "server",
+          error.exitCode,
+          error.category,
         );
       }
       ctx.output(

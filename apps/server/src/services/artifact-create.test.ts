@@ -100,4 +100,18 @@ describe("ArtifactService.create storage lifecycle", () => {
     const uploadedKey = asMock(storage.putObject).mock.calls[0]?.[0];
     expect(storage.deleteObject).toHaveBeenCalledWith(uploadedKey);
   });
+
+  it("does not replay an artifact after its invocation is no longer active", async () => {
+    asMock(prisma.session.findFirst).mockResolvedValueOnce(null);
+    asMock(prisma.artifact.findUnique).mockResolvedValueOnce({
+      id: "artifact-1",
+      ...createInput,
+      type: "trace.visual-plan.v1",
+    } as never);
+
+    await expect(
+      artifactService.create({ ...createInput, archive: await planArchive() }),
+    ).rejects.toThrow("invocation is no longer active");
+    expect(prisma.artifact.findUnique).not.toHaveBeenCalled();
+  });
 });

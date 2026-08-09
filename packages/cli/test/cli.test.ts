@@ -531,6 +531,25 @@ describe("Trace CLI", () => {
     expect(stdout.mock.calls.flat().join("")).toContain('"idempotencyKey":"artifact-key-1"');
   });
 
+  it("classifies rejected artifact bundles as validation errors", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "Invalid artifact manifest" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(run(["artifact", "push", "file-bundle", "package.json", "--json"])).resolves.toBe(
+      4,
+    );
+    expect(stderr.mock.calls.flat().join("")).toContain('"category":"validation"');
+  });
+
   it("surfaces graphql-transport-ws operation errors", async () => {
     class FakeWebSocket {
       private listeners = new Map<string, Array<(event: { data?: string }) => void>>();
@@ -574,5 +593,87 @@ describe("Trace CLI", () => {
     await expect(
       client.subscribe("subscription { sessionEvents { id } }", {}, () => undefined),
     ).rejects.toMatchObject({ message: "Nested field denied", category: "authorization" });
+  });
+
+  it("reports a rejected subscription handshake as authentication failure", async () => {
+    class RejectedWebSocket {
+      private listeners = new Map<
+        string,
+        Array<(event: { code?: number; reason?: string }) => void>
+      >();
+
+      constructor() {
+        queueMicrotask(() => this.emit("open", {}));
+      }
+
+      addEventListener(
+        type: string,
+        listener: (event: { code?: number; reason?: string }) => void,
+      ) {
+        const listeners = this.listeners.get(type) ?? [];
+        listeners.push(listener);
+        this.listeners.set(type, listeners);
+      }
+
+      send(raw: string) {
+        const message = JSON.parse(raw) as { type?: string };
+        if (message.type === "connection_init") {
+          queueMicrotask(() => this.emit("close", { code: 4403, reason: "Forbidden" }));
+        }
+      }
+
+      close() {}
+
+      private emit(type: string, event: { code?: number; reason?: string }) {
+        for (const listener of this.listeners.get(type) ?? []) listener(event);
+      }
+    }
+    vi.stubGlobal("WebSocket", RejectedWebSocket);
+    const client = new TraceClient("https://trace.test", "expired-token", "org-1");
+
+    await expect(
+      client.subscribe("subscription { sessionEvents { id } }", {}, () => undefined),
+    ).rejects.toMatchObject({ category: "authentication", exitCode: 2 });
+  });
+
+  it("times out a subscription handshake that is never acknowledged", async () => {
+    vi.useFakeTimers();
+    class SilentWebSocket {
+      private listeners = new Map<string, Array<(event: { code?: number }) => void>>();
+
+      constructor() {
+        queueMicrotask(() => this.emit("open", {}));
+      }
+
+      addEventListener(type: string, listener: (event: { code?: number }) => void) {
+        const listeners = this.listeners.get(type) ?? [];
+        listeners.push(listener);
+        this.listeners.set(type, listeners);
+      }
+
+      send() {}
+      close() {
+        this.emit("close", { code: 1000 });
+      }
+
+      private emit(type: string, event: { code?: number }) {
+        for (const listener of this.listeners.get(type) ?? []) listener(event);
+      }
+    }
+    vi.stubGlobal("WebSocket", SilentWebSocket);
+    const client = new TraceClient("https://trace.test", "token", "org-1");
+    const subscription = client.subscribe(
+      "subscription { sessionEvents { id } }",
+      {},
+      () => undefined,
+    );
+    const rejection = expect(subscription).rejects.toMatchObject({
+      category: "connectivity",
+      exitCode: 5,
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await rejection;
+    vi.useRealTimers();
   });
 });
