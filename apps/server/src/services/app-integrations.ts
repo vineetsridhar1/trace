@@ -368,14 +368,10 @@ export class AppIntegrationService {
   async deleteConnection(organizationId: string, userId: string, role: Role, id: string) {
     const connection = await prisma.integrationConnection.findFirst({
       where: { id, organizationId, status: { not: "revoked" } },
-      include: { _count: { select: { sharedBindings: true } } },
     });
     if (!connection) throw new NotFoundError("Integration connection", id);
     if (connection.ownerUserId !== userId && role !== "admin") {
       throw new AuthorizationError("Only the connection owner or an org admin can disconnect it");
-    }
-    if (connection._count.sharedBindings > 0) {
-      throw new ValidationError("Remove this connection from applications before disconnecting it");
     }
     await this.connectionProvider.deleteConnection(
       connection.nangoConnectionId,

@@ -30,6 +30,7 @@ import type { IntegrationRequestAuditStore } from "./integration-request-audit.j
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const nangoMock = nangoConnectionProvider as unknown as {
   createConnectSession: ReturnType<typeof vi.fn>;
+  deleteConnection: ReturnType<typeof vi.fn>;
   proxy: ReturnType<typeof vi.fn>;
 };
 const eventMock = eventService as unknown as { create: ReturnType<typeof vi.fn> };
@@ -115,6 +116,37 @@ describe("AppIntegrationService", () => {
       },
       orderBy: [{ provider: "asc" }, { displayName: "asc" }],
     });
+  });
+
+  it("disconnects a connection without removing its application bindings", async () => {
+    prismaMock.integrationConnection.findFirst.mockResolvedValue({
+      id: "connection-1",
+      organizationId: "org-1",
+      ownerUserId: "viewer-1",
+      nangoConnectionId: "nango-1",
+      provider: "github",
+      providerConfigKey: "github-getting-started",
+      status: "active",
+    });
+
+    await service().deleteConnection("org-1", "viewer-1", "member", "connection-1");
+
+    expect(nangoMock.deleteConnection).toHaveBeenCalledWith(
+      "nango-1",
+      "github-getting-started",
+    );
+    expect(prismaMock.integrationConnection.update).toHaveBeenCalledWith({
+      where: { id: "connection-1" },
+      data: { status: "revoked", lastError: null },
+    });
+    expect(prismaMock.appIntegrationBinding.delete).not.toHaveBeenCalled();
+    expect(eventMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "integration_connection_deleted",
+        payload: { connectionId: "connection-1", provider: "github" },
+      }),
+      expect.any(Object),
+    );
   });
 
   it("expands selected capabilities into server-controlled binding permissions", async () => {

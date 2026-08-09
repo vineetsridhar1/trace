@@ -11,6 +11,7 @@ import { client } from "../../lib/urql";
 import { useIntegrationStore } from "../../stores/integrations";
 import { Button } from "../ui/button";
 import { IntegrationConnectDialog } from "./IntegrationConnectDialog";
+import { IntegrationDisconnectDialog } from "./IntegrationDisconnectDialog";
 import { IntegrationProviderCard } from "./IntegrationProviderCard";
 import { SettingsStatusPill } from "./SettingsStatusPill";
 import {
@@ -38,6 +39,10 @@ export function NangoConnectionsSection() {
   const [connectIntegration, setConnectIntegration] = useState<SupportedAppIntegration | null>(
     null,
   );
+  const [disconnectConnection, setDisconnectConnection] = useState<IntegrationConnection | null>(
+    null,
+  );
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const refresh = useCallback(async () => {
     const result = await client
@@ -85,15 +90,19 @@ export function NangoConnectionsSection() {
   };
 
   const disconnect = async (connection: IntegrationConnection) => {
-    if (!window.confirm(`Disconnect ${connection.displayName}?`)) return;
-    const result = await client
-      .mutation(DELETE_INTEGRATION_CONNECTION_MUTATION, { id: connection.id })
-      .toPromise();
-    if (result.error) {
-      toast.error(result.error.message);
-      return;
+    setDisconnecting(true);
+    try {
+      const result = await client
+        .mutation(DELETE_INTEGRATION_CONNECTION_MUTATION, { id: connection.id })
+        .toPromise();
+      if (result.error) throw new Error(result.error.message);
+      setDisconnectConnection(null);
+      toast.success("Connection removed");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to disconnect");
+    } finally {
+      setDisconnecting(false);
     }
-    toast.success("Connection removed");
   };
 
   return (
@@ -132,7 +141,7 @@ export function NangoConnectionsSection() {
               )}
               pending={pendingIntegrationId === integration.id}
               onConnect={setConnectIntegration}
-              onDisconnect={(connection) => void disconnect(connection)}
+              onDisconnect={setDisconnectConnection}
             />
           ))}
         </div>
@@ -156,6 +165,16 @@ export function NangoConnectionsSection() {
         }}
         onOpenChange={(open) => {
           if (!open && pendingIntegrationId === null) setConnectIntegration(null);
+        }}
+      />
+      <IntegrationDisconnectDialog
+        connection={disconnectConnection}
+        pending={disconnecting}
+        onConfirm={() => {
+          if (disconnectConnection) void disconnect(disconnectConnection);
+        }}
+        onOpenChange={(open) => {
+          if (!open && !disconnecting) setDisconnectConnection(null);
         }}
       />
     </div>
