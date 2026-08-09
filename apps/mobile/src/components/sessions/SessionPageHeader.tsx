@@ -1,10 +1,6 @@
 import { useCallback } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
-import { BlurView } from "expo-blur";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { SymbolView } from "expo-symbols";
-import { haptic } from "@/lib/haptics";
-import { useTheme } from "@/theme";
+import { StyleSheet, View } from "react-native";
+import { FloatingBackButton } from "@/components/navigation/FloatingBackButton";
 import { SessionGroupHeader } from "./SessionGroupHeader";
 
 interface SessionPageHeaderProps {
@@ -17,8 +13,6 @@ interface SessionPageHeaderProps {
   minimal?: boolean;
 }
 
-const TRIGGER_SIZE = 48;
-
 export function SessionPageHeader({
   groupId,
   sessionId,
@@ -28,60 +22,11 @@ export function SessionPageHeader({
   onBack,
   minimal = false,
 }: SessionPageHeaderProps) {
-  const theme = useTheme();
   const handleBack = useCallback(() => {
-    void haptic.light();
     onBack();
   }, [onBack]);
 
-  const backButton = isLiquidGlassAvailable() ? (
-    <GlassView
-      glassEffectStyle="regular"
-      isInteractive
-      colorScheme={theme.scheme === "dark" ? "dark" : "light"}
-      style={styles.backGlass}
-    >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Back"
-        hitSlop={8}
-        onPress={handleBack}
-        style={styles.backButton}
-      >
-        <SymbolView
-          name="chevron.left"
-          size={18}
-          tintColor={theme.colors.foreground}
-          weight="semibold"
-          resizeMode="scaleAspectFit"
-          style={styles.icon}
-        />
-      </Pressable>
-    </GlassView>
-  ) : (
-    <BlurView
-      tint={theme.scheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterial"}
-      intensity={60}
-      style={styles.backGlass}
-    >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Back"
-        hitSlop={8}
-        onPress={handleBack}
-        style={styles.backButton}
-      >
-        <SymbolView
-          name="chevron.left"
-          size={18}
-          tintColor={theme.colors.foreground}
-          weight="semibold"
-          resizeMode="scaleAspectFit"
-          style={styles.icon}
-        />
-      </Pressable>
-    </BlurView>
-  );
+  const backButton = <FloatingBackButton onPress={handleBack} />;
 
   if (minimal) return <View style={styles.floatingBack}>{backButton}</View>;
 
@@ -101,21 +46,5 @@ const styles = StyleSheet.create({
   floatingBack: {
     alignSelf: "flex-start",
     marginLeft: 16,
-  },
-  backGlass: {
-    width: TRIGGER_SIZE,
-    height: TRIGGER_SIZE,
-    borderRadius: TRIGGER_SIZE / 2,
-    overflow: "hidden",
-  },
-  backButton: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-  },
-  icon: {
-    width: 18,
-    height: 18,
   },
 });

@@ -1,11 +1,13 @@
 import { useCallback, useMemo } from "react";
 import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, View } from "react-native";
-import { SymbolView } from "expo-symbols";
+import { StyleSheet, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import WebView, { type WebViewNavigation } from "react-native-webview";
-import { Screen, Text } from "@/components/design-system";
+import { Screen } from "@/components/design-system";
+import { FloatingBackButton } from "@/components/navigation/FloatingBackButton";
 import { isPlanNavigationAllowed, sandboxedPlanHtml } from "@/lib/plan-html";
 import { alpha, useTheme } from "@/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface VisualPlanViewerProps {
   html: string;
@@ -15,6 +17,7 @@ interface VisualPlanViewerProps {
 export function VisualPlanViewer({ html }: VisualPlanViewerProps) {
   const theme = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const source = useMemo(() => ({ html: sandboxedPlanHtml(html), baseUrl: "about:blank" }), [html]);
   const handleNavigation = useCallback(
     (request: WebViewNavigation) => isPlanNavigationAllowed(request.url),
@@ -22,34 +25,8 @@ export function VisualPlanViewer({ html }: VisualPlanViewerProps) {
   );
 
   return (
-    <Screen edges={["top", "left", "right", "bottom"]}>
+    <Screen edges={["left", "right", "bottom"]}>
       <View style={styles.root}>
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            onPress={() => router.back()}
-            style={[
-              styles.backButton,
-              {
-                backgroundColor: alpha(theme.colors.surface, 0.9),
-                borderColor: alpha(theme.colors.foreground, 0.12),
-              },
-            ]}
-          >
-            <SymbolView
-              name="chevron.left"
-              size={16}
-              tintColor={theme.colors.foreground}
-              resizeMode="scaleAspectFit"
-            />
-            <Text variant="caption1">Back</Text>
-          </Pressable>
-          <Text variant="headline" style={styles.title}>
-            Visual plan
-          </Text>
-          <View style={styles.headerSpacer} />
-        </View>
         <WebView
           source={source}
           originWhitelist={["about:blank"]}
@@ -64,6 +41,19 @@ export function VisualPlanViewer({ html }: VisualPlanViewerProps) {
           mixedContentMode="never"
           style={styles.webView}
         />
+        <LinearGradient
+          pointerEvents="none"
+          colors={[
+            alpha(theme.colors.background, 0.96),
+            alpha(theme.colors.background, 0.5),
+            alpha(theme.colors.background, 0),
+          ]}
+          locations={[0, 0.62, 1]}
+          style={[styles.topGradient, { height: insets.top + 104 }]}
+        />
+        <View style={[styles.floatingBack, { top: insets.top + 12 }]}>
+          <FloatingBackButton onPress={() => router.back()} />
+        </View>
       </View>
     </Screen>
   );
@@ -73,30 +63,17 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  header: {
-    minHeight: 56,
-    alignItems: "center",
-    flexDirection: "row",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 16,
-  },
-  backButton: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 2,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  title: {
-    flex: 1,
-    textAlign: "center",
-  },
-  headerSpacer: {
-    width: 62,
-  },
   webView: {
     flex: 1,
+  },
+  topGradient: {
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
+  },
+  floatingBack: {
+    left: 16,
+    position: "absolute",
   },
 });
