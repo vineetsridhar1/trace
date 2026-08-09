@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, RefreshControl, StyleSheet, TextInput, View } from "react-native";
+import { Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useStoreWithEqualityFn } from "zustand/traditional";
@@ -34,15 +34,13 @@ export default function CreationsScreen() {
   const apps = useAppSessionGroups(activeOrgId);
   const designs = useDesignSessionGroups(activeOrgId);
   const [filter, setFilter] = useState<CreationKindFilter>("all");
-  const [query, setQuery] = useState("");
-  const [searching, setSearching] = useState(false);
   const [archived, setArchived] = useState(false);
   const [creating, setCreating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const creations = useStoreWithEqualityFn(
     useEntityStore,
-    (state) => buildCreationListItems(state, filter, archived, query),
+    (state) => buildCreationListItems(state, filter, archived, ""),
     sameCreations,
   );
   const loading = apps.loading || designs.loading;
@@ -64,12 +62,6 @@ export default function CreationsScreen() {
     void haptic.selection();
     setFilter(next);
   }, []);
-  const openSearch = useCallback(() => setSearching(true), []);
-  const closeSearch = useCallback(() => {
-    setQuery("");
-    setSearching(false);
-  }, []);
-
   return (
     <>
       <Stack.Screen
@@ -77,7 +69,7 @@ export default function CreationsScreen() {
           headerRight: () => (
             <TopBarPill
               actions={[
-                { id: "search", symbol: searching ? "xmark" : "magnifyingglass", accessibilityLabel: searching ? "Close search" : "Search creations", onPress: searching ? closeSearch : openSearch },
+                { id: "archive", symbol: archived ? "tray.full" : "archivebox", accessibilityLabel: archived ? "Show active creations" : "Show archived creations", onPress: () => setArchived((value) => !value) },
                 { id: "new-creation", symbol: "plus", accessibilityLabel: "New creation", onPress: () => setCreating(true) },
               ]}
               avatar={user ? { name: user.name ?? user.email ?? "?", uri: user.avatarUrl, accessibilityLabel: "Account", onPress: () => router.push("/sheets/account") } : undefined}
@@ -91,8 +83,8 @@ export default function CreationsScreen() {
         keyExtractor={keyExtractor}
         getItemType={(item) => item.kind}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.colors.mutedForeground} />}
-        ListHeaderComponent={<CreationsListHeader searching={searching} query={query} onQueryChange={setQuery} onCancelSearch={closeSearch} filter={filter} archived={archived} error={error} onFilterChange={chooseFilter} onArchiveToggle={() => setArchived((value) => !value)} onRetry={() => void refresh()} />}
-        ListEmptyComponent={loading ? <CreationLoading /> : <CreationsEmpty error={error} archived={archived} query={query} onCreate={() => setCreating(true)} onRetry={() => void refresh()} />}
+        ListHeaderComponent={<CreationsListHeader filter={filter} error={error} onFilterChange={chooseFilter} onRetry={() => void refresh()} />}
+        ListEmptyComponent={loading ? <CreationLoading /> : <CreationsEmpty error={error} archived={archived} onCreate={() => setCreating(true)} onRetry={() => void refresh()} />}
         contentInsetAdjustmentBehavior="automatic"
         style={{ flex: 1, backgroundColor: theme.colors.background }}
       />
@@ -121,47 +113,19 @@ function keyExtractor(item: ListItem): string {
 }
 
 function CreationsListHeader({
-  searching,
-  query,
-  onQueryChange,
-  onCancelSearch,
   filter,
-  archived,
   error,
   onFilterChange,
-  onArchiveToggle,
   onRetry,
 }: {
-  searching: boolean;
-  query: string;
-  onQueryChange: (value: string) => void;
-  onCancelSearch: () => void;
   filter: CreationKindFilter;
-  archived: boolean;
   error: string | null;
   onFilterChange: (value: CreationKindFilter) => void;
-  onArchiveToggle: () => void;
   onRetry: () => void;
 }) {
   const theme = useTheme();
   return (
     <>
-      {searching ? (
-        <View style={[styles.search, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
-          <TextInput
-            autoFocus
-            accessibilityLabel="Search creations"
-            value={query}
-            onChangeText={onQueryChange}
-            placeholder="Search creations"
-            placeholderTextColor={theme.colors.dimForeground}
-            style={[styles.input, theme.typography.callout, { color: theme.colors.foreground }]}
-          />
-          <Pressable accessibilityRole="button" accessibilityLabel="Cancel search" onPress={onCancelSearch} hitSlop={8}>
-            <Text variant="subheadline" style={{ color: "#0a84ff", fontWeight: "600" }}>Cancel</Text>
-          </Pressable>
-        </View>
-      ) : null}
       <View style={styles.filters} accessibilityRole="tablist">
         <Glass preset="input" interactive style={styles.filterGroup}>
           <View style={styles.filterSegments}>
@@ -181,9 +145,6 @@ function CreationsListHeader({
             })}
           </View>
         </Glass>
-        <Pressable accessibilityRole="button" accessibilityLabel={archived ? "Show active creations" : "Show archived creations"} onPress={onArchiveToggle} style={styles.archiveToggle}>
-          <Text variant="footnote" color="mutedForeground">{archived ? "Active" : "Archived"}</Text>
-        </Pressable>
       </View>
       {error ? <OfflineNotice onRetry={onRetry} /> : null}
     </>
@@ -214,9 +175,8 @@ function OfflineNotice({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function CreationsEmpty({ error, archived, query, onCreate, onRetry }: { error: string | null; archived: boolean; query: string; onCreate: () => void; onRetry: () => void }) {
+function CreationsEmpty({ error, archived, onCreate, onRetry }: { error: string | null; archived: boolean; onCreate: () => void; onRetry: () => void }) {
   if (error) return <EmptyState icon="wifi.exclamationmark" title="You’re offline" subtitle="Showing creations saved on this device. Pull to refresh or try again." action={{ label: "Retry", onPress: onRetry }} />;
-  if (query) return <EmptyState icon="magnifyingglass" title="No matches" subtitle="Try another name or creation type." />;
   if (archived) return <EmptyState icon="archivebox" title="Nothing archived" subtitle="Archived apps and designs will appear here." />;
   return <EmptyState icon="square.grid.2x2" title="No creations yet" subtitle="Apps and designs you make with Trace will appear here." action={{ label: "New creation", onPress: onCreate }} />;
 }
@@ -226,9 +186,6 @@ const styles = StyleSheet.create({
   filterGroup: { flex: 1, minHeight: 44, padding: 2 },
   filterSegments: { flex: 1, flexDirection: "row", alignItems: "center" },
   filter: { flex: 1, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 999 },
-  archiveToggle: { minHeight: 44, justifyContent: "center", marginLeft: "auto", paddingLeft: 4 },
-  search: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44, marginHorizontal: 16, marginTop: 8, paddingHorizontal: 14, borderWidth: 1, borderRadius: 999 },
-  input: { flex: 1, minWidth: 0, paddingVertical: 8 },
   loading: { paddingTop: 8 },
   loadingRow: { minHeight: 72, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, borderBottomWidth: StyleSheet.hairlineWidth },
   loadingCopy: { flex: 1, gap: 0 },
