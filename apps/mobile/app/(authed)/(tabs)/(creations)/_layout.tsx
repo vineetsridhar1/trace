@@ -1,11 +1,6 @@
-import { Stack, useRouter } from "expo-router";
-import { useAuthStore, type AuthState } from "@trace/client-core";
-import { TopBarPill } from "@/components/navigation/TopBarPill";
+import { Stack } from "expo-router";
 
 export default function CreationsLayout() {
-  const user = useAuthStore((s: AuthState) => s.user);
-  const router = useRouter();
-
   return (
     <Stack
       screenOptions={{
@@ -20,20 +15,6 @@ export default function CreationsLayout() {
           title: "Creations",
           headerLargeTitle: true,
           headerLargeTitleShadowVisible: false,
-          headerRight: () => (
-            <TopBarPill
-              avatar={
-                user
-                  ? {
-                      name: user.name ?? user.email ?? "?",
-                      uri: user.avatarUrl,
-                      accessibilityLabel: "Account",
-                      onPress: () => router.push("/sheets/account"),
-                    }
-                  : undefined
-              }
-            />
-          ),
         }}
       />
     </Stack>

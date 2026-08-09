@@ -44,18 +44,15 @@ export interface CreationListItem {
 
 /** The merged Creations destination keeps app and design session groups in one list. */
 export function buildCreationListItems(
-  state: EntityState,
+  state: Pick<EntityState, "sessionGroups">,
   filter: CreationKindFilter,
   archived: boolean,
-  query: string,
 ): CreationListItem[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
   return (Object.values(state.sessionGroups) as SessionGroupEntity[])
     .filter((group) => {
       if (group.kind !== "app" && group.kind !== "design") return false;
       const isArchived = Boolean(group.archivedAt) || group.status === "archived";
-      if (isArchived !== archived || (filter !== "all" && group.kind !== filter)) return false;
-      return !normalizedQuery || group.name.toLocaleLowerCase().includes(normalizedQuery);
+      return isArchived === archived && (filter === "all" || group.kind === filter);
     })
     .sort(
       (a, b) =>

@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
-import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
 import { EmptyState, Glass, Skeleton, Text } from "@/components/design-system";
 import { CreateCreationSheet } from "@/components/creations/CreateCreationSheet";
@@ -29,17 +28,17 @@ const FILTERS: Array<{ label: string; value: CreationKindFilter }> = [
 export default function CreationsScreen() {
   const theme = useTheme();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
-  const apps = useAppSessionGroups(activeOrgId);
-  const designs = useDesignSessionGroups(activeOrgId);
   const [filter, setFilter] = useState<CreationKindFilter>("all");
   const [archived, setArchived] = useState(false);
   const [creating, setCreating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const apps = useAppSessionGroups(activeOrgId, archived);
+  const designs = useDesignSessionGroups(activeOrgId, archived);
 
-  const creations = useStoreWithEqualityFn(
-    useEntityStore,
-    (state) => buildCreationListItems(state, filter, archived, ""),
-    sameCreations,
+  const sessionGroups = useEntityStore((state) => state.sessionGroups);
+  const creations = useMemo(
+    () => buildCreationListItems({ sessionGroups }, filter, archived),
+    [archived, filter, sessionGroups],
   );
   const loading = apps.loading || designs.loading;
   const error = apps.error ?? designs.error;
@@ -146,10 +145,6 @@ function CreationsListHeader({
       {error ? <OfflineNotice onRetry={onRetry} /> : null}
     </>
   );
-}
-
-function sameCreations(a: CreationListItem[], b: CreationListItem[]): boolean {
-  return a.length === b.length && a.every((item, index) => item.id === b[index]?.id && item.status === b[index]?.status && item.name === b[index]?.name);
 }
 
 function CreationLoading() {
