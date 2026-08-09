@@ -199,6 +199,8 @@ export interface SessionAdapterCreateOptions {
   /** Absolute path to an existing worktree to adopt instead of creating one (local only). */
   adoptWorktreePath?: string;
   adapterType?: RuntimeAdapterType;
+  /** Persisted local bridge selected as this session's authorized home. */
+  expectedHomeRuntimeId?: string;
   runtimeToken?: string;
   bridgeUrl?: string;
   environment?: {
@@ -2330,6 +2332,9 @@ export class SessionRouter {
           await options.onLifecycle?.("session_runtime_connected", lifecycleUpdate);
         }
 
+        const expectedHomeRuntimeId =
+          startResult.runtimeInstanceId ?? options.expectedHomeRuntimeId;
+
         if (isGeneratedProjectKind(options.sessionGroupKind)) {
           const runtimeInstanceId = startResult.runtimeInstanceId;
           if (!runtimeInstanceId || !options.prepareAppGit) {
@@ -2353,7 +2358,7 @@ export class SessionRouter {
               ...(sourceRepository ? { sourceRepository } : {}),
             },
             {
-              expectedHomeRuntimeId: startResult.runtimeInstanceId,
+              expectedHomeRuntimeId,
               organizationId: options.organizationId,
             },
           );
@@ -2382,7 +2387,7 @@ export class SessionRouter {
               adoptWorktreePath: options.adoptWorktreePath,
             },
             {
-              expectedHomeRuntimeId: startResult.runtimeInstanceId,
+              expectedHomeRuntimeId,
               organizationId: options.organizationId,
             },
           );

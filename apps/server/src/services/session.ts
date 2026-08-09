@@ -1713,6 +1713,8 @@ export class SessionService {
     readOnly?: boolean;
     /** Adopt an existing local worktree at this path instead of creating one. */
     adoptWorktreePath?: string | null;
+    /** Persisted local bridge selected as this session's authorized home. */
+    expectedHomeRuntimeId?: string | null;
     adapterType?: RuntimeAdapterType;
     environment?: {
       id: string;
@@ -1811,6 +1813,7 @@ export class SessionService {
         organizationId: params.organizationId,
         readOnly: params.readOnly,
         adoptWorktreePath,
+        expectedHomeRuntimeId: params.expectedHomeRuntimeId ?? undefined,
         onLifecycle: (eventType, update) =>
           this.recordRuntimeLifecycle(params.sessionId, eventType, update),
         onFailed: (error) => this.workspaceFailed(params.sessionId, error),
@@ -9393,6 +9396,7 @@ export class SessionService {
         createdById: actorId,
         organizationId: movedSession.organizationId,
         readOnly: movedSession.readOnlyWorkspace,
+        expectedHomeRuntimeId: targetHosting === "local" ? targetRuntimeInstanceId : undefined,
         adapterType: this.parseConnection(movedSession.connection).adapterType,
         environment: targetEnvironment,
       });

@@ -808,6 +808,39 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
+  it("pins initial local prepare delivery to the selected home bridge", async () => {
+    const router = new SessionRouter();
+    const sendAsync = vi.spyOn(router, "sendAsync").mockResolvedValue("delivered");
+
+    router.createRuntime({
+      sessionId: "session-1",
+      hosting: "local",
+      adapterType: "local",
+      expectedHomeRuntimeId: "runtime-remote-owner",
+      tool: "codex",
+      repo: {
+        id: "repo-1",
+        name: "repo",
+        remoteUrl: "https://github.com/acme/repo.git",
+        defaultBranch: "main",
+      },
+      createdById: "user-1",
+      organizationId: "org-1",
+      onFailed: vi.fn(),
+    });
+
+    await vi.waitFor(() => expect(sendAsync).toHaveBeenCalledOnce());
+
+    expect(sendAsync).toHaveBeenCalledWith(
+      "session-1",
+      expect.objectContaining({ type: "prepare", sessionId: "session-1" }),
+      {
+        expectedHomeRuntimeId: "runtime-remote-owner",
+        organizationId: "org-1",
+      },
+    );
+  });
+
   it("does not let local environment config override the authorized bound runtime", async () => {
     const router = new SessionRouter();
     const authorizedWs = makeWs();
