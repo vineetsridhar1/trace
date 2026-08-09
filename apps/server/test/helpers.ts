@@ -317,6 +317,10 @@ export function createPrismaMock() {
       update: vi.fn(),
       delete: vi.fn(),
     },
+    integrationRequestAuditEntry: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
     bridgeRuntime: {
       findMany: vi.fn(),
       findUnique: vi.fn(),

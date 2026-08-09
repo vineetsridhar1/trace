@@ -25,6 +25,7 @@ import {
   normalizeIntegrationPath,
 } from "./app-integrations.js";
 import { nangoConnectionProvider } from "./nango-connection-provider.js";
+import type { IntegrationRequestAuditStore } from "./integration-request-audit.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const nangoMock = nangoConnectionProvider as unknown as {
@@ -32,9 +33,13 @@ const nangoMock = nangoConnectionProvider as unknown as {
   proxy: ReturnType<typeof vi.fn>;
 };
 const eventMock = eventService as unknown as { create: ReturnType<typeof vi.fn> };
+const auditMock: IntegrationRequestAuditStore = {
+  start: vi.fn(),
+  complete: vi.fn(),
+};
 
 function service() {
-  return new AppIntegrationService(nangoConnectionProvider);
+  return new AppIntegrationService(nangoConnectionProvider, auditMock);
 }
 
 function allowViewer() {
@@ -52,6 +57,8 @@ describe("AppIntegrationService", () => {
     vi.clearAllMocks();
     delete process.env.NANGO_GITHUB_INTEGRATION_KEY;
     allowViewer();
+    vi.mocked(auditMock.start).mockResolvedValue();
+    vi.mocked(auditMock.complete).mockResolvedValue();
   });
 
   it("creates a connect session from the supported integration catalog", async () => {
@@ -174,7 +181,7 @@ describe("AppIntegrationService", () => {
       contentType: "application/json",
       body: Buffer.from("{}"),
     });
-    eventMock.create.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("audit failed"));
+    vi.mocked(auditMock.complete).mockRejectedValueOnce(new Error("audit failed"));
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     await expect(
@@ -189,14 +196,61 @@ describe("AppIntegrationService", () => {
         body: Buffer.alloc(0),
       }),
     ).resolves.toMatchObject({ status: 200 });
-    expect(eventMock.create).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ eventType: "app_integration_request_started" }),
+    expect(auditMock.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org-1",
+        sessionGroupId: "app-1",
+        bindingId: "binding-1",
+        connectionId: "viewer-connection",
+        userId: "viewer-1",
+        method: "GET",
+        path: "/user",
+      }),
+    );
+    const auditStart = vi.mocked(auditMock.start).mock.calls[0]?.[0];
+    expect(auditStart).not.toHaveProperty("body");
+    expect(auditStart).not.toHaveProperty("query");
+    expect(auditStart).not.toHaveProperty("providerConfigKey");
+    expect(auditMock.complete).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: "completed", status: 200 }),
     );
     expect(consoleError).toHaveBeenCalledWith(
       "[app-integrations] failed to record provider request completion",
       expect.any(Error),
     );
+  });
+
+  it("does not contact a provider unless the request start is durably audited", async () => {
+    prismaMock.appIntegrationBinding.findFirst.mockResolvedValue({
+      id: "binding-1",
+      organizationId: "org-1",
+      sessionGroupId: "app-1",
+      provider: "GitHub",
+      providerConfigKey: "github-getting-started",
+      executionIdentity: "viewer",
+      sharedConnectionId: null,
+      allowedMethods: ["GET"],
+      allowedPathPrefixes: ["/user"],
+    });
+    prismaMock.integrationConnection.findFirst.mockResolvedValue({
+      id: "viewer-connection",
+      nangoConnectionId: "nango-viewer-1",
+    });
+    vi.mocked(auditMock.start).mockRejectedValueOnce(new Error("audit unavailable"));
+
+    await expect(
+      service().execute({
+        endpoint: { organizationId: "org-1", sessionGroupId: "app-1" },
+        userId: "viewer-1",
+        bindingId: "github",
+        method: "GET",
+        path: "/user",
+        query: null,
+        contentType: null,
+        body: Buffer.alloc(0),
+      }),
+    ).rejects.toThrow("audit unavailable");
+    expect(nangoMock.proxy).not.toHaveBeenCalled();
   });
 
   it.each([

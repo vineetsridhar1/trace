@@ -13,6 +13,10 @@ import type {
   IntegrationConnectionProvider,
   IntegrationProxyResponse,
 } from "./integration-connection-provider.js";
+import type {
+  IntegrationRequestAuditStart,
+  IntegrationRequestAuditStore,
+} from "./integration-request-audit.js";
 
 const PROVIDER_KEY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/;
 const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
@@ -284,7 +288,10 @@ function publicBinding(binding: {
 type Role = "admin" | "member" | "observer" | null | undefined;
 
 export class AppIntegrationService {
-  constructor(private readonly connectionProvider: IntegrationConnectionProvider) {}
+  constructor(
+    private readonly connectionProvider: IntegrationConnectionProvider,
+    private readonly requestAuditStore: IntegrationRequestAuditStore,
+  ) {}
 
   nangoConfigured(): boolean {
     return this.connectionProvider.isConfigured();
@@ -533,22 +540,7 @@ export class AppIntegrationService {
       input.endpoint.organizationId,
       input.userId,
     );
-    const integration = supportedIntegration(input.bindingId);
-    const binding = await prisma.appIntegrationBinding.findFirst({
-      where: {
-        ...(integration
-          ? {
-              OR: [
-                { integrationId: integration.id },
-                { integrationId: null, providerConfigKey: integration.providerConfigKey },
-              ],
-            }
-          : { id: input.bindingId }),
-        organizationId: input.endpoint.organizationId,
-        sessionGroupId: input.endpoint.sessionGroupId,
-      },
-    });
-    if (!binding) throw new NotFoundError("Application integration binding", input.bindingId);
+    const binding = await this.findBinding(input.endpoint, input.bindingId);
     const method = normalizeMethod(input.method);
     const path = normalizeIntegrationPath(input.path);
     if (!binding.allowedMethods.includes(method)) {
@@ -586,22 +578,7 @@ export class AppIntegrationService {
       input.endpoint.organizationId,
       input.userId,
     );
-    const integration = supportedIntegration(input.bindingId);
-    const binding = await prisma.appIntegrationBinding.findFirst({
-      where: {
-        ...(integration
-          ? {
-              OR: [
-                { integrationId: integration.id },
-                { integrationId: null, providerConfigKey: integration.providerConfigKey },
-              ],
-            }
-          : { id: input.bindingId }),
-        organizationId: input.endpoint.organizationId,
-        sessionGroupId: input.endpoint.sessionGroupId,
-      },
-    });
-    if (!binding) throw new NotFoundError("Application integration binding", input.bindingId);
+    const binding = await this.findBinding(input.endpoint, input.bindingId);
     if (binding.provider.trim().toLowerCase() !== "snowflake") {
       throw new ValidationError("This binding is not a Snowflake integration");
     }
@@ -663,26 +640,20 @@ export class AppIntegrationService {
     body: Buffer;
   }): Promise<IntegrationProxyResponse> {
     const requestId = randomUUID();
-    const eventBase = {
+    const startedAt = new Date();
+    const auditBase = {
+      id: requestId,
       organizationId: input.binding.organizationId,
-      scopeType: "session" as const,
-      scopeId: input.binding.sessionGroupId,
-      actorType: "user" as const,
-      actorId: input.userId,
-    };
-    const auditPayload = {
-      requestId,
+      sessionGroupId: input.binding.sessionGroupId,
       bindingId: input.binding.id,
       connectionId: input.connection.id,
+      userId: input.userId,
       executionIdentity: input.binding.executionIdentity,
       method: input.method,
       path: input.path,
+      startedAt,
     };
-    await eventService.create({
-      ...eventBase,
-      eventType: "app_integration_request_started",
-      payload: auditPayload,
-    });
+    await this.requestAuditStore.start(auditBase);
     try {
       const response = await this.connectionProvider.proxy({
         connectionId: input.connection.nangoConnectionId,
@@ -693,41 +664,64 @@ export class AppIntegrationService {
         contentType: input.contentType,
         body: input.body,
       });
-      await this.recordExecutionCompletion(eventBase, {
-        ...auditPayload,
+      await this.recordExecutionCompletion({
+        audit: auditBase,
         status: response.status,
-        outcome: "completed",
+        phase: "completed",
       });
       return response;
     } catch (error: unknown) {
-      await this.recordExecutionCompletion(eventBase, {
-        ...auditPayload,
-        outcome: "failed",
+      await this.recordExecutionCompletion({
+        audit: auditBase,
+        phase: "failed",
         error: "Provider request failed",
       });
       throw error;
     }
   }
 
-  private async recordExecutionCompletion(
-    eventBase: {
-      organizationId: string;
-      scopeType: "session";
-      scopeId: string;
-      actorType: "user";
-      actorId: string;
-    },
-    payload: Record<string, string | number>,
-  ): Promise<void> {
+  private async recordExecutionCompletion(input: {
+    audit: IntegrationRequestAuditStart;
+    phase: "completed" | "failed";
+    status?: number;
+    error?: string;
+  }): Promise<void> {
     try {
-      await eventService.create({
-        ...eventBase,
-        eventType: "app_integration_request_executed",
-        payload,
+      const timestamp = new Date();
+      await this.requestAuditStore.complete({
+        ...input.audit,
+        phase: input.phase,
+        status: input.status,
+        error: input.error,
+        timestamp,
+        durationMs: Math.max(0, timestamp.getTime() - input.audit.startedAt.getTime()),
       });
     } catch (error: unknown) {
       console.error("[app-integrations] failed to record provider request completion", error);
     }
+  }
+
+  private async findBinding(
+    endpoint: { organizationId: string; sessionGroupId: string },
+    bindingId: string,
+  ) {
+    const integration = supportedIntegration(bindingId);
+    const binding = await prisma.appIntegrationBinding.findFirst({
+      where: {
+        ...(integration
+          ? {
+              OR: [
+                { integrationId: integration.id },
+                { integrationId: null, providerConfigKey: integration.providerConfigKey },
+              ],
+            }
+          : { id: bindingId }),
+        organizationId: endpoint.organizationId,
+        sessionGroupId: endpoint.sessionGroupId,
+      },
+    });
+    if (!binding) throw new NotFoundError("Application integration binding", bindingId);
+    return binding;
   }
 
   async reconcileNangoAuthWebhook(payload: unknown) {

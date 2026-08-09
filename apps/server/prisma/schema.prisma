@@ -336,6 +336,12 @@ enum IntegrationExecutionIdentity {
   service
 }
 
+enum IntegrationRequestPhase {
+  started
+  completed
+  failed
+}
+
 model Organization {
   id       String @id @default(uuid())
   name     String
@@ -366,6 +372,7 @@ model Organization {
   artifacts                   Artifact[]
   integrationConnections      IntegrationConnection[]
   appIntegrationBindings      AppIntegrationBinding[]
+  integrationRequestAuditEntries IntegrationRequestAuditEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1040,6 +1047,30 @@ model AppIntegrationBinding {
   @@unique([sessionGroupId, integrationId])
   @@index([organizationId, sessionGroupId])
   @@index([sharedConnectionId])
+}
+
+model IntegrationRequestAuditEntry {
+  id                String                       @id @default(uuid())
+  requestId         String
+  organizationId    String
+  organization      Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessionGroupId    String
+  bindingId         String
+  connectionId      String
+  userId            String
+  executionIdentity IntegrationExecutionIdentity
+  requestMethod     String
+  requestPath       String
+  phase             IntegrationRequestPhase
+  responseStatus    Int?
+  error             String?
+  timestamp         DateTime                     @default(now())
+  durationMs        Int?
+
+  @@index([requestId, timestamp])
+  @@index([organizationId, timestamp])
+  @@index([sessionGroupId, timestamp])
+  @@index([bindingId, timestamp])
 }
 
 model QueuedMessage {
