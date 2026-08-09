@@ -6,7 +6,7 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import type { Question } from "@trace/shared";
 import { Text } from "@/components/design-system";
@@ -87,13 +87,13 @@ function RankingRow({ value, label, index, count, drag, onBegin, onPreview, onFi
     })
     .onEnd(() => runOnJS(onFinish)(value, translation.value))
     .onFinalize((_event, success) => {
-      translation.value = withSpring(0);
+      translation.value = withTiming(0, { duration: 160 });
       if (!success) runOnJS(onCancel)(value);
     });
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: active ? translation.value : withSpring(displaced) },
-      { scale: withSpring(active ? 1.025 : 1) },
+      { translateY: active ? translation.value : withTiming(displaced, { duration: 160 }) },
+      { scale: withTiming(active ? 1.025 : 1, { duration: 140 }) },
     ],
     zIndex: active ? 20 : 0,
     shadowOpacity: active ? 0.42 : 0,
@@ -102,7 +102,7 @@ function RankingRow({ value, label, index, count, drag, onBegin, onPreview, onFi
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View
-        layout={LinearTransition.springify().damping(20).stiffness(230)}
+        layout={LinearTransition.duration(180)}
         accessible
         accessibilityRole="adjustable"
         accessibilityLabel={`${label}, position ${index + 1} of ${count}`}
