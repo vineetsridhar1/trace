@@ -34,7 +34,8 @@ test("defines an artifact-first design workflow and quality gate", () => {
   assert.match(guidance, /docs\/playbooks\/README\.md/);
   assert.match(guidance, /Avoid generic AI styling/);
   assert.match(guidance, /## Impeccable craft reference/);
-  assert.match(guidance, /surface mode: persuade, operate, read, or experience/);
+  assert.match(guidance, /surface mode: `persuade`, `operate`, `read`, or `experience`/);
+  assert.match(guidance, /impeccable-workflow\.md/);
   assert.match(guidance, /Use bounded review passes/);
   assert.match(guidance, /## Final critique/);
   assert.match(guidance, /Brief fidelity/);

@@ -6,7 +6,12 @@ import { validateDesignBrief } from "./brief";
 test("accepts the starter brief and its unresolved fields", () => {
   const brief = validateDesignBrief(source);
   assert.equal(brief.version, 1);
+  assert.equal(brief.mode, "operate");
   assert.deepEqual(brief.requiredStates, ["default"]);
+});
+
+test("requires a supported surface mode", () => {
+  assert.throws(() => validateDesignBrief({ ...source, mode: "landing" }), /mode must be one of/);
 });
 
 test("captures reference evidence and reuse boundaries", () => {

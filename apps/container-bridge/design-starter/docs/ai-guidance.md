@@ -19,7 +19,7 @@ Keep earlier user constraints active across turns until the user changes them. D
 
 ## Design loop
 
-1. **Understand.** Identify the audience, primary job, platform, fidelity, core flow, required content, states, success criteria, and surface mode: persuade, operate, read, or experience. Inspect the existing brief, manifest, screens, tokens, and supplied references, then replace the starter values in `design.brief.json` with the resolved brief.
+1. **Understand.** Identify the audience, primary job, platform, fidelity, core flow, required content, states, success criteria, and surface mode: `persuade`, `operate`, `read`, or `experience`. Inspect the existing brief, manifest, screens, tokens, and supplied references, then replace the starter values in `design.brief.json` with the resolved brief.
 2. **Resolve uncertainty.** Ask through Trace's normal question mechanism only when an answer would materially change the design and cannot be inferred safely. Otherwise state a concise assumption and continue.
 3. **Map the experience.** Decide the sections, screen sequence, essential variants, and state coverage before writing components. Prefer a coherent end-to-end flow over one polished isolated screen.
 4. **Commit to a visual system.** Select one direction appropriate to the product and audience. Record reusable palette roles, typography, spacing, radius, elevation, and motion decisions in `trace.tokens.json`, and keep its direction name aligned with `design.brief.json`. If brand guidance exists, derive from measured evidence rather than choosing a new palette.
@@ -28,7 +28,7 @@ Keep earlier user constraints active across turns until the user changes them. D
 
 ## Impeccable craft reference
 
-Use the following Impeccable-inspired practices as a quality reference throughout the design loop:
+Read `docs/playbooks/impeccable-workflow.md` whenever you are shaping a new surface, choosing a visual direction, reviewing a design, or responding to a targeted improvement request. It is the detailed, Impeccable-adapted workflow for this canvas. Use the following practices as its short quality reference throughout the design loop:
 
 - **The brief wins.** A clear request for an aesthetic, era, material, typeface, palette, density, or platform is a constraint, not a suggestion. Honor it even when it differs from a general heuristic.
 - **Match the surface to its job.** Persuade surfaces earn attention and action; operate surfaces prioritize task completion, scanability, and familiar affordances; read surfaces optimize comprehension; experience surfaces let the work lead while UI recedes.
