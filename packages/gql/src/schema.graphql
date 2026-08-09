@@ -1455,6 +1455,7 @@ input ReorderChannelsInput {
 }
 
 input StartSessionInput {
+  clientMutationId: String
   kind: SessionGroupKind
   tool: CodingTool
   model: String

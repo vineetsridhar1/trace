@@ -57,6 +57,8 @@ describe("ensureTraceRuntime", () => {
     );
     expect(traceSessionSkill).toContain("session list");
     expect(traceSessionSkill).toContain("session start");
+    expect(traceSessionSkill).toContain("Do not call");
+    expect(traceSessionSkill).toContain("idempotencyKey");
     expect(traceSessionSkill).toContain("--queue");
   });
 

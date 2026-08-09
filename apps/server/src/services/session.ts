@@ -1550,6 +1550,33 @@ export function isFullyUnloadedSession(
 export class SessionService {
   private manualElementSaveQueues = new Map<string, Promise<void>>();
 
+  private async findIdempotentStartedSession(input: {
+    clientMutationId?: string | null;
+    organizationId: string;
+    createdById: string;
+  }): Promise<SessionWithInclude | null> {
+    if (!input.clientMutationId) return null;
+    const startEvent = await prisma.event.findFirst({
+      where: {
+        id: input.clientMutationId,
+        organizationId: input.organizationId,
+        scopeType: "session",
+        eventType: "session_started",
+        actorId: input.createdById,
+      },
+      select: { scopeId: true },
+    });
+    if (!startEvent) return null;
+    return prisma.session.findFirst({
+      where: {
+        id: startEvent.scopeId,
+        organizationId: input.organizationId,
+        createdById: input.createdById,
+      },
+      include: SESSION_INCLUDE,
+    });
+  }
+
   private async prepareInvocation(
     sessionId: string,
     organizationId: string,
@@ -3621,6 +3648,14 @@ export class SessionService {
   async start(input: StartSessionServiceInput) {
     validateUploadKeysForOrganization(input.imageKeys, input.organizationId);
 
+    const clientMutationId = input.clientMutationId?.trim() || null;
+    if (input.clientMutationId != null && (!clientMutationId || clientMutationId.length > 200)) {
+      throw new ValidationError("clientMutationId must be between 1 and 200 characters");
+    }
+    input.clientMutationId = clientMutationId;
+    const existingIdempotentSession = await this.findIdempotentStartedSession(input);
+    if (existingIdempotentSession) return existingIdempotentSession;
+
     if (input.restoreCheckpointId && input.sessionGroupId) {
       throw new Error("restoreCheckpointId cannot reuse an existing session group");
     }
@@ -3972,7 +4007,7 @@ export class SessionService {
     // Resolve hosting mode: if a runtime is specified, derive from it; otherwise
     // default to local in TRACE_LOCAL_MODE and cloud everywhere else.
     if (isLocalMode() && input.hosting === "cloud") {
-      throw new Error("Cloud sessions are disabled in local mode");
+      throw new ValidationError("Cloud sessions are disabled in local mode");
     }
 
     const requestedRuntimeSelection =
@@ -4092,7 +4127,7 @@ export class SessionService {
       hosting = "local";
     }
     if (hosting === "cloud" && !requestedEnvironment && !reuseExistingGroupRuntimeSelection) {
-      throw new Error("No enabled cloud agent environment is configured");
+      throw new ValidationError("No enabled cloud agent environment is configured");
     }
 
     // Importing an existing on-disk worktree: adopt it as the workspace instead
@@ -4462,7 +4497,7 @@ export class SessionService {
           { sessionStatus: initialSessionStatus },
         ]);
 
-        const startEventId = input.startEventId ?? randomUUID();
+        const startEventId = input.startEventId ?? clientMutationId ?? randomUUID();
         const startEventPayload = {
           session: serializeSession(session),
           sessionGroup: sessionGroupSnapshot,
@@ -4496,7 +4531,7 @@ export class SessionService {
             eventType: "session_started",
             payload: startEventOverride?.payload ?? startEventPayload,
             metadata: startEventOverride?.metadata ?? startEventMetadata,
-            actorType: startEventOverride?.actorType ?? "user",
+            actorType: startEventOverride?.actorType ?? input.actorType ?? "user",
             actorId: startEventOverride?.actorId ?? input.createdById,
             timestamp: startEventOverride?.timestamp,
             deferPublish: true,
@@ -4528,6 +4563,8 @@ export class SessionService {
             })
             .catch(() => {});
         }
+        const existingSession = await this.findIdempotentStartedSession(input);
+        if (existingSession) return existingSession;
         throw error;
       });
 

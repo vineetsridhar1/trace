@@ -1017,6 +1017,16 @@ export const sessionTypeResolvers = {
     },
   },
   Session: {
+    projects: async (session: { id: string }, _args: unknown, ctx: Context) => {
+      const links = await prisma.sessionProject.findMany({
+        where: {
+          sessionId: session.id,
+          project: { organizationId: requireOrgContext(ctx) },
+        },
+        include: { project: { include: { repo: true } } },
+      });
+      return links.map((link) => link.project);
+    },
     inputTokens: (session: { inputTokens?: bigint | number | null }) =>
       typeof session.inputTokens === "bigint"
         ? Number(session.inputTokens)

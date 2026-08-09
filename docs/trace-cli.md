@@ -30,7 +30,7 @@ AI guidance should invoke `"$TRACE_CLI"`, not rely on `trace` being present on t
 "$TRACE_CLI" project list [--repo ID]
 "$TRACE_CLI" session list [--status STATUS] [--tool TOOL] [--repo ID] [--channel ID]
 "$TRACE_CLI" session get [session-id]
-"$TRACE_CLI" session start [prompt] [--group ID | --channel ID | --repo ID | --kind KIND]
+"$TRACE_CLI" session start [prompt] [--group ID | --channel ID | --project ID | --repo ID | --kind KIND]
 "$TRACE_CLI" session send [session-id] <message> [--self] [--queue]
 "$TRACE_CLI" session run [session-id] [prompt] [--self]
 "$TRACE_CLI" session stop [session-id] [--self]
@@ -40,9 +40,19 @@ AI guidance should invoke `"$TRACE_CLI"`, not rely on `trace` being present on t
 ```
 
 All commands accept `--json`. Commands with an optional session ID default to `TRACE_SESSION_ID`.
-Starting without an explicit destination creates a sibling in `TRACE_SESSION_GROUP_ID`. Use
-`session start --help` for all creation options. Session lists exclude merged and archived sessions
-unless their include flags are supplied.
+Starting without an explicit destination or group-level configuration creates a sibling in
+`TRACE_SESSION_GROUP_ID`. Creating a new coding group requires `--channel`, `--project`, or
+`--repo`; prefer a channel for normal UI visibility. A channel or project's linked repo is derived
+automatically, and a destination without one requires `--repo`. Destination selection is mutually
+exclusive with `--group`, whose sessions inherit the group's hosting, runtime, environment, branch,
+and visibility. Use `session start --help` for all creation options. Session lists exclude merged
+and archived sessions unless their include flags are supplied.
+
+A prompt passed to `session start` requests its run immediately. The returned session can remain
+`not_started` while runtime provisioning is in progress; do not repeat the prompt with `session
+run`. The CLI automatically attaches an idempotency key and retries transient empty/server
+responses once. If a retry is still necessary, reuse the reported key with `--idempotency-key`.
+Explicit cloud requests fail if cloud is unavailable and are never downgraded to local.
 
 ## Automation contract
 
@@ -53,9 +63,9 @@ follow mode prints the snapshot object first and then one `{ "event": ... }` obj
 | ---------------- | -------------------------------------------------------------------------- |
 | `context`        | `{ serverUrl, organizationId, sessionId, sessionGroupId, authentication }` |
 | resource lists   | `{ channels }`, `{ repos }`, or `{ projects }`                             |
-| `session list`   | `{ sessions }`                                                               |
-| `session get`    | `{ session }`                                                               |
-| `session start`  | `{ session }`                                                               |
+| `session list`   | `{ sessions }`                                                             |
+| `session get`    | `{ session }`                                                              |
+| `session start`  | `{ session, runRequested, uiPath, idempotencyKey }`                        |
 | `session send`   | `{ event }` or `{ queuedMessage }`                                         |
 | lifecycle        | `{ session }` or `{ sessionGroup }`                                        |
 | `session events` | `{ events: [...], following }`                                             |

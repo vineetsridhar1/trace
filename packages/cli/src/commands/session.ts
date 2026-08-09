@@ -11,7 +11,8 @@ import type {
   StartSessionInput,
 } from "@trace/gql";
 import { randomUUID } from "node:crypto";
-import { usage } from "../errors.js";
+import type { TraceClient } from "../client.js";
+import { CliError, usage } from "../errors.js";
 import type { Command, CommandContext } from "../runtime.js";
 
 type SessionView = Pick<
@@ -112,12 +113,19 @@ function parseSessionList(args: string[]): SessionFilters {
 function parseSessionStart(ctx: CommandContext): StartSessionInput {
   const input: StartSessionInput = {};
   const prompt: string[] = [];
-  let hasExplicitDestination = false;
+  let requestedGroup = false;
+  let requestedDestination = false;
+  let requestedGroupConfiguration = false;
+
   for (let index = 2; index < ctx.args.length; index += 1) {
     const flag = ctx.args[index] ?? "";
     if (flag === "--kind") {
-      input.kind = choice(optionValue(ctx.args, index, flag), SESSION_KINDS, flag) as SessionGroupKind;
-      hasExplicitDestination = true;
+      input.kind = choice(
+        optionValue(ctx.args, index, flag),
+        SESSION_KINDS,
+        flag,
+      ) as SessionGroupKind;
+      requestedGroupConfiguration = true;
       index += 1;
     } else if (flag === "--tool") {
       input.tool = choice(optionValue(ctx.args, index, flag), CODING_TOOLS, flag) as CodingTool;
@@ -125,66 +133,155 @@ function parseSessionStart(ctx: CommandContext): StartSessionInput {
     } else if (flag === "--model") input.model = optionValue(ctx.args, index++, flag);
     else if (flag === "--reasoning") input.reasoningEffort = optionValue(ctx.args, index++, flag);
     else if (flag === "--hosting") {
-      input.hosting = choice(optionValue(ctx.args, index, flag), HOSTING_MODES, flag) as HostingMode;
-      hasExplicitDestination = true;
+      input.hosting = choice(
+        optionValue(ctx.args, index, flag),
+        HOSTING_MODES,
+        flag,
+      ) as HostingMode;
+      requestedGroupConfiguration = true;
       index += 1;
     } else if (flag === "--runtime") {
       input.runtimeInstanceId = optionValue(ctx.args, index++, flag);
-      hasExplicitDestination = true;
-    }
-    else if (flag === "--repo") {
+      requestedGroupConfiguration = true;
+    } else if (flag === "--environment") {
+      input.environmentId = optionValue(ctx.args, index++, flag);
+      requestedGroupConfiguration = true;
+    } else if (flag === "--repo") {
       input.repoId = optionValue(ctx.args, index++, flag);
-      hasExplicitDestination = true;
+      requestedDestination = true;
     } else if (flag === "--branch") {
       input.branch = optionValue(ctx.args, index++, flag);
-      hasExplicitDestination = true;
-    }
-    else if (flag === "--channel") {
+      requestedGroupConfiguration = true;
+    } else if (flag === "--channel") {
       input.channelId = optionValue(ctx.args, index++, flag);
-      hasExplicitDestination = true;
+      requestedDestination = true;
     } else if (flag === "--group") {
       input.sessionGroupId = optionValue(ctx.args, index++, flag);
-      hasExplicitDestination = true;
+      requestedGroup = true;
     } else if (flag === "--project") {
       input.projectId = optionValue(ctx.args, index++, flag);
-      hasExplicitDestination = true;
-    } else if (flag === "--ticket") {
-      input.ticketId = optionValue(ctx.args, index++, flag);
-      hasExplicitDestination = true;
-    } else if (flag === "--visibility") {
-      input.visibility = choice(optionValue(ctx.args, index, flag), VISIBILITIES, flag) as SessionGroupVisibility;
-      hasExplicitDestination = true;
+      requestedDestination = true;
+    } else if (flag === "--ticket") input.ticketId = optionValue(ctx.args, index++, flag);
+    else if (flag === "--visibility") {
+      input.visibility = choice(
+        optionValue(ctx.args, index, flag),
+        VISIBILITIES,
+        flag,
+      ) as SessionGroupVisibility;
+      requestedGroupConfiguration = true;
       index += 1;
-    } else if (flag === "--interaction-mode") input.interactionMode = optionValue(ctx.args, index++, flag);
+    } else if (flag === "--interaction-mode")
+      input.interactionMode = optionValue(ctx.args, index++, flag);
     else if (flag === "--prompt") input.prompt = optionValue(ctx.args, index++, flag);
+    else if (flag === "--idempotency-key")
+      input.clientMutationId = optionValue(ctx.args, index++, flag);
     else if (flag === "--defer") {
       input.deferRuntimeSelection = true;
-      hasExplicitDestination = true;
-    }
-    else if (flag.startsWith("--")) usage(`Unexpected argument: ${flag}`);
+      requestedGroupConfiguration = true;
+    } else if (flag.startsWith("--")) usage(`Unexpected argument: ${flag}`);
     else prompt.push(flag);
   }
+
   if (prompt.length) {
     if (input.prompt) usage("Provide the prompt either positionally or with --prompt, not both");
     input.prompt = prompt.join(" ");
   }
-  if (
-    input.sessionGroupId &&
-    (input.kind ||
-      input.hosting ||
-      input.runtimeInstanceId ||
-      input.branch ||
-      input.visibility ||
-      input.deferRuntimeSelection)
-  ) {
+  if (requestedGroup && requestedDestination) {
+    usage("--group cannot be combined with --channel, --project, or --repo");
+  }
+  if (requestedGroup && requestedGroupConfiguration) {
     usage(
-      "--group cannot be combined with --kind, --hosting, --runtime, --branch, --visibility, or --defer; sessions inherit those settings from their group",
+      "--group cannot be combined with --kind, --hosting, --runtime, --environment, --branch, --visibility, or --defer; sessions inherit those settings from their group",
     );
   }
-  if (!hasExplicitDestination && ctx.env.TRACE_SESSION_GROUP_ID) {
+
+  const generatedProject = !!input.kind && input.kind !== "coding";
+  if (
+    !requestedGroup &&
+    !requestedDestination &&
+    !requestedGroupConfiguration &&
+    ctx.env.TRACE_SESSION_GROUP_ID
+  ) {
     input.sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
+  } else if (!requestedGroup && !requestedDestination && !generatedProject) {
+    usage(
+      "Starting a new coding session group requires --channel, --project, or --repo; omit group-level options to start a sibling in the current group",
+    );
   }
+  input.clientMutationId ||= randomUUID();
   return input;
+}
+
+async function resolveStartDestination(
+  client: TraceClient,
+  input: StartSessionInput,
+): Promise<void> {
+  if (input.sessionGroupId || (input.kind && input.kind !== "coding")) return;
+
+  let impliedRepo: { id: string; name: string } | null = null;
+  if (input.channelId) {
+    const result = await client.graphql<
+      { channel: { id: string; name: string; repo?: { id: string; name: string } | null } | null },
+      { id: string }
+    >(`query TraceCliStartChannel($id: ID!) { channel(id: $id) { id name repo { id name } } }`, {
+      id: input.channelId,
+    });
+    if (!result.channel) usage(`Channel not found: ${input.channelId}`);
+    impliedRepo = result.channel.repo ?? null;
+  } else if (input.projectId) {
+    const result = await client.graphql<
+      { project: { id: string; name: string; repo?: { id: string; name: string } | null } | null },
+      { id: string }
+    >(`query TraceCliStartProject($id: ID!) { project(id: $id) { id name repo { id name } } }`, {
+      id: input.projectId,
+    });
+    if (!result.project) usage(`Project not found: ${input.projectId}`);
+    impliedRepo = result.project.repo ?? null;
+  }
+
+  if (impliedRepo && input.repoId && input.repoId !== impliedRepo.id) {
+    usage(
+      `The selected destination uses repo ${impliedRepo.id} (${impliedRepo.name}); remove --repo or use that repo`,
+    );
+  }
+  input.repoId ??= impliedRepo?.id;
+  if (!input.repoId) {
+    usage("The selected destination has no repository; add --repo for a coding session");
+  }
+}
+
+function sessionUiPath(session: SessionView): string | null {
+  if (!session.sessionGroupId) return null;
+  return session.channel?.id
+    ? `/c/${session.channel.id}/g/${session.sessionGroupId}/s/${session.id}`
+    : `/g/${session.sessionGroupId}/s/${session.id}`;
+}
+
+async function startSessionWithRetry(client: TraceClient, input: StartSessionInput) {
+  const request = () =>
+    client.graphql<{ startSession: SessionView }, { input: StartSessionInput }>(
+      `mutation TraceCliStartSession($input: StartSessionInput!) { startSession(input: $input) { ${SESSION_FIELDS} } }`,
+      { input },
+    );
+  try {
+    return await request();
+  } catch (error) {
+    if (!(error instanceof CliError) || !["connectivity", "server"].includes(error.category)) {
+      throw error;
+    }
+    try {
+      return await request();
+    } catch (retryError) {
+      if (retryError instanceof CliError) {
+        throw new CliError(
+          `${retryError.message}; retry with --idempotency-key ${input.clientMutationId}`,
+          retryError.exitCode,
+          retryError.category,
+        );
+      }
+      throw retryError;
+    }
+  }
 }
 
 function parseTargetAction(ctx: CommandContext): { id: string; values: string[]; queue: boolean; interactionMode?: string } {
@@ -237,16 +334,31 @@ export const sessionCommands: Command[] = [
   },
   {
     path: ["session", "start"],
-    usage: "trace session start [prompt] [--tool TOOL] [--model MODEL] [--hosting MODE] [--runtime ID] [--repo ID] [--branch NAME] [--channel ID] [--group ID] [--project ID] [--ticket ID] [--kind KIND] [--visibility VISIBILITY] [--interaction-mode MODE] [--defer] [--json]",
+    usage:
+      "trace session start [prompt] [--group ID | --channel ID | --project ID | --repo ID] [--tool TOOL] [--model MODEL] [--hosting MODE] [--runtime ID] [--environment ID] [--branch NAME] [--ticket ID] [--kind KIND] [--visibility VISIBILITY] [--interaction-mode MODE] [--defer] [--idempotency-key KEY] [--json]",
     description: "Start a sibling session or create one in an explicit Trace destination",
     async run(ctx) {
       const client = await ctx.client();
       const input = parseSessionStart(ctx);
-      const result = await client.graphql<{ startSession: SessionView }, { input: StartSessionInput }>(
-        `mutation TraceCliStartSession($input: StartSessionInput!) { startSession(input: $input) { ${SESSION_FIELDS} } }`,
-        { input },
+      await resolveStartDestination(client, input);
+      const result = await startSessionWithRetry(client, input);
+      const runRequested = !!input.prompt;
+      const uiPath = sessionUiPath(result.startSession);
+      ctx.output(
+        {
+          session: result.startSession,
+          runRequested,
+          uiPath,
+          idempotencyKey: input.clientMutationId,
+        },
+        [
+          printSession(result.startSession),
+          runRequested
+            ? "Initial run requested; not_started may be shown while the runtime is provisioning."
+            : "Session created without an initial run.",
+          ...(uiPath ? [`Open: ${uiPath}`] : []),
+        ].join("\n"),
       );
-      ctx.output({ session: result.startSession }, printSession(result.startSession));
     },
   },
   {

@@ -107,6 +107,12 @@ vi.mock("../lib/db.js", () => ({
     channel: {
       findFirst: vi.fn(),
     },
+    channelProject: {
+      findMany: vi.fn(),
+    },
+    sessionProject: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -138,10 +144,10 @@ vi.mock("../services/inbox.js", () => ({
 }));
 
 import { ticketMutations, ticketQueries, ticketSubscriptions } from "./ticket.js";
-import { sessionQueries, sessionSubscriptions } from "./session.js";
+import { sessionQueries, sessionSubscriptions, sessionTypeResolvers } from "./session.js";
 import { sessionMutations } from "./session.js";
 import { channelGroupQueries } from "./channelGroup.js";
-import { channelSubscriptions } from "./channel.js";
+import { channelSubscriptions, channelTypeResolvers } from "./channel.js";
 import { eventQueries, eventSubscriptions } from "./event.js";
 import { inboxQueries } from "./inbox.js";
 import { assertChannelAccess, assertScopeAccess } from "../services/access.js";
@@ -165,6 +171,18 @@ const ctx = {
 describe("GraphQL authz guards", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("resolves missing channel and session project links as empty lists", async () => {
+    vi.mocked(prisma.channelProject.findMany).mockResolvedValueOnce([]);
+    vi.mocked(prisma.sessionProject.findMany).mockResolvedValueOnce([]);
+
+    await expect(
+      channelTypeResolvers.Channel.projects({ id: "channel-1" }, {}, ctx),
+    ).resolves.toEqual([]);
+    await expect(
+      sessionTypeResolvers.Session.projects({ id: "session-1" }, {}, ctx),
+    ).resolves.toEqual([]);
   });
 
   it("rejects cross-org ticket list queries", async () => {

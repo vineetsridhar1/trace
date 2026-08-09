@@ -42,18 +42,34 @@ The simplest command starts a sibling in the current session group:
 ```
 
 Do not add group-level options such as `--hosting`, `--runtime`, `--branch`, `--visibility`, or
-`--defer` when you want a sibling to inherit the current group's environment. Supplying one of
-those options without `--group` creates a new session group.
+`--defer` when you want a sibling to inherit the current group's environment. A new coding group
+must name exactly one destination with `--channel`, `--project`, or `--repo`. Prefer a channel so
+the result appears in the normal channel workflow. A channel or project supplies its linked repo;
+if it has none, also pass `--repo`.
 
 Select another existing group or an explicit destination when appropriate:
 
 ```sh
 "$TRACE_CLI" session start "Review this work" --group <group-id> --tool codex --json
-"$TRACE_CLI" session start "Fix the login flow" --channel <channel-id> --repo <repo-id> --tool claude_code --json
+"$TRACE_CLI" session start "Fix the login flow" --channel <channel-id> --tool claude_code --json
+"$TRACE_CLI" session start "Refactor the parser" --repo <repo-id> --hosting cloud --json
 "$TRACE_CLI" session start "Build the dashboard" --kind app --hosting cloud --json
 ```
 
-Useful options include `--model`, `--reasoning`, `--hosting`, `--runtime`, `--branch`, `--project`, `--ticket`, `--visibility`, `--interaction-mode`, and `--defer`. Use `session start --help` for the complete syntax.
+`session start` with a prompt requests the initial run in the same operation. The returned session
+may temporarily have `agentStatus: "not_started"` while its runtime is provisioning. Do not call
+`session run` with the same prompt: that can duplicate the work. Inspect `runRequested` and monitor
+the session or its events instead.
+
+The JSON result includes `session`, `runRequested`, `uiPath`, and `idempotencyKey`. The CLI retries
+a transient empty/server response once with the same key. If the command still fails and reports a
+key, reuse it with `--idempotency-key <key>` so a manual retry returns the original session instead
+of creating a duplicate.
+
+Useful options include `--model`, `--reasoning`, `--hosting`, `--runtime`, `--environment`,
+`--branch`, `--project`, `--ticket`, `--visibility`, `--interaction-mode`, and `--defer`. Explicit
+cloud hosting fails when cloud is unavailable; it is never silently changed to local. Use
+`session start --help` for the complete syntax.
 
 ## Message and lifecycle
 

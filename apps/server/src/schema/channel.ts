@@ -5,6 +5,7 @@ import { assertChannelAccess } from "../services/access.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import { organizationService } from "../services/organization.js";
+import { prisma } from "../lib/db.js";
 
 export const channelQueries = {
   channels: (
@@ -136,6 +137,16 @@ export const channelSubscriptions = {
 
 export const channelTypeResolvers = {
   Channel: {
+    projects: async (channel: { id: string }, _args: unknown, ctx: Context) => {
+      const links = await prisma.channelProject.findMany({
+        where: {
+          channelId: channel.id,
+          project: { organizationId: requireOrgContext(ctx) },
+        },
+        include: { project: { include: { repo: true } } },
+      });
+      return links.map((link) => link.project);
+    },
     members: (channel: { id: string }) => channelService.getMembers(channel.id),
     memberCount: (channel: { id: string; _count?: { members?: number } }) =>
       channel._count?.members ?? channelService.getMemberCount(channel.id),
