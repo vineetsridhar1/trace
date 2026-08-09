@@ -6,4 +6,4 @@
 - Imported: 2026-08-09
 - License: Apache License 2.0
 
-Trace vendors the Codex-compatible `.agents` skill, the Claude skill and reviewer agents, their command references, and supporting scripts. The two provider `SKILL.md` files are modified with the Trace Design workspace adapter. Trace does not vendor or enable the upstream provider hook manifests or browser extension.
+Trace vendors the Codex-compatible `.agents` skill, the Claude skill and relevant reviewer agents, their React-relevant command references, and supporting design/detector scripts. The provider `SKILL.md`, critique, and live references are modified for Trace's fixed React + Vite canvas. Trace omits the upstream multi-framework live-injection implementation and does not vendor or enable provider hook manifests or the browser extension.

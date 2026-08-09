@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const guidance = readFileSync(new URL("./ai-guidance.md", import.meta.url), "utf8");
@@ -83,7 +83,7 @@ test("preserves attribution for the adapted Impeccable guidance", () => {
   assert.match(impeccableUpstream, /Skill version: `4\.0\.4`/);
 });
 
-test("ships the complete provider-native Impeccable workflow with Trace adapters", () => {
+test("ships the React-relevant Impeccable workflow with Trace adapters", () => {
   assert.match(codexImpeccable, /## Trace Design workspace adapter/);
   assert.match(claudeImpeccable, /## Trace Design workspace adapter/);
   assert.match(codexImpeccable, /Do not run `context\.mjs`/);
@@ -96,10 +96,19 @@ test("ships the complete provider-native Impeccable workflow with Trace adapters
   assert.ok(codexReferences.includes("craft-floor.md"));
   assert.ok(codexReferences.includes("critique.md"));
   assert.ok(codexReferences.includes("new-work.md"));
+  assert.match(
+    readFileSync(new URL("../.agents/skills/impeccable/reference/live.md", import.meta.url), "utf8"),
+    /Trace live variation mode/,
+  );
 
   const codexScripts = readdirSync(
     new URL("../.agents/skills/impeccable/scripts/", import.meta.url),
   );
   assert.ok(codexScripts.includes("detect.mjs"));
   assert.ok(codexScripts.includes("palette.mjs"));
+  assert.equal(codexScripts.includes("live-server.mjs"), false);
+  assert.equal(
+    existsSync(new URL("../.agents/skills/impeccable/scripts/live/", import.meta.url)),
+    false,
+  );
 });

@@ -22,9 +22,8 @@
  *      escape hatch, only consulted when defaults are empty
  *   5. Active project root as a "nothing found" default
  *
- * `resolveContextDir()` and `loadContext()` are also exported for the
- * server-side scripts (live.mjs, live-server.mjs) that need the structured
- * shape rather than the markdown block.
+ * `resolveContextDir()` and `loadContext()` are also exported for callers that
+ * need the structured shape rather than the markdown block.
  */
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
