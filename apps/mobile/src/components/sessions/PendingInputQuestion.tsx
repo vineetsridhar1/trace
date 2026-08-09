@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SEND_SESSION_MESSAGE_MUTATION, useQuestionState } from "@trace/client-core";
 import type { Question } from "@trace/shared";
@@ -9,6 +9,7 @@ import { getClient } from "@/lib/urql";
 import { QuestionFlowControl } from "./question-flow/QuestionFlowControl";
 import { QuestionFlowFooter } from "./question-flow/QuestionFlowFooter";
 import { QuestionFlowHeader } from "./question-flow/QuestionFlowHeader";
+import { QuestionFlowOption } from "./question-flow/QuestionFlowOption";
 import { QuestionFlowReview } from "./question-flow/QuestionFlowReview";
 import { questionColors, questionMetrics } from "./question-flow/tokens";
 
@@ -25,6 +26,7 @@ export function PendingInputQuestion({ sessionId, questions, hasActivePlan, onCl
   const [sending, setSending] = useState(false);
   const state = useQuestionState({ questions });
   const { page, total, question, currentSelected, currentCustom, currentRanking, currentValid, validationMessage, isFirstPage, isLastPage, hasAllAnswers, answers } = state;
+  const currentAssumed = answers[page]?.assumed ?? false;
 
   const send = useCallback(async () => {
     if (sending || !hasAllAnswers) return;
@@ -49,8 +51,6 @@ export function PendingInputQuestion({ sessionId, questions, hasActivePlan, onCl
   const letAgentDecide = () => {
     void haptic.selection();
     state.decideForMe();
-    if (isLastPage) setReviewing(true);
-    else state.goNext();
   };
   const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
   const primaryLabel = sending
@@ -79,7 +79,9 @@ export function PendingInputQuestion({ sessionId, questions, hasActivePlan, onCl
             </View>
             <QuestionFlowControl question={question} type={type} selected={currentSelected} custom={currentCustom} ranking={currentRanking} onToggle={state.toggleOption} onCustom={state.setCustomText} onMove={state.moveRankOption} />
             {validationMessage ? <Text variant="caption1" style={styles.error}>{validationMessage}</Text> : null}
-            <Pressable accessibilityRole="button" accessibilityLabel="Let the agent decide" onPress={letAgentDecide} style={styles.decide}><Text variant="subheadline" style={styles.muted}>You decide</Text></Pressable>
+            <View style={styles.decide}>
+              <QuestionFlowOption label="You decide" description="Choose the smallest useful next step." selected={currentAssumed} onPress={letAgentDecide} />
+            </View>
           </>
         )}
       </ScrollView>
@@ -89,5 +91,5 @@ export function PendingInputQuestion({ sessionId, questions, hasActivePlan, onCl
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: questionColors.background }, content: { paddingHorizontal: questionMetrics.pagePadding, paddingTop: 32, paddingBottom: 24 }, prompt: { gap: 10 }, dot: { width: 8, height: 8, borderRadius: 4 }, label: { fontWeight: "600" }, title: { color: questionColors.foreground, letterSpacing: -0.7 }, context: { color: questionColors.muted, lineHeight: 21 }, muted: { color: questionColors.muted }, error: { color: questionColors.foreground, marginTop: 16, borderWidth: 1, borderColor: "rgba(255,69,58,0.5)", backgroundColor: "rgba(255,69,58,0.1)", borderRadius: questionMetrics.controlRadius, paddingHorizontal: 12, paddingVertical: 8 }, decide: { marginTop: 16, alignSelf: "flex-start", minHeight: 44, justifyContent: "center" },
+  root: { flex: 1, backgroundColor: questionColors.background }, content: { paddingHorizontal: questionMetrics.pagePadding, paddingTop: 32, paddingBottom: 24 }, prompt: { gap: 10 }, dot: { width: 8, height: 8, borderRadius: 4 }, label: { fontWeight: "600" }, title: { color: questionColors.foreground, letterSpacing: -0.7 }, context: { color: questionColors.muted, lineHeight: 21 }, error: { color: questionColors.foreground, marginTop: 16, borderWidth: 1, borderColor: "rgba(255,69,58,0.5)", backgroundColor: "rgba(255,69,58,0.1)", borderRadius: questionMetrics.controlRadius, paddingHorizontal: 12, paddingVertical: 8 }, decide: { marginTop: 12 },
 });
