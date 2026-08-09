@@ -20,7 +20,7 @@ export function QuestionFlowFooter({
   bottomInset,
 }: QuestionFlowFooterProps) {
   return (
-    <View style={[styles.dock, { paddingBottom: Math.max(28, bottomInset) }]}>
+    <View style={[styles.dock, { paddingBottom: Math.max(12, bottomInset) }]}>
       {backVisible ? (
         <View style={styles.backShadow}>
           <Glass preset="input" interactive style={styles.backGlass}>

@@ -25,14 +25,20 @@ const closeMock = vi.fn();
 const submitMock = vi.fn();
 
 vi.mock("react-native", () => ({
-  KeyboardAvoidingView: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement("KeyboardAvoidingView", null, children),
+  Keyboard: {
+    addListener: () => ({ remove: vi.fn() }),
+  },
   Platform: { OS: "ios" },
   ScrollView: ({ children }: { children?: React.ReactNode }) =>
     React.createElement("ScrollView", null, children),
-  StyleSheet: { create: <T,>(styles: T) => styles },
+  StyleSheet: { absoluteFillObject: {}, create: <T,>(styles: T) => styles },
   View: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
     React.createElement("View", props, children),
+}));
+
+vi.mock("react-native-keyboard-controller", () => ({
+  KeyboardStickyView: ({ children }: { children?: React.ReactNode }) =>
+    React.createElement("KeyboardStickyView", null, children),
 }));
 
 vi.mock("react-native-safe-area-context", () => ({

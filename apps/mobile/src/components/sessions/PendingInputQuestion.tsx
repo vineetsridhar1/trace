@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Keyboard, Platform, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthStore, useQuestionState, type AuthState } from "@trace/client-core";
 import type { Question, QuestionType } from "@trace/shared";
@@ -36,6 +37,7 @@ export function PendingInputQuestion({
   const organizationId = useAuthStore((state: AuthState) => state.activeOrgId);
   const [reviewing, setReviewing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [referenceAttachments, setReferenceAttachments] = useState<
     Record<number, FileAttachment[]>
@@ -67,6 +69,17 @@ export function PendingInputQuestion({
   } = state;
   const currentAssumed = answers[page]?.assumed ?? false;
   const currentReferenceAttachments = referenceAttachments[page] ?? EMPTY_ATTACHMENTS;
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const updateUploadedAttachments = useCallback((uploaded: FileAttachment[]) => {
     const uploadedById = new Map(uploaded.map((attachment) => [attachment.id, attachment]));
@@ -150,15 +163,13 @@ export function PendingInputQuestion({
             : "Continue";
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={[styles.root, { paddingTop: insets.top }]}
-    >
+    <View style={[styles.root, { paddingTop: insets.top }]}>
       <QuestionFlowHeader
         step={reviewing ? `${total} answers` : total > 1 ? `${page + 1} of ${total}` : "Question"}
         onBack={onClose}
       />
       <ScrollView
+        automaticallyAdjustKeyboardInsets
         contentContainerStyle={styles.content}
         keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
         keyboardShouldPersistTaps="handled"
@@ -238,29 +249,37 @@ export function PendingInputQuestion({
           </>
         )}
       </ScrollView>
-      {sendError ? (
-        <View accessibilityRole="alert" style={styles.sendError}>
-          <Text variant="caption1" style={styles.sendErrorText}>{sendError}</Text>
+      <KeyboardStickyView
+        offset={{ opened: -8 }}
+        pointerEvents="box-none"
+        style={styles.overlayHost}
+      >
+        <View pointerEvents="box-none" style={styles.actionStack}>
+          {sendError ? (
+            <View accessibilityRole="alert" style={styles.sendError}>
+              <Text variant="caption1" style={styles.sendErrorText}>{sendError}</Text>
+            </View>
+          ) : null}
+          <QuestionFlowFooter
+            label={primaryLabel}
+            disabled={sending || (reviewing ? !hasAllAnswers : !currentValid)}
+            backVisible={!reviewing && !isFirstPage}
+            onBack={state.goPrev}
+            onPrimary={() => {
+              if (reviewing) void send();
+              else continueFlow();
+            }}
+            bottomInset={keyboardVisible ? 0 : insets.bottom}
+          />
         </View>
-      ) : null}
-      <QuestionFlowFooter
-        label={primaryLabel}
-        disabled={sending || (reviewing ? !hasAllAnswers : !currentValid)}
-        backVisible={!reviewing && !isFirstPage}
-        onBack={state.goPrev}
-        onPrimary={() => {
-          if (reviewing) void send();
-          else continueFlow();
-        }}
-        bottomInset={insets.bottom}
-      />
-    </KeyboardAvoidingView>
+      </KeyboardStickyView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: questionColors.background },
-  content: { paddingHorizontal: questionMetrics.pagePadding, paddingTop: 32, paddingBottom: 24 },
+  content: { paddingHorizontal: questionMetrics.pagePadding, paddingTop: 32, paddingBottom: 124 },
   prompt: { gap: 10 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   label: { fontWeight: "600" },
@@ -268,6 +287,8 @@ const styles = StyleSheet.create({
   context: { color: questionColors.muted, lineHeight: 21 },
   error: { color: questionColors.foreground, marginTop: 16, borderWidth: 1, borderColor: "rgba(255,69,58,0.5)", backgroundColor: "rgba(255,69,58,0.1)", borderRadius: questionMetrics.controlRadius, paddingHorizontal: 12, paddingVertical: 8 },
   decide: { marginTop: 12 },
-  sendError: { marginHorizontal: 16, marginBottom: 4, borderWidth: 1, borderColor: "rgba(255,69,58,0.5)", backgroundColor: "rgba(255,69,58,0.1)", borderRadius: questionMetrics.controlRadius, paddingHorizontal: 12, paddingVertical: 10 },
+  overlayHost: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-end" },
+  actionStack: { backgroundColor: "transparent" },
+  sendError: { marginHorizontal: 16, marginBottom: 2, borderWidth: 1, borderColor: "rgba(255,69,58,0.5)", backgroundColor: "rgba(12,12,14,0.94)", borderRadius: questionMetrics.controlRadius, paddingHorizontal: 12, paddingVertical: 10 },
   sendErrorText: { color: questionColors.foreground },
 });
