@@ -9,6 +9,7 @@ interface MockComposerProps {
   inputHeight: number;
   onChangeText: (text: string) => void;
   onContentHeightChange: (height: number) => void;
+  onFocus: () => void;
   onRetry: () => void;
   text: string;
 }
@@ -27,6 +28,11 @@ interface MockAttachmentSheetProps {
 interface MockActionButtonProps {
   accessibilityLabel: string;
   disabled?: boolean;
+  onPress: () => void;
+}
+
+interface MockPasteButtonProps {
+  visible: boolean;
   onPress: () => void;
 }
 
@@ -67,12 +73,14 @@ let latestComposerProps: MockComposerProps | null = null;
 let latestAttachButtonProps: MockAttachButtonProps | null = null;
 let latestAttachmentSheetProps: MockAttachmentSheetProps | null = null;
 let latestActionButtonProps: MockActionButtonProps | null = null;
+let latestPasteButtonProps: MockPasteButtonProps | null = null;
 let latestOnFailure: ((draft: string, message: string) => void) | null = null;
 let latestOnSuccess: (() => void) | null = null;
 let draftAttachments: MockDraftAttachment[] = [];
 let mockTool = "codex";
 let mockAgentStatus = "idle";
 let mockSessionGroupKind: string | null = null;
+let mockClipboardHasImage = false;
 let runtimePickerRenderCount = 0;
 const submitMock = vi.fn();
 const routerPushMock = vi.fn();
@@ -209,7 +217,7 @@ vi.mock("@/hooks/useComposerSubmit", () => ({
 
 vi.mock("@/hooks/useClipboardImage", () => ({
   useClipboardImage: () => ({
-    hasImage: false,
+    hasImage: mockClipboardHasImage,
     refresh: vi.fn(),
     dismiss: vi.fn(),
   }),
@@ -299,7 +307,10 @@ vi.mock("./ComposerConnectionNotice", () => ({
 }));
 
 vi.mock("./ComposerPasteButton", () => ({
-  ComposerPasteButton: () => null,
+  ComposerPasteButton: (props: MockPasteButtonProps) => {
+    latestPasteButtonProps = props;
+    return null;
+  },
 }));
 
 vi.mock("./AttachmentBar", () => ({
@@ -394,9 +405,11 @@ describe("SessionInputComposer", () => {
     latestOnFailure = null;
     latestOnSuccess = null;
     draftAttachments = [];
+    latestPasteButtonProps = null;
     mockTool = "codex";
     mockAgentStatus = "idle";
     mockSessionGroupKind = null;
+    mockClipboardHasImage = false;
     runtimePickerRenderCount = 0;
     submitMock.mockClear();
     routerPushMock.mockClear();
@@ -430,6 +443,38 @@ describe("SessionInputComposer", () => {
 
     expect(latestComposerProps?.inputHeight).toBe(MIN_INPUT_HEIGHT);
     expect(latestComposerProps?.text).toBe("");
+  });
+
+  it("keeps the paste button visible when an image is already attached", async () => {
+    mockClipboardHasImage = true;
+    draftAttachments = [
+      {
+        id: "attachment-1",
+        filename: "first-image.jpg",
+        mimeType: "image/jpeg",
+        fileUri: "file:///tmp/first-image.jpg",
+        previewUri: "file:///tmp/first-image.jpg",
+        width: 100,
+        height: 100,
+        s3Key: null,
+        uploading: false,
+      },
+    ];
+    const { SessionInputComposer } = await import("./SessionInputComposer");
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(SessionInputComposer, {
+          sessionId: "session-1",
+          keyboardVisible: true,
+        }),
+      );
+    });
+    await act(async () => {
+      latestComposerProps?.onFocus();
+    });
+
+    expect(latestPasteButtonProps?.visible).toBe(true);
   });
 
   it("keeps attachment-only failures retryable", async () => {

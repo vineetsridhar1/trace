@@ -14,7 +14,6 @@ import { Mention } from "quill-mention";
 import "./MentionBlot";
 import "./mention-styles.css";
 import { createCustomUserElement, createSlashCommandElement } from "./mention-dom";
-import { pastedFilesFromClipboard } from "./clipboard";
 
 // Guard against double-registration (e.g. HMR in dev mode)
 if (!Quill.imports["modules/mention"]) {
@@ -133,7 +132,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     const handler = (e: ClipboardEvent) => {
       if (!onPasteFilesRef.current) return;
 
-      const files = pastedFilesFromClipboard(e.clipboardData);
+      const files = Array.from(e.clipboardData?.files ?? []);
       if (files.length > 0) {
         e.preventDefault();
         e.stopImmediatePropagation();

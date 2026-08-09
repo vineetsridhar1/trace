@@ -236,7 +236,7 @@ export function SessionInputComposer({
     inputFocused &&
     keyboardVisible &&
     clipboardHasImage &&
-    attachments.length === 0 &&
+    attachments.length < MAX_ATTACHMENTS &&
     !pastingImage;
 
   // Expanded controls should only show while the input is focused and the

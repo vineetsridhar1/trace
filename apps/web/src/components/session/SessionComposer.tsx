@@ -1,6 +1,5 @@
 import { useRef, type ChangeEvent, type ReactNode, type RefObject } from "react";
-import { ClipboardPaste, Paperclip, Send, Square } from "lucide-react";
-import { toast } from "sonner";
+import { Paperclip, Send, Square } from "lucide-react";
 import { cn } from "../../lib/utils";
 import {
   ChatEditor,
@@ -9,7 +8,6 @@ import {
   type ChatEditorSubmitOptions,
   type SlashCommandItem,
 } from "../chat/ChatEditor";
-import { pastedImageFilesFromClipboard } from "../chat/clipboard";
 import { ImageAttachmentBar, type FileAttachment } from "./ImageAttachmentBar";
 import { MODE_CONFIG, type InteractionMode } from "./interactionModes";
 
@@ -77,18 +75,6 @@ export function SessionComposer({
     onFilesSelected?.(Array.from(event.currentTarget.files ?? []));
     event.currentTarget.value = "";
   };
-  const handlePasteImage = async () => {
-    try {
-      const files = await pastedImageFilesFromClipboard();
-      if (files.length === 0) {
-        toast.error("No image found in the clipboard");
-        return;
-      }
-      onPasteFiles?.(files);
-    } catch {
-      toast.error("Could not access the clipboard image");
-    }
-  };
 
   return (
     <div
@@ -140,15 +126,6 @@ export function SessionComposer({
           title="Attach files"
         >
           <Paperclip size={16} />
-        </button>
-        <button
-          type="button"
-          onClick={() => void handlePasteImage()}
-          disabled={disabled || attachmentDisabled || !onPasteFiles}
-          className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-elevated hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-          title="Paste image"
-        >
-          <ClipboardPaste size={16} />
         </button>
         {afterAttachment}
         {controls}
