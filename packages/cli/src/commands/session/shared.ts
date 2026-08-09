@@ -48,6 +48,7 @@ export const CODING_TOOLS = [
   "pi",
 ] as const;
 export const SESSION_KINDS = [
+  "general",
   "coding",
   "design",
   "design_system",

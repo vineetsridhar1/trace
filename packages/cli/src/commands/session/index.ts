@@ -6,12 +6,14 @@ import { sessionListCommand } from "./list.js";
 import { sessionRunCommand } from "./run.js";
 import { sessionSendCommand } from "./send.js";
 import { sessionStartCommand } from "./start.js";
+import { sessionConvertCommand } from "./convert.js";
 import { sessionStopCommand } from "./stop.js";
 
 export const sessionCommands: readonly CommandDefinition[] = [
   sessionListCommand,
   sessionGetCommand,
   sessionStartCommand,
+  sessionConvertCommand,
   sessionSendCommand,
   sessionRunCommand,
   sessionStopCommand,

@@ -125,6 +125,28 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   afterCreate?: (input: StartSessionAfterCreateInput) => Promise<void>;
 };
 
+/**
+ * A session group is the durable work unit. Conversion deliberately changes
+ * that unit in place so its active session, URL, and event history survive.
+ * Target-specific provisioning is added through this service rather than a
+ * resolver so agents and GraphQL clients share the same rules.
+ */
+export type ConvertSessionGroupServiceInput = {
+  sessionGroupId: string;
+  kind: SessionGroupKind;
+  repoId?: string | null;
+  projectId?: string | null;
+  tool?: CodingTool | null;
+  model?: string | null;
+  reasoningEffort?: string | null;
+  environmentId?: string | null;
+  runtimeInstanceId?: string | null;
+  clientMutationId?: string | null;
+  organizationId: string;
+  actorId: string;
+  actorType?: ActorType;
+};
+
 type SessionStartMetadata = {
   prompt: string | null;
   promptEventId: string | null;
@@ -1130,6 +1152,10 @@ const TRACE_CLI_DISCOVERY_INSTRUCTION = `\n\n<system-instruction>
 When you need a Trace platform capability, first run \`"$TRACE_CLI" --help --json\`, then inspect the relevant group and leaf help with \`"$TRACE_CLI" <group> --help --json\` and \`"$TRACE_CLI" <group> <command> --help --json\`. Follow the returned workflow, effects, output, and next-step guidance. Invoke the managed CLI using \`"$TRACE_CLI"\` exactly; do not call a bare \`trace\` command, call Trace GraphQL directly, or print $TRACE_INVOCATION_TOKEN.
 </system-instruction>`;
 
+const GENERAL_SESSION_INSTRUCTION = `\n\n<system-instruction>
+This is a Trace general agent session. Coordinate, monitor, answer questions, and use the managed Trace CLI to discover the relevant project, repository, and sessions. Do not edit code or create a code workspace in this session. When this conversation becomes one focused implementation task, use the CLI to convert this session to a Coding session after resolving its repository. When work is independent or parallel, create a linked session instead.
+</system-instruction>`;
+
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves each response. */
 const AUTO_SAVE_INSTRUCTION = `\n\n<system-instruction>
 Before completing every response that changes the workspace, silently save your work to the remote:
@@ -1211,6 +1237,7 @@ function appendPromptInstructions(
   result += REQUEST_USER_INPUT_SKILL_INSTRUCTION;
   result += TRACE_CLI_DISCOVERY_INSTRUCTION;
   result += TRACE_SESSION_SKILL_INSTRUCTION;
+  if (sessionGroupKind === "general") result += GENERAL_SESSION_INSTRUCTION;
   if (hasRepo && !isGeneratedProjectKind(sessionGroupKind)) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
@@ -3381,6 +3408,122 @@ export class SessionService {
     }
 
     return result.sessionGroup;
+  }
+
+  /**
+   * Convert the current work unit without creating a second conversation.
+   *
+   * v1 intentionally exposes only the safe general-to-coding transition. Generated
+   * project kinds require their own cloud starter preparation and must opt in
+   * before they are surfaced as conversion targets.
+   */
+  async convertGroup(input: ConvertSessionGroupServiceInput) {
+    await assertSessionGroupAccess(input.sessionGroupId, input.actorId, input.organizationId);
+
+    const targetIsGenerated = isGeneratedProjectKind(input.kind);
+    if (targetIsGenerated) {
+      throw new ValidationError(
+        `${input.kind} sessions require cloud target preparation and are not convertible yet`,
+      );
+    }
+    if (input.kind !== "coding") {
+      throw new ValidationError(`Unsupported conversion target: ${input.kind}`);
+    }
+
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.$queryRaw`SELECT "id" FROM "SessionGroup" WHERE "id" = ${input.sessionGroupId} FOR UPDATE`;
+      const group = await tx.sessionGroup.findFirst({
+        where: { id: input.sessionGroupId, organizationId: input.organizationId, archivedAt: null },
+        select: {
+          id: true,
+          kind: true,
+          repoId: true,
+          sessions: {
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            include: SESSION_INCLUDE,
+          },
+        },
+      });
+      if (!group) throw new ValidationError("Session group not found or is archived");
+      if (group.kind !== "general") {
+        throw new ValidationError("Only general sessions can be converted in the initial release");
+      }
+      if (group.sessions.length !== 1) {
+        throw new ValidationError("Only single-session groups can be converted");
+      }
+
+      const session = group.sessions[0]!;
+      const targetRepoId = input.repoId ?? group.repoId;
+      if (input.kind === "coding" && !targetRepoId) {
+        throw new ValidationError("Converting to coding requires a repository");
+      }
+
+      if (input.projectId) {
+        const project = await tx.project.findFirst({
+          where: { id: input.projectId, organizationId: input.organizationId },
+          select: { id: true, repoId: true },
+        });
+        if (!project) throw new ValidationError("Project does not belong to this organization");
+        if (targetRepoId && project.repoId && project.repoId !== targetRepoId) {
+          throw new ValidationError("Project must be linked to the selected repository");
+        }
+      }
+      if (targetRepoId) {
+        const repo = await tx.repo.findFirst({
+          where: { id: targetRepoId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+        if (!repo) throw new ValidationError("Repository does not belong to this organization");
+      }
+
+      // A general session may be local or cloud. Coding preserves the chosen
+      // hosting; cloud-only targets are rejected above until their migration
+      // adapter can prepare and health-check a cloud runtime before this write.
+      await tx.sessionGroup.update({
+        where: { id: group.id },
+        data: { kind: input.kind, repoId: targetRepoId },
+      });
+      const updated = await tx.session.update({
+        where: { id: session.id },
+        data: {
+          repoId: targetRepoId,
+          ...(input.tool ? { tool: input.tool } : {}),
+          ...(input.model !== undefined ? { model: input.model } : {}),
+          ...(input.reasoningEffort !== undefined
+            ? { reasoningEffort: input.reasoningEffort }
+            : {}),
+          ...(input.projectId
+            ? { projects: { deleteMany: {}, create: { projectId: input.projectId } } }
+            : {}),
+        },
+        include: SESSION_INCLUDE,
+      });
+      const sessionGroup = await this.loadSessionGroupSnapshot(group.id, tx);
+      if (!sessionGroup) throw new Error("Session group disappeared during conversion");
+      const event = await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: updated.id,
+          eventType: "session_converted" as EventType,
+          payload: eventJson({
+            sessionGroupId: group.id,
+            fromKind: group.kind,
+            toKind: input.kind,
+            session: serializeSession(updated),
+            sessionGroup,
+          }),
+          actorType: input.actorType ?? "user",
+          actorId: input.actorId,
+          deferPublish: true,
+        },
+        tx,
+      );
+      return { session: updated, event };
+    });
+
+    eventService.publishCreated(result.event);
+    return result.session;
   }
 
   async getGroupStatusSources(sessionGroupId: string) {

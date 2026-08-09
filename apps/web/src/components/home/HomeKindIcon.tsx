@@ -1,4 +1,4 @@
-import { AppWindow, CodeXml, Component, FileText, Frame, Gem, type LucideIcon } from "lucide-react";
+import { AppWindow, BotMessageSquare, CodeXml, Component, FileText, Frame, Gem, type LucideIcon } from "lucide-react";
 import type { SessionGroupKind } from "@trace/gql";
 import { cn } from "../../lib/utils";
 import type { HomeCreatableKind } from "./home-kinds";
@@ -11,6 +11,7 @@ export const HOME_KIND_OPTIONS: ReadonlyArray<{
   Icon: LucideIcon;
   colorClass: string;
 }> = [
+  { kind: "general", label: "AI", Icon: BotMessageSquare, colorClass: "text-muted-foreground" },
   { kind: "coding", label: "Code", Icon: CodeXml, colorClass: "text-[var(--th-kind-code)]" },
   { kind: "design", label: "Design", Icon: Frame, colorClass: "text-[var(--th-kind-design)]" },
   { kind: "app", label: "App", Icon: AppWindow, colorClass: "text-[var(--th-kind-app)]" },

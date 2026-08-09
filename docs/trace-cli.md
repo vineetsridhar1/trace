@@ -33,6 +33,7 @@ command-specific schemas use `"$TRACE_CLI" <command> <subcommand> --help --json`
 "$TRACE_CLI" session list [--status STATUS] [--tool TOOL] [--repo ID] [--channel ID]
 "$TRACE_CLI" session get [session-id]
 "$TRACE_CLI" session start [prompt] [--group ID | --channel ID | --project ID | --repo ID | --kind KIND]
+"$TRACE_CLI" session convert --kind KIND [--session ID] [--repo ID] [--project ID]
 "$TRACE_CLI" session send [session-id] <message> [--self] [--queue]
 "$TRACE_CLI" session run [session-id] [prompt] [--self]
 "$TRACE_CLI" session stop [session-id] [--self]
@@ -93,6 +94,7 @@ a new snapshot instead of replaying an unbounded history.
 | `session list`   | `{ sessions }`                                                             |
 | `session get`    | `{ session }`                                                              |
 | `session start`  | `{ session, runRequested, uiPath, idempotencyKey }`                        |
+| `session convert` | `{ session }`                                                               |
 | `session send`   | `{ event }` or `{ queuedMessage }`                                         |
 | lifecycle        | `{ session }` or `{ sessionGroup }`                                        |
 | `session events` | `{ events: [...], following }`                                             |

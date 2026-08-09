@@ -23,8 +23,9 @@ interface CreateHomeSessionInput {
 }
 
 export function buildHomeStartInput(input: CreateHomeSessionInput) {
+  const usesExistingContext = input.kind === "coding" || input.kind === "general";
   const codingChannel = input.kind === "coding" ? input.channel : null;
-  const linkedRepoId = input.kind === "coding" ? input.repoId : null;
+  const linkedRepoId = usesExistingContext ? input.repoId : null;
   return {
     kind: input.kind,
     tool: input.tool,
@@ -35,7 +36,7 @@ export function buildHomeStartInput(input: CreateHomeSessionInput) {
     ...(input.attachmentKeys?.length ? { attachmentKeys: input.attachmentKeys } : {}),
     ...(linkedRepoId ? { repoId: linkedRepoId } : {}),
     ...(codingChannel ? { channelId: codingChannel.id } : {}),
-    ...(input.kind === "coding" && input.projectId ? { projectId: input.projectId } : {}),
+    ...(usesExistingContext && input.projectId ? { projectId: input.projectId } : {}),
     ...(input.kind === "coding"
       ? {
           hosting: "local" as const,

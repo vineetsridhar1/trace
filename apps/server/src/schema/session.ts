@@ -413,6 +413,33 @@ export const sessionMutations = {
       clientSource: ctx.clientSource,
     });
   },
+  convertSessionGroup: (
+    _: unknown,
+    args: {
+      input: {
+        sessionGroupId: string;
+        kind: import("@trace/gql").SessionGroupKind;
+        repoId?: string | null;
+        projectId?: string | null;
+        tool?: CodingTool | null;
+        model?: string | null;
+        reasoningEffort?: string | null;
+        environmentId?: string | null;
+        runtimeInstanceId?: string | null;
+        clientMutationId?: string | null;
+      };
+    },
+    ctx: Context,
+  ) => {
+    const orgId = requireOrgContext(ctx);
+    if (!ctx.userId) throw new AuthenticationError();
+    return sessionService.convertGroup({
+      ...args.input,
+      organizationId: orgId,
+      actorId: ctx.userId,
+      actorType: ctx.actorType,
+    });
+  },
   importWorktree: (
     _: unknown,
     args: { sessionId: string; worktreePath: string; branch?: string | null },
