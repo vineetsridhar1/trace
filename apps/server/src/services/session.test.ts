@@ -11488,6 +11488,7 @@ describe("SessionService", () => {
         expect.objectContaining({
           branch: "trace/gibbon",
           preserveBranchName: true,
+          expectedHomeRuntimeId: "runtime-1",
         }),
       );
     });

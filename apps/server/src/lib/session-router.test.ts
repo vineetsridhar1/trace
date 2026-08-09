@@ -808,6 +808,63 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
+  it("pins initial local prepare delivery to the selected home bridge", async () => {
+    const router = new SessionRouter();
+    const runtimeId = "runtime-remote-owner";
+    const organizationId = "org-1";
+    const runtimeKey = runtimeRouterKey(runtimeId, organizationId);
+    const remoteDelivery = vi.spyOn(router, "sendToRuntimeAsync").mockResolvedValue("delivered");
+    const descriptor = await runtimeDirectory.register(
+      {
+        key: runtimeKey,
+        id: runtimeId,
+        organizationId,
+        ownerReplicaId: "replica-remote-owner",
+        connectionGeneration: "generation-remote-owner",
+        ownershipEpoch: 0,
+        label: "Remote laptop",
+        hostingMode: "local",
+        supportedTools: ["codex"],
+        registeredRepoIds: ["repo-1"],
+        linkedCheckoutStatuses: [],
+        linkedCheckoutStatusObservedAt: {},
+        lastHeartbeat: Date.now(),
+        expiresAt: Date.now() + 30_000,
+      },
+      30_000,
+    );
+
+    try {
+      router.createRuntime({
+        sessionId: "session-1",
+        hosting: "local",
+        adapterType: "local",
+        expectedHomeRuntimeId: runtimeId,
+        tool: "codex",
+        repo: {
+          id: "repo-1",
+          name: "repo",
+          remoteUrl: "https://github.com/acme/repo.git",
+          defaultBranch: "main",
+        },
+        createdById: "user-1",
+        organizationId,
+        onFailed: vi.fn(),
+      });
+
+      await vi.waitFor(() => expect(remoteDelivery).toHaveBeenCalledOnce());
+
+      expect(remoteDelivery).toHaveBeenCalledWith(
+        runtimeId,
+        expect.objectContaining({ type: "prepare", sessionId: "session-1" }),
+        organizationId,
+      );
+    } finally {
+      await runtimeDirectory.remove(runtimeKey, descriptor.connectionGeneration);
+      router.dispose();
+    }
+  });
+
   it("does not let local environment config override the authorized bound runtime", async () => {
     const router = new SessionRouter();
     const authorizedWs = makeWs();
