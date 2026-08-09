@@ -35,7 +35,7 @@ export function QuestionTextControl({
         className={
           compact
             ? "min-h-10 max-h-32 w-full resize-none overflow-y-auto rounded-lg border border-border bg-surface-deep/55 px-3 py-[9px] text-[13px] leading-5 outline-none transition-colors placeholder:text-muted-foreground focus:border-foreground/30 [field-sizing:content]"
-            : "min-h-10 w-full resize-none rounded-lg border border-foreground/35 bg-transparent px-3 py-2 text-[13px] leading-5 outline-none ring-2 ring-foreground/10 placeholder:text-muted-foreground max-md:min-h-36 max-md:rounded-2xl max-md:px-4 max-md:py-3 max-md:text-sm max-md:leading-6"
+            : "min-h-10 w-full resize-none rounded-lg border border-foreground/35 bg-transparent px-3 py-2 text-[13px] leading-5 outline-none ring-2 ring-foreground/10 placeholder:text-muted-foreground"
         }
       />
       {showMeta ? (
@@ -45,7 +45,7 @@ export function QuestionTextControl({
               key={suggestion}
               type="button"
               onClick={() => onChange(suggestion)}
-            className="min-h-8 rounded-full border border-border px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground max-md:min-h-11 max-md:text-xs max-md:font-semibold"
+              className="min-h-8 rounded-full border border-border px-3 text-[11px] font-medium text-muted-foreground hover:text-foreground"
             >
               {suggestion}
             </button>

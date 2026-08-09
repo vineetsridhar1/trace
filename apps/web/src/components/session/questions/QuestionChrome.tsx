@@ -21,7 +21,7 @@ export function QuestionChoice({
       type="button"
       aria-pressed={selected}
       className={cn(
-        "flex min-h-10 w-full items-center gap-2.5 rounded-lg border px-3 py-1.5 text-left transition-colors max-md:min-h-[62px] max-md:gap-3 max-md:rounded-2xl max-md:px-4 max-md:py-2",
+        "flex min-h-10 w-full items-center gap-2.5 rounded-lg border px-3 py-1.5 text-left transition-colors",
         selected
           ? "border-foreground/35 bg-foreground/[0.08]"
           : "border-border bg-surface-deep/55 hover:border-foreground/30",
@@ -34,14 +34,14 @@ export function QuestionChoice({
         </span>
       ) : null}
       <span className="grid gap-0.5">
-        <span className="text-[13px] font-medium leading-4 text-foreground max-md:text-[17px] max-md:leading-5">{label}</span>
+        <span className="text-[13px] font-medium leading-4 text-foreground">{label}</span>
         {detail ? (
-          <span className="text-[11px] leading-4 text-muted-foreground max-md:mt-1 max-md:text-[13px]">{detail}</span>
+          <span className="text-[11px] leading-4 text-muted-foreground">{detail}</span>
         ) : null}
       </span>
       <span
         className={cn(
-          "ml-auto grid h-4 w-4 shrink-0 place-items-center border max-md:h-6 max-md:w-6",
+          "ml-auto grid h-4 w-4 shrink-0 place-items-center border",
           multi ? "rounded-[3px]" : "rounded-full",
           selected ? "border-foreground bg-foreground" : "border-muted-foreground",
         )}

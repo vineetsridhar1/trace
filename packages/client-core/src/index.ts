@@ -116,5 +116,9 @@ export {
   wrapPrompt,
 } from "./session/messages.js";
 export type { InteractionMode } from "./session/messages.js";
+export {
+  questionAnswerLabel,
+  type QuestionAnswerLabelInput,
+} from "./session/question-answer-label.js";
 export { useQuestionState } from "./session/question-state.js";
 export { structuredResponseSummary } from "./session/structured-response-summary.js";

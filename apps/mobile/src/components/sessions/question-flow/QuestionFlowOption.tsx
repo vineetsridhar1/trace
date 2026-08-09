@@ -4,7 +4,7 @@ import { questionColors, questionMetrics } from "./tokens";
 
 export function QuestionFlowOption({ label, description, selected, multiple, onPress }: { label: string; description?: string; selected: boolean; multiple?: boolean; onPress: () => void }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => [styles.row, selected && styles.selected, pressed && styles.pressed]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => [styles.row, selected && styles.selected, pressed && styles.pressed]}>
       <View style={styles.copy}><Text variant="body" style={styles.label}>{label}</Text>{description ? <Text variant="footnote" style={styles.description}>{description}</Text> : null}</View>
       <View style={[styles.mark, multiple && !selected && styles.multiple, selected && styles.markSelected]}>{selected ? <Text variant="callout" style={styles.check}>✓</Text> : null}</View>
     </Pressable>

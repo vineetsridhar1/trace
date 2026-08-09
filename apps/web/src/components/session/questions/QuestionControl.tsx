@@ -81,8 +81,8 @@ export function QuestionControl({
             { id: "no", label: "No", description: "" },
           ];
     return (
-      <div className="grid gap-2 max-md:gap-4">
-        <div className="grid grid-cols-2 gap-2 max-md:gap-3">
+      <div className="grid gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {options.slice(0, 2).map((option, index) => {
             const value = option.id ?? option.label;
             return (
@@ -91,9 +91,9 @@ export function QuestionControl({
                 type="button"
                 aria-pressed={selected.has(value)}
                 onClick={() => onToggle(value)}
-                className={`flex min-h-14 flex-col justify-center rounded-lg border px-3 text-left max-md:min-h-28 max-md:rounded-2xl max-md:p-4 ${selected.has(value) ? "border-foreground/35 bg-foreground/[0.08]" : "border-border"}`}
+                className={`flex min-h-14 flex-col justify-center rounded-lg border px-3 text-left ${selected.has(value) ? "border-foreground/35 bg-foreground/[0.08]" : "border-border"}`}
               >
-                <span className="text-[13px] font-semibold max-md:text-base">{option.label}</span>
+                <span className="text-[13px] font-semibold">{option.label}</span>
                 <span className="font-mono text-[10px] text-muted-foreground">
                   {index === 0 ? "y" : "n"}
                 </span>
@@ -115,7 +115,7 @@ export function QuestionControl({
   const showOther = type === "select-with-other" || question.other;
   const otherSelected = selected.has("other");
   return (
-    <div className="grid gap-2 max-md:gap-3">
+    <div className="grid gap-2">
       {question.min != null || question.max != null ? (
         <div className="flex font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
           <span>

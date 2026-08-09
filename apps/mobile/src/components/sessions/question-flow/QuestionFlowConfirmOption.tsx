@@ -18,6 +18,7 @@ export function QuestionFlowConfirmOption({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={description ? `${label}. ${description}` : label}
       accessibilityState={{ selected }}
       onPress={onPress}
       style={({ pressed }) => [

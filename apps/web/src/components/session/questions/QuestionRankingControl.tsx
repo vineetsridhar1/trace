@@ -12,19 +12,19 @@ export function QuestionRankingControl({
 }) {
   const options = new Map(question.options.map((option) => [option.id ?? option.label, option]));
   return (
-    <div className="grid gap-1.5 max-md:gap-3">
+    <div className="grid gap-1.5">
       {ranking.map((value, index) => {
         const option = options.get(value);
         return (
           <div
             key={value}
-            className="flex min-h-10 items-center gap-3 rounded-lg border border-border px-3 py-1.5 max-md:min-h-[62px] max-md:rounded-2xl"
+            className="flex min-h-10 items-center gap-3 rounded-lg border border-border px-3 py-1.5"
           >
             <GripVertical size={14} className="text-muted-foreground" />
             <span className="grid h-5 w-5 place-items-center rounded border border-foreground/30 bg-foreground/[0.08] font-mono text-[10px] font-semibold">
               {index + 1}
             </span>
-            <span className="text-[13px] font-medium max-md:text-[15px]">{option?.label ?? value}</span>
+            <span className="text-[13px] font-medium">{option?.label ?? value}</span>
             <span className="ml-auto flex gap-1">
               <button
                 type="button"

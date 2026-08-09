@@ -47,7 +47,7 @@ export function QuestionTrayQuestion({
   const label = typeLabel(question);
   const context = showContext ? question.context : undefined;
   return (
-    <div className="mt-2 grid gap-2 max-md:gap-4">
+    <div className="mt-2 grid gap-2">
       {label || context ? (
         <div className="flex items-center gap-2">
           {label ? (
@@ -56,13 +56,11 @@ export function QuestionTrayQuestion({
             </span>
           ) : null}
           {context ? (
-            <span className="text-[11px] leading-4 text-muted-foreground max-md:text-[15px] max-md:leading-5">{context}</span>
+            <span className="text-[11px] leading-4 text-muted-foreground">{context}</span>
           ) : null}
         </div>
       ) : null}
-      <h3 className="text-[15px] font-semibold leading-5 max-md:text-[28px] max-md:leading-[34px] max-md:tracking-[-0.025em]">
-        {question.question}
-      </h3>
+      <h3 className="text-[15px] font-semibold leading-5">{question.question}</h3>
       <QuestionControl
         question={question}
         selected={selected}
@@ -77,12 +75,12 @@ export function QuestionTrayQuestion({
         onReferenceFiles={onReferenceFiles}
         onRemoveReference={onRemoveReference}
       />
-      <div className="flex items-center gap-2 max-md:pt-1">
-        <span className="font-mono text-[9px] leading-3 text-muted-foreground max-md:hidden">{helperText}</span>
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-[9px] leading-3 text-muted-foreground">{helperText}</span>
         <button
           type="button"
           onClick={onDecide}
-          className="ml-auto min-h-8 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground max-md:mr-auto max-md:ml-0 max-md:min-h-11 max-md:px-0 max-md:text-[13px]"
+          className="ml-auto min-h-8 px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
         >
           You decide
         </button>
