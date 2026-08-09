@@ -84,6 +84,24 @@ describe("AppIntegrationService", () => {
     );
   });
 
+  it("rejects a second organization service connection for the same integration", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      email: "admin@example.com",
+      name: "Admin",
+    });
+    prismaMock.integrationConnection.findFirst.mockResolvedValue({ id: "service-1" });
+
+    await expect(
+      service().createConnectSession("org-1", "admin-1", "admin", {
+        integrationId: "github",
+        kind: "service",
+      }),
+    ).rejects.toThrow(
+      new ValidationError("This organization already has a GitHub service connection"),
+    );
+    expect(nangoMock.createConnectSession).not.toHaveBeenCalled();
+  });
+
   it("lists only an admin's own personal connections and organization service connections", async () => {
     prismaMock.integrationConnection.findMany.mockResolvedValue([]);
 
@@ -310,6 +328,28 @@ describe("AppIntegrationService", () => {
       expect.objectContaining({ eventType: "integration_connection_updated" }),
       expect.any(Object),
     );
+  });
+
+  it("rejects a second service connection during webhook reconciliation", async () => {
+    prismaMock.orgMember.findUnique.mockResolvedValue({ role: "admin" });
+    prismaMock.integrationConnection.findFirst.mockResolvedValue({ id: "service-1" });
+
+    await expect(
+      service().reconcileNangoAuthWebhook({
+        type: "auth",
+        operation: "creation",
+        success: true,
+        connectionId: "nango-2",
+        providerConfigKey: "github-getting-started",
+        provider: "github",
+        tags: {
+          organization_id: "org-1",
+          end_user_id: "admin-1",
+          trace_connection_kind: "service",
+        },
+      }),
+    ).rejects.toThrow(new ValidationError("This organization already has a service connection"));
+    expect(prismaMock.integrationConnection.upsert).not.toHaveBeenCalled();
   });
 
   it("rejects encoded path traversal before calling Nango", () => {

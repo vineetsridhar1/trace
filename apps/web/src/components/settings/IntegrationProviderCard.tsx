@@ -1,25 +1,19 @@
-import type {
-  IntegrationConnection,
-  IntegrationConnectionKind,
-  SupportedAppIntegration,
-} from "@trace/gql";
-import { Database, ExternalLink, Github, Trash2 } from "lucide-react";
+import type { IntegrationConnection, SupportedAppIntegration } from "@trace/gql";
+import { Database, Github, Plug, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { SettingsStatusPill } from "./SettingsStatusPill";
 
 export function IntegrationProviderCard({
   connections,
-  canCreateService,
   integration,
   pending,
   onConnect,
   onDisconnect,
 }: {
   connections: IntegrationConnection[];
-  canCreateService: boolean;
   integration: SupportedAppIntegration;
   pending: boolean;
-  onConnect: (integrationId: string, kind: IntegrationConnectionKind) => void;
+  onConnect: (integration: SupportedAppIntegration) => void;
   onDisconnect: (connection: IntegrationConnection) => void;
 }) {
   const Icon = integration.id === "github" ? Github : Database;
@@ -43,11 +37,9 @@ export function IntegrationProviderCard({
             <p className="mt-1 text-xs text-muted-foreground">{integration.description}</p>
           </div>
         </div>
-        <Button size="sm" disabled={pending} onClick={() => onConnect(integration.id, "personal")}>
-          <ExternalLink size={14} />
-          {connections.some((connection) => connection.kind === "personal")
-            ? "Add account"
-            : "Connect"}
+        <Button size="sm" disabled={pending} onClick={() => onConnect(integration)}>
+          <Plug size={14} />
+          Connect
         </Button>
       </div>
 
@@ -70,18 +62,6 @@ export function IntegrationProviderCard({
             </div>
           ))}
         </div>
-      ) : null}
-
-      {canCreateService ? (
-        <Button
-          className="mt-2 px-0 text-xs text-muted-foreground"
-          variant="link"
-          size="sm"
-          disabled={pending}
-          onClick={() => onConnect(integration.id, "service")}
-        >
-          Connect an organization service account
-        </Button>
       ) : null}
     </div>
   );

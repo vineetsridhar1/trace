@@ -335,12 +335,29 @@ export class AppIntegrationService {
     if (!user) throw new NotFoundError("User", userId);
     const integration = supportedIntegration(input.integrationId);
     if (!integration) throw new ValidationError("This integration is not supported");
+    const providerConfigKey = providerKey(integration.providerConfigKey);
+    if (kind === "service") {
+      const existingService = await prisma.integrationConnection.findFirst({
+        where: {
+          organizationId,
+          providerConfigKey,
+          kind: "service",
+          status: { not: "revoked" },
+        },
+        select: { id: true },
+      });
+      if (existingService) {
+        throw new ValidationError(
+          `This organization already has a ${integration.name} service connection`,
+        );
+      }
+    }
     return this.connectionProvider.createConnectSession({
       organizationId,
       userId,
       userEmail: user.email,
       userName: user.name,
-      providerConfigKey: providerKey(integration.providerConfigKey),
+      providerConfigKey,
       displayName:
         input.displayName?.trim() ||
         `${integration.name} ${kind === "service" ? "service account" : "account"}`,
@@ -810,6 +827,21 @@ export class AppIntegrationService {
       return;
     }
     if (operation !== "creation" && operation !== "override") return;
+    if (kind === "service") {
+      const existingService = await prisma.integrationConnection.findFirst({
+        where: {
+          organizationId,
+          providerConfigKey,
+          kind: "service",
+          status: { not: "revoked" },
+          nangoConnectionId: { not: connectionId },
+        },
+        select: { id: true },
+      });
+      if (existingService) {
+        throw new ValidationError("This organization already has a service connection");
+      }
+    }
     const displayName =
       typeof tagMap.trace_display_name === "string"
         ? requiredText(tagMap.trace_display_name, "Connection name")

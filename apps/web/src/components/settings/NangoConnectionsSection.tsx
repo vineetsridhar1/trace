@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { client } from "../../lib/urql";
 import { useIntegrationStore } from "../../stores/integrations";
 import { Button } from "../ui/button";
+import { IntegrationConnectDialog } from "./IntegrationConnectDialog";
 import { IntegrationProviderCard } from "./IntegrationProviderCard";
 import { SettingsStatusPill } from "./SettingsStatusPill";
 import {
@@ -20,6 +21,7 @@ import {
 
 export function NangoConnectionsSection() {
   const activeOrgId = useAuthStore((state) => state.activeOrgId);
+  const currentUserId = useAuthStore((state) => state.user?.id ?? null);
   const canCreateService = useAuthStore(
     (state) =>
       state.orgMemberships.find((membership) => membership.organizationId === activeOrgId)?.role ===
@@ -33,6 +35,9 @@ export function NangoConnectionsSection() {
   const integrations = useMemo(() => Object.values(supportedTable), [supportedTable]);
   const setSupported = useIntegrationStore((state) => state.setSupported);
   const [pendingIntegrationId, setPendingIntegrationId] = useState<string | null>(null);
+  const [connectIntegration, setConnectIntegration] = useState<SupportedAppIntegration | null>(
+    null,
+  );
 
   const refresh = useCallback(async () => {
     const result = await client
@@ -70,6 +75,7 @@ export function NangoConnectionsSection() {
       const link = result.data?.createNangoConnectSession?.connectLink as string | undefined;
       if (!link) throw new Error("The connection provider did not return a connect link");
       window.open(link, "_blank", "noopener,noreferrer");
+      setConnectIntegration(null);
       toast.success("Finish authorizing in the new tab. This page will update automatically.");
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Connection failed");
@@ -120,13 +126,12 @@ export function NangoConnectionsSection() {
           {integrations.map((integration) => (
             <IntegrationProviderCard
               key={integration.id}
-              canCreateService={canCreateService}
               integration={integration}
               connections={connections.filter(
                 (connection) => connection.providerConfigKey === integration.providerConfigKey,
               )}
               pending={pendingIntegrationId === integration.id}
-              onConnect={(integrationId, kind) => void connect(integrationId, kind)}
+              onConnect={setConnectIntegration}
               onDisconnect={(connection) => void disconnect(connection)}
             />
           ))}
@@ -136,6 +141,23 @@ export function NangoConnectionsSection() {
           Ask a Trace administrator to configure the connection provider.
         </p>
       ) : null}
+
+      <IntegrationConnectDialog
+        canCreateService={canCreateService}
+        connections={connections.filter(
+          (connection) => connection.providerConfigKey === connectIntegration?.providerConfigKey,
+        )}
+        currentUserId={currentUserId}
+        integration={connectIntegration}
+        open={connectIntegration !== null}
+        pending={pendingIntegrationId === connectIntegration?.id}
+        onConnect={(kind) => {
+          if (connectIntegration) void connect(connectIntegration.id, kind);
+        }}
+        onOpenChange={(open) => {
+          if (!open && pendingIntegrationId === null) setConnectIntegration(null);
+        }}
+      />
     </div>
   );
 }
