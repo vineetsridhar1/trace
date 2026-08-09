@@ -26,6 +26,8 @@ interface BrowserPanelProps {
   hideExportHtml?: boolean;
   /** Top inset matching the Session Player's glass header height. */
   topInset?: number;
+  /** Headers sent with the initial page request, for app-owned saved previews. */
+  initialRequestHeaders?: Record<string, string>;
 }
 
 /**
@@ -40,6 +42,7 @@ export function BrowserPanel({
   showToolbar = true,
   hideExportHtml = false,
   topInset = 0,
+  initialRequestHeaders,
 }: BrowserPanelProps) {
   const theme = useTheme();
   const resolvedUrl = nextUrl;
@@ -56,7 +59,10 @@ export function BrowserPanel({
   const lastPropUrlRef = useRef(resolvedUrl);
   const lastReportedUrlRef = useRef(resolvedUrl);
   const onUrlChangeRef = useRef(onUrlChange);
-  const webSource = useMemo(() => ({ uri: url }), [url]);
+  const webSource = useMemo(
+    () => ({ uri: url, ...(initialRequestHeaders ? { headers: initialRequestHeaders } : {}) }),
+    [initialRequestHeaders, url],
+  );
 
   useEffect(() => {
     if (resolvedUrl === lastPropUrlRef.current) return;

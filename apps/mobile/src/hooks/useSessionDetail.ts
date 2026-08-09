@@ -102,6 +102,7 @@ const SESSION_DETAIL_QUERY = gql`
       sessionGroupId
       sessionGroup {
         id
+        designPreviewUrl
         gitCheckpoints {
           id
           sessionId
@@ -111,6 +112,8 @@ const SESSION_DETAIL_QUERY = gql`
           author
           committedAt
           filesChanged
+          previewStatus
+          previewUrl
           createdAt
         }
       }

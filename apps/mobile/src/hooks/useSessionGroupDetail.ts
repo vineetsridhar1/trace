@@ -26,6 +26,7 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
       prUrl
       workdir
       worktreeDeleted
+      designPreviewUrl
       gitCheckpoints {
         id
         sessionId
@@ -35,6 +36,8 @@ const SESSION_GROUP_DETAIL_QUERY = gql`
         author
         committedAt
         filesChanged
+        previewStatus
+        previewUrl
         createdAt
       }
       repo {

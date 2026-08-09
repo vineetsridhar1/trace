@@ -1,5 +1,5 @@
 import type { EntityState, SessionGroupEntity } from "@trace/client-core";
-import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
+import type { GitCheckpoint, SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 
 function timestamp(value: string | null | undefined): number {
   if (!value) return 0;
@@ -81,4 +81,31 @@ export function findReadyAppPreviewEndpointId(
         runningProcessKeys.has(`${endpoint.appConfigId}:${endpoint.processConfigId}`),
     )?.id ?? null
   );
+}
+
+/** A saved preview is usable after the container that produced it has stopped. */
+export function savedDesignPreviewUrl(
+  groupPreviewUrl: string | null | undefined,
+  checkpoints: GitCheckpoint[] | null | undefined,
+): string | null {
+  if (groupPreviewUrl) return groupPreviewUrl;
+
+  return (
+    (checkpoints ?? [])
+      .filter(
+        (checkpoint) => checkpoint.previewStatus === "captured" && Boolean(checkpoint.previewUrl),
+      )
+      .sort((a, b) => b.committedAt.localeCompare(a.committedAt))[0]?.previewUrl ?? null
+  );
+}
+
+/** Tells the saved design renderer to omit controls intended for a live canvas. */
+export function designPreviewModeUrl(url: string): string {
+  const [path, hash] = url.split("#", 2);
+  if (/(?:^|[?&])__trace_preview(?:=|&|$)/.test(path)) return url;
+  return `${path}${path.includes("?") ? "&" : "?"}__trace_preview=1${hash ? `#${hash}` : ""}`;
+}
+
+export function isLivePreviewRuntimeAvailable(state: unknown): boolean {
+  return state === "connected" || state === "degraded";
 }
