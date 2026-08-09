@@ -14,6 +14,7 @@ import { SavedPreviewSkeleton } from "./SavedPreviewSkeleton";
 import { usePdfPreview } from "./usePdfPreview";
 import { useDesignManualEdit } from "./useDesignManualEdit";
 import { ManualEditActions } from "./ManualEditActions";
+import { useDocumentVisible } from "@/hooks/useDocumentVisible";
 
 const INITIAL_FRAME_RETRY_MS = 4_000;
 const MAX_FRAME_RETRY_MS = 30_000;
@@ -38,12 +39,14 @@ export function AppPreview({
   manualSessionGroupId?: string;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const documentVisible = useDocumentVisible();
   const [state, dispatch] = useReducer(appPreviewReducer, initialAppPreviewState);
   const [credentialExpiresAt, setCredentialExpiresAt] = useState<string | null>(null);
   const { attempts, error, frameLoaded, frameRevision, refreshing, requestRevision, url } = state;
   const manualEdit = useDesignManualEdit({
     sessionGroupId: manualSessionGroupId ?? "",
     url,
+    visible: documentVisible,
   });
   const activeFrameRef = manualSessionGroupId ? manualEdit.frameRef : frameRef;
   const pdf = usePdfPreview({
@@ -57,6 +60,7 @@ export function AppPreview({
   }, []);
 
   useEffect(() => {
+    if (!documentVisible) return;
     let active = true;
     setCredentialExpiresAt(null);
     void client
@@ -79,16 +83,16 @@ export function AppPreview({
     return () => {
       active = false;
     };
-  }, [endpointId, requestRevision]);
+  }, [documentVisible, endpointId, requestRevision]);
 
   useEffect(() => {
-    if (!url || frameLoaded || error) return;
+    if (!documentVisible || !url || frameLoaded || error) return;
     const timeout = window.setTimeout(
       () => dispatch({ type: "frame-retry" }),
       Math.min(MAX_FRAME_RETRY_MS, INITIAL_FRAME_RETRY_MS * 2 ** attempts),
     );
     return () => window.clearTimeout(timeout);
-  }, [attempts, error, frameLoaded, frameRevision, url]);
+  }, [attempts, documentVisible, error, frameLoaded, frameRevision, url]);
 
   if (error) {
     if (desktopViewport) {
@@ -145,8 +149,11 @@ export function AppPreview({
           onPdfFormatChange={projectKind === "pdf" ? pdf.updateFormat : undefined}
           onPdfDownload={projectKind === "pdf" ? () => void pdf.download() : undefined}
           pdfDownloadState={projectKind === "pdf" ? pdf.downloadState : undefined}
+          suspended={!documentVisible}
         />
-        <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
+        {documentVisible ? (
+          <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
+        ) : null}
       </>
     );
   }
@@ -172,7 +179,9 @@ export function AppPreview({
           downloadState={pdf.downloadState}
         />
       ) : null}
-      <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
+      {documentVisible ? (
+        <PreviewCredentialRenewal endpointId={endpointId} expiresAt={credentialExpiresAt} />
+      ) : null}
       {manualSessionGroupId ? (
         <ManualEditActions
           enabled={manualEdit.enabled}
@@ -194,22 +203,24 @@ export function AppPreview({
       >
         <RotateCw className={cn("size-3", refreshing && "animate-spin")} />
       </Button>
-      <iframe
-        ref={activeFrameRef}
-        key={frameRevision}
-        src={url}
-        title={title}
-        onLoad={() => {
-          dispatch({ type: "frame-loaded" });
-          manualEdit.onFrameLoad();
-        }}
-        className={cn(
-          "w-full bg-background",
-          !frameLoaded && projectKind && "opacity-0",
-          fill ? "h-full border-0" : "aspect-video rounded-md border border-border",
-        )}
-        sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
-      />
+      {documentVisible ? (
+        <iframe
+          ref={activeFrameRef}
+          key={frameRevision}
+          src={url}
+          title={title}
+          onLoad={() => {
+            dispatch({ type: "frame-loaded" });
+            manualEdit.onFrameLoad();
+          }}
+          className={cn(
+            "w-full bg-background",
+            !frameLoaded && projectKind && "opacity-0",
+            fill ? "h-full border-0" : "aspect-video rounded-md border border-border",
+          )}
+          sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts"
+        />
+      ) : null}
     </div>
   );
 }

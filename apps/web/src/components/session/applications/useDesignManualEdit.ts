@@ -62,9 +62,11 @@ function normalizeDomTree(value: unknown, depth = 0): DesignEditorDomNode[] {
 export function useDesignManualEdit({
   sessionGroupId,
   url,
+  visible,
 }: {
   sessionGroupId: string;
   url: string | null;
+  visible: boolean;
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [frameReady, setFrameReady] = useState(false);
@@ -177,15 +179,15 @@ export function useDesignManualEdit({
 
   useEffect(() => {
     if (!sessionGroupId) return;
-    if (enabled) enableEditMode();
+    if (enabled && visible) enableEditMode();
     else postToFrame({ type: "trace:design:edit-mode", enabled: false });
-  }, [enabled, enableEditMode, postToFrame, sessionGroupId]);
+  }, [enabled, enableEditMode, postToFrame, sessionGroupId, visible]);
 
   useEffect(() => {
-    if (!enabled || frameReady) return;
+    if (!enabled || !visible || frameReady) return;
     const retry = window.setInterval(enableEditMode, 500);
     return () => window.clearInterval(retry);
-  }, [enabled, enableEditMode, frameReady]);
+  }, [enabled, enableEditMode, frameReady, visible]);
 
   useEffect(() => {
     return () => {

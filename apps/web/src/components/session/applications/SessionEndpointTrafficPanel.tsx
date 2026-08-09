@@ -5,6 +5,9 @@ import type { EndpointTrafficEntry, SessionEndpoint } from "@trace/gql";
 import { cn } from "@/lib/utils";
 import { client } from "../../../lib/urql";
 import { Button } from "../../ui/button";
+import { useDocumentVisible } from "@/hooks/useDocumentVisible";
+
+const TRAFFIC_POLL_INTERVAL_MS = 10_000;
 
 const ENDPOINTS_QUERY = gql`
   query SessionEndpointTrafficEndpoints($sessionGroupId: ID!) {
@@ -61,6 +64,7 @@ export function SessionEndpointTrafficPanel({
   const [trafficEntries, setTrafficEntries] = useState<EndpointTrafficEntry[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const documentVisible = useDocumentVisible();
 
   const selectedEndpoint = useMemo(
     () => endpoints.find((endpoint) => endpoint.id === selectedEndpointId) ?? null,
@@ -92,6 +96,7 @@ export function SessionEndpointTrafficPanel({
       setTrafficEntries([]);
       return;
     }
+    if (!documentVisible) return;
     let cancelled = false;
     const loadTraffic = () => {
       void client
@@ -103,12 +108,12 @@ export function SessionEndpointTrafficPanel({
         });
     };
     loadTraffic();
-    const interval = window.setInterval(loadTraffic, 2000);
+    const interval = window.setInterval(loadTraffic, TRAFFIC_POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [selectedEndpointId]);
+  }, [documentVisible, selectedEndpointId]);
 
   const clearTraffic = async () => {
     if (!selectedEndpointId) return;

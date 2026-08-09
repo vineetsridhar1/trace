@@ -27,6 +27,7 @@ export function AppPreviewCanvas({
   onPdfDownload,
   pdfDownloadState,
   manualEdit,
+  suspended = false,
 }: {
   url: string | null;
   title: string;
@@ -51,6 +52,7 @@ export function AppPreviewCanvas({
     primaryAction: () => void;
     discard: () => void;
   };
+  suspended?: boolean;
 }) {
   const frameMargin = bare ? 0 : PREVIEW_FRAME_MARGIN;
   const pixelsPerUnit = pdfFormat?.unit === "in" ? 96 : 96 / 25.4;
@@ -161,7 +163,7 @@ export function AppPreviewCanvas({
                   bare ? "bg-transparent" : "rounded-md bg-muted/20",
                 )}
               >
-                {url ? (
+                {url && !suspended ? (
                   <iframe
                     ref={iframeRef}
                     key={frameRevision}
