@@ -273,6 +273,11 @@ export function SessionSurface({
             <>
               <PendingInputBar sessionId={sessionId} keyboardVisible={keyboardVisible} />
               <SessionErrorCard sessionId={sessionId} />
+              <SessionInputComposer
+                sessionId={sessionId}
+                keyboardVisible={keyboardVisible}
+                bottomSafeAreaInset={keyboardVisible ? 0 : undefined}
+              />
             </>
           ) : (
             <>
