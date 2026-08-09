@@ -25,7 +25,7 @@ export function VisualPlanViewer({ html }: VisualPlanViewerProps) {
   );
 
   return (
-    <Screen edges={["left", "right", "bottom"]}>
+    <Screen edges={["left", "right"]}>
       <View style={styles.root}>
         <WebView
           source={source}
