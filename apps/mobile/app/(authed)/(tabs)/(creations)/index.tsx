@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, View } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
@@ -28,9 +28,7 @@ const FILTERS: Array<{ label: string; value: CreationKindFilter }> = [
 
 export default function CreationsScreen() {
   const theme = useTheme();
-  const router = useRouter();
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
-  const user = useAuthStore((s: AuthState) => s.user);
   const apps = useAppSessionGroups(activeOrgId);
   const designs = useDesignSessionGroups(activeOrgId);
   const [filter, setFilter] = useState<CreationKindFilter>("all");
@@ -72,7 +70,6 @@ export default function CreationsScreen() {
                 { id: "archive", symbol: archived ? "tray.full" : "archivebox", accessibilityLabel: archived ? "Show active creations" : "Show archived creations", onPress: () => setArchived((value) => !value) },
                 { id: "new-creation", symbol: "plus", accessibilityLabel: "New creation", onPress: () => setCreating(true) },
               ]}
-              avatar={user ? { name: user.name ?? user.email ?? "?", uri: user.avatarUrl, accessibilityLabel: "Account", onPress: () => router.push("/sheets/account") } : undefined}
             />
           ),
         }}
