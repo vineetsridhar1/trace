@@ -4,7 +4,7 @@ import { Stack, useRouter } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
-import { EmptyState, Glass, Skeleton, Text } from "@/components/design-system";
+import { EmptyState, Skeleton, Text } from "@/components/design-system";
 import { CreateCreationSheet } from "@/components/creations/CreateCreationSheet";
 import { CreationRow } from "@/components/creations/CreationRow";
 import { CreationsSectionHeader, type CreationSectionKind } from "@/components/creations/CreationsSectionHeader";
@@ -75,15 +75,13 @@ export default function CreationsScreen() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Glass preset="input" style={[styles.headerGlass, { borderColor: theme.colors.border }]}>
-              <TopBarPill
-                actions={[
-                  { id: "search", symbol: searching ? "xmark" : "magnifyingglass", accessibilityLabel: searching ? "Close search" : "Search creations", onPress: searching ? closeSearch : openSearch },
-                  { id: "new-creation", symbol: "plus", accessibilityLabel: "New creation", onPress: () => setCreating(true) },
-                ]}
-                avatar={user ? { name: user.name ?? user.email ?? "?", uri: user.avatarUrl, accessibilityLabel: "Account", onPress: () => router.push("/sheets/account") } : undefined}
-              />
-            </Glass>
+            <TopBarPill
+              actions={[
+                { id: "search", symbol: searching ? "xmark" : "magnifyingglass", accessibilityLabel: searching ? "Close search" : "Search creations", onPress: searching ? closeSearch : openSearch },
+                { id: "new-creation", symbol: "plus", accessibilityLabel: "New creation", onPress: () => setCreating(true) },
+              ]}
+              avatar={user ? { name: user.name ?? user.email ?? "?", uri: user.avatarUrl, accessibilityLabel: "Account", onPress: () => router.push("/sheets/account") } : undefined}
+            />
           ),
         }}
       />
@@ -220,7 +218,6 @@ function CreationsEmpty({ error, archived, query, onCreate, onRetry }: { error: 
 }
 
 const styles = StyleSheet.create({
-  headerGlass: { borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 2 },
   filters: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
   filter: { minHeight: 44, justifyContent: "center", paddingHorizontal: 18, borderRadius: 999, borderWidth: 1 },
   archiveToggle: { minHeight: 44, justifyContent: "center", marginLeft: "auto", paddingLeft: 4 },
