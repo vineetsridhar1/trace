@@ -18,11 +18,6 @@ export function QuestionFlowHeader({ step, onBack }: { step: string; onBack: () 
           <Text variant="caption2" style={styles.subtitle} numberOfLines={1}>{step}</Text>
         </View>
       </Glass>
-      <Glass preset="input" interactive style={styles.circle}>
-        <View style={styles.center}>
-          <SymbolView name="ellipsis" size={22} tintColor={questionColors.foreground} weight="medium" />
-        </View>
-      </Glass>
     </View>
   );
 }
