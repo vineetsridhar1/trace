@@ -4877,6 +4877,7 @@ describe("SessionService", () => {
       await service.run("session-1", "Continue", undefined, {
         userId: "user-1",
         organizationId: "org-1",
+        actorType: "agent",
       });
 
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
@@ -4896,6 +4897,13 @@ describe("SessionService", () => {
               runtimeLabel: "Remote laptop",
             }),
           }),
+        }),
+      );
+      expect(eventServiceMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: "session_resumed",
+          actorType: "agent",
+          actorId: "user-1",
         }),
       );
     });
@@ -5454,6 +5462,13 @@ describe("SessionService", () => {
           prompt: expect.stringContaining(
             "$TRACE_SKILLS_DIR/request-user-input/SKILL.md completely",
           ),
+        }),
+        expect.any(Object),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          prompt: expect.stringContaining("$TRACE_SKILLS_DIR/trace-session/SKILL.md completely"),
         }),
         expect.any(Object),
       );
@@ -7532,6 +7547,7 @@ describe("SessionService", () => {
         text: "inspect this",
         imageKeys: queuedMessage.imageKeys,
         actorId: "user-1",
+        actorType: "agent",
         interactionMode: "ask",
         organizationId: "org-1",
         clientSource: "web",
@@ -7547,6 +7563,7 @@ describe("SessionService", () => {
       expect(eventServiceMock.create).toHaveBeenCalledWith(
         expect.objectContaining({
           eventType: "queued_message_added",
+          actorType: "agent",
           payload: expect.objectContaining({
             queuedMessage: expect.objectContaining({
               id: "queued-1",
