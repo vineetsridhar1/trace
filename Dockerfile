@@ -10,6 +10,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/gql/package.json packages/gql/
 COPY packages/shared/package.json packages/shared/
 COPY packages/client-core/package.json packages/client-core/
+COPY packages/cli-contract/package.json packages/cli-contract/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile --ignore-scripts
@@ -19,6 +20,7 @@ FROM deps AS build
 COPY packages/gql/ packages/gql/
 COPY packages/shared/ packages/shared/
 COPY packages/client-core/ packages/client-core/
+COPY packages/cli-contract/ packages/cli-contract/
 COPY apps/server/ apps/server/
 COPY apps/web/ apps/web/
 COPY runtime/ runtime/
@@ -28,6 +30,7 @@ RUN node packages/gql/scripts/codegen.cjs
 RUN pnpm --filter @trace/shared build
 RUN pnpm --filter @trace/gql build
 RUN pnpm --filter @trace/client-core build
+RUN pnpm --filter @trace/cli-contract build
 RUN pnpm --filter @trace/server build
 ARG VITE_API_URL=""
 ENV VITE_API_URL=${VITE_API_URL}
@@ -48,6 +51,7 @@ COPY --from=build /app/package.json /app/pnpm-workspace.yaml ./
 COPY --from=build /app/packages/gql/package.json packages/gql/
 COPY --from=build /app/packages/shared/package.json packages/shared/
 COPY --from=build /app/packages/client-core/package.json packages/client-core/
+COPY --from=build /app/packages/cli-contract/package.json packages/cli-contract/
 COPY --from=build /app/apps/server/package.json apps/server/
 COPY --from=build /app/apps/web/package.json apps/web/
 
@@ -55,6 +59,7 @@ COPY --from=build /app/node_modules/ node_modules/
 COPY --from=build /app/packages/gql/node_modules/ packages/gql/node_modules/
 COPY --from=build /app/packages/shared/node_modules/ packages/shared/node_modules/
 COPY --from=build /app/packages/client-core/node_modules/ packages/client-core/node_modules/
+COPY --from=build /app/packages/cli-contract/node_modules/ packages/cli-contract/node_modules/
 COPY --from=build /app/apps/server/node_modules/ apps/server/node_modules/
 COPY --from=build /app/apps/web/node_modules/ apps/web/node_modules/
 
@@ -62,6 +67,7 @@ COPY --from=build /app/packages/gql/dist/ packages/gql/dist/
 COPY --from=build /app/packages/gql/src/schema.graphql packages/gql/src/schema.graphql
 COPY --from=build /app/packages/shared/dist/ packages/shared/dist/
 COPY --from=build /app/packages/client-core/dist/ packages/client-core/dist/
+COPY --from=build /app/packages/cli-contract/dist/ packages/cli-contract/dist/
 COPY --from=build /app/apps/server/dist/ apps/server/dist/
 COPY --from=build /app/apps/server/prisma/ apps/server/prisma/
 COPY --from=build /app/apps/web/dist/ apps/web/dist/
