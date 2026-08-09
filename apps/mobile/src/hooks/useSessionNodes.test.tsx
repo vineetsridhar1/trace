@@ -45,7 +45,9 @@ function requireLatest(value: UseSessionNodesResult | null): UseSessionNodesResu
 
 describe("useSessionNodes", () => {
   beforeEach(() => {
-    useEntityStore.getState().reset();
+    act(() => {
+      useEntityStore.getState().reset();
+    });
   });
 
   it("keeps a stable snapshot while frozen and catches up when unfrozen", () => {
@@ -90,5 +92,35 @@ describe("useSessionNodes", () => {
     });
 
     expect(eventNodeIds(requireLatest(latest).nodes)).toEqual(["event-1", "event-2"]);
+  });
+
+  it("keeps visual-plan artifact events in the mobile stream", () => {
+    let latest: UseSessionNodesResult | null = null;
+
+    function Probe() {
+      latest = useSessionNodes(SESSION_ID);
+      return null;
+    }
+
+    const artifactEvent: Event & { id: string } = {
+      ...makeEvent("plan-artifact", "2026-04-25T10:00:00.000Z"),
+      eventType: "artifact_created",
+      payload: {
+        artifact: {
+          id: "artifact-1",
+          type: "trace.visual-plan.v1",
+          manifest: { files: [{ path: "implementation-plan.html", mediaType: "text/html" }] },
+        },
+      },
+    };
+    act(() => {
+      useEntityStore.getState().upsertScopedEvent(SCOPE_KEY, artifactEvent.id, artifactEvent);
+    });
+
+    act(() => {
+      TestRenderer.create(<Probe />);
+    });
+
+    expect(eventNodeIds(requireLatest(latest).nodes)).toEqual(["plan-artifact"]);
   });
 });
