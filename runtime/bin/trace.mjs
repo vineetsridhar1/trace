@@ -18,6 +18,84 @@ var SESSION_FIELDS = `
 `;
 var EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
 var traceCliOperations = {
+  integrationCatalog: operation({
+    name: "TraceCliIntegrationCatalog",
+    type: "query",
+    rootField: "supportedAppIntegrations",
+    capability: "integration:read",
+    argumentPaths: [],
+    document: `query TraceCliIntegrationCatalog {
+      supportedAppIntegrations {
+        id name provider providerConfigKey description guide
+        capabilities { id name description guide allowedMethods allowedPathPrefixes }
+      }
+    }`
+  }),
+  integrationConnections: operation({
+    name: "TraceCliIntegrationConnections",
+    type: "query",
+    rootField: "integrationConnections",
+    capability: "integration:read",
+    argumentPaths: [],
+    document: `query TraceCliIntegrationConnections {
+      integrationConnections {
+        id ownerUserId provider providerConfigKey displayName kind status lastError
+      }
+    }`
+  }),
+  appIntegrationBindings: operation({
+    name: "TraceCliAppIntegrationBindings",
+    type: "query",
+    rootField: "appIntegrationBindings",
+    capability: "integration:read",
+    argumentPaths: ["sessionGroupId"],
+    document: `query TraceCliAppIntegrationBindings($sessionGroupId: ID!) {
+      appIntegrationBindings(sessionGroupId: $sessionGroupId) {
+        id integrationId sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
+        allowedMethods allowedPathPrefixes
+      }
+    }`
+  }),
+  createIntegrationConnectSession: operation({
+    name: "TraceCliCreateIntegrationConnectSession",
+    type: "mutation",
+    rootField: "createNangoConnectSession",
+    capability: "integration:connect",
+    argumentPaths: ["input.integrationId", "input.kind"],
+    document: `mutation TraceCliCreateIntegrationConnectSession($input: CreateNangoConnectSessionInput!) {
+      createNangoConnectSession(input: $input) { connectLink expiresAt }
+    }`
+  }),
+  upsertAppIntegrationBinding: operation({
+    name: "TraceCliUpsertAppIntegrationBinding",
+    type: "mutation",
+    rootField: "upsertAppIntegrationBinding",
+    capability: "integration:configure",
+    argumentPaths: [
+      "input.sessionGroupId",
+      "input.id",
+      "input.integrationId",
+      "input.capabilityIds",
+      "input.executionIdentity",
+      "input.sharedConnectionId"
+    ],
+    document: `mutation TraceCliUpsertAppIntegrationBinding($input: UpsertAppIntegrationBindingInput!) {
+      upsertAppIntegrationBinding(input: $input) {
+        id integrationId sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
+        allowedMethods allowedPathPrefixes
+      }
+    }`
+  }),
+  deleteAppIntegrationBinding: operation({
+    name: "TraceCliDeleteAppIntegrationBinding",
+    type: "mutation",
+    rootField: "deleteAppIntegrationBinding",
+    capability: "integration:configure",
+    argumentPaths: ["id", "sessionGroupId"],
+    document: `mutation TraceCliDeleteAppIntegrationBinding($id: ID!, $sessionGroupId: ID!) {
+      deleteAppIntegrationBinding(id: $id, sessionGroupId: $sessionGroupId)
+    }`
+  }),
   channels: operation({
     name: "TraceCliChannels",
     type: "query",
@@ -474,6 +552,7 @@ var TraceClient = class {
 };
 
 // src/runtime.ts
+var TRACE_CLI_EXECUTABLE = '"$TRACE_CLI"';
 function defineCommand(definition) {
   return definition;
 }
@@ -498,6 +577,22 @@ function assertCommandDefinitions(commands2) {
       throw new Error(`Variadic positional must be last for ${path}`);
     }
   }
+}
+function assertCommandGroups(groups, commands2) {
+  const names = /* @__PURE__ */ new Set();
+  for (const group of groups) {
+    if (!group.name || group.name.includes(" ") || names.has(group.name)) {
+      throw new Error(`Duplicate or invalid command group: ${group.name}`);
+    }
+    names.add(group.name);
+    if (!commands2.some((command) => command.path[0] === group.name && command.path.length > 1)) {
+      throw new Error(`Command group has no subcommands: ${group.name}`);
+    }
+  }
+  const missing = commands2.find(
+    (command) => command.path.length > 1 && !names.has(command.path[0])
+  );
+  if (missing) throw new Error(`Command has no registered group: ${missing.path.join(" ")}`);
 }
 function parseGlobalOptions(argv) {
   const args = [];
@@ -607,7 +702,10 @@ function commandUsage(command) {
   const options = (command.options ?? []).map(
     (definition) => definition.kind === "boolean" ? `[${definition.flag}]` : `[${definition.flag} ${definition.valueName}]`
   );
-  return ["trace", ...command.path, ...positionals, ...options, "[--json]"].join(" ");
+  return [TRACE_CLI_EXECUTABLE, ...command.path, ...positionals, ...options, "[--json]"].join(" ");
+}
+function commandExample(value) {
+  return value.replace(/^trace\b/, TRACE_CLI_EXECUTABLE);
 }
 function commandHelp(command) {
   const options = command.options ?? [];
@@ -622,7 +720,12 @@ function commandHelp(command) {
         const label = definition.kind === "boolean" ? definition.flag : `${definition.flag} ${definition.valueName}`;
         return `  ${label.padEnd(30)} ${definition.description}`;
       })
-    ] : []
+    ] : [],
+    ...command.examples?.length ? ["", "Examples:", ...command.examples.map((x) => `  ${commandExample(x)}`)] : [],
+    ...command.effects?.length ? ["", "Effects:", ...command.effects.map((x) => `  - ${x}`)] : [],
+    ...command.output ? ["", "Output:", `  ${command.output}`] : [],
+    ...command.nextSteps?.length ? ["", "Next steps:", ...command.nextSteps.map((x) => `  - ${x}`)] : [],
+    ...command.notes?.length ? ["", "Notes:", ...command.notes.map((x) => `  - ${x}`)] : []
   ].join("\n");
 }
 function commandDescriptor(command) {
@@ -631,8 +734,42 @@ function commandDescriptor(command) {
     description: command.description,
     usage: commandUsage(command),
     positionals: command.positionals ?? [],
-    options: command.options ?? []
+    options: command.options ?? [],
+    examples: (command.examples ?? []).map(commandExample),
+    effects: command.effects ?? [],
+    output: command.output ?? null,
+    nextSteps: command.nextSteps ?? [],
+    notes: command.notes ?? []
   };
+}
+function commandGroupDescriptor(group, commands2) {
+  return {
+    name: group.name,
+    description: group.description,
+    usage: `${TRACE_CLI_EXECUTABLE} ${group.name} <command> [options]`,
+    workflow: group.workflow ?? [],
+    examples: (group.examples ?? []).map(commandExample),
+    notes: group.notes ?? [],
+    commands: commands2.filter((command) => command.path[0] === group.name).map(commandDescriptor)
+  };
+}
+function commandGroupHelp(group, commands2) {
+  const descriptor = commandGroupDescriptor(group, commands2);
+  return [
+    `Usage: ${descriptor.usage}`,
+    "",
+    descriptor.description,
+    "",
+    "Commands:",
+    ...descriptor.commands.map(
+      (command) => `  ${command.path.slice(1).join(" ").padEnd(20)} ${command.description}`
+    ),
+    ...descriptor.workflow.length ? ["", "Workflow:", ...descriptor.workflow.map((step, index) => `  ${index + 1}. ${step}`)] : [],
+    ...descriptor.examples.length ? ["", "Examples:", ...descriptor.examples.map((example) => `  ${example}`)] : [],
+    ...descriptor.notes.length ? ["", "Notes:", ...descriptor.notes.map((note) => `  - ${note}`)] : [],
+    "",
+    `Run ${TRACE_CLI_EXECUTABLE} ${group.name} <command> --help for exact arguments and effects.`
+  ].join("\n");
 }
 function createCommandContext(options, env = process.env) {
   return {
@@ -845,6 +982,265 @@ var contextCommand = defineCommand({
     );
   }
 });
+
+// src/commands/integration/shared.ts
+function requireCurrentAppGroup(ctx) {
+  const sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
+  if (!sessionGroupId) {
+    throw new CliError(
+      "This command requires an active Trace app session",
+      ExitCode.validation,
+      "validation"
+    );
+  }
+  return sessionGroupId;
+}
+async function loadIntegrationCatalog(client) {
+  const result = await client.graphql(traceCliOperations.integrationCatalog, {});
+  return result.supportedAppIntegrations;
+}
+async function loadIntegrationBindings(client, sessionGroupId) {
+  const variables = { sessionGroupId };
+  const result = await client.graphql(traceCliOperations.appIntegrationBindings, variables);
+  return result.appIntegrationBindings;
+}
+
+// src/commands/integration/add.ts
+var integrationAddCommand = defineCommand({
+  path: ["integration", "add"],
+  description: "Add or update a supported integration on the current Trace app",
+  examples: [
+    '"$TRACE_CLI" integration add github --capabilities profile --identity viewer --json',
+    '"$TRACE_CLI" integration add snowflake --identity service --connection <connection-id> --json'
+  ],
+  effects: [
+    "Creates or updates one stable provider binding on the current app.",
+    "Emits an app-integration binding event through the Trace service layer."
+  ],
+  output: "The live integration guide, selected capability guides, and saved current-app binding.",
+  nextSteps: [
+    "Follow the returned guides to call the stable integration ID from a generated Node route.",
+    "Have React call only that same-origin app route.",
+    'Run "$TRACE_CLI" integration list --json to verify app access.'
+  ],
+  notes: [
+    "Viewer identity is the default and must not include --connection.",
+    "Shared and service identities require a matching connection ID from integration list.",
+    "When several capabilities exist, --capabilities is required to prevent accidental broad access."
+  ],
+  positionals: [{ name: "integration", required: true }],
+  options: [
+    {
+      name: "capabilities",
+      flag: "--capabilities",
+      kind: "string",
+      valueName: "ID,ID",
+      description: "Least-privilege capability IDs from integration list"
+    },
+    {
+      name: "identity",
+      flag: "--identity",
+      kind: "string",
+      valueName: "MODE",
+      choices: ["viewer", "shared", "service"],
+      description: "Account selection mode (default: viewer)"
+    },
+    {
+      name: "connection",
+      flag: "--connection",
+      kind: "string",
+      valueName: "ID",
+      description: "Connected account ID for shared or service identity"
+    }
+  ],
+  async run(ctx, input) {
+    const integrationId = input.positionals[0] ?? usage("Integration is required");
+    const sessionGroupId = requireCurrentAppGroup(ctx);
+    const client = await ctx.client();
+    const [catalog, bindings] = await Promise.all([
+      loadIntegrationCatalog(client),
+      loadIntegrationBindings(client, sessionGroupId)
+    ]);
+    const integration = catalog.find((candidate) => candidate.id === integrationId);
+    if (!integration) usage(`Unsupported integration: ${integrationId}`);
+    const requestedCapabilities = optionString(input, "capabilities");
+    const capabilityIds = requestedCapabilities ? requestedCapabilities.split(",").map((value) => value.trim()).filter(Boolean) : integration.capabilities.length === 1 ? [integration.capabilities[0]?.id ?? ""] : usage(
+      `--capabilities is required; choose from: ${integration.capabilities.map((item) => item.id).join(", ")}`
+    );
+    const invalidCapability = capabilityIds.find(
+      (id) => !integration.capabilities.some((capability) => capability.id === id)
+    );
+    if (invalidCapability) usage(`Unknown ${integrationId} capability: ${invalidCapability}`);
+    const executionIdentity = optionString(input, "identity") ?? "viewer";
+    const sharedConnectionId = optionString(input, "connection") ?? null;
+    if (executionIdentity === "viewer" && sharedConnectionId) {
+      usage("--connection is only valid with shared or service identity");
+    }
+    if (executionIdentity !== "viewer" && !sharedConnectionId) {
+      usage(`--connection is required with ${executionIdentity} identity`);
+    }
+    const existing = bindings.find(
+      (binding) => binding.integrationId === integration.id || !binding.integrationId && binding.providerConfigKey === integration.providerConfigKey
+    );
+    const variables = {
+      input: {
+        ...existing ? { id: existing.id } : {},
+        sessionGroupId,
+        integrationId,
+        capabilityIds,
+        executionIdentity,
+        sharedConnectionId
+      }
+    };
+    const result = await client.graphql(traceCliOperations.upsertAppIntegrationBinding, variables);
+    ctx.output(
+      {
+        integration,
+        selectedCapabilities: integration.capabilities.filter(
+          (capability) => capabilityIds.includes(capability.id)
+        ),
+        binding: result.upsertAppIntegrationBinding
+      },
+      `${integration.name} is ready for this app using ${executionIdentity} identity`
+    );
+  }
+});
+
+// src/commands/integration/connect.ts
+var integrationConnectCommand = defineCommand({
+  path: ["integration", "connect"],
+  description: "Create an authorization link for a personal or organization service account",
+  examples: [
+    '"$TRACE_CLI" integration connect github --json',
+    '"$TRACE_CLI" integration connect github --service --json'
+  ],
+  effects: [
+    "Creates a short-lived provider authorization session.",
+    "Does not expose credentials or grant the current app access."
+  ],
+  output: "The connectLink, its expiration time, integration ID, and personal or service kind.",
+  nextSteps: [
+    "Give connectLink to the user and wait for provider authorization to finish.",
+    'Run "$TRACE_CLI" integration list --json to confirm the connection became active.',
+    'Run "$TRACE_CLI" integration add to grant the current app least-privilege access.'
+  ],
+  notes: [
+    "Use --service only when the user explicitly requests an organization-owned identity; organization-admin permission is required."
+  ],
+  positionals: [{ name: "integration", required: true }],
+  options: [
+    {
+      name: "service",
+      flag: "--service",
+      kind: "boolean",
+      description: "Connect an organization service account (admins only)"
+    }
+  ],
+  async run(ctx, input) {
+    const integrationId = input.positionals[0] ?? usage("Integration is required");
+    const client = await ctx.client();
+    const variables = {
+      input: {
+        integrationId,
+        kind: optionBoolean(input, "service") ? "service" : "personal"
+      }
+    };
+    const result = await client.graphql(traceCliOperations.createIntegrationConnectSession, variables);
+    const session = result.createNangoConnectSession;
+    ctx.output(
+      { integrationId, kind: variables.input.kind, ...session },
+      `Authorize ${integrationId}: ${session.connectLink}`
+    );
+  }
+});
+
+// src/commands/integration/list.ts
+var integrationListCommand = defineCommand({
+  path: ["integration", "list"],
+  description: "List supported integrations, connected accounts, usage guides, and current app access",
+  examples: ['"$TRACE_CLI" integration list --json'],
+  effects: ["Read-only; does not connect an account or change app access."],
+  output: "Supported integrations with capability and implementation guides, visible connections, current-app bindings, and the selected sessionGroupId.",
+  nextSteps: [
+    'Run "$TRACE_CLI" integration connect <id> if a required account is missing.',
+    'Run "$TRACE_CLI" integration add <id> with the minimum capability IDs when app access is missing.'
+  ],
+  async run(ctx) {
+    const client = await ctx.client();
+    const sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
+    const [integrations, connectionResult, bindings] = await Promise.all([
+      loadIntegrationCatalog(client),
+      client.graphql(traceCliOperations.integrationConnections, {}),
+      sessionGroupId ? loadIntegrationBindings(client, sessionGroupId) : Promise.resolve([])
+    ]);
+    const connections = connectionResult.integrationConnections;
+    const value = {
+      integrations: integrations.map((integration) => ({
+        ...integration,
+        connections: connections.filter(
+          (connection) => connection.providerConfigKey === integration.providerConfigKey
+        ),
+        appAccess: bindings.filter(
+          (binding) => binding.integrationId === integration.id || !binding.integrationId && binding.providerConfigKey === integration.providerConfigKey
+        )
+      })),
+      sessionGroupId: sessionGroupId ?? null
+    };
+    ctx.output(
+      value,
+      value.integrations.length ? value.integrations.map((integration) => {
+        const capabilities = integration.capabilities.map((capability) => capability.id).join(", ");
+        const connectionState = integration.connections.length ? `${integration.connections.length} connected account(s)` : "not connected";
+        const accessState = integration.appAccess.length ? "added to this app" : "not added";
+        return `${integration.id}	${capabilities}	${connectionState}	${accessState}`;
+      }).join("\n") : "No supported integrations"
+    );
+  }
+});
+
+// src/commands/integration/remove.ts
+var integrationRemoveCommand = defineCommand({
+  path: ["integration", "remove"],
+  description: "Remove an integration from the current Trace app",
+  examples: ['"$TRACE_CLI" integration remove github --json'],
+  effects: [
+    "Deletes the matching binding from the current app and emits a binding-deleted event.",
+    "Does not disconnect the underlying provider account."
+  ],
+  output: "The removed binding ID and confirmation flag.",
+  nextSteps: [
+    'Run "$TRACE_CLI" integration list --json to verify that current-app access is absent.'
+  ],
+  positionals: [{ name: "integration", required: true }],
+  async run(ctx, input) {
+    const reference = input.positionals[0] ?? usage("Integration is required");
+    const sessionGroupId = requireCurrentAppGroup(ctx);
+    const client = await ctx.client();
+    const [catalog, bindings] = await Promise.all([
+      loadIntegrationCatalog(client),
+      loadIntegrationBindings(client, sessionGroupId)
+    ]);
+    const integration = catalog.find((candidate) => candidate.id === reference);
+    const binding = bindings.find(
+      (candidate) => candidate.id === reference || integration && (candidate.integrationId === integration.id || !candidate.integrationId && candidate.providerConfigKey === integration.providerConfigKey)
+    );
+    if (!binding) usage(`Integration is not configured on this app: ${reference}`);
+    const variables = { id: binding.id, sessionGroupId };
+    await client.graphql(
+      traceCliOperations.deleteAppIntegrationBinding,
+      variables
+    );
+    ctx.output({ removed: true, bindingId: binding.id }, `${binding.label} removed from this app`);
+  }
+});
+
+// src/commands/integration/index.ts
+var integrationCommands = [
+  integrationListCommand,
+  integrationConnectCommand,
+  integrationAddCommand,
+  integrationRemoveCommand
+];
 
 // src/commands/project/list.ts
 var projectListCommand = defineCommand({
@@ -1521,45 +1917,117 @@ var sessionCommands = [
 // src/commands/index.ts
 var commands = [
   contextCommand,
+  ...integrationCommands,
   channelListCommand,
   repoListCommand,
   projectListCommand,
   ...sessionCommands,
   artifactCommand
 ];
+var commandGroups = [
+  {
+    name: "integration",
+    description: "Discover, connect, and configure data providers for the current Trace app",
+    workflow: [
+      'Run "$TRACE_CLI" integration list --json to inspect the live provider catalog, connected accounts, and current app access.',
+      'If the required account is missing, run "$TRACE_CLI" integration connect and have the user complete the returned OAuth link.',
+      'Run "$TRACE_CLI" integration add with only the capabilities required by the app.',
+      "Follow the integration and capability guides returned by integration list when writing the app's Node route.",
+      'Run "$TRACE_CLI" integration list again to verify the final connection and app-access state.'
+    ],
+    examples: [
+      '"$TRACE_CLI" integration list --json',
+      '"$TRACE_CLI" integration add github --capabilities profile --identity viewer --json'
+    ],
+    notes: [
+      "The current app is selected automatically from TRACE_SESSION_GROUP_ID; never ask for a binding UUID.",
+      "Put provider requests in generated Node routes and have the browser call only same-origin /api routes.",
+      "Do not call Trace GraphQL directly, expose credentials, accept SQL from the browser, or silently broaden capabilities.",
+      "Viewer identity uses each viewer's account; shared and service identities require an explicit connection ID."
+    ]
+  },
+  {
+    name: "session",
+    description: "Discover and control Trace AI sessions",
+    examples: [
+      '"$TRACE_CLI" session list --json',
+      '"$TRACE_CLI" session start "Implement the API tests" --json'
+    ],
+    notes: [
+      "Read command help before lifecycle mutations; session operations change shared Trace state."
+    ]
+  },
+  {
+    name: "channel",
+    description: "Discover channels available to the session owner"
+  },
+  {
+    name: "repo",
+    description: "Discover repositories in the current organization"
+  },
+  {
+    name: "project",
+    description: "Discover projects in the current organization"
+  },
+  {
+    name: "artifact",
+    description: "Validate and upload immutable Trace artifacts",
+    notes: [
+      "Artifact types can impose additional validation; use the relevant artifact skill when instructed."
+    ]
+  }
+];
 
 // src/main.ts
 assertCommandDefinitions(commands);
+assertCommandGroups(commandGroups, commands);
 function globalHelp() {
+  const standalone = commands.filter((command) => command.path.length === 1);
   return [
-    "Usage: trace <command> [options]",
+    'Usage: "$TRACE_CLI" <command> [options]',
     "",
-    "Commands:",
-    ...commands.map((command) => `  ${command.path.join(" ").padEnd(22)} ${command.description}`),
+    "Command groups:",
+    ...commandGroups.map((group) => `  ${group.name.padEnd(14)} ${group.description}`),
+    ...standalone.length ? [
+      "",
+      "Standalone commands:",
+      ...standalone.map(
+        (command) => `  ${command.path.join(" ").padEnd(14)} ${command.description}`
+      )
+    ] : [],
     "",
-    "Global option: --json",
+    'Run "$TRACE_CLI" <group> --help to discover its subcommands.',
+    "Add --json to any help command for machine-readable output.",
     "",
     "This command is available inside Trace-managed AI sessions."
   ].join("\n");
 }
-function writeHelp(command, json) {
+function writeHelp(command, group, json) {
   if (json) {
-    const value = command ? { command: commandDescriptor(command) } : {
-      commands: commands.map(commandDescriptor),
+    const value = command ? { command: commandDescriptor(command) } : group ? { group: commandGroupDescriptor(group, commands) } : {
+      groups: commandGroups.map((candidate) => ({
+        name: candidate.name,
+        description: candidate.description,
+        usage: `"$TRACE_CLI" ${candidate.name} <command> [options]`
+      })),
+      commands: commands.filter((candidate) => candidate.path.length === 1).map(commandDescriptor),
       globalOptions: [{ flag: "--json", description: "Emit machine-readable JSON" }]
     };
     process.stdout.write(`${JSON.stringify(value)}
 `);
     return;
   }
-  process.stdout.write(`${command ? commandHelp(command) : globalHelp()}
-`);
+  process.stdout.write(
+    `${command ? commandHelp(command) : group ? commandGroupHelp(group, commands) : globalHelp()}
+`
+  );
 }
 async function run(argv = process.argv.slice(2)) {
   const parsed = parseGlobalOptions(argv);
   const command = findCommand(commands, parsed.args);
-  if (argv.length === 0 || parsed.help) {
-    writeHelp(command, parsed.options.json);
+  const group = commandGroups.find((candidate) => candidate.name === parsed.args[0]);
+  if (argv.length === 0 || parsed.help || group && parsed.args.length === 1) {
+    writeHelp(command, command ? void 0 : group, parsed.options.json);
     return ExitCode.success;
   }
   try {

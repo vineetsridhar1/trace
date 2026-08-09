@@ -21,4 +21,16 @@ describe("app starter styling", () => {
       "plugins: { tailwindcss: {}, autoprefixer: {} }",
     );
   });
+
+  it("provides generic and Snowflake server-only integration helpers", () => {
+    const helper = readStarterFile("trace.ts");
+    expect(helper).toContain("integrations:");
+    expect(helper).toContain("snowflake:");
+    expect(helper).toContain("request: integrationRequest");
+    expect(helper).toContain("x-trace-app-viewer-context");
+    expect(helper).toContain("/runtime/app-integrations/");
+    const docs = readStarterFile("docs/trace-apps.md");
+    expect(docs).toContain('trace.integrations.request(request, "github"');
+    expect(docs).toContain("trace.integrations.snowflake.query");
+  });
 });

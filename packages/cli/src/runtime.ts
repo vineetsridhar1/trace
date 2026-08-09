@@ -1,6 +1,8 @@
 import { TraceClient } from "./client.js";
 import { CliError, ExitCode, usage } from "./errors.js";
 
+const TRACE_CLI_EXECUTABLE = '"$TRACE_CLI"';
+
 export type GlobalOptions = { json: boolean };
 
 type BaseOption = {
@@ -45,9 +47,22 @@ export type CommandContext = {
 export type CommandDefinition = {
   readonly path: readonly string[];
   readonly description: string;
+  readonly examples?: readonly string[];
+  readonly effects?: readonly string[];
+  readonly output?: string;
+  readonly nextSteps?: readonly string[];
+  readonly notes?: readonly string[];
   readonly options?: readonly OptionDefinition[];
   readonly positionals?: readonly PositionalDefinition[];
   run(ctx: CommandContext, input: ParsedCommandInput): Promise<void>;
+};
+
+export type CommandGroupDefinition = {
+  readonly name: string;
+  readonly description: string;
+  readonly workflow?: readonly string[];
+  readonly examples?: readonly string[];
+  readonly notes?: readonly string[];
 };
 
 export function defineCommand<const T extends CommandDefinition>(definition: T): T {
@@ -77,6 +92,26 @@ export function assertCommandDefinitions(commands: readonly CommandDefinition[])
       throw new Error(`Variadic positional must be last for ${path}`);
     }
   }
+}
+
+export function assertCommandGroups(
+  groups: readonly CommandGroupDefinition[],
+  commands: readonly CommandDefinition[],
+): void {
+  const names = new Set<string>();
+  for (const group of groups) {
+    if (!group.name || group.name.includes(" ") || names.has(group.name)) {
+      throw new Error(`Duplicate or invalid command group: ${group.name}`);
+    }
+    names.add(group.name);
+    if (!commands.some((command) => command.path[0] === group.name && command.path.length > 1)) {
+      throw new Error(`Command group has no subcommands: ${group.name}`);
+    }
+  }
+  const missing = commands.find(
+    (command) => command.path.length > 1 && !names.has(command.path[0]!),
+  );
+  if (missing) throw new Error(`Command has no registered group: ${missing.path.join(" ")}`);
 }
 
 export function parseGlobalOptions(argv: readonly string[]): {
@@ -211,7 +246,11 @@ export function commandUsage(command: CommandDefinition): string {
       ? `[${definition.flag}]`
       : `[${definition.flag} ${definition.valueName}]`,
   );
-  return ["trace", ...command.path, ...positionals, ...options, "[--json]"].join(" ");
+  return [TRACE_CLI_EXECUTABLE, ...command.path, ...positionals, ...options, "[--json]"].join(" ");
+}
+
+function commandExample(value: string): string {
+  return value.replace(/^trace\b/, TRACE_CLI_EXECUTABLE);
 }
 
 export function commandHelp(command: CommandDefinition): string {
@@ -233,6 +272,15 @@ export function commandHelp(command: CommandDefinition): string {
           }),
         ]
       : []),
+    ...(command.examples?.length
+      ? ["", "Examples:", ...command.examples.map((x) => `  ${commandExample(x)}`)]
+      : []),
+    ...(command.effects?.length ? ["", "Effects:", ...command.effects.map((x) => `  - ${x}`)] : []),
+    ...(command.output ? ["", "Output:", `  ${command.output}`] : []),
+    ...(command.nextSteps?.length
+      ? ["", "Next steps:", ...command.nextSteps.map((x) => `  - ${x}`)]
+      : []),
+    ...(command.notes?.length ? ["", "Notes:", ...command.notes.map((x) => `  - ${x}`)] : []),
   ].join("\n");
 }
 
@@ -243,7 +291,55 @@ export function commandDescriptor(command: CommandDefinition) {
     usage: commandUsage(command),
     positionals: command.positionals ?? [],
     options: command.options ?? [],
+    examples: (command.examples ?? []).map(commandExample),
+    effects: command.effects ?? [],
+    output: command.output ?? null,
+    nextSteps: command.nextSteps ?? [],
+    notes: command.notes ?? [],
   };
+}
+
+export function commandGroupDescriptor(
+  group: CommandGroupDefinition,
+  commands: readonly CommandDefinition[],
+) {
+  return {
+    name: group.name,
+    description: group.description,
+    usage: `${TRACE_CLI_EXECUTABLE} ${group.name} <command> [options]`,
+    workflow: group.workflow ?? [],
+    examples: (group.examples ?? []).map(commandExample),
+    notes: group.notes ?? [],
+    commands: commands.filter((command) => command.path[0] === group.name).map(commandDescriptor),
+  };
+}
+
+export function commandGroupHelp(
+  group: CommandGroupDefinition,
+  commands: readonly CommandDefinition[],
+): string {
+  const descriptor = commandGroupDescriptor(group, commands);
+  return [
+    `Usage: ${descriptor.usage}`,
+    "",
+    descriptor.description,
+    "",
+    "Commands:",
+    ...descriptor.commands.map(
+      (command) => `  ${command.path.slice(1).join(" ").padEnd(20)} ${command.description}`,
+    ),
+    ...(descriptor.workflow.length
+      ? ["", "Workflow:", ...descriptor.workflow.map((step, index) => `  ${index + 1}. ${step}`)]
+      : []),
+    ...(descriptor.examples.length
+      ? ["", "Examples:", ...descriptor.examples.map((example) => `  ${example}`)]
+      : []),
+    ...(descriptor.notes.length
+      ? ["", "Notes:", ...descriptor.notes.map((note) => `  - ${note}`)]
+      : []),
+    "",
+    `Run ${TRACE_CLI_EXECUTABLE} ${group.name} <command> --help for exact arguments and effects.`,
+  ].join("\n");
 }
 
 export function createCommandContext(

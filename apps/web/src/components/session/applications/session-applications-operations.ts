@@ -161,8 +161,11 @@ export const DISABLE_ENDPOINT_MUTATION = gql`
 `;
 
 export const PUBLISH_APP_MUTATION = gql`
-  mutation PublishAppSession($sessionGroupId: ID!) {
-    publishAppSession(sessionGroupId: $sessionGroupId) {
+  mutation PublishAppSession(
+    $sessionGroupId: ID!
+    $accessMode: SessionEndpointAccessMode = private
+  ) {
+    publishAppSession(sessionGroupId: $sessionGroupId, accessMode: $accessMode) {
       id
     }
   }
@@ -174,6 +177,76 @@ export const CREATE_PREVIEW_MUTATION = gql`
       url
       expiresAt
     }
+  }
+`;
+
+export const APP_INTEGRATIONS_QUERY = gql`
+  query AppIntegrations($sessionGroupId: ID!) {
+    supportedAppIntegrations {
+      id
+      name
+      provider
+      providerConfigKey
+      description
+      capabilities {
+        id
+        name
+        description
+        allowedMethods
+        allowedPathPrefixes
+      }
+    }
+    integrationConnections {
+      id
+      ownerUserId
+      provider
+      providerConfigKey
+      displayName
+      kind
+      status
+      lastError
+      createdAt
+      updatedAt
+    }
+    appIntegrationBindings(sessionGroupId: $sessionGroupId) {
+      id
+      integrationId
+      sessionGroupId
+      label
+      provider
+      providerConfigKey
+      executionIdentity
+      sharedConnectionId
+      allowedMethods
+      allowedPathPrefixes
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const UPSERT_APP_INTEGRATION_BINDING_MUTATION = gql`
+  mutation UpsertAppIntegrationBinding($input: UpsertAppIntegrationBindingInput!) {
+    upsertAppIntegrationBinding(input: $input) {
+      id
+      integrationId
+      sessionGroupId
+      label
+      provider
+      providerConfigKey
+      executionIdentity
+      sharedConnectionId
+      allowedMethods
+      allowedPathPrefixes
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const DELETE_APP_INTEGRATION_BINDING_MUTATION = gql`
+  mutation DeleteAppIntegrationBinding($id: ID!) {
+    deleteAppIntegrationBinding(id: $id)
   }
 `;
 

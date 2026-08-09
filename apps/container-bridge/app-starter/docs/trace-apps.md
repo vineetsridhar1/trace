@@ -27,6 +27,51 @@ Keep browser requests to this app same-origin. Put calls that require secrets or
 browser CORS behind a route in `server.ts` or another server module. Never send secrets to the
 browser or commit them.
 
+## Connected data
+
+When the user asks for connected data, run `"$TRACE_CLI" integration --help --json` and follow its
+workflow. Use leaf help for exact effects and arguments, then run `integration list --json`. The live
+catalog tells you which integrations and least-privilege capabilities are available, whether
+accounts are connected, what the current app can access, and the exact server helper to use. Do not
+send the user to the manual Data access UI, guess Nango keys, call Trace GraphQL directly, or put
+binding UUIDs in generated code.
+
+Call integrations only from server routes. Trace attaches the current signed-in viewer to proxied
+`/api/*` requests, and the server-only `trace` helper passes that identity to Trace without exposing
+credentials to browser code.
+
+For example, a GitHub route only needs the integration name and provider path:
+
+```ts
+app.get("/api/github-user", async (request, response) => {
+  const user = await trace.integrations.request(request, "github", {
+    path: "/user",
+  });
+  response.json(user);
+});
+```
+
+For a Snowflake binding, keep the SQL in the Node route and accept only its parameter values from
+the browser:
+
+```ts
+import { trace } from "./trace.js";
+
+app.get("/api/revenue", async (request, response) => {
+  const rows = await trace.integrations.snowflake.query(request, "snowflake", {
+    sql: "SELECT region, SUM(revenue) FROM analytics.sales WHERE sold_at >= ? GROUP BY region",
+    parameters: [String(request.query.startDate)],
+  });
+  response.json(rows);
+});
+```
+
+Use the stable integration ID returned by `integration list`; generated code never needs a binding
+UUID or Nango configuration key. Trace accepts one read-only `SELECT` statement, resolves the
+binding's viewer/shared/service connection, and sends the request through Nango. Do not accept SQL,
+binding IDs, database names, schema names, warehouse names, or connection identifiers from browser
+input.
+
 ## Runtime
 
 Trace manages the development server on port 3000. Do not run `pnpm dev` or start another server.

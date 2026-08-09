@@ -181,6 +181,23 @@ enum EndpointTrafficCaptureMode {
   full
 }
 
+enum IntegrationConnectionKind {
+  personal
+  service
+}
+
+enum IntegrationConnectionStatus {
+  active
+  error
+  revoked
+}
+
+enum IntegrationExecutionIdentity {
+  viewer
+  shared
+  service
+}
+
 type SlashCommand {
   name: String!
   description: String!
@@ -375,6 +392,12 @@ enum EventType {
   design_system_archived
   artifact_created
   artifact_approved
+  integration_connection_created
+  integration_connection_updated
+  integration_connection_deleted
+  app_integration_binding_updated
+  app_integration_request_started
+  app_integration_request_executed
 }
 
 # --- Core Types ---
@@ -1044,6 +1067,59 @@ type SessionEndpointPreview {
   expiresAt: DateTime!
 }
 
+type IntegrationConnection {
+  id: ID!
+  ownerUserId: ID!
+  provider: String!
+  providerConfigKey: String!
+  displayName: String!
+  kind: IntegrationConnectionKind!
+  status: IntegrationConnectionStatus!
+  lastError: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type AppIntegrationBinding {
+  id: ID!
+  integrationId: String
+  sessionGroupId: ID!
+  label: String!
+  provider: String!
+  providerConfigKey: String!
+  executionIdentity: IntegrationExecutionIdentity!
+  sharedConnectionId: ID
+  sharedConnection: IntegrationConnection
+  allowedMethods: [String!]!
+  allowedPathPrefixes: [String!]!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type NangoConnectSession {
+  connectLink: String!
+  expiresAt: DateTime!
+}
+
+type SupportedIntegrationCapability {
+  id: String!
+  name: String!
+  description: String!
+  guide: String!
+  allowedMethods: [String!]!
+  allowedPathPrefixes: [String!]!
+}
+
+type SupportedAppIntegration {
+  id: String!
+  name: String!
+  provider: String!
+  providerConfigKey: String!
+  description: String!
+  guide: String!
+  capabilities: [SupportedIntegrationCapability!]!
+}
+
 type EndpointTrafficEntry {
   id: ID!
   endpointId: ID!
@@ -1662,6 +1738,22 @@ input CreateOrganizationInput {
   name: String!
 }
 
+input CreateNangoConnectSessionInput {
+  integrationId: String!
+  displayName: String
+  kind: IntegrationConnectionKind = personal
+}
+
+input UpsertAppIntegrationBindingInput {
+  id: ID
+  sessionGroupId: ID!
+  integrationId: String!
+  capabilityIds: [String!]!
+  label: String
+  executionIdentity: IntegrationExecutionIdentity!
+  sharedConnectionId: ID
+}
+
 # --- Queries ---
 
 type Query {
@@ -1815,6 +1907,10 @@ type Query {
   ): [SessionApplicationLogEntry!]!
   sessionEndpoints(sessionGroupId: ID!): [SessionEndpoint!]!
   endpointTraffic(endpointId: ID!, limit: Int, before: DateTime): [EndpointTrafficEntry!]!
+  nangoIntegrationConfigured: Boolean!
+  supportedAppIntegrations: [SupportedAppIntegration!]!
+  integrationConnections: [IntegrationConnection!]!
+  appIntegrationBindings(sessionGroupId: ID!): [AppIntegrationBinding!]!
   searchUsers(query: String!): [User!]!
 }
 
@@ -2096,7 +2192,14 @@ type Mutation {
   ): SessionEndpoint!
   clearEndpointTraffic(endpointId: ID!): Boolean!
   createSessionEndpointPreview(endpointId: ID!): SessionEndpointPreview!
-  publishAppSession(sessionGroupId: ID!): SessionEndpoint!
+  publishAppSession(
+    sessionGroupId: ID!
+    accessMode: SessionEndpointAccessMode = private
+  ): SessionEndpoint!
+  createNangoConnectSession(input: CreateNangoConnectSessionInput!): NangoConnectSession!
+  deleteIntegrationConnection(id: ID!): Boolean!
+  upsertAppIntegrationBinding(input: UpsertAppIntegrationBindingInput!): AppIntegrationBinding!
+  deleteAppIntegrationBinding(id: ID!, sessionGroupId: ID): Boolean!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!

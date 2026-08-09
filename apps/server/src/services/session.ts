@@ -1125,6 +1125,11 @@ const TRACE_SESSION_SKILL_INSTRUCTION = `\n\n<system-instruction>
 When the request involves discovering, creating, messaging, running, stopping, monitoring, or archiving Trace sessions, read $TRACE_SKILLS_DIR/trace-session/SKILL.md completely before acting. Invoke the managed CLI using \`"$TRACE_CLI"\` exactly; do not call a bare \`trace\` command and never print $TRACE_INVOCATION_TOKEN.
 </system-instruction>`;
 
+/** Make the CLI a self-describing platform surface instead of requiring one skill per capability. */
+const TRACE_CLI_DISCOVERY_INSTRUCTION = `\n\n<system-instruction>
+When you need a Trace platform capability, first run \`"$TRACE_CLI" --help --json\`, then inspect the relevant group and leaf help with \`"$TRACE_CLI" <group> --help --json\` and \`"$TRACE_CLI" <group> <command> --help --json\`. Follow the returned workflow, effects, output, and next-step guidance. Invoke the managed CLI using \`"$TRACE_CLI"\` exactly; do not call a bare \`trace\` command, call Trace GraphQL directly, or print $TRACE_INVOCATION_TOKEN.
+</system-instruction>`;
+
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves each response. */
 const AUTO_SAVE_INSTRUCTION = `\n\n<system-instruction>
 Before completing every response that changes the workspace, silently save your work to the remote:
@@ -1200,6 +1205,7 @@ function appendPromptInstructions(
   let result = prompt + TITLE_INSTRUCTION;
   result += BACKGROUND_WORK_INSTRUCTION;
   result += REQUEST_USER_INPUT_SKILL_INSTRUCTION;
+  result += TRACE_CLI_DISCOVERY_INSTRUCTION;
   result += TRACE_SESSION_SKILL_INSTRUCTION;
   if (hasRepo && !isGeneratedProjectKind(sessionGroupKind)) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
@@ -3045,15 +3051,16 @@ export class SessionService {
     }
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
-    const ownedRuntimesForRepo = listRuntimeMetadata({ hostingMode: "local" })
-      .filter((candidate) => {
+    const ownedRuntimesForRepo = listRuntimeMetadata({ hostingMode: "local" }).filter(
+      (candidate) => {
         if (candidate.organizationId !== organizationId) return false;
         if (candidate.ownerUserId !== userId) return false;
         if (options.requireRegisteredRepo && !candidate.registeredRepoIds.includes(repoId)) {
           return false;
         }
         return true;
-      });
+      },
+    );
     const runtime = options.runtimeInstanceId
       ? ownedRuntimesForRepo.find((candidate) => candidate.id === options.runtimeInstanceId)
       : (ownedRuntimesForRepo.find((candidate) => candidate.id === groupRuntimeId) ??
@@ -9803,13 +9810,12 @@ export class SessionService {
         organizationId,
         sessionGroupId,
       });
-      const runtime = listRuntimeMetadata()
-        .find(
-          (runtime) =>
-            runtime.organizationId === organizationId &&
-            (runtime.hostingMode === "cloud" || accessibleRuntimeIds.has(runtime.id)) &&
-            runtime.registeredRepoIds.includes(repoId),
-        );
+      const runtime = listRuntimeMetadata().find(
+        (runtime) =>
+          runtime.organizationId === organizationId &&
+          (runtime.hostingMode === "cloud" || accessibleRuntimeIds.has(runtime.id)) &&
+          runtime.registeredRepoIds.includes(repoId),
+      );
       runtimeId = runtime?.key;
     }
     if (!runtimeId) throw new Error("Repo not cloned on any connected runtime");
@@ -9842,14 +9848,13 @@ export class SessionService {
         userId,
         organizationId,
       });
-      const runtime = listRuntimeMetadata()
-        .find(
-          (runtime) =>
-            runtime.organizationId === organizationId &&
-            runtime.hostingMode === "local" &&
-            accessibleRuntimeIds.has(runtime.id) &&
-            runtime.registeredRepoIds.includes(repoId),
-        );
+      const runtime = listRuntimeMetadata().find(
+        (runtime) =>
+          runtime.organizationId === organizationId &&
+          runtime.hostingMode === "local" &&
+          accessibleRuntimeIds.has(runtime.id) &&
+          runtime.registeredRepoIds.includes(repoId),
+      );
       runtimeId = runtime?.key;
     }
     if (!runtimeId) throw new Error("Repo not cloned on any connected local runtime");

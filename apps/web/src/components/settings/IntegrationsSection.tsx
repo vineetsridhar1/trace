@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { SettingsStatusPill } from "./SettingsStatusPill";
+import { NangoConnectionsSection } from "./NangoConnectionsSection";
 
 type SlackSettings = {
   configured: boolean;
@@ -206,6 +207,7 @@ export function IntegrationsSection() {
             </div>
           </div>
         )}
+        <NangoConnectionsSection />
       </div>
     </section>
   );

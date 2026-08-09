@@ -60,6 +60,7 @@ import { resolveActor } from "../services/actor.js";
 import { designSystemMutations, designSystemQueries } from "./design-system.js";
 import { artifactMutations, artifactQueries, artifactTypeResolvers } from "./artifact.js";
 import { restrictAgentRootResolvers } from "../lib/agent-authorization.js";
+import { appIntegrationMutations, appIntegrationQueries } from "./app-integrations.js";
 
 const queries = {
   ...organizationQueries,
@@ -82,6 +83,7 @@ const queries = {
   ...threadQueries,
   ...designSystemQueries,
   ...artifactQueries,
+  ...appIntegrationQueries,
 };
 
 const mutations = {
@@ -103,6 +105,7 @@ const mutations = {
   ...participantMutations,
   ...designSystemMutations,
   ...artifactMutations,
+  ...appIntegrationMutations,
 };
 
 const subscriptions = {

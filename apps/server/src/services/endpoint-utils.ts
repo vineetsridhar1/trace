@@ -196,6 +196,7 @@ export function forwardableRequestHeaders(
     if (value == null) continue;
     const name = rawName.toLowerCase();
     if (name === "authorization" || name === "proxy-authorization") continue;
+    if (name.startsWith("x-trace-")) continue;
     if (HOP_BY_HOP_HEADERS.has(name)) continue;
     if (options?.websocket && WS_HANDSHAKE_HEADERS.has(name)) continue;
     if (options?.authoringOverlay && name === "accept-encoding") continue;

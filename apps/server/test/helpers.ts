@@ -299,6 +299,28 @@ export function createPrismaMock() {
       findMany: vi.fn(),
       update: vi.fn(),
     },
+    integrationConnection: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      delete: vi.fn(),
+    },
+    appIntegrationBinding: {
+      create: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    integrationRequestAuditEntry: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
     bridgeRuntime: {
       findMany: vi.fn(),
       findUnique: vi.fn(),

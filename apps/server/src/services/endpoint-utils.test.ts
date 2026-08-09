@@ -155,6 +155,16 @@ describe("endpoint utils", () => {
     expect(forwardableRequestHeaders({ cookie: "trace_token=secret" })).toEqual({});
   });
 
+  it("strips caller-supplied internal Trace headers", () => {
+    expect(
+      forwardableRequestHeaders({
+        "x-trace-app-viewer-context": "forged",
+        "x-trace-other": "forged",
+        "x-app": "ok",
+      }),
+    ).toEqual({ "x-app": "ok" });
+  });
+
   it("strips the endpoint preview cookie before forwarding", () => {
     expect(
       forwardableRequestHeaders({

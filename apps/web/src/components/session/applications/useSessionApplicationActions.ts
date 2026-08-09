@@ -141,7 +141,10 @@ export function useSessionApplicationActions({
       }
     },
     copyEndpoint: async (endpoint: EndpointReference) => {
-      const url = await resolveEndpointUrl(endpoint);
+      // Share links never carry the sender's short-lived preview credential.
+      // The stable URL bootstraps a fresh viewer-specific session after Trace
+      // checks that viewer's organization and application access.
+      const url = endpoint.url;
       if (!url) return;
       try {
         await navigator.clipboard.writeText(url);

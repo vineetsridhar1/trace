@@ -5514,6 +5514,13 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
         expect.objectContaining({
+          prompt: expect.stringContaining('"$TRACE_CLI" --help --json'),
+        }),
+        expect.any(Object),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
           prompt: expect.stringContaining("$TRACE_SKILLS_DIR/trace-session/SKILL.md completely"),
         }),
         expect.any(Object),
@@ -5565,6 +5572,44 @@ describe("SessionService", () => {
       });
       expect(command?.runtimeEnv?.TRACE_INVOCATION_ID).toEqual(expect.any(String));
       expect(command?.runtimeEnv?.TRACE_INVOCATION_TOKEN).toEqual(expect.any(String));
+    });
+
+    it("uses self-describing CLI help instead of an integration-specific app skill", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        hosting: "cloud",
+        workdir: "/workspaces/app",
+        toolSessionId: "tool-sess-1",
+        repoId: "managed-repo-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-app",
+          runtimeLabel: "App Runtime",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+        sessionGroup: makeSessionGroup({ kind: "app" }),
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "show my GitHub profile",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      const command = sessionRouterMock.send.mock.calls.at(-1)?.[1];
+      expect(command).toEqual(
+        expect.objectContaining({
+          prompt: expect.stringContaining('"$TRACE_CLI" <group> --help --json'),
+        }),
+      );
+      expect(command?.appendSystemPrompt).not.toContain("trace-integrations/SKILL.md");
     });
 
     it("injects design guidance without branch instructions for managed design repos", async () => {
@@ -14035,9 +14080,7 @@ describe("SessionService", () => {
         { path: "/repo", branch: "main", isTraceManaged: false, isMain: true },
       ]);
 
-      await expect(
-        service.listRepoWorktrees("repo-a", "org-1", "user-2"),
-      ).resolves.toEqual([
+      await expect(service.listRepoWorktrees("repo-a", "org-1", "user-2")).resolves.toEqual([
         expect.objectContaining({ path: "/worktrees/feature", branch: "feature" }),
       ]);
       expect(sessionRouterMock.listRepoWorktrees).toHaveBeenCalledWith(

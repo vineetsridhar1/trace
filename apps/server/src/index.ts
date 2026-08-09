@@ -24,6 +24,8 @@ import { designPreviewRouter } from "./routes/design-preview.js";
 import { animationPreviewRouter } from "./routes/animation-preview.js";
 import { agentArtifactRouter } from "./routes/agent-artifact.js";
 import { artifactContentRouter } from "./routes/artifact-content.js";
+import { nangoRouter } from "./routes/nango.js";
+import { appIntegrationsRouter } from "./routes/app-integrations.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -206,6 +208,7 @@ async function main() {
 
   // Webhook route needs raw body for signature verification — register before express.json()
   app.use("/webhooks/github", express.raw({ type: "application/json" }), webhookRouter);
+  app.use("/webhooks/nango", express.raw({ type: "application/json" }), nangoRouter);
 
   // Slack router applies per-endpoint body parsers (raw for /events, urlencoded for /link/complete),
   // so register before express.json() so the events webhook keeps a raw buffer.
@@ -223,6 +226,7 @@ async function main() {
 
   app.use(express.json());
   app.use(artifactContentRouter);
+  app.use(appIntegrationsRouter);
   app.post("/runtime/codex-auth", async (req: express.Request, res: express.Response) => {
     const token = readBearerToken(req);
     const runtime = token ? authenticateProvisionedRuntimeToken(token) : null;

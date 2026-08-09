@@ -49,31 +49,64 @@ describe("Trace CLI", () => {
 
   it("shows global and command-specific help without authentication", async () => {
     await expect(run([])).resolves.toBe(0);
-    expect(stdout.mock.calls.flat().join("")).toContain("session list");
+    const globalOutput = stdout.mock.calls.flat().join("");
+    expect(globalOutput).toContain("Command groups:");
+    expect(globalOutput).toContain("integration");
+    expect(globalOutput).not.toContain("session start");
+
+    stdout.mockClear();
+    await expect(run(["integration", "--help"])).resolves.toBe(0);
+    const groupOutput = stdout.mock.calls.flat().join("");
+    expect(groupOutput).toContain('Usage: "$TRACE_CLI" integration <command>');
+    expect(groupOutput).toContain("integration list --json");
+    expect(groupOutput).toContain("Put provider requests in generated Node routes");
 
     stdout.mockClear();
     await expect(run(["session", "start", "--help"])).resolves.toBe(0);
     const output = stdout.mock.calls.flat().join("");
-    expect(output).toContain("Usage: trace session start");
+    expect(output).toContain('Usage: "$TRACE_CLI" session start');
     expect(output).toContain("Start a new session group");
   });
 
   it("exposes the command registry as machine-readable help", async () => {
     await expect(run(["--help", "--json"])).resolves.toBe(0);
     expect(JSON.parse(stdout.mock.calls.flat().join(""))).toMatchObject({
-      commands: expect.arrayContaining([
+      groups: expect.arrayContaining([
         expect.objectContaining({
-          path: ["session", "start"],
-          usage: expect.stringContaining("trace session start"),
-          options: expect.arrayContaining([expect.objectContaining({ flag: "--tool" })]),
+          name: "integration",
+          usage: '"$TRACE_CLI" integration <command> [options]',
         }),
       ]),
+    });
+
+    stdout.mockClear();
+    await expect(run(["integration", "--help", "--json"])).resolves.toBe(0);
+    expect(JSON.parse(stdout.mock.calls.flat().join(""))).toMatchObject({
+      group: {
+        name: "integration",
+        workflow: expect.arrayContaining([expect.stringContaining("integration list --json")]),
+        commands: expect.arrayContaining([
+          expect.objectContaining({ path: ["integration", "add"] }),
+        ]),
+      },
     });
 
     stdout.mockClear();
     await expect(run(["session", "start", "--help", "--json"])).resolves.toBe(0);
     expect(JSON.parse(stdout.mock.calls.flat().join(""))).toMatchObject({
       command: { path: ["session", "start"] },
+    });
+
+    stdout.mockClear();
+    await expect(run(["integration", "add", "--help", "--json"])).resolves.toBe(0);
+    expect(JSON.parse(stdout.mock.calls.flat().join(""))).toMatchObject({
+      command: {
+        path: ["integration", "add"],
+        examples: expect.arrayContaining([expect.stringContaining("--capabilities profile")]),
+        effects: expect.arrayContaining([expect.stringContaining("current app")]),
+        output: expect.stringContaining("selected capability guides"),
+        nextSteps: expect.arrayContaining([expect.stringContaining("generated Node route")]),
+      },
     });
   });
 

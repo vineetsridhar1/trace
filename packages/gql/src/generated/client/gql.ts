@@ -54,8 +54,11 @@ type Documents = {
   "\n  mutation StopSessionProcess($sessionGroupId: ID!, $appConfigId: ID!, $processConfigId: ID!) {\n    stopSessionProcess(\n      sessionGroupId: $sessionGroupId\n      appConfigId: $appConfigId\n      processConfigId: $processConfigId\n    ) {\n      id\n    }\n  }\n": typeof types.StopSessionProcessDocument;
   "\n  mutation EnableSessionEndpointForwarding(\n    $endpointId: ID!\n    $accessMode: SessionEndpointAccessMode!\n  ) {\n    enableSessionEndpointForwarding(endpointId: $endpointId, accessMode: $accessMode) {\n      id\n    }\n  }\n": typeof types.EnableSessionEndpointForwardingDocument;
   "\n  mutation DisableSessionEndpointForwarding($endpointId: ID!) {\n    disableSessionEndpointForwarding(endpointId: $endpointId) {\n      id\n    }\n  }\n": typeof types.DisableSessionEndpointForwardingDocument;
-  "\n  mutation PublishAppSession($sessionGroupId: ID!) {\n    publishAppSession(sessionGroupId: $sessionGroupId) {\n      id\n    }\n  }\n": typeof types.PublishAppSessionDocument;
+  "\n  mutation PublishAppSession(\n    $sessionGroupId: ID!\n    $accessMode: SessionEndpointAccessMode = private\n  ) {\n    publishAppSession(sessionGroupId: $sessionGroupId, accessMode: $accessMode) {\n      id\n    }\n  }\n": typeof types.PublishAppSessionDocument;
   "\n  mutation CreateSessionEndpointPreview($endpointId: ID!) {\n    createSessionEndpointPreview(endpointId: $endpointId) {\n      url\n      expiresAt\n    }\n  }\n": typeof types.CreateSessionEndpointPreviewDocument;
+  "\n  query AppIntegrations($sessionGroupId: ID!) {\n    supportedAppIntegrations {\n      id\n      name\n      provider\n      providerConfigKey\n      description\n      capabilities {\n        id\n        name\n        description\n        allowedMethods\n        allowedPathPrefixes\n      }\n    }\n    integrationConnections {\n      id\n      ownerUserId\n      provider\n      providerConfigKey\n      displayName\n      kind\n      status\n      lastError\n      createdAt\n      updatedAt\n    }\n    appIntegrationBindings(sessionGroupId: $sessionGroupId) {\n      id\n      integrationId\n      sessionGroupId\n      label\n      provider\n      providerConfigKey\n      executionIdentity\n      sharedConnectionId\n      allowedMethods\n      allowedPathPrefixes\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.AppIntegrationsDocument;
+  "\n  mutation UpsertAppIntegrationBinding($input: UpsertAppIntegrationBindingInput!) {\n    upsertAppIntegrationBinding(input: $input) {\n      id\n      integrationId\n      sessionGroupId\n      label\n      provider\n      providerConfigKey\n      executionIdentity\n      sharedConnectionId\n      allowedMethods\n      allowedPathPrefixes\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.UpsertAppIntegrationBindingDocument;
+  "\n  mutation DeleteAppIntegrationBinding($id: ID!) {\n    deleteAppIntegrationBinding(id: $id)\n  }\n": typeof types.DeleteAppIntegrationBindingDocument;
   "\n  mutation UpdatePdfFormat($sessionGroupId: ID!, $width: Float!, $height: Float!, $unit: String!) {\n    updatePdfSessionFormat(\n      sessionGroupId: $sessionGroupId\n      width: $width\n      height: $height\n      unit: $unit\n    )\n  }\n": typeof types.UpdatePdfFormatDocument;
   "\n  mutation RequestPdfExport($sessionGroupId: ID!) {\n    requestPdfSessionExport(sessionGroupId: $sessionGroupId)\n  }\n": typeof types.RequestPdfExportDocument;
   "\n  query PdfSessionDownloadUrl($sessionGroupId: ID!) {\n    pdfSessionDownloadUrl(sessionGroupId: $sessionGroupId)\n  }\n": typeof types.PdfSessionDownloadUrlDocument;
@@ -81,6 +84,9 @@ type Documents = {
   "\n  mutation TestAgentEnvironment($id: ID!) {\n    testAgentEnvironment(id: $id) {\n      ok\n      message\n    }\n  }\n": typeof types.TestAgentEnvironmentDocument;
   "\n  mutation SetOrgSecret($input: SetOrgSecretInput!) {\n    setOrgSecret(input: $input) {\n      id\n      orgId\n      name\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.SetOrgSecretDocument;
   "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n": typeof types.DeleteOrgSecretDocument;
+  "\n  query IntegrationConnections {\n    nangoIntegrationConfigured\n    supportedAppIntegrations {\n      id\n      name\n      provider\n      providerConfigKey\n      description\n      capabilities {\n        id\n        name\n        description\n        allowedMethods\n        allowedPathPrefixes\n      }\n    }\n    integrationConnections {\n      id\n      ownerUserId\n      provider\n      providerConfigKey\n      displayName\n      kind\n      status\n      lastError\n      createdAt\n      updatedAt\n    }\n  }\n": typeof types.IntegrationConnectionsDocument;
+  "\n  mutation CreateNangoConnectSession($input: CreateNangoConnectSessionInput!) {\n    createNangoConnectSession(input: $input) {\n      connectLink\n      expiresAt\n    }\n  }\n": typeof types.CreateNangoConnectSessionDocument;
+  "\n  mutation DeleteIntegrationConnection($id: ID!) {\n    deleteIntegrationConnection(id: $id)\n  }\n": typeof types.DeleteIntegrationConnectionDocument;
   "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateRepoDocument;
   "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n": typeof types.CreateDmDocument;
   "\n  query AppSessionGroups($organizationId: ID!) {\n    appSessionGroups(organizationId: $organizationId) {\n      id\n      name\n      slug\n      kind\n      status\n      visibility\n      connection {\n        state\n      }\n      sessions {\n        id\n        sessionGroupId\n        agentStatus\n        sessionStatus\n        prUrl\n        worktreeDeleted\n        lastMessageAt\n        lastUserMessageAt\n        updatedAt\n        createdAt\n      }\n    }\n  }\n": typeof types.AppSessionGroupsDocument;
@@ -202,10 +208,16 @@ const documents: Documents = {
     types.EnableSessionEndpointForwardingDocument,
   "\n  mutation DisableSessionEndpointForwarding($endpointId: ID!) {\n    disableSessionEndpointForwarding(endpointId: $endpointId) {\n      id\n    }\n  }\n":
     types.DisableSessionEndpointForwardingDocument,
-  "\n  mutation PublishAppSession($sessionGroupId: ID!) {\n    publishAppSession(sessionGroupId: $sessionGroupId) {\n      id\n    }\n  }\n":
+  "\n  mutation PublishAppSession(\n    $sessionGroupId: ID!\n    $accessMode: SessionEndpointAccessMode = private\n  ) {\n    publishAppSession(sessionGroupId: $sessionGroupId, accessMode: $accessMode) {\n      id\n    }\n  }\n":
     types.PublishAppSessionDocument,
   "\n  mutation CreateSessionEndpointPreview($endpointId: ID!) {\n    createSessionEndpointPreview(endpointId: $endpointId) {\n      url\n      expiresAt\n    }\n  }\n":
     types.CreateSessionEndpointPreviewDocument,
+  "\n  query AppIntegrations($sessionGroupId: ID!) {\n    supportedAppIntegrations {\n      id\n      name\n      provider\n      providerConfigKey\n      description\n      capabilities {\n        id\n        name\n        description\n        allowedMethods\n        allowedPathPrefixes\n      }\n    }\n    integrationConnections {\n      id\n      ownerUserId\n      provider\n      providerConfigKey\n      displayName\n      kind\n      status\n      lastError\n      createdAt\n      updatedAt\n    }\n    appIntegrationBindings(sessionGroupId: $sessionGroupId) {\n      id\n      integrationId\n      sessionGroupId\n      label\n      provider\n      providerConfigKey\n      executionIdentity\n      sharedConnectionId\n      allowedMethods\n      allowedPathPrefixes\n      createdAt\n      updatedAt\n    }\n  }\n":
+    types.AppIntegrationsDocument,
+  "\n  mutation UpsertAppIntegrationBinding($input: UpsertAppIntegrationBindingInput!) {\n    upsertAppIntegrationBinding(input: $input) {\n      id\n      integrationId\n      sessionGroupId\n      label\n      provider\n      providerConfigKey\n      executionIdentity\n      sharedConnectionId\n      allowedMethods\n      allowedPathPrefixes\n      createdAt\n      updatedAt\n    }\n  }\n":
+    types.UpsertAppIntegrationBindingDocument,
+  "\n  mutation DeleteAppIntegrationBinding($id: ID!) {\n    deleteAppIntegrationBinding(id: $id)\n  }\n":
+    types.DeleteAppIntegrationBindingDocument,
   "\n  mutation UpdatePdfFormat($sessionGroupId: ID!, $width: Float!, $height: Float!, $unit: String!) {\n    updatePdfSessionFormat(\n      sessionGroupId: $sessionGroupId\n      width: $width\n      height: $height\n      unit: $unit\n    )\n  }\n":
     types.UpdatePdfFormatDocument,
   "\n  mutation RequestPdfExport($sessionGroupId: ID!) {\n    requestPdfSessionExport(sessionGroupId: $sessionGroupId)\n  }\n":
@@ -256,6 +268,12 @@ const documents: Documents = {
     types.SetOrgSecretDocument,
   "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n":
     types.DeleteOrgSecretDocument,
+  "\n  query IntegrationConnections {\n    nangoIntegrationConfigured\n    supportedAppIntegrations {\n      id\n      name\n      provider\n      providerConfigKey\n      description\n      capabilities {\n        id\n        name\n        description\n        allowedMethods\n        allowedPathPrefixes\n      }\n    }\n    integrationConnections {\n      id\n      ownerUserId\n      provider\n      providerConfigKey\n      displayName\n      kind\n      status\n      lastError\n      createdAt\n      updatedAt\n    }\n  }\n":
+    types.IntegrationConnectionsDocument,
+  "\n  mutation CreateNangoConnectSession($input: CreateNangoConnectSessionInput!) {\n    createNangoConnectSession(input: $input) {\n      connectLink\n      expiresAt\n    }\n  }\n":
+    types.CreateNangoConnectSessionDocument,
+  "\n  mutation DeleteIntegrationConnection($id: ID!) {\n    deleteIntegrationConnection(id: $id)\n  }\n":
+    types.DeleteIntegrationConnectionDocument,
   "\n  mutation CreateRepo($input: CreateRepoInput!) {\n    createRepo(input: $input) {\n      id\n    }\n  }\n":
     types.CreateRepoDocument,
   "\n  mutation CreateDM($input: CreateChatInput!) {\n    createChat(input: $input) {\n      id\n    }\n  }\n":
@@ -594,14 +612,32 @@ export function graphql(
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
-  source: "\n  mutation PublishAppSession($sessionGroupId: ID!) {\n    publishAppSession(sessionGroupId: $sessionGroupId) {\n      id\n    }\n  }\n",
-): (typeof documents)["\n  mutation PublishAppSession($sessionGroupId: ID!) {\n    publishAppSession(sessionGroupId: $sessionGroupId) {\n      id\n    }\n  }\n"];
+  source: "\n  mutation PublishAppSession(\n    $sessionGroupId: ID!\n    $accessMode: SessionEndpointAccessMode = private\n  ) {\n    publishAppSession(sessionGroupId: $sessionGroupId, accessMode: $accessMode) {\n      id\n    }\n  }\n",
+): (typeof documents)["\n  mutation PublishAppSession(\n    $sessionGroupId: ID!\n    $accessMode: SessionEndpointAccessMode = private\n  ) {\n    publishAppSession(sessionGroupId: $sessionGroupId, accessMode: $accessMode) {\n      id\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(
   source: "\n  mutation CreateSessionEndpointPreview($endpointId: ID!) {\n    createSessionEndpointPreview(endpointId: $endpointId) {\n      url\n      expiresAt\n    }\n  }\n",
 ): (typeof documents)["\n  mutation CreateSessionEndpointPreview($endpointId: ID!) {\n    createSessionEndpointPreview(endpointId: $endpointId) {\n      url\n      expiresAt\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query AppIntegrations($sessionGroupId: ID!) {\n    supportedAppIntegrations {\n      id\n      name\n      provider\n      providerConfigKey\n      description\n      capabilities {\n        id\n        name\n        description\n        allowedMethods\n        allowedPathPrefixes\n      }\n    }\n    integrationConnections {\n      id\n      ownerUserId\n      provider\n      providerConfigKey\n      displayName\n      kind\n      status\n      lastError\n      createdAt\n      updatedAt\n    }\n    appIntegrationBindings(sessionGroupId: $sessionGroupId) {\n      id\n      integrationId\n      sessionGroupId\n      label\n      provider\n      providerConfigKey\n      executionIdentity\n      sharedConnectionId\n      allowedMethods\n      allowedPathPrefixes\n      createdAt\n      updatedAt\n    }\n  }\n",
+): (typeof documents)["\n  query AppIntegrations($sessionGroupId: ID!) {\n    supportedAppIntegrations {\n      id\n      name\n      provider\n      providerConfigKey\n      description\n      capabilities {\n        id\n        name\n        description\n        allowedMethods\n        allowedPathPrefixes\n      }\n    }\n    integrationConnections {\n      id\n      ownerUserId\n      provider\n      providerConfigKey\n      displayName\n      kind\n      status\n      lastError\n      createdAt\n      updatedAt\n    }\n    appIntegrationBindings(sessionGroupId: $sessionGroupId) {\n      id\n      integrationId\n      sessionGroupId\n      label\n      provider\n      providerConfigKey\n      executionIdentity\n      sharedConnectionId\n      allowedMethods\n      allowedPathPrefixes\n      createdAt\n      updatedAt\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation UpsertAppIntegrationBinding($input: UpsertAppIntegrationBindingInput!) {\n    upsertAppIntegrationBinding(input: $input) {\n      id\n      integrationId\n      sessionGroupId\n      label\n      provider\n      providerConfigKey\n      executionIdentity\n      sharedConnectionId\n      allowedMethods\n      allowedPathPrefixes\n      createdAt\n      updatedAt\n    }\n  }\n",
+): (typeof documents)["\n  mutation UpsertAppIntegrationBinding($input: UpsertAppIntegrationBindingInput!) {\n    upsertAppIntegrationBinding(input: $input) {\n      id\n      integrationId\n      sessionGroupId\n      label\n      provider\n      providerConfigKey\n      executionIdentity\n      sharedConnectionId\n      allowedMethods\n      allowedPathPrefixes\n      createdAt\n      updatedAt\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation DeleteAppIntegrationBinding($id: ID!) {\n    deleteAppIntegrationBinding(id: $id)\n  }\n",
+): (typeof documents)["\n  mutation DeleteAppIntegrationBinding($id: ID!) {\n    deleteAppIntegrationBinding(id: $id)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -752,6 +788,24 @@ export function graphql(
 export function graphql(
   source: "\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n",
 ): (typeof documents)["\n  mutation DeleteOrgSecret($orgId: ID!, $id: ID!) {\n    deleteOrgSecret(orgId: $orgId, id: $id)\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  query IntegrationConnections {\n    nangoIntegrationConfigured\n    supportedAppIntegrations {\n      id\n      name\n      provider\n      providerConfigKey\n      description\n      capabilities {\n        id\n        name\n        description\n        allowedMethods\n        allowedPathPrefixes\n      }\n    }\n    integrationConnections {\n      id\n      ownerUserId\n      provider\n      providerConfigKey\n      displayName\n      kind\n      status\n      lastError\n      createdAt\n      updatedAt\n    }\n  }\n",
+): (typeof documents)["\n  query IntegrationConnections {\n    nangoIntegrationConfigured\n    supportedAppIntegrations {\n      id\n      name\n      provider\n      providerConfigKey\n      description\n      capabilities {\n        id\n        name\n        description\n        allowedMethods\n        allowedPathPrefixes\n      }\n    }\n    integrationConnections {\n      id\n      ownerUserId\n      provider\n      providerConfigKey\n      displayName\n      kind\n      status\n      lastError\n      createdAt\n      updatedAt\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation CreateNangoConnectSession($input: CreateNangoConnectSessionInput!) {\n    createNangoConnectSession(input: $input) {\n      connectLink\n      expiresAt\n    }\n  }\n",
+): (typeof documents)["\n  mutation CreateNangoConnectSession($input: CreateNangoConnectSessionInput!) {\n    createNangoConnectSession(input: $input) {\n      connectLink\n      expiresAt\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(
+  source: "\n  mutation DeleteIntegrationConnection($id: ID!) {\n    deleteIntegrationConnection(id: $id)\n  }\n",
+): (typeof documents)["\n  mutation DeleteIntegrationConnection($id: ID!) {\n    deleteIntegrationConnection(id: $id)\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

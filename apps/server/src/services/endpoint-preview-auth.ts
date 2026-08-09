@@ -81,3 +81,9 @@ export function endpointPreviewCookieHeader(token: string, expiresAt: Date): str
     .filter((part): part is string => Boolean(part))
     .join("; ");
 }
+
+export function safeEndpointRedirectPath(value: string | null | undefined): string {
+  if (!value || value.length > 2048 || !value.startsWith("/")) return "/";
+  if (value[1] === "/" || value[1] === "\\") return "/";
+  return value;
+}

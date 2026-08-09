@@ -95,6 +95,24 @@ function assertAgentRequest(
     forbidden("The session credential cannot access another organization");
   }
 
+  if (
+    field === "appIntegrationBindings" ||
+    field === "upsertAppIntegrationBinding" ||
+    field === "deleteAppIntegrationBinding"
+  ) {
+    const input = args.input;
+    const requestedSessionGroupId =
+      field === "upsertAppIntegrationBinding" && input && typeof input === "object"
+        ? (input as { sessionGroupId?: unknown }).sessionGroupId
+        : args.sessionGroupId;
+    if (
+      typeof requestedSessionGroupId !== "string" ||
+      requestedSessionGroupId !== ctx.agentSessionGroupId
+    ) {
+      forbidden("The session credential may only configure its current application");
+    }
+  }
+
   if (field === "events") {
     const scope = args.scope;
     if (!scope || typeof scope !== "object" || Array.isArray(scope)) {

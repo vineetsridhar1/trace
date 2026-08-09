@@ -396,7 +396,7 @@ describe("SessionApplicationService", () => {
       "user-1",
     );
 
-    expect(endpoint.accessMode).toBe("public");
+    expect(endpoint.accessMode).toBe("private");
     expect(eventServiceMock.create).toHaveBeenCalledWith(
       expect.objectContaining({
         scopeId: "group-1",

@@ -76,6 +76,23 @@ export type ApiTokenStatus = {
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type AppIntegrationBinding = {
+  __typename?: "AppIntegrationBinding";
+  allowedMethods: Array<Scalars["String"]["output"]>;
+  allowedPathPrefixes: Array<Scalars["String"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  executionIdentity: IntegrationExecutionIdentity;
+  id: Scalars["ID"]["output"];
+  integrationId?: Maybe<Scalars["String"]["output"]>;
+  label: Scalars["String"]["output"];
+  provider: Scalars["String"]["output"];
+  providerConfigKey: Scalars["String"]["output"];
+  sessionGroupId: Scalars["ID"]["output"];
+  sharedConnection?: Maybe<IntegrationConnection>;
+  sharedConnectionId?: Maybe<Scalars["ID"]["output"]>;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
 export type ApplicationProcessStatus =
   | "exited"
   | "failed"
@@ -354,6 +371,12 @@ export type CreateDesignSystemInput = {
   name: Scalars["String"]["input"];
   repoId: Scalars["ID"]["input"];
   sourcePath?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type CreateNangoConnectSessionInput = {
+  displayName?: InputMaybe<Scalars["String"]["input"]>;
+  integrationId: Scalars["String"]["input"];
+  kind?: InputMaybe<IntegrationConnectionKind>;
 };
 
 export type CreateOrganizationInput = {
@@ -682,6 +705,9 @@ export type EventType =
   | "agent_environment_deleted"
   | "agent_environment_updated"
   | "animation_preview_updated"
+  | "app_integration_binding_updated"
+  | "app_integration_request_executed"
+  | "app_integration_request_started"
   | "application_config_updated"
   | "artifact_approved"
   | "artifact_created"
@@ -714,6 +740,9 @@ export type EventType =
   | "entity_linked"
   | "inbox_item_created"
   | "inbox_item_resolved"
+  | "integration_connection_created"
+  | "integration_connection_deleted"
+  | "integration_connection_updated"
   | "managed_git_token_minted"
   | "manual_element_saved"
   | "member_joined"
@@ -826,6 +855,26 @@ export type InboxItem = {
 export type InboxItemStatus = "active" | "dismissed" | "expired" | "resolved";
 
 export type InboxItemType = "plan" | "question";
+
+export type IntegrationConnection = {
+  __typename?: "IntegrationConnection";
+  createdAt: Scalars["DateTime"]["output"];
+  displayName: Scalars["String"]["output"];
+  id: Scalars["ID"]["output"];
+  kind: IntegrationConnectionKind;
+  lastError?: Maybe<Scalars["String"]["output"]>;
+  ownerUserId: Scalars["ID"]["output"];
+  provider: Scalars["String"]["output"];
+  providerConfigKey: Scalars["String"]["output"];
+  status: IntegrationConnectionStatus;
+  updatedAt: Scalars["DateTime"]["output"];
+};
+
+export type IntegrationConnectionKind = "personal" | "service";
+
+export type IntegrationConnectionStatus = "active" | "error" | "revoked";
+
+export type IntegrationExecutionIdentity = "service" | "shared" | "viewer";
 
 export type LinkedCheckoutActionResult = {
   __typename?: "LinkedCheckoutActionResult";
@@ -964,6 +1013,7 @@ export type Mutation = {
   createChannelTerminal: Terminal;
   createChat: Chat;
   createDesignSystem: DesignSystem;
+  createNangoConnectSession: NangoConnectSession;
   createOrganization: OrgMember;
   createProject: Project;
   createRepo: Repo;
@@ -972,11 +1022,13 @@ export type Mutation = {
   createTicket: Ticket;
   deleteAgentEnvironment: Scalars["Boolean"]["output"];
   deleteApiToken: Scalars["Boolean"]["output"];
+  deleteAppIntegrationBinding: Scalars["Boolean"]["output"];
   deleteChannel: Scalars["Boolean"]["output"];
   deleteChannelGroup: Scalars["Boolean"]["output"];
   deleteChannelMessage: Message;
   deleteChatMessage: Message;
   deleteCodexCredential: Scalars["Boolean"]["output"];
+  deleteIntegrationConnection: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
@@ -1068,6 +1120,7 @@ export type Mutation = {
   updateSessionEndpointTrafficCapture: SessionEndpoint;
   updateSessionGroupVisibility: SessionGroup;
   updateTicket: Ticket;
+  upsertAppIntegrationBinding: AppIntegrationBinding;
 };
 
 export type MutationAddChannelMemberArgs = {
@@ -1168,6 +1221,10 @@ export type MutationCreateDesignSystemArgs = {
   input: CreateDesignSystemInput;
 };
 
+export type MutationCreateNangoConnectSessionArgs = {
+  input: CreateNangoConnectSessionInput;
+};
+
 export type MutationCreateOrganizationArgs = {
   input: CreateOrganizationInput;
 };
@@ -1202,6 +1259,11 @@ export type MutationDeleteApiTokenArgs = {
   provider: ApiTokenProvider;
 };
 
+export type MutationDeleteAppIntegrationBindingArgs = {
+  id: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
+};
+
 export type MutationDeleteChannelArgs = {
   id: Scalars["ID"]["input"];
 };
@@ -1216,6 +1278,10 @@ export type MutationDeleteChannelMessageArgs = {
 
 export type MutationDeleteChatMessageArgs = {
   messageId: Scalars["ID"]["input"];
+};
+
+export type MutationDeleteIntegrationConnectionArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteOrgSecretArgs = {
@@ -1326,6 +1392,7 @@ export type MutationMuteScopeArgs = {
 };
 
 export type MutationPublishAppSessionArgs = {
+  accessMode?: InputMaybe<SessionEndpointAccessMode>;
   sessionGroupId: Scalars["ID"]["input"];
 };
 
@@ -1680,6 +1747,16 @@ export type MutationUpdateTicketArgs = {
   input: UpdateTicketInput;
 };
 
+export type MutationUpsertAppIntegrationBindingArgs = {
+  input: UpsertAppIntegrationBindingInput;
+};
+
+export type NangoConnectSession = {
+  __typename?: "NangoConnectSession";
+  connectLink: Scalars["String"]["output"];
+  expiresAt: Scalars["DateTime"]["output"];
+};
+
 export type Notification = {
   __typename?: "Notification";
   id: Scalars["ID"]["output"];
@@ -1753,6 +1830,7 @@ export type Query = {
   agentEnvironments: Array<AgentEnvironment>;
   /** Animation-kind session groups for the org (the sidebar Animations section). */
   animationSessionGroups: Array<SessionGroup>;
+  appIntegrationBindings: Array<AppIntegrationBinding>;
   /**
    * App-kind session groups for the org. Apps have no channel, so this is their
    * listing surface (the sidebar Apps section).
@@ -1781,6 +1859,7 @@ export type Query = {
   endpointTraffic: Array<EndpointTrafficEntry>;
   events: Array<Event>;
   inboxItems: Array<InboxItem>;
+  integrationConnections: Array<IntegrationConnection>;
   linkedCheckoutChangedFile: LinkedCheckoutChangedFile;
   linkedCheckoutStatus: LinkedCheckoutStatus;
   myApiTokens: Array<ApiTokenStatus>;
@@ -1789,6 +1868,7 @@ export type Query = {
   myConnections: Array<ConnectionsBridge>;
   myOrganizations: Array<OrgMember>;
   mySessions: Array<Session>;
+  nangoIntegrationConfigured: Scalars["Boolean"]["output"];
   orgSecrets: Array<OrgSecret>;
   organization?: Maybe<Organization>;
   participants: Array<Participant>;
@@ -1827,6 +1907,7 @@ export type Query = {
   sessionTerminals: Array<Terminal>;
   sessionTimeline: SessionTimelinePage;
   sessions: Array<Session>;
+  supportedAppIntegrations: Array<SupportedAppIntegration>;
   threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
@@ -1840,6 +1921,10 @@ export type QueryAgentEnvironmentsArgs = {
 export type QueryAnimationSessionGroupsArgs = {
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryAppIntegrationBindingsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryAppSessionGroupsArgs = {
@@ -2756,6 +2841,27 @@ export type SubscriptionUserNotificationsArgs = {
   organizationId: Scalars["ID"]["input"];
 };
 
+export type SupportedAppIntegration = {
+  __typename?: "SupportedAppIntegration";
+  capabilities: Array<SupportedIntegrationCapability>;
+  description: Scalars["String"]["output"];
+  guide: Scalars["String"]["output"];
+  id: Scalars["String"]["output"];
+  name: Scalars["String"]["output"];
+  provider: Scalars["String"]["output"];
+  providerConfigKey: Scalars["String"]["output"];
+};
+
+export type SupportedIntegrationCapability = {
+  __typename?: "SupportedIntegrationCapability";
+  allowedMethods: Array<Scalars["String"]["output"]>;
+  allowedPathPrefixes: Array<Scalars["String"]["output"]>;
+  description: Scalars["String"]["output"];
+  guide: Scalars["String"]["output"];
+  id: Scalars["String"]["output"];
+  name: Scalars["String"]["output"];
+};
+
 export type Terminal = {
   __typename?: "Terminal";
   id: Scalars["ID"]["output"];
@@ -2854,6 +2960,16 @@ export type UpdateTicketInput = {
   priority?: InputMaybe<Priority>;
   status?: InputMaybe<TicketStatus>;
   title?: InputMaybe<Scalars["String"]["input"]>;
+};
+
+export type UpsertAppIntegrationBindingInput = {
+  capabilityIds: Array<Scalars["String"]["input"]>;
+  executionIdentity: IntegrationExecutionIdentity;
+  id?: InputMaybe<Scalars["ID"]["input"]>;
+  integrationId: Scalars["String"]["input"];
+  label?: InputMaybe<Scalars["String"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+  sharedConnectionId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type User = {
@@ -2976,6 +3092,7 @@ export type ResolversTypes = ResolversObject<{
   AgentStatus: AgentStatus;
   ApiTokenProvider: ApiTokenProvider;
   ApiTokenStatus: ResolverTypeWrapper<ApiTokenStatus>;
+  AppIntegrationBinding: ResolverTypeWrapper<AppIntegrationBinding>;
   ApplicationProcessStatus: ApplicationProcessStatus;
   Artifact: ResolverTypeWrapper<Artifact>;
   ArtifactApprovalAction: ArtifactApprovalAction;
@@ -3010,6 +3127,7 @@ export type ResolversTypes = ResolversObject<{
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
   CreateDesignSystemInput: CreateDesignSystemInput;
+  CreateNangoConnectSessionInput: CreateNangoConnectSessionInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
@@ -3044,6 +3162,10 @@ export type ResolversTypes = ResolversObject<{
   InboxItemStatus: InboxItemStatus;
   InboxItemType: InboxItemType;
   Int: ResolverTypeWrapper<Scalars["Int"]["output"]>;
+  IntegrationConnection: ResolverTypeWrapper<IntegrationConnection>;
+  IntegrationConnectionKind: IntegrationConnectionKind;
+  IntegrationConnectionStatus: IntegrationConnectionStatus;
+  IntegrationExecutionIdentity: IntegrationExecutionIdentity;
   JSON: ResolverTypeWrapper<Scalars["JSON"]["output"]>;
   LinkedCheckoutActionResult: ResolverTypeWrapper<LinkedCheckoutActionResult>;
   LinkedCheckoutChangedFile: ResolverTypeWrapper<LinkedCheckoutChangedFile>;
@@ -3056,6 +3178,7 @@ export type ResolversTypes = ResolversObject<{
   MessageSearchHit: ResolverTypeWrapper<MessageSearchHit>;
   MoveChannelInput: MoveChannelInput;
   Mutation: ResolverTypeWrapper<{}>;
+  NangoConnectSession: ResolverTypeWrapper<NangoConnectSession>;
   Notification: ResolverTypeWrapper<Notification>;
   OrgMember: ResolverTypeWrapper<OrgMember>;
   OrgSecret: ResolverTypeWrapper<OrgSecret>;
@@ -3126,6 +3249,8 @@ export type ResolversTypes = ResolversObject<{
   StartSessionInput: StartSessionInput;
   String: ResolverTypeWrapper<Scalars["String"]["output"]>;
   Subscription: ResolverTypeWrapper<{}>;
+  SupportedAppIntegration: ResolverTypeWrapper<SupportedAppIntegration>;
+  SupportedIntegrationCapability: ResolverTypeWrapper<SupportedIntegrationCapability>;
   Terminal: ResolverTypeWrapper<Terminal>;
   TerminalEndpoint: ResolverTypeWrapper<TerminalEndpoint>;
   ThreadSummary: ResolverTypeWrapper<ThreadSummary>;
@@ -3139,6 +3264,7 @@ export type ResolversTypes = ResolversObject<{
   UpdateRepoInput: UpdateRepoInput;
   UpdateSessionDefaultsInput: UpdateSessionDefaultsInput;
   UpdateTicketInput: UpdateTicketInput;
+  UpsertAppIntegrationBindingInput: UpsertAppIntegrationBindingInput;
   User: ResolverTypeWrapper<User>;
   UserRole: UserRole;
   WorktreeChangesResult: ResolverTypeWrapper<WorktreeChangesResult>;
@@ -3152,6 +3278,7 @@ export type ResolversParentTypes = ResolversObject<{
   AgentEnvironment: AgentEnvironment;
   AgentEnvironmentTestResult: AgentEnvironmentTestResult;
   ApiTokenStatus: ApiTokenStatus;
+  AppIntegrationBinding: AppIntegrationBinding;
   Artifact: Artifact;
   ArtifactApprovalResult: ArtifactApprovalResult;
   ArtifactFile: ArtifactFile;
@@ -3176,6 +3303,7 @@ export type ResolversParentTypes = ResolversObject<{
   CreateChannelInput: CreateChannelInput;
   CreateChatInput: CreateChatInput;
   CreateDesignSystemInput: CreateDesignSystemInput;
+  CreateNangoConnectSessionInput: CreateNangoConnectSessionInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreateProjectInput: CreateProjectInput;
   CreateRepoInput: CreateRepoInput;
@@ -3199,6 +3327,7 @@ export type ResolversParentTypes = ResolversObject<{
   ID: Scalars["ID"]["output"];
   InboxItem: InboxItem;
   Int: Scalars["Int"]["output"];
+  IntegrationConnection: IntegrationConnection;
   JSON: Scalars["JSON"]["output"];
   LinkedCheckoutActionResult: LinkedCheckoutActionResult;
   LinkedCheckoutChangedFile: LinkedCheckoutChangedFile;
@@ -3209,6 +3338,7 @@ export type ResolversParentTypes = ResolversObject<{
   MessageSearchHit: MessageSearchHit;
   MoveChannelInput: MoveChannelInput;
   Mutation: {};
+  NangoConnectSession: NangoConnectSession;
   Notification: Notification;
   OrgMember: OrgMember;
   OrgSecret: OrgSecret;
@@ -3262,6 +3392,8 @@ export type ResolversParentTypes = ResolversObject<{
   StartSessionInput: StartSessionInput;
   String: Scalars["String"]["output"];
   Subscription: {};
+  SupportedAppIntegration: SupportedAppIntegration;
+  SupportedIntegrationCapability: SupportedIntegrationCapability;
   Terminal: Terminal;
   TerminalEndpoint: TerminalEndpoint;
   ThreadSummary: ThreadSummary;
@@ -3274,6 +3406,7 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateRepoInput: UpdateRepoInput;
   UpdateSessionDefaultsInput: UpdateSessionDefaultsInput;
   UpdateTicketInput: UpdateTicketInput;
+  UpsertAppIntegrationBindingInput: UpsertAppIntegrationBindingInput;
   User: User;
   WorktreeChangesResult: WorktreeChangesResult;
 }>;
@@ -3324,6 +3457,35 @@ export type ApiTokenStatusResolvers<
   isSet?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   provider?: Resolver<ResolversTypes["ApiTokenProvider"], ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes["DateTime"]>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type AppIntegrationBindingResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["AppIntegrationBinding"] =
+    ResolversParentTypes["AppIntegrationBinding"],
+> = ResolversObject<{
+  allowedMethods?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
+  allowedPathPrefixes?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  executionIdentity?: Resolver<
+    ResolversTypes["IntegrationExecutionIdentity"],
+    ParentType,
+    ContextType
+  >;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  integrationId?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  label?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  provider?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  providerConfigKey?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  sessionGroupId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  sharedConnection?: Resolver<
+    Maybe<ResolversTypes["IntegrationConnection"]>,
+    ParentType,
+    ContextType
+  >;
+  sharedConnectionId?: Resolver<Maybe<ResolversTypes["ID"]>, ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -3942,6 +4104,24 @@ export type InboxItemResolvers<
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type IntegrationConnectionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["IntegrationConnection"] =
+    ResolversParentTypes["IntegrationConnection"],
+> = ResolversObject<{
+  createdAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  displayName?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  kind?: Resolver<ResolversTypes["IntegrationConnectionKind"], ParentType, ContextType>;
+  lastError?: Resolver<Maybe<ResolversTypes["String"]>, ParentType, ContextType>;
+  ownerUserId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  provider?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  providerConfigKey?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["IntegrationConnectionStatus"], ParentType, ContextType>;
+  updatedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export interface JsonScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes["JSON"], any> {
   name: "JSON";
 }
@@ -4186,6 +4366,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationCreateDesignSystemArgs, "input">
   >;
+  createNangoConnectSession?: Resolver<
+    ResolversTypes["NangoConnectSession"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationCreateNangoConnectSessionArgs, "input">
+  >;
   createOrganization?: Resolver<
     ResolversTypes["OrgMember"],
     ParentType,
@@ -4234,6 +4420,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationDeleteApiTokenArgs, "provider">
   >;
+  deleteAppIntegrationBinding?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationDeleteAppIntegrationBindingArgs, "id">
+  >;
   deleteChannel?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -4259,6 +4451,12 @@ export type MutationResolvers<
     RequireFields<MutationDeleteChatMessageArgs, "messageId">
   >;
   deleteCodexCredential?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  deleteIntegrationConnection?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationDeleteIntegrationConnectionArgs, "id">
+  >;
   deleteOrgSecret?: Resolver<
     ResolversTypes["Boolean"],
     ParentType,
@@ -4401,7 +4599,7 @@ export type MutationResolvers<
     ResolversTypes["SessionEndpoint"],
     ParentType,
     ContextType,
-    RequireFields<MutationPublishAppSessionArgs, "sessionGroupId">
+    RequireFields<MutationPublishAppSessionArgs, "accessMode" | "sessionGroupId">
   >;
   queueSessionMessage?: Resolver<
     ResolversTypes["QueuedMessage"],
@@ -4817,6 +5015,22 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationUpdateTicketArgs, "id" | "input">
   >;
+  upsertAppIntegrationBinding?: Resolver<
+    ResolversTypes["AppIntegrationBinding"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationUpsertAppIntegrationBindingArgs, "input">
+  >;
+}>;
+
+export type NangoConnectSessionResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["NangoConnectSession"] =
+    ResolversParentTypes["NangoConnectSession"],
+> = ResolversObject<{
+  connectLink?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  expiresAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
 export type NotificationResolvers<
@@ -4919,6 +5133,12 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QueryAnimationSessionGroupsArgs, "organizationId">
+  >;
+  appIntegrationBindings?: Resolver<
+    Array<ResolversTypes["AppIntegrationBinding"]>,
+    ParentType,
+    ContextType,
+    RequireFields<QueryAppIntegrationBindingsArgs, "sessionGroupId">
   >;
   appSessionGroups?: Resolver<
     Array<ResolversTypes["SessionGroup"]>,
@@ -5053,6 +5273,11 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryInboxItemsArgs, "organizationId">
   >;
+  integrationConnections?: Resolver<
+    Array<ResolversTypes["IntegrationConnection"]>,
+    ParentType,
+    ContextType
+  >;
   linkedCheckoutChangedFile?: Resolver<
     ResolversTypes["LinkedCheckoutChangedFile"],
     ParentType,
@@ -5080,6 +5305,7 @@ export type QueryResolvers<
     ContextType,
     RequireFields<QueryMySessionsArgs, "organizationId">
   >;
+  nangoIntegrationConfigured?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   orgSecrets?: Resolver<
     Array<ResolversTypes["OrgSecret"]>,
     ParentType,
@@ -5295,6 +5521,11 @@ export type QueryResolvers<
     ParentType,
     ContextType,
     RequireFields<QuerySessionsArgs, "organizationId">
+  >;
+  supportedAppIntegrations?: Resolver<
+    Array<ResolversTypes["SupportedAppIntegration"]>,
+    ParentType,
+    ContextType
   >;
   threadReplies?: Resolver<
     Array<ResolversTypes["Message"]>,
@@ -5854,6 +6085,39 @@ export type SubscriptionResolvers<
   >;
 }>;
 
+export type SupportedAppIntegrationResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SupportedAppIntegration"] =
+    ResolversParentTypes["SupportedAppIntegration"],
+> = ResolversObject<{
+  capabilities?: Resolver<
+    Array<ResolversTypes["SupportedIntegrationCapability"]>,
+    ParentType,
+    ContextType
+  >;
+  description?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  guide?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  provider?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  providerConfigKey?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SupportedIntegrationCapabilityResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["SupportedIntegrationCapability"] =
+    ResolversParentTypes["SupportedIntegrationCapability"],
+> = ResolversObject<{
+  allowedMethods?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
+  allowedPathPrefixes?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
+  description?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  guide?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type TerminalResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Terminal"] = ResolversParentTypes["Terminal"],
@@ -5955,6 +6219,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   AgentEnvironment?: AgentEnvironmentResolvers<ContextType>;
   AgentEnvironmentTestResult?: AgentEnvironmentTestResultResolvers<ContextType>;
   ApiTokenStatus?: ApiTokenStatusResolvers<ContextType>;
+  AppIntegrationBinding?: AppIntegrationBindingResolvers<ContextType>;
   Artifact?: ArtifactResolvers<ContextType>;
   ArtifactApprovalResult?: ArtifactApprovalResultResolvers<ContextType>;
   ArtifactFile?: ArtifactFileResolvers<ContextType>;
@@ -5988,6 +6253,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Event?: EventResolvers<ContextType>;
   GitCheckpoint?: GitCheckpointResolvers<ContextType>;
   InboxItem?: InboxItemResolvers<ContextType>;
+  IntegrationConnection?: IntegrationConnectionResolvers<ContextType>;
   JSON?: GraphQLScalarType;
   LinkedCheckoutActionResult?: LinkedCheckoutActionResultResolvers<ContextType>;
   LinkedCheckoutChangedFile?: LinkedCheckoutChangedFileResolvers<ContextType>;
@@ -5996,6 +6262,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Message?: MessageResolvers<ContextType>;
   MessageSearchHit?: MessageSearchHitResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
+  NangoConnectSession?: NangoConnectSessionResolvers<ContextType>;
   Notification?: NotificationResolvers<ContextType>;
   OrgMember?: OrgMemberResolvers<ContextType>;
   OrgSecret?: OrgSecretResolvers<ContextType>;
@@ -6033,6 +6300,8 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SessionTimelinePage?: SessionTimelinePageResolvers<ContextType>;
   SlashCommand?: SlashCommandResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
+  SupportedAppIntegration?: SupportedAppIntegrationResolvers<ContextType>;
+  SupportedIntegrationCapability?: SupportedIntegrationCapabilityResolvers<ContextType>;
   Terminal?: TerminalResolvers<ContextType>;
   TerminalEndpoint?: TerminalEndpointResolvers<ContextType>;
   ThreadSummary?: ThreadSummaryResolvers<ContextType>;

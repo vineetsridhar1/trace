@@ -6,9 +6,18 @@ import { prisma } from "../lib/db.js";
 import { sessionRouter } from "../lib/session-router.js";
 import { parseCookieToken, verifyToken } from "../lib/auth.js";
 import { canViewSessionGroup } from "./access.js";
+import { appIntegrationService } from "./integration-services.js";
+import { APP_VIEWER_CONTEXT_HEADER, createAppViewerContextToken } from "./app-viewer-context.js";
+import {
+  AuthorizationError,
+  AuthenticationError,
+  NotFoundError,
+  ValidationError,
+} from "../lib/errors.js";
 import {
   endpointPreviewCookieHeader,
   endpointPreviewTokenFromCookie,
+  safeEndpointRedirectPath,
   verifyEndpointPreviewToken,
 } from "./endpoint-preview-auth.js";
 import {
@@ -106,12 +115,17 @@ function requestUrl(req: IncomingMessage): URL {
   return new URL(req.url ?? "/", "http://trace-endpoint.local");
 }
 
-function safeRedirectPath(value: string | null): string {
-  // Must be a same-origin absolute path. Reject protocol-relative (`//host`) and
-  // backslash variants (`/\host`, which browsers normalize to `//host`).
-  if (!value || !value.startsWith("/")) return "/";
-  if (value[1] === "/" || value[1] === "\\") return "/";
-  return value;
+function endpointAccessUrl(endpointId: string, nextPath: string): string | null {
+  const traceWebUrl = process.env.TRACE_WEB_URL?.trim();
+  if (!traceWebUrl) return null;
+  try {
+    const url = new URL("/auth/app-access", traceWebUrl);
+    url.searchParams.set("endpointId", endpointId);
+    url.searchParams.set("next", safeEndpointRedirectPath(nextPath));
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 export function injectAuthoringOverlay(
@@ -486,6 +500,15 @@ export class EndpointProxyService {
       res.writeHead(503).end("Endpoint unavailable");
       return;
     }
+    const viewerUserId = authenticatedUserId(req) ?? endpointPreviewUserId(req, endpoint);
+    const needsViewerAuthorization =
+      endpoint.accessMode === "private" ||
+      url.pathname.startsWith("/api/") ||
+      url.pathname.startsWith("/__trace/integrations/");
+    const viewerCanAccessApp =
+      viewerUserId && needsViewerAuthorization
+        ? await authorizePrivateAccess(req, endpoint)
+        : false;
     if (endpoint.accessMode === "private") {
       // The preview cookie is SameSite=None, so a credentialed request can be
       // driven cross-site (CSRF). Reject any browser Origin that isn't the app's
@@ -494,10 +517,74 @@ export class EndpointProxyService {
         res.writeHead(403).end("Cross-origin request forbidden");
         return;
       }
-      if (!(await authorizePrivateAccess(req, endpoint))) {
+      if (!viewerCanAccessApp) {
+        const acceptsHtml = String(req.headers.accept ?? "").includes("text/html");
+        const isNavigation = req.headers["sec-fetch-mode"] === "navigate" || acceptsHtml;
+        const redirect =
+          req.method === "GET" && isNavigation
+            ? endpointAccessUrl(endpoint.id, `${url.pathname}${url.search}`)
+            : null;
+        if (redirect) {
+          res.writeHead(302, { Location: redirect, "Cache-Control": "no-store" }).end();
+          return;
+        }
         res.writeHead(403).end("Forbidden");
         return;
       }
+    }
+    const integrationMatch = url.pathname.match(/^\/__trace\/integrations\/([^/]+)(\/.*)$/);
+    if (integrationMatch) {
+      if (!isAllowedPreviewRequestOrigin(req.headers.origin, endpointKey)) {
+        res.writeHead(403).end("Cross-origin request forbidden");
+        return;
+      }
+      const userId = viewerUserId;
+      if (!userId) {
+        res.writeHead(401).end("Authentication required");
+        return;
+      }
+      if (!viewerCanAccessApp) {
+        res.writeHead(403).end("Forbidden");
+        return;
+      }
+      try {
+        const body = await readRequestBody(req, endpointProxyMaxRequestBodyBytes());
+        const response = await appIntegrationService.execute({
+          endpoint,
+          userId,
+          bindingId: decodeURIComponent(integrationMatch[1]!),
+          method: req.method ?? "GET",
+          path: integrationMatch[2]!,
+          query: url.search ? url.search.slice(1) : null,
+          contentType:
+            typeof req.headers["content-type"] === "string" ? req.headers["content-type"] : null,
+          body,
+        });
+        res.writeHead(response.status, {
+          ...(response.contentType ? { "Content-Type": response.contentType } : {}),
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+        });
+        res.end(response.body);
+      } catch (error: unknown) {
+        const status =
+          error instanceof AuthenticationError
+            ? 401
+            : error instanceof AuthorizationError
+              ? 403
+              : error instanceof NotFoundError
+                ? 404
+                : error instanceof ValidationError
+                  ? 400
+                  : 502;
+        res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : "Integration request failed",
+          }),
+        );
+      }
+      return;
     }
     // A signed preview credential is issued only after Trace authorizes the user
     // for this endpoint. It opts authenticated in-product previews into the
@@ -602,6 +689,18 @@ export class EndpointProxyService {
       authoringParentOrigins,
     };
     this.pendingHttp.set(requestId, pending);
+    const forwardedHeaders = forwardableRequestHeaders(req.headers, {
+      authoringOverlay: authoringParentOrigins !== null,
+    });
+    if (url.pathname.startsWith("/api/") && viewerUserId && viewerCanAccessApp) {
+      forwardedHeaders[APP_VIEWER_CONTEXT_HEADER] = createAppViewerContextToken({
+        tokenType: "app_viewer_context",
+        userId: viewerUserId,
+        organizationId: endpoint.organizationId,
+        sessionGroupId: endpoint.sessionGroupId,
+        endpointId: endpoint.id,
+      });
+    }
     const delivery = await sendRuntimeCommand(
       runtime.key,
       {
@@ -612,9 +711,7 @@ export class EndpointProxyService {
         port: endpoint.targetPort,
         method: req.method ?? "GET",
         path: `${path}${query ? `?${query}` : ""}`,
-        headers: forwardableRequestHeaders(req.headers, {
-          authoringOverlay: authoringParentOrigins !== null,
-        }),
+        headers: forwardedHeaders,
         bodyBase64: requestBody.byteLength ? requestBody.toString("base64") : undefined,
       },
       endpoint.organizationId,
@@ -848,7 +945,7 @@ export class EndpointProxyService {
     const expiresAt = payload.exp ? new Date(payload.exp * 1000) : new Date(Date.now() + 60_000);
     res.writeHead(302, {
       "Set-Cookie": endpointPreviewCookieHeader(token ?? "", expiresAt),
-      Location: safeRedirectPath(url.searchParams.get("next")),
+      Location: safeEndpointRedirectPath(url.searchParams.get("next")),
       "Cache-Control": "no-store",
     });
     res.end();

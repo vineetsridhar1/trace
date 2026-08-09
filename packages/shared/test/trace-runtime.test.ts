@@ -61,6 +61,12 @@ describe("ensureTraceRuntime", () => {
     expect(traceSessionSkill).toContain("Do not call");
     expect(traceSessionSkill).toContain("idempotencyKey");
     expect(traceSessionSkill).toContain("--queue");
+    const bundledCli = await readFile(join(runtime.binDir, "trace.mjs"), "utf8");
+    expect(bundledCli).toContain("Command groups:");
+    expect(bundledCli).toContain("integration list --json");
+    await expect(
+      readFile(join(runtime.skillsDir, "trace-integrations", "SKILL.md"), "utf8"),
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("replaces an older install so machines pick up changed skills", async () => {
