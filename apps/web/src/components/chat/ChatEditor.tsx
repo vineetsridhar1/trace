@@ -32,6 +32,22 @@ function createPastedTextFile(text: string): File {
   });
 }
 
+export function pastedFilesFromClipboard(
+  clipboardData: Pick<DataTransfer, "files" | "items"> | null | undefined,
+): File[] {
+  const files = Array.from(clipboardData?.files ?? []);
+  if (files.length > 0) return files;
+
+  // Mobile browsers commonly expose clipboard images as DataTransferItems,
+  // without adding them to the FileList.
+  return Array.from(clipboardData?.items ?? []).flatMap((item) => {
+    if (item.kind !== "file" || !item.type.startsWith("image/")) return [];
+
+    const file = item.getAsFile();
+    return file ? [file] : [];
+  });
+}
+
 export interface MentionableUser {
   id: string;
   name: string;
@@ -132,7 +148,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
     const handler = (e: ClipboardEvent) => {
       if (!onPasteFilesRef.current) return;
 
-      const files = Array.from(e.clipboardData?.files ?? []);
+      const files = pastedFilesFromClipboard(e.clipboardData);
       if (files.length > 0) {
         e.preventDefault();
         e.stopImmediatePropagation();
