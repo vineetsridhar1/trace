@@ -8,10 +8,4 @@ data
 .trace/review/
 *.log
 
-# Impeccable runtime output; shared configuration and critique reports remain trackable.
-.impeccable/config.local.json
-.impeccable/hook.cache.json
-.impeccable/hook.pending.json
-.impeccable/*.png
-
 next-env.d.ts

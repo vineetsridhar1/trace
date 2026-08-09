@@ -8,8 +8,8 @@
     "start": "NODE_ENV=production tsx server.ts",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "design:check": "tsx scripts/check-design.ts && node .agents/skills/impeccable/scripts/detect.mjs src/design",
-    "design:detect": "node .agents/skills/impeccable/scripts/detect.mjs --json src/design",
+    "design:check": "tsx scripts/check-design.ts && node scripts/impeccable/detect.mjs src/design",
+    "design:detect": "node scripts/impeccable/detect.mjs --json src/design",
     "design:review": "tsx scripts/review-design.ts",
     "smoke": "vite build",
     "test": "tsx --test src/canvas/artboard.test.tsx src/canvas/layout.test.ts src/canvas/manifest.test.ts src/canvas/viewport.test.ts src/design/brief.test.ts src/design/tokens.test.ts src/design/primitives/primitives.test.tsx scripts/design-qa.test.ts server/export-html.test.ts docs/agent-contract.test.ts"

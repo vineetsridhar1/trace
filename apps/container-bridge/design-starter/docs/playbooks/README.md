@@ -1,6 +1,6 @@
 # Design playbook router
 
-After resolving `design.brief.json`, read the one playbook that best matches the requested artifact. Combine playbooks only when the brief genuinely spans surfaces.
+After resolving `design.brief.json`, always read `design-method.md`, then read the one surface playbook that best matches the requested artifact. Combine surface playbooks only when the brief genuinely spans them.
 
 - `mobile-product.md` — native-feeling phone and tablet flows.
 - `desktop-product.md` — dashboards, workspaces, admin tools, and dense utilities.
@@ -9,7 +9,8 @@ After resolving `design.brief.json`, read the one playbook that best matches the
 
 Also read:
 
-- the installed Impeccable skill reference matching the requested design action; its Trace adapter explains how upstream workflows map onto this canvas.
+- `refinement-actions.md` for a focused critique, polish, simplification, typography, color, layout, motion, or responsive request.
+- `review-and-resilience.md` before delivery and whenever the request centers on critique, accessibility, onboarding, edge cases, or state coverage.
 - `reference-grounding.md` whenever the user supplies a URL, screenshot, brand guide, or existing design.
 - `visual-directions.md` only when no brand or reference already determines the direction.
 

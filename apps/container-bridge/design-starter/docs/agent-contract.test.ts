@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const guidance = readFileSync(new URL("./ai-guidance.md", import.meta.url), "utf8");
@@ -18,12 +18,20 @@ const impeccableUpstream = readFileSync(
   new URL("../licenses/impeccable-UPSTREAM.md", import.meta.url),
   "utf8",
 );
-const codexImpeccable = readFileSync(
-  new URL("../.agents/skills/impeccable/SKILL.md", import.meta.url),
+const designMethod = readFileSync(
+  new URL("./playbooks/design-method.md", import.meta.url),
   "utf8",
 );
-const claudeImpeccable = readFileSync(
-  new URL("../.claude/skills/impeccable/SKILL.md", import.meta.url),
+const refinementActions = readFileSync(
+  new URL("./playbooks/refinement-actions.md", import.meta.url),
+  "utf8",
+);
+const reviewAndResilience = readFileSync(
+  new URL("./playbooks/review-and-resilience.md", import.meta.url),
+  "utf8",
+);
+const impeccableDetector = readFileSync(
+  new URL("../scripts/impeccable/detect.mjs", import.meta.url),
   "utf8",
 );
 
@@ -49,9 +57,9 @@ test("defines an artifact-first design workflow and quality gate", () => {
   assert.match(guidance, /Executable tokens and screen primitives/);
   assert.match(guidance, /docs\/playbooks\/README\.md/);
   assert.match(guidance, /Avoid generic AI styling/);
-  assert.match(guidance, /## Impeccable craft reference/);
+  assert.match(guidance, /## Design craft reference/);
   assert.match(guidance, /surface mode: `persuade`, `operate`, `read`, or `experience`/);
-  assert.match(guidance, /\.agents\/skills\/impeccable/);
+  assert.match(guidance, /design-method\.md/);
   assert.match(guidance, /Use bounded review passes/);
   assert.match(guidance, /## Final critique/);
   assert.match(guidance, /Brief fidelity/);
@@ -83,32 +91,15 @@ test("preserves attribution for the adapted Impeccable guidance", () => {
   assert.match(impeccableUpstream, /Skill version: `4\.0\.4`/);
 });
 
-test("ships the React-relevant Impeccable workflow with Trace adapters", () => {
-  assert.match(codexImpeccable, /## Trace Design workspace adapter/);
-  assert.match(claudeImpeccable, /## Trace Design workspace adapter/);
-  assert.match(codexImpeccable, /Do not run `context\.mjs`/);
-  assert.match(claudeImpeccable, /Do not run `context\.mjs`/);
-
-  const codexReferences = readdirSync(
-    new URL("../.agents/skills/impeccable/reference/", import.meta.url),
-  ).filter((file) => file.endsWith(".md"));
-  assert.ok(codexReferences.length >= 30);
-  assert.ok(codexReferences.includes("craft-floor.md"));
-  assert.ok(codexReferences.includes("critique.md"));
-  assert.ok(codexReferences.includes("new-work.md"));
-  assert.match(
-    readFileSync(new URL("../.agents/skills/impeccable/reference/live.md", import.meta.url), "utf8"),
-    /Trace live variation mode/,
-  );
-
-  const codexScripts = readdirSync(
-    new URL("../.agents/skills/impeccable/scripts/", import.meta.url),
-  );
-  assert.ok(codexScripts.includes("detect.mjs"));
-  assert.ok(codexScripts.includes("palette.mjs"));
-  assert.equal(codexScripts.includes("live-server.mjs"), false);
-  assert.equal(
-    existsSync(new URL("../.agents/skills/impeccable/scripts/live/", import.meta.url)),
-    false,
-  );
+test("ships a curated Impeccable-derived workflow without provider packages", () => {
+  assert.match(designMethod, /## Select the visitor mode/);
+  assert.match(designMethod, /## Establish visual authority/);
+  assert.match(designMethod, /## Craft floor/);
+  assert.match(refinementActions, /\| Bolder \|/);
+  assert.match(refinementActions, /\| Adapt \|/);
+  assert.match(reviewAndResilience, /## Review order/);
+  assert.match(reviewAndResilience, /## Resilience checklist/);
+  assert.match(impeccableDetector, /detector.*detect-antipatterns\.mjs/);
+  assert.equal(existsSync(new URL("../.agents/", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../.claude/", import.meta.url)), false);
 });
