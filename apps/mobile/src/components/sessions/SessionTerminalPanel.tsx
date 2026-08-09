@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as Clipboard from "expo-clipboard";
 import {
   Keyboard,
   Platform,
@@ -18,6 +19,7 @@ import type { Terminal } from "@trace/gql";
 import WebView, { type WebViewMessageEvent } from "react-native-webview";
 import { Button, TraceLoader, Text } from "@/components/design-system";
 import { BridgeAccessNotice } from "@/components/sessions/BridgeAccessNotice";
+import { TerminalKeyToolbar } from "@/components/sessions/TerminalKeyToolbar";
 import { isBridgeTerminalAllowed, useBridgeRuntimeAccess } from "@/hooks/useBridgeRuntimeAccess";
 import { TerminalSocket } from "@/lib/terminal-ws";
 import { getClient } from "@/lib/urql";
@@ -347,6 +349,7 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
       const message = JSON.parse(event.nativeEvent.data) as
         | { type: "ready" }
         | { type: "bootstrap_error" }
+        | { type: "copy"; text: string }
         | { type: "input"; data: string }
         | { type: "resize"; cols: number; rows: number };
 
@@ -364,6 +367,14 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
         socketRef.current?.write(message.data);
         return;
       }
+      if (message.type === "copy") {
+        if (message.text) {
+          void Clipboard.setStringAsync(message.text).catch(() => {
+            // Clipboard access can be denied by the operating system.
+          });
+        }
+        return;
+      }
       if (message.type === "resize") {
         socketRef.current?.resize(message.cols, message.rows);
       }
@@ -371,6 +382,15 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
       // Ignore malformed bridge messages from the embedded terminal.
     }
   }, []);
+
+  const sendTerminalInput = useCallback((data: string) => {
+    socketRef.current?.write(data);
+    inject("window.__traceFocus && window.__traceFocus();");
+  }, [inject]);
+
+  const copyTerminalSelection = useCallback(() => {
+    inject("window.__traceCopySelection && window.__traceCopySelection();");
+  }, [inject]);
 
   const statusLabel =
     status === "loading"
@@ -481,6 +501,11 @@ export function SessionTerminalPanel({ sessionId }: SessionTerminalPanelProps) {
           </View>
         ) : null}
       </View>
+      <TerminalKeyToolbar
+        disabled={status !== "active"}
+        onCopy={copyTerminalSelection}
+        onInput={sendTerminalInput}
+      />
     </View>
   );
 }
