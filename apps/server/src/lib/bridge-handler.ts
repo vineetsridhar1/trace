@@ -29,8 +29,6 @@ import { correlatedResponseRelay } from "./correlated-response-relay.js";
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
 
-/** Interval between server→client pings to keep the WebSocket alive through proxies (e.g. Render). */
-const PING_INTERVAL_MS = 20_000;
 const BRIDGE_PROTOCOL_VERSION = 2;
 const RUNTIME_LEASE_CAPABILITY = "runtime_lease_v1";
 const LEASE_OWNERSHIP_REVALIDATE_INTERVAL_MS = 30_000;
@@ -323,25 +321,11 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
     authKind: bridgeAuth?.kind ?? "unknown",
   });
 
-  // Keep-alive: periodically ping the client to prevent idle timeout
-  // from reverse proxies (Render closes idle WebSockets after ~55-60s).
-  let pongReceived = true;
-  const pingInterval = setInterval(() => {
-    if (!pongReceived) {
-      runtimeDebug("bridge websocket ping watchdog terminating stale connection", {
-        runtimeId,
-      });
-      clearInterval(pingInterval);
-      ws.terminate();
-      return;
-    }
-    pongReceived = false;
-    ws.ping();
-  }, PING_INTERVAL_MS);
-
-  ws.on("pong", () => {
-    pongReceived = true;
-  });
+  // The bridge sends a runtime_heartbeat every 10 seconds. That application-level
+  // signal both keeps proxies from treating the socket as idle and is tracked by
+  // SessionRouter's stale-runtime monitor. Do not use WebSocket control-frame
+  // pongs as a liveness authority: some load-balancer paths do not preserve them,
+  // which can otherwise terminate a bridge that is actively heartbeating.
 
   // Serialize event creation per session to preserve ordering
   const queues = new Map<string, Promise<void>>();
@@ -1344,7 +1328,6 @@ export function handleBridgeConnection(ws: WebSocket, req?: BridgeConnectionRequ
   });
 
   ws.on("close", (code: number, reason: Buffer) => {
-    clearInterval(pingInterval);
     const disconnectedAt = new Date().toISOString();
     const reasonText = reason.toString();
     runtimeDebug("bridge websocket closed, grace period starting", {
