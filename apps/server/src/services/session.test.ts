@@ -10381,6 +10381,20 @@ describe("SessionService", () => {
       // The early compute-gone skip aborts before touching the connection, so
       // no per-session read, update, or runtime teardown is issued.
       expect(result).toEqual({ scanned: 1, cleaned: [] });
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            NOT: expect.arrayContaining([
+              {
+                AND: [
+                  { connection: { path: ["state"], equals: "disconnected" } },
+                  { connection: expect.objectContaining({ path: ["deprovisionedAt"] }) },
+                ],
+              },
+            ]),
+          }),
+        }),
+      );
       expect(prismaMock.session.findUnique).not.toHaveBeenCalled();
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
@@ -10434,10 +10448,18 @@ describe("SessionService", () => {
       expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            NOT: [
+            NOT: expect.arrayContaining([
+              { connection: { path: ["state"], equals: "stopped" } },
+              { connection: { path: ["state"], equals: "deprovisioned" } },
+              {
+                AND: [
+                  { connection: { path: ["state"], equals: "disconnected" } },
+                  { connection: expect.objectContaining({ path: ["deprovisionedAt"] }) },
+                ],
+              },
               { connection: { path: ["state"], equals: "stopping" } },
               { connection: { path: ["state"], equals: "deprovision_failed" } },
-            ],
+            ]),
           }),
         }),
       );

@@ -12037,6 +12037,14 @@ export class SessionService {
         archivedAt: null,
         worktreeDeleted: false,
         NOT: [
+          { connection: { path: ["state"], equals: "stopped" } },
+          { connection: { path: ["state"], equals: "deprovisioned" } },
+          {
+            AND: [
+              { connection: { path: ["state"], equals: "disconnected" } },
+              { connection: { path: ["deprovisionedAt"], not: Prisma.AnyNull } },
+            ],
+          },
           { connection: { path: ["state"], equals: "stopping" } },
           { connection: { path: ["state"], equals: "deprovision_failed" } },
         ],
