@@ -71,7 +71,7 @@ export default function CreationsScreen() {
   }, []);
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+    <>
       <Stack.Screen
         options={{
           headerRight: () => (
@@ -88,17 +88,18 @@ export default function CreationsScreen() {
         }}
       />
       <FlashList
-          data={items}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          getItemType={(item) => item.kind}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.colors.mutedForeground} />}
-          ListHeaderComponent={<CreationsListHeader searching={searching} query={query} onQueryChange={setQuery} onCancelSearch={closeSearch} filter={filter} archived={archived} error={error} onFilterChange={chooseFilter} onArchiveToggle={() => setArchived((value) => !value)} onRetry={() => void refresh()} />}
-          ListEmptyComponent={loading ? <CreationLoading /> : <CreationsEmpty error={error} archived={archived} query={query} onCreate={() => setCreating(true)} onRetry={() => void refresh()} />}
-          contentInsetAdjustmentBehavior="automatic"
-        />
+        data={items}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        getItemType={(item) => item.kind}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.colors.mutedForeground} />}
+        ListHeaderComponent={<CreationsListHeader searching={searching} query={query} onQueryChange={setQuery} onCancelSearch={closeSearch} filter={filter} archived={archived} error={error} onFilterChange={chooseFilter} onArchiveToggle={() => setArchived((value) => !value)} onRetry={() => void refresh()} />}
+        ListEmptyComponent={loading ? <CreationLoading /> : <CreationsEmpty error={error} archived={archived} query={query} onCreate={() => setCreating(true)} onRetry={() => void refresh()} />}
+        contentInsetAdjustmentBehavior="automatic"
+        style={{ flex: 1, backgroundColor: theme.colors.background }}
+      />
       <CreateCreationSheet visible={creating} onClose={() => setCreating(false)} onCreateApp={() => void createApplication()} onCreateDesign={() => void chooseDesignSystemAndCreate(activeOrgId)} />
-    </View>
+    </>
   );
 }
 
@@ -219,7 +220,6 @@ function CreationsEmpty({ error, archived, query, onCreate, onRetry }: { error: 
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
   headerGlass: { borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 2 },
   filters: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
   filter: { minHeight: 44, justifyContent: "center", paddingHorizontal: 18, borderRadius: 999, borderWidth: 1 },
