@@ -10,6 +10,13 @@ import {
 export const integrationRemoveCommand = defineCommand({
   path: ["integration", "remove"],
   description: "Remove an integration from the current Trace app",
+  examples: ["trace integration remove github --json"],
+  effects: [
+    "Deletes the matching binding from the current app and emits a binding-deleted event.",
+    "Does not disconnect the underlying provider account.",
+  ],
+  output: "The removed binding ID and confirmation flag.",
+  nextSteps: ["Run integration list --json to verify that current-app access is absent."],
   positionals: [{ name: "integration", required: true }],
   async run(ctx, input) {
     const reference = input.positionals[0] ?? usage("Integration is required");

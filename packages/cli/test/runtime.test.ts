@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CliError } from "../src/errors.js";
 import {
   assertCommandDefinitions,
+  assertCommandGroups,
   defineCommand,
   parseCommandInput,
   parseGlobalOptions,
@@ -76,5 +77,9 @@ describe("declarative command runtime", () => {
 
   it("rejects invalid command registries", () => {
     expect(() => assertCommandDefinitions([command, command])).toThrow("Duplicate");
+    expect(() => assertCommandGroups([], [command])).toThrow("no registered group");
+    expect(() => assertCommandGroups([{ name: "thing", description: "Things" }], [])).toThrow(
+      "no subcommands",
+    );
   });
 });

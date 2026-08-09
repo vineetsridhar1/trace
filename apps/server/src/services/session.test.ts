@@ -5514,6 +5514,13 @@ describe("SessionService", () => {
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
         expect.objectContaining({
+          prompt: expect.stringContaining('"$TRACE_CLI" --help --json'),
+        }),
+        expect.any(Object),
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
           prompt: expect.stringContaining("$TRACE_SKILLS_DIR/trace-session/SKILL.md completely"),
         }),
         expect.any(Object),
@@ -5567,7 +5574,7 @@ describe("SessionService", () => {
       expect(command?.runtimeEnv?.TRACE_INVOCATION_TOKEN).toEqual(expect.any(String));
     });
 
-    it("injects integration discovery guidance for managed app sessions", async () => {
+    it("uses self-describing CLI help instead of an integration-specific app skill", async () => {
       const session = makeSession({
         agentStatus: "done",
         sessionStatus: "in_progress",
@@ -5599,18 +5606,10 @@ describe("SessionService", () => {
       const command = sessionRouterMock.send.mock.calls.at(-1)?.[1];
       expect(command).toEqual(
         expect.objectContaining({
-          appendSystemPrompt: expect.stringContaining(
-            "$TRACE_SKILLS_DIR/trace-integrations/SKILL.md completely",
-          ),
+          prompt: expect.stringContaining('"$TRACE_CLI" <group> --help --json'),
         }),
       );
-      expect(command).toEqual(
-        expect.objectContaining({
-          appendSystemPrompt: expect.stringContaining(
-            "Do not ask the user to configure the Data access GUI",
-          ),
-        }),
-      );
+      expect(command?.appendSystemPrompt).not.toContain("trace-integrations/SKILL.md");
     });
 
     it("injects design guidance without branch instructions for managed design repos", async () => {

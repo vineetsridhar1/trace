@@ -11,6 +11,25 @@ import {
 export const integrationAddCommand = defineCommand({
   path: ["integration", "add"],
   description: "Add or update a supported integration on the current Trace app",
+  examples: [
+    "trace integration add github --capabilities profile --identity viewer --json",
+    "trace integration add snowflake --identity service --connection <connection-id> --json",
+  ],
+  effects: [
+    "Creates or updates one stable provider binding on the current app.",
+    "Emits an app-integration binding event through the Trace service layer.",
+  ],
+  output: "The live integration guide, selected capability guides, and saved current-app binding.",
+  nextSteps: [
+    "Follow the returned guides to call the stable integration ID from a generated Node route.",
+    "Have React call only that same-origin app route.",
+    "Run integration list --json to verify app access.",
+  ],
+  notes: [
+    "Viewer identity is the default and must not include --connection.",
+    "Shared and service identities require a matching connection ID from integration list.",
+    "When several capabilities exist, --capabilities is required to prevent accidental broad access.",
+  ],
   positionals: [{ name: "integration", required: true }],
   options: [
     {

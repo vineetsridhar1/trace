@@ -1,16 +1,14 @@
 {
   "schemaVersion": 1,
-  "version": 25,
+  "version": 26,
   "protocolVersion": 1,
-  "contentHash": "a3fd052eee6b8809c9804b32b7ee22374968aa8fca88352726b9bdd116d89afb",
+  "contentHash": "6b55376edd812f254a128e4cb28b79f07f2f7dd5d0d721176a7047b17267fac2",
   "files": [
     "bin/trace",
     "bin/trace.mjs",
     "skills/browser-video/SKILL.md",
     "skills/browser-video/agents/openai.yaml",
     "skills/request-user-input/SKILL.md",
-    "skills/trace-integrations/SKILL.md",
-    "skills/trace-integrations/agents/openai.yaml",
     "skills/trace-session/SKILL.md",
     "skills/trace-session/agents/openai.yaml",
     "skills/trace-artifacts/SKILL.md",

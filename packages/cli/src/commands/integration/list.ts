@@ -10,6 +10,14 @@ export const integrationListCommand = defineCommand({
   path: ["integration", "list"],
   description:
     "List supported integrations, connected accounts, usage guides, and current app access",
+  examples: ["trace integration list --json"],
+  effects: ["Read-only; does not connect an account or change app access."],
+  output:
+    "Supported integrations with capability and implementation guides, visible connections, current-app bindings, and the selected sessionGroupId.",
+  nextSteps: [
+    "Run integration connect <id> if a required account is missing.",
+    "Run integration add <id> with the minimum capability IDs when app access is missing.",
+  ],
   async run(ctx) {
     const client = await ctx.client();
     const sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
