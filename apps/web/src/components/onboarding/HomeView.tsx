@@ -130,12 +130,6 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
     setManualKind(kind);
   };
 
-  const implementDesign = (designId: string) => {
-    setManualKind("app");
-    setSelectedDesignSessionGroupId(designId);
-    useHomeComposerStore.getState().requestFocus();
-  };
-
   const selectTool = (nextTool: ToolOptionValue) => {
     setTool(nextTool);
     setSelectedBridgeId(null);
@@ -300,7 +294,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
             <HomeWorkLedger items={work.items} />
           ) : null}
 
-          {isCreateMode ? <HomeCreationsGrid onImplementDesign={implementDesign} /> : null}
+          {isCreateMode ? <HomeCreationsGrid /> : null}
 
           <p className="mt-auto pt-8 text-center text-[11px] text-[var(--th-faint)]">
             <span className="hidden sm:inline">⌘N New session · </span>⌘K Search · ⌘J Latest session

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { LayoutTemplate, MoreHorizontal, Search, Trash2 } from "lucide-react";
+import { MoreHorizontal, Search, Trash2 } from "lucide-react";
 import { useEntityStore, type SessionGroupEntity } from "@trace/client-core";
 import { Input } from "../ui/input";
 import { cn, timeAgo } from "../../lib/utils";
@@ -25,11 +25,7 @@ const CREATION_TYPES: Array<{ id: "all" | GeneratedProjectKind; label: string }>
   { id: "animation", label: "Animations" },
 ];
 
-export function HomeCreationsGrid({
-  onImplementDesign,
-}: {
-  onImplementDesign: (designId: string) => void;
-}) {
+export function HomeCreationsGrid() {
   const [type, setType] = useState<(typeof CREATION_TYPES)[number]["id"]>("all");
   const [search, setSearch] = useState("");
   const sessionGroups = useEntityStore((state) => state.sessionGroups);
@@ -102,7 +98,6 @@ export function HomeCreationsGrid({
               key={group.id}
               group={group}
               sessionCount={sessionCountByGroup[group.id] ?? 0}
-              onImplementDesign={onImplementDesign}
             />
           ))}
         </div>
@@ -111,15 +106,7 @@ export function HomeCreationsGrid({
   );
 }
 
-function CreationCard({
-  group,
-  sessionCount,
-  onImplementDesign,
-}: {
-  group: SessionGroupEntity;
-  sessionCount: number;
-  onImplementDesign: (designId: string) => void;
-}) {
+function CreationCard({ group, sessionCount }: { group: SessionGroupEntity; sessionCount: number }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const title = group.name || group.slug || "Untitled creation";
   const designPreviewUrl = group.designPreviewUrl as string | null | undefined;
@@ -163,7 +150,7 @@ function CreationCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="absolute right-2 top-2 size-7 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                className="absolute right-2 top-2 size-7 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                 aria-label={`More actions for ${title}`}
               />
             }
@@ -171,12 +158,6 @@ function CreationCard({
             <MoreHorizontal className="size-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {group.kind === "design" ? (
-              <DropdownMenuItem onClick={() => onImplementDesign(group.id)}>
-                <LayoutTemplate />
-                Implement design
-              </DropdownMenuItem>
-            ) : null}
             <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
               <Trash2 />
               Delete
