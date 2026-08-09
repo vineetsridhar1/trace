@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { SEND_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { Glass, Text } from "@/components/design-system";
@@ -7,7 +8,6 @@ import { haptic } from "@/lib/haptics";
 import { getClient } from "@/lib/urql";
 import { alpha, useTheme } from "@/theme";
 import { PendingInputShell, pendingInputStyles } from "./PendingInputShell";
-import { VisualPlanViewer } from "./VisualPlanViewer";
 import { SessionComposerActionButton } from "./session-input-composer/SessionComposerActionButton";
 import { styles as composerStyles } from "./session-input-composer/styles";
 import { gql } from "@urql/core";
@@ -16,7 +16,7 @@ interface PendingInputPlanProps {
   sessionId: string;
   planContent: string;
   artifactId?: string;
-  visualPlanHtml?: string;
+  visualPlanFilePath?: string;
   keyboardVisible?: boolean;
 }
 
@@ -58,15 +58,15 @@ export function PendingInputPlan({
   sessionId,
   planContent,
   artifactId,
-  visualPlanHtml,
+  visualPlanFilePath,
   keyboardVisible = false,
 }: PendingInputPlanProps) {
   const theme = useTheme();
+  const router = useRouter();
   const inputRef = useRef<TextInput>(null);
   const [selectedAction, setSelectedAction] = useState<PlanAction | null>("new-session");
   const [feedback, setFeedback] = useState("");
   const [sending, setSending] = useState(false);
-  const [viewerVisible, setViewerVisible] = useState(false);
 
   const trimmed = feedback.trim();
   const isTypingMore = trimmed.length > 0;
@@ -161,12 +161,16 @@ export function PendingInputPlan({
       <View style={[styles.menuContainer, theme.shadows.lg]}>
         <Glass preset="card" interactive style={styles.menuSurface}>
           <View style={styles.menuContent}>
-            {visualPlanHtml ? (
+            {artifactId && visualPlanFilePath ? (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="View visual plan"
                 disabled={sending}
-                onPress={() => setViewerVisible(true)}
+                onPress={() =>
+                  router.push(
+                    `/plans/${artifactId}?filePath=${encodeURIComponent(visualPlanFilePath)}`,
+                  )
+                }
                 style={({ pressed }) => [
                   styles.visualPlanButton,
                   {
@@ -280,13 +284,6 @@ export function PendingInputPlan({
           tint={alpha(theme.colors.success, 0.18)}
         />
       </View>
-      {visualPlanHtml ? (
-        <VisualPlanViewer
-          html={visualPlanHtml}
-          visible={viewerVisible}
-          onClose={() => setViewerVisible(false)}
-        />
-      ) : null}
     </PendingInputShell>
   );
 }

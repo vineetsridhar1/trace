@@ -1,19 +1,20 @@
 import { useCallback, useMemo } from "react";
-import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Pressable, StyleSheet, View } from "react-native";
+import { SymbolView } from "expo-symbols";
 import WebView, { type WebViewNavigation } from "react-native-webview";
-import { Text } from "@/components/design-system";
+import { Screen, Text } from "@/components/design-system";
 import { isPlanNavigationAllowed, sandboxedPlanHtml } from "@/lib/plan-html";
 import { alpha, useTheme } from "@/theme";
 
 interface VisualPlanViewerProps {
   html: string;
-  visible: boolean;
-  onClose: () => void;
 }
 
-/** A full-screen, isolated reader for agent-authored visual-plan HTML. */
-export function VisualPlanViewer({ html, visible, onClose }: VisualPlanViewerProps) {
+/** Routed, full-screen reader for agent-authored visual-plan HTML. */
+export function VisualPlanViewer({ html }: VisualPlanViewerProps) {
   const theme = useTheme();
+  const router = useRouter();
   const source = useMemo(() => ({ html: sandboxedPlanHtml(html), baseUrl: "about:blank" }), [html]);
   const handleNavigation = useCallback(
     (request: WebViewNavigation) => isPlanNavigationAllowed(request.url),
@@ -21,24 +22,33 @@ export function VisualPlanViewer({ html, visible, onClose }: VisualPlanViewerPro
   );
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
+    <Screen edges={["top", "left", "right", "bottom"]}>
+      <View style={styles.root}>
         <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-          <Text variant="headline">Visual plan</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Close visual plan"
-            onPress={onClose}
+            accessibilityLabel="Go back"
+            onPress={() => router.back()}
             style={[
-              styles.closeButton,
+              styles.backButton,
               {
                 backgroundColor: alpha(theme.colors.surface, 0.9),
                 borderColor: alpha(theme.colors.foreground, 0.12),
               },
             ]}
           >
-            <Text variant="caption1">Close</Text>
+            <SymbolView
+              name="chevron.left"
+              size={16}
+              tintColor={theme.colors.foreground}
+              resizeMode="scaleAspectFit"
+            />
+            <Text variant="caption1">Back</Text>
           </Pressable>
+          <Text variant="headline" style={styles.title}>
+            Visual plan
+          </Text>
+          <View style={styles.headerSpacer} />
         </View>
         <WebView
           source={source}
@@ -55,7 +65,7 @@ export function VisualPlanViewer({ html, visible, onClose }: VisualPlanViewerPro
           style={styles.webView}
         />
       </View>
-    </Modal>
+    </Screen>
   );
 }
 
@@ -67,15 +77,24 @@ const styles = StyleSheet.create({
     minHeight: 56,
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "space-between",
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
   },
-  closeButton: {
+  backButton: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 2,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  title: {
+    flex: 1,
+    textAlign: "center",
+  },
+  headerSpacer: {
+    width: 62,
   },
   webView: {
     flex: 1,

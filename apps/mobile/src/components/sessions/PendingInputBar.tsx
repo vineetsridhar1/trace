@@ -49,6 +49,7 @@ export function PendingInputBar({ sessionId, keyboardVisible = false }: PendingI
     return latest;
   });
   const [artifactContent, setArtifactContent] = useState("");
+  const latestPlanHtmlPath = visualPlanHtmlPath(latestPlan);
 
   useEffect(() => {
     if (!latestPlan || sessionStatus !== "needs_input") {
@@ -56,7 +57,7 @@ export function PendingInputBar({ sessionId, keyboardVisible = false }: PendingI
       return;
     }
     const controller = new AbortController();
-    const htmlPath = visualPlanHtmlPath(latestPlan);
+    const htmlPath = latestPlanHtmlPath;
     if (!htmlPath) {
       setArtifactContent("");
       return;
@@ -73,7 +74,7 @@ export function PendingInputBar({ sessionId, keyboardVisible = false }: PendingI
       .then(setArtifactContent)
       .catch(() => undefined);
     return () => controller.abort();
-  }, [latestPlan, sessionStatus]);
+  }, [latestPlan, latestPlanHtmlPath, sessionStatus]);
 
   if (!pending && latestPlan && artifactContent && sessionStatus === "needs_input") {
     return (
@@ -81,7 +82,7 @@ export function PendingInputBar({ sessionId, keyboardVisible = false }: PendingI
         sessionId={sessionId}
         artifactId={latestPlan.id}
         planContent={artifactContent}
-        visualPlanHtml={artifactContent}
+        visualPlanFilePath={latestPlanHtmlPath ?? undefined}
         keyboardVisible={keyboardVisible}
       />
     );
