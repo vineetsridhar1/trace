@@ -3,6 +3,7 @@ import type {
   IntegrationExecutionIdentity,
   SupportedAppIntegration,
 } from "@trace/gql";
+import { useAuthStore } from "@trace/client-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../ui/select";
 
 export function AppIntegrationIdentityPicker({
@@ -20,13 +21,19 @@ export function AppIntegrationIdentityPicker({
   onConnectionChange: (connectionId: string | null) => void;
   onIdentityChange: (identity: IntegrationExecutionIdentity) => void;
 }) {
+  const currentUserId = useAuthStore((state) => state.user?.id ?? null);
   const activeConnections = connections.filter(
     (connection) =>
       connection.providerConfigKey === integration.providerConfigKey &&
       connection.status === "active",
   );
   const eligibleConnections = activeConnections.filter(
-    (connection) => connection.kind === (identity === "service" ? "service" : "personal"),
+    (connection) =>
+      connection.kind === (identity === "service" ? "service" : "personal") &&
+      (identity !== "shared" || connection.ownerUserId === currentUserId),
+  );
+  const hasOwnedPersonalConnection = activeConnections.some(
+    (connection) => connection.kind === "personal" && connection.ownerUserId === currentUserId,
   );
 
   return (
@@ -46,7 +53,7 @@ export function AppIntegrationIdentityPicker({
             <SelectItem value="viewer">Each viewer’s own account</SelectItem>
             <SelectItem
               value="shared"
-              disabled={!activeConnections.some((connection) => connection.kind === "personal")}
+              disabled={!hasOwnedPersonalConnection}
             >
               One shared personal account
             </SelectItem>

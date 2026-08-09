@@ -91,8 +91,8 @@ export function reconcileIntegrationEvent(event: Event): void {
       const role = auth.orgMemberships.find(
         (membership) => membership.organizationId === auth.activeOrgId,
       )?.role;
-      if (auth.user && connection.ownerUserId !== auth.user.id && role !== "admin") {
-        return;
+      if (auth.user && connection.ownerUserId !== auth.user.id) {
+        if (role !== "admin" || connection.kind !== "service") return;
       }
       state.upsertConnection(connection as unknown as IntegrationConnection);
     }

@@ -1,4 +1,5 @@
 import type { Event } from "@trace/gql";
+import { useAuthStore } from "@trace/client-core";
 import { beforeEach, describe, expect, it } from "vitest";
 import { reconcileIntegrationEvent, useIntegrationStore } from "./integrations";
 
@@ -15,6 +16,7 @@ function integrationEvent(eventType: Event["eventType"], payload: Record<string,
 
 describe("integration event reconciliation", () => {
   beforeEach(() => {
+    useAuthStore.setState({ user: null, activeOrgId: null, orgMemberships: [] });
     const state = useIntegrationStore.getState();
     state.setConnections([]);
     state.setSupported([]);
@@ -61,5 +63,44 @@ describe("integration event reconciliation", () => {
       integrationEvent("integration_connection_deleted", { connectionId: "connection-1" }),
     );
     expect(useIntegrationStore.getState().connections["connection-1"]).toBeUndefined();
+  });
+
+  it("does not expose another user's personal connection to an admin", () => {
+    useAuthStore.setState({
+      user: { id: "admin-1" } as never,
+      activeOrgId: "org-1",
+      orgMemberships: [
+        {
+          organizationId: "org-1",
+          role: "admin",
+          joinedAt: "2026-08-09T00:00:00.000Z",
+          organization: { id: "org-1", name: "Trace" },
+        },
+      ],
+    });
+
+    reconcileIntegrationEvent(
+      integrationEvent("integration_connection_created", {
+        connection: {
+          id: "other-personal",
+          ownerUserId: "other-user",
+          kind: "personal",
+          status: "active",
+        },
+      }),
+    );
+    reconcileIntegrationEvent(
+      integrationEvent("integration_connection_created", {
+        connection: {
+          id: "organization-service",
+          ownerUserId: "other-admin",
+          kind: "service",
+          status: "active",
+        },
+      }),
+    );
+
+    expect(useIntegrationStore.getState().connections["other-personal"]).toBeUndefined();
+    expect(useIntegrationStore.getState().connections["organization-service"]).toBeDefined();
   });
 });

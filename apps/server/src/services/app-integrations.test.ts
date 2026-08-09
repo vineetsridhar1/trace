@@ -84,6 +84,21 @@ describe("AppIntegrationService", () => {
     );
   });
 
+  it("lists only an admin's own personal connections and organization service connections", async () => {
+    prismaMock.integrationConnection.findMany.mockResolvedValue([]);
+
+    await service().listConnections("org-1", "admin-1", "admin");
+
+    expect(prismaMock.integrationConnection.findMany).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org-1",
+        status: { not: "revoked" },
+        OR: [{ ownerUserId: "admin-1" }, { kind: "service" }],
+      },
+      orderBy: [{ provider: "asc" }, { displayName: "asc" }],
+    });
+  });
+
   it("expands selected capabilities into server-controlled binding permissions", async () => {
     prismaMock.appIntegrationBinding.upsert.mockImplementation(
       async (args: { create: Record<string, unknown> }) => ({
@@ -312,6 +327,28 @@ describe("AppIntegrationService", () => {
         sharedConnectionId: "ceo-connection",
       }),
     ).rejects.toThrow("Viewer connections cannot specify a shared connection");
+  });
+
+  it("does not let an admin share another user's personal connection", async () => {
+    prismaMock.integrationConnection.findFirst.mockResolvedValue({
+      id: "other-connection",
+      organizationId: "org-1",
+      ownerUserId: "other-user",
+      providerConfigKey: "github-getting-started",
+      kind: "personal",
+      status: "active",
+    });
+
+    await expect(
+      service().upsertBinding("org-1", "owner-1", "admin", {
+        sessionGroupId: "app-1",
+        integrationId: "github",
+        capabilityIds: ["profile"],
+        executionIdentity: "shared",
+        sharedConnectionId: "other-connection",
+      }),
+    ).rejects.toThrow("Only the connection owner can share a personal connection");
+    expect(prismaMock.appIntegrationBinding.upsert).not.toHaveBeenCalled();
   });
 
   it("runs an allowed request with the current viewer's connection", async () => {

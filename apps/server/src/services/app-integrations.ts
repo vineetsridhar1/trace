@@ -306,7 +306,9 @@ export class AppIntegrationService {
       where: {
         organizationId,
         status: { not: "revoked" },
-        ...(role === "admin" ? {} : { ownerUserId: userId }),
+        ...(role === "admin"
+          ? { OR: [{ ownerUserId: userId }, { kind: "service" as const }] }
+          : { ownerUserId: userId }),
       },
       orderBy: [{ provider: "asc" }, { displayName: "asc" }],
     });
@@ -424,8 +426,11 @@ export class AppIntegrationService {
       if (identity === "shared" && connection.kind !== "personal") {
         throw new ValidationError("Shared bindings require a personal connection");
       }
-      if (connection.ownerUserId !== userId && role !== "admin") {
-        throw new AuthorizationError("Only an org admin can share another user's connection");
+      if (identity === "shared" && connection.ownerUserId !== userId) {
+        throw new AuthorizationError("Only the connection owner can share a personal connection");
+      }
+      if (identity === "service" && connection.ownerUserId !== userId && role !== "admin") {
+        throw new AuthorizationError("Only an org admin can use another user's service connection");
       }
     }
     const capabilityIds = input.capabilityIds;
