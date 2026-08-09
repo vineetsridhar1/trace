@@ -4,7 +4,7 @@ import { Stack, useRouter } from "expo-router";
 import { FlashList } from "@shopify/flash-list";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 import { useAuthStore, useEntityStore, type AuthState } from "@trace/client-core";
-import { EmptyState, Skeleton, Text } from "@/components/design-system";
+import { EmptyState, Glass, Skeleton, Text } from "@/components/design-system";
 import { CreateCreationSheet } from "@/components/creations/CreateCreationSheet";
 import { CreationRow } from "@/components/creations/CreationRow";
 import { CreationsSectionHeader, type CreationSectionKind } from "@/components/creations/CreationsSectionHeader";
@@ -163,20 +163,24 @@ function CreationsListHeader({
         </View>
       ) : null}
       <View style={styles.filters} accessibilityRole="tablist">
-        {FILTERS.map(({ label, value }) => {
-          const selected = filter === value;
-          return (
-            <Pressable
-              key={value}
-              accessibilityRole="tab"
-              accessibilityState={{ selected }}
-              onPress={() => onFilterChange(value)}
-              style={[styles.filter, { borderColor: selected ? "#0a84ff" : theme.colors.border, backgroundColor: theme.colors.surface }]}
-            >
-              <Text variant="subheadline" style={{ color: selected ? "#0a84ff" : theme.colors.mutedForeground, fontWeight: "600" }}>{label}</Text>
-            </Pressable>
-          );
-        })}
+        <Glass preset="input" interactive style={styles.filterGroup}>
+          <View style={styles.filterSegments}>
+            {FILTERS.map(({ label, value }) => {
+              const selected = filter === value;
+              return (
+                <Pressable
+                  key={value}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  onPress={() => onFilterChange(value)}
+                  style={[styles.filter, selected && { backgroundColor: "rgba(10,132,255,0.30)" }]}
+                >
+                  <Text variant="subheadline" style={{ color: selected ? "#0a84ff" : theme.colors.mutedForeground, fontWeight: "600" }}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Glass>
         <Pressable accessibilityRole="button" accessibilityLabel={archived ? "Show active creations" : "Show archived creations"} onPress={onArchiveToggle} style={styles.archiveToggle}>
           <Text variant="footnote" color="mutedForeground">{archived ? "Active" : "Archived"}</Text>
         </Pressable>
@@ -218,8 +222,10 @@ function CreationsEmpty({ error, archived, query, onCreate, onRetry }: { error: 
 }
 
 const styles = StyleSheet.create({
-  filters: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
-  filter: { minHeight: 44, justifyContent: "center", paddingHorizontal: 18, borderRadius: 999, borderWidth: 1 },
+  filters: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  filterGroup: { flex: 1, minHeight: 44, padding: 2 },
+  filterSegments: { flex: 1, flexDirection: "row", alignItems: "center" },
+  filter: { flex: 1, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 999 },
   archiveToggle: { minHeight: 44, justifyContent: "center", marginLeft: "auto", paddingLeft: 4 },
   search: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44, marginHorizontal: 16, marginTop: 8, paddingHorizontal: 14, borderWidth: 1, borderRadius: 999 },
   input: { flex: 1, minWidth: 0, paddingVertical: 8 },
