@@ -66,8 +66,10 @@ describe("Trace CLI", () => {
     const fetchMock = vi.fn(async (url: URL, init?: RequestInit) => {
       expect(url.toString()).toBe("https://trace.test/graphql");
       const request = JSON.parse(String(init?.body)) as {
+        query: string;
         variables: { input: Record<string, unknown> };
       };
+      expect(request.query).not.toContain("projects {");
       expect(request.variables.input).toMatchObject({
         sessionGroupId: "group-1",
         prompt: "Implement the API tests",
@@ -94,7 +96,6 @@ describe("Trace CLI", () => {
               updatedAt: "2026-08-08T00:00:00.000Z",
               channel: null,
               repo: null,
-              projects: [],
             },
           },
         }),
@@ -119,8 +120,10 @@ describe("Trace CLI", () => {
     vi.stubEnv("TRACE_API_URL", "https://trace.test/");
     const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body)) as {
+        query: string;
         variables: { input: Record<string, unknown> };
       };
+      expect(request.query).not.toContain("projects {");
       expect(request.variables.input).toEqual({ prompt: "hello", hosting: "local" });
       return new Response(
         JSON.stringify({
@@ -140,7 +143,6 @@ describe("Trace CLI", () => {
               updatedAt: "2026-08-08T00:00:00.000Z",
               channel: null,
               repo: null,
-              projects: [],
             },
           },
         }),

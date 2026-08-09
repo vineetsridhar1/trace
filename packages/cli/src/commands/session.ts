@@ -31,14 +31,13 @@ type SessionView = Pick<
 > & {
   channel?: { id: string; name: string } | null;
   repo?: { id: string; name: string } | null;
-  projects: Array<{ id: string; name: string }>;
 };
 type EventView = Pick<Event, "id" | "eventType" | "scopeType" | "scopeId" | "timestamp" | "payload">;
 type GroupView = Pick<SessionGroup, "id" | "name" | "status" | "archivedAt">;
 
 const SESSION_FIELDS = `
   id name agentStatus sessionStatus tool model reasoningEffort hosting branch sessionGroupId
-  createdAt updatedAt channel { id name } repo { id name } projects { id name }
+  createdAt updatedAt channel { id name } repo { id name }
 `;
 const EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
 const AGENT_STATUSES = ["not_started", "active", "done", "failed", "stopped"] as const;

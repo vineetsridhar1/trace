@@ -222,7 +222,7 @@ var resourceCommands = [
 import { randomUUID as randomUUID2 } from "node:crypto";
 var SESSION_FIELDS = `
   id name agentStatus sessionStatus tool model reasoningEffort hosting branch sessionGroupId
-  createdAt updatedAt channel { id name } repo { id name } projects { id name }
+  createdAt updatedAt channel { id name } repo { id name }
 `;
 var EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
 var AGENT_STATUSES = ["not_started", "active", "done", "failed", "stopped"];
