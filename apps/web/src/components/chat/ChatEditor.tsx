@@ -14,6 +14,7 @@ import { Mention } from "quill-mention";
 import "./MentionBlot";
 import "./mention-styles.css";
 import { createCustomUserElement, createSlashCommandElement } from "./mention-dom";
+import { pastedFilesFromClipboard } from "./clipboard";
 
 // Guard against double-registration (e.g. HMR in dev mode)
 if (!Quill.imports["modules/mention"]) {
@@ -29,22 +30,6 @@ function createPastedTextFile(text: string): File {
   return new File([text], `pasted-text-${timestamp}.txt`, {
     type: "text/plain",
     lastModified: Date.now(),
-  });
-}
-
-export function pastedFilesFromClipboard(
-  clipboardData: Pick<DataTransfer, "files" | "items"> | null | undefined,
-): File[] {
-  const files = Array.from(clipboardData?.files ?? []);
-  if (files.length > 0) return files;
-
-  // Mobile browsers commonly expose clipboard images as DataTransferItems,
-  // without adding them to the FileList.
-  return Array.from(clipboardData?.items ?? []).flatMap((item) => {
-    if (item.kind !== "file" || !item.type.startsWith("image/")) return [];
-
-    const file = item.getAsFile();
-    return file ? [file] : [];
   });
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pastedFilesFromClipboard } from "./ChatEditor";
+import { pastedFilesFromClipboard } from "./clipboard";
 
 function clipboardData({
   files = [],
