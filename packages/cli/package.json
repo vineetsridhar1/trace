@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@trace/cli-contract": "workspace:*",
     "@trace/gql": "workspace:*"
   },
   "devDependencies": {

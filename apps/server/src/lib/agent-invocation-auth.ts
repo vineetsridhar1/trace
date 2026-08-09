@@ -1,3 +1,7 @@
+import {
+  TRACE_CLI_CAPABILITIES,
+  type TraceCliCapability as AgentInvocationCapability,
+} from "@trace/cli-contract";
 import jwt from "jsonwebtoken";
 import { prisma } from "./db.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
@@ -6,20 +10,8 @@ const JWT_SECRET = resolveJwtSecret();
 const TOKEN_TTL_SECONDS = 6 * 60 * 60;
 const TOKEN_AUDIENCE = "trace-session-client";
 
-export const AGENT_INVOCATION_CAPABILITIES = [
-  "artifact:write",
-  "resource:list",
-  "session:list",
-  "session:create",
-  "session:read",
-  "session:events",
-  "session:send",
-  "session:run",
-  "session:stop",
-  "session:archive",
-] as const;
-
-export type AgentInvocationCapability = (typeof AGENT_INVOCATION_CAPABILITIES)[number];
+export const AGENT_INVOCATION_CAPABILITIES = TRACE_CLI_CAPABILITIES;
+export type { AgentInvocationCapability };
 
 export type AgentInvocationToken = {
   tokenType: "agent_invocation";

@@ -1,151 +1,18 @@
-import { GraphQLError, Kind, type GraphQLResolveInfo, type SelectionSetNode } from "graphql";
+import {
+  traceCliOperationByName,
+  type TraceCliOperation,
+  type TraceCliOperationType,
+} from "@trace/cli-contract";
+import { GraphQLError, print, stripIgnoredCharacters, type GraphQLResolveInfo } from "graphql";
 import type { Context } from "../context.js";
 
 type RootOperation = "Query" | "Mutation" | "Subscription";
+type ResolverFunction = (...args: unknown[]) => unknown;
 
-const ALLOWED_FIELDS: Record<RootOperation, Readonly<Record<string, string>>> = {
-  Query: {
-    channels: "resource:list",
-    channel: "resource:list",
-    repos: "resource:list",
-    repo: "resource:list",
-    projects: "resource:list",
-    project: "resource:list",
-    sessions: "session:list",
-    session: "session:read",
-    events: "session:events",
-  },
-  Mutation: {
-    startSession: "session:create",
-    sendSessionMessage: "session:send",
-    queueSessionMessage: "session:send",
-    runSession: "session:run",
-    terminateSession: "session:stop",
-    archiveSessionGroup: "session:archive",
-  },
-  Subscription: {
-    sessionEvents: "session:events",
-  },
-};
-
-const RESOURCE_SELECTIONS = {
-  channels: [
-    "id",
-    "name",
-    "type",
-    "visibility",
-    "baseBranch",
-    "viewerIsMember",
-    "repo.id",
-    "repo.name",
-    "projects.id",
-    "projects.name",
-  ],
-  channel: ["id", "name", "repo.id", "repo.name"],
-  repos: ["id", "name", "provider", "remoteUrl", "defaultBranch"],
-  repo: ["id", "name", "provider", "remoteUrl", "defaultBranch"],
-  projects: ["id", "name", "repo.id", "repo.name"],
-  project: ["id", "name", "repo.id", "repo.name"],
-} as const;
-
-const SESSION_SELECTIONS = [
-  "id",
-  "name",
-  "agentStatus",
-  "sessionStatus",
-  "tool",
-  "model",
-  "reasoningEffort",
-  "hosting",
-  "branch",
-  "sessionGroupId",
-  "createdAt",
-  "updatedAt",
-  "channel.id",
-  "channel.name",
-  "channel.repo.id",
-  "channel.repo.name",
-  "repo.id",
-  "repo.name",
-  "projects.id",
-  "connection.environmentId",
-  "connection.runtimeInstanceId",
-  "sessionGroup.kind",
-  "sessionGroup.visibility",
-] as const;
-const EVENT_SELECTIONS = ["id", "eventType", "scopeType", "scopeId", "timestamp", "payload"];
-
-const ALLOWED_ARGUMENTS: Record<RootOperation, Readonly<Record<string, readonly string[]>>> = {
-  Query: {
-    channels: ["organizationId", "memberOnly"],
-    channel: ["id"],
-    repos: ["organizationId"],
-    repo: ["id"],
-    projects: ["organizationId", "repoId"],
-    project: ["id"],
-    sessions: [
-      "organizationId",
-      "filters.agentStatus",
-      "filters.tool",
-      "filters.repoId",
-      "filters.channelId",
-      "filters.includeArchived",
-      "filters.includeMerged",
-      "filters.limit",
-    ],
-    session: ["id"],
-    events: ["organizationId", "scope.type", "scope.id", "limit", "before"],
-  },
-  Mutation: {
-    startSession: [
-      "input.clientMutationId",
-      "input.kind",
-      "input.tool",
-      "input.model",
-      "input.reasoningEffort",
-      "input.visibility",
-      "input.environmentId",
-      "input.hosting",
-      "input.runtimeInstanceId",
-      "input.deferRuntimeSelection",
-      "input.repoId",
-      "input.branch",
-      "input.ticketId",
-      "input.channelId",
-      "input.sessionGroupId",
-      "input.projectId",
-      "input.prompt",
-      "input.interactionMode",
-    ],
-    sendSessionMessage: ["sessionId", "text", "interactionMode", "clientMutationId"],
-    queueSessionMessage: ["sessionId", "text", "interactionMode"],
-    runSession: ["id", "prompt", "interactionMode"],
-    terminateSession: ["id"],
-    archiveSessionGroup: ["id"],
-  },
-  Subscription: {
-    sessionEvents: ["sessionId", "organizationId", "after", "afterEventId"],
-  },
-};
-
-const ALLOWED_SELECTIONS: Record<RootOperation, Readonly<Record<string, readonly string[]>>> = {
-  Query: {
-    ...RESOURCE_SELECTIONS,
-    sessions: SESSION_SELECTIONS,
-    session: SESSION_SELECTIONS,
-    events: EVENT_SELECTIONS,
-  },
-  Mutation: {
-    startSession: SESSION_SELECTIONS,
-    sendSessionMessage: EVENT_SELECTIONS,
-    queueSessionMessage: ["id", "sessionId", "text", "position", "createdAt"],
-    runSession: SESSION_SELECTIONS,
-    terminateSession: SESSION_SELECTIONS,
-    archiveSessionGroup: ["id", "name", "status", "archivedAt"],
-  },
-  Subscription: {
-    sessionEvents: EVENT_SELECTIONS,
-  },
+const OPERATION_TYPES: Readonly<Record<RootOperation, TraceCliOperationType>> = {
+  Query: "query",
+  Mutation: "mutation",
+  Subscription: "subscription",
 };
 
 function forbidden(message: string): never {
@@ -153,17 +20,20 @@ function forbidden(message: string): never {
 }
 
 function assertAllowedArguments(
+  definition: TraceCliOperation,
   operation: RootOperation,
   field: string,
   args: Record<string, unknown>,
 ): void {
-  const allowed = new Set(ALLOWED_ARGUMENTS[operation][field] ?? []);
+  const allowed = new Set(definition.argumentPaths);
 
   const visit = (value: Record<string, unknown>, prefix: string): void => {
     for (const [name, child] of Object.entries(value)) {
       const path = prefix ? `${prefix}.${name}` : name;
       const isAllowed = allowed.has(path);
-      const hasAllowedChild = [...allowed].some((candidate) => candidate.startsWith(`${path}.`));
+      const hasAllowedChild = definition.argumentPaths.some((candidate) =>
+        candidate.startsWith(`${path}.`),
+      );
       if (!isAllowed && !hasAllowedChild) {
         forbidden(`The session credential cannot pass ${operation}.${field}.${path}`);
       }
@@ -176,38 +46,28 @@ function assertAllowedArguments(
   visit(args, "");
 }
 
-function assertAllowedSelectionSet(
+function registeredOperation(
   operation: RootOperation,
   field: string,
-  info: GraphQLResolveInfo,
-): void {
-  const allowed = new Set(ALLOWED_SELECTIONS[operation][field] ?? []);
-  const visitedFragments = new Set<string>();
+  info: GraphQLResolveInfo | undefined,
+): TraceCliOperation {
+  const name = info?.operation.name?.value;
+  if (!name) forbidden("Session credentials must use a registered Trace CLI operation");
+  const definition = traceCliOperationByName(name);
+  if (
+    !definition ||
+    definition.type !== OPERATION_TYPES[operation] ||
+    definition.rootField !== field
+  ) {
+    forbidden(`The session credential cannot perform ${operation}.${field}`);
+  }
 
-  const visit = (selectionSet: SelectionSetNode | undefined, prefix: string): void => {
-    for (const selection of selectionSet?.selections ?? []) {
-      if (selection.kind === Kind.FIELD) {
-        const name = selection.name.value;
-        if (name === "__typename") continue;
-        const path = prefix ? `${prefix}.${name}` : name;
-        const isAllowed = allowed.has(path);
-        const hasAllowedChild = [...allowed].some((candidate) => candidate.startsWith(`${path}.`));
-        if (!isAllowed && !hasAllowedChild) {
-          forbidden(`The session credential cannot select ${operation}.${field}.${path}`);
-        }
-        visit(selection.selectionSet, path);
-      } else if (selection.kind === Kind.INLINE_FRAGMENT) {
-        visit(selection.selectionSet, prefix);
-      } else {
-        const fragmentName = selection.name.value;
-        if (visitedFragments.has(fragmentName)) continue;
-        visitedFragments.add(fragmentName);
-        visit(info.fragments[fragmentName]?.selectionSet, prefix);
-      }
-    }
-  };
-
-  for (const fieldNode of info.fieldNodes) visit(fieldNode.selectionSet, "");
+  const requestedDocument = stripIgnoredCharacters(print(info.operation));
+  const registeredDocument = stripIgnoredCharacters(definition.document);
+  if (requestedDocument !== registeredDocument) {
+    forbidden(`The session credential cannot modify the registered operation ${name}`);
+  }
+  return definition;
 }
 
 function assertAgentRequest(
@@ -219,25 +79,14 @@ function assertAgentRequest(
 ): void {
   if (!ctx.agentSessionId) return;
 
-  const capability = ALLOWED_FIELDS[operation][field];
-  if (!capability || !ctx.agentCapabilities?.includes(capability)) {
+  const definition = registeredOperation(operation, field, info);
+  if (!ctx.agentCapabilities?.includes(definition.capability)) {
     forbidden(`The session credential cannot perform ${operation}.${field}`);
   }
-  assertAllowedArguments(operation, field, args);
-  if (info) assertAllowedSelectionSet(operation, field, info);
+  assertAllowedArguments(definition, operation, field, args);
 
-  const input =
-    args.input && typeof args.input === "object" && !Array.isArray(args.input)
-      ? (args.input as Record<string, unknown>)
-      : null;
   const requestedOrganizationId =
-    typeof args.organizationId === "string"
-      ? args.organizationId
-      : typeof args.orgId === "string"
-        ? args.orgId
-        : typeof input?.organizationId === "string"
-          ? input.organizationId
-          : null;
+    typeof args.organizationId === "string" ? args.organizationId : null;
   if (requestedOrganizationId && requestedOrganizationId !== ctx.organizationId) {
     forbidden("The session credential cannot access another organization");
   }
@@ -253,8 +102,6 @@ function assertAgentRequest(
     }
   }
 }
-
-type ResolverFunction = (...args: unknown[]) => unknown;
 
 function wrapFunction(
   resolver: ResolverFunction,

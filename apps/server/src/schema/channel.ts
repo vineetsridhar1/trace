@@ -5,7 +5,6 @@ import { assertChannelAccess } from "../services/access.js";
 import { pubsub, topics } from "../lib/pubsub.js";
 import { requireOrgContext } from "../lib/require-org.js";
 import { organizationService } from "../services/organization.js";
-import { prisma } from "../lib/db.js";
 
 export const channelQueries = {
   channels: (

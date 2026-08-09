@@ -1,3 +1,4 @@
+import type { TraceCliOperation } from "@trace/cli-contract";
 import { CliError, ExitCode } from "./errors.js";
 
 type GraphQlError = {
@@ -79,7 +80,7 @@ export class TraceClient {
   }
 
   async graphql<TData, TVariables extends Record<string, unknown>>(
-    query: string,
+    operation: TraceCliOperation,
     variables: TVariables,
   ): Promise<TData> {
     let response: Response;
@@ -87,7 +88,11 @@ export class TraceClient {
       response = await fetch(new URL("/graphql", this.serverUrl), {
         method: "POST",
         headers: this.headers(),
-        body: JSON.stringify({ query, variables }),
+        body: JSON.stringify({
+          operationName: operation.name,
+          query: operation.document,
+          variables,
+        }),
       });
     } catch {
       throw new CliError(
@@ -106,7 +111,7 @@ export class TraceClient {
   }
 
   async subscribe<TData, TVariables extends Record<string, unknown>>(
-    query: string,
+    operation: TraceCliOperation,
     variables: TVariables,
     onData: (data: TData) => void,
   ): Promise<void> {
@@ -166,7 +171,15 @@ export class TraceClient {
           acknowledged = true;
           clearTimeout(ackTimeout);
           socket.send(
-            JSON.stringify({ id: "trace-cli", type: "subscribe", payload: { query, variables } }),
+            JSON.stringify({
+              id: "trace-cli",
+              type: "subscribe",
+              payload: {
+                operationName: operation.name,
+                query: operation.document,
+                variables,
+              },
+            }),
           );
         } else if (
           payload.type === "next" &&

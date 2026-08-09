@@ -60,6 +60,20 @@ run`. The CLI automatically attaches an idempotency key and retries transient em
 responses once. If a retry is still necessary, reuse the reported key with `--idempotency-key`.
 Explicit cloud requests fail if cloud is unavailable and are never downgraded to local.
 
+## Adding a command
+
+The managed API contract lives in `packages/cli-contract`. Each GraphQL operation is registered
+there once with its capability and permitted input paths; both the CLI client and server-side
+authorization consume that same descriptor. The server rejects unregistered or modified GraphQL
+documents, even when the underlying resolver is otherwise available to the owning user.
+
+Add each command as one focused module under `packages/cli/src/commands`, declare its options and
+positionals with `defineCommand`, and register it in `commands/index.ts`. Help, duplicate-option
+checks, choices, integer bounds, JSON handling, and unknown-option errors come from the shared
+command runtime. Add contract authorization coverage and command behavior coverage with the new
+operation. Build the repository before committing: the build produces `runtime/bin/trace.mjs`,
+updates the runtime content hash, and regenerates the desktop/container embedded copy.
+
 ## Automation contract
 
 With `--json`, each successful command prints exactly one JSON object followed by a newline. Event

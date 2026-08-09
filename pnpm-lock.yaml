@@ -364,6 +364,9 @@ importers:
       '@slack/web-api':
         specifier: ^7.10.0
         version: 7.15.2
+      '@trace/cli-contract':
+        specifier: workspace:*
+        version: link:../../packages/cli-contract
       '@trace/gql':
         specifier: workspace:*
         version: link:../../packages/gql
@@ -633,6 +636,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@trace/cli-contract':
+        specifier: workspace:*
+        version: link:../cli-contract
       '@trace/gql':
         specifier: workspace:*
         version: link:../gql
@@ -643,6 +649,21 @@ importers:
       esbuild:
         specifier: ^0.27.4
         version: 0.27.4
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(msw@2.12.10(@types/node@24.12.0)(typescript@5.9.3))(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.3)
+
+  packages/cli-contract:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.5.2
+        version: 24.12.0
+      graphql:
+        specifier: ^16.10.0
+        version: 16.13.1
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

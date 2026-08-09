@@ -1,20 +1,18 @@
 #!/usr/bin/env node
-import { artifactCommand } from "./commands/artifact.js";
-import { contextCommand } from "./commands/context.js";
-import { resourceCommands } from "./commands/resources.js";
-import { sessionCommands } from "./commands/session.js";
+import { commands } from "./commands/index.js";
 import { CliError, ExitCode } from "./errors.js";
-import { createCommandContext, type Command } from "./runtime.js";
+import {
+  assertCommandDefinitions,
+  commandHelp,
+  createCommandContext,
+  findCommand,
+  parseCommandInput,
+  parseGlobalOptions,
+} from "./runtime.js";
 
-export const commands: readonly Command[] = [
-  contextCommand,
-  ...resourceCommands,
-  ...sessionCommands,
-  artifactCommand,
-];
+assertCommandDefinitions(commands);
 
-function help(command?: Command): string {
-  if (command) return [`Usage: ${command.usage}`, "", command.description].join("\n");
+function globalHelp(): string {
   return [
     "Usage: trace <command> [options]",
     "",
@@ -28,29 +26,26 @@ function help(command?: Command): string {
 }
 
 export async function run(argv = process.argv.slice(2)): Promise<number> {
-  const wantsJson = argv.includes("--json");
-  const wantsHelp = argv.includes("--help") || argv.includes("-h");
+  const parsed = parseGlobalOptions(argv);
+  const wantsHelp = parsed.args.includes("--help") || parsed.args.includes("-h");
+  const commandArgs = parsed.args.filter((value) => value !== "--help" && value !== "-h");
+  const command = findCommand(commands, commandArgs);
   if (argv.length === 0 || wantsHelp) {
-    const helpArgs = argv.filter((value) => value !== "--help" && value !== "-h");
-    const command = commands.find((candidate) =>
-      candidate.path.every((part, index) => helpArgs[index] === part),
-    );
-    process.stdout.write(`${help(command)}\n`);
+    process.stdout.write(`${command ? commandHelp(command) : globalHelp()}\n`);
     return ExitCode.success;
   }
 
   try {
-    const ctx = await createCommandContext(argv);
-    const command = commands.find((candidate) =>
-      candidate.path.every((part, index) => ctx.args[index] === part),
-    );
-    if (!command)
+    if (!command) {
       throw new CliError(
-        `Unknown command: ${ctx.args.slice(0, 2).join(" ")}`,
+        `Unknown command: ${commandArgs.slice(0, 2).join(" ")}`,
         ExitCode.usage,
         "usage",
       );
-    await command.run(ctx);
+    }
+    const input = parseCommandInput(command, commandArgs);
+    const ctx = createCommandContext(parsed.options);
+    await command.run(ctx, input);
     return ExitCode.success;
   } catch (error) {
     const cliError =
@@ -62,7 +57,9 @@ export async function run(argv = process.argv.slice(2)): Promise<number> {
             "server",
           );
     const value = { error: { category: cliError.category, message: cliError.message } };
-    process.stderr.write(wantsJson ? `${JSON.stringify(value)}\n` : `trace: ${cliError.message}\n`);
+    process.stderr.write(
+      parsed.options.json ? `${JSON.stringify(value)}\n` : `trace: ${cliError.message}\n`,
+    );
     return cliError.exitCode;
   }
 }

@@ -14,7 +14,6 @@ afterEach(async () => {
 
 describe("ensureTraceRuntime", () => {
   it("installs the bundled CLI and skills when GitHub is unavailable", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     const parent = await mkdtemp(join(tmpdir(), "trace-runtime-test-"));
     roots.push(parent);
 
@@ -65,7 +64,6 @@ describe("ensureTraceRuntime", () => {
   });
 
   it("replaces an older install so machines pick up changed skills", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     const parent = await mkdtemp(join(tmpdir(), "trace-runtime-test-"));
     roots.push(parent);
     const root = join(parent, "runtime");
@@ -83,15 +81,40 @@ describe("ensureTraceRuntime", () => {
     );
   });
 
+  it("replaces a same-version install when its bundled content changed", async () => {
+    const parent = await mkdtemp(join(tmpdir(), "trace-runtime-test-"));
+    roots.push(parent);
+    const root = join(parent, "runtime");
+    await mkdir(root, { recursive: true });
+    await writeFile(
+      join(root, "manifest.json"),
+      JSON.stringify({
+        version: BUNDLED_TRACE_RUNTIME_MANIFEST.version,
+        contentHash: "0".repeat(64),
+      }),
+      "utf8",
+    );
+    await writeFile(join(root, "marker"), "stale", "utf8");
+
+    await ensureTraceRuntime(root);
+
+    await expect(readFile(join(root, "marker"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect(JSON.parse(await readFile(join(root, "manifest.json"), "utf8")).contentHash).toBe(
+      BUNDLED_TRACE_RUNTIME_MANIFEST.contentHash,
+    );
+  });
+
   it("leaves a current install alone", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     const parent = await mkdtemp(join(tmpdir(), "trace-runtime-test-"));
     roots.push(parent);
     const root = join(parent, "runtime");
     await mkdir(join(root, "skills"), { recursive: true });
     await writeFile(
       join(root, "manifest.json"),
-      JSON.stringify({ version: BUNDLED_TRACE_RUNTIME_MANIFEST.version }),
+      JSON.stringify({
+        version: BUNDLED_TRACE_RUNTIME_MANIFEST.version,
+        contentHash: BUNDLED_TRACE_RUNTIME_MANIFEST.contentHash,
+      }),
       "utf8",
     );
     await writeFile(join(root, "marker"), "kept", "utf8");

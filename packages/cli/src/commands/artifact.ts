@@ -4,26 +4,39 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { CliError, ExitCode, usage } from "../errors.js";
-import type { Command } from "../runtime.js";
+import { defineCommand, optionString } from "../runtime.js";
 
-export const artifactCommand: Command = {
+export const artifactCommand = defineCommand({
   path: ["artifact", "push"],
-  usage:
-    "trace artifact push <type> <file-or-directory> [--key KEY] [--idempotency-key KEY] [--json]",
   description: "Upload an immutable artifact from an active Trace invocation",
-  async run(ctx) {
-    const type = ctx.args[2] || usage("Artifact type is required");
-    const sourceArg = ctx.args[3] || usage("Artifact file or directory is required");
+  positionals: [
+    { name: "type", required: true },
+    { name: "file-or-directory", required: true },
+  ],
+  options: [
+    {
+      name: "key",
+      flag: "--key",
+      kind: "string",
+      valueName: "KEY",
+      description: "Artifact slot key",
+    },
+    {
+      name: "idempotencyKey",
+      flag: "--idempotency-key",
+      kind: "string",
+      valueName: "KEY",
+      description: "Retry-safe upload key",
+    },
+  ],
+  async run(ctx, input) {
+    const type = input.positionals[0] ?? usage("Artifact type is required");
+    const sourceArg = input.positionals[1] ?? usage("Artifact file or directory is required");
     const source = resolve(sourceArg);
-    let key = type === "visual-plan" || type === "trace.visual-plan.v1" ? "primary" : "default";
-    let idempotencyKey: string = randomUUID();
-    for (let index = 4; index < ctx.args.length; index += 1) {
-      const flag = ctx.args[index];
-      if (flag === "--key") key = ctx.args[++index] || usage("--key requires a value");
-      else if (flag === "--idempotency-key") {
-        idempotencyKey = ctx.args[++index] || usage("--idempotency-key requires a value");
-      } else usage(`Unknown option: ${flag}`);
-    }
+    const key =
+      optionString(input, "key") ??
+      (type === "visual-plan" || type === "trace.visual-plan.v1" ? "primary" : "default");
+    const idempotencyKey = optionString(input, "idempotencyKey") ?? randomUUID();
     if (idempotencyKey.length > 200) usage("--idempotency-key must be at most 200 characters");
     if (!existsSync(source)) usage(`Path does not exist: ${source}`);
     const apiUrl = ctx.env.TRACE_API_URL || ctx.env.TRACE_SERVER_URL;
@@ -113,4 +126,4 @@ export const artifactCommand: Command = {
       rmSync(temporary, { recursive: true, force: true });
     }
   },
-};
+});

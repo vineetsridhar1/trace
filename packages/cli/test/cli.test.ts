@@ -1,3 +1,4 @@
+import { traceCliOperations } from "@trace/cli-contract";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TraceClient } from "../src/client.js";
 import { run } from "../src/main.js";
@@ -591,7 +592,7 @@ describe("Trace CLI", () => {
     const client = new TraceClient("https://trace.test", "token", "org-1");
 
     await expect(
-      client.subscribe("subscription { sessionEvents { id } }", {}, () => undefined),
+      client.subscribe(traceCliOperations.followSession, {}, () => undefined),
     ).rejects.toMatchObject({ message: "Nested field denied", category: "authorization" });
   });
 
@@ -632,7 +633,7 @@ describe("Trace CLI", () => {
     const client = new TraceClient("https://trace.test", "expired-token", "org-1");
 
     await expect(
-      client.subscribe("subscription { sessionEvents { id } }", {}, () => undefined),
+      client.subscribe(traceCliOperations.followSession, {}, () => undefined),
     ).rejects.toMatchObject({ category: "authentication", exitCode: 2 });
   });
 
@@ -662,11 +663,7 @@ describe("Trace CLI", () => {
     }
     vi.stubGlobal("WebSocket", SilentWebSocket);
     const client = new TraceClient("https://trace.test", "token", "org-1");
-    const subscription = client.subscribe(
-      "subscription { sessionEvents { id } }",
-      {},
-      () => undefined,
-    );
+    const subscription = client.subscribe(traceCliOperations.followSession, {}, () => undefined);
     const rejection = expect(subscription).rejects.toMatchObject({
       category: "connectivity",
       exitCode: 5,

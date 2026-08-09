@@ -1,8 +1,7 @@
-import type { Command } from "../runtime.js";
+import { defineCommand } from "../runtime.js";
 
-export const contextCommand: Command = {
+export const contextCommand = defineCommand({
   path: ["context"],
-  usage: "trace context [--json]",
   description: "Show the selected Trace server, organization, and session context",
   async run(ctx) {
     const value = {
@@ -23,4 +22,4 @@ export const contextCommand: Command = {
       ].join("\n"),
     );
   },
-};
+});

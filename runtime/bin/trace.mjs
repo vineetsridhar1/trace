@@ -29,24 +29,426 @@ function usage(message) {
   throw new CliError(message, ExitCode.usage, "usage");
 }
 
-// src/commands/artifact.ts
-var artifactCommand = {
-  path: ["artifact", "push"],
-  usage: "trace artifact push <type> <file-or-directory> [--key KEY] [--idempotency-key KEY] [--json]",
-  description: "Upload an immutable artifact from an active Trace invocation",
-  async run(ctx) {
-    const type = ctx.args[2] || usage("Artifact type is required");
-    const sourceArg = ctx.args[3] || usage("Artifact file or directory is required");
-    const source = resolve(sourceArg);
-    let key = type === "visual-plan" || type === "trace.visual-plan.v1" ? "primary" : "default";
-    let idempotencyKey = randomUUID();
-    for (let index = 4; index < ctx.args.length; index += 1) {
-      const flag = ctx.args[index];
-      if (flag === "--key") key = ctx.args[++index] || usage("--key requires a value");
-      else if (flag === "--idempotency-key") {
-        idempotencyKey = ctx.args[++index] || usage("--idempotency-key requires a value");
-      } else usage(`Unknown option: ${flag}`);
+// src/client.ts
+var CONNECTION_ACK_TIMEOUT_MS = 1e4;
+function errorFromStatus(status, message) {
+  if (status === 401) return new CliError(message, ExitCode.authentication, "authentication");
+  if (status === 403) return new CliError(message, ExitCode.authorization, "authorization");
+  if (status >= 400 && status < 500) {
+    return new CliError(message, ExitCode.validation, "validation");
+  }
+  return new CliError(message, ExitCode.server, "server");
+}
+function graphQlError(error) {
+  const message = typeof error.message === "string" ? error.message : "GraphQL request failed";
+  const code = error.extensions?.code;
+  if (code === "UNAUTHENTICATED") {
+    return new CliError(message, ExitCode.authentication, "authentication");
+  }
+  if (code === "FORBIDDEN") {
+    return new CliError(message, ExitCode.authorization, "authorization");
+  }
+  if (code === "BAD_USER_INPUT" || code === "NOT_FOUND") {
+    return new CliError(message, ExitCode.validation, "validation");
+  }
+  return new CliError(message, ExitCode.server, "server");
+}
+var TraceClient = class {
+  constructor(serverUrl, token, organizationId) {
+    this.serverUrl = serverUrl;
+    this.token = token;
+    this.organizationId = organizationId;
+  }
+  headers(extra) {
+    return {
+      Authorization: `Bearer ${this.token}`,
+      "Content-Type": "application/json",
+      "X-Trace-Client-Source": "cli",
+      ...this.organizationId ? { "X-Organization-Id": this.organizationId } : {},
+      ...extra
+    };
+  }
+  async http(path, init = {}) {
+    let response;
+    try {
+      response = await fetch(new URL(path, this.serverUrl), {
+        method: init.method ?? "GET",
+        headers: this.headers(),
+        body: init.body === void 0 ? void 0 : JSON.stringify(init.body)
+      });
+    } catch {
+      throw new CliError(
+        `Could not connect to ${this.serverUrl}`,
+        ExitCode.connectivity,
+        "connectivity"
+      );
     }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw errorFromStatus(
+        response.status,
+        typeof payload.error === "string" ? payload.error : `Server returned ${response.status}`
+      );
+    }
+    return payload;
+  }
+  async graphql(operation2, variables) {
+    let response;
+    try {
+      response = await fetch(new URL("/graphql", this.serverUrl), {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({
+          operationName: operation2.name,
+          query: operation2.document,
+          variables
+        })
+      });
+    } catch {
+      throw new CliError(
+        `Could not connect to ${this.serverUrl}`,
+        ExitCode.connectivity,
+        "connectivity"
+      );
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw errorFromStatus(response.status, `Server returned ${response.status}`);
+    }
+    if (payload.errors?.length) throw graphQlError(payload.errors[0] ?? {});
+    if (!payload.data) throw new CliError("Server returned no data", ExitCode.server, "server");
+    return payload.data;
+  }
+  async subscribe(operation2, variables, onData) {
+    const url = new URL("/graphql", this.serverUrl);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(url, "graphql-transport-ws");
+    await new Promise((resolve2, reject) => {
+      let acknowledged = false;
+      let completed = false;
+      let failed = false;
+      let stopped = false;
+      const fail = (error) => {
+        if (failed) return;
+        failed = true;
+        clearTimeout(ackTimeout);
+        reject(error);
+      };
+      const close = () => {
+        stopped = true;
+        clearTimeout(ackTimeout);
+        socket.close(1e3, "CLI stopped following");
+      };
+      const ackTimeout = setTimeout(() => {
+        fail(
+          new CliError(
+            `Trace did not acknowledge the subscription connection within ${CONNECTION_ACK_TIMEOUT_MS / 1e3} seconds`,
+            ExitCode.connectivity,
+            "connectivity"
+          )
+        );
+        socket.close(1e3, "Connection acknowledgement timed out");
+      }, CONNECTION_ACK_TIMEOUT_MS);
+      process.once("SIGINT", close);
+      socket.addEventListener("open", () => {
+        socket.send(
+          JSON.stringify({
+            type: "connection_init",
+            payload: {
+              token: this.token,
+              organizationId: this.organizationId,
+              clientSource: "cli"
+            }
+          })
+        );
+      });
+      socket.addEventListener("message", (message) => {
+        let payload;
+        try {
+          payload = JSON.parse(String(message.data));
+        } catch {
+          return;
+        }
+        if (payload.type === "connection_ack" && !acknowledged) {
+          acknowledged = true;
+          clearTimeout(ackTimeout);
+          socket.send(
+            JSON.stringify({
+              id: "trace-cli",
+              type: "subscribe",
+              payload: {
+                operationName: operation2.name,
+                query: operation2.document,
+                variables
+              }
+            })
+          );
+        } else if (payload.type === "next" && payload.payload && !Array.isArray(payload.payload) && payload.payload.data) {
+          onData(payload.payload.data);
+        } else if (payload.type === "error") {
+          const errors = Array.isArray(payload.payload) ? payload.payload : [];
+          fail(graphQlError(errors[0] ?? {}));
+          socket.close();
+        } else if (payload.type === "complete") {
+          completed = true;
+          socket.close(1e3, "Subscription completed");
+        }
+      });
+      socket.addEventListener("error", () => {
+        fail(
+          new CliError(`Could not connect to ${url.origin}`, ExitCode.connectivity, "connectivity")
+        );
+        socket.close();
+      });
+      socket.addEventListener("close", (event) => {
+        clearTimeout(ackTimeout);
+        process.removeListener("SIGINT", close);
+        if (failed) return;
+        if (stopped || completed) {
+          resolve2();
+          return;
+        }
+        if (!acknowledged && (event.code === 4401 || event.code === 4403)) {
+          fail(
+            new CliError(
+              event.reason || "Trace rejected the subscription credential",
+              ExitCode.authentication,
+              "authentication"
+            )
+          );
+          return;
+        }
+        fail(
+          new CliError(
+            event.reason || `Trace subscription closed unexpectedly (${event.code})`,
+            ExitCode.connectivity,
+            "connectivity"
+          )
+        );
+      });
+    });
+  }
+};
+
+// src/runtime.ts
+function defineCommand(definition) {
+  return definition;
+}
+function assertCommandDefinitions(commands2) {
+  const paths = /* @__PURE__ */ new Set();
+  for (const command of commands2) {
+    const path = command.path.join(" ");
+    if (!path || paths.has(path)) throw new Error(`Duplicate or empty command path: ${path}`);
+    paths.add(path);
+    const optionNames = /* @__PURE__ */ new Set();
+    const optionFlags = /* @__PURE__ */ new Set();
+    for (const option of command.options ?? []) {
+      if (optionNames.has(option.name) || optionFlags.has(option.flag)) {
+        throw new Error(`Duplicate option in command ${path}: ${option.flag}`);
+      }
+      optionNames.add(option.name);
+      optionFlags.add(option.flag);
+    }
+    const positionals = command.positionals ?? [];
+    const variadicIndex = positionals.findIndex((definition) => definition.variadic);
+    if (variadicIndex !== -1 && variadicIndex !== positionals.length - 1) {
+      throw new Error(`Variadic positional must be last for ${path}`);
+    }
+  }
+}
+function parseGlobalOptions(argv) {
+  const args = [];
+  const options = { json: false };
+  let optionsEnded = false;
+  for (const value of argv) {
+    if (value === "--") {
+      optionsEnded = true;
+      args.push(value);
+    } else if (!optionsEnded && value === "--json") options.json = true;
+    else args.push(value);
+  }
+  return { args, options };
+}
+function findCommand(commands2, args) {
+  return commands2.filter((candidate) => candidate.path.every((part, index) => args[index] === part)).sort((left, right) => right.path.length - left.path.length)[0];
+}
+function parseOptionValue(definition, raw) {
+  if (definition.kind === "boolean") return true;
+  if (definition.kind === "string") {
+    if (definition.choices && !definition.choices.includes(raw)) {
+      usage(`${definition.flag} must be one of: ${definition.choices.join(", ")}`);
+    }
+    return raw;
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value)) usage(`${definition.flag} requires an integer`);
+  if (definition.min !== void 0 && value < definition.min) {
+    usage(`${definition.flag} must be at least ${definition.min}`);
+  }
+  if (definition.max !== void 0 && value > definition.max) {
+    usage(`${definition.flag} must be at most ${definition.max}`);
+  }
+  return value;
+}
+function parseCommandInput(command, args) {
+  const definitions = new Map((command.options ?? []).map((option) => [option.flag, option]));
+  const options = {};
+  const providedOptions = /* @__PURE__ */ new Set();
+  const positionals = [];
+  let optionsEnded = false;
+  for (let index = command.path.length; index < args.length; index += 1) {
+    const raw = args[index] ?? "";
+    if (!optionsEnded && raw === "--") {
+      optionsEnded = true;
+      continue;
+    }
+    if (optionsEnded) {
+      positionals.push(raw);
+      continue;
+    }
+    const equals = raw.indexOf("=");
+    const flag = equals === -1 ? raw : raw.slice(0, equals);
+    const definition = definitions.get(flag);
+    if (!definition) {
+      if (raw.startsWith("--")) usage(`Unknown option: ${flag}`);
+      positionals.push(raw);
+      continue;
+    }
+    if (providedOptions.has(definition.name)) usage(`${definition.flag} may only be provided once`);
+    providedOptions.add(definition.name);
+    if (definition.kind === "boolean") {
+      if (equals !== -1) usage(`${definition.flag} does not accept a value`);
+      options[definition.name] = true;
+      continue;
+    }
+    const value = equals === -1 ? args[++index] : raw.slice(equals + 1);
+    if (!value) usage(`${definition.flag} requires ${definition.valueName}`);
+    options[definition.name] = parseOptionValue(definition, value);
+  }
+  const positionalDefinitions = command.positionals ?? [];
+  const variadicIndex = positionalDefinitions.findIndex((definition) => definition.variadic);
+  const minimum = positionalDefinitions.filter((definition) => definition.required).length;
+  if (positionals.length < minimum) {
+    const missing = positionalDefinitions.find(
+      (definition, index) => definition.required && index >= positionals.length
+    );
+    usage(`${missing?.name ?? "Argument"} is required`);
+  }
+  if (variadicIndex === -1 && positionals.length > positionalDefinitions.length) {
+    usage(`Unexpected argument: ${positionals[positionalDefinitions.length]}`);
+  }
+  return { positionals, options, providedOptions };
+}
+function optionString(input, name) {
+  const value = input.options[name];
+  if (value === void 0) return void 0;
+  if (typeof value !== "string") throw new Error(`Option ${name} is not a string`);
+  return value;
+}
+function optionInteger(input, name) {
+  const value = input.options[name];
+  if (value === void 0) return void 0;
+  if (typeof value !== "number") throw new Error(`Option ${name} is not a number`);
+  return value;
+}
+function optionBoolean(input, name) {
+  return input.options[name] === true;
+}
+function commandUsage(command) {
+  const positionals = (command.positionals ?? []).map((definition) => {
+    const value = definition.variadic ? `${definition.name}...` : definition.name;
+    return definition.required ? `<${value}>` : `[${value}]`;
+  });
+  const options = (command.options ?? []).map(
+    (definition) => definition.kind === "boolean" ? `[${definition.flag}]` : `[${definition.flag} ${definition.valueName}]`
+  );
+  return ["trace", ...command.path, ...positionals, ...options, "[--json]"].join(" ");
+}
+function commandHelp(command) {
+  const options = command.options ?? [];
+  return [
+    `Usage: ${commandUsage(command)}`,
+    "",
+    command.description,
+    ...options.length ? [
+      "",
+      "Options:",
+      ...options.map((definition) => {
+        const label = definition.kind === "boolean" ? definition.flag : `${definition.flag} ${definition.valueName}`;
+        return `  ${label.padEnd(30)} ${definition.description}`;
+      })
+    ] : []
+  ].join("\n");
+}
+function createCommandContext(options, env = process.env) {
+  return {
+    options,
+    env,
+    output(value, human) {
+      process.stdout.write(options.json ? `${JSON.stringify(value)}
+` : `${human}
+`);
+    },
+    async client(requireOrganization = true) {
+      const token = env.TRACE_INVOCATION_TOKEN;
+      if (!token) {
+        throw new CliError(
+          "This command is only available inside an active Trace AI session",
+          ExitCode.authentication,
+          "authentication"
+        );
+      }
+      const serverUrl = env.TRACE_API_URL || env.TRACE_SERVER_URL;
+      if (!serverUrl) {
+        throw new CliError(
+          "The Trace server URL is unavailable in this session",
+          ExitCode.authentication,
+          "authentication"
+        );
+      }
+      const organizationId = env.TRACE_ORGANIZATION_ID;
+      if (requireOrganization && !organizationId) {
+        throw new CliError(
+          "The Trace organization is unavailable in this session",
+          ExitCode.authentication,
+          "authentication"
+        );
+      }
+      return new TraceClient(serverUrl, token, organizationId);
+    }
+  };
+}
+
+// src/commands/artifact.ts
+var artifactCommand = defineCommand({
+  path: ["artifact", "push"],
+  description: "Upload an immutable artifact from an active Trace invocation",
+  positionals: [
+    { name: "type", required: true },
+    { name: "file-or-directory", required: true }
+  ],
+  options: [
+    {
+      name: "key",
+      flag: "--key",
+      kind: "string",
+      valueName: "KEY",
+      description: "Artifact slot key"
+    },
+    {
+      name: "idempotencyKey",
+      flag: "--idempotency-key",
+      kind: "string",
+      valueName: "KEY",
+      description: "Retry-safe upload key"
+    }
+  ],
+  async run(ctx, input) {
+    const type = input.positionals[0] ?? usage("Artifact type is required");
+    const sourceArg = input.positionals[1] ?? usage("Artifact file or directory is required");
+    const source = resolve(sourceArg);
+    const key = optionString(input, "key") ?? (type === "visual-plan" || type === "trace.visual-plan.v1" ? "primary" : "default");
+    const idempotencyKey = optionString(input, "idempotencyKey") ?? randomUUID();
     if (idempotencyKey.length > 200) usage("--idempotency-key must be at most 200 characters");
     if (!existsSync(source)) usage(`Path does not exist: ${source}`);
     const apiUrl = ctx.env.TRACE_API_URL || ctx.env.TRACE_SERVER_URL;
@@ -120,12 +522,286 @@ var artifactCommand = {
       rmSync(temporary, { recursive: true, force: true });
     }
   }
+});
+
+// ../cli-contract/dist/index.js
+function operation(definition) {
+  return definition;
+}
+var SESSION_FIELDS = `
+  id name agentStatus sessionStatus tool model reasoningEffort hosting branch sessionGroupId
+  createdAt updatedAt channel { id name } repo { id name }
+`;
+var EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
+var traceCliOperations = {
+  channels: operation({
+    name: "TraceCliChannels",
+    type: "query",
+    rootField: "channels",
+    capability: "resource:list",
+    argumentPaths: ["organizationId", "memberOnly"],
+    document: `query TraceCliChannels($organizationId: ID!, $memberOnly: Boolean) {
+      channels(organizationId: $organizationId, memberOnly: $memberOnly) {
+        id name type visibility baseBranch viewerIsMember
+        repo { id name }
+        projects { id name }
+      }
+    }`
+  }),
+  repos: operation({
+    name: "TraceCliRepos",
+    type: "query",
+    rootField: "repos",
+    capability: "resource:list",
+    argumentPaths: ["organizationId"],
+    document: `query TraceCliRepos($organizationId: ID!) {
+      repos(organizationId: $organizationId) { id name provider remoteUrl defaultBranch }
+    }`
+  }),
+  projects: operation({
+    name: "TraceCliProjects",
+    type: "query",
+    rootField: "projects",
+    capability: "resource:list",
+    argumentPaths: ["organizationId", "repoId"],
+    document: `query TraceCliProjects($organizationId: ID!, $repoId: ID) {
+      projects(organizationId: $organizationId, repoId: $repoId) { id name repo { id name } }
+    }`
+  }),
+  session: operation({
+    name: "TraceCliSession",
+    type: "query",
+    rootField: "session",
+    capability: "session:read",
+    argumentPaths: ["id"],
+    document: `query TraceCliSession($id: ID!) { session(id: $id) { ${SESSION_FIELDS} } }`
+  }),
+  startContextSession: operation({
+    name: "TraceCliStartContextSession",
+    type: "query",
+    rootField: "session",
+    capability: "session:read",
+    argumentPaths: ["id"],
+    document: `query TraceCliStartContextSession($id: ID!) {
+      session(id: $id) {
+        id tool model reasoningEffort hosting
+        channel { id name repo { id name } }
+        repo { id name }
+        projects { id }
+        connection { environmentId runtimeInstanceId }
+        sessionGroup { kind visibility }
+      }
+    }`
+  }),
+  startChannel: operation({
+    name: "TraceCliStartChannel",
+    type: "query",
+    rootField: "channel",
+    capability: "resource:list",
+    argumentPaths: ["id"],
+    document: `query TraceCliStartChannel($id: ID!) {
+      channel(id: $id) { id name repo { id name } }
+    }`
+  }),
+  startProject: operation({
+    name: "TraceCliStartProject",
+    type: "query",
+    rootField: "project",
+    capability: "resource:list",
+    argumentPaths: ["id"],
+    document: `query TraceCliStartProject($id: ID!) {
+      project(id: $id) { id name repo { id name } }
+    }`
+  }),
+  sessions: operation({
+    name: "TraceCliSessions",
+    type: "query",
+    rootField: "sessions",
+    capability: "session:list",
+    argumentPaths: [
+      "organizationId",
+      "filters.agentStatus",
+      "filters.tool",
+      "filters.repoId",
+      "filters.channelId",
+      "filters.includeArchived",
+      "filters.includeMerged",
+      "filters.limit"
+    ],
+    document: `query TraceCliSessions($organizationId: ID!, $filters: SessionFilters) {
+      sessions(organizationId: $organizationId, filters: $filters) { ${SESSION_FIELDS} }
+    }`
+  }),
+  startSession: operation({
+    name: "TraceCliStartSession",
+    type: "mutation",
+    rootField: "startSession",
+    capability: "session:create",
+    argumentPaths: [
+      "input.clientMutationId",
+      "input.kind",
+      "input.tool",
+      "input.model",
+      "input.reasoningEffort",
+      "input.visibility",
+      "input.environmentId",
+      "input.hosting",
+      "input.runtimeInstanceId",
+      "input.deferRuntimeSelection",
+      "input.repoId",
+      "input.branch",
+      "input.ticketId",
+      "input.channelId",
+      "input.sessionGroupId",
+      "input.projectId",
+      "input.prompt",
+      "input.interactionMode"
+    ],
+    document: `mutation TraceCliStartSession($input: StartSessionInput!) {
+      startSession(input: $input) { ${SESSION_FIELDS} }
+    }`
+  }),
+  queueSessionMessage: operation({
+    name: "TraceCliQueueSessionMessage",
+    type: "mutation",
+    rootField: "queueSessionMessage",
+    capability: "session:send",
+    argumentPaths: ["sessionId", "text", "interactionMode"],
+    document: `mutation TraceCliQueueSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String) {
+      queueSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode) {
+        id sessionId text position createdAt
+      }
+    }`
+  }),
+  sendSessionMessage: operation({
+    name: "TraceCliSendSessionMessage",
+    type: "mutation",
+    rootField: "sendSessionMessage",
+    capability: "session:send",
+    argumentPaths: ["sessionId", "text", "interactionMode", "clientMutationId"],
+    document: `mutation TraceCliSendSessionMessage(
+      $sessionId: ID!
+      $text: String!
+      $interactionMode: String
+      $clientMutationId: String
+    ) {
+      sendSessionMessage(
+        sessionId: $sessionId
+        text: $text
+        interactionMode: $interactionMode
+        clientMutationId: $clientMutationId
+      ) { ${EVENT_FIELDS} }
+    }`
+  }),
+  runSession: operation({
+    name: "TraceCliRunSession",
+    type: "mutation",
+    rootField: "runSession",
+    capability: "session:run",
+    argumentPaths: ["id", "prompt", "interactionMode"],
+    document: `mutation TraceCliRunSession($id: ID!, $prompt: String, $interactionMode: String) {
+      runSession(id: $id, prompt: $prompt, interactionMode: $interactionMode) { ${SESSION_FIELDS} }
+    }`
+  }),
+  stopSession: operation({
+    name: "TraceCliStopSession",
+    type: "mutation",
+    rootField: "terminateSession",
+    capability: "session:stop",
+    argumentPaths: ["id"],
+    document: `mutation TraceCliStopSession($id: ID!) {
+      terminateSession(id: $id) { ${SESSION_FIELDS} }
+    }`
+  }),
+  archiveSession: operation({
+    name: "TraceCliArchiveSession",
+    type: "mutation",
+    rootField: "archiveSessionGroup",
+    capability: "session:archive",
+    argumentPaths: ["id"],
+    document: `mutation TraceCliArchiveSession($id: ID!) {
+      archiveSessionGroup(id: $id) { id name status archivedAt }
+    }`
+  }),
+  sessionEvents: operation({
+    name: "TraceCliSessionEvents",
+    type: "query",
+    rootField: "events",
+    capability: "session:events",
+    argumentPaths: ["organizationId", "scope.type", "scope.id", "limit", "before"],
+    document: `query TraceCliSessionEvents(
+      $organizationId: ID!
+      $scope: ScopeInput!
+      $limit: Int
+      $before: DateTime
+    ) {
+      events(organizationId: $organizationId, scope: $scope, limit: $limit, before: $before) {
+        ${EVENT_FIELDS}
+      }
+    }`
+  }),
+  followSession: operation({
+    name: "TraceCliFollowSession",
+    type: "subscription",
+    rootField: "sessionEvents",
+    capability: "session:events",
+    argumentPaths: ["sessionId", "organizationId", "after", "afterEventId"],
+    document: `subscription TraceCliFollowSession(
+      $sessionId: ID!
+      $organizationId: ID!
+      $after: DateTime
+      $afterEventId: ID
+    ) {
+      sessionEvents(
+        sessionId: $sessionId
+        organizationId: $organizationId
+        after: $after
+        afterEventId: $afterEventId
+      ) { ${EVENT_FIELDS} }
+    }`
+  })
 };
+var operationsByName = new Map(Object.values(traceCliOperations).map((definition) => [definition.name, definition]));
+
+// src/commands/organization.ts
+function requireOrganizationId(value) {
+  return value || usage("The Trace organization is unavailable in this session");
+}
+
+// src/commands/channel/list.ts
+var channelListCommand = defineCommand({
+  path: ["channel", "list"],
+  description: "List channels available to the session owner",
+  options: [
+    {
+      name: "memberOnly",
+      flag: "--member-only",
+      kind: "boolean",
+      description: "Only include channels the session owner has joined"
+    }
+  ],
+  async run(ctx, input) {
+    const client = await ctx.client();
+    const variables = {
+      organizationId: requireOrganizationId(client.organizationId),
+      memberOnly: optionBoolean(input, "memberOnly")
+    };
+    const result = await client.graphql(
+      traceCliOperations.channels,
+      variables
+    );
+    ctx.output(
+      { channels: result.channels },
+      result.channels.length ? result.channels.map(
+        (channel) => `${channel.id}	${channel.name}	${channel.visibility}	${channel.repo?.name ?? "no repo"}`
+      ).join("\n") : "No channels found"
+    );
+  }
+});
 
 // src/commands/context.ts
-var contextCommand = {
+var contextCommand = defineCommand({
   path: ["context"],
-  usage: "trace context [--json]",
   description: "Show the selected Trace server, organization, and session context",
   async run(ctx) {
     const value = {
@@ -146,100 +822,57 @@ var contextCommand = {
       ].join("\n")
     );
   }
-};
+});
 
-// src/commands/resources.ts
-function organizationId(value) {
-  return value || usage("The Trace organization is unavailable in this session");
-}
-var resourceCommands = [
-  {
-    path: ["channel", "list"],
-    usage: "trace channel list [--member-only] [--json]",
-    description: "List channels available to the session owner",
-    async run(ctx) {
-      const unexpected = ctx.args.slice(2).find((value) => value !== "--member-only");
-      if (unexpected) usage(`Unexpected argument: ${unexpected}`);
-      const client = await ctx.client();
-      const variables = {
-        organizationId: organizationId(client.organizationId),
-        memberOnly: ctx.args.includes("--member-only")
-      };
-      const result = await client.graphql(
-        `query TraceCliChannels($organizationId: ID!, $memberOnly: Boolean) {
-          channels(organizationId: $organizationId, memberOnly: $memberOnly) {
-            id name type visibility baseBranch viewerIsMember
-            repo { id name }
-            projects { id name }
-          }
-        }`,
-        variables
-      );
-      ctx.output(
-        { channels: result.channels },
-        result.channels.length ? result.channels.map(
-          (channel) => `${channel.id}	${channel.name}	${channel.visibility}	${channel.repo?.name ?? "no repo"}`
-        ).join("\n") : "No channels found"
-      );
+// src/commands/project/list.ts
+var projectListCommand = defineCommand({
+  path: ["project", "list"],
+  description: "List projects in the current organization",
+  options: [
+    {
+      name: "repo",
+      flag: "--repo",
+      kind: "string",
+      valueName: "ID",
+      description: "Only include projects linked to this repository"
     }
-  },
-  {
-    path: ["repo", "list"],
-    usage: "trace repo list [--json]",
-    description: "List repositories in the current organization",
-    async run(ctx) {
-      if (ctx.args[2]) usage(`Unexpected argument: ${ctx.args[2]}`);
-      const client = await ctx.client();
-      const variables = { organizationId: organizationId(client.organizationId) };
-      const result = await client.graphql(
-        `query TraceCliRepos($organizationId: ID!) {
-          repos(organizationId: $organizationId) { id name provider remoteUrl defaultBranch }
-        }`,
-        variables
-      );
-      ctx.output(
-        { repos: result.repos },
-        result.repos.length ? result.repos.map((repo) => `${repo.id}	${repo.name}	${repo.provider}	${repo.defaultBranch}`).join("\n") : "No repositories found"
-      );
-    }
-  },
-  {
-    path: ["project", "list"],
-    usage: "trace project list [--repo ID] [--json]",
-    description: "List projects in the current organization",
-    async run(ctx) {
-      let repoId;
-      for (let index = 2; index < ctx.args.length; index += 1) {
-        const value = ctx.args[index];
-        if (value === "--repo") repoId = ctx.args[++index] || usage("--repo requires an ID");
-        else usage(`Unexpected argument: ${value}`);
-      }
-      const client = await ctx.client();
-      const variables = {
-        organizationId: organizationId(client.organizationId),
-        repoId: repoId ?? null
-      };
-      const result = await client.graphql(
-        `query TraceCliProjects($organizationId: ID!, $repoId: ID) {
-          projects(organizationId: $organizationId, repoId: $repoId) { id name repo { id name } }
-        }`,
-        variables
-      );
-      ctx.output(
-        { projects: result.projects },
-        result.projects.length ? result.projects.map((project) => `${project.id}	${project.name}	${project.repo?.name ?? "no repo"}`).join("\n") : "No projects found"
-      );
-    }
+  ],
+  async run(ctx, input) {
+    const client = await ctx.client();
+    const variables = {
+      organizationId: requireOrganizationId(client.organizationId),
+      repoId: optionString(input, "repo") ?? null
+    };
+    const result = await client.graphql(
+      traceCliOperations.projects,
+      variables
+    );
+    ctx.output(
+      { projects: result.projects },
+      result.projects.length ? result.projects.map((project) => `${project.id}	${project.name}	${project.repo?.name ?? "no repo"}`).join("\n") : "No projects found"
+    );
   }
-];
+});
 
-// src/commands/session.ts
-import { randomUUID as randomUUID2 } from "node:crypto";
-var SESSION_FIELDS = `
-  id name agentStatus sessionStatus tool model reasoningEffort hosting branch sessionGroupId
-  createdAt updatedAt channel { id name } repo { id name }
-`;
-var EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
+// src/commands/repo/list.ts
+var repoListCommand = defineCommand({
+  path: ["repo", "list"],
+  description: "List repositories in the current organization",
+  async run(ctx) {
+    const client = await ctx.client();
+    const variables = { organizationId: requireOrganizationId(client.organizationId) };
+    const result = await client.graphql(
+      traceCliOperations.repos,
+      variables
+    );
+    ctx.output(
+      { repos: result.repos },
+      result.repos.length ? result.repos.map((repo) => `${repo.id}	${repo.name}	${repo.provider}	${repo.defaultBranch}`).join("\n") : "No repositories found"
+    );
+  }
+});
+
+// src/commands/session/shared.ts
 var AGENT_STATUSES = ["not_started", "active", "done", "failed", "stopped"];
 var CODING_TOOLS = [
   "antigravity",
@@ -249,16 +882,17 @@ var CODING_TOOLS = [
   "custom",
   "pi"
 ];
-var SESSION_KINDS = ["coding", "design", "design_system", "app", "pdf", "animation"];
+var SESSION_KINDS = [
+  "coding",
+  "design",
+  "design_system",
+  "app",
+  "pdf",
+  "animation"
+];
 var HOSTING_MODES = ["cloud", "local"];
 var VISIBILITIES = ["public", "private"];
-function optionValue(args, index, flag) {
-  return args[index + 1] || usage(`${flag} requires a value`);
-}
-function choice(value, choices, flag) {
-  return choices.includes(value) ? value : usage(`${flag} must be one of: ${choices.join(", ")}`);
-}
-function sessionId(ctx, explicit) {
+function resolveSessionId(ctx, explicit) {
   return explicit || ctx.env.TRACE_SESSION_ID || usage("Session ID is required outside a Trace session");
 }
 function printSession(session) {
@@ -276,123 +910,11 @@ function printSession(session) {
 async function getSession(ctx, id) {
   const client = await ctx.client();
   const result = await client.graphql(
-    `query TraceCliSession($id: ID!) { session(id: $id) { ${SESSION_FIELDS} } }`,
+    traceCliOperations.session,
     { id }
   );
   if (!result.session) usage(`Session not found: ${id}`);
   return result.session;
-}
-function parseSessionList(args) {
-  const filters = { includeArchived: false, includeMerged: false };
-  for (let index = 2; index < args.length; index += 1) {
-    const flag = args[index] ?? "";
-    if (flag === "--status") {
-      filters.agentStatus = choice(optionValue(args, index, flag), AGENT_STATUSES, flag);
-      index += 1;
-    } else if (flag === "--tool") {
-      filters.tool = choice(optionValue(args, index, flag), CODING_TOOLS, flag);
-      index += 1;
-    } else if (flag === "--repo") {
-      filters.repoId = optionValue(args, index, flag);
-      index += 1;
-    } else if (flag === "--channel") {
-      filters.channelId = optionValue(args, index, flag);
-      index += 1;
-    } else if (flag === "--limit") {
-      const limit = Number(optionValue(args, index, flag));
-      if (!Number.isInteger(limit) || limit < 1 || limit > 500) usage("--limit must be 1-500");
-      filters.limit = limit;
-      index += 1;
-    } else if (flag === "--include-archived") filters.includeArchived = true;
-    else if (flag === "--include-merged") filters.includeMerged = true;
-    else usage(`Unexpected argument: ${flag}`);
-  }
-  return filters;
-}
-function parseSessionStart(ctx) {
-  const input = {};
-  const prompt = [];
-  let requestedGroup = false;
-  let requestedDestination = false;
-  let requestedGroupConfiguration = false;
-  for (let index = 2; index < ctx.args.length; index += 1) {
-    const flag = ctx.args[index] ?? "";
-    if (flag === "--kind") {
-      input.kind = choice(
-        optionValue(ctx.args, index, flag),
-        SESSION_KINDS,
-        flag
-      );
-      requestedGroupConfiguration = true;
-      index += 1;
-    } else if (flag === "--tool") {
-      input.tool = choice(optionValue(ctx.args, index, flag), CODING_TOOLS, flag);
-      index += 1;
-    } else if (flag === "--model") input.model = optionValue(ctx.args, index++, flag);
-    else if (flag === "--reasoning") input.reasoningEffort = optionValue(ctx.args, index++, flag);
-    else if (flag === "--hosting") {
-      input.hosting = choice(
-        optionValue(ctx.args, index, flag),
-        HOSTING_MODES,
-        flag
-      );
-      requestedGroupConfiguration = true;
-      index += 1;
-    } else if (flag === "--runtime") {
-      input.runtimeInstanceId = optionValue(ctx.args, index++, flag);
-      requestedGroupConfiguration = true;
-    } else if (flag === "--environment") {
-      input.environmentId = optionValue(ctx.args, index++, flag);
-      requestedGroupConfiguration = true;
-    } else if (flag === "--repo") {
-      input.repoId = optionValue(ctx.args, index++, flag);
-      requestedDestination = true;
-    } else if (flag === "--branch") {
-      input.branch = optionValue(ctx.args, index++, flag);
-      requestedGroupConfiguration = true;
-    } else if (flag === "--channel") {
-      input.channelId = optionValue(ctx.args, index++, flag);
-      requestedDestination = true;
-    } else if (flag === "--group") {
-      input.sessionGroupId = optionValue(ctx.args, index++, flag);
-      requestedGroup = true;
-    } else if (flag === "--project") {
-      input.projectId = optionValue(ctx.args, index++, flag);
-      requestedDestination = true;
-    } else if (flag === "--ticket") input.ticketId = optionValue(ctx.args, index++, flag);
-    else if (flag === "--visibility") {
-      input.visibility = choice(
-        optionValue(ctx.args, index, flag),
-        VISIBILITIES,
-        flag
-      );
-      requestedGroupConfiguration = true;
-      index += 1;
-    } else if (flag === "--interaction-mode")
-      input.interactionMode = optionValue(ctx.args, index++, flag);
-    else if (flag === "--prompt") input.prompt = optionValue(ctx.args, index++, flag);
-    else if (flag === "--idempotency-key")
-      input.clientMutationId = optionValue(ctx.args, index++, flag);
-    else if (flag === "--defer") {
-      input.deferRuntimeSelection = true;
-      requestedGroupConfiguration = true;
-    } else if (flag.startsWith("--")) usage(`Unexpected argument: ${flag}`);
-    else prompt.push(flag);
-  }
-  if (prompt.length) {
-    if (input.prompt) usage("Provide the prompt either positionally or with --prompt, not both");
-    input.prompt = prompt.join(" ");
-  }
-  if (requestedGroup && requestedDestination) {
-    usage("--group cannot be combined with --channel, --project, or --repo");
-  }
-  if (requestedGroup && requestedGroupConfiguration) {
-    usage(
-      "--group cannot be combined with --kind, --hosting, --runtime, --environment, --branch, --visibility, or --defer; sessions inherit those settings from their group"
-    );
-  }
-  input.clientMutationId ||= randomUUID2();
-  return input;
 }
 async function resolveStartDefaultsAndDestination(client, input, currentSessionId) {
   if (input.sessionGroupId) return;
@@ -402,19 +924,7 @@ async function resolveStartDefaultsAndDestination(client, input, currentSessionI
   const hasExplicitRuntimeSelection = !!input.environmentId || !!input.runtimeInstanceId || !!input.hosting;
   let impliedRepo = null;
   if (currentSessionId) {
-    const result = await client.graphql(
-      `query TraceCliStartContextSession($id: ID!) {
-        session(id: $id) {
-          id tool model reasoningEffort hosting
-          channel { id name repo { id name } }
-          repo { id name }
-          projects { id }
-          connection { environmentId runtimeInstanceId }
-          sessionGroup { kind visibility }
-        }
-      }`,
-      { id: currentSessionId }
-    );
+    const result = await client.graphql(traceCliOperations.startContextSession, { id: currentSessionId });
     if (!result.session) usage(`Current session not found: ${currentSessionId}`);
     const current = result.session;
     input.kind ??= current.sessionGroup?.kind;
@@ -443,15 +953,11 @@ async function resolveStartDefaultsAndDestination(client, input, currentSessionI
     usage("Starting a coding session group requires --channel, --project, or --repo");
   }
   if (input.channelId && !impliedRepo) {
-    const result = await client.graphql(`query TraceCliStartChannel($id: ID!) { channel(id: $id) { id name repo { id name } } }`, {
-      id: input.channelId
-    });
+    const result = await client.graphql(traceCliOperations.startChannel, { id: input.channelId });
     if (!result.channel) usage(`Channel not found: ${input.channelId}`);
     impliedRepo = result.channel.repo ?? null;
   } else if (input.projectId && !impliedRepo) {
-    const result = await client.graphql(`query TraceCliStartProject($id: ID!) { project(id: $id) { id name repo { id name } } }`, {
-      id: input.projectId
-    });
+    const result = await client.graphql(traceCliOperations.startProject, { id: input.projectId });
     if (!result.project) usage(`Project not found: ${input.projectId}`);
     impliedRepo = result.project.repo ?? null;
   }
@@ -471,7 +977,7 @@ function sessionUiPath(session) {
 }
 async function startSessionWithRetry(client, input) {
   const request = () => client.graphql(
-    `mutation TraceCliStartSession($input: StartSessionInput!) { startSession(input: $input) { ${SESSION_FIELDS} } }`,
+    traceCliOperations.startSession,
     { input }
   );
   try {
@@ -494,490 +1000,520 @@ async function startSessionWithRetry(client, input) {
     }
   }
 }
-function parseTargetAction(ctx) {
-  const values = [];
-  let self = false;
-  let queue = false;
-  let interactionMode;
-  for (let index = 2; index < ctx.args.length; index += 1) {
-    const value = ctx.args[index] ?? "";
-    if (value === "--self") self = true;
-    else if (value === "--queue") queue = true;
-    else if (value === "--interaction-mode")
-      interactionMode = optionValue(ctx.args, index++, value);
-    else values.push(value);
+
+// src/commands/session/archive.ts
+var sessionArchiveCommand = defineCommand({
+  path: ["session", "archive"],
+  description: "Archive a session's group",
+  positionals: [{ name: "session-id" }],
+  options: [
+    { name: "self", flag: "--self", kind: "boolean", description: "Target the current session" }
+  ],
+  async run(ctx, input) {
+    const id = optionBoolean(input, "self") ? resolveSessionId(ctx) : resolveSessionId(ctx, input.positionals[0]);
+    const session = await getSession(ctx, id);
+    if (!session.sessionGroupId) usage("This session has no group to archive");
+    const client = await ctx.client();
+    const result = await client.graphql(
+      traceCliOperations.archiveSession,
+      { id: session.sessionGroupId }
+    );
+    ctx.output(
+      { sessionGroup: result.archiveSessionGroup },
+      `Archived session group (${session.sessionGroupId})`
+    );
   }
-  const id = self ? sessionId(ctx) : sessionId(ctx, values.shift());
-  return { id, values, queue, interactionMode };
-}
-var sessionCommands = [
-  {
-    path: ["session", "list"],
-    usage: "trace session list [--status STATUS] [--tool TOOL] [--repo ID] [--channel ID] [--limit N] [--include-archived] [--include-merged] [--json]",
-    description: "List sessions visible to the session owner",
-    async run(ctx) {
-      const client = await ctx.client();
-      const variables = {
-        organizationId: client.organizationId,
-        filters: parseSessionList(ctx.args)
-      };
-      const result = await client.graphql(
-        `query TraceCliSessions($organizationId: ID!, $filters: SessionFilters) {
-          sessions(organizationId: $organizationId, filters: $filters) { ${SESSION_FIELDS} }
-        }`,
-        variables
-      );
-      ctx.output(
-        { sessions: result.sessions },
-        result.sessions.length ? result.sessions.map(
-          (session) => `${session.id}	${session.name}	${session.agentStatus}	${session.tool}`
-        ).join("\n") : "No sessions found"
-      );
+});
+
+// src/commands/session/events.ts
+var sessionEventsCommand = defineCommand({
+  path: ["session", "events"],
+  description: "Read a bounded event snapshot and optionally follow the session stream",
+  positionals: [{ name: "session-id" }],
+  options: [
+    {
+      name: "limit",
+      flag: "--limit",
+      kind: "integer",
+      valueName: "N",
+      min: 1,
+      max: 500,
+      description: "Maximum historical events"
+    },
+    {
+      name: "follow",
+      flag: "--follow",
+      kind: "boolean",
+      description: "Continue streaming new events"
     }
-  },
-  {
-    path: ["session", "get"],
-    usage: "trace session get [session-id] [--json]",
-    description: "Get a session, defaulting to TRACE_SESSION_ID",
-    async run(ctx) {
-      if (ctx.args[3]) usage(`Unexpected argument: ${ctx.args[3]}`);
-      const session = await getSession(ctx, sessionId(ctx, ctx.args[2]));
-      ctx.output({ session }, printSession(session));
-    }
-  },
-  {
-    path: ["session", "start"],
-    usage: "trace session start [prompt] [--group ID | --channel ID | --project ID | --repo ID] [--tool TOOL] [--model MODEL] [--hosting MODE] [--runtime ID] [--environment ID] [--branch NAME] [--ticket ID] [--kind KIND] [--visibility VISIBILITY] [--interaction-mode MODE] [--defer] [--idempotency-key KEY] [--json]",
-    description: "Start a new session group or add a session to an explicit group",
-    async run(ctx) {
-      const client = await ctx.client();
-      const input = parseSessionStart(ctx);
-      await resolveStartDefaultsAndDestination(client, input, ctx.env.TRACE_SESSION_ID);
-      const result = await startSessionWithRetry(client, input);
-      const runRequested = !!input.prompt;
-      const uiPath = sessionUiPath(result.startSession);
-      ctx.output(
-        {
-          session: result.startSession,
-          runRequested,
-          uiPath,
-          idempotencyKey: input.clientMutationId
-        },
-        [
-          printSession(result.startSession),
-          runRequested ? "Initial run requested; not_started may be shown while the runtime is provisioning." : "Session created without an initial run.",
-          ...uiPath ? [`Open: ${uiPath}`] : []
-        ].join("\n")
-      );
-    }
-  },
-  {
-    path: ["session", "send"],
-    usage: "trace session send [session-id] <message> [--self] [--queue] [--interaction-mode MODE] [--json]",
-    description: "Send or queue a message for a session",
-    async run(ctx) {
-      const { id, values, queue, interactionMode } = parseTargetAction(ctx);
-      const text = values.join(" ").trim();
-      if (!text) usage("Message text is required");
-      const client = await ctx.client();
-      if (queue) {
-        const variables2 = { sessionId: id, text, interactionMode: interactionMode ?? null };
-        const result2 = await client.graphql(
-          `mutation TraceCliQueueSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String) {
-            queueSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode) { id sessionId text position createdAt }
-          }`,
-          variables2
-        );
-        ctx.output(
-          { queuedMessage: result2.queueSessionMessage },
-          `Queued message (${result2.queueSessionMessage.id})`
-        );
-        return;
-      }
-      const variables = {
+  ],
+  async run(ctx, input) {
+    const id = resolveSessionId(ctx, input.positionals[0]);
+    const limit = optionInteger(input, "limit") ?? 50;
+    const follow = optionBoolean(input, "follow");
+    const client = await ctx.client();
+    const organizationId = client.organizationId ?? usage("Organization is required");
+    const variables = {
+      organizationId,
+      scope: { type: "session", id },
+      limit,
+      before: "9999-12-31T23:59:59.999Z"
+    };
+    const result = await client.graphql(
+      traceCliOperations.sessionEvents,
+      variables
+    );
+    ctx.output(
+      { events: result.events, following: follow },
+      result.events.length ? result.events.map((event) => `${event.timestamp}	${event.eventType}	${event.id}`).join("\n") : "No events found"
+    );
+    if (!follow) return;
+    const cursor = result.events.at(-1);
+    await client.subscribe(
+      traceCliOperations.followSession,
+      {
         sessionId: id,
-        text,
-        interactionMode: interactionMode ?? null,
-        clientMutationId: randomUUID2()
-      };
-      const result = await client.graphql(
-        `mutation TraceCliSendSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String, $clientMutationId: String) {
-          sendSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode, clientMutationId: $clientMutationId) { ${EVENT_FIELDS} }
-        }`,
-        variables
-      );
-      ctx.output(
-        { event: result.sendSessionMessage },
-        `Sent message (${result.sendSessionMessage.id})`
-      );
-    }
-  },
-  {
-    path: ["session", "run"],
-    usage: "trace session run [session-id] [prompt] [--self] [--interaction-mode MODE] [--json]",
-    description: "Start or resume a session run",
-    async run(ctx) {
-      const { id, values, interactionMode } = parseTargetAction(ctx);
-      const variables = {
-        id,
-        prompt: values.join(" ").trim() || null,
-        interactionMode: interactionMode ?? null
-      };
-      const client = await ctx.client();
-      const result = await client.graphql(
-        `mutation TraceCliRunSession($id: ID!, $prompt: String, $interactionMode: String) { runSession(id: $id, prompt: $prompt, interactionMode: $interactionMode) { ${SESSION_FIELDS} } }`,
-        variables
-      );
-      ctx.output({ session: result.runSession }, printSession(result.runSession));
-    }
-  },
-  {
-    path: ["session", "stop"],
-    usage: "trace session stop [session-id] [--self] [--json]",
-    description: "Stop a running session",
-    async run(ctx) {
-      const { id, values } = parseTargetAction(ctx);
-      if (values.length) usage(`Unexpected argument: ${values[0]}`);
-      const client = await ctx.client();
-      const result = await client.graphql(
-        `mutation TraceCliStopSession($id: ID!) { terminateSession(id: $id) { ${SESSION_FIELDS} } }`,
-        { id }
-      );
-      ctx.output({ session: result.terminateSession }, printSession(result.terminateSession));
-    }
-  },
-  {
-    path: ["session", "archive"],
-    usage: "trace session archive [session-id] [--self] [--json]",
-    description: "Archive a session's group",
-    async run(ctx) {
-      const { id, values } = parseTargetAction(ctx);
-      if (values.length) usage(`Unexpected argument: ${values[0]}`);
-      const session = await getSession(ctx, id);
-      if (!session.sessionGroupId) usage("This session has no group to archive");
-      const client = await ctx.client();
-      const result = await client.graphql(
-        `mutation TraceCliArchiveSession($id: ID!) { archiveSessionGroup(id: $id) { id name status archivedAt } }`,
-        { id: session.sessionGroupId }
-      );
-      ctx.output(
-        { sessionGroup: result.archiveSessionGroup },
-        `Archived session group (${session.sessionGroupId})`
-      );
-    }
-  },
-  {
-    path: ["session", "events"],
-    usage: "trace session events [session-id] [--limit N] [--follow] [--json]",
-    description: "Read a bounded event snapshot and optionally follow the session stream",
-    async run(ctx) {
-      let id = "";
-      let limit = 50;
-      let follow = false;
-      for (let index = 2; index < ctx.args.length; index += 1) {
-        const value = ctx.args[index];
-        if (value === "--limit") {
-          limit = Number(ctx.args[++index]);
-          if (!Number.isInteger(limit) || limit < 1 || limit > 500) usage("--limit must be 1-500");
-        } else if (value === "--follow") follow = true;
-        else if (!id) id = value ?? "";
-        else usage(`Unexpected argument: ${value}`);
-      }
-      id = sessionId(ctx, id);
-      const client = await ctx.client();
-      const organizationId2 = client.organizationId ?? usage("Organization is required");
-      const variables = {
-        organizationId: organizationId2,
-        scope: { type: "session", id },
-        limit,
-        before: "9999-12-31T23:59:59.999Z"
-      };
-      const result = await client.graphql(
-        `query TraceCliSessionEvents($organizationId: ID!, $scope: ScopeInput!, $limit: Int, $before: DateTime) { events(organizationId: $organizationId, scope: $scope, limit: $limit, before: $before) { ${EVENT_FIELDS} } }`,
-        variables
-      );
-      ctx.output(
-        { events: result.events, following: follow },
-        result.events.length ? result.events.map((event) => `${event.timestamp}	${event.eventType}	${event.id}`).join("\n") : "No events found"
-      );
-      if (!follow) return;
-      const cursor = result.events.at(-1);
-      await client.subscribe(
-        `subscription TraceCliFollowSession($sessionId: ID!, $organizationId: ID!, $after: DateTime, $afterEventId: ID) { sessionEvents(sessionId: $sessionId, organizationId: $organizationId, after: $after, afterEventId: $afterEventId) { ${EVENT_FIELDS} } }`,
-        {
-          sessionId: id,
-          organizationId: organizationId2,
-          after: cursor?.timestamp ?? "1970-01-01T00:00:00.000Z",
-          ...cursor ? { afterEventId: cursor.id } : {}
-        },
-        (data) => {
-          const event = data.sessionEvents;
-          process.stdout.write(
-            ctx.options.json ? `${JSON.stringify({ event })}
+        organizationId,
+        after: cursor?.timestamp ?? "1970-01-01T00:00:00.000Z",
+        ...cursor ? { afterEventId: cursor.id } : {}
+      },
+      (data) => {
+        const event = data.sessionEvents;
+        process.stdout.write(
+          ctx.options.json ? `${JSON.stringify({ event })}
 ` : `${event.timestamp}	${event.eventType}	${event.id}
 `
-          );
-        }
+        );
+      }
+    );
+  }
+});
+
+// src/commands/session/get.ts
+var sessionGetCommand = defineCommand({
+  path: ["session", "get"],
+  description: "Get a session, defaulting to TRACE_SESSION_ID",
+  positionals: [{ name: "session-id" }],
+  async run(ctx, input) {
+    const session = await getSession(ctx, resolveSessionId(ctx, input.positionals[0]));
+    ctx.output({ session }, printSession(session));
+  }
+});
+
+// src/commands/session/list.ts
+var sessionListCommand = defineCommand({
+  path: ["session", "list"],
+  description: "List sessions visible to the session owner",
+  options: [
+    {
+      name: "status",
+      flag: "--status",
+      kind: "string",
+      valueName: "STATUS",
+      choices: AGENT_STATUSES,
+      description: "Filter by agent status"
+    },
+    {
+      name: "tool",
+      flag: "--tool",
+      kind: "string",
+      valueName: "TOOL",
+      choices: CODING_TOOLS,
+      description: "Filter by coding tool"
+    },
+    {
+      name: "repo",
+      flag: "--repo",
+      kind: "string",
+      valueName: "ID",
+      description: "Filter by repository"
+    },
+    {
+      name: "channel",
+      flag: "--channel",
+      kind: "string",
+      valueName: "ID",
+      description: "Filter by channel"
+    },
+    {
+      name: "limit",
+      flag: "--limit",
+      kind: "integer",
+      valueName: "N",
+      min: 1,
+      max: 500,
+      description: "Maximum sessions to return"
+    },
+    {
+      name: "includeArchived",
+      flag: "--include-archived",
+      kind: "boolean",
+      description: "Include archived groups"
+    },
+    {
+      name: "includeMerged",
+      flag: "--include-merged",
+      kind: "boolean",
+      description: "Include merged sessions"
+    }
+  ],
+  async run(ctx, input) {
+    const client = await ctx.client();
+    const filters = {
+      includeArchived: optionBoolean(input, "includeArchived"),
+      includeMerged: optionBoolean(input, "includeMerged"),
+      agentStatus: optionString(input, "status"),
+      tool: optionString(input, "tool"),
+      repoId: optionString(input, "repo"),
+      channelId: optionString(input, "channel"),
+      limit: optionInteger(input, "limit")
+    };
+    const variables = { organizationId: client.organizationId, filters };
+    const result = await client.graphql(
+      traceCliOperations.sessions,
+      variables
+    );
+    ctx.output(
+      { sessions: result.sessions },
+      result.sessions.length ? result.sessions.map(
+        (session) => `${session.id}	${session.name}	${session.agentStatus}	${session.tool}`
+      ).join("\n") : "No sessions found"
+    );
+  }
+});
+
+// src/commands/session/run.ts
+var sessionRunCommand = defineCommand({
+  path: ["session", "run"],
+  description: "Start or resume a session run",
+  positionals: [{ name: "session-id" }, { name: "prompt", variadic: true }],
+  options: [
+    { name: "self", flag: "--self", kind: "boolean", description: "Target the current session" },
+    {
+      name: "interactionMode",
+      flag: "--interaction-mode",
+      kind: "string",
+      valueName: "MODE",
+      description: "Interaction mode override"
+    }
+  ],
+  async run(ctx, input) {
+    const values = [...input.positionals];
+    const id = optionBoolean(input, "self") ? resolveSessionId(ctx) : resolveSessionId(ctx, values.shift());
+    const variables = {
+      id,
+      prompt: values.join(" ").trim() || null,
+      interactionMode: optionString(input, "interactionMode") ?? null
+    };
+    const client = await ctx.client();
+    const result = await client.graphql(
+      traceCliOperations.runSession,
+      variables
+    );
+    ctx.output({ session: result.runSession }, printSession(result.runSession));
+  }
+});
+
+// src/commands/session/send.ts
+import { randomUUID as randomUUID2 } from "node:crypto";
+var sessionSendCommand = defineCommand({
+  path: ["session", "send"],
+  description: "Send or queue a message for a session",
+  positionals: [{ name: "session-id" }, { name: "message", required: true, variadic: true }],
+  options: [
+    { name: "self", flag: "--self", kind: "boolean", description: "Target the current session" },
+    {
+      name: "queue",
+      flag: "--queue",
+      kind: "boolean",
+      description: "Queue instead of interrupting the active turn"
+    },
+    {
+      name: "interactionMode",
+      flag: "--interaction-mode",
+      kind: "string",
+      valueName: "MODE",
+      description: "Interaction mode override"
+    }
+  ],
+  async run(ctx, input) {
+    const values = [...input.positionals];
+    const id = optionBoolean(input, "self") ? resolveSessionId(ctx) : resolveSessionId(ctx, values.shift());
+    const text = values.join(" ").trim();
+    if (!text) usage("Message text is required");
+    const interactionMode = optionString(input, "interactionMode") ?? null;
+    const client = await ctx.client();
+    if (optionBoolean(input, "queue")) {
+      const variables2 = { sessionId: id, text, interactionMode };
+      const result2 = await client.graphql(
+        traceCliOperations.queueSessionMessage,
+        variables2
+      );
+      ctx.output(
+        { queuedMessage: result2.queueSessionMessage },
+        `Queued message (${result2.queueSessionMessage.id})`
+      );
+      return;
+    }
+    const variables = { sessionId: id, text, interactionMode, clientMutationId: randomUUID2() };
+    const result = await client.graphql(
+      traceCliOperations.sendSessionMessage,
+      variables
+    );
+    ctx.output(
+      { event: result.sendSessionMessage },
+      `Sent message (${result.sendSessionMessage.id})`
+    );
+  }
+});
+
+// src/commands/session/start.ts
+import { randomUUID as randomUUID3 } from "node:crypto";
+var sessionStartCommand = defineCommand({
+  path: ["session", "start"],
+  description: "Start a new session group or add a session to an explicit group",
+  positionals: [{ name: "prompt", variadic: true }],
+  options: [
+    {
+      name: "group",
+      flag: "--group",
+      kind: "string",
+      valueName: "ID",
+      description: "Add the session to an existing group"
+    },
+    {
+      name: "channel",
+      flag: "--channel",
+      kind: "string",
+      valueName: "ID",
+      description: "Create the group in this channel"
+    },
+    {
+      name: "project",
+      flag: "--project",
+      kind: "string",
+      valueName: "ID",
+      description: "Link the new group to this project"
+    },
+    {
+      name: "repo",
+      flag: "--repo",
+      kind: "string",
+      valueName: "ID",
+      description: "Use this repository"
+    },
+    {
+      name: "tool",
+      flag: "--tool",
+      kind: "string",
+      valueName: "TOOL",
+      choices: CODING_TOOLS,
+      description: "Coding tool"
+    },
+    {
+      name: "model",
+      flag: "--model",
+      kind: "string",
+      valueName: "MODEL",
+      description: "Model override"
+    },
+    {
+      name: "reasoning",
+      flag: "--reasoning",
+      kind: "string",
+      valueName: "EFFORT",
+      description: "Reasoning effort override"
+    },
+    {
+      name: "hosting",
+      flag: "--hosting",
+      kind: "string",
+      valueName: "MODE",
+      choices: HOSTING_MODES,
+      description: "Hosting mode"
+    },
+    {
+      name: "runtime",
+      flag: "--runtime",
+      kind: "string",
+      valueName: "ID",
+      description: "Runtime instance"
+    },
+    {
+      name: "environment",
+      flag: "--environment",
+      kind: "string",
+      valueName: "ID",
+      description: "Environment"
+    },
+    {
+      name: "branch",
+      flag: "--branch",
+      kind: "string",
+      valueName: "NAME",
+      description: "Git branch"
+    },
+    {
+      name: "ticket",
+      flag: "--ticket",
+      kind: "string",
+      valueName: "ID",
+      description: "Linked ticket"
+    },
+    {
+      name: "kind",
+      flag: "--kind",
+      kind: "string",
+      valueName: "KIND",
+      choices: SESSION_KINDS,
+      description: "Session group kind"
+    },
+    {
+      name: "visibility",
+      flag: "--visibility",
+      kind: "string",
+      valueName: "VISIBILITY",
+      choices: VISIBILITIES,
+      description: "Session group visibility"
+    },
+    {
+      name: "interactionMode",
+      flag: "--interaction-mode",
+      kind: "string",
+      valueName: "MODE",
+      description: "Initial interaction mode"
+    },
+    {
+      name: "prompt",
+      flag: "--prompt",
+      kind: "string",
+      valueName: "PROMPT",
+      description: "Initial prompt"
+    },
+    {
+      name: "idempotencyKey",
+      flag: "--idempotency-key",
+      kind: "string",
+      valueName: "KEY",
+      description: "Retry-safe mutation key"
+    },
+    { name: "defer", flag: "--defer", kind: "boolean", description: "Defer runtime selection" }
+  ],
+  async run(ctx, parsed) {
+    const input = {
+      sessionGroupId: optionString(parsed, "group"),
+      channelId: optionString(parsed, "channel"),
+      projectId: optionString(parsed, "project"),
+      repoId: optionString(parsed, "repo"),
+      tool: optionString(parsed, "tool"),
+      model: optionString(parsed, "model"),
+      reasoningEffort: optionString(parsed, "reasoning"),
+      hosting: optionString(parsed, "hosting"),
+      runtimeInstanceId: optionString(parsed, "runtime"),
+      environmentId: optionString(parsed, "environment"),
+      branch: optionString(parsed, "branch"),
+      ticketId: optionString(parsed, "ticket"),
+      kind: optionString(parsed, "kind"),
+      visibility: optionString(parsed, "visibility"),
+      interactionMode: optionString(parsed, "interactionMode"),
+      prompt: optionString(parsed, "prompt"),
+      clientMutationId: optionString(parsed, "idempotencyKey") ?? randomUUID3(),
+      deferRuntimeSelection: optionBoolean(parsed, "defer") || void 0
+    };
+    const positionalPrompt = parsed.positionals.join(" ").trim();
+    if (positionalPrompt) {
+      if (input.prompt) usage("Provide the prompt either positionally or with --prompt, not both");
+      input.prompt = positionalPrompt;
+    }
+    const hasGroup = parsed.providedOptions.has("group");
+    const destinationOptions = ["channel", "project", "repo"];
+    const groupConfigurationOptions = [
+      "kind",
+      "hosting",
+      "runtime",
+      "environment",
+      "branch",
+      "visibility",
+      "defer"
+    ];
+    if (hasGroup && destinationOptions.some((name) => parsed.providedOptions.has(name))) {
+      usage("--group cannot be combined with --channel, --project, or --repo");
+    }
+    if (hasGroup && groupConfigurationOptions.some((name) => parsed.providedOptions.has(name))) {
+      usage(
+        "--group cannot be combined with --kind, --hosting, --runtime, --environment, --branch, --visibility, or --defer; sessions inherit those settings from their group"
       );
     }
+    const client = await ctx.client();
+    await resolveStartDefaultsAndDestination(client, input, ctx.env.TRACE_SESSION_ID);
+    const result = await startSessionWithRetry(client, input);
+    const runRequested = !!input.prompt;
+    const uiPath = sessionUiPath(result.startSession);
+    ctx.output(
+      {
+        session: result.startSession,
+        runRequested,
+        uiPath,
+        idempotencyKey: input.clientMutationId
+      },
+      [
+        printSession(result.startSession),
+        runRequested ? "Initial run requested; not_started may be shown while the runtime is provisioning." : "Session created without an initial run.",
+        ...uiPath ? [`Open: ${uiPath}`] : []
+      ].join("\n")
+    );
   }
+});
+
+// src/commands/session/stop.ts
+var sessionStopCommand = defineCommand({
+  path: ["session", "stop"],
+  description: "Stop a running session",
+  positionals: [{ name: "session-id" }],
+  options: [
+    { name: "self", flag: "--self", kind: "boolean", description: "Target the current session" }
+  ],
+  async run(ctx, input) {
+    const id = optionBoolean(input, "self") ? resolveSessionId(ctx) : resolveSessionId(ctx, input.positionals[0]);
+    const client = await ctx.client();
+    const result = await client.graphql(
+      traceCliOperations.stopSession,
+      { id }
+    );
+    ctx.output({ session: result.terminateSession }, printSession(result.terminateSession));
+  }
+});
+
+// src/commands/session/index.ts
+var sessionCommands = [
+  sessionListCommand,
+  sessionGetCommand,
+  sessionStartCommand,
+  sessionSendCommand,
+  sessionRunCommand,
+  sessionStopCommand,
+  sessionArchiveCommand,
+  sessionEventsCommand
 ];
 
-// src/client.ts
-var CONNECTION_ACK_TIMEOUT_MS = 1e4;
-function errorFromStatus(status, message) {
-  if (status === 401) return new CliError(message, ExitCode.authentication, "authentication");
-  if (status === 403) return new CliError(message, ExitCode.authorization, "authorization");
-  if (status >= 400 && status < 500) {
-    return new CliError(message, ExitCode.validation, "validation");
-  }
-  return new CliError(message, ExitCode.server, "server");
-}
-function graphQlError(error) {
-  const message = typeof error.message === "string" ? error.message : "GraphQL request failed";
-  const code = error.extensions?.code;
-  if (code === "UNAUTHENTICATED") {
-    return new CliError(message, ExitCode.authentication, "authentication");
-  }
-  if (code === "FORBIDDEN") {
-    return new CliError(message, ExitCode.authorization, "authorization");
-  }
-  if (code === "BAD_USER_INPUT" || code === "NOT_FOUND") {
-    return new CliError(message, ExitCode.validation, "validation");
-  }
-  return new CliError(message, ExitCode.server, "server");
-}
-var TraceClient = class {
-  constructor(serverUrl, token, organizationId2) {
-    this.serverUrl = serverUrl;
-    this.token = token;
-    this.organizationId = organizationId2;
-  }
-  headers(extra) {
-    return {
-      Authorization: `Bearer ${this.token}`,
-      "Content-Type": "application/json",
-      "X-Trace-Client-Source": "cli",
-      ...this.organizationId ? { "X-Organization-Id": this.organizationId } : {},
-      ...extra
-    };
-  }
-  async http(path, init = {}) {
-    let response;
-    try {
-      response = await fetch(new URL(path, this.serverUrl), {
-        method: init.method ?? "GET",
-        headers: this.headers(),
-        body: init.body === void 0 ? void 0 : JSON.stringify(init.body)
-      });
-    } catch {
-      throw new CliError(
-        `Could not connect to ${this.serverUrl}`,
-        ExitCode.connectivity,
-        "connectivity"
-      );
-    }
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw errorFromStatus(
-        response.status,
-        typeof payload.error === "string" ? payload.error : `Server returned ${response.status}`
-      );
-    }
-    return payload;
-  }
-  async graphql(query, variables) {
-    let response;
-    try {
-      response = await fetch(new URL("/graphql", this.serverUrl), {
-        method: "POST",
-        headers: this.headers(),
-        body: JSON.stringify({ query, variables })
-      });
-    } catch {
-      throw new CliError(
-        `Could not connect to ${this.serverUrl}`,
-        ExitCode.connectivity,
-        "connectivity"
-      );
-    }
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw errorFromStatus(response.status, `Server returned ${response.status}`);
-    }
-    if (payload.errors?.length) throw graphQlError(payload.errors[0] ?? {});
-    if (!payload.data) throw new CliError("Server returned no data", ExitCode.server, "server");
-    return payload.data;
-  }
-  async subscribe(query, variables, onData) {
-    const url = new URL("/graphql", this.serverUrl);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(url, "graphql-transport-ws");
-    await new Promise((resolve2, reject) => {
-      let acknowledged = false;
-      let completed = false;
-      let failed = false;
-      let stopped = false;
-      const fail = (error) => {
-        if (failed) return;
-        failed = true;
-        clearTimeout(ackTimeout);
-        reject(error);
-      };
-      const close = () => {
-        stopped = true;
-        clearTimeout(ackTimeout);
-        socket.close(1e3, "CLI stopped following");
-      };
-      const ackTimeout = setTimeout(() => {
-        fail(
-          new CliError(
-            `Trace did not acknowledge the subscription connection within ${CONNECTION_ACK_TIMEOUT_MS / 1e3} seconds`,
-            ExitCode.connectivity,
-            "connectivity"
-          )
-        );
-        socket.close(1e3, "Connection acknowledgement timed out");
-      }, CONNECTION_ACK_TIMEOUT_MS);
-      process.once("SIGINT", close);
-      socket.addEventListener("open", () => {
-        socket.send(
-          JSON.stringify({
-            type: "connection_init",
-            payload: {
-              token: this.token,
-              organizationId: this.organizationId,
-              clientSource: "cli"
-            }
-          })
-        );
-      });
-      socket.addEventListener("message", (message) => {
-        let payload;
-        try {
-          payload = JSON.parse(String(message.data));
-        } catch {
-          return;
-        }
-        if (payload.type === "connection_ack" && !acknowledged) {
-          acknowledged = true;
-          clearTimeout(ackTimeout);
-          socket.send(
-            JSON.stringify({ id: "trace-cli", type: "subscribe", payload: { query, variables } })
-          );
-        } else if (payload.type === "next" && payload.payload && !Array.isArray(payload.payload) && payload.payload.data) {
-          onData(payload.payload.data);
-        } else if (payload.type === "error") {
-          const errors = Array.isArray(payload.payload) ? payload.payload : [];
-          fail(graphQlError(errors[0] ?? {}));
-          socket.close();
-        } else if (payload.type === "complete") {
-          completed = true;
-          socket.close(1e3, "Subscription completed");
-        }
-      });
-      socket.addEventListener("error", () => {
-        fail(
-          new CliError(`Could not connect to ${url.origin}`, ExitCode.connectivity, "connectivity")
-        );
-        socket.close();
-      });
-      socket.addEventListener("close", (event) => {
-        clearTimeout(ackTimeout);
-        process.removeListener("SIGINT", close);
-        if (failed) return;
-        if (stopped || completed) {
-          resolve2();
-          return;
-        }
-        if (!acknowledged && (event.code === 4401 || event.code === 4403)) {
-          fail(
-            new CliError(
-              event.reason || "Trace rejected the subscription credential",
-              ExitCode.authentication,
-              "authentication"
-            )
-          );
-          return;
-        }
-        fail(
-          new CliError(
-            event.reason || `Trace subscription closed unexpectedly (${event.code})`,
-            ExitCode.connectivity,
-            "connectivity"
-          )
-        );
-      });
-    });
-  }
-};
-
-// src/runtime.ts
-function parseGlobalOptions(argv) {
-  const args = [];
-  const options = { json: false };
-  for (let index = 0; index < argv.length; index += 1) {
-    const value = argv[index];
-    if (value === "--json") options.json = true;
-    else args.push(value ?? "");
-  }
-  return { args, options };
-}
-async function createCommandContext(argv, env = process.env) {
-  const parsed = parseGlobalOptions(argv);
-  return {
-    args: parsed.args,
-    options: parsed.options,
-    env,
-    output(value, human) {
-      process.stdout.write(parsed.options.json ? `${JSON.stringify(value)}
-` : `${human}
-`);
-    },
-    async client(requireOrganization = true) {
-      const token = env.TRACE_INVOCATION_TOKEN;
-      if (!token) {
-        throw new CliError(
-          "This command is only available inside an active Trace AI session",
-          ExitCode.authentication,
-          "authentication"
-        );
-      }
-      const serverUrl = env.TRACE_API_URL || env.TRACE_SERVER_URL;
-      if (!serverUrl) {
-        throw new CliError(
-          "The Trace server URL is unavailable in this session",
-          ExitCode.authentication,
-          "authentication"
-        );
-      }
-      const organizationId2 = env.TRACE_ORGANIZATION_ID;
-      if (requireOrganization && !organizationId2) {
-        throw new CliError(
-          "The Trace organization is unavailable in this session",
-          ExitCode.authentication,
-          "authentication"
-        );
-      }
-      return new TraceClient(serverUrl, token, organizationId2);
-    }
-  };
-}
-
-// src/main.ts
+// src/commands/index.ts
 var commands = [
   contextCommand,
-  ...resourceCommands,
+  channelListCommand,
+  repoListCommand,
+  projectListCommand,
   ...sessionCommands,
   artifactCommand
 ];
-function help(command) {
-  if (command) return [`Usage: ${command.usage}`, "", command.description].join("\n");
+
+// src/main.ts
+assertCommandDefinitions(commands);
+function globalHelp() {
   return [
     "Usage: trace <command> [options]",
     "",
     "Commands:",
-    ...commands.map((command2) => `  ${command2.path.join(" ").padEnd(22)} ${command2.description}`),
+    ...commands.map((command) => `  ${command.path.join(" ").padEnd(22)} ${command.description}`),
     "",
     "Global option: --json",
     "",
@@ -985,29 +1521,26 @@ function help(command) {
   ].join("\n");
 }
 async function run(argv = process.argv.slice(2)) {
-  const wantsJson = argv.includes("--json");
-  const wantsHelp = argv.includes("--help") || argv.includes("-h");
+  const parsed = parseGlobalOptions(argv);
+  const wantsHelp = parsed.args.includes("--help") || parsed.args.includes("-h");
+  const commandArgs = parsed.args.filter((value) => value !== "--help" && value !== "-h");
+  const command = findCommand(commands, commandArgs);
   if (argv.length === 0 || wantsHelp) {
-    const helpArgs = argv.filter((value) => value !== "--help" && value !== "-h");
-    const command = commands.find(
-      (candidate) => candidate.path.every((part, index) => helpArgs[index] === part)
-    );
-    process.stdout.write(`${help(command)}
+    process.stdout.write(`${command ? commandHelp(command) : globalHelp()}
 `);
     return ExitCode.success;
   }
   try {
-    const ctx = await createCommandContext(argv);
-    const command = commands.find(
-      (candidate) => candidate.path.every((part, index) => ctx.args[index] === part)
-    );
-    if (!command)
+    if (!command) {
       throw new CliError(
-        `Unknown command: ${ctx.args.slice(0, 2).join(" ")}`,
+        `Unknown command: ${commandArgs.slice(0, 2).join(" ")}`,
         ExitCode.usage,
         "usage"
       );
-    await command.run(ctx);
+    }
+    const input = parseCommandInput(command, commandArgs);
+    const ctx = createCommandContext(parsed.options);
+    await command.run(ctx, input);
     return ExitCode.success;
   } catch (error) {
     const cliError = error instanceof CliError ? error : new CliError(
@@ -1016,9 +1549,11 @@ async function run(argv = process.argv.slice(2)) {
       "server"
     );
     const value = { error: { category: cliError.category, message: cliError.message } };
-    process.stderr.write(wantsJson ? `${JSON.stringify(value)}
+    process.stderr.write(
+      parsed.options.json ? `${JSON.stringify(value)}
 ` : `trace: ${cliError.message}
-`);
+`
+    );
     return cliError.exitCode;
   }
 }
@@ -1026,6 +1561,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   process.exitCode = await run();
 }
 export {
-  commands,
   run
 };
