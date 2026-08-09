@@ -1110,6 +1110,11 @@ const REQUEST_USER_INPUT_SKILL_INSTRUCTION = `\n\n<system-instruction>
 Before asking the user for information, a decision, confirmation, or references, first read $TRACE_SKILLS_DIR/request-user-input/SKILL.md completely. Follow that skill's guidance for deciding whether to ask, formatting structured questions, and waiting for the response. Use the skill whenever you need user input before continuing.
 </system-instruction>`;
 
+/** Teach managed agents about Trace's session-control surface without relying on PATH discovery. */
+const TRACE_SESSION_SKILL_INSTRUCTION = `\n\n<system-instruction>
+When the request involves discovering, creating, messaging, running, stopping, monitoring, or archiving Trace sessions, read $TRACE_SKILLS_DIR/trace-session/SKILL.md completely before acting. Invoke the managed CLI using \`"$TRACE_CLI"\` exactly; do not call a bare \`trace\` command and never print $TRACE_INVOCATION_TOKEN.
+</system-instruction>`;
+
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves each response. */
 const AUTO_SAVE_INSTRUCTION = `\n\n<system-instruction>
 Before completing every response that changes the workspace, silently save your work to the remote:
@@ -1185,6 +1190,7 @@ function appendPromptInstructions(
   let result = prompt + TITLE_INSTRUCTION;
   result += BACKGROUND_WORK_INSTRUCTION;
   result += REQUEST_USER_INPUT_SKILL_INSTRUCTION;
+  result += TRACE_SESSION_SKILL_INSTRUCTION;
   if (hasRepo && !isGeneratedProjectKind(sessionGroupKind)) result += BRANCH_INSTRUCTION;
   result = appendAutoSave(result, hasRepo);
   return result;
@@ -4954,7 +4960,12 @@ export class SessionService {
     id: string,
     prompt?: string | null,
     interactionMode?: string,
-    access?: { userId: string; organizationId: string; clientSource?: string | null },
+    access?: {
+      userId: string;
+      organizationId: string;
+      clientSource?: string | null;
+      actorType?: ActorType;
+    },
     imageKeys?: string[] | null,
   ) {
     const session = await prisma.session.findUniqueOrThrow({
@@ -5232,8 +5243,8 @@ export class SessionService {
         clientSource: normalizeClientSource(access?.clientSource),
         ...(sessionGroup ? { sessionGroup } : {}),
       },
-      actorType: "user",
-      actorId: session.createdById,
+      actorType: access?.actorType ?? "user",
+      actorId: access?.userId ?? session.createdById,
     });
 
     return updated;
@@ -6941,6 +6952,7 @@ export class SessionService {
     text,
     imageKeys,
     actorId,
+    actorType = "user",
     interactionMode,
     organizationId,
     clientSource,
@@ -6949,6 +6961,7 @@ export class SessionService {
     text: string;
     imageKeys?: string[];
     actorId: string;
+    actorType?: ActorType;
     interactionMode?: string;
     organizationId: string;
     clientSource?: string | null;
@@ -7021,7 +7034,7 @@ export class SessionService {
           createdAt: queuedMessage.createdAt.toISOString(),
         },
       },
-      actorType: "user",
+      actorType,
       actorId,
     });
 

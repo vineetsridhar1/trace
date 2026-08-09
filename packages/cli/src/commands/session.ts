@@ -1,4 +1,15 @@
-import type { Event, Session } from "@trace/gql";
+import type {
+  CodingTool,
+  Event,
+  HostingMode,
+  QueuedMessage,
+  Session,
+  SessionFilters,
+  SessionGroup,
+  SessionGroupKind,
+  SessionGroupVisibility,
+  StartSessionInput,
+} from "@trace/gql";
 import { randomUUID } from "node:crypto";
 import { usage } from "../errors.js";
 import type { Command, CommandContext } from "../runtime.js";
@@ -11,27 +22,41 @@ type SessionView = Pick<
   | "sessionStatus"
   | "tool"
   | "model"
+  | "reasoningEffort"
   | "hosting"
   | "branch"
   | "sessionGroupId"
   | "createdAt"
   | "updatedAt"
->;
-
-type EventView = Pick<
-  Event,
-  "id" | "eventType" | "scopeType" | "scopeId" | "timestamp" | "payload"
->;
+> & {
+  channel?: { id: string; name: string } | null;
+  repo?: { id: string; name: string } | null;
+  projects: Array<{ id: string; name: string }>;
+};
+type EventView = Pick<Event, "id" | "eventType" | "scopeType" | "scopeId" | "timestamp" | "payload">;
+type GroupView = Pick<SessionGroup, "id" | "name" | "status" | "archivedAt">;
 
 const SESSION_FIELDS = `
-  id name agentStatus sessionStatus tool model hosting branch sessionGroupId createdAt updatedAt
+  id name agentStatus sessionStatus tool model reasoningEffort hosting branch sessionGroupId
+  createdAt updatedAt channel { id name } repo { id name } projects { id name }
 `;
 const EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
+const AGENT_STATUSES = ["not_started", "active", "done", "failed", "stopped"] as const;
+const CODING_TOOLS = ["antigravity", "claude_code", "codex", "cursor_composer", "custom", "pi"] as const;
+const SESSION_KINDS = ["coding", "design", "design_system", "app", "pdf", "animation"] as const;
+const HOSTING_MODES = ["cloud", "local"] as const;
+const VISIBILITIES = ["public", "private"] as const;
 
-function sessionId(ctx: CommandContext, position = 2): string {
-  const explicit = ctx.args[position];
-  const implicit = ctx.env.TRACE_SESSION_ID;
-  return explicit || implicit || usage("Session ID is required outside a Trace session");
+function optionValue(args: string[], index: number, flag: string): string {
+  return args[index + 1] || usage(`${flag} requires a value`);
+}
+
+function choice<T extends string>(value: string, choices: readonly T[], flag: string): T {
+  return choices.includes(value as T) ? (value as T) : usage(`${flag} must be one of: ${choices.join(", ")}`);
+}
+
+function sessionId(ctx: CommandContext, explicit?: string): string {
+  return explicit || ctx.env.TRACE_SESSION_ID || usage("Session ID is required outside a Trace session");
 }
 
 function printSession(session: SessionView): string {
@@ -41,6 +66,8 @@ function printSession(session: SessionView): string {
     `Tool: ${session.tool}${session.model ? ` (${session.model})` : ""}`,
     `Hosting: ${session.hosting}`,
     `Group: ${session.sessionGroupId ?? "none"}`,
+    `Channel: ${session.channel?.name ?? "none"}`,
+    `Repo: ${session.repo?.name ?? "none"}`,
     ...(session.branch ? [`Branch: ${session.branch}`] : []),
   ].join("\n");
 }
@@ -55,43 +82,225 @@ async function getSession(ctx: CommandContext, id: string): Promise<SessionView>
   return result.session;
 }
 
+function parseSessionList(args: string[]): SessionFilters {
+  const filters: SessionFilters = { includeArchived: false, includeMerged: false };
+  for (let index = 2; index < args.length; index += 1) {
+    const flag = args[index] ?? "";
+    if (flag === "--status") {
+      filters.agentStatus = choice(optionValue(args, index, flag), AGENT_STATUSES, flag);
+      index += 1;
+    } else if (flag === "--tool") {
+      filters.tool = choice(optionValue(args, index, flag), CODING_TOOLS, flag);
+      index += 1;
+    } else if (flag === "--repo") {
+      filters.repoId = optionValue(args, index, flag);
+      index += 1;
+    } else if (flag === "--channel") {
+      filters.channelId = optionValue(args, index, flag);
+      index += 1;
+    } else if (flag === "--limit") {
+      const limit = Number(optionValue(args, index, flag));
+      if (!Number.isInteger(limit) || limit < 1 || limit > 500) usage("--limit must be 1-500");
+      filters.limit = limit;
+      index += 1;
+    } else if (flag === "--include-archived") filters.includeArchived = true;
+    else if (flag === "--include-merged") filters.includeMerged = true;
+    else usage(`Unexpected argument: ${flag}`);
+  }
+  return filters;
+}
+
+function parseSessionStart(ctx: CommandContext): StartSessionInput {
+  const input: StartSessionInput = {};
+  const prompt: string[] = [];
+  let hasExplicitDestination = false;
+  for (let index = 2; index < ctx.args.length; index += 1) {
+    const flag = ctx.args[index] ?? "";
+    if (flag === "--kind") {
+      input.kind = choice(optionValue(ctx.args, index, flag), SESSION_KINDS, flag) as SessionGroupKind;
+      hasExplicitDestination = true;
+      index += 1;
+    } else if (flag === "--tool") {
+      input.tool = choice(optionValue(ctx.args, index, flag), CODING_TOOLS, flag) as CodingTool;
+      index += 1;
+    } else if (flag === "--model") input.model = optionValue(ctx.args, index++, flag);
+    else if (flag === "--reasoning") input.reasoningEffort = optionValue(ctx.args, index++, flag);
+    else if (flag === "--hosting") {
+      input.hosting = choice(optionValue(ctx.args, index, flag), HOSTING_MODES, flag) as HostingMode;
+      index += 1;
+    } else if (flag === "--runtime") input.runtimeInstanceId = optionValue(ctx.args, index++, flag);
+    else if (flag === "--repo") {
+      input.repoId = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    } else if (flag === "--branch") input.branch = optionValue(ctx.args, index++, flag);
+    else if (flag === "--channel") {
+      input.channelId = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    } else if (flag === "--group") {
+      input.sessionGroupId = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    } else if (flag === "--project") {
+      input.projectId = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    } else if (flag === "--ticket") {
+      input.ticketId = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    } else if (flag === "--visibility") {
+      input.visibility = choice(optionValue(ctx.args, index, flag), VISIBILITIES, flag) as SessionGroupVisibility;
+      index += 1;
+    } else if (flag === "--interaction-mode") input.interactionMode = optionValue(ctx.args, index++, flag);
+    else if (flag === "--prompt") input.prompt = optionValue(ctx.args, index++, flag);
+    else if (flag === "--defer") input.deferRuntimeSelection = true;
+    else if (flag.startsWith("--")) usage(`Unexpected argument: ${flag}`);
+    else prompt.push(flag);
+  }
+  if (prompt.length) {
+    if (input.prompt) usage("Provide the prompt either positionally or with --prompt, not both");
+    input.prompt = prompt.join(" ");
+  }
+  if (!hasExplicitDestination && ctx.env.TRACE_SESSION_GROUP_ID) {
+    input.sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
+  }
+  return input;
+}
+
+function parseTargetAction(ctx: CommandContext): { id: string; values: string[]; queue: boolean; interactionMode?: string } {
+  const values: string[] = [];
+  let self = false;
+  let queue = false;
+  let interactionMode: string | undefined;
+  for (let index = 2; index < ctx.args.length; index += 1) {
+    const value = ctx.args[index] ?? "";
+    if (value === "--self") self = true;
+    else if (value === "--queue") queue = true;
+    else if (value === "--interaction-mode") interactionMode = optionValue(ctx.args, index++, value);
+    else values.push(value);
+  }
+  const id = self ? sessionId(ctx) : sessionId(ctx, values.shift());
+  return { id, values, queue, interactionMode };
+}
+
 export const sessionCommands: Command[] = [
+  {
+    path: ["session", "list"],
+    usage: "trace session list [--status STATUS] [--tool TOOL] [--repo ID] [--channel ID] [--limit N] [--include-archived] [--include-merged] [--json]",
+    description: "List sessions visible to the session owner",
+    async run(ctx) {
+      const client = await ctx.client();
+      const variables = { organizationId: client.organizationId!, filters: parseSessionList(ctx.args) };
+      const result = await client.graphql<{ sessions: SessionView[] }, typeof variables>(
+        `query TraceCliSessions($organizationId: ID!, $filters: SessionFilters) {
+          sessions(organizationId: $organizationId, filters: $filters) { ${SESSION_FIELDS} }
+        }`,
+        variables,
+      );
+      ctx.output(
+        { sessions: result.sessions },
+        result.sessions.length
+          ? result.sessions.map((session) => `${session.id}\t${session.name}\t${session.agentStatus}\t${session.tool}`).join("\n")
+          : "No sessions found",
+      );
+    },
+  },
   {
     path: ["session", "get"],
     usage: "trace session get [session-id] [--json]",
     description: "Get a session, defaulting to TRACE_SESSION_ID",
     async run(ctx) {
-      const session = await getSession(ctx, sessionId(ctx));
+      if (ctx.args[3]) usage(`Unexpected argument: ${ctx.args[3]}`);
+      const session = await getSession(ctx, sessionId(ctx, ctx.args[2]));
       ctx.output({ session }, printSession(session));
     },
   },
   {
-    path: ["session", "send"],
-    usage: "trace session send [session-id] <message> [--self] [--json]",
-    description: "Send a message to a session",
+    path: ["session", "start"],
+    usage: "trace session start [prompt] [--tool TOOL] [--model MODEL] [--hosting MODE] [--runtime ID] [--repo ID] [--branch NAME] [--channel ID] [--group ID] [--project ID] [--ticket ID] [--kind KIND] [--visibility VISIBILITY] [--interaction-mode MODE] [--defer] [--json]",
+    description: "Start a sibling session or create one in an explicit Trace destination",
     async run(ctx) {
-      const selfIndex = ctx.args.indexOf("--self");
-      const self = selfIndex >= 0;
-      const values = ctx.args.slice(2).filter((value) => value !== "--self");
-      const id = self ? sessionId(ctx, Number.MAX_SAFE_INTEGER) : values.shift() || sessionId(ctx);
+      const client = await ctx.client();
+      const input = parseSessionStart(ctx);
+      const result = await client.graphql<{ startSession: SessionView }, { input: StartSessionInput }>(
+        `mutation TraceCliStartSession($input: StartSessionInput!) { startSession(input: $input) { ${SESSION_FIELDS} } }`,
+        { input },
+      );
+      ctx.output({ session: result.startSession }, printSession(result.startSession));
+    },
+  },
+  {
+    path: ["session", "send"],
+    usage: "trace session send [session-id] <message> [--self] [--queue] [--interaction-mode MODE] [--json]",
+    description: "Send or queue a message for a session",
+    async run(ctx) {
+      const { id, values, queue, interactionMode } = parseTargetAction(ctx);
       const text = values.join(" ").trim();
       if (!text) usage("Message text is required");
       const client = await ctx.client();
-      const result = await client.graphql<
-        { sendSessionMessage: EventView },
-        { sessionId: string; text: string; clientMutationId: string }
-      >(
-        `mutation TraceCliSendSessionMessage($sessionId: ID!, $text: String!, $clientMutationId: String) {
-          sendSessionMessage(sessionId: $sessionId, text: $text, clientMutationId: $clientMutationId) {
-            ${EVENT_FIELDS}
-          }
+      if (queue) {
+        const variables = { sessionId: id, text, interactionMode: interactionMode ?? null };
+        const result = await client.graphql<{ queueSessionMessage: QueuedMessage }, typeof variables>(
+          `mutation TraceCliQueueSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String) {
+            queueSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode) { id sessionId text position createdAt }
+          }`,
+          variables,
+        );
+        ctx.output({ queuedMessage: result.queueSessionMessage }, `Queued message (${result.queueSessionMessage.id})`);
+        return;
+      }
+      const variables = { sessionId: id, text, interactionMode: interactionMode ?? null, clientMutationId: randomUUID() };
+      const result = await client.graphql<{ sendSessionMessage: EventView }, typeof variables>(
+        `mutation TraceCliSendSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String, $clientMutationId: String) {
+          sendSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode, clientMutationId: $clientMutationId) { ${EVENT_FIELDS} }
         }`,
-        { sessionId: id, text, clientMutationId: randomUUID() },
+        variables,
       );
-      ctx.output(
-        { event: result.sendSessionMessage },
-        `Sent message (${result.sendSessionMessage.id})`,
+      ctx.output({ event: result.sendSessionMessage }, `Sent message (${result.sendSessionMessage.id})`);
+    },
+  },
+  {
+    path: ["session", "run"],
+    usage: "trace session run [session-id] [prompt] [--self] [--interaction-mode MODE] [--json]",
+    description: "Start or resume a session run",
+    async run(ctx) {
+      const { id, values, interactionMode } = parseTargetAction(ctx);
+      const variables = { id, prompt: values.join(" ").trim() || null, interactionMode: interactionMode ?? null };
+      const client = await ctx.client();
+      const result = await client.graphql<{ runSession: SessionView }, typeof variables>(
+        `mutation TraceCliRunSession($id: ID!, $prompt: String, $interactionMode: String) { runSession(id: $id, prompt: $prompt, interactionMode: $interactionMode) { ${SESSION_FIELDS} } }`,
+        variables,
       );
+      ctx.output({ session: result.runSession }, printSession(result.runSession));
+    },
+  },
+  {
+    path: ["session", "stop"],
+    usage: "trace session stop [session-id] [--self] [--json]",
+    description: "Stop a running session",
+    async run(ctx) {
+      const { id, values } = parseTargetAction(ctx);
+      if (values.length) usage(`Unexpected argument: ${values[0]}`);
+      const client = await ctx.client();
+      const result = await client.graphql<{ terminateSession: SessionView }, { id: string }>(
+        `mutation TraceCliStopSession($id: ID!) { terminateSession(id: $id) { ${SESSION_FIELDS} } }`,
+        { id },
+      );
+      ctx.output({ session: result.terminateSession }, printSession(result.terminateSession));
+    },
+  },
+  {
+    path: ["session", "archive"],
+    usage: "trace session archive [session-id] [--self] [--json]",
+    description: "Archive a session's group",
+    async run(ctx) {
+      const { id, values } = parseTargetAction(ctx);
+      if (values.length) usage(`Unexpected argument: ${values[0]}`);
+      const session = await getSession(ctx, id);
+      if (!session.sessionGroupId) usage("This session has no group to archive");
+      const client = await ctx.client();
+      const result = await client.graphql<{ archiveSessionGroup: GroupView | null }, { id: string }>(
+        `mutation TraceCliArchiveSession($id: ID!) { archiveSessionGroup(id: $id) { id name status archivedAt } }`,
+        { id: session.sessionGroupId },
+      );
+      ctx.output({ sessionGroup: result.archiveSessionGroup }, `Archived session group (${session.sessionGroupId})`);
     },
   },
   {
@@ -111,45 +320,25 @@ export const sessionCommands: Command[] = [
         else if (!id) id = value ?? "";
         else usage(`Unexpected argument: ${value}`);
       }
-      id ||= ctx.env.TRACE_SESSION_ID || "";
-      if (!id) usage("Session ID is required outside a Trace session");
+      id = sessionId(ctx, id);
       const client = await ctx.client();
       const organizationId = client.organizationId ?? usage("Organization is required");
-      const variables = {
-        organizationId,
-        scope: { type: "session", id },
-        limit,
-      };
+      const variables = { organizationId, scope: { type: "session", id }, limit };
       const result = await client.graphql<{ events: EventView[] }, typeof variables>(
-        `query TraceCliSessionEvents($organizationId: ID!, $scope: ScopeInput!, $limit: Int) {
-          events(organizationId: $organizationId, scope: $scope, limit: $limit) { ${EVENT_FIELDS} }
-        }`,
+        `query TraceCliSessionEvents($organizationId: ID!, $scope: ScopeInput!, $limit: Int) { events(organizationId: $organizationId, scope: $scope, limit: $limit) { ${EVENT_FIELDS} } }`,
         variables,
       );
       ctx.output(
         { events: result.events, following: follow },
-        result.events.length
-          ? result.events
-              .map((event) => `${event.timestamp}\t${event.eventType}\t${event.id}`)
-              .join("\n")
-          : "No events found",
+        result.events.length ? result.events.map((event) => `${event.timestamp}\t${event.eventType}\t${event.id}`).join("\n") : "No events found",
       );
       if (!follow) return;
-      await client.subscribe<
-        { sessionEvents: EventView },
-        { sessionId: string; organizationId: string }
-      >(
-        `subscription TraceCliFollowSession($sessionId: ID!, $organizationId: ID!) {
-          sessionEvents(sessionId: $sessionId, organizationId: $organizationId) { ${EVENT_FIELDS} }
-        }`,
+      await client.subscribe<{ sessionEvents: EventView }, { sessionId: string; organizationId: string }>(
+        `subscription TraceCliFollowSession($sessionId: ID!, $organizationId: ID!) { sessionEvents(sessionId: $sessionId, organizationId: $organizationId) { ${EVENT_FIELDS} } }`,
         { sessionId: id, organizationId },
         (data) => {
           const event = data.sessionEvents;
-          process.stdout.write(
-            ctx.options.json
-              ? `${JSON.stringify({ event })}\n`
-              : `${event.timestamp}\t${event.eventType}\t${event.id}\n`,
-          );
+          process.stdout.write(ctx.options.json ? `${JSON.stringify({ event })}\n` : `${event.timestamp}\t${event.eventType}\t${event.id}\n`);
         },
       );
     },

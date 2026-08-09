@@ -8,9 +8,15 @@ const TOKEN_AUDIENCE = "trace-session-client";
 
 export const AGENT_INVOCATION_CAPABILITIES = [
   "artifact:write",
+  "resource:list",
+  "session:list",
+  "session:create",
   "session:read",
   "session:events",
   "session:send",
+  "session:run",
+  "session:stop",
+  "session:archive",
 ] as const;
 
 export type AgentInvocationCapability = (typeof AGENT_INVOCATION_CAPABILITIES)[number];

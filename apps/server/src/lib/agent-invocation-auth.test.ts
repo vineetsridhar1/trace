@@ -32,9 +32,15 @@ describe("agent invocation auth", () => {
       invocationId: "invocation-1",
       capabilities: expect.arrayContaining([
         "artifact:write",
+        "resource:list",
+        "session:list",
+        "session:create",
         "session:read",
         "session:events",
         "session:send",
+        "session:run",
+        "session:stop",
+        "session:archive",
       ]),
     });
   });

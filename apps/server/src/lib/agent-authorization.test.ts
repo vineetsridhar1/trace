@@ -10,19 +10,27 @@ function context(sessionId: string): Context {
     role: null,
     actorType: "agent",
     agentSessionId: sessionId,
-    agentCapabilities: ["session:read", "session:events", "session:send"],
+    agentCapabilities: [
+      "resource:list",
+      "session:list",
+      "session:create",
+      "session:read",
+      "session:events",
+      "session:send",
+      "session:run",
+      "session:stop",
+      "session:archive",
+    ],
   } as Context;
 }
 
 describe("agent GraphQL authorization", () => {
-  it("allows an approved operation only for the bound session", () => {
+  it("allows an approved operation for a visible session", () => {
     const resolver = vi.fn(() => "ok");
     const restricted = restrictAgentRootResolvers("Query", { session: resolver });
 
     expect(restricted.session(null, { id: "session-a" }, context("session-a"), null)).toBe("ok");
-    expect(() => restricted.session(null, { id: "session-b" }, context("session-a"), null)).toThrow(
-      "cannot access another session",
-    );
+    expect(restricted.session(null, { id: "session-b" }, context("session-a"), null)).toBe("ok");
   });
 
   it("rejects non-allowlisted root fields", () => {
@@ -32,15 +40,22 @@ describe("agent GraphQL authorization", () => {
     );
   });
 
-  it("requires event snapshots to be scoped to the bound session", () => {
+  it("requires event snapshots to use a session scope", () => {
     const restricted = restrictAgentRootResolvers("Query", { events: () => [] });
     expect(() =>
       restricted.events(
         null,
-        { scope: { type: "session", id: "session-b" } },
+        { scope: { type: "channel", id: "channel-a" } },
         context("session-a"),
         null,
       ),
-    ).toThrow("cannot access events from another scope");
+    ).toThrow("only query session-scoped events");
+  });
+
+  it("rejects cross-organization list requests", () => {
+    const restricted = restrictAgentRootResolvers("Query", { sessions: () => [] });
+    expect(() =>
+      restricted.sessions(null, { organizationId: "org-2" }, context("session-a"), null),
+    ).toThrow("cannot access another organization");
   });
 });

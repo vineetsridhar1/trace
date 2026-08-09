@@ -5,11 +5,23 @@ type RootOperation = "Query" | "Mutation" | "Subscription";
 
 const ALLOWED_FIELDS: Record<RootOperation, Readonly<Record<string, string>>> = {
   Query: {
+    channels: "resource:list",
+    channel: "resource:list",
+    repos: "resource:list",
+    repo: "resource:list",
+    projects: "resource:list",
+    project: "resource:list",
+    sessions: "session:list",
     session: "session:read",
     events: "session:events",
   },
   Mutation: {
+    startSession: "session:create",
     sendSessionMessage: "session:send",
+    queueSessionMessage: "session:send",
+    runSession: "session:run",
+    terminateSession: "session:stop",
+    archiveSessionGroup: "session:archive",
   },
   Subscription: {
     sessionEvents: "session:events",
@@ -33,25 +45,31 @@ function assertAgentRequest(
     forbidden(`The session credential cannot perform ${operation}.${field}`);
   }
 
-  const requestedSessionId =
-    typeof args.sessionId === "string"
-      ? args.sessionId
-      : typeof args.id === "string"
-        ? args.id
-        : null;
+  const input =
+    args.input && typeof args.input === "object" && !Array.isArray(args.input)
+      ? (args.input as Record<string, unknown>)
+      : null;
+  const requestedOrganizationId =
+    typeof args.organizationId === "string"
+      ? args.organizationId
+      : typeof args.orgId === "string"
+        ? args.orgId
+        : typeof input?.organizationId === "string"
+          ? input.organizationId
+          : null;
+  if (requestedOrganizationId && requestedOrganizationId !== ctx.organizationId) {
+    forbidden("The session credential cannot access another organization");
+  }
+
   if (field === "events") {
     const scope = args.scope;
     if (!scope || typeof scope !== "object" || Array.isArray(scope)) {
       forbidden("Session credentials must query events with a session scope");
     }
     const typedScope = scope as { type?: unknown; id?: unknown };
-    if (typedScope.type !== "session" || typedScope.id !== ctx.agentSessionId) {
-      forbidden("The session credential cannot access events from another scope");
+    if (typedScope.type !== "session" || typeof typedScope.id !== "string") {
+      forbidden("Session credentials may only query session-scoped events");
     }
-    return;
-  }
-  if (requestedSessionId !== ctx.agentSessionId) {
-    forbidden("The session credential cannot access another session");
   }
 }
 

@@ -133,16 +133,111 @@ var contextCommand = {
   }
 };
 
+// src/commands/resources.ts
+function organizationId(value) {
+  return value || usage("The Trace organization is unavailable in this session");
+}
+var resourceCommands = [
+  {
+    path: ["channel", "list"],
+    usage: "trace channel list [--member-only] [--json]",
+    description: "List channels available to the session owner",
+    async run(ctx) {
+      const unexpected = ctx.args.slice(2).find((value) => value !== "--member-only");
+      if (unexpected) usage(`Unexpected argument: ${unexpected}`);
+      const client = await ctx.client();
+      const variables = {
+        organizationId: organizationId(client.organizationId),
+        memberOnly: ctx.args.includes("--member-only")
+      };
+      const result = await client.graphql(
+        `query TraceCliChannels($organizationId: ID!, $memberOnly: Boolean) {
+          channels(organizationId: $organizationId, memberOnly: $memberOnly) {
+            id name type visibility baseBranch viewerIsMember
+            repo { id name }
+            projects { id name }
+          }
+        }`,
+        variables
+      );
+      ctx.output(
+        { channels: result.channels },
+        result.channels.length ? result.channels.map(
+          (channel) => `${channel.id}	${channel.name}	${channel.visibility}	${channel.repo?.name ?? "no repo"}`
+        ).join("\n") : "No channels found"
+      );
+    }
+  },
+  {
+    path: ["repo", "list"],
+    usage: "trace repo list [--json]",
+    description: "List repositories in the current organization",
+    async run(ctx) {
+      if (ctx.args[2]) usage(`Unexpected argument: ${ctx.args[2]}`);
+      const client = await ctx.client();
+      const variables = { organizationId: organizationId(client.organizationId) };
+      const result = await client.graphql(
+        `query TraceCliRepos($organizationId: ID!) {
+          repos(organizationId: $organizationId) { id name provider remoteUrl defaultBranch }
+        }`,
+        variables
+      );
+      ctx.output(
+        { repos: result.repos },
+        result.repos.length ? result.repos.map((repo) => `${repo.id}	${repo.name}	${repo.provider}	${repo.defaultBranch}`).join("\n") : "No repositories found"
+      );
+    }
+  },
+  {
+    path: ["project", "list"],
+    usage: "trace project list [--repo ID] [--json]",
+    description: "List projects in the current organization",
+    async run(ctx) {
+      let repoId;
+      for (let index = 2; index < ctx.args.length; index += 1) {
+        const value = ctx.args[index];
+        if (value === "--repo") repoId = ctx.args[++index] || usage("--repo requires an ID");
+        else usage(`Unexpected argument: ${value}`);
+      }
+      const client = await ctx.client();
+      const variables = {
+        organizationId: organizationId(client.organizationId),
+        repoId: repoId ?? null
+      };
+      const result = await client.graphql(
+        `query TraceCliProjects($organizationId: ID!, $repoId: ID) {
+          projects(organizationId: $organizationId, repoId: $repoId) { id name repo { id name } }
+        }`,
+        variables
+      );
+      ctx.output(
+        { projects: result.projects },
+        result.projects.length ? result.projects.map((project) => `${project.id}	${project.name}	${project.repo?.name ?? "no repo"}`).join("\n") : "No projects found"
+      );
+    }
+  }
+];
+
 // src/commands/session.ts
 import { randomUUID as randomUUID2 } from "node:crypto";
 var SESSION_FIELDS = `
-  id name agentStatus sessionStatus tool model hosting branch sessionGroupId createdAt updatedAt
+  id name agentStatus sessionStatus tool model reasoningEffort hosting branch sessionGroupId
+  createdAt updatedAt channel { id name } repo { id name } projects { id name }
 `;
 var EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
-function sessionId(ctx, position = 2) {
-  const explicit = ctx.args[position];
-  const implicit = ctx.env.TRACE_SESSION_ID;
-  return explicit || implicit || usage("Session ID is required outside a Trace session");
+var AGENT_STATUSES = ["not_started", "active", "done", "failed", "stopped"];
+var CODING_TOOLS = ["antigravity", "claude_code", "codex", "cursor_composer", "custom", "pi"];
+var SESSION_KINDS = ["coding", "design", "design_system", "app", "pdf", "animation"];
+var HOSTING_MODES = ["cloud", "local"];
+var VISIBILITIES = ["public", "private"];
+function optionValue(args, index, flag) {
+  return args[index + 1] || usage(`${flag} requires a value`);
+}
+function choice(value, choices, flag) {
+  return choices.includes(value) ? value : usage(`${flag} must be one of: ${choices.join(", ")}`);
+}
+function sessionId(ctx, explicit) {
+  return explicit || ctx.env.TRACE_SESSION_ID || usage("Session ID is required outside a Trace session");
 }
 function printSession(session) {
   return [
@@ -151,6 +246,8 @@ function printSession(session) {
     `Tool: ${session.tool}${session.model ? ` (${session.model})` : ""}`,
     `Hosting: ${session.hosting}`,
     `Group: ${session.sessionGroupId ?? "none"}`,
+    `Channel: ${session.channel?.name ?? "none"}`,
+    `Repo: ${session.repo?.name ?? "none"}`,
     ...session.branch ? [`Branch: ${session.branch}`] : []
   ].join("\n");
 }
@@ -163,40 +260,220 @@ async function getSession(ctx, id) {
   if (!result.session) usage(`Session not found: ${id}`);
   return result.session;
 }
+function parseSessionList(args) {
+  const filters = { includeArchived: false, includeMerged: false };
+  for (let index = 2; index < args.length; index += 1) {
+    const flag = args[index] ?? "";
+    if (flag === "--status") {
+      filters.agentStatus = choice(optionValue(args, index, flag), AGENT_STATUSES, flag);
+      index += 1;
+    } else if (flag === "--tool") {
+      filters.tool = choice(optionValue(args, index, flag), CODING_TOOLS, flag);
+      index += 1;
+    } else if (flag === "--repo") {
+      filters.repoId = optionValue(args, index, flag);
+      index += 1;
+    } else if (flag === "--channel") {
+      filters.channelId = optionValue(args, index, flag);
+      index += 1;
+    } else if (flag === "--limit") {
+      const limit = Number(optionValue(args, index, flag));
+      if (!Number.isInteger(limit) || limit < 1 || limit > 500) usage("--limit must be 1-500");
+      filters.limit = limit;
+      index += 1;
+    } else if (flag === "--include-archived") filters.includeArchived = true;
+    else if (flag === "--include-merged") filters.includeMerged = true;
+    else usage(`Unexpected argument: ${flag}`);
+  }
+  return filters;
+}
+function parseSessionStart(ctx) {
+  const input = {};
+  const prompt = [];
+  let hasExplicitDestination = false;
+  for (let index = 2; index < ctx.args.length; index += 1) {
+    const flag = ctx.args[index] ?? "";
+    if (flag === "--kind") {
+      input.kind = choice(optionValue(ctx.args, index, flag), SESSION_KINDS, flag);
+      hasExplicitDestination = true;
+      index += 1;
+    } else if (flag === "--tool") {
+      input.tool = choice(optionValue(ctx.args, index, flag), CODING_TOOLS, flag);
+      index += 1;
+    } else if (flag === "--model") input.model = optionValue(ctx.args, index++, flag);
+    else if (flag === "--reasoning") input.reasoningEffort = optionValue(ctx.args, index++, flag);
+    else if (flag === "--hosting") {
+      input.hosting = choice(optionValue(ctx.args, index, flag), HOSTING_MODES, flag);
+      index += 1;
+    } else if (flag === "--runtime") input.runtimeInstanceId = optionValue(ctx.args, index++, flag);
+    else if (flag === "--repo") {
+      input.repoId = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    } else if (flag === "--branch") input.branch = optionValue(ctx.args, index++, flag);
+    else if (flag === "--channel") {
+      input.channelId = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    } else if (flag === "--group") {
+      input.sessionGroupId = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    } else if (flag === "--project") {
+      input.projectId = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    } else if (flag === "--ticket") {
+      input.ticketId = optionValue(ctx.args, index++, flag);
+      hasExplicitDestination = true;
+    } else if (flag === "--visibility") {
+      input.visibility = choice(optionValue(ctx.args, index, flag), VISIBILITIES, flag);
+      index += 1;
+    } else if (flag === "--interaction-mode") input.interactionMode = optionValue(ctx.args, index++, flag);
+    else if (flag === "--prompt") input.prompt = optionValue(ctx.args, index++, flag);
+    else if (flag === "--defer") input.deferRuntimeSelection = true;
+    else if (flag.startsWith("--")) usage(`Unexpected argument: ${flag}`);
+    else prompt.push(flag);
+  }
+  if (prompt.length) {
+    if (input.prompt) usage("Provide the prompt either positionally or with --prompt, not both");
+    input.prompt = prompt.join(" ");
+  }
+  if (!hasExplicitDestination && ctx.env.TRACE_SESSION_GROUP_ID) {
+    input.sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
+  }
+  return input;
+}
+function parseTargetAction(ctx) {
+  const values = [];
+  let self = false;
+  let queue = false;
+  let interactionMode;
+  for (let index = 2; index < ctx.args.length; index += 1) {
+    const value = ctx.args[index] ?? "";
+    if (value === "--self") self = true;
+    else if (value === "--queue") queue = true;
+    else if (value === "--interaction-mode") interactionMode = optionValue(ctx.args, index++, value);
+    else values.push(value);
+  }
+  const id = self ? sessionId(ctx) : sessionId(ctx, values.shift());
+  return { id, values, queue, interactionMode };
+}
 var sessionCommands = [
+  {
+    path: ["session", "list"],
+    usage: "trace session list [--status STATUS] [--tool TOOL] [--repo ID] [--channel ID] [--limit N] [--include-archived] [--include-merged] [--json]",
+    description: "List sessions visible to the session owner",
+    async run(ctx) {
+      const client = await ctx.client();
+      const variables = { organizationId: client.organizationId, filters: parseSessionList(ctx.args) };
+      const result = await client.graphql(
+        `query TraceCliSessions($organizationId: ID!, $filters: SessionFilters) {
+          sessions(organizationId: $organizationId, filters: $filters) { ${SESSION_FIELDS} }
+        }`,
+        variables
+      );
+      ctx.output(
+        { sessions: result.sessions },
+        result.sessions.length ? result.sessions.map((session) => `${session.id}	${session.name}	${session.agentStatus}	${session.tool}`).join("\n") : "No sessions found"
+      );
+    }
+  },
   {
     path: ["session", "get"],
     usage: "trace session get [session-id] [--json]",
     description: "Get a session, defaulting to TRACE_SESSION_ID",
     async run(ctx) {
-      const session = await getSession(ctx, sessionId(ctx));
+      if (ctx.args[3]) usage(`Unexpected argument: ${ctx.args[3]}`);
+      const session = await getSession(ctx, sessionId(ctx, ctx.args[2]));
       ctx.output({ session }, printSession(session));
     }
   },
   {
-    path: ["session", "send"],
-    usage: "trace session send [session-id] <message> [--self] [--json]",
-    description: "Send a message to a session",
+    path: ["session", "start"],
+    usage: "trace session start [prompt] [--tool TOOL] [--model MODEL] [--hosting MODE] [--runtime ID] [--repo ID] [--branch NAME] [--channel ID] [--group ID] [--project ID] [--ticket ID] [--kind KIND] [--visibility VISIBILITY] [--interaction-mode MODE] [--defer] [--json]",
+    description: "Start a sibling session or create one in an explicit Trace destination",
     async run(ctx) {
-      const selfIndex = ctx.args.indexOf("--self");
-      const self = selfIndex >= 0;
-      const values = ctx.args.slice(2).filter((value) => value !== "--self");
-      const id = self ? sessionId(ctx, Number.MAX_SAFE_INTEGER) : values.shift() || sessionId(ctx);
+      const client = await ctx.client();
+      const input = parseSessionStart(ctx);
+      const result = await client.graphql(
+        `mutation TraceCliStartSession($input: StartSessionInput!) { startSession(input: $input) { ${SESSION_FIELDS} } }`,
+        { input }
+      );
+      ctx.output({ session: result.startSession }, printSession(result.startSession));
+    }
+  },
+  {
+    path: ["session", "send"],
+    usage: "trace session send [session-id] <message> [--self] [--queue] [--interaction-mode MODE] [--json]",
+    description: "Send or queue a message for a session",
+    async run(ctx) {
+      const { id, values, queue, interactionMode } = parseTargetAction(ctx);
       const text = values.join(" ").trim();
       if (!text) usage("Message text is required");
       const client = await ctx.client();
+      if (queue) {
+        const variables2 = { sessionId: id, text, interactionMode: interactionMode ?? null };
+        const result2 = await client.graphql(
+          `mutation TraceCliQueueSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String) {
+            queueSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode) { id sessionId text position createdAt }
+          }`,
+          variables2
+        );
+        ctx.output({ queuedMessage: result2.queueSessionMessage }, `Queued message (${result2.queueSessionMessage.id})`);
+        return;
+      }
+      const variables = { sessionId: id, text, interactionMode: interactionMode ?? null, clientMutationId: randomUUID2() };
       const result = await client.graphql(
-        `mutation TraceCliSendSessionMessage($sessionId: ID!, $text: String!, $clientMutationId: String) {
-          sendSessionMessage(sessionId: $sessionId, text: $text, clientMutationId: $clientMutationId) {
-            ${EVENT_FIELDS}
-          }
+        `mutation TraceCliSendSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String, $clientMutationId: String) {
+          sendSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode, clientMutationId: $clientMutationId) { ${EVENT_FIELDS} }
         }`,
-        { sessionId: id, text, clientMutationId: randomUUID2() }
+        variables
       );
-      ctx.output(
-        { event: result.sendSessionMessage },
-        `Sent message (${result.sendSessionMessage.id})`
+      ctx.output({ event: result.sendSessionMessage }, `Sent message (${result.sendSessionMessage.id})`);
+    }
+  },
+  {
+    path: ["session", "run"],
+    usage: "trace session run [session-id] [prompt] [--self] [--interaction-mode MODE] [--json]",
+    description: "Start or resume a session run",
+    async run(ctx) {
+      const { id, values, interactionMode } = parseTargetAction(ctx);
+      const variables = { id, prompt: values.join(" ").trim() || null, interactionMode: interactionMode ?? null };
+      const client = await ctx.client();
+      const result = await client.graphql(
+        `mutation TraceCliRunSession($id: ID!, $prompt: String, $interactionMode: String) { runSession(id: $id, prompt: $prompt, interactionMode: $interactionMode) { ${SESSION_FIELDS} } }`,
+        variables
       );
+      ctx.output({ session: result.runSession }, printSession(result.runSession));
+    }
+  },
+  {
+    path: ["session", "stop"],
+    usage: "trace session stop [session-id] [--self] [--json]",
+    description: "Stop a running session",
+    async run(ctx) {
+      const { id, values } = parseTargetAction(ctx);
+      if (values.length) usage(`Unexpected argument: ${values[0]}`);
+      const client = await ctx.client();
+      const result = await client.graphql(
+        `mutation TraceCliStopSession($id: ID!) { terminateSession(id: $id) { ${SESSION_FIELDS} } }`,
+        { id }
+      );
+      ctx.output({ session: result.terminateSession }, printSession(result.terminateSession));
+    }
+  },
+  {
+    path: ["session", "archive"],
+    usage: "trace session archive [session-id] [--self] [--json]",
+    description: "Archive a session's group",
+    async run(ctx) {
+      const { id, values } = parseTargetAction(ctx);
+      if (values.length) usage(`Unexpected argument: ${values[0]}`);
+      const session = await getSession(ctx, id);
+      if (!session.sessionGroupId) usage("This session has no group to archive");
+      const client = await ctx.client();
+      const result = await client.graphql(
+        `mutation TraceCliArchiveSession($id: ID!) { archiveSessionGroup(id: $id) { id name status archivedAt } }`,
+        { id: session.sessionGroupId }
+      );
+      ctx.output({ sessionGroup: result.archiveSessionGroup }, `Archived session group (${session.sessionGroupId})`);
     }
   },
   {
@@ -216,19 +493,12 @@ var sessionCommands = [
         else if (!id) id = value ?? "";
         else usage(`Unexpected argument: ${value}`);
       }
-      id ||= ctx.env.TRACE_SESSION_ID || "";
-      if (!id) usage("Session ID is required outside a Trace session");
+      id = sessionId(ctx, id);
       const client = await ctx.client();
-      const organizationId = client.organizationId ?? usage("Organization is required");
-      const variables = {
-        organizationId,
-        scope: { type: "session", id },
-        limit
-      };
+      const organizationId2 = client.organizationId ?? usage("Organization is required");
+      const variables = { organizationId: organizationId2, scope: { type: "session", id }, limit };
       const result = await client.graphql(
-        `query TraceCliSessionEvents($organizationId: ID!, $scope: ScopeInput!, $limit: Int) {
-          events(organizationId: $organizationId, scope: $scope, limit: $limit) { ${EVENT_FIELDS} }
-        }`,
+        `query TraceCliSessionEvents($organizationId: ID!, $scope: ScopeInput!, $limit: Int) { events(organizationId: $organizationId, scope: $scope, limit: $limit) { ${EVENT_FIELDS} } }`,
         variables
       );
       ctx.output(
@@ -237,17 +507,13 @@ var sessionCommands = [
       );
       if (!follow) return;
       await client.subscribe(
-        `subscription TraceCliFollowSession($sessionId: ID!, $organizationId: ID!) {
-          sessionEvents(sessionId: $sessionId, organizationId: $organizationId) { ${EVENT_FIELDS} }
-        }`,
-        { sessionId: id, organizationId },
+        `subscription TraceCliFollowSession($sessionId: ID!, $organizationId: ID!) { sessionEvents(sessionId: $sessionId, organizationId: $organizationId) { ${EVENT_FIELDS} } }`,
+        { sessionId: id, organizationId: organizationId2 },
         (data) => {
           const event = data.sessionEvents;
-          process.stdout.write(
-            ctx.options.json ? `${JSON.stringify({ event })}
+          process.stdout.write(ctx.options.json ? `${JSON.stringify({ event })}
 ` : `${event.timestamp}	${event.eventType}	${event.id}
-`
-          );
+`);
         }
       );
     }
@@ -278,10 +544,10 @@ function graphQlError(error) {
   return new CliError(message, ExitCode.server, "server");
 }
 var TraceClient = class {
-  constructor(serverUrl, token, organizationId) {
+  constructor(serverUrl, token, organizationId2) {
     this.serverUrl = serverUrl;
     this.token = token;
-    this.organizationId = organizationId;
+    this.organizationId = organizationId2;
   }
   headers(extra) {
     return {
@@ -430,15 +696,15 @@ async function createCommandContext(argv, env = process.env) {
           "authentication"
         );
       }
-      const organizationId = env.TRACE_ORGANIZATION_ID;
-      if (requireOrganization && !organizationId) {
+      const organizationId2 = env.TRACE_ORGANIZATION_ID;
+      if (requireOrganization && !organizationId2) {
         throw new CliError(
           "The Trace organization is unavailable in this session",
           ExitCode.authentication,
           "authentication"
         );
       }
-      return new TraceClient(serverUrl, token, organizationId);
+      return new TraceClient(serverUrl, token, organizationId2);
     }
   };
 }
@@ -446,15 +712,17 @@ async function createCommandContext(argv, env = process.env) {
 // src/main.ts
 var commands = [
   contextCommand,
+  ...resourceCommands,
   ...sessionCommands,
   artifactCommand
 ];
-function help() {
+function help(command) {
+  if (command) return [`Usage: ${command.usage}`, "", command.description].join("\n");
   return [
     "Usage: trace <command> [options]",
     "",
     "Commands:",
-    ...commands.map((command) => `  ${command.path.join(" ").padEnd(22)} ${command.description}`),
+    ...commands.map((command2) => `  ${command2.path.join(" ").padEnd(22)} ${command2.description}`),
     "",
     "Global option: --json",
     "",
@@ -463,8 +731,13 @@ function help() {
 }
 async function run(argv = process.argv.slice(2)) {
   const wantsJson = argv.includes("--json");
-  if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
-    process.stdout.write(`${help()}
+  const wantsHelp = argv.includes("--help") || argv.includes("-h");
+  if (argv.length === 0 || wantsHelp) {
+    const helpArgs = argv.filter((value) => value !== "--help" && value !== "-h");
+    const command = commands.find(
+      (candidate) => candidate.path.every((part, index) => helpArgs[index] === part)
+    );
+    process.stdout.write(`${help(command)}
 `);
     return ExitCode.success;
   }

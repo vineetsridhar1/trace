@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 import { artifactCommand } from "./commands/artifact.js";
 import { contextCommand } from "./commands/context.js";
+import { resourceCommands } from "./commands/resources.js";
 import { sessionCommands } from "./commands/session.js";
 import { CliError, ExitCode } from "./errors.js";
 import { createCommandContext, type Command } from "./runtime.js";
 
 export const commands: readonly Command[] = [
   contextCommand,
+  ...resourceCommands,
   ...sessionCommands,
   artifactCommand,
 ];
 
-function help(): string {
+function help(command?: Command): string {
+  if (command) return [`Usage: ${command.usage}`, "", command.description].join("\n");
   return [
     "Usage: trace <command> [options]",
     "",
@@ -26,8 +29,13 @@ function help(): string {
 
 export async function run(argv = process.argv.slice(2)): Promise<number> {
   const wantsJson = argv.includes("--json");
-  if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
-    process.stdout.write(`${help()}\n`);
+  const wantsHelp = argv.includes("--help") || argv.includes("-h");
+  if (argv.length === 0 || wantsHelp) {
+    const helpArgs = argv.filter((value) => value !== "--help" && value !== "-h");
+    const command = commands.find((candidate) =>
+      candidate.path.every((part, index) => helpArgs[index] === part),
+    );
+    process.stdout.write(`${help(command)}\n`);
     return ExitCode.success;
   }
 

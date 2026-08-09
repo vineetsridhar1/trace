@@ -51,6 +51,13 @@ describe("ensureTraceRuntime", () => {
     expect(
       await readFile(join(runtime.skillsDir, "request-user-input", "SKILL.md"), "utf8"),
     ).toContain("<trace:request-input");
+    const traceSessionSkill = await readFile(
+      join(runtime.skillsDir, "trace-session", "SKILL.md"),
+      "utf8",
+    );
+    expect(traceSessionSkill).toContain("session list");
+    expect(traceSessionSkill).toContain("session start");
+    expect(traceSessionSkill).toContain("--queue");
   });
 
   it("replaces an older install so machines pick up changed skills", async () => {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": 15,
+  "version": 16,
   "protocolVersion": 1,
   "files": [
     "bin/trace",
@@ -8,6 +8,8 @@
     "skills/browser-video/SKILL.md",
     "skills/browser-video/agents/openai.yaml",
     "skills/request-user-input/SKILL.md",
+    "skills/trace-session/SKILL.md",
+    "skills/trace-session/agents/openai.yaml",
     "skills/trace-artifacts/SKILL.md",
     "skills/visual-plan/SKILL.md",
     "skills/visual-plan/template.html"

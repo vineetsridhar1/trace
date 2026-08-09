@@ -449,6 +449,7 @@ export const sessionMutations = {
         userId: ctx.userId,
         organizationId: requireOrgContext(ctx),
         clientSource: ctx.clientSource,
+        actorType: ctx.actorType,
       });
     } catch (error) {
       throw toGraphQLError(error);
@@ -908,6 +909,7 @@ export const sessionMutations = {
       text: args.text,
       imageKeys: args.attachmentKeys ?? args.imageKeys ?? undefined,
       actorId: ctx.userId,
+      actorType: ctx.actorType,
       interactionMode: args.interactionMode ?? undefined,
       organizationId: orgId,
       clientSource: ctx.clientSource,
