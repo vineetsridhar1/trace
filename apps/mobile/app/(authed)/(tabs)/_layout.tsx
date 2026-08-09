@@ -63,6 +63,8 @@ export default function TabsLayout() {
         name="(creations)"
         options={{ title: "Creations", tabBarIcon: creationsIcon }}
       />
+      <NativeTabs.Screen name="(applications)" options={{ tabBarItemHidden: true }} />
+      <NativeTabs.Screen name="(designs)" options={{ tabBarItemHidden: true }} />
       <NativeTabs.Screen name="(connections)" options={{ tabBarItemHidden: true }} />
     </NativeTabs>
   );

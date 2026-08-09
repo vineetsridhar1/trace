@@ -87,53 +87,16 @@ export default function CreationsScreen() {
           ),
         }}
       />
-      {searching ? (
-        <View style={[styles.search, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
-          <TextInput
-            autoFocus
-            accessibilityLabel="Search creations"
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search creations"
-            placeholderTextColor={theme.colors.dimForeground}
-            style={[styles.input, theme.typography.callout, { color: theme.colors.foreground }]}
-          />
-          <Pressable accessibilityRole="button" accessibilityLabel="Cancel search" onPress={closeSearch} hitSlop={8}>
-            <Text variant="subheadline" style={{ color: "#0a84ff", fontWeight: "600" }}>Cancel</Text>
-          </Pressable>
-        </View>
-      ) : null}
-      <View style={styles.filters} accessibilityRole="tablist">
-        {FILTERS.map(({ label, value }) => {
-          const selected = filter === value;
-          return (
-            <Pressable
-              key={value}
-              accessibilityRole="tab"
-              accessibilityState={{ selected }}
-              onPress={() => chooseFilter(value)}
-              style={[styles.filter, { borderColor: selected ? "#0a84ff" : theme.colors.border, backgroundColor: theme.colors.surface }]}
-            >
-              <Text variant="subheadline" style={{ color: selected ? "#0a84ff" : theme.colors.mutedForeground, fontWeight: "600" }}>{label}</Text>
-            </Pressable>
-          );
-        })}
-        <Pressable accessibilityRole="button" accessibilityLabel={archived ? "Show active creations" : "Show archived creations"} onPress={() => setArchived((value) => !value)} style={styles.archiveToggle}>
-          <Text variant="footnote" color="mutedForeground">{archived ? "Active" : "Archived"}</Text>
-        </Pressable>
-      </View>
-      {loading && creations.length === 0 ? <CreationLoading /> : (
-        <FlashList
+      <FlashList
           data={items}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
           getItemType={(item) => item.kind}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.colors.mutedForeground} />}
-          ListHeaderComponent={error ? <OfflineNotice onRetry={() => void refresh()} /> : null}
-          ListEmptyComponent={<CreationsEmpty error={error} archived={archived} query={query} onCreate={() => setCreating(true)} onRetry={() => void refresh()} />}
+          ListHeaderComponent={<CreationsListHeader searching={searching} query={query} onQueryChange={setQuery} onCancelSearch={closeSearch} filter={filter} archived={archived} error={error} onFilterChange={chooseFilter} onArchiveToggle={() => setArchived((value) => !value)} onRetry={() => void refresh()} />}
+          ListEmptyComponent={loading ? <CreationLoading /> : <CreationsEmpty error={error} archived={archived} query={query} onCreate={() => setCreating(true)} onRetry={() => void refresh()} />}
           contentInsetAdjustmentBehavior="automatic"
         />
-      )}
       <CreateCreationSheet visible={creating} onClose={() => setCreating(false)} onCreateApp={() => void createApplication()} onCreateDesign={() => void chooseDesignSystemAndCreate(activeOrgId)} />
     </View>
   );
@@ -156,6 +119,72 @@ function renderItem({ item }: { item: ListItem }) {
 
 function keyExtractor(item: ListItem): string {
   return item.kind === "header" ? `header:${item.section}` : item.creation.id;
+}
+
+function CreationsListHeader({
+  searching,
+  query,
+  onQueryChange,
+  onCancelSearch,
+  filter,
+  archived,
+  error,
+  onFilterChange,
+  onArchiveToggle,
+  onRetry,
+}: {
+  searching: boolean;
+  query: string;
+  onQueryChange: (value: string) => void;
+  onCancelSearch: () => void;
+  filter: CreationKindFilter;
+  archived: boolean;
+  error: string | null;
+  onFilterChange: (value: CreationKindFilter) => void;
+  onArchiveToggle: () => void;
+  onRetry: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <>
+      {searching ? (
+        <View style={[styles.search, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}>
+          <TextInput
+            autoFocus
+            accessibilityLabel="Search creations"
+            value={query}
+            onChangeText={onQueryChange}
+            placeholder="Search creations"
+            placeholderTextColor={theme.colors.dimForeground}
+            style={[styles.input, theme.typography.callout, { color: theme.colors.foreground }]}
+          />
+          <Pressable accessibilityRole="button" accessibilityLabel="Cancel search" onPress={onCancelSearch} hitSlop={8}>
+            <Text variant="subheadline" style={{ color: "#0a84ff", fontWeight: "600" }}>Cancel</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      <View style={styles.filters} accessibilityRole="tablist">
+        {FILTERS.map(({ label, value }) => {
+          const selected = filter === value;
+          return (
+            <Pressable
+              key={value}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              onPress={() => onFilterChange(value)}
+              style={[styles.filter, { borderColor: selected ? "#0a84ff" : theme.colors.border, backgroundColor: theme.colors.surface }]}
+            >
+              <Text variant="subheadline" style={{ color: selected ? "#0a84ff" : theme.colors.mutedForeground, fontWeight: "600" }}>{label}</Text>
+            </Pressable>
+          );
+        })}
+        <Pressable accessibilityRole="button" accessibilityLabel={archived ? "Show active creations" : "Show archived creations"} onPress={onArchiveToggle} style={styles.archiveToggle}>
+          <Text variant="footnote" color="mutedForeground">{archived ? "Active" : "Archived"}</Text>
+        </Pressable>
+      </View>
+      {error ? <OfflineNotice onRetry={onRetry} /> : null}
+    </>
+  );
 }
 
 function sameCreations(a: CreationListItem[], b: CreationListItem[]): boolean {
