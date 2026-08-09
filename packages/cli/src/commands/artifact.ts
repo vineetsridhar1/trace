@@ -8,17 +8,23 @@ import type { Command } from "../runtime.js";
 
 export const artifactCommand: Command = {
   path: ["artifact", "push"],
-  usage: "trace artifact push <type> <file-or-directory> [--key KEY] [--json]",
+  usage:
+    "trace artifact push <type> <file-or-directory> [--key KEY] [--idempotency-key KEY] [--json]",
   description: "Upload an immutable artifact from an active Trace invocation",
   async run(ctx) {
     const type = ctx.args[2] || usage("Artifact type is required");
     const sourceArg = ctx.args[3] || usage("Artifact file or directory is required");
     const source = resolve(sourceArg);
     let key = type === "visual-plan" || type === "trace.visual-plan.v1" ? "primary" : "default";
+    let idempotencyKey: string = randomUUID();
     for (let index = 4; index < ctx.args.length; index += 1) {
-      if (ctx.args[index] !== "--key") usage(`Unknown option: ${ctx.args[index]}`);
-      key = ctx.args[++index] || usage("--key requires a value");
+      const flag = ctx.args[index];
+      if (flag === "--key") key = ctx.args[++index] || usage("--key requires a value");
+      else if (flag === "--idempotency-key") {
+        idempotencyKey = ctx.args[++index] || usage("--idempotency-key requires a value");
+      } else usage(`Unknown option: ${flag}`);
     }
+    if (idempotencyKey.length > 200) usage("--idempotency-key must be at most 200 characters");
     if (!existsSync(source)) usage(`Path does not exist: ${source}`);
     const apiUrl = ctx.env.TRACE_API_URL || ctx.env.TRACE_SERVER_URL;
     const token = ctx.env.TRACE_INVOCATION_TOKEN;
@@ -36,11 +42,7 @@ export const artifactCommand: Command = {
       if (!validator) usage("Browser video validation is unavailable");
       const validated = spawnSync(validator, [source], { stdio: "inherit", env: ctx.env });
       if (validated.status !== 0) {
-        throw new CliError(
-          "video validation failed; artifact was not uploaded",
-          1,
-          "validation",
-        );
+        throw new CliError("video validation failed; artifact was not uploaded", 1, "validation");
       }
     }
 
@@ -57,21 +59,32 @@ export const artifactCommand: Command = {
       });
       if (packed.status !== 0) usage("Could not package artifact");
 
-      let response: Response;
-      try {
-        response = await fetch(new URL("/agent/artifacts", apiUrl), {
+      const upload = () =>
+        fetch(new URL("/agent/artifacts", apiUrl), {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/gzip",
             "X-Trace-Artifact-Type": type,
             "X-Trace-Artifact-Key": key,
-            "X-Trace-Idempotency-Key": randomUUID(),
+            "X-Trace-Idempotency-Key": idempotencyKey,
           },
           body: readFileSync(archivePath),
         });
+      let response: Response;
+      try {
+        response = await upload();
+        if (response.status >= 500) response = await upload();
       } catch {
-        throw new CliError("Could not connect to Trace", ExitCode.connectivity, "connectivity");
+        try {
+          response = await upload();
+        } catch {
+          throw new CliError(
+            `Could not connect to Trace; retry with --idempotency-key ${idempotencyKey}`,
+            ExitCode.connectivity,
+            "connectivity",
+          );
+        }
       }
       const result = (await response.json().catch(() => ({}))) as {
         error?: unknown;
@@ -79,12 +92,15 @@ export const artifactCommand: Command = {
       };
       if (!response.ok || typeof result.artifact?.id !== "string") {
         throw new CliError(
-          typeof result.error === "string" ? result.error : "Artifact upload failed",
+          `${typeof result.error === "string" ? result.error : "Artifact upload failed"}; retry with --idempotency-key ${idempotencyKey}`,
           response.status === 401 ? ExitCode.authentication : ExitCode.server,
           response.status === 401 ? "authentication" : "server",
         );
       }
-      ctx.output({ artifact: { id: result.artifact.id, type, key } }, result.artifact.id);
+      ctx.output(
+        { artifact: { id: result.artifact.id, type, key }, idempotencyKey },
+        result.artifact.id,
+      );
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }

@@ -2141,5 +2141,5 @@ type Subscription {
   sessionPortsChanged(sessionId: ID!, organizationId: ID!): SessionEndpoints!
   sessionStatusChanged(sessionId: ID!, organizationId: ID!): Session!
   chatEvents(chatId: ID!, types: [String!]): Event!
-  sessionEvents(sessionId: ID!, organizationId: ID!): Event!
+  sessionEvents(sessionId: ID!, organizationId: ID!, after: DateTime, afterEventId: ID): Event!
 }

@@ -15,6 +15,8 @@ vi.mock("./dataloader.js", () => ({
   createEventLoader: vi.fn(() => ({ kind: "eventLoader" })),
   createChatMembersLoader: vi.fn(() => ({ kind: "chatMembersLoader" })),
   createSessionTicketsLoader: vi.fn(() => ({ kind: "sessionTicketsLoader" })),
+  createChannelProjectsLoader: vi.fn(() => ({ kind: "channelProjectsLoader" })),
+  createSessionProjectsLoader: vi.fn(() => ({ kind: "sessionProjectsLoader" })),
   createChannelMembershipLoader: vi.fn(() => ({ kind: "channelMembershipLoader" })),
   createChatMembershipLoader: vi.fn(() => ({ kind: "chatMembershipLoader" })),
 }));

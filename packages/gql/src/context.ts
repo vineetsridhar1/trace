@@ -23,6 +23,8 @@ export interface Context {
   eventLoader: DataLoader<string, unknown | null>;
   chatMembersLoader: DataLoader<string, Array<{ userId: string; joinedAt: Date }>>;
   sessionTicketsLoader: DataLoader<string, unknown[]>;
+  channelProjectsLoader: DataLoader<string, unknown[]>;
+  sessionProjectsLoader: DataLoader<string, unknown[]>;
   channelMembershipLoader: DataLoader<string, boolean>;
   chatMembershipLoader: DataLoader<string, boolean>;
 }

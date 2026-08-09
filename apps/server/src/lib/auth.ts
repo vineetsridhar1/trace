@@ -3,10 +3,7 @@ import type { CookieOptions, Request, Response } from "express";
 import type { IncomingHttpHeaders } from "http";
 import jwt from "jsonwebtoken";
 import type { Context } from "../context.js";
-import {
-  authenticateMobileSecret,
-  type MobileAuthSubject,
-} from "../services/mobile-auth.js";
+import { authenticateMobileSecret, type MobileAuthSubject } from "../services/mobile-auth.js";
 import { getCanonicalLocalOrganizationId } from "../services/local-bootstrap.js";
 import { AuthenticationError } from "./errors.js";
 import { prisma } from "./db.js";
@@ -19,6 +16,8 @@ import {
   createEventLoader,
   createChatMembersLoader,
   createSessionTicketsLoader,
+  createChannelProjectsLoader,
+  createSessionProjectsLoader,
   createChannelMembershipLoader,
   createChatMembershipLoader,
 } from "./dataloader.js";
@@ -357,10 +356,7 @@ export function getRequestToken(req: Pick<Request, "headers" | "cookies">): stri
   return req.cookies?.trace_token ?? parseCookieToken(req.headers.cookie);
 }
 
-export async function buildContext({
-  req,
-  res,
-}: ExpressContextFunctionArgument): Promise<Context> {
+export async function buildContext({ req, res }: ExpressContextFunctionArgument): Promise<Context> {
   let userId: string | undefined;
   let authSubject: AccessTokenAuthSubject | null = null;
 
@@ -446,6 +442,8 @@ export async function buildContext({
     eventLoader: createEventLoader(),
     chatMembersLoader: createChatMembersLoader(),
     sessionTicketsLoader: createSessionTicketsLoader(organizationId),
+    channelProjectsLoader: createChannelProjectsLoader(organizationId),
+    sessionProjectsLoader: createSessionProjectsLoader(organizationId),
     channelMembershipLoader: createChannelMembershipLoader(user.id),
     chatMembershipLoader: createChatMembershipLoader(user.id),
   };
@@ -525,6 +523,8 @@ export async function buildWsContext(
     eventLoader: createEventLoader(),
     chatMembersLoader: createChatMembersLoader(),
     sessionTicketsLoader: createSessionTicketsLoader(organizationId),
+    channelProjectsLoader: createChannelProjectsLoader(organizationId),
+    sessionProjectsLoader: createSessionProjectsLoader(organizationId),
     channelMembershipLoader: createChannelMembershipLoader(user.id),
     chatMembershipLoader: createChatMembershipLoader(user.id),
   };

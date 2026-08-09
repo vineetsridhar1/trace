@@ -484,7 +484,12 @@ export const eventSubscriptions = {
             event.scopeType === "channel" ||
             eventPayloadChannelIds(eventPayloadRecord(event)).length
           ) {
-            return canViewChannelEvent(event, args.organizationId, ctx.userId, channelVisibilityCache);
+            return canViewChannelEvent(
+              event,
+              args.organizationId,
+              ctx.userId,
+              channelVisibilityCache,
+            );
           }
           return canViewSessionEvent(
             event,
@@ -509,7 +514,12 @@ export const eventSubscriptions = {
   sessionEvents: {
     subscribe: async (
       _: unknown,
-      args: { sessionId: string; organizationId: string },
+      args: {
+        sessionId: string;
+        organizationId: string;
+        after?: Date | null;
+        afterEventId?: string | null;
+      },
       ctx: Context,
     ) => {
       assertOrgAccess(ctx, args.organizationId);
@@ -518,16 +528,62 @@ export const eventSubscriptions = {
         string,
         { visibility: string; ownerUserId: string } | null
       >();
+      const topic = topics.sessionEvents(args.sessionId);
+      const liveIterator = pubsub.asyncIterator<{
+        sessionEvents: {
+          id: string;
+          scopeType: string;
+          scopeId: string;
+          eventType: EventType;
+          payload?: unknown;
+        };
+      }>(topic);
+      await pubsub.waitForSubscription(topic);
+
+      const replayThenLive = async function* () {
+        const seenIds = new Set<string>();
+        let after = args.after ?? undefined;
+        let afterEventId = args.afterEventId ?? undefined;
+        try {
+          if (after) {
+            while (true) {
+              const replay = await eventService.query(args.organizationId, {
+                scopeType: "session",
+                scopeId: args.sessionId,
+                after,
+                afterEventId,
+                limit: 500,
+              });
+              for (const event of replay) {
+                seenIds.add(event.id);
+                yield { sessionEvents: event };
+              }
+              const last = replay.at(-1);
+              if (!last || replay.length < 500) break;
+              after = last.timestamp;
+              afterEventId = last.id;
+            }
+          }
+          for await (const payload of liveIterator) {
+            if (seenIds.has(payload.sessionEvents.id)) continue;
+            yield payload;
+          }
+        } finally {
+          await liveIterator.return?.();
+        }
+      };
+
       return filterAsyncIterator(
-        pubsub.asyncIterator<{
+        replayThenLive(),
+        async (payload: {
           sessionEvents: {
+            id: string;
             scopeType: string;
             scopeId: string;
             eventType: EventType;
             payload?: unknown;
           };
-        }>(topics.sessionEvents(args.sessionId)),
-        async (payload) => {
+        }) => {
           if (payload.sessionEvents.eventType === "session_group_visibility_updated") {
             sessionVisibilityCache.clear();
           }

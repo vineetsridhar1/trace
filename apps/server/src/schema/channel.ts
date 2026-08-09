@@ -138,14 +138,8 @@ export const channelSubscriptions = {
 export const channelTypeResolvers = {
   Channel: {
     projects: async (channel: { id: string }, _args: unknown, ctx: Context) => {
-      const links = await prisma.channelProject.findMany({
-        where: {
-          channelId: channel.id,
-          project: { organizationId: requireOrgContext(ctx) },
-        },
-        include: { project: { include: { repo: true } } },
-      });
-      return links.map((link) => link.project);
+      requireOrgContext(ctx);
+      return ctx.channelProjectsLoader.load(channel.id);
     },
     members: (channel: { id: string }) => channelService.getMembers(channel.id),
     memberCount: (channel: { id: string; _count?: { members?: number } }) =>

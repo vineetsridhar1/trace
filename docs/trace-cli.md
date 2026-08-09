@@ -36,7 +36,7 @@ AI guidance should invoke `"$TRACE_CLI"`, not rely on `trace` being present on t
 "$TRACE_CLI" session stop [session-id] [--self]
 "$TRACE_CLI" session archive [session-id] [--self]
 "$TRACE_CLI" session events [session-id] [--limit 50] [--follow]
-"$TRACE_CLI" artifact push <type> <file-or-directory> [--key KEY]
+"$TRACE_CLI" artifact push <type> <file-or-directory> [--key KEY] [--idempotency-key KEY]
 ```
 
 All commands accept `--json`. Commands with an optional session ID default to `TRACE_SESSION_ID`.
@@ -75,7 +75,7 @@ follow mode prints the snapshot object first and then one `{ "event": ... }` obj
 | `session send`   | `{ event }` or `{ queuedMessage }`                                         |
 | lifecycle        | `{ session }` or `{ sessionGroup }`                                        |
 | `session events` | `{ events: [...], following }`                                             |
-| `artifact push`  | `{ artifact: { id, type, key } }`                                          |
+| `artifact push`  | `{ artifact: { id, type, key }, idempotencyKey }`                          |
 
 Errors are written to stderr as `{ "error": { "category", "message" } }` in JSON mode. Exit
 codes are stable: `2` authentication, `3` authorization, `4` validation, `5` connectivity, `6`

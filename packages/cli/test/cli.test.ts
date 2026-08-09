@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { TraceClient } from "../src/client.js";
 import { run } from "../src/main.js";
 
 describe("Trace CLI", () => {
@@ -112,9 +113,7 @@ describe("Trace CLI", () => {
       });
       expect(request.variables.input).not.toHaveProperty("runtimeInstanceId");
       expect(request.variables.input).not.toHaveProperty("sessionGroupId");
-      expect(new Headers(init?.headers).get("Authorization")).toBe(
-        "Bearer injected-agent-secret",
-      );
+      expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer injected-agent-secret");
       return new Response(
         JSON.stringify({
           data: {
@@ -163,16 +162,7 @@ describe("Trace CLI", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      run([
-        "session",
-        "start",
-        "hello",
-        "--group",
-        "group-1",
-        "--hosting",
-        "local",
-        "--json",
-      ]),
+      run(["session", "start", "hello", "--group", "group-1", "--hosting", "local", "--json"]),
     ).resolves.toBe(64);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(stderr.mock.calls.flat().join("")).toContain("sessions inherit those settings");
@@ -213,9 +203,7 @@ describe("Trace CLI", () => {
       run(["session", "start", "Review", "this", "--group", "group-target", "--json"]),
     ).resolves.toBe(0);
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(stdout.mock.calls.flat().join("")).toContain(
-      '"uiPath":"/g/group-target/s/session-2"',
-    );
+    expect(stdout.mock.calls.flat().join("")).toContain('"uiPath":"/g/group-target/s/session-2"');
   });
 
   it("does not inherit a coding runtime when an explicit generated kind needs its own runtime", async () => {
@@ -453,12 +441,14 @@ describe("Trace CLI", () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
     vi.stubEnv("TRACE_API_URL", "https://trace.test/");
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ data: { channel: { id: "channel-1", name: "General", repo: null } } }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ data: { channel: { id: "channel-1", name: "General", repo: null } } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
@@ -510,5 +500,79 @@ describe("Trace CLI", () => {
     await expect(run(["session", "start", "hello", "--repo", "repo-1", "--json"])).resolves.toBe(0);
     expect(keys).toHaveLength(2);
     expect(keys[0]).toBe(keys[1]);
+  });
+
+  it("retries artifact uploads with the caller-visible idempotency key", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    const keys: string[] = [];
+    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+      keys.push(new Headers(init?.headers).get("X-Trace-Idempotency-Key") ?? "");
+      if (keys.length === 1) throw new Error("response lost");
+      return new Response(JSON.stringify({ artifact: { id: "artifact-1" } }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      run([
+        "artifact",
+        "push",
+        "file-bundle",
+        "package.json",
+        "--idempotency-key",
+        "artifact-key-1",
+        "--json",
+      ]),
+    ).resolves.toBe(0);
+    expect(keys).toEqual(["artifact-key-1", "artifact-key-1"]);
+    expect(stdout.mock.calls.flat().join("")).toContain('"idempotencyKey":"artifact-key-1"');
+  });
+
+  it("surfaces graphql-transport-ws operation errors", async () => {
+    class FakeWebSocket {
+      private listeners = new Map<string, Array<(event: { data?: string }) => void>>();
+
+      constructor() {
+        queueMicrotask(() => this.emit("open", {}));
+      }
+
+      addEventListener(type: string, listener: (event: { data?: string }) => void) {
+        const listeners = this.listeners.get(type) ?? [];
+        listeners.push(listener);
+        this.listeners.set(type, listeners);
+      }
+
+      send(raw: string) {
+        const message = JSON.parse(raw) as { type?: string };
+        if (message.type === "connection_init") {
+          this.emit("message", { data: JSON.stringify({ type: "connection_ack" }) });
+        } else if (message.type === "subscribe") {
+          this.emit("message", {
+            data: JSON.stringify({
+              id: "trace-cli",
+              type: "error",
+              payload: [{ message: "Nested field denied", extensions: { code: "FORBIDDEN" } }],
+            }),
+          });
+        }
+      }
+
+      close() {
+        this.emit("close", {});
+      }
+
+      private emit(type: string, event: { data?: string }) {
+        for (const listener of this.listeners.get(type) ?? []) listener(event);
+      }
+    }
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const client = new TraceClient("https://trace.test", "token", "org-1");
+
+    await expect(
+      client.subscribe("subscription { sessionEvents { id } }", {}, () => undefined),
+    ).rejects.toMatchObject({ message: "Nested field denied", category: "authorization" });
   });
 });

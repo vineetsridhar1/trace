@@ -93,3 +93,7 @@ cloud hosting fails when cloud is unavailable; it is never silently changed to l
 Use `--self` instead of an ID to target the current session. Be careful: stopping or archiving `--self` can end your own ability to continue. If another session is actively running, queueing is normally the least disruptive way to add follow-up work.
 
 For monitoring, take bounded snapshots with `session events`. Use `--follow` only when continuous monitoring is actually requested, and stop following once the requested condition is met.
+
+Artifact uploads return an `idempotencyKey` in JSON mode and retry transient failures once. If a
+manual retry is needed, pass that value with `artifact push --idempotency-key <key>` to recover the
+original upload instead of creating a duplicate.

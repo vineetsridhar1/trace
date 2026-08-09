@@ -130,7 +130,7 @@ export class TraceClient {
       socket.addEventListener("message", (message) => {
         let payload: {
           type?: unknown;
-          payload?: { data?: TData; errors?: GraphQlError[] };
+          payload?: { data?: TData } | GraphQlError[];
         };
         try {
           payload = JSON.parse(String(message.data)) as typeof payload;
@@ -142,11 +142,19 @@ export class TraceClient {
           socket.send(
             JSON.stringify({ id: "trace-cli", type: "subscribe", payload: { query, variables } }),
           );
-        } else if (payload.type === "next" && payload.payload?.data) {
+        } else if (
+          payload.type === "next" &&
+          payload.payload &&
+          !Array.isArray(payload.payload) &&
+          payload.payload.data
+        ) {
           onData(payload.payload.data);
         } else if (payload.type === "error") {
-          reject(graphQlError(payload.payload?.errors?.[0] ?? {}));
+          const errors = Array.isArray(payload.payload) ? payload.payload : [];
+          reject(graphQlError(errors[0] ?? {}));
           socket.close();
+        } else if (payload.type === "complete") {
+          socket.close(1000, "Subscription completed");
         }
       });
       socket.addEventListener("error", () => {

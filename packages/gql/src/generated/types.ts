@@ -2728,6 +2728,8 @@ export type SubscriptionOrgEventsArgs = {
 };
 
 export type SubscriptionSessionEventsArgs = {
+  after?: InputMaybe<Scalars["DateTime"]["input"]>;
+  afterEventId?: InputMaybe<Scalars["ID"]["input"]>;
   organizationId: Scalars["ID"]["input"];
   sessionId: Scalars["ID"]["input"];
 };

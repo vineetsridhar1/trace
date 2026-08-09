@@ -1,4 +1,4 @@
-import { GraphQLError } from "graphql";
+import { GraphQLError, Kind, type GraphQLResolveInfo, type SelectionSetNode } from "graphql";
 import type { Context } from "../context.js";
 
 type RootOperation = "Query" | "Mutation" | "Subscription";
@@ -28,8 +28,109 @@ const ALLOWED_FIELDS: Record<RootOperation, Readonly<Record<string, string>>> = 
   },
 };
 
+const RESOURCE_SELECTIONS = {
+  channels: [
+    "id",
+    "name",
+    "type",
+    "visibility",
+    "baseBranch",
+    "viewerIsMember",
+    "repo.id",
+    "repo.name",
+    "projects.id",
+    "projects.name",
+  ],
+  channel: ["id", "name", "repo.id", "repo.name"],
+  repos: ["id", "name", "provider", "remoteUrl", "defaultBranch"],
+  repo: ["id", "name", "provider", "remoteUrl", "defaultBranch"],
+  projects: ["id", "name", "repo.id", "repo.name"],
+  project: ["id", "name", "repo.id", "repo.name"],
+} as const;
+
+const SESSION_SELECTIONS = [
+  "id",
+  "name",
+  "agentStatus",
+  "sessionStatus",
+  "tool",
+  "model",
+  "reasoningEffort",
+  "hosting",
+  "branch",
+  "sessionGroupId",
+  "createdAt",
+  "updatedAt",
+  "channel.id",
+  "channel.name",
+  "channel.repo.id",
+  "channel.repo.name",
+  "repo.id",
+  "repo.name",
+  "projects.id",
+  "connection.environmentId",
+  "connection.runtimeInstanceId",
+  "sessionGroup.kind",
+  "sessionGroup.visibility",
+] as const;
+const EVENT_SELECTIONS = ["id", "eventType", "scopeType", "scopeId", "timestamp", "payload"];
+
+const ALLOWED_SELECTIONS: Record<RootOperation, Readonly<Record<string, readonly string[]>>> = {
+  Query: {
+    ...RESOURCE_SELECTIONS,
+    sessions: SESSION_SELECTIONS,
+    session: SESSION_SELECTIONS,
+    events: EVENT_SELECTIONS,
+  },
+  Mutation: {
+    startSession: SESSION_SELECTIONS,
+    sendSessionMessage: EVENT_SELECTIONS,
+    queueSessionMessage: ["id", "sessionId", "text", "position", "createdAt"],
+    runSession: SESSION_SELECTIONS,
+    terminateSession: SESSION_SELECTIONS,
+    archiveSessionGroup: ["id", "name", "status", "archivedAt"],
+  },
+  Subscription: {
+    sessionEvents: EVENT_SELECTIONS,
+  },
+};
+
 function forbidden(message: string): never {
   throw new GraphQLError(message, { extensions: { code: "FORBIDDEN" } });
+}
+
+function assertAllowedSelectionSet(
+  operation: RootOperation,
+  field: string,
+  info: GraphQLResolveInfo,
+): void {
+  const allowed = new Set(ALLOWED_SELECTIONS[operation][field] ?? []);
+  const visitedFragments = new Set<string>();
+
+  const visit = (selectionSet: SelectionSetNode | undefined, prefix: string): void => {
+    for (const selection of selectionSet?.selections ?? []) {
+      if (selection.kind === Kind.FIELD) {
+        const name = selection.name.value;
+        if (name === "__typename") continue;
+        const path = prefix ? `${prefix}.${name}` : name;
+        const isAllowed = allowed.has(path);
+        const hasAllowedChild = [...allowed].some((candidate) => candidate.startsWith(`${path}.`));
+        if (!isAllowed && !hasAllowedChild) {
+          forbidden(`The session credential cannot select ${operation}.${field}.${path}`);
+        }
+        visit(selection.selectionSet, path);
+      } else if (selection.kind === Kind.INLINE_FRAGMENT) {
+        visit(selection.selectionSet, prefix);
+      } else {
+        const fragmentName = selection.name.value;
+        if (visitedFragments.has(fragmentName)) continue;
+        visitedFragments.add(fragmentName);
+        visit(info.fragments[fragmentName]?.selectionSet, prefix);
+      }
+    }
+  };
+
+  for (const fieldNode of info.fieldNodes) visit(fieldNode.selectionSet, "");
 }
 
 function assertAgentRequest(
@@ -37,6 +138,7 @@ function assertAgentRequest(
   operation: RootOperation,
   field: string,
   args: Record<string, unknown>,
+  info?: GraphQLResolveInfo,
 ): void {
   if (!ctx.agentSessionId) return;
 
@@ -44,6 +146,7 @@ function assertAgentRequest(
   if (!capability || !ctx.agentCapabilities?.includes(capability)) {
     forbidden(`The session credential cannot perform ${operation}.${field}`);
   }
+  if (info) assertAllowedSelectionSet(operation, field, info);
 
   const input =
     args.input && typeof args.input === "object" && !Array.isArray(args.input)
@@ -83,7 +186,8 @@ function wrapFunction(
   return (...resolverArgs: unknown[]) => {
     const args = (resolverArgs[1] ?? {}) as Record<string, unknown>;
     const ctx = resolverArgs[2] as Context;
-    assertAgentRequest(ctx, operation, field, args);
+    const info = resolverArgs[3] as GraphQLResolveInfo | undefined;
+    assertAgentRequest(ctx, operation, field, args, info);
     return Reflect.apply(resolver, undefined, resolverArgs);
   };
 }

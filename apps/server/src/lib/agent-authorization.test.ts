@@ -1,3 +1,4 @@
+import { Kind, parse, type FieldNode, type GraphQLResolveInfo } from "graphql";
 import { describe, expect, it, vi } from "vitest";
 import type { Context } from "../context.js";
 import { restrictAgentRootResolvers } from "./agent-authorization.js";
@@ -22,6 +23,23 @@ function context(sessionId: string): Context {
       "session:archive",
     ],
   } as Context;
+}
+
+function infoFor(source: string): GraphQLResolveInfo {
+  const document = parse(source);
+  const operation = document.definitions.find(
+    (definition) => definition.kind === Kind.OPERATION_DEFINITION,
+  );
+  if (!operation || operation.kind !== Kind.OPERATION_DEFINITION)
+    throw new Error("Missing operation");
+  const fieldNode = operation.selectionSet.selections[0];
+  if (!fieldNode || fieldNode.kind !== Kind.FIELD) throw new Error("Missing root field");
+  const fragments = Object.fromEntries(
+    document.definitions
+      .filter((definition) => definition.kind === Kind.FRAGMENT_DEFINITION)
+      .map((fragment) => [fragment.name.value, fragment]),
+  );
+  return { fieldNodes: [fieldNode as FieldNode], fragments } as unknown as GraphQLResolveInfo;
 }
 
 describe("agent GraphQL authorization", () => {
@@ -57,5 +75,32 @@ describe("agent GraphQL authorization", () => {
     expect(() =>
       restricted.sessions(null, { organizationId: "org-2" }, context("session-a"), null),
     ).toThrow("cannot access another organization");
+  });
+
+  it("allows only the nested fields required by the session CLI", () => {
+    const resolver = vi.fn(() => "ok");
+    const restricted = restrictAgentRootResolvers("Query", { session: resolver });
+
+    expect(
+      restricted.session(
+        null,
+        { id: "session-a" },
+        context("session-a"),
+        infoFor(`query { session(id: "session-a") { id channel { id repo { id name } } } }`),
+      ),
+    ).toBe("ok");
+  });
+
+  it("rejects sensitive nested fields even below an allowlisted root", () => {
+    const restricted = restrictAgentRootResolvers("Query", { channel: () => ({}) });
+
+    expect(() =>
+      restricted.channel(
+        null,
+        { id: "channel-a" },
+        context("session-a"),
+        infoFor(`query { channel(id: "channel-a") { id owner { email organizations { role } } } }`),
+      ),
+    ).toThrow("cannot select Query.channel.owner");
   });
 });

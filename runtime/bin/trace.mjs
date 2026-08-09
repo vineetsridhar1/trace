@@ -32,17 +32,22 @@ function usage(message) {
 // src/commands/artifact.ts
 var artifactCommand = {
   path: ["artifact", "push"],
-  usage: "trace artifact push <type> <file-or-directory> [--key KEY] [--json]",
+  usage: "trace artifact push <type> <file-or-directory> [--key KEY] [--idempotency-key KEY] [--json]",
   description: "Upload an immutable artifact from an active Trace invocation",
   async run(ctx) {
     const type = ctx.args[2] || usage("Artifact type is required");
     const sourceArg = ctx.args[3] || usage("Artifact file or directory is required");
     const source = resolve(sourceArg);
     let key = type === "visual-plan" || type === "trace.visual-plan.v1" ? "primary" : "default";
+    let idempotencyKey = randomUUID();
     for (let index = 4; index < ctx.args.length; index += 1) {
-      if (ctx.args[index] !== "--key") usage(`Unknown option: ${ctx.args[index]}`);
-      key = ctx.args[++index] || usage("--key requires a value");
+      const flag = ctx.args[index];
+      if (flag === "--key") key = ctx.args[++index] || usage("--key requires a value");
+      else if (flag === "--idempotency-key") {
+        idempotencyKey = ctx.args[++index] || usage("--idempotency-key requires a value");
+      } else usage(`Unknown option: ${flag}`);
     }
+    if (idempotencyKey.length > 200) usage("--idempotency-key must be at most 200 characters");
     if (!existsSync(source)) usage(`Path does not exist: ${source}`);
     const apiUrl = ctx.env.TRACE_API_URL || ctx.env.TRACE_SERVER_URL;
     const token = ctx.env.TRACE_INVOCATION_TOKEN;
@@ -59,11 +64,7 @@ var artifactCommand = {
       if (!validator) usage("Browser video validation is unavailable");
       const validated = spawnSync(validator, [source], { stdio: "inherit", env: ctx.env });
       if (validated.status !== 0) {
-        throw new CliError(
-          "video validation failed; artifact was not uploaded",
-          1,
-          "validation"
-        );
+        throw new CliError("video validation failed; artifact was not uploaded", 1, "validation");
       }
     }
     const temporary = mkdtempSync(join(tmpdir(), "trace-artifact-"));
@@ -76,31 +77,44 @@ var artifactCommand = {
         env: { ...ctx.env, COPYFILE_DISABLE: "1" }
       });
       if (packed.status !== 0) usage("Could not package artifact");
+      const upload = () => fetch(new URL("/agent/artifacts", apiUrl), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/gzip",
+          "X-Trace-Artifact-Type": type,
+          "X-Trace-Artifact-Key": key,
+          "X-Trace-Idempotency-Key": idempotencyKey
+        },
+        body: readFileSync(archivePath)
+      });
       let response;
       try {
-        response = await fetch(new URL("/agent/artifacts", apiUrl), {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/gzip",
-            "X-Trace-Artifact-Type": type,
-            "X-Trace-Artifact-Key": key,
-            "X-Trace-Idempotency-Key": randomUUID()
-          },
-          body: readFileSync(archivePath)
-        });
+        response = await upload();
+        if (response.status >= 500) response = await upload();
       } catch {
-        throw new CliError("Could not connect to Trace", ExitCode.connectivity, "connectivity");
+        try {
+          response = await upload();
+        } catch {
+          throw new CliError(
+            `Could not connect to Trace; retry with --idempotency-key ${idempotencyKey}`,
+            ExitCode.connectivity,
+            "connectivity"
+          );
+        }
       }
       const result = await response.json().catch(() => ({}));
       if (!response.ok || typeof result.artifact?.id !== "string") {
         throw new CliError(
-          typeof result.error === "string" ? result.error : "Artifact upload failed",
+          `${typeof result.error === "string" ? result.error : "Artifact upload failed"}; retry with --idempotency-key ${idempotencyKey}`,
           response.status === 401 ? ExitCode.authentication : ExitCode.server,
           response.status === 401 ? "authentication" : "server"
         );
       }
-      ctx.output({ artifact: { id: result.artifact.id, type, key } }, result.artifact.id);
+      ctx.output(
+        { artifact: { id: result.artifact.id, type, key }, idempotencyKey },
+        result.artifact.id
+      );
     } finally {
       rmSync(temporary, { recursive: true, force: true });
     }
@@ -226,7 +240,14 @@ var SESSION_FIELDS = `
 `;
 var EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
 var AGENT_STATUSES = ["not_started", "active", "done", "failed", "stopped"];
-var CODING_TOOLS = ["antigravity", "claude_code", "codex", "cursor_composer", "custom", "pi"];
+var CODING_TOOLS = [
+  "antigravity",
+  "claude_code",
+  "codex",
+  "cursor_composer",
+  "custom",
+  "pi"
+];
 var SESSION_KINDS = ["coding", "design", "design_system", "app", "pdf", "animation"];
 var HOSTING_MODES = ["cloud", "local"];
 var VISIBILITIES = ["public", "private"];
@@ -481,7 +502,8 @@ function parseTargetAction(ctx) {
     const value = ctx.args[index] ?? "";
     if (value === "--self") self = true;
     else if (value === "--queue") queue = true;
-    else if (value === "--interaction-mode") interactionMode = optionValue(ctx.args, index++, value);
+    else if (value === "--interaction-mode")
+      interactionMode = optionValue(ctx.args, index++, value);
     else values.push(value);
   }
   const id = self ? sessionId(ctx) : sessionId(ctx, values.shift());
@@ -494,7 +516,10 @@ var sessionCommands = [
     description: "List sessions visible to the session owner",
     async run(ctx) {
       const client = await ctx.client();
-      const variables = { organizationId: client.organizationId, filters: parseSessionList(ctx.args) };
+      const variables = {
+        organizationId: client.organizationId,
+        filters: parseSessionList(ctx.args)
+      };
       const result = await client.graphql(
         `query TraceCliSessions($organizationId: ID!, $filters: SessionFilters) {
           sessions(organizationId: $organizationId, filters: $filters) { ${SESSION_FIELDS} }
@@ -503,7 +528,9 @@ var sessionCommands = [
       );
       ctx.output(
         { sessions: result.sessions },
-        result.sessions.length ? result.sessions.map((session) => `${session.id}	${session.name}	${session.agentStatus}	${session.tool}`).join("\n") : "No sessions found"
+        result.sessions.length ? result.sessions.map(
+          (session) => `${session.id}	${session.name}	${session.agentStatus}	${session.tool}`
+        ).join("\n") : "No sessions found"
       );
     }
   },
@@ -560,17 +587,28 @@ var sessionCommands = [
           }`,
           variables2
         );
-        ctx.output({ queuedMessage: result2.queueSessionMessage }, `Queued message (${result2.queueSessionMessage.id})`);
+        ctx.output(
+          { queuedMessage: result2.queueSessionMessage },
+          `Queued message (${result2.queueSessionMessage.id})`
+        );
         return;
       }
-      const variables = { sessionId: id, text, interactionMode: interactionMode ?? null, clientMutationId: randomUUID2() };
+      const variables = {
+        sessionId: id,
+        text,
+        interactionMode: interactionMode ?? null,
+        clientMutationId: randomUUID2()
+      };
       const result = await client.graphql(
         `mutation TraceCliSendSessionMessage($sessionId: ID!, $text: String!, $interactionMode: String, $clientMutationId: String) {
           sendSessionMessage(sessionId: $sessionId, text: $text, interactionMode: $interactionMode, clientMutationId: $clientMutationId) { ${EVENT_FIELDS} }
         }`,
         variables
       );
-      ctx.output({ event: result.sendSessionMessage }, `Sent message (${result.sendSessionMessage.id})`);
+      ctx.output(
+        { event: result.sendSessionMessage },
+        `Sent message (${result.sendSessionMessage.id})`
+      );
     }
   },
   {
@@ -579,7 +617,11 @@ var sessionCommands = [
     description: "Start or resume a session run",
     async run(ctx) {
       const { id, values, interactionMode } = parseTargetAction(ctx);
-      const variables = { id, prompt: values.join(" ").trim() || null, interactionMode: interactionMode ?? null };
+      const variables = {
+        id,
+        prompt: values.join(" ").trim() || null,
+        interactionMode: interactionMode ?? null
+      };
       const client = await ctx.client();
       const result = await client.graphql(
         `mutation TraceCliRunSession($id: ID!, $prompt: String, $interactionMode: String) { runSession(id: $id, prompt: $prompt, interactionMode: $interactionMode) { ${SESSION_FIELDS} } }`,
@@ -617,7 +659,10 @@ var sessionCommands = [
         `mutation TraceCliArchiveSession($id: ID!) { archiveSessionGroup(id: $id) { id name status archivedAt } }`,
         { id: session.sessionGroupId }
       );
-      ctx.output({ sessionGroup: result.archiveSessionGroup }, `Archived session group (${session.sessionGroupId})`);
+      ctx.output(
+        { sessionGroup: result.archiveSessionGroup },
+        `Archived session group (${session.sessionGroupId})`
+      );
     }
   },
   {
@@ -640,9 +685,14 @@ var sessionCommands = [
       id = sessionId(ctx, id);
       const client = await ctx.client();
       const organizationId2 = client.organizationId ?? usage("Organization is required");
-      const variables = { organizationId: organizationId2, scope: { type: "session", id }, limit };
+      const variables = {
+        organizationId: organizationId2,
+        scope: { type: "session", id },
+        limit,
+        before: "9999-12-31T23:59:59.999Z"
+      };
       const result = await client.graphql(
-        `query TraceCliSessionEvents($organizationId: ID!, $scope: ScopeInput!, $limit: Int) { events(organizationId: $organizationId, scope: $scope, limit: $limit) { ${EVENT_FIELDS} } }`,
+        `query TraceCliSessionEvents($organizationId: ID!, $scope: ScopeInput!, $limit: Int, $before: DateTime) { events(organizationId: $organizationId, scope: $scope, limit: $limit, before: $before) { ${EVENT_FIELDS} } }`,
         variables
       );
       ctx.output(
@@ -650,14 +700,22 @@ var sessionCommands = [
         result.events.length ? result.events.map((event) => `${event.timestamp}	${event.eventType}	${event.id}`).join("\n") : "No events found"
       );
       if (!follow) return;
+      const cursor = result.events.at(-1);
       await client.subscribe(
-        `subscription TraceCliFollowSession($sessionId: ID!, $organizationId: ID!) { sessionEvents(sessionId: $sessionId, organizationId: $organizationId) { ${EVENT_FIELDS} } }`,
-        { sessionId: id, organizationId: organizationId2 },
+        `subscription TraceCliFollowSession($sessionId: ID!, $organizationId: ID!, $after: DateTime, $afterEventId: ID) { sessionEvents(sessionId: $sessionId, organizationId: $organizationId, after: $after, afterEventId: $afterEventId) { ${EVENT_FIELDS} } }`,
+        {
+          sessionId: id,
+          organizationId: organizationId2,
+          after: cursor?.timestamp ?? "1970-01-01T00:00:00.000Z",
+          ...cursor ? { afterEventId: cursor.id } : {}
+        },
         (data) => {
           const event = data.sessionEvents;
-          process.stdout.write(ctx.options.json ? `${JSON.stringify({ event })}
+          process.stdout.write(
+            ctx.options.json ? `${JSON.stringify({ event })}
 ` : `${event.timestamp}	${event.eventType}	${event.id}
-`);
+`
+          );
         }
       );
     }
@@ -781,11 +839,14 @@ var TraceClient = class {
           socket.send(
             JSON.stringify({ id: "trace-cli", type: "subscribe", payload: { query, variables } })
           );
-        } else if (payload.type === "next" && payload.payload?.data) {
+        } else if (payload.type === "next" && payload.payload && !Array.isArray(payload.payload) && payload.payload.data) {
           onData(payload.payload.data);
         } else if (payload.type === "error") {
-          reject(graphQlError(payload.payload?.errors?.[0] ?? {}));
+          const errors = Array.isArray(payload.payload) ? payload.payload : [];
+          reject(graphQlError(errors[0] ?? {}));
           socket.close();
+        } else if (payload.type === "complete") {
+          socket.close(1e3, "Subscription completed");
         }
       });
       socket.addEventListener("error", () => {
