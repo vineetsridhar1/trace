@@ -8,7 +8,7 @@ vi.mock("../lib/db.js", async () => {
 });
 
 vi.mock("../lib/session-router.js", () => ({
-  sessionRouter: { getRuntime: vi.fn(), sendToRuntime: vi.fn() },
+  sessionRouter: { getRuntimeDescriptor: vi.fn(), sendToRuntimeAsync: vi.fn() },
 }));
 
 vi.mock("./app-integrations.js", () => ({
@@ -25,8 +25,8 @@ import { EndpointProxyService } from "./endpoint-proxy.js";
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const integrationMock = appIntegrationService as unknown as { execute: ReturnType<typeof vi.fn> };
 const sessionRouterMock = sessionRouter as unknown as {
-  getRuntime: ReturnType<typeof vi.fn>;
-  sendToRuntime: ReturnType<typeof vi.fn>;
+  getRuntimeDescriptor: ReturnType<typeof vi.fn>;
+  sendToRuntimeAsync: ReturnType<typeof vi.fn>;
 };
 
 describe("EndpointProxyService application integrations", () => {
@@ -120,11 +120,10 @@ describe("EndpointProxyService application integrations", () => {
       runtimeInstanceId: "runtime-1",
     });
     prismaMock.endpointTrafficEntry.create.mockResolvedValue({ id: "traffic-1" });
-    sessionRouterMock.getRuntime.mockReturnValue({
+    sessionRouterMock.getRuntimeDescriptor.mockReturnValue({
       key: "runtime-key",
-      ws: { readyState: 1, OPEN: 1 },
     });
-    sessionRouterMock.sendToRuntime.mockReturnValue("unavailable");
+    sessionRouterMock.sendToRuntimeAsync.mockResolvedValue("unavailable");
     const request = Object.assign(Readable.from([]), {
       url: "/api/revenue",
       method: "GET",
@@ -142,7 +141,7 @@ describe("EndpointProxyService application integrations", () => {
       "endpoint-key",
     );
 
-    const message = sessionRouterMock.sendToRuntime.mock.calls[0]?.[1] as {
+    const message = sessionRouterMock.sendToRuntimeAsync.mock.calls[0]?.[1] as {
       headers: Record<string, string>;
     };
     const context = verifyAppViewerContextToken(message.headers["x-trace-app-viewer-context"]!);

@@ -1103,6 +1103,7 @@ type SupportedIntegrationCapability {
   id: String!
   name: String!
   description: String!
+  guide: String!
   allowedMethods: [String!]!
   allowedPathPrefixes: [String!]!
 }
@@ -1113,6 +1114,7 @@ type SupportedAppIntegration {
   provider: String!
   providerConfigKey: String!
   description: String!
+  guide: String!
   capabilities: [SupportedIntegrationCapability!]!
 }
 
@@ -2200,7 +2202,7 @@ type Mutation {
   createNangoConnectSession(input: CreateNangoConnectSessionInput!): NangoConnectSession!
   deleteIntegrationConnection(id: ID!): Boolean!
   upsertAppIntegrationBinding(input: UpsertAppIntegrationBindingInput!): AppIntegrationBinding!
-  deleteAppIntegrationBinding(id: ID!): Boolean!
+  deleteAppIntegrationBinding(id: ID!, sessionGroupId: ID): Boolean!
   registerRepoWebhook(repoId: ID!): Repo!
   unregisterRepoWebhook(repoId: ID!): Repo!
   createChat(input: CreateChatInput!): Chat!

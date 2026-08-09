@@ -55,11 +55,16 @@ export const appIntegrationMutations = {
       ctx.role,
       args.input,
     ),
-  deleteAppIntegrationBinding: (_parent: unknown, args: { id: string }, ctx: Context) =>
+  deleteAppIntegrationBinding: (
+    _parent: unknown,
+    args: { id: string; sessionGroupId?: string | null },
+    ctx: Context,
+  ) =>
     appIntegrationService.deleteBinding(
       requireOrgContext(ctx),
       requireUser(ctx),
       ctx.role,
       args.id,
+      args.sessionGroupId,
     ),
 };

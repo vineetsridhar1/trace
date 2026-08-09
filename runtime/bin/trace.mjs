@@ -18,6 +18,84 @@ var SESSION_FIELDS = `
 `;
 var EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
 var traceCliOperations = {
+  integrationCatalog: operation({
+    name: "TraceCliIntegrationCatalog",
+    type: "query",
+    rootField: "supportedAppIntegrations",
+    capability: "integration:read",
+    argumentPaths: [],
+    document: `query TraceCliIntegrationCatalog {
+      supportedAppIntegrations {
+        id name provider providerConfigKey description guide
+        capabilities { id name description guide allowedMethods allowedPathPrefixes }
+      }
+    }`
+  }),
+  integrationConnections: operation({
+    name: "TraceCliIntegrationConnections",
+    type: "query",
+    rootField: "integrationConnections",
+    capability: "integration:read",
+    argumentPaths: [],
+    document: `query TraceCliIntegrationConnections {
+      integrationConnections {
+        id ownerUserId provider providerConfigKey displayName kind status lastError
+      }
+    }`
+  }),
+  appIntegrationBindings: operation({
+    name: "TraceCliAppIntegrationBindings",
+    type: "query",
+    rootField: "appIntegrationBindings",
+    capability: "integration:read",
+    argumentPaths: ["sessionGroupId"],
+    document: `query TraceCliAppIntegrationBindings($sessionGroupId: ID!) {
+      appIntegrationBindings(sessionGroupId: $sessionGroupId) {
+        id sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
+        allowedMethods allowedPathPrefixes
+      }
+    }`
+  }),
+  createIntegrationConnectSession: operation({
+    name: "TraceCliCreateIntegrationConnectSession",
+    type: "mutation",
+    rootField: "createNangoConnectSession",
+    capability: "integration:connect",
+    argumentPaths: ["input.integrationId", "input.kind"],
+    document: `mutation TraceCliCreateIntegrationConnectSession($input: CreateNangoConnectSessionInput!) {
+      createNangoConnectSession(input: $input) { connectLink expiresAt }
+    }`
+  }),
+  upsertAppIntegrationBinding: operation({
+    name: "TraceCliUpsertAppIntegrationBinding",
+    type: "mutation",
+    rootField: "upsertAppIntegrationBinding",
+    capability: "integration:configure",
+    argumentPaths: [
+      "input.sessionGroupId",
+      "input.id",
+      "input.integrationId",
+      "input.capabilityIds",
+      "input.executionIdentity",
+      "input.sharedConnectionId"
+    ],
+    document: `mutation TraceCliUpsertAppIntegrationBinding($input: UpsertAppIntegrationBindingInput!) {
+      upsertAppIntegrationBinding(input: $input) {
+        id sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
+        allowedMethods allowedPathPrefixes
+      }
+    }`
+  }),
+  deleteAppIntegrationBinding: operation({
+    name: "TraceCliDeleteAppIntegrationBinding",
+    type: "mutation",
+    rootField: "deleteAppIntegrationBinding",
+    capability: "integration:configure",
+    argumentPaths: ["id", "sessionGroupId"],
+    document: `mutation TraceCliDeleteAppIntegrationBinding($id: ID!, $sessionGroupId: ID!) {
+      deleteAppIntegrationBinding(id: $id, sessionGroupId: $sessionGroupId)
+    }`
+  }),
   channels: operation({
     name: "TraceCliChannels",
     type: "query",
@@ -846,6 +924,213 @@ var contextCommand = defineCommand({
   }
 });
 
+// src/commands/integration/shared.ts
+function requireCurrentAppGroup(ctx) {
+  const sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
+  if (!sessionGroupId) {
+    throw new CliError(
+      "This command requires an active Trace app session",
+      ExitCode.validation,
+      "validation"
+    );
+  }
+  return sessionGroupId;
+}
+async function loadIntegrationCatalog(client) {
+  const result = await client.graphql(traceCliOperations.integrationCatalog, {});
+  return result.supportedAppIntegrations;
+}
+async function loadIntegrationBindings(client, sessionGroupId) {
+  const variables = { sessionGroupId };
+  const result = await client.graphql(traceCliOperations.appIntegrationBindings, variables);
+  return result.appIntegrationBindings;
+}
+
+// src/commands/integration/add.ts
+var integrationAddCommand = defineCommand({
+  path: ["integration", "add"],
+  description: "Add or update a supported integration on the current Trace app",
+  positionals: [{ name: "integration", required: true }],
+  options: [
+    {
+      name: "capabilities",
+      flag: "--capabilities",
+      kind: "string",
+      valueName: "ID,ID",
+      description: "Least-privilege capability IDs from integration list"
+    },
+    {
+      name: "identity",
+      flag: "--identity",
+      kind: "string",
+      valueName: "MODE",
+      choices: ["viewer", "shared", "service"],
+      description: "Account selection mode (default: viewer)"
+    },
+    {
+      name: "connection",
+      flag: "--connection",
+      kind: "string",
+      valueName: "ID",
+      description: "Connected account ID for shared or service identity"
+    }
+  ],
+  async run(ctx, input) {
+    const integrationId = input.positionals[0] ?? usage("Integration is required");
+    const sessionGroupId = requireCurrentAppGroup(ctx);
+    const client = await ctx.client();
+    const [catalog, bindings] = await Promise.all([
+      loadIntegrationCatalog(client),
+      loadIntegrationBindings(client, sessionGroupId)
+    ]);
+    const integration = catalog.find((candidate) => candidate.id === integrationId);
+    if (!integration) usage(`Unsupported integration: ${integrationId}`);
+    const requestedCapabilities = optionString(input, "capabilities");
+    const capabilityIds = requestedCapabilities ? requestedCapabilities.split(",").map((value) => value.trim()).filter(Boolean) : integration.capabilities.length === 1 ? [integration.capabilities[0]?.id ?? ""] : usage(
+      `--capabilities is required; choose from: ${integration.capabilities.map((item) => item.id).join(", ")}`
+    );
+    const invalidCapability = capabilityIds.find(
+      (id) => !integration.capabilities.some((capability) => capability.id === id)
+    );
+    if (invalidCapability) usage(`Unknown ${integrationId} capability: ${invalidCapability}`);
+    const executionIdentity = optionString(input, "identity") ?? "viewer";
+    const sharedConnectionId = optionString(input, "connection") ?? null;
+    if (executionIdentity === "viewer" && sharedConnectionId) {
+      usage("--connection is only valid with shared or service identity");
+    }
+    if (executionIdentity !== "viewer" && !sharedConnectionId) {
+      usage(`--connection is required with ${executionIdentity} identity`);
+    }
+    const existing = bindings.find(
+      (binding) => binding.providerConfigKey === integration.providerConfigKey
+    );
+    const variables = {
+      input: {
+        ...existing ? { id: existing.id } : {},
+        sessionGroupId,
+        integrationId,
+        capabilityIds,
+        executionIdentity,
+        sharedConnectionId
+      }
+    };
+    const result = await client.graphql(traceCliOperations.upsertAppIntegrationBinding, variables);
+    ctx.output(
+      {
+        integration,
+        selectedCapabilities: integration.capabilities.filter(
+          (capability) => capabilityIds.includes(capability.id)
+        ),
+        binding: result.upsertAppIntegrationBinding
+      },
+      `${integration.name} is ready for this app using ${executionIdentity} identity`
+    );
+  }
+});
+
+// src/commands/integration/connect.ts
+var integrationConnectCommand = defineCommand({
+  path: ["integration", "connect"],
+  description: "Create an authorization link for a personal or organization service account",
+  positionals: [{ name: "integration", required: true }],
+  options: [
+    {
+      name: "service",
+      flag: "--service",
+      kind: "boolean",
+      description: "Connect an organization service account (admins only)"
+    }
+  ],
+  async run(ctx, input) {
+    const integrationId = input.positionals[0] ?? usage("Integration is required");
+    const client = await ctx.client();
+    const variables = {
+      input: {
+        integrationId,
+        kind: optionBoolean(input, "service") ? "service" : "personal"
+      }
+    };
+    const result = await client.graphql(traceCliOperations.createIntegrationConnectSession, variables);
+    const session = result.createNangoConnectSession;
+    ctx.output(
+      { integrationId, kind: variables.input.kind, ...session },
+      `Authorize ${integrationId}: ${session.connectLink}`
+    );
+  }
+});
+
+// src/commands/integration/list.ts
+var integrationListCommand = defineCommand({
+  path: ["integration", "list"],
+  description: "List supported integrations, connected accounts, usage guides, and current app access",
+  async run(ctx) {
+    const client = await ctx.client();
+    const sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
+    const [integrations, connectionResult, bindings] = await Promise.all([
+      loadIntegrationCatalog(client),
+      client.graphql(traceCliOperations.integrationConnections, {}),
+      sessionGroupId ? loadIntegrationBindings(client, sessionGroupId) : Promise.resolve([])
+    ]);
+    const connections = connectionResult.integrationConnections;
+    const value = {
+      integrations: integrations.map((integration) => ({
+        ...integration,
+        connections: connections.filter(
+          (connection) => connection.providerConfigKey === integration.providerConfigKey
+        ),
+        appAccess: bindings.filter(
+          (binding) => binding.providerConfigKey === integration.providerConfigKey
+        )
+      })),
+      sessionGroupId: sessionGroupId ?? null
+    };
+    ctx.output(
+      value,
+      value.integrations.length ? value.integrations.map((integration) => {
+        const capabilities = integration.capabilities.map((capability) => capability.id).join(", ");
+        const connectionState = integration.connections.length ? `${integration.connections.length} connected account(s)` : "not connected";
+        const accessState = integration.appAccess.length ? "added to this app" : "not added";
+        return `${integration.id}	${capabilities}	${connectionState}	${accessState}`;
+      }).join("\n") : "No supported integrations"
+    );
+  }
+});
+
+// src/commands/integration/remove.ts
+var integrationRemoveCommand = defineCommand({
+  path: ["integration", "remove"],
+  description: "Remove an integration from the current Trace app",
+  positionals: [{ name: "integration", required: true }],
+  async run(ctx, input) {
+    const reference = input.positionals[0] ?? usage("Integration is required");
+    const sessionGroupId = requireCurrentAppGroup(ctx);
+    const client = await ctx.client();
+    const [catalog, bindings] = await Promise.all([
+      loadIntegrationCatalog(client),
+      loadIntegrationBindings(client, sessionGroupId)
+    ]);
+    const integration = catalog.find((candidate) => candidate.id === reference);
+    const binding = bindings.find(
+      (candidate) => candidate.id === reference || integration && candidate.providerConfigKey === integration.providerConfigKey
+    );
+    if (!binding) usage(`Integration is not configured on this app: ${reference}`);
+    const variables = { id: binding.id, sessionGroupId };
+    await client.graphql(
+      traceCliOperations.deleteAppIntegrationBinding,
+      variables
+    );
+    ctx.output({ removed: true, bindingId: binding.id }, `${binding.label} removed from this app`);
+  }
+});
+
+// src/commands/integration/index.ts
+var integrationCommands = [
+  integrationListCommand,
+  integrationConnectCommand,
+  integrationAddCommand,
+  integrationRemoveCommand
+];
+
 // src/commands/project/list.ts
 var projectListCommand = defineCommand({
   path: ["project", "list"],
@@ -1521,6 +1806,7 @@ var sessionCommands = [
 // src/commands/index.ts
 var commands = [
   contextCommand,
+  ...integrationCommands,
   channelListCommand,
   repoListCommand,
   projectListCommand,

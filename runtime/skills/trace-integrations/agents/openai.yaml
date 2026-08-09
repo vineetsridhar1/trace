@@ -1,0 +1,4 @@
+interface:
+  display_name: "Trace Integrations"
+  short_description: "Connect and configure data for Trace apps"
+  default_prompt: "Discover and configure the requested integration for this Trace app, then use it from the server runtime."

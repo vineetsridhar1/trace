@@ -1260,6 +1260,7 @@ export type MutationDeleteApiTokenArgs = {
 
 export type MutationDeleteAppIntegrationBindingArgs = {
   id: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type MutationDeleteChannelArgs = {
@@ -2843,6 +2844,7 @@ export type SupportedAppIntegration = {
   __typename?: "SupportedAppIntegration";
   capabilities: Array<SupportedIntegrationCapability>;
   description: Scalars["String"]["output"];
+  guide: Scalars["String"]["output"];
   id: Scalars["String"]["output"];
   name: Scalars["String"]["output"];
   provider: Scalars["String"]["output"];
@@ -2854,6 +2856,7 @@ export type SupportedIntegrationCapability = {
   allowedMethods: Array<Scalars["String"]["output"]>;
   allowedPathPrefixes: Array<Scalars["String"]["output"]>;
   description: Scalars["String"]["output"];
+  guide: Scalars["String"]["output"];
   id: Scalars["String"]["output"];
   name: Scalars["String"]["output"];
 };
@@ -6095,6 +6098,7 @@ export type SupportedAppIntegrationResolvers<
     ContextType
   >;
   description?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  guide?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   provider?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
@@ -6110,6 +6114,7 @@ export type SupportedIntegrationCapabilityResolvers<
   allowedMethods?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
   allowedPathPrefixes?: Resolver<Array<ResolversTypes["String"]>, ParentType, ContextType>;
   description?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  guide?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   name?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;

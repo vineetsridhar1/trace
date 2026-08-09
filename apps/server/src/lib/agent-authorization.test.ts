@@ -1,4 +1,4 @@
-import { traceCliOperations } from "@trace/cli-contract";
+import { TRACE_CLI_CAPABILITIES, traceCliOperations } from "@trace/cli-contract";
 import { Kind, parse, type FieldNode, type GraphQLResolveInfo } from "graphql";
 import { describe, expect, it, vi } from "vitest";
 import type { Context } from "../context.js";
@@ -12,17 +12,8 @@ function context(sessionId: string): Context {
     role: null,
     actorType: "agent",
     agentSessionId: sessionId,
-    agentCapabilities: [
-      "resource:list",
-      "session:list",
-      "session:create",
-      "session:read",
-      "session:events",
-      "session:send",
-      "session:run",
-      "session:stop",
-      "session:archive",
-    ],
+    agentSessionGroupId: "group-a",
+    agentCapabilities: TRACE_CLI_CAPABILITIES,
   } as Context;
 }
 
@@ -70,10 +61,21 @@ describe("agent GraphQL authorization", () => {
       const restricted = restrictAgentRootResolvers(operation, {
         [definition.rootField]: resolver,
       });
-      const args =
-        definition.rootField === "events"
-          ? { organizationId: "org-1", scope: { type: "session", id: "session-a" } }
-          : {};
+      const args = (() => {
+        if (definition.rootField === "events") {
+          return { organizationId: "org-1", scope: { type: "session", id: "session-a" } };
+        }
+        if (definition.rootField === "appIntegrationBindings") {
+          return { sessionGroupId: "group-a" };
+        }
+        if (definition.rootField === "upsertAppIntegrationBinding") {
+          return { input: { sessionGroupId: "group-a" } };
+        }
+        if (definition.rootField === "deleteAppIntegrationBinding") {
+          return { id: "binding-a", sessionGroupId: "group-a" };
+        }
+        return {};
+      })();
       expect(
         restricted[definition.rootField]?.(
           null,
@@ -83,6 +85,20 @@ describe("agent GraphQL authorization", () => {
         ),
       ).toBe("ok");
     }
+  });
+
+  it("limits app integration configuration to the agent's current group", () => {
+    const restricted = restrictAgentRootResolvers("Mutation", {
+      upsertAppIntegrationBinding: () => ({}),
+    });
+    expect(() =>
+      restricted.upsertAppIntegrationBinding(
+        null,
+        { input: { sessionGroupId: "group-b" } },
+        context("session-a"),
+        infoFor(traceCliOperations.upsertAppIntegrationBinding.document),
+      ),
+    ).toThrow("only configure its current application");
   });
 
   it("allows an approved operation for any session visible to the owner", () => {

@@ -61,6 +61,15 @@ describe("ensureTraceRuntime", () => {
     expect(traceSessionSkill).toContain("Do not call");
     expect(traceSessionSkill).toContain("idempotencyKey");
     expect(traceSessionSkill).toContain("--queue");
+    const traceIntegrationsSkill = await readFile(
+      join(runtime.skillsDir, "trace-integrations", "SKILL.md"),
+      "utf8",
+    );
+    expect(traceIntegrationsSkill).toContain('"$TRACE_CLI" integration list --json');
+    expect(traceIntegrationsSkill).toContain('"$TRACE_CLI" integration connect');
+    expect(traceIntegrationsSkill).toContain('"$TRACE_CLI" integration add');
+    expect(traceIntegrationsSkill).toContain("ask the user to configure the Data access GUI");
+    expect(traceIntegrationsSkill).toContain("Do not call Trace's GraphQL API directly");
   });
 
   it("replaces an older install so machines pick up changed skills", async () => {

@@ -1,6 +1,9 @@
 export const TRACE_CLI_CAPABILITIES = [
   "artifact:write",
   "resource:list",
+  "integration:read",
+  "integration:connect",
+  "integration:configure",
   "session:list",
   "session:create",
   "session:read",
@@ -36,6 +39,84 @@ const SESSION_FIELDS = `
 const EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
 
 export const traceCliOperations = {
+  integrationCatalog: operation({
+    name: "TraceCliIntegrationCatalog",
+    type: "query",
+    rootField: "supportedAppIntegrations",
+    capability: "integration:read",
+    argumentPaths: [],
+    document: `query TraceCliIntegrationCatalog {
+      supportedAppIntegrations {
+        id name provider providerConfigKey description guide
+        capabilities { id name description guide allowedMethods allowedPathPrefixes }
+      }
+    }`,
+  }),
+  integrationConnections: operation({
+    name: "TraceCliIntegrationConnections",
+    type: "query",
+    rootField: "integrationConnections",
+    capability: "integration:read",
+    argumentPaths: [],
+    document: `query TraceCliIntegrationConnections {
+      integrationConnections {
+        id ownerUserId provider providerConfigKey displayName kind status lastError
+      }
+    }`,
+  }),
+  appIntegrationBindings: operation({
+    name: "TraceCliAppIntegrationBindings",
+    type: "query",
+    rootField: "appIntegrationBindings",
+    capability: "integration:read",
+    argumentPaths: ["sessionGroupId"],
+    document: `query TraceCliAppIntegrationBindings($sessionGroupId: ID!) {
+      appIntegrationBindings(sessionGroupId: $sessionGroupId) {
+        id sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
+        allowedMethods allowedPathPrefixes
+      }
+    }`,
+  }),
+  createIntegrationConnectSession: operation({
+    name: "TraceCliCreateIntegrationConnectSession",
+    type: "mutation",
+    rootField: "createNangoConnectSession",
+    capability: "integration:connect",
+    argumentPaths: ["input.integrationId", "input.kind"],
+    document: `mutation TraceCliCreateIntegrationConnectSession($input: CreateNangoConnectSessionInput!) {
+      createNangoConnectSession(input: $input) { connectLink expiresAt }
+    }`,
+  }),
+  upsertAppIntegrationBinding: operation({
+    name: "TraceCliUpsertAppIntegrationBinding",
+    type: "mutation",
+    rootField: "upsertAppIntegrationBinding",
+    capability: "integration:configure",
+    argumentPaths: [
+      "input.sessionGroupId",
+      "input.id",
+      "input.integrationId",
+      "input.capabilityIds",
+      "input.executionIdentity",
+      "input.sharedConnectionId",
+    ],
+    document: `mutation TraceCliUpsertAppIntegrationBinding($input: UpsertAppIntegrationBindingInput!) {
+      upsertAppIntegrationBinding(input: $input) {
+        id sessionGroupId label provider providerConfigKey executionIdentity sharedConnectionId
+        allowedMethods allowedPathPrefixes
+      }
+    }`,
+  }),
+  deleteAppIntegrationBinding: operation({
+    name: "TraceCliDeleteAppIntegrationBinding",
+    type: "mutation",
+    rootField: "deleteAppIntegrationBinding",
+    capability: "integration:configure",
+    argumentPaths: ["id", "sessionGroupId"],
+    document: `mutation TraceCliDeleteAppIntegrationBinding($id: ID!, $sessionGroupId: ID!) {
+      deleteAppIntegrationBinding(id: $id, sessionGroupId: $sessionGroupId)
+    }`,
+  }),
   channels: operation({
     name: "TraceCliChannels",
     type: "query",

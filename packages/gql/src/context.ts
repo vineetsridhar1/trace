@@ -12,6 +12,7 @@ export interface Context {
   actorType: ActorType;
   /** Present only for a restricted credential launched inside a coding session. */
   agentSessionId?: string | null;
+  agentSessionGroupId?: string | null;
   agentCapabilities?: readonly string[];
   userLoader: DataLoader<
     string,

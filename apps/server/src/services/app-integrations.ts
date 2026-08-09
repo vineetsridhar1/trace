@@ -3,10 +3,7 @@ import type {
   IntegrationExecutionIdentity,
   UpsertAppIntegrationBindingInput,
 } from "@trace/gql";
-import {
-  supportedIntegration,
-  supportedIntegrations,
-} from "../config/supported-integrations.js";
+import { supportedIntegration, supportedIntegrations } from "../config/supported-integrations.js";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError, NotFoundError, ValidationError } from "../lib/errors.js";
 import { canViewSessionGroup } from "./access.js";
@@ -477,8 +474,16 @@ export class AppIntegrationService {
     return binding;
   }
 
-  async deleteBinding(organizationId: string, userId: string, role: Role, id: string) {
-    const binding = await prisma.appIntegrationBinding.findFirst({ where: { id, organizationId } });
+  async deleteBinding(
+    organizationId: string,
+    userId: string,
+    role: Role,
+    id: string,
+    sessionGroupId?: string | null,
+  ) {
+    const binding = await prisma.appIntegrationBinding.findFirst({
+      where: { id, organizationId, ...(sessionGroupId ? { sessionGroupId } : {}) },
+    });
     if (!binding) throw new NotFoundError("Application integration binding", id);
     await this.assertCanManageApp(binding.sessionGroupId, organizationId, userId, role);
     await prisma.$transaction(async (tx) => {

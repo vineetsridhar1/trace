@@ -5567,6 +5567,52 @@ describe("SessionService", () => {
       expect(command?.runtimeEnv?.TRACE_INVOCATION_TOKEN).toEqual(expect.any(String));
     });
 
+    it("injects integration discovery guidance for managed app sessions", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        hosting: "cloud",
+        workdir: "/workspaces/app",
+        toolSessionId: "tool-sess-1",
+        repoId: "managed-repo-1",
+        connection: {
+          state: "connected",
+          runtimeInstanceId: "runtime-app",
+          runtimeLabel: "App Runtime",
+          retryCount: 0,
+          canRetry: true,
+          canMove: true,
+        },
+        sessionGroup: makeSessionGroup({ kind: "app" }),
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "show my GitHub profile",
+        actorType: "user",
+        actorId: "user-1",
+      });
+
+      const command = sessionRouterMock.send.mock.calls.at(-1)?.[1];
+      expect(command).toEqual(
+        expect.objectContaining({
+          appendSystemPrompt: expect.stringContaining(
+            "$TRACE_SKILLS_DIR/trace-integrations/SKILL.md completely",
+          ),
+        }),
+      );
+      expect(command).toEqual(
+        expect.objectContaining({
+          appendSystemPrompt: expect.stringContaining(
+            "Do not ask the user to configure the Data access GUI",
+          ),
+        }),
+      );
+    });
+
     it("injects design guidance without branch instructions for managed design repos", async () => {
       const session = makeSession({
         agentStatus: "done",
@@ -13953,9 +13999,7 @@ describe("SessionService", () => {
         { path: "/repo", branch: "main", isTraceManaged: false, isMain: true },
       ]);
 
-      await expect(
-        service.listRepoWorktrees("repo-a", "org-1", "user-2"),
-      ).resolves.toEqual([
+      await expect(service.listRepoWorktrees("repo-a", "org-1", "user-2")).resolves.toEqual([
         expect.objectContaining({ path: "/worktrees/feature", branch: "feature" }),
       ]);
       expect(sessionRouterMock.listRepoWorktrees).toHaveBeenCalledWith(

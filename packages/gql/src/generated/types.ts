@@ -1257,6 +1257,7 @@ export type MutationDeleteApiTokenArgs = {
 
 export type MutationDeleteAppIntegrationBindingArgs = {
   id: Scalars["ID"]["input"];
+  sessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
 };
 
 export type MutationDeleteChannelArgs = {
@@ -2840,6 +2841,7 @@ export type SupportedAppIntegration = {
   __typename?: "SupportedAppIntegration";
   capabilities: Array<SupportedIntegrationCapability>;
   description: Scalars["String"]["output"];
+  guide: Scalars["String"]["output"];
   id: Scalars["String"]["output"];
   name: Scalars["String"]["output"];
   provider: Scalars["String"]["output"];
@@ -2851,6 +2853,7 @@ export type SupportedIntegrationCapability = {
   allowedMethods: Array<Scalars["String"]["output"]>;
   allowedPathPrefixes: Array<Scalars["String"]["output"]>;
   description: Scalars["String"]["output"];
+  guide: Scalars["String"]["output"];
   id: Scalars["String"]["output"];
   name: Scalars["String"]["output"];
 };

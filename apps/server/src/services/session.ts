@@ -1126,7 +1126,7 @@ If the user asks you to stop auto-saving or disable auto-save, stop doing this f
 </system-instruction>`;
 
 const APP_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace app session in its own isolated cloud runtime. When present, read and follow docs/ai-guidance.md and docs/trace-apps.md before changing the app. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Vite/React/Node/Tailwind/shadcn-compatible starter as the source of truth. Work visibly and incrementally: make a small, valid first UI change quickly, then build in coherent runnable batches so the user can watch each meaningful step through Vite HMR. Keep the app working between edits; do not prepare the entire replacement offscreen and swap it in only at the end. Build frontend UI in src and add API routes or other server behavior in server.ts and related Node modules. Keep browser requests to your own API same-origin. Call third-party APIs from Node routes when browser CORS would block them. Only when an external browser origin must call this app directly, add its exact origin to the comma-separated APP_CORS_ALLOWED_ORIGINS environment variable; never use a wildcard for credentialed requests. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running and ready to use — do NOT install, initialize, or reconfigure them, create roles, or edit pg_hba/auth. The \`pg\` client and its TypeScript types are already installed. For Postgres, import \`Pool\` from \`pg\`, read the DATABASE_URL environment variable, and pass it straight to \`new Pool({ connectionString: process.env.DATABASE_URL })\`; it is a complete, credentialed TCP URL (\`postgresql://user:pass@localhost:5432/app\`) for a ready database named \`app\` — do not parse it, override the user, or switch to a Unix socket. Redis is at REDIS_URL / redis://localhost:6379. Keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. IMPORTANT: the dev server is already started and managed for you on port 3000 (host 0.0.0.0) and hot-reloads your file changes — do NOT run \`pnpm dev\` or otherwise start your own server, the port is already taken and a second one will crash. Just edit files; if you need to verify, curl http://localhost:3000. Before every response that changes the app, commit and push the changes to the configured managed origin. Sharing the live app is a valid final outcome.
+This is a Trace app session in its own isolated cloud runtime. When present, read and follow docs/ai-guidance.md and docs/trace-apps.md before changing the app. When the app needs external or connected provider data, read $TRACE_SKILLS_DIR/trace-integrations/SKILL.md completely, then use \`"$TRACE_CLI"\` to discover and configure integrations for the current app. Do not ask the user to configure the Data access GUI and do not call Trace GraphQL directly. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Vite/React/Node/Tailwind/shadcn-compatible starter as the source of truth. Work visibly and incrementally: make a small, valid first UI change quickly, then build in coherent runnable batches so the user can watch each meaningful step through Vite HMR. Keep the app working between edits; do not prepare the entire replacement offscreen and swap it in only at the end. Build frontend UI in src and add API routes or other server behavior in server.ts and related Node modules. Keep browser requests to your own API same-origin. Call third-party APIs from Node routes when browser CORS would block them. Only when an external browser origin must call this app directly, add its exact origin to the comma-separated APP_CORS_ALLOWED_ORIGINS environment variable; never use a wildcard for credentialed requests. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running and ready to use — do NOT install, initialize, or reconfigure them, create roles, or edit pg_hba/auth. The \`pg\` client and its TypeScript types are already installed. For Postgres, import \`Pool\` from \`pg\`, read the DATABASE_URL environment variable, and pass it straight to \`new Pool({ connectionString: process.env.DATABASE_URL })\`; it is a complete, credentialed TCP URL (\`postgresql://user:pass@localhost:5432/app\`) for a ready database named \`app\` — do not parse it, override the user, or switch to a Unix socket. Redis is at REDIS_URL / redis://localhost:6379. Keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. IMPORTANT: the dev server is already started and managed for you on port 3000 (host 0.0.0.0) and hot-reloads your file changes — do NOT run \`pnpm dev\` or otherwise start your own server, the port is already taken and a second one will crash. Just edit files; if you need to verify, curl http://localhost:3000. Before every response that changes the app, commit and push the changes to the configured managed origin. Sharing the live app is a valid final outcome.
 </system-instruction>`;
 
 const DESIGN_SESSION_INSTRUCTION = `\n\n<system-instruction>
@@ -3035,15 +3035,16 @@ export class SessionService {
     }
 
     const groupRuntimeId = this.getConnectionRuntimeInstanceId(group.connection);
-    const ownedRuntimesForRepo = listRuntimeMetadata({ hostingMode: "local" })
-      .filter((candidate) => {
+    const ownedRuntimesForRepo = listRuntimeMetadata({ hostingMode: "local" }).filter(
+      (candidate) => {
         if (candidate.organizationId !== organizationId) return false;
         if (candidate.ownerUserId !== userId) return false;
         if (options.requireRegisteredRepo && !candidate.registeredRepoIds.includes(repoId)) {
           return false;
         }
         return true;
-      });
+      },
+    );
     const runtime = options.runtimeInstanceId
       ? ownedRuntimesForRepo.find((candidate) => candidate.id === options.runtimeInstanceId)
       : (ownedRuntimesForRepo.find((candidate) => candidate.id === groupRuntimeId) ??
@@ -9793,13 +9794,12 @@ export class SessionService {
         organizationId,
         sessionGroupId,
       });
-      const runtime = listRuntimeMetadata()
-        .find(
-          (runtime) =>
-            runtime.organizationId === organizationId &&
-            (runtime.hostingMode === "cloud" || accessibleRuntimeIds.has(runtime.id)) &&
-            runtime.registeredRepoIds.includes(repoId),
-        );
+      const runtime = listRuntimeMetadata().find(
+        (runtime) =>
+          runtime.organizationId === organizationId &&
+          (runtime.hostingMode === "cloud" || accessibleRuntimeIds.has(runtime.id)) &&
+          runtime.registeredRepoIds.includes(repoId),
+      );
       runtimeId = runtime?.key;
     }
     if (!runtimeId) throw new Error("Repo not cloned on any connected runtime");
@@ -9832,14 +9832,13 @@ export class SessionService {
         userId,
         organizationId,
       });
-      const runtime = listRuntimeMetadata()
-        .find(
-          (runtime) =>
-            runtime.organizationId === organizationId &&
-            runtime.hostingMode === "local" &&
-            accessibleRuntimeIds.has(runtime.id) &&
-            runtime.registeredRepoIds.includes(repoId),
-        );
+      const runtime = listRuntimeMetadata().find(
+        (runtime) =>
+          runtime.organizationId === organizationId &&
+          runtime.hostingMode === "local" &&
+          accessibleRuntimeIds.has(runtime.id) &&
+          runtime.registeredRepoIds.includes(repoId),
+      );
       runtimeId = runtime?.key;
     }
     if (!runtimeId) throw new Error("Repo not cloned on any connected local runtime");

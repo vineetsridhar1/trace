@@ -293,6 +293,7 @@ describe("auth helpers", () => {
       role: "observer",
       actorType: "agent",
       agentSessionId: "session-1",
+      agentSessionGroupId: "group-1",
     });
   });
 

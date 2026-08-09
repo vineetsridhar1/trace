@@ -29,6 +29,14 @@ browser or commit them.
 
 ## Connected data
 
+When the user asks for connected data, read `$TRACE_SKILLS_DIR/trace-integrations/SKILL.md` and run
+`"$TRACE_CLI" integration list --json`. The live catalog tells you which integrations and
+least-privilege capabilities are available, whether accounts are connected, what the current app
+can access, and the exact server helper to use. Configure access with `integration add`; if an
+account must be connected, create the OAuth link with `integration connect` and ask the user only
+to complete provider authorization. Do not send the user to the manual Data access UI, guess Nango
+keys, call Trace GraphQL directly, or put binding UUIDs in generated code.
+
 Call integrations only from server routes. Trace attaches the current signed-in viewer to proxied
 `/api/*` requests, and the server-only `trace` helper passes that identity to Trace without exposing
 credentials to browser code.
@@ -59,7 +67,7 @@ app.get("/api/revenue", async (request, response) => {
 });
 ```
 
-Use the integration name shown in Trace's Data access panel; generated code never needs a binding
+Use the stable integration ID returned by `integration list`; generated code never needs a binding
 UUID or Nango configuration key. Trace accepts one read-only `SELECT` statement, resolves the
 binding's viewer/shared/service connection, and sends the request through Nango. Do not accept SQL,
 binding IDs, database names, schema names, warehouse names, or connection identifiers from browser
