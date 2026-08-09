@@ -8,6 +8,7 @@ describe("buildTraceInvocationEnv", () => {
       runtimeEnv: {
         TRACE_INVOCATION_TOKEN: "invocation-token",
         TRACE_API_URL: "https://untrusted.example",
+        TRACE_SERVER_URL: "https://other-control-plane.example",
         TRACE_SKILLS_DIR: "/untrusted/skills",
         PATH: "/untrusted/bin",
       },
@@ -21,6 +22,7 @@ describe("buildTraceInvocationEnv", () => {
 
     expect(env).toMatchObject({
       TRACE_API_URL: "https://trace.example/",
+      TRACE_SERVER_URL: "https://trace.example/",
       TRACE_CLI: "/trace/runtime/bin/trace",
       TRACE_INVOCATION_TOKEN: "invocation-token",
       TRACE_SKILLS_DIR: "/trace/runtime/skills",

@@ -19,6 +19,10 @@ export function buildTraceInvocationEnv(input: {
   return {
     ...input.runtimeEnv,
     TRACE_API_URL: traceApiUrl.toString(),
+    // Keep both legacy and current names pinned to the bridge's control plane.
+    // A runtime credential is only valid on the server that minted it; retaining
+    // a service-supplied fallback here can send agents to a different deployment.
+    TRACE_SERVER_URL: traceApiUrl.toString(),
     TRACE_CLI: join(input.binDir, "trace"),
     TRACE_SKILLS_DIR: input.skillsDir,
     TRACE_NODE_BINARY: input.nodeBinary,
