@@ -9,9 +9,8 @@ interface Props {
 }
 
 /**
- * Liquid-glass "Paste image" pill that fades in above the composer when
- * there's an image on the clipboard and the input is focused. Matches the
- * visual language of `NewActivityPill`.
+ * Liquid-glass "Paste image" pill shown whenever the composer can add an
+ * attachment. Tapping it asks the operating system for clipboard access.
  */
 export function ComposerPasteButton({ visible, onPress }: Props) {
   const theme = useTheme();

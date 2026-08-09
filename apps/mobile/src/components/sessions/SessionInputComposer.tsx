@@ -22,7 +22,6 @@ import {
 } from "@trace/client-core";
 import type { CodingTool, SessionConnection } from "@trace/gql";
 import { useComposerSubmit, type ComposerMode } from "@/hooks/useComposerSubmit";
-import { useClipboardImage } from "@/hooks/useClipboardImage";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useSlashCommands } from "@/hooks/useSlashCommands";
 import { extensionForMimeType } from "@/lib/attachment-utils";
@@ -226,16 +225,8 @@ export function SessionInputComposer({
   const canStop = isActive && !stopping;
   const canAttach = canInteract && !pickingAttachment && attachments.length < MAX_ATTACHMENTS;
 
-  const {
-    hasImage: clipboardHasImage,
-    refresh: refreshClipboard,
-    dismiss: dismissClipboard,
-  } = useClipboardImage();
   const showPasteButton =
     canInteract &&
-    inputFocused &&
-    keyboardVisible &&
-    clipboardHasImage &&
     attachments.length < MAX_ATTACHMENTS &&
     !pastingImage;
 
@@ -355,8 +346,7 @@ export function SessionInputComposer({
   const handleFocus = useCallback(() => {
     setFocused(true);
     setInputFocused(true);
-    refreshClipboard();
-  }, [refreshClipboard]);
+  }, []);
 
   const handleBlur = useCallback(() => {
     setFocused(false);
@@ -475,7 +465,6 @@ export function SessionInputComposer({
         if (prev.length >= MAX_ATTACHMENTS) return prev;
         return [...prev, attachment];
       });
-      dismissClipboard();
       void haptic.light();
     } catch (err) {
       void haptic.error();
@@ -483,7 +472,7 @@ export function SessionInputComposer({
     } finally {
       setPastingImage(false);
     }
-  }, [attachments.length, dismissClipboard, pastingImage, sessionId, setAttachments]);
+  }, [attachments.length, pastingImage, sessionId, setAttachments]);
 
   const launchImagePicker = useCallback(async () => {
     if (pickingAttachment || attachments.length >= MAX_ATTACHMENTS) return;

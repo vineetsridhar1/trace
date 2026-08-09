@@ -80,7 +80,6 @@ let draftAttachments: MockDraftAttachment[] = [];
 let mockTool = "codex";
 let mockAgentStatus = "idle";
 let mockSessionGroupKind: string | null = null;
-let mockClipboardHasImage = false;
 let runtimePickerRenderCount = 0;
 const submitMock = vi.fn();
 const routerPushMock = vi.fn();
@@ -213,14 +212,6 @@ vi.mock("@/hooks/useComposerSubmit", () => ({
       sending: false,
     };
   },
-}));
-
-vi.mock("@/hooks/useClipboardImage", () => ({
-  useClipboardImage: () => ({
-    hasImage: mockClipboardHasImage,
-    refresh: vi.fn(),
-    dismiss: vi.fn(),
-  }),
 }));
 
 vi.mock("@/hooks/useSlashCommands", () => ({
@@ -409,7 +400,6 @@ describe("SessionInputComposer", () => {
     mockTool = "codex";
     mockAgentStatus = "idle";
     mockSessionGroupKind = null;
-    mockClipboardHasImage = false;
     runtimePickerRenderCount = 0;
     submitMock.mockClear();
     routerPushMock.mockClear();
@@ -446,7 +436,6 @@ describe("SessionInputComposer", () => {
   });
 
   it("keeps the paste button visible when an image is already attached", async () => {
-    mockClipboardHasImage = true;
     draftAttachments = [
       {
         id: "attachment-1",
@@ -466,7 +455,6 @@ describe("SessionInputComposer", () => {
       TestRenderer.create(
         React.createElement(SessionInputComposer, {
           sessionId: "session-1",
-          keyboardVisible: true,
         }),
       );
     });
