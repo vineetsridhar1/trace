@@ -178,6 +178,8 @@ describe("ProvisionedRuntimeAdapter", () => {
       bootstrapEnv: Record<string, string>;
     };
     expect(body.bootstrapEnv.DATABASE_URL).toBe("postgresql://db.example/app");
+    expect(body.bootstrapEnv.TRACE_CLI).toBe("/trace/runtime/bin/trace");
+    expect(body.bootstrapEnv.TRACE_SKILLS_DIR).toBe("/trace/runtime/skills");
     expect(orgSecretService.getDecryptedValue).toHaveBeenCalledWith("org-1", "database-secret");
   });
 

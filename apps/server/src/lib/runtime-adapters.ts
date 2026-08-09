@@ -768,6 +768,12 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
         TRACE_SESSION_ID: input.sessionId,
         TRACE_ORG_ID: input.organizationId,
         TRACE_SERVER_PUBLIC_URL: process.env.TRACE_SERVER_PUBLIC_URL?.trim() ?? "",
+        // Provisioned runtimes install the managed CLI at this fixed location. Put the
+        // paths in the container environment as a compatibility baseline; current
+        // bridges still replace them with their verified installation paths for each
+        // invocation.
+        TRACE_CLI: "/trace/runtime/bin/trace",
+        TRACE_SKILLS_DIR: "/trace/runtime/skills",
         TRACE_RUNTIME_INSTANCE_ID: runtimeInstanceId,
         TRACE_RUNTIME_TOKEN: runtimeToken.token,
         TRACE_BRIDGE_URL: bridgeUrl,
