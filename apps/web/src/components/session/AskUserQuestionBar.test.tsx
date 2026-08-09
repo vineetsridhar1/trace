@@ -288,6 +288,7 @@ describe("AskUserQuestionBar", () => {
     expect(findButton(renderer.root, "Next").props.disabled).toBe(true);
     const textarea = renderer.root.findByType("textarea");
     await act(async () => textarea.props.onChange({ target: { value: "Use a kiosk" } }));
+    expect(findButton(renderer.root, "Something else").props["aria-pressed"]).toBe(true);
     expect(findButton(renderer.root, "Next").props.disabled).toBe(false);
     await act(async () => renderer.unmount());
   });

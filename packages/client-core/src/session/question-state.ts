@@ -162,10 +162,15 @@ export function useQuestionState(
       setCustomTexts((previous) => ({ ...previous, [page]: text }));
       const type = question.type ?? (question.multiSelect ? "multi-select" : "single-select");
       if (text.trim().length > 0 && (type === "confirm" || type.includes("select"))) {
-        setSelections((previous) => ({ ...previous, [page]: new Set() }));
+        setSelections((previous) => {
+          const current = previous[page];
+          const keepsOtherSelection =
+            (type === "select-with-other" || question.other) && current?.has("other");
+          return keepsOtherSelection ? previous : { ...previous, [page]: new Set() };
+        });
       }
     },
-    [page, question.multiSelect, question.type],
+    [page, question.multiSelect, question.other, question.type],
   );
 
   const decideForMe = useCallback(() => {

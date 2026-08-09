@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EntityState } from "@trace/client-core";
-import type { SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
+import type { GitCheckpoint, SessionApplicationProcess, SessionEndpoint } from "@trace/gql";
 import {
   appSessionSubtitle,
   buildAppSessionGroupIds,

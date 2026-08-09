@@ -561,8 +561,8 @@ export function SessionDetailView({
     : (activePlan?.node.planContent ?? "");
 
   const activeQuestion = useMemo(() => {
-    return findActiveQuestion(nodes, sessionStatus, timelineInputRequest?.kind ?? null);
-  }, [nodes, sessionStatus, timelineInputRequest]);
+    return findActiveQuestion(nodes, timelineInputRequest?.kind ?? null);
+  }, [nodes, timelineInputRequest]);
   const replacedQuestionIds = useMemo(
     () => findReplacedQuestionIds(nodes, events),
     [events, nodes],

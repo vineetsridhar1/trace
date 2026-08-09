@@ -41,13 +41,13 @@ describe("findReplacedQuestionIds", () => {
 });
 
 describe("findActiveQuestion", () => {
-  it("keeps a pending question resumable only while the session needs input", () => {
+  it("keeps the latest unanswered question actionable after a run completes", () => {
     const nodes: SessionNode[] = [question("pending")];
 
-    expect(findActiveQuestion(nodes, "needs_input", "question")).toMatchObject({
+    expect(findActiveQuestion(nodes, "question")).toMatchObject({
       node: { id: "pending" },
       index: 0,
     });
-    expect(findActiveQuestion(nodes, "in_progress", "question")).toBeNull();
+    expect(findActiveQuestion(nodes, "native-plan")).toBeNull();
   });
 });

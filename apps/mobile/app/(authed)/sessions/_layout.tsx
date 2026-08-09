@@ -22,6 +22,7 @@ export default function SessionsLayout() {
           headerShown: false,
         }}
       />
+      <Stack.Screen name="question/[sessionId]" options={{ headerShown: false }} />
     </Stack>
   );
 }

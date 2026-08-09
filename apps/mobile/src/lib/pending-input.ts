@@ -1,5 +1,5 @@
 import type { Event } from "@trace/gql";
-import { asJsonObject, parseQuestion, type Question } from "@trace/shared";
+import { asJsonObject, parseQuestion, parseTraceRequestInputs, type Question } from "@trace/shared";
 
 export type PendingInputData =
   | {
@@ -74,6 +74,11 @@ export function findMostRecentPendingInput(
           questions: (Array.isArray(block.questions) ? block.questions : []).map(parseQuestion),
           timestamp: ev.timestamp,
         };
+      } else if (block.type === "text" && typeof block.text === "string" && !latestQuestion) {
+        const questions = parseTraceRequestInputs(block.text);
+        if (questions.length > 0) {
+          latestQuestion = { eventId: ev.id, questions, timestamp: ev.timestamp };
+        }
       }
     }
     if (latestQuestion && latestPlan) break;

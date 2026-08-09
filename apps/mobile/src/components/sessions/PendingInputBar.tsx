@@ -12,7 +12,7 @@ import { getActiveApiUrl } from "@/lib/connection-target";
 import { findMostRecentPendingInput } from "@/lib/pending-input";
 import { visualPlanHtmlPath } from "@/lib/visual-plan-file";
 import { PendingInputPlan } from "./PendingInputPlan";
-import { PendingInputQuestion } from "./PendingInputQuestion";
+import { PendingQuestionPrompt } from "./PendingQuestionPrompt";
 
 interface PendingInputBarProps {
   sessionId: string;
@@ -99,12 +99,5 @@ export function PendingInputBar({ sessionId, keyboardVisible = false }: PendingI
     );
   }
 
-  return (
-    <PendingInputQuestion
-      sessionId={sessionId}
-      questions={pending.questions}
-      hasActivePlan={pending.hasActivePlan}
-      keyboardVisible={keyboardVisible}
-    />
-  );
+  return <PendingQuestionPrompt sessionId={sessionId} questions={pending.questions} />;
 }
