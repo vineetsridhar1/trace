@@ -73,10 +73,6 @@ export function SessionGroupHeader({
     | string
     | null
     | undefined;
-  const agentStatus = useEntityField("sessions", sessionId ?? "", "agentStatus") as
-    | string
-    | null
-    | undefined;
   const hosting = useEntityField("sessions", sessionId ?? "", "hosting") as
     | string
     | null
