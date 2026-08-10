@@ -2,6 +2,7 @@ import DOMPurify from "dompurify";
 import parse, { type HTMLReactParserOptions, type DOMNode, Element } from "html-react-parser";
 import { UserMention } from "./UserMention";
 import { SessionLinkCard } from "./SessionLinkCard";
+import { cleanMessageHtml } from "./message-utils";
 
 // Allow mention data attributes through DOMPurify
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,11 +92,8 @@ function linkifySessionUrls(html: string): string {
 }
 
 export function MessageContent({ html }: { html: string }) {
-  // Strip empty paragraphs Quill appends and trailing <br> inside paragraphs
-  const stripped = html
-    .replace(/^(\s*<p>\s*<br\s*\/?>\s*<\/p>)+/i, "")
-    .replace(/(<p>\s*<br\s*\/?>\s*<\/p>\s*)+$/i, "")
-    .replace(/<br\s*\/?>\s*(<\/p>)/gi, "$1");
+  // Strip empty paragraphs Quill appends, but retain intentional soft line breaks.
+  const stripped = cleanMessageHtml(html);
   const linked = linkifySessionUrls(stripped);
   const clean = DOMPurify.sanitize(linked);
   return (
