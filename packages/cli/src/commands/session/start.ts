@@ -22,6 +22,24 @@ import {
 export const sessionStartCommand = defineCommand({
   path: ["session", "start"],
   description: "Start a new session group or add a session to an explicit group",
+  examples: [
+    '"$TRACE_CLI" session start "Implement the API tests" --json',
+    '"$TRACE_CLI" session start "Fix the login flow" --channel <channel-id> --tool codex --json',
+    '"$TRACE_CLI" session start "Review this work" --group <group-id> --json',
+  ],
+  effects: [
+    "Creates a session and, unless --group is supplied, creates a new session group.",
+    "A prompt requests the initial run in the same operation.",
+  ],
+  output: "The new session, whether an initial run was requested, its UI path, and an idempotency key.",
+  nextSteps: [
+    'Run "$TRACE_CLI" session events <session-id> --limit 50 --json to monitor progress.',
+    'Use "$TRACE_CLI" session send <session-id> "<message>" --queue --json for follow-up work.',
+  ],
+  notes: [
+    "A new coding group needs a channel or repository; omitted values inherit from the current session when available.",
+    "Do not call session run with the same initial prompt, because that can duplicate the work.",
+  ],
   positionals: [{ name: "prompt", variadic: true }],
   options: [
     {

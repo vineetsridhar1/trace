@@ -1,6 +1,7 @@
 import { traceCliOperations } from "@trace/cli-contract";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TraceClient } from "../src/client.js";
+import { commandGroups, commands } from "../src/commands/index.js";
 import { run } from "../src/main.js";
 
 describe("Trace CLI", () => {
@@ -108,6 +109,19 @@ describe("Trace CLI", () => {
         nextSteps: expect.arrayContaining([expect.stringContaining("generated Node route")]),
       },
     });
+  });
+
+  it("documents every command and group with actionable help metadata", () => {
+    for (const command of commands) {
+      expect(command.examples?.length, `${command.path.join(" ")} examples`).toBeGreaterThan(0);
+      expect(command.effects?.length, `${command.path.join(" ")} effects`).toBeGreaterThan(0);
+      expect(command.output, `${command.path.join(" ")} output`).toBeTruthy();
+      expect(command.nextSteps?.length, `${command.path.join(" ")} next steps`).toBeGreaterThan(0);
+    }
+    for (const group of commandGroups) {
+      expect(group.workflow?.length, `${group.name} workflow`).toBeGreaterThan(0);
+      expect(group.examples?.length, `${group.name} examples`).toBeGreaterThan(0);
+    }
   });
 
   it("starts a new group in the current session destination without exposing the bearer", async () => {

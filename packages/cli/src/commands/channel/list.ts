@@ -13,6 +13,16 @@ type ChannelView = Pick<
 export const channelListCommand = defineCommand({
   path: ["channel", "list"],
   description: "List channels available to the session owner",
+  examples: [
+    '"$TRACE_CLI" channel list --json',
+    '"$TRACE_CLI" channel list --member-only --json',
+  ],
+  effects: ["Read-only; does not join channels or change membership."],
+  output: "Channel IDs, names, visibility, and linked repositories.",
+  nextSteps: [
+    'Pass a channel ID to "$TRACE_CLI" session start --channel <channel-id>.',
+    "Use --member-only when selecting a channel for the current user.",
+  ],
   options: [
     {
       name: "memberOnly",

@@ -6,6 +6,17 @@ import { resolveSessionId, type EventView } from "./shared.js";
 export const sessionEventsCommand = defineCommand({
   path: ["session", "events"],
   description: "Read a bounded event snapshot and optionally follow the session stream",
+  examples: [
+    '"$TRACE_CLI" session events <session-id> --limit 50 --json',
+    '"$TRACE_CLI" session events <session-id> --follow --json',
+  ],
+  effects: ["Read-only; --follow keeps an event subscription open until it is stopped."],
+  output: "A bounded event snapshot and, with --follow, one JSON event per subsequent line.",
+  nextSteps: [
+    "Use the snapshot to assess progress, then stop following once the requested condition is met.",
+    'Run "$TRACE_CLI" session get <session-id> --json for the current status.',
+  ],
+  notes: ["Use --follow only for continuous monitoring; otherwise keep snapshots bounded with --limit."],
   positionals: [{ name: "session-id" }],
   options: [
     {
