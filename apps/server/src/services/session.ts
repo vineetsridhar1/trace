@@ -164,6 +164,12 @@ type ProvisioningEnvironment = {
   config: Prisma.JsonValue;
 };
 
+type ConversionToolSelection = {
+  tool: CodingTool;
+  model: string | null | undefined;
+  reasoningEffort: string | null | undefined;
+};
+
 type SessionStartMetadata = {
   prompt: string | null;
   promptEventId: string | null;
@@ -1254,6 +1260,42 @@ function conversionContinuationPrompt(kind: SessionGroupKind): string {
             ? "animation"
             : "coding";
   return `Continue the user's request in the newly prepared ${label} workspace.`;
+}
+
+function requireSingleGeneralConversionSession<T>(
+  source: { kind: SessionGroupKind; sessions: T[] } | null,
+): T {
+  if (!source) throw new ValidationError("Session group not found or is archived");
+  if (source.kind !== "general") {
+    throw new ValidationError("Only general sessions can be converted");
+  }
+  if (source.sessions.length !== 1) {
+    throw new ValidationError("Only single-session groups can be converted");
+  }
+  return source.sessions[0]!;
+}
+
+function resolveConversionToolSelection(
+  sourceTool: CodingTool,
+  input: Pick<ConvertSessionGroupServiceInput, "tool" | "model" | "reasoningEffort">,
+): ConversionToolSelection {
+  const tool = input.tool ?? sourceTool;
+  const toolChanged = tool !== sourceTool;
+  return {
+    tool,
+    model:
+      input.model != null
+        ? validateModelForTool(tool, input.model)
+        : toolChanged
+          ? (getDefaultModel(tool) ?? null)
+          : undefined,
+    reasoningEffort:
+      input.reasoningEffort != null
+        ? validateReasoningEffortForTool(tool, input.reasoningEffort)
+        : toolChanged
+          ? (getDefaultReasoningEffort(tool) ?? null)
+          : undefined,
+  };
 }
 
 function appendAutoSave(prompt: string, hasRepo: boolean): string {
@@ -3473,127 +3515,175 @@ export class SessionService {
     }
 
     if (targetIsGenerated) {
-      const generatedKind = input.kind as GeneratedSessionConversion["kind"];
-      const source = await prisma.sessionGroup.findFirst({
-        where: {
-          id: input.sessionGroupId,
-          organizationId: input.organizationId,
-          archivedAt: null,
-        },
-        select: {
-          kind: true,
-          sessions: {
-            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-            take: 2,
-            include: SESSION_INCLUDE,
-          },
-        },
-      });
-      if (!source) throw new ValidationError("Session group not found or is archived");
-      if (source.kind !== "general") {
-        throw new ValidationError("Only general sessions can be converted");
-      }
-      if (source.sessions.length !== 1) {
-        throw new ValidationError("Only single-session groups can be converted");
-      }
-      const sourceSession = source.sessions[0]!;
-      const targetTool = input.tool ?? sourceSession.tool;
-      const toolChanged = targetTool !== sourceSession.tool;
-      const targetModel =
-        input.model != null
-          ? validateModelForTool(targetTool, input.model)
-          : toolChanged
-            ? (getDefaultModel(targetTool) ?? null)
-            : undefined;
-      const targetReasoningEffort =
-        input.reasoningEffort != null
-          ? validateReasoningEffortForTool(targetTool, input.reasoningEffort)
-          : toolChanged
-            ? (getDefaultReasoningEffort(targetTool) ?? null)
-            : undefined;
-      const cloudEnvironment = await this.resolveProvisioningEnvironment({
-        sessionId: sourceSession.id,
+      return this.convertGeneralToGenerated(
+        input,
+        input.kind as GeneratedSessionConversion["kind"],
+      );
+    }
+    return this.convertGeneralToCoding(input);
+  }
+
+  private async convertGeneralToGenerated(
+    input: ConvertSessionGroupServiceInput,
+    generatedKind: GeneratedSessionConversion["kind"],
+  ): Promise<SessionWithInclude> {
+    const source = await prisma.sessionGroup.findFirst({
+      where: {
+        id: input.sessionGroupId,
         organizationId: input.organizationId,
-        adapterType: "provisioned",
-      });
-      if (!cloudEnvironment) {
-        throw new ValidationError("No enabled cloud agent environment is configured");
-      }
-      assertAgentEnvironmentSupportsTool(cloudEnvironment, targetTool);
-      const locked = await withDistributedLock(
-        {
-          key: this.runtimeTransitionLockKey(sourceSession.id, sourceSession.sessionGroupId),
-          ttlMs: RUNTIME_TRANSITION_LOCK_TTL_MS,
+        archivedAt: null,
+      },
+      select: {
+        kind: true,
+        sessions: {
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+          take: 2,
+          include: SESSION_INCLUDE,
         },
-        async () => {
-          const managedRepo = await managedGitService.createManagedRepo({
-            organizationId: input.organizationId,
-            name: `${sourceSession.name} source`,
+      },
+    });
+    const sourceSession = requireSingleGeneralConversionSession(source);
+    const target = resolveConversionToolSelection(sourceSession.tool, input);
+    const cloudEnvironment = await this.resolveProvisioningEnvironment({
+      sessionId: sourceSession.id,
+      organizationId: input.organizationId,
+      adapterType: "provisioned",
+    });
+    if (!cloudEnvironment) {
+      throw new ValidationError("No enabled cloud agent environment is configured");
+    }
+    assertAgentEnvironmentSupportsTool(cloudEnvironment, target.tool);
+    const locked = await withDistributedLock(
+      {
+        key: this.runtimeTransitionLockKey(sourceSession.id, sourceSession.sessionGroupId),
+        ttlMs: RUNTIME_TRANSITION_LOCK_TTL_MS,
+      },
+      async () => {
+        const managedRepo = await managedGitService.createManagedRepo({
+          organizationId: input.organizationId,
+          name: `${sourceSession.name} source`,
+          actorType: input.actorType ?? "user",
+          actorId: input.actorId,
+        });
+
+        try {
+          return await this.moveSessionInPlace({
+            session: sourceSession,
+            targetHosting: "cloud",
+            targetRuntimeInstanceId: null,
+            targetRuntimeLabel: null,
+            targetEnvironment: cloudEnvironment,
+            allowUnverifiedSourceGitStatus: true,
+            bootstrapPrompt: conversionContinuationPrompt(generatedKind),
+            conversion: {
+              kind: generatedKind,
+              repoId: managedRepo.id,
+              branch: managedRepo.defaultBranch,
+              tool: target.tool,
+              model: target.model,
+              reasoningEffort: target.reasoningEffort,
+            },
             actorType: input.actorType ?? "user",
             actorId: input.actorId,
+            runtimeLockHeld: true,
           });
-
-          try {
-            return await this.moveSessionInPlace({
-              session: sourceSession,
-              targetHosting: "cloud",
-              targetRuntimeInstanceId: null,
-              targetRuntimeLabel: null,
-              targetEnvironment: cloudEnvironment,
-              allowUnverifiedSourceGitStatus: true,
-              bootstrapPrompt: conversionContinuationPrompt(generatedKind),
-              conversion: {
-                kind: generatedKind,
-                repoId: managedRepo.id,
-                branch: managedRepo.defaultBranch,
-                tool: targetTool,
-                model: targetModel,
-                reasoningEffort: targetReasoningEffort,
-              },
-              actorType: input.actorType ?? "user",
-              actorId: input.actorId,
-              runtimeLockHeld: true,
-            });
-          } catch (error) {
-            const committed = await prisma.session.findFirst({
-              where: {
-                id: sourceSession.id,
-                organizationId: input.organizationId,
-                hosting: "cloud",
-                repoId: managedRepo.id,
-                sessionGroup: { kind: generatedKind },
-              },
+        } catch (error) {
+          const committed = await prisma.session.findFirst({
+            where: {
+              id: sourceSession.id,
+              organizationId: input.organizationId,
+              hosting: "cloud",
+              repoId: managedRepo.id,
+              sessionGroup: { kind: generatedKind },
+            },
+            include: SESSION_INCLUDE,
+          });
+          if (committed) {
+            const message = error instanceof Error ? error.message : String(error);
+            await this.workspaceFailed(
+              committed.id,
+              `Converted to ${generatedKind}, but workspace preparation failed: ${message}`,
+            ).catch(() => {});
+            return prisma.session.findUniqueOrThrow({
+              where: { id: committed.id },
               include: SESSION_INCLUDE,
             });
-            if (committed) {
-              const message = error instanceof Error ? error.message : String(error);
-              await this.workspaceFailed(
-                committed.id,
-                `Converted to ${generatedKind}, but workspace preparation failed: ${message}`,
-              ).catch(() => {});
-              return prisma.session.findUniqueOrThrow({
-                where: { id: committed.id },
-                include: SESSION_INCLUDE,
-              });
-            }
-            await managedGitService
-              .deleteManagedRepo({
-                organizationId: input.organizationId,
-                repoId: managedRepo.id,
-                actorType: input.actorType ?? "user",
-                actorId: input.actorId,
-              })
-              .catch(() => {});
-            throw error;
           }
-        },
-      );
-      if (!locked.acquired) {
-        throw new ValidationError("Session conversion is already in progress");
-      }
-      return locked.value;
+          await managedGitService
+            .deleteManagedRepo({
+              organizationId: input.organizationId,
+              repoId: managedRepo.id,
+              actorType: input.actorType ?? "user",
+              actorId: input.actorId,
+            })
+            .catch(() => {});
+          throw error;
+        }
+      },
+    );
+    if (!locked.acquired) {
+      throw new ValidationError("Session conversion is already in progress");
+    }
+    return locked.value;
+  }
+
+  private async resolveCodingConversionDestination(
+    tx: Prisma.TransactionClient,
+    input: ConvertSessionGroupServiceInput,
+    sourceGroup: { channelId: string | null; repoId: string | null },
+  ): Promise<{ channelId: string; repoId: string }> {
+    if (input.kind !== "coding") {
+      throw new ValidationError(`Unsupported conversion target: ${input.kind}`);
+    }
+    const channelId = input.channelId ?? sourceGroup.channelId;
+    if (!channelId) {
+      throw new ValidationError("Converting to coding requires a channel");
+    }
+    const channel = await tx.channel.findFirst({
+      where: {
+        id: channelId,
+        organizationId: input.organizationId,
+        type: "coding",
+      },
+      select: { id: true, repoId: true },
+    });
+    if (!channel) {
+      throw new ValidationError("Coding channel does not belong to this organization");
+    }
+    if (channel.repoId && input.repoId && channel.repoId !== input.repoId) {
+      throw new ValidationError("Coding channel sessions must use the channel's linked repo");
+    }
+    const repoId = channel.repoId ?? input.repoId ?? sourceGroup.repoId;
+    if (!repoId) {
+      throw new ValidationError("The selected coding channel requires a repository");
     }
 
+    if (input.projectId) {
+      const project = await tx.project.findFirst({
+        where: {
+          id: input.projectId,
+          organizationId: input.organizationId,
+          channels: { some: { channelId } },
+        },
+        select: { id: true, repoId: true },
+      });
+      if (!project) throw new ValidationError("Project is not linked to the selected channel");
+      if (project.repoId && project.repoId !== repoId) {
+        throw new ValidationError("Project must be linked to the selected repository");
+      }
+    }
+
+    const repo = await tx.repo.findFirst({
+      where: { id: repoId, organizationId: input.organizationId },
+      select: { id: true },
+    });
+    if (!repo) throw new ValidationError("Repository does not belong to this organization");
+    return { channelId, repoId };
+  }
+
+  private async convertGeneralToCoding(
+    input: ConvertSessionGroupServiceInput,
+  ): Promise<SessionWithInclude> {
     const result: {
       session: SessionWithInclude;
       event: Awaited<ReturnType<typeof eventService.create>>;
@@ -3616,29 +3706,9 @@ export class SessionService {
           },
         },
       });
-      if (!group) throw new ValidationError("Session group not found or is archived");
-      if (group.kind !== "general") {
-        throw new ValidationError("Only general sessions can be converted");
-      }
-      if (group.sessions.length !== 1) {
-        throw new ValidationError("Only single-session groups can be converted");
-      }
-
-      const session = group.sessions[0]!;
-      const targetTool = input.tool ?? session.tool;
-      const toolChanged = targetTool !== session.tool;
-      const targetModel =
-        input.model != null
-          ? validateModelForTool(targetTool, input.model)
-          : toolChanged
-            ? (getDefaultModel(targetTool) ?? null)
-            : undefined;
-      const targetReasoningEffort =
-        input.reasoningEffort != null
-          ? validateReasoningEffortForTool(targetTool, input.reasoningEffort)
-          : toolChanged
-            ? (getDefaultReasoningEffort(targetTool) ?? null)
-            : undefined;
+      const session = requireSingleGeneralConversionSession(group);
+      const generalGroup = group!;
+      const target = resolveConversionToolSelection(session.tool, input);
       const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
       const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
       const effectiveRuntime =
@@ -3646,79 +3716,29 @@ export class SessionService {
         (persistedRuntimeId
           ? runtimeMetadata(persistedRuntimeId, input.organizationId)
           : undefined);
-      if (effectiveRuntime && !effectiveRuntime.supportedTools.includes(targetTool)) {
-        throw new ToolNotInstalledError(targetTool, effectiveRuntime.label ?? null);
+      if (effectiveRuntime && !effectiveRuntime.supportedTools.includes(target.tool)) {
+        throw new ToolNotInstalledError(target.tool, effectiveRuntime.label ?? null);
       }
-      let targetChannelId: string | null = null;
-      let targetRepoId: string;
-      if (input.kind === "coding") {
-        targetChannelId = input.channelId ?? group.channelId;
-        if (!targetChannelId) {
-          throw new ValidationError("Converting to coding requires a channel");
-        }
-        const targetChannel = await tx.channel.findFirst({
-          where: {
-            id: targetChannelId,
-            organizationId: input.organizationId,
-            type: "coding",
-          },
-          select: { id: true, repoId: true },
-        });
-        if (!targetChannel) {
-          throw new ValidationError("Coding channel does not belong to this organization");
-        }
-        if (targetChannel.repoId && input.repoId && targetChannel.repoId !== input.repoId) {
-          throw new ValidationError("Coding channel sessions must use the channel's linked repo");
-        }
-        const codingRepoId = targetChannel.repoId ?? input.repoId ?? group.repoId;
-        if (!codingRepoId) {
-          throw new ValidationError("The selected coding channel requires a repository");
-        }
-        targetRepoId = codingRepoId;
-      } else {
-        throw new ValidationError(`Unsupported conversion target: ${input.kind}`);
-      }
-
-      if (input.projectId) {
-        const project = await tx.project.findFirst({
-          where: {
-            id: input.projectId,
-            organizationId: input.organizationId,
-            channels: { some: { channelId: targetChannelId! } },
-          },
-          select: { id: true, repoId: true },
-        });
-        if (!project) throw new ValidationError("Project is not linked to the selected channel");
-        if (project.repoId && project.repoId !== targetRepoId) {
-          throw new ValidationError("Project must be linked to the selected repository");
-        }
-      }
-      if (input.kind === "coding") {
-        const repo = await tx.repo.findFirst({
-          where: { id: targetRepoId, organizationId: input.organizationId },
-          select: { id: true },
-        });
-        if (!repo) throw new ValidationError("Repository does not belong to this organization");
-      }
+      const destination = await this.resolveCodingConversionDestination(tx, input, generalGroup);
 
       await tx.sessionGroup.update({
-        where: { id: group.id },
+        where: { id: generalGroup.id },
         data: {
           kind: input.kind,
-          channelId: targetChannelId,
-          repoId: targetRepoId,
+          channelId: destination.channelId,
+          repoId: destination.repoId,
         },
       });
       const updated = await tx.session.update({
         where: { id: session.id },
         data: {
-          channelId: targetChannelId,
-          repoId: targetRepoId,
+          channelId: destination.channelId,
+          repoId: destination.repoId,
           readOnlyWorkspace: input.kind === "coding",
-          ...(input.tool ? { tool: targetTool } : {}),
-          ...(targetModel !== undefined ? { model: targetModel } : {}),
-          ...(targetReasoningEffort !== undefined
-            ? { reasoningEffort: targetReasoningEffort }
+          ...(input.tool ? { tool: target.tool } : {}),
+          ...(target.model !== undefined ? { model: target.model } : {}),
+          ...(target.reasoningEffort !== undefined
+            ? { reasoningEffort: target.reasoningEffort }
             : {}),
           projects: input.projectId
             ? { deleteMany: {}, create: { projectId: input.projectId } }
@@ -3726,7 +3746,7 @@ export class SessionService {
         },
         include: SESSION_INCLUDE,
       });
-      const sessionGroup = await this.loadSessionGroupSnapshot(group.id, tx);
+      const sessionGroup = await this.loadSessionGroupSnapshot(generalGroup.id, tx);
       if (!sessionGroup) throw new Error("Session group disappeared during conversion");
       const event = await eventService.create(
         {
@@ -3735,8 +3755,8 @@ export class SessionService {
           scopeId: updated.id,
           eventType: "session_converted" as EventType,
           payload: eventJson({
-            sessionGroupId: group.id,
-            fromKind: group.kind,
+            sessionGroupId: generalGroup.id,
+            fromKind: generalGroup.kind,
             toKind: input.kind,
             session: serializeSession(updated),
             sessionGroup,
