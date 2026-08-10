@@ -4648,6 +4648,7 @@ export class SessionService {
         organizationId: input.organizationId,
         readOnly: readOnlyWorkspace,
         adoptWorktreePath,
+        expectedHomeRuntimeId: runtimeToBind,
         adapterType: requestedEnvironment?.adapterType,
         environment: requestedEnvironment,
       });
@@ -5021,6 +5022,7 @@ export class SessionService {
         createdById: updated.createdById,
         organizationId: updated.organizationId,
         readOnly: updated.readOnlyWorkspace,
+        expectedHomeRuntimeId: input.runtimeInstanceId,
         adapterType: conn.adapterType,
       });
     }
@@ -5161,6 +5163,7 @@ export class SessionService {
           createdById: session.createdById,
           organizationId: session.organizationId,
           readOnly: session.readOnlyWorkspace,
+          expectedHomeRuntimeId: runtimeBinding.runtimeId ?? conn.runtimeInstanceId,
           adapterType: conn.adapterType,
         });
       }
@@ -5973,6 +5976,7 @@ export class SessionService {
         createdById: session.createdById,
         organizationId: session.organizationId,
         readOnly: session.readOnlyWorkspace,
+        expectedHomeRuntimeId: conn.runtimeInstanceId,
         adapterType: conn.adapterType,
         environment: requestedEnvironment,
       });
@@ -6664,6 +6668,7 @@ export class SessionService {
             createdById: session.createdById,
             organizationId: session.organizationId,
             readOnly: session.readOnlyWorkspace,
+            expectedHomeRuntimeId: runtimeBinding.runtimeId ?? conn.runtimeInstanceId,
             adapterType: conn.adapterType,
           });
         }
