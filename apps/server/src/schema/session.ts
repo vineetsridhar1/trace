@@ -2,6 +2,7 @@ import type { Context } from "../context.js";
 import type {
   AgentStatus,
   CodingTool,
+  ConvertSessionGroupInput,
   DesignElementStylesInput,
   SessionFilters,
   StartSessionInput,
@@ -413,22 +414,7 @@ export const sessionMutations = {
       clientSource: ctx.clientSource,
     });
   },
-  convertSessionGroup: (
-    _: unknown,
-    args: {
-      input: {
-        sessionGroupId: string;
-        kind: import("@trace/gql").SessionGroupKind;
-        channelId?: string | null;
-        repoId?: string | null;
-        projectId?: string | null;
-        tool?: CodingTool | null;
-        model?: string | null;
-        reasoningEffort?: string | null;
-      };
-    },
-    ctx: Context,
-  ) => {
+  convertSessionGroup: (_: unknown, args: { input: ConvertSessionGroupInput }, ctx: Context) => {
     const orgId = requireOrgContext(ctx);
     if (!ctx.userId) throw new AuthenticationError();
     return sessionService.convertGroup({

@@ -1,4 +1,4 @@
-import type { CodingTool, SessionGroupKind } from "@trace/gql";
+import type { CodingTool, ConvertSessionGroupInput, SessionGroupKind } from "@trace/gql";
 import { traceCliOperations } from "@trace/cli-contract";
 import { usage } from "../../errors.js";
 import { defineCommand, optionString } from "../../runtime.js";
@@ -13,16 +13,6 @@ import {
 const CONVERSION_KINDS = SESSION_KINDS.filter(
   (kind) => kind !== "general" && kind !== "design_system",
 );
-
-type ConvertSessionGroupInput = {
-  sessionGroupId: string;
-  kind: SessionGroupKind;
-  channelId?: string;
-  repoId?: string;
-  tool?: CodingTool;
-  model?: string;
-  reasoningEffort?: string;
-};
 
 export const sessionConvertCommand = defineCommand({
   path: ["session", "convert"],

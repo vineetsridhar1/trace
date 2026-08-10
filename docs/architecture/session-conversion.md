@@ -40,17 +40,24 @@ made safe. Design-system authoring is not a standalone mode: it requires a
 source repository and a `DesignSystem` record, so it keeps its dedicated
 creation flow.
 
-A coding conversion requires a coding channel. The channel is the destination
-and supplies its linked repository; an explicit repository is accepted only
-when the channel has none. This matches normal coding-session creation and
-prevents repo-only sessions from bypassing the channel workflow.
+A coding conversion requires a coding channel that the actor can see, and the
+same group lock as a runtime move. The channel is the destination and supplies
+its linked repository; an explicit repository is accepted only when the channel
+has none, and a local runtime must already have that repository linked. This
+matches normal coding-session creation and prevents repo-only sessions from
+bypassing the channel workflow. An explicit project must belong to the
+destination; otherwise the project the general session already carried is kept
+when it still belongs to that destination and dropped when it does not.
 
 A repository attached to a general session is context only. Local and cloud
 general sessions always run from `~/trace/general-sessions/<session-group-id>`,
-never a writable repository checkout. Converting to coding upgrades that scratch
-workspace to the selected repository worktree. The bridge removes the scratch
-directory after a successful upgrade; cross-runtime cleanup is persisted until
-the source bridge confirms deletion and retried when that bridge reconnects.
+never a writable repository checkout. Converting to coding always upgrades that
+scratch workspace to the selected repository worktree, so a converted session is
+never left running outside the checkout its instructions assume; an
+agent-initiated conversion additionally resumes the request there. The bridge
+removes the scratch directory after a successful upgrade; cross-runtime cleanup
+is persisted until the source bridge confirms deletion and retried when that
+bridge reconnects.
 
 Creation-mode conversion clears channel/project links, creates a Trace-managed
 repo, stops the old runtime, and moves the existing session to the default cloud

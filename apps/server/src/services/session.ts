@@ -68,6 +68,7 @@ import { isLocalMode } from "../lib/mode.js";
 import {
   assertSessionGroupAccess,
   canViewSessionGroup,
+  visibleChannelWhere,
   visibleSessionGroupWhere,
   visibleSessionWhere,
 } from "./access.js";
@@ -454,7 +455,6 @@ type PendingSessionCommand =
       checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
-      cleanupGeneralWorkspaceRuntimeId?: string | null;
       designAttachments?: DesignAttachmentRef[] | null;
     }
   | {
@@ -465,7 +465,6 @@ type PendingSessionCommand =
       checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
-      cleanupGeneralWorkspaceRuntimeId?: string | null;
       designAttachments?: DesignAttachmentRef[] | null;
     };
 
@@ -3631,24 +3630,26 @@ export class SessionService {
     tx: Prisma.TransactionClient,
     input: ConvertSessionGroupServiceInput,
     sourceGroup: { channelId: string | null; repoId: string | null },
-  ): Promise<{ channelId: string; repoId: string }> {
-    if (input.kind !== "coding") {
-      throw new ValidationError(`Unsupported conversion target: ${input.kind}`);
-    }
+    currentProjectIds: string[],
+  ): Promise<{ channelId: string; repoId: string; projectId: string | null }> {
     const channelId = input.channelId ?? sourceGroup.channelId;
     if (!channelId) {
       throw new ValidationError("Converting to coding requires a channel");
     }
+    // The destination channel must be one the actor could have selected
+    // themselves; organization membership alone would let a caller attach the
+    // session to a private channel they cannot see.
     const channel = await tx.channel.findFirst({
       where: {
         id: channelId,
         organizationId: input.organizationId,
         type: "coding",
+        ...visibleChannelWhere(input.actorId),
       },
       select: { id: true, repoId: true },
     });
     if (!channel) {
-      throw new ValidationError("Coding channel does not belong to this organization");
+      throw new ValidationError("Coding channel is not available to this session");
     }
     if (channel.repoId && input.repoId && channel.repoId !== input.repoId) {
       throw new ValidationError("Coding channel sessions must use the channel's linked repo");
@@ -3658,19 +3659,28 @@ export class SessionService {
       throw new ValidationError("The selected coding channel requires a repository");
     }
 
-    if (input.projectId) {
+    // An explicit project must be valid for the destination. Otherwise keep the
+    // project the user already chose for the general session when it still
+    // belongs to that destination, and drop it when it no longer applies.
+    const requestedProjectId = input.projectId ?? currentProjectIds[0] ?? null;
+    let projectId: string | null = null;
+    if (requestedProjectId) {
       const project = await tx.project.findFirst({
         where: {
-          id: input.projectId,
+          id: requestedProjectId,
           organizationId: input.organizationId,
           channels: { some: { channelId } },
         },
         select: { id: true, repoId: true },
       });
-      if (!project) throw new ValidationError("Project is not linked to the selected channel");
-      if (project.repoId && project.repoId !== repoId) {
+      const compatible = !!project && (!project.repoId || project.repoId === repoId);
+      if (input.projectId && !project) {
+        throw new ValidationError("Project is not linked to the selected channel");
+      }
+      if (input.projectId && !compatible) {
         throw new ValidationError("Project must be linked to the selected repository");
       }
+      projectId = compatible ? requestedProjectId : null;
     }
 
     const repo = await tx.repo.findFirst({
@@ -3678,10 +3688,29 @@ export class SessionService {
       select: { id: true },
     });
     if (!repo) throw new ValidationError("Repository does not belong to this organization");
-    return { channelId, repoId };
+    return { channelId, repoId, projectId };
   }
 
   private async convertGeneralToCoding(
+    input: ConvertSessionGroupServiceInput,
+  ): Promise<SessionWithInclude> {
+    // Conversion rebinds the repo and then upgrades the running workspace, so
+    // it has to serialize against the other runtime transitions for this group
+    // exactly like the generated path does.
+    const locked = await withDistributedLock(
+      {
+        key: this.sessionGroupTransitionLockKey(input.sessionGroupId),
+        ttlMs: RUNTIME_TRANSITION_LOCK_TTL_MS,
+      },
+      () => this.applyCodingConversion(input),
+    );
+    if (!locked.acquired) {
+      throw new ValidationError("Session conversion is already in progress");
+    }
+    return locked.value;
+  }
+
+  private async applyCodingConversion(
     input: ConvertSessionGroupServiceInput,
   ): Promise<SessionWithInclude> {
     const result: {
@@ -3702,7 +3731,7 @@ export class SessionService {
           repoId: true,
           sessions: {
             orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-            include: SESSION_INCLUDE,
+            include: { ...SESSION_INCLUDE, projects: { select: { projectId: true } } },
           },
         },
       });
@@ -3719,7 +3748,20 @@ export class SessionService {
       if (effectiveRuntime && !effectiveRuntime.supportedTools.includes(target.tool)) {
         throw new ToolNotInstalledError(target.tool, effectiveRuntime.label ?? null);
       }
-      const destination = await this.resolveCodingConversionDestination(tx, input, generalGroup);
+      const destination = await this.resolveCodingConversionDestination(
+        tx,
+        input,
+        generalGroup,
+        session.projects.map((link: { projectId: string }) => link.projectId),
+      );
+      // The upgrade below builds a worktree on this runtime, so it has to be a
+      // runtime that actually has the destination repository linked.
+      if (
+        effectiveRuntime?.hostingMode === "local" &&
+        !effectiveRuntime.registeredRepoIds.includes(destination.repoId)
+      ) {
+        throw new ValidationError("Selected runtime does not have this repo linked");
+      }
 
       await tx.sessionGroup.update({
         where: { id: generalGroup.id },
@@ -3734,14 +3776,15 @@ export class SessionService {
         data: {
           channelId: destination.channelId,
           repoId: destination.repoId,
-          readOnlyWorkspace: input.kind === "coding",
+          // The conversion always prepares a writable worktree below.
+          readOnlyWorkspace: false,
           ...(input.tool ? { tool: target.tool } : {}),
           ...(target.model !== undefined ? { model: target.model } : {}),
           ...(target.reasoningEffort !== undefined
             ? { reasoningEffort: target.reasoningEffort }
             : {}),
-          projects: input.projectId
-            ? { deleteMany: {}, create: { projectId: input.projectId } }
+          projects: destination.projectId
+            ? { deleteMany: {}, create: { projectId: destination.projectId } }
             : { deleteMany: {} },
         },
         include: SESSION_INCLUDE,
@@ -3772,27 +3815,33 @@ export class SessionService {
 
     eventService.publishCreated(result.event);
 
-    // An agent-initiated conversion is a handoff, not the end of the user's
-    // request. Prepare the repository worktree and resume the same tool
-    // conversation there. workspaceReady atomically consumes this pending run,
-    // and the desktop bridge aborts the old general-workspace process before
-    // starting it in the new cwd.
-    if (input.actorType === "agent") {
-      await this.triggerWorkspaceUpgrade(
-        result.session.id,
-        result.session,
-        {
-          type: "run",
-          prompt: "Continue the user's request in the newly prepared coding workspace.",
-          interactionMode: "code",
-          clientSource: "cli",
-        },
-        {
-          agentStatus: "active",
-          sessionStatus: getRunningSessionStatus(result.session.sessionStatus),
-        },
-      );
-    }
+    // Replace the disposable general scratch directory with the repository
+    // worktree the converted session now claims to work in — otherwise the
+    // session would keep running outside a checkout while carrying
+    // repo-backed coding instructions. An agent-initiated conversion is a
+    // handoff rather than the end of the user's request, so it also resumes
+    // the same tool conversation there: workspaceReady atomically consumes
+    // that pending run, and the bridge aborts the old general-workspace
+    // process before starting it in the new cwd.
+    const isAgentHandoff = input.actorType === "agent";
+    await this.triggerWorkspaceUpgrade(
+      result.session.id,
+      result.session,
+      isAgentHandoff
+        ? {
+            type: "run",
+            prompt: "Continue the user's request in the newly prepared coding workspace.",
+            interactionMode: "code",
+            clientSource: "cli",
+          }
+        : null,
+      isAgentHandoff
+        ? {
+            agentStatus: "active",
+            sessionStatus: getRunningSessionStatus(result.session.sessionStatus),
+          }
+        : undefined,
+    );
 
     return result.session;
   }
@@ -8091,16 +8140,12 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
-    const cleanupRuntimeInstanceId =
-      pendingCleanupRuntimeId ??
-      this.parsePendingCommands(pendingRun)[0]?.cleanupGeneralWorkspaceRuntimeId ??
-      null;
-    if (cleanupRuntimeInstanceId) {
+    if (pendingCleanupRuntimeId) {
       await this.deliverGeneralWorkspaceCleanup({
         sessionId,
         sessionGroupId: session.sessionGroupId,
         organizationId: session.organizationId,
-        runtimeInstanceId: cleanupRuntimeInstanceId,
+        runtimeInstanceId: pendingCleanupRuntimeId,
       });
     }
     if (
@@ -9152,8 +9197,12 @@ export class SessionService {
 
   private runtimeTransitionLockKey(sessionId: string, sessionGroupId?: string | null): string {
     return sessionGroupId
-      ? `trace:session-group-runtime-transition:${sessionGroupId}`
+      ? this.sessionGroupTransitionLockKey(sessionGroupId)
       : `trace:session-runtime-transition:${sessionId}`;
+  }
+
+  private sessionGroupTransitionLockKey(sessionGroupId: string): string {
+    return `trace:session-group-runtime-transition:${sessionGroupId}`;
   }
 
   private async retryConnectionLocked(
@@ -11945,10 +11994,6 @@ export class SessionService {
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
-        cleanupGeneralWorkspaceRuntimeId:
-          typeof pending.cleanupGeneralWorkspaceRuntimeId === "string"
-            ? pending.cleanupGeneralWorkspaceRuntimeId
-            : null,
         designAttachments: parseDesignAttachments(pending.designAttachments),
       };
     }
@@ -11962,10 +12007,6 @@ export class SessionService {
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
-        cleanupGeneralWorkspaceRuntimeId:
-          typeof pending.cleanupGeneralWorkspaceRuntimeId === "string"
-            ? pending.cleanupGeneralWorkspaceRuntimeId
-            : null,
         designAttachments: parseDesignAttachments(pending.designAttachments),
       };
     }
@@ -12004,14 +12045,16 @@ export class SessionService {
       branch: string | null;
       connection: unknown;
     },
-    pendingCommand: PendingSessionCommand,
+    pendingCommand: PendingSessionCommand | null,
     extraData?: Partial<Prisma.SessionUpdateInput>,
   ) {
-    await this.storePendingCommand(
-      sessionId,
-      { ...pendingCommand, workspaceUpgrade: true },
-      extraData,
-    );
+    if (pendingCommand) {
+      await this.storePendingCommand(
+        sessionId,
+        { ...pendingCommand, workspaceUpgrade: true },
+        extraData,
+      );
+    }
 
     const repo = session.repo;
     if (!repo) return;

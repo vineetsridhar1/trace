@@ -1,4 +1,13 @@
-import { AppWindow, BotMessageSquare, CodeXml, Component, FileText, Frame, Gem, type LucideIcon } from "lucide-react";
+import {
+  AppWindow,
+  BotMessageSquare,
+  CodeXml,
+  Component,
+  FileText,
+  Frame,
+  Gem,
+  type LucideIcon,
+} from "lucide-react";
 import type { SessionGroupKind } from "@trace/gql";
 import { cn } from "../../lib/utils";
 import type { HomeCreatableKind } from "./home-kinds";
