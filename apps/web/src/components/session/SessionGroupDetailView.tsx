@@ -42,7 +42,7 @@ import { useSessionGroupDirectoryTree } from "./useSessionGroupDirectoryTree";
 import { getSessionGroupDisplayStatus, isTerminalStatus } from "./sessionStatus";
 import { isAnimationCanvasReady, isAppCanvasReady } from "./app-session-readiness";
 import { isGeneratedProjectCanvasReady } from "./generated-project-readiness";
-import { getProjectWorkspaceKind } from "./project-workspace-kind";
+import { getProjectWorkspaceKind, usesFloatingProjectChat } from "./project-workspace-kind";
 import { getLinkedCheckoutRuntimeInstanceId } from "../../lib/linked-checkout-access";
 import { toast } from "sonner";
 import {
@@ -509,6 +509,7 @@ export function SessionGroupDetailView({
     projectWorkspaceKind === "design_system" ||
     projectWorkspaceKind === "pdf";
   const isCanvasWorkspace = projectWorkspaceKind !== null;
+  const floatingProjectChat = usesFloatingProjectChat(projectWorkspaceKind);
   const selectedConnection = selectedSession?.connection as
     | Record<string, unknown>
     | null
@@ -1099,6 +1100,7 @@ export function SessionGroupDetailView({
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                       canvasReady={appCanvasReady}
                       canvasKey="app-canvas"
+                      floatingChat={floatingProjectChat}
                       canvas={
                         <SessionGroupContentArea
                           sessionGroupId={sessionGroupId}
@@ -1133,6 +1135,7 @@ export function SessionGroupDetailView({
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                       canvasReady={animationCanvasReady}
                       canvasKey="animation-canvas"
+                      floatingChat={floatingProjectChat}
                       canvas={
                         <SessionGroupContentArea
                           sessionGroupId={sessionGroupId}
@@ -1169,6 +1172,7 @@ export function SessionGroupDetailView({
                       canForkSession={!!selectedSession && !selectedSessionIsOptimistic}
                       canvasReady={generatedProjectCanvasReady}
                       canvasKey="generated-project-canvas"
+                      floatingChat={floatingProjectChat}
                       manualSessionGroupId={sessionGroupId}
                       showCanvasWhileLoading={
                         projectWorkspaceKind === "design" ||

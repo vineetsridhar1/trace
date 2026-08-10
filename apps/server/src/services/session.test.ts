@@ -5610,6 +5610,9 @@ describe("SessionService", () => {
         }),
       );
       expect(command?.appendSystemPrompt).not.toContain("trace-integrations/SKILL.md");
+      expect(command?.appendSystemPrompt).toContain(
+        "$TRACE_SKILLS_DIR/design-craft/SKILL.md completely",
+      );
     });
 
     it("injects design guidance without branch instructions for managed design repos", async () => {
@@ -5655,6 +5658,9 @@ describe("SessionService", () => {
           appendSystemPrompt: expect.stringContaining("React is only the rendering medium"),
         }),
       );
+      expect(command?.appendSystemPrompt).toContain(
+        "$TRACE_SKILLS_DIR/design-craft/SKILL.md completely",
+      );
       expect(command).toEqual(
         expect.objectContaining({
           appendSystemPrompt: expect.stringContaining("inspect and repair every screenshot"),
@@ -5663,7 +5669,7 @@ describe("SessionService", () => {
       expect(command).toEqual(
         expect.objectContaining({
           appendSystemPrompt: expect.stringContaining(
-            "Read the workspace guidance and design brief",
+            "Read the workspace guidance, design brief",
           ),
         }),
       );

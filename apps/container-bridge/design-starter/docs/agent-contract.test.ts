@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const guidance = readFileSync(new URL("./ai-guidance.md", import.meta.url), "utf8");
+const playbookRouter = readFileSync(new URL("./playbooks/README.md", import.meta.url), "utf8");
 const agents = readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8");
 const claude = readFileSync(new URL("../CLAUDE.md", import.meta.url), "utf8");
 const notice = readFileSync(new URL("../THIRD_PARTY_NOTICES.md", import.meta.url), "utf8");
@@ -32,7 +33,8 @@ test("defines an artifact-first design workflow and quality gate", () => {
   assert.match(guidance, /trace\.tokens\.json/);
   assert.match(guidance, /Executable tokens and screen primitives/);
   assert.match(guidance, /docs\/playbooks\/README\.md/);
-  assert.match(guidance, /Avoid generic AI styling/);
+  assert.match(guidance, /surface mode: `persuade`, `operate`, `read`, or `experience`/);
+  assert.match(guidance, /\$TRACE_SKILLS_DIR\/design-craft\/SKILL\.md/);
   assert.match(guidance, /## Final critique/);
   assert.match(guidance, /Brief fidelity/);
   assert.match(guidance, /Interaction and accessibility/);
@@ -51,4 +53,12 @@ test("preserves attribution for the adapted Open Design guidance", () => {
   assert.match(notice, /Apache License 2\.0/);
   assert.match(openDesignLicense, /Apache License/);
   assert.match(openDesignLicense, /Version 2\.0, January 2004/);
+});
+
+test("delegates shared craft guidance without bundling page-detector assumptions", () => {
+  assert.match(guidance, /\$TRACE_SKILLS_DIR\/design-craft\/SKILL\.md/);
+  assert.match(playbookRouter, /shared design-craft references/);
+  assert.doesNotMatch(notice, /Impeccable/);
+  assert.equal(existsSync(new URL("../scripts/impeccable/", import.meta.url)), false);
+  assert.equal(existsSync(new URL("./playbooks/design-method.md", import.meta.url)), false);
 });

@@ -1140,12 +1140,16 @@ Do this silently — do not mention it to the user unless they ask or it fails.
 If the user asks you to stop auto-saving or disable auto-save, stop doing this for the rest of the session.
 </system-instruction>`;
 
+const DESIGN_CRAFT_SKILL_INSTRUCTION = `\n\n<system-instruction>
+Before substantial interface work, read $TRACE_SKILLS_DIR/design-craft/SKILL.md completely and use the references it routes for the task. Apply its shared design guidance inside the active session's own artifact, runtime, and review contract.
+</system-instruction>`;
+
 const APP_SESSION_INSTRUCTION = `\n\n<system-instruction>
 This is a Trace app session in its own isolated cloud runtime. When present, read and follow docs/ai-guidance.md and docs/trace-apps.md before changing the app. Build a full-stack app, not a static artifact or patch to an existing user repo. Use the provided Vite/React/Node/Tailwind/shadcn-compatible starter as the source of truth. Work visibly and incrementally: make a small, valid first UI change quickly, then build in coherent runnable batches so the user can watch each meaningful step through Vite HMR. Keep the app working between edits; do not prepare the entire replacement offscreen and swap it in only at the end. Build frontend UI in src and add API routes or other server behavior in server.ts and related Node modules. Keep browser requests to your own API same-origin. Call third-party APIs from Node routes when browser CORS would block them. Only when an external browser origin must call this app directly, add its exact origin to the comma-separated APP_CORS_ALLOWED_ORIGINS environment variable; never use a wildcard for credentialed requests. You may install npm packages (pnpm is available) and use sudo to install any other OS packages you need. Redis and PostgreSQL are already running and ready to use — do NOT install, initialize, or reconfigure them, create roles, or edit pg_hba/auth. The \`pg\` client and its TypeScript types are already installed. For Postgres, import \`Pool\` from \`pg\`, read the DATABASE_URL environment variable, and pass it straight to \`new Pool({ connectionString: process.env.DATABASE_URL })\`; it is a complete, credentialed TCP URL (\`postgresql://user:pass@localhost:5432/app\`) for a ready database named \`app\` — do not parse it, override the user, or switch to a Unix socket. Redis is at REDIS_URL / redis://localhost:6379. Keep credentials out of git. Preserve data-trace-source attributes when adding inspectable UI elements. IMPORTANT: the dev server is already started and managed for you on port 3000 (host 0.0.0.0) and hot-reloads your file changes — do NOT run \`pnpm dev\` or otherwise start your own server, the port is already taken and a second one will crash. Just edit files; if you need to verify, curl http://localhost:3000. Before every response that changes the app, commit and push the changes to the configured managed origin. Sharing the live app is a valid final outcome.
 </system-instruction>`;
 
 const DESIGN_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace Design session, not an App or Coding session. Before editing, read design-system/manifest.json, design-system/DESIGN.md, design-system/tokens.css, design-system/components.manifest.json, and then relevant local components, assets, or evidence. The selected package outranks starter defaults; describe any intentional user-requested override. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; design screens, flows, variants, and states instead of implementing a production application. Read the workspace guidance and design brief, work visibly through Vite HMR, keep the manifest and canvas valid, and use the token-driven primitives and portable-component import seam. Do not build APIs, persistence, or real integrations. Do not replace the stable canvas/review runtime or Vite/export configuration. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect and repair every screenshot. Before every response that changes the design, commit and push the managed origin.
+This is a Trace Design session, not an App or Coding session. Before editing, read design-system/manifest.json, design-system/DESIGN.md, design-system/tokens.css, design-system/components.manifest.json, and then relevant local components, assets, or evidence. The selected package outranks starter defaults; describe any intentional user-requested override. Act as a product and interface designer producing reviewable screen artifacts on the existing canvas. React is only the rendering medium; design screens, flows, variants, and states instead of implementing a production application. Read the workspace guidance, design brief, and relevant Trace design playbooks, work visibly through Vite HMR, keep the manifest and canvas valid, and use the token-driven primitives and portable-component import seam. Do not build APIs, persistence, or real integrations. Do not replace the stable canvas/review runtime or Vite/export configuration. Before delivery run pnpm design:check, pnpm design:review, and pnpm test; inspect and repair every screenshot. Before every response that changes the design, commit and push the managed origin.
 </system-instruction>`;
 
 const DESIGN_SYSTEM_SESSION_INSTRUCTION = `\n\n<system-instruction>
@@ -1180,12 +1184,12 @@ function generatedProjectBaseInstruction(
   kind: SessionGroupKind | string | null | undefined,
   selected?: { version: number; contentDigest: string; designSystem: { name: string } } | null,
 ): string | undefined {
-  if (kind === "app") return APP_SESSION_INSTRUCTION;
+  if (kind === "app") return DESIGN_CRAFT_SKILL_INSTRUCTION + APP_SESSION_INSTRUCTION;
   if (kind === "design") {
     const reference = selected
       ? `\nSelected design system: ${selected.designSystem.name} v${selected.version} (${selected.contentDigest}). The package is already local; follow the required manifest/guidance/tokens/components read order and load other files only on demand.\n`
       : "\nSelected design system: Trace Default. The package is already local and uses the same read contract.\n";
-    return DESIGN_SESSION_INSTRUCTION + reference;
+    return DESIGN_CRAFT_SKILL_INSTRUCTION + DESIGN_SESSION_INSTRUCTION + reference;
   }
   if (kind === "design_system") return DESIGN_SYSTEM_SESSION_INSTRUCTION;
   if (kind === "pdf") return PDF_SESSION_INSTRUCTION;

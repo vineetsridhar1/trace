@@ -31,6 +31,57 @@ describe("ensureTraceRuntime", () => {
     expect(browserVideoSkill).toContain('artifact push video "$TRACE_BROWSER_VIDEO_DIR');
     expect(browserVideoSkill).toContain("Never override the session name");
     expect(browserVideoSkill).toContain('"$TRACE_BROWSER_VIDEO_VALIDATE"');
+    const designCraftSkill = await readFile(
+      join(runtime.skillsDir, "design-craft", "SKILL.md"),
+      "utf8",
+    );
+    expect(designCraftSkill).toContain("App session");
+    expect(designCraftSkill).toContain("Design session");
+    expect(designCraftSkill).toContain("Do not introduce a generic page detector");
+    expect(designCraftSkill).toContain("references/new-work.md");
+    expect(designCraftSkill).toContain("references/operate.md");
+    expect(designCraftSkill).toContain("references/critique.md");
+    expect(designCraftSkill).toContain("references/harden.md");
+    expect(
+      await readFile(
+        join(runtime.skillsDir, "design-craft", "references", "design-method.md"),
+        "utf8",
+      ),
+    ).toContain("Establish visual authority");
+    expect(
+      await readFile(
+        join(runtime.skillsDir, "design-craft", "references", "refinement-actions.md"),
+        "utf8",
+      ),
+    ).toContain("| Bolder |");
+    expect(
+      await readFile(
+        join(runtime.skillsDir, "design-craft", "references", "review-and-resilience.md"),
+        "utf8",
+      ),
+    ).toContain("exclude canvas chrome");
+    expect(
+      await readFile(join(runtime.skillsDir, "design-craft", "references", "critique.md"), "utf8"),
+    ).toContain("Run independent passes");
+    expect(
+      await readFile(join(runtime.skillsDir, "design-craft", "references", "harden.md"), "utf8"),
+    ).toContain("Hardening Dimensions");
+    const bolderReference = await readFile(
+      join(runtime.skillsDir, "design-craft", "references", "bolder.md"),
+      "utf8",
+    );
+    expect(bolderReference).toContain("Trace's normal question mechanism");
+    expect(bolderReference).not.toContain("Codex's structured user-input");
+    const operateReference = await readFile(
+      join(runtime.skillsDir, "design-craft", "references", "operate.md"),
+      "utf8",
+    );
+    expect(operateReference).toContain("[design-method.md](design-method.md)");
+    expect(operateReference).toContain("mode-specific guidance narrows a general craft-floor rule");
+    expect(operateReference).toContain("replacing native scrollbar behavior");
+    expect(
+      await readFile(join(runtime.skillsDir, "design-craft", "LICENSE.txt"), "utf8"),
+    ).toContain("Apache License");
     const visualPlanSkill = await readFile(
       join(runtime.skillsDir, "visual-plan", "SKILL.md"),
       "utf8",

@@ -5,6 +5,7 @@
   "platform": "Mobile",
   "fidelity": "High-fidelity example",
   "primaryJob": "Understand that Design sessions produce reviewable interactive screen artifacts",
+  "mode": "operate",
   "coreFlow": ["Review the example screen", "Trigger its local prototype interaction"],
   "requiredStates": ["default"],
   "direction": {

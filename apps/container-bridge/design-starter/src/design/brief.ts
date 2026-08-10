@@ -6,6 +6,9 @@ export type DesignReference = {
   evidence: string[];
 };
 
+export const designModes = ["persuade", "operate", "read", "experience"] as const;
+export type DesignMode = (typeof designModes)[number];
+
 export type DesignBrief = {
   version: 1;
   artifactType: string | null;
@@ -13,6 +16,7 @@ export type DesignBrief = {
   platform: string | null;
   fidelity: string | null;
   primaryJob: string | null;
+  mode: DesignMode;
   coreFlow: string[];
   requiredStates: string[];
   direction: { name: string | null; principles: string[] };
@@ -43,6 +47,13 @@ function textList(value: unknown, path: string): string[] {
   });
 }
 
+function designMode(value: unknown): DesignMode {
+  if (typeof value === "string" && designModes.includes(value as DesignMode)) {
+    return value as DesignMode;
+  }
+  throw new Error(`mode must be one of: ${designModes.join(", ")}`);
+}
+
 export function validateDesignBrief(value: unknown): DesignBrief {
   const source = record(value, "design.brief.json");
   if (source.version !== 1) throw new Error("design.brief.json version must be 1");
@@ -69,6 +80,7 @@ export function validateDesignBrief(value: unknown): DesignBrief {
     platform: nullableText(source.platform, "platform"),
     fidelity: nullableText(source.fidelity, "fidelity"),
     primaryJob: nullableText(source.primaryJob, "primaryJob"),
+    mode: designMode(source.mode),
     coreFlow: textList(source.coreFlow, "coreFlow"),
     requiredStates: textList(source.requiredStates, "requiredStates"),
     direction: {
