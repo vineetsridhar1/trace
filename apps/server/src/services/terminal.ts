@@ -5,6 +5,8 @@ import { terminalRelay } from "../lib/terminal-relay.js";
 import { canViewSessionGroup } from "./access.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { isFullyUnloadedSession } from "./session.js";
+import { eventService } from "./event.js";
+import type { ActorType } from "@trace/gql";
 
 const TERMINAL_NO_RUNTIME_ERROR =
   "Cannot open terminal: this session is not connected to a runtime";
@@ -170,6 +172,7 @@ class TerminalService {
     rows,
     organizationId,
     userId,
+    actorType,
     agentSessionId,
   }: {
     sessionId: string;
@@ -177,6 +180,7 @@ class TerminalService {
     rows: number;
     organizationId: string;
     userId: string;
+    actorType: ActorType;
     agentSessionId?: string | null;
   }): Promise<{ id: string; sessionId: string }> {
     this.validateDimensions(cols, rows);
@@ -237,7 +241,36 @@ class TerminalService {
       rows,
       session.sessionGroup?.workdir ?? undefined,
     );
-    return terminalRelay.getTerminalState(terminalId) ?? { id: terminalId, sessionId, status: "connecting", cols, rows, connected: true, closed: false };
+    const terminal = terminalRelay.getTerminalState(terminalId) ?? {
+      id: terminalId,
+      sessionId,
+      status: "connecting",
+      cols,
+      rows,
+      connected: true,
+      closed: false,
+    };
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: sessionId,
+      eventType: "terminal_created",
+      payload: {
+        terminal: {
+          id: terminal.id,
+          sessionId,
+          sessionGroupId: session.sessionGroupId,
+          status: terminal.status,
+          cols: terminal.cols,
+          rows: terminal.rows,
+          connected: terminal.connected,
+          closed: terminal.closed,
+        },
+      },
+      actorType,
+      actorId: userId,
+    });
+    return terminal;
   }
 
   async listForSession({
@@ -393,11 +426,13 @@ class TerminalService {
     terminalId,
     organizationId,
     userId,
+    actorType,
     agentSessionId,
   }: {
     terminalId: string;
     organizationId: string;
     userId: string;
+    actorType: ActorType;
     agentSessionId?: string | null;
   }): Promise<boolean> {
     if (agentSessionId) await this.assertTerminalOperation(terminalId, organizationId, userId, agentSessionId);
@@ -440,6 +475,15 @@ class TerminalService {
     if (!runtimeInstanceId) return true;
 
     await terminalRelay.destroyTerminalDistributed(terminalId);
+    await eventService.create({
+      organizationId,
+      scopeType: "session",
+      scopeId: session.id,
+      eventType: "terminal_destroyed",
+      payload: { terminalId, sessionId: session.id, sessionGroupId: session.sessionGroupId },
+      actorType,
+      actorId: userId,
+    });
     return true;
   }
 

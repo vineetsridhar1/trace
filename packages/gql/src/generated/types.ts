@@ -805,6 +805,8 @@ export type EventType =
   | "session_setup_script_started"
   | "session_started"
   | "session_terminated"
+  | "terminal_created"
+  | "terminal_destroyed"
   | "ticket_assigned"
   | "ticket_commented"
   | "ticket_created"

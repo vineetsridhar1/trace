@@ -309,6 +309,8 @@ enum EventType {
   session_resumed
   session_terminated
   session_deleted
+  terminal_created
+  terminal_destroyed
   session_output
   ticket_created
   ticket_updated

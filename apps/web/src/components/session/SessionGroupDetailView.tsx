@@ -474,32 +474,27 @@ export function SessionGroupDetailView({
     setActiveTerminalId(null);
   }, [activeTerminalId, terminals, setActiveTerminalId]);
 
-  // Reconcile server terminals while the session group is visible. CLI-created
-  // terminals do not flow through the local Zustand creation action.
+  // Restore terminals which predate this view. Subsequent lifecycle changes
+  // arrive through the organization event stream.
   useEffect(() => {
     let aborted = false;
     const firstSessionId = groupSessions[0]?.id;
     if (!firstSessionId) return;
 
-    const restore = () => {
-      void client
-        .query(SESSION_TERMINALS_QUERY, { sessionId: firstSessionId })
-        .toPromise()
-        .then((result: { data?: Record<string, unknown> }) => {
-          if (aborted) return;
-          const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
-          for (const terminal of serverTerminals) {
-            if (!useTerminalStore.getState().terminals[terminal.id]) {
-              addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
-            }
+    void client
+      .query(SESSION_TERMINALS_QUERY, { sessionId: firstSessionId })
+      .toPromise()
+      .then((result: { data?: Record<string, unknown> }) => {
+        if (aborted) return;
+        const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
+        for (const terminal of serverTerminals) {
+          if (!useTerminalStore.getState().terminals[terminal.id]) {
+            addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
           }
-        });
-    };
-    restore();
-    const interval = setInterval(restore, 2_000);
+        }
+      });
     return () => {
       aborted = true;
-      clearInterval(interval);
     };
   }, [groupSessions, sessionGroupId, addTerminal]);
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;

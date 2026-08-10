@@ -49,6 +49,7 @@ export const terminalMutations = {
       rows: args.rows,
       organizationId: requireOrgContext(ctx),
       userId: ctx.userId,
+      actorType: ctx.actorType,
       agentSessionId: ctx.agentSessionId,
     });
   },
@@ -75,6 +76,7 @@ export const terminalMutations = {
       terminalId: args.terminalId,
       organizationId: requireOrgContext(ctx),
       userId: ctx.userId,
+      actorType: ctx.actorType,
       agentSessionId: ctx.agentSessionId,
     });
   },
