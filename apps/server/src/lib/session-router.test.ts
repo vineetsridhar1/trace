@@ -816,6 +816,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       label: "Laptop",
       ws,
       hostingMode: "local",
+      protocolVersion: 3,
       supportedTools: ["codex"],
       registeredRepoIds: [],
     });
@@ -843,6 +844,38 @@ describe("SessionRouter runtime adapter dispatch", () => {
       sessionId: "session-1",
       sessionGroupId: "group-1",
     });
+  });
+
+  it("runs a repo-less general session from home on an older local bridge", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Older laptop",
+      ws,
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    router.bindSession("session-1", "runtime-1");
+
+    const onWorkspaceReady = vi.fn();
+    router.createRuntime({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      sessionGroupKind: "general",
+      hosting: "local",
+      adapterType: "local",
+      tool: "codex",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      onWorkspaceReady,
+      onFailed: vi.fn(),
+    });
+
+    await vi.waitFor(() => expect(onWorkspaceReady).toHaveBeenCalledWith(""));
+    expect(ws.send).not.toHaveBeenCalled();
   });
 
   it("pins initial local prepare delivery to the selected home bridge", async () => {

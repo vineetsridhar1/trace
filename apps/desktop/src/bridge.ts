@@ -38,6 +38,7 @@ import {
   inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
   BridgeOutbox,
+  BRIDGE_PROTOCOL_VERSION,
 } from "@trace/shared";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
@@ -746,6 +747,7 @@ export class BridgeClient implements IBridgeClient {
       instanceId: this.instanceId,
       label,
       hostingMode: "local",
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
       supportedTools,
       registeredRepoIds: Object.keys(config.repos),
       activeTerminals: this.terminalManager.getActiveTerminals(),

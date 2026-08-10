@@ -5,6 +5,9 @@
 
 import type { GitCheckpointBridgePayload, GitCheckpointContext } from "./git-checkpoint.js";
 
+export const BRIDGE_PROTOCOL_VERSION = 3;
+export const GENERAL_WORKSPACE_PROTOCOL_VERSION = 3;
+
 // --- Server → Bridge commands ---
 
 export interface BridgeRunCommand {

@@ -34,6 +34,7 @@ import type {
   BridgeAnimationExportCommand,
   BridgeDesignSystemExportCommand,
 } from "@trace/shared";
+import { GENERAL_WORKSPACE_PROTOCOL_VERSION } from "@trace/shared";
 import { prisma } from "./db.js";
 import { isGeneratedProjectKind } from "./generated-project.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -2399,6 +2400,15 @@ export class SessionRouter {
         }
 
         if (options.sessionGroupKind === "general" && adapterType !== "provisioned") {
+          const runtime = expectedHomeRuntimeId
+            ? this.getRuntime(expectedHomeRuntimeId, options.organizationId)
+            : this.getRuntimeForSession(options.sessionId);
+          if ((runtime?.protocolVersion ?? 1) < GENERAL_WORKSPACE_PROTOCOL_VERSION) {
+            // Older desktop bridges do not understand prepare_general. An empty
+            // cwd is intentional: legacy bridges fall back to their home directory.
+            options.onWorkspaceReady?.("");
+            return;
+          }
           const result = await this.sendAsync(
             options.sessionId,
             {

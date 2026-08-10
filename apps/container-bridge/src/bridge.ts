@@ -36,6 +36,7 @@ import {
   inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
   BridgeOutbox,
+  BRIDGE_PROTOCOL_VERSION,
 } from "@trace/shared";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
@@ -72,7 +73,6 @@ import {
 import { installRuntimeSkillsForCodingTools } from "./runtime-skills.js";
 
 const execFileAsync = promisify(execFile);
-const BRIDGE_PROTOCOL_VERSION = 2;
 const AGENT_VERSION = "0.1.0";
 const BRIDGE_USER_AGENT = "Trace-Container-Bridge/0.1";
 const RUNTIME_LEASE_CAPABILITY = "runtime_lease_v1";
