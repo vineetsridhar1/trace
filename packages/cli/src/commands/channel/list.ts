@@ -1,5 +1,5 @@
 import { traceCliOperations } from "@trace/cli-contract";
-import type { Channel, Project, Repo } from "@trace/gql";
+import type { Channel, Repo } from "@trace/gql";
 import { defineCommand, optionBoolean } from "../../runtime.js";
 import { requireOrganizationId } from "../organization.js";
 
@@ -8,7 +8,6 @@ type ChannelView = Pick<
   "id" | "name" | "type" | "visibility" | "baseBranch" | "viewerIsMember"
 > & {
   repo?: Pick<Repo, "id" | "name"> | null;
-  projects: Array<Pick<Project, "id" | "name">>;
 };
 
 export const channelListCommand = defineCommand({

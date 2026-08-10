@@ -106,7 +106,6 @@ var traceCliOperations = {
       channels(organizationId: $organizationId, memberOnly: $memberOnly) {
         id name type visibility baseBranch viewerIsMember
         repo { id name }
-        projects { id name }
       }
     }`
   }),
@@ -118,16 +117,6 @@ var traceCliOperations = {
     argumentPaths: ["organizationId"],
     document: `query TraceCliRepos($organizationId: ID!) {
       repos(organizationId: $organizationId) { id name provider remoteUrl defaultBranch }
-    }`
-  }),
-  projects: operation({
-    name: "TraceCliProjects",
-    type: "query",
-    rootField: "projects",
-    capability: "resource:list",
-    argumentPaths: ["organizationId", "repoId"],
-    document: `query TraceCliProjects($organizationId: ID!, $repoId: ID) {
-      projects(organizationId: $organizationId, repoId: $repoId) { id name repo { id name } }
     }`
   }),
   session: operation({
@@ -149,7 +138,6 @@ var traceCliOperations = {
         id tool model reasoningEffort hosting
         channel { id name repo { id name } }
         repo { id name }
-        projects { id }
         connection { environmentId runtimeInstanceId }
         sessionGroup { kind visibility }
       }
@@ -163,16 +151,6 @@ var traceCliOperations = {
     argumentPaths: ["id"],
     document: `query TraceCliStartChannel($id: ID!) {
       channel(id: $id) { id name repo { id name } }
-    }`
-  }),
-  startProject: operation({
-    name: "TraceCliStartProject",
-    type: "query",
-    rootField: "project",
-    capability: "resource:list",
-    argumentPaths: ["id"],
-    document: `query TraceCliStartProject($id: ID!) {
-      project(id: $id) { id name repo { id name } }
     }`
   }),
   sessions: operation({
@@ -215,7 +193,6 @@ var traceCliOperations = {
       "input.ticketId",
       "input.channelId",
       "input.sessionGroupId",
-      "input.projectId",
       "input.prompt",
       "input.interactionMode"
     ],
@@ -1242,36 +1219,6 @@ var integrationCommands = [
   integrationRemoveCommand
 ];
 
-// src/commands/project/list.ts
-var projectListCommand = defineCommand({
-  path: ["project", "list"],
-  description: "List projects in the current organization",
-  options: [
-    {
-      name: "repo",
-      flag: "--repo",
-      kind: "string",
-      valueName: "ID",
-      description: "Only include projects linked to this repository"
-    }
-  ],
-  async run(ctx, input) {
-    const client = await ctx.client();
-    const variables = {
-      organizationId: requireOrganizationId(client.organizationId),
-      repoId: optionString(input, "repo") ?? null
-    };
-    const result = await client.graphql(
-      traceCliOperations.projects,
-      variables
-    );
-    ctx.output(
-      { projects: result.projects },
-      result.projects.length ? result.projects.map((project) => `${project.id}	${project.name}	${project.repo?.name ?? "no repo"}`).join("\n") : "No projects found"
-    );
-  }
-});
-
 // src/commands/repo/list.ts
 var repoListCommand = defineCommand({
   path: ["repo", "list"],
@@ -1336,7 +1283,7 @@ async function getSession(ctx, id) {
 }
 async function resolveStartDefaultsAndDestination(client, input, currentSessionId) {
   if (input.sessionGroupId) return;
-  const hasExplicitDestination = !!input.channelId || !!input.projectId || !!input.repoId;
+  const hasExplicitDestination = !!input.channelId || !!input.repoId;
   const hasExplicitGeneratedKind = !!input.kind && input.kind !== "coding";
   const hasExplicitTool = !!input.tool;
   const hasExplicitRuntimeSelection = !!input.environmentId || !!input.runtimeInstanceId || !!input.hosting;
@@ -1362,22 +1309,17 @@ async function resolveStartDefaultsAndDestination(client, input, currentSessionI
     if (!hasExplicitDestination && (!input.kind || input.kind === "coding")) {
       input.channelId = current.channel?.id;
       input.repoId = current.repo?.id;
-      if (current.projects.length === 1) input.projectId = current.projects[0]?.id;
       impliedRepo = current.channel?.repo ?? current.repo ?? null;
     }
   }
   if (input.kind && input.kind !== "coding") return;
-  if (!input.channelId && !input.projectId && !input.repoId) {
-    usage("Starting a coding session group requires --channel, --project, or --repo");
+  if (!input.channelId && !input.repoId) {
+    usage("Starting a coding session group requires --channel or --repo");
   }
   if (input.channelId && !impliedRepo) {
     const result = await client.graphql(traceCliOperations.startChannel, { id: input.channelId });
     if (!result.channel) usage(`Channel not found: ${input.channelId}`);
     impliedRepo = result.channel.repo ?? null;
-  } else if (input.projectId && !impliedRepo) {
-    const result = await client.graphql(traceCliOperations.startProject, { id: input.projectId });
-    if (!result.project) usage(`Project not found: ${input.projectId}`);
-    impliedRepo = result.project.repo ?? null;
   }
   if (impliedRepo && input.repoId && input.repoId !== impliedRepo.id) {
     usage(
@@ -1707,13 +1649,6 @@ var sessionStartCommand = defineCommand({
       description: "Create the group in this channel"
     },
     {
-      name: "project",
-      flag: "--project",
-      kind: "string",
-      valueName: "ID",
-      description: "Link the new group to this project"
-    },
-    {
       name: "repo",
       flag: "--repo",
       kind: "string",
@@ -1821,7 +1756,6 @@ var sessionStartCommand = defineCommand({
     const input = {
       sessionGroupId: optionString(parsed, "group"),
       channelId: optionString(parsed, "channel"),
-      projectId: optionString(parsed, "project"),
       repoId: optionString(parsed, "repo"),
       tool: optionString(parsed, "tool"),
       model: optionString(parsed, "model"),
@@ -1844,7 +1778,7 @@ var sessionStartCommand = defineCommand({
       input.prompt = positionalPrompt;
     }
     const hasGroup = parsed.providedOptions.has("group");
-    const destinationOptions = ["channel", "project", "repo"];
+    const destinationOptions = ["channel", "repo"];
     const groupConfigurationOptions = [
       "kind",
       "hosting",
@@ -1855,7 +1789,7 @@ var sessionStartCommand = defineCommand({
       "defer"
     ];
     if (hasGroup && destinationOptions.some((name) => parsed.providedOptions.has(name))) {
-      usage("--group cannot be combined with --channel, --project, or --repo");
+      usage("--group cannot be combined with --channel or --repo");
     }
     if (hasGroup && groupConfigurationOptions.some((name) => parsed.providedOptions.has(name))) {
       usage(
@@ -1920,7 +1854,6 @@ var commands = [
   ...integrationCommands,
   channelListCommand,
   repoListCommand,
-  projectListCommand,
   ...sessionCommands,
   artifactCommand
 ];
@@ -1964,10 +1897,6 @@ var commandGroups = [
   {
     name: "repo",
     description: "Discover repositories in the current organization"
-  },
-  {
-    name: "project",
-    description: "Discover projects in the current organization"
   },
   {
     name: "artifact",

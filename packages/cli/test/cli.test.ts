@@ -140,7 +140,6 @@ describe("Trace CLI", () => {
                   repo: { id: "repo-1", name: "trace" },
                 },
                 repo: { id: "repo-1", name: "trace" },
-                projects: [{ id: "project-1" }],
                 connection: { environmentId: "environment-1", runtimeInstanceId: "runtime-1" },
                 sessionGroup: { kind: "coding", visibility: "private" },
               },
@@ -154,7 +153,6 @@ describe("Trace CLI", () => {
         clientMutationId: expect.any(String),
         channelId: "channel-1",
         repoId: "repo-1",
-        projectId: "project-1",
         prompt: "Implement the API tests",
         kind: "coding",
         visibility: "private",
@@ -281,7 +279,6 @@ describe("Trace CLI", () => {
                 hosting: "local",
                 channel: { id: "channel-1", name: "API", repo: null },
                 repo: null,
-                projects: [],
                 connection: { environmentId: "local-environment", runtimeInstanceId: "runtime-1" },
                 sessionGroup: { kind: "coding", visibility: "public" },
               },
@@ -431,63 +428,6 @@ describe("Trace CLI", () => {
     expect(stdout.mock.calls.flat().join("")).toContain(
       '"uiPath":"/c/channel-1/g/group-2/s/session-2"',
     );
-  });
-
-  it("derives the repository from a selected project before starting", async () => {
-    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
-    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
-    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
-    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
-      const request = JSON.parse(String(init?.body)) as {
-        query: string;
-        variables: Record<string, unknown>;
-      };
-      if (request.query.includes("TraceCliStartProject")) {
-        return new Response(
-          JSON.stringify({
-            data: {
-              project: {
-                id: "project-1",
-                name: "Launch",
-                repo: { id: "repo-1", name: "trace" },
-              },
-            },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      expect(request.variables.input).toMatchObject({ projectId: "project-1", repoId: "repo-1" });
-      return new Response(
-        JSON.stringify({
-          data: {
-            startSession: {
-              id: "session-2",
-              name: "hello",
-              agentStatus: "not_started",
-              sessionStatus: "in_progress",
-              tool: "codex",
-              model: null,
-              reasoningEffort: null,
-              hosting: "cloud",
-              branch: null,
-              sessionGroupId: "group-2",
-              createdAt: "2026-08-08T00:00:00.000Z",
-              updatedAt: "2026-08-08T00:00:00.000Z",
-              channel: null,
-              repo: { id: "repo-1", name: "trace" },
-            },
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(
-      run(["session", "start", "hello", "--project", "project-1", "--json"]),
-    ).resolves.toBe(0);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(stdout.mock.calls.flat().join("")).toContain('"uiPath":"/g/group-2/s/session-2"');
   });
 
   it("requires an explicit repo when a selected channel has none", async () => {

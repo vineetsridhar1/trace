@@ -39,13 +39,6 @@ export const sessionStartCommand = defineCommand({
       description: "Create the group in this channel",
     },
     {
-      name: "project",
-      flag: "--project",
-      kind: "string",
-      valueName: "ID",
-      description: "Link the new group to this project",
-    },
-    {
       name: "repo",
       flag: "--repo",
       kind: "string",
@@ -153,7 +146,6 @@ export const sessionStartCommand = defineCommand({
     const input: StartSessionInput = {
       sessionGroupId: optionString(parsed, "group"),
       channelId: optionString(parsed, "channel"),
-      projectId: optionString(parsed, "project"),
       repoId: optionString(parsed, "repo"),
       tool: optionString(parsed, "tool") as CodingTool | undefined,
       model: optionString(parsed, "model"),
@@ -177,7 +169,7 @@ export const sessionStartCommand = defineCommand({
     }
 
     const hasGroup = parsed.providedOptions.has("group");
-    const destinationOptions = ["channel", "project", "repo"];
+    const destinationOptions = ["channel", "repo"];
     const groupConfigurationOptions = [
       "kind",
       "hosting",
@@ -188,7 +180,7 @@ export const sessionStartCommand = defineCommand({
       "defer",
     ];
     if (hasGroup && destinationOptions.some((name) => parsed.providedOptions.has(name))) {
-      usage("--group cannot be combined with --channel, --project, or --repo");
+      usage("--group cannot be combined with --channel or --repo");
     }
     if (hasGroup && groupConfigurationOptions.some((name) => parsed.providedOptions.has(name))) {
       usage(

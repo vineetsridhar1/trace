@@ -94,7 +94,7 @@ export async function resolveStartDefaultsAndDestination(
 ): Promise<void> {
   if (input.sessionGroupId) return;
 
-  const hasExplicitDestination = !!input.channelId || !!input.projectId || !!input.repoId;
+  const hasExplicitDestination = !!input.channelId || !!input.repoId;
   const hasExplicitGeneratedKind = !!input.kind && input.kind !== "coding";
   const hasExplicitTool = !!input.tool;
   const hasExplicitRuntimeSelection =
@@ -116,7 +116,6 @@ export async function resolveStartDefaultsAndDestination(
             repo?: { id: string; name: string } | null;
           } | null;
           repo?: { id: string; name: string } | null;
-          projects: Array<{ id: string }>;
           connection?: {
             environmentId?: string | null;
             runtimeInstanceId?: string | null;
@@ -149,14 +148,13 @@ export async function resolveStartDefaultsAndDestination(
     if (!hasExplicitDestination && (!input.kind || input.kind === "coding")) {
       input.channelId = current.channel?.id;
       input.repoId = current.repo?.id;
-      if (current.projects.length === 1) input.projectId = current.projects[0]?.id;
       impliedRepo = current.channel?.repo ?? current.repo ?? null;
     }
   }
 
   if (input.kind && input.kind !== "coding") return;
-  if (!input.channelId && !input.projectId && !input.repoId) {
-    usage("Starting a coding session group requires --channel, --project, or --repo");
+  if (!input.channelId && !input.repoId) {
+    usage("Starting a coding session group requires --channel or --repo");
   }
 
   if (input.channelId && !impliedRepo) {
@@ -166,13 +164,6 @@ export async function resolveStartDefaultsAndDestination(
     >(traceCliOperations.startChannel, { id: input.channelId });
     if (!result.channel) usage(`Channel not found: ${input.channelId}`);
     impliedRepo = result.channel.repo ?? null;
-  } else if (input.projectId && !impliedRepo) {
-    const result = await client.graphql<
-      { project: { id: string; name: string; repo?: { id: string; name: string } | null } | null },
-      { id: string }
-    >(traceCliOperations.startProject, { id: input.projectId });
-    if (!result.project) usage(`Project not found: ${input.projectId}`);
-    impliedRepo = result.project.repo ?? null;
   }
 
   if (impliedRepo && input.repoId && input.repoId !== impliedRepo.id) {
