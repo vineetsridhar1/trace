@@ -1767,6 +1767,7 @@ var sessionStartCommand = defineCommand({
   ],
   notes: [
     "A new coding group needs a channel and task prompt; the channel can be inherited from the current session when available.",
+    "--repo validates or supplies the repository for the selected or inherited channel; it never selects a destination by itself.",
     "Do not call session run with the same initial prompt, because that can duplicate the work."
   ],
   positionals: [{ name: "prompt", variadic: true }],
