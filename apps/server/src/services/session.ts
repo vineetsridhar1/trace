@@ -136,10 +136,7 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
  * Target-specific provisioning is added through this service rather than a
  * resolver so agents and GraphQL clients share the same rules.
  */
-export type ConvertSessionGroupServiceInput = Omit<
-  ConvertSessionGroupInput,
-  "kind" | "tool"
-> & {
+export type ConvertSessionGroupServiceInput = Omit<ConvertSessionGroupInput, "kind" | "tool"> & {
   kind: SessionGroupKind;
   tool?: CodingTool | null;
   organizationId: string;
@@ -885,6 +882,42 @@ type SessionWithTimestamps = SessionGroupStatusSource & {
 type SessionWithInclude = Prisma.SessionGetPayload<{
   include: typeof SESSION_INCLUDE;
 }>;
+
+type SessionMoveParams = {
+  session: SessionWithInclude;
+  targetHosting: "cloud" | "local";
+  targetRuntimeInstanceId?: string | null;
+  targetRuntimeLabel?: string | null;
+  targetRuntime?: Pick<RuntimeInstance, "supportedTools" | "label"> | null;
+  targetEnvironment?: ProvisioningEnvironment;
+  reuseCloudRuntime?: RuntimeMetadata | null;
+  allowUnverifiedSourceGitStatus?: boolean;
+  bootstrapPrompt?: string;
+  conversion?: GeneratedSessionConversion;
+  actorType: ActorType;
+  actorId: string;
+  runtimeLockHeld?: boolean;
+};
+
+type SessionMoveSourceInspection = {
+  status: BridgeSessionGitSyncStatus | null;
+  verified: boolean;
+  skippedReason: string | null;
+};
+
+type PreparedSessionMove = {
+  targetEnvironment: ProvisioningEnvironment | null;
+  sourceCloudRuntimeSession: SessionWithInclude | null;
+  sourceInspection: SessionMoveSourceInspection;
+  sessionsToMove: SessionWithInclude[];
+  sourceRuntimeId: string | null;
+  bootstrapPrompt: string;
+  checkpointSha: string | null;
+  sourceBranch: string | null;
+  sourceConnection: SessionConnectionData;
+  shouldCleanupGeneralWorkspace: boolean;
+  nextConnectionBase: SessionConnectionData;
+};
 
 type ForkSourceEvent = Prisma.EventGetPayload<Prisma.EventDefaultArgs>;
 
@@ -3641,7 +3674,9 @@ export class SessionService {
     const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
     const runtime =
       boundRuntime ??
-      (persistedRuntimeId ? runtimeMetadata(persistedRuntimeId, session.organizationId) : undefined);
+      (persistedRuntimeId
+        ? runtimeMetadata(persistedRuntimeId, session.organizationId)
+        : undefined);
     if (
       !runtime ||
       runtime.hostingMode !== "cloud" ||
@@ -9757,23 +9792,7 @@ export class SessionService {
     return { status, verified: true, skippedReason: null };
   }
 
-  private async moveSessionInPlace(params: {
-    session: Awaited<ReturnType<typeof prisma.session.findFirstOrThrow>> & {
-      repo?: { remoteUrl: string | null } | null;
-    };
-    targetHosting: "cloud" | "local";
-    targetRuntimeInstanceId?: string | null;
-    targetRuntimeLabel?: string | null;
-    targetRuntime?: Pick<RuntimeInstance, "supportedTools" | "label"> | null;
-    targetEnvironment?: ProvisioningEnvironment;
-    reuseCloudRuntime?: RuntimeMetadata | null;
-    allowUnverifiedSourceGitStatus?: boolean;
-    bootstrapPrompt?: string;
-    conversion?: GeneratedSessionConversion;
-    actorType: ActorType;
-    actorId: string;
-    runtimeLockHeld?: boolean;
-  }): Promise<SessionWithInclude> {
+  private async moveSessionInPlace(params: SessionMoveParams): Promise<SessionWithInclude> {
     if (!params.runtimeLockHeld) {
       const locked = await withDistributedLock(
         {
@@ -9796,6 +9815,30 @@ export class SessionService {
       });
     }
 
+    const prepared = await this.prepareSessionMove(params);
+    const moved = await this.persistSessionMove(params, prepared);
+    const movedSession = moved.sessions[0];
+    if (!movedSession) throw new Error("Moved session was not persisted");
+    if (moved.conversionEvent) eventService.publishCreated(moved.conversionEvent);
+
+    await this.rebindMovedSessions(params, moved.sessions);
+    await this.publishSessionMoveEvents(params, prepared, moved.sessions);
+
+    const failedSession = await this.activateMovedSession(params, prepared, movedSession);
+    if (failedSession) return failedSession;
+
+    if (prepared.sourceCloudRuntimeSession) {
+      await this.destroyMovedSourceCloudRuntime(
+        movedSession.id,
+        prepared.sourceCloudRuntimeSession,
+        params.targetHosting === "local" ? "session_moved_to_local" : "session_runtime_replaced",
+      );
+    }
+
+    return movedSession;
+  }
+
+  private async prepareSessionMove(params: SessionMoveParams): Promise<PreparedSessionMove> {
     const {
       session,
       targetHosting,
@@ -9805,20 +9848,9 @@ export class SessionService {
       targetEnvironment: requestedTargetEnvironment,
       reuseCloudRuntime,
       allowUnverifiedSourceGitStatus,
-      bootstrapPrompt: requestedBootstrapPrompt,
       conversion,
-      actorType,
-      actorId,
     } = params;
-    const currentSessionGroup = (
-      session as {
-        sessionGroup?: {
-          visibility: string;
-          ownerUserId: string;
-          kind: SessionGroupKind;
-        } | null;
-      }
-    ).sessionGroup;
+    const currentSessionGroup = session.sessionGroup;
     await this.assertPrivateRuntimeOwner({
       visibility: currentSessionGroup?.visibility,
       ownerUserId: currentSessionGroup?.ownerUserId,
@@ -9896,45 +9928,12 @@ export class SessionService {
       : [];
     const sessionsToMove = [session, ...siblings];
 
-    if (targetRuntime?.supportedTools) {
-      const unsupportedSession = sessionsToMove.find(
-        (current) => !targetRuntime.supportedTools?.includes(current.tool),
-      );
-      if (unsupportedSession) {
-        throw new ToolNotInstalledError(unsupportedSession.tool, targetRuntime.label ?? null);
-      }
-    }
-
-    // Stop every reachable source process before committing the shared target
-    // binding. If a live bridge rejects teardown, no database binding changes.
-    for (const current of sessionsToMove) {
-      const boundRuntime = sessionRouter.getRuntimeForSession(current.id);
-      const persistedRuntimeId = this.getConnectionRuntimeInstanceId(current.connection);
-      const reachableRuntimeId =
-        boundRuntime?.id &&
-        sessionRouter.isRuntimeAvailable(boundRuntime.id, current.organizationId)
-          ? boundRuntime.id
-          : persistedRuntimeId &&
-              sessionRouter.isRuntimeAvailable(persistedRuntimeId, current.organizationId)
-            ? persistedRuntimeId
-            : null;
-      if (reachableRuntimeId) {
-        await sessionRouter.transitionRuntime(
-          current.id,
-          current.hosting as "cloud" | "local",
-          "terminate",
-        );
-      }
-    }
-
-    if (session.sessionGroupId) {
-      terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
-    } else {
-      terminalRelay.destroyAllForSession(session.id);
-    }
+    this.assertMoveTargetSupportsSessions(sessionsToMove, targetRuntime);
+    await this.stopSessionMoveSources(sessionsToMove);
+    this.destroySessionMoveTerminals(session);
 
     const bootstrapPrompt =
-      requestedBootstrapPrompt ?? buildMigrationPrompt(sourceInspection.verified);
+      params.bootstrapPrompt ?? buildMigrationPrompt(sourceInspection.verified);
     const checkpointSha =
       sourceGitStatus?.headCommitSha && (!sourceGitStatus.branch || !sourceGitStatus.remoteBranch)
         ? sourceGitStatus.headCommitSha
@@ -9968,6 +9967,77 @@ export class SessionService {
             requestedAt: replacementRequestedAt,
           });
 
+    return {
+      targetEnvironment,
+      sourceCloudRuntimeSession,
+      sourceInspection,
+      sessionsToMove,
+      sourceRuntimeId,
+      bootstrapPrompt,
+      checkpointSha,
+      sourceBranch,
+      sourceConnection,
+      shouldCleanupGeneralWorkspace,
+      nextConnectionBase,
+    };
+  }
+
+  private assertMoveTargetSupportsSessions(
+    sessions: SessionWithInclude[],
+    targetRuntime: SessionMoveParams["targetRuntime"],
+  ): void {
+    if (!targetRuntime?.supportedTools) return;
+    const unsupportedSession = sessions.find(
+      (session) => !targetRuntime.supportedTools?.includes(session.tool),
+    );
+    if (unsupportedSession) {
+      throw new ToolNotInstalledError(unsupportedSession.tool, targetRuntime.label ?? null);
+    }
+  }
+
+  private async stopSessionMoveSources(sessions: SessionWithInclude[]): Promise<void> {
+    // Stop every reachable source process before committing the shared target
+    // binding. If a live bridge rejects teardown, no database binding changes.
+    for (const session of sessions) {
+      const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
+      const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+      const reachableRuntimeId =
+        boundRuntime?.id &&
+        sessionRouter.isRuntimeAvailable(boundRuntime.id, session.organizationId)
+          ? boundRuntime.id
+          : persistedRuntimeId &&
+              sessionRouter.isRuntimeAvailable(persistedRuntimeId, session.organizationId)
+            ? persistedRuntimeId
+            : null;
+      if (reachableRuntimeId) {
+        await sessionRouter.transitionRuntime(
+          session.id,
+          session.hosting as "cloud" | "local",
+          "terminate",
+        );
+      }
+    }
+  }
+
+  private destroySessionMoveTerminals(session: SessionWithInclude): void {
+    if (session.sessionGroupId) {
+      terminalRelay.destroyAllForSessionGroup(session.sessionGroupId);
+    } else {
+      terminalRelay.destroyAllForSession(session.id);
+    }
+  }
+
+  private async persistSessionMove(params: SessionMoveParams, prepared: PreparedSessionMove) {
+    const { session, targetHosting, conversion, actorType, actorId } = params;
+    const {
+      sessionsToMove,
+      sourceRuntimeId,
+      bootstrapPrompt,
+      sourceBranch,
+      sourceConnection,
+      shouldCleanupGeneralWorkspace,
+      nextConnectionBase,
+    } = prepared;
     const movedSessions = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       if (session.sessionGroupId) {
         await tx.$queryRaw`SELECT "id" FROM "SessionGroup" WHERE "id" = ${session.sessionGroupId} FOR UPDATE`;
@@ -10116,20 +10186,22 @@ export class SessionService {
       }
       return { sessions: updated, conversionEvent };
     });
-    const movedSession = movedSessions.sessions[0];
-    if (!movedSession) throw new Error("Moved session was not persisted");
-    if (movedSessions.conversionEvent) {
-      eventService.publishCreated(movedSessions.conversionEvent);
-    }
-    const sessionGroup = await this.loadSessionGroupSnapshot(movedSession.sessionGroupId);
+    return movedSessions;
+  }
 
-    const targetRuntimeKey = reuseCloudRuntime
-      ? reuseCloudRuntime.key
-      : targetHosting === "local" && targetRuntimeInstanceId
-        ? (runtimeMetadata(targetRuntimeInstanceId, movedSession.organizationId)?.key ??
-          targetRuntimeInstanceId)
+  private async rebindMovedSessions(
+    params: SessionMoveParams,
+    movedSessions: SessionWithInclude[],
+  ): Promise<void> {
+    const movedSession = movedSessions[0];
+    if (!movedSession) return;
+    const targetRuntimeKey = params.reuseCloudRuntime
+      ? params.reuseCloudRuntime.key
+      : params.targetHosting === "local" && params.targetRuntimeInstanceId
+        ? (runtimeMetadata(params.targetRuntimeInstanceId, movedSession.organizationId)?.key ??
+          params.targetRuntimeInstanceId)
         : null;
-    const sessionIdsToBind = new Set(movedSessions.sessions.map((moved) => moved.id));
+    const sessionIdsToBind = new Set(movedSessions.map((moved) => moved.id));
     if (movedSession.sessionGroupId) {
       const committedGroupSessions = await prisma.session.findMany({
         where: { sessionGroupId: movedSession.sessionGroupId },
@@ -10141,7 +10213,16 @@ export class SessionService {
       sessionRouter.unbindSession(movedSessionId);
       if (targetRuntimeKey) sessionRouter.bindSession(movedSessionId, targetRuntimeKey);
     }
+  }
 
+  private async publishSessionMoveEvents(
+    params: SessionMoveParams,
+    prepared: PreparedSessionMove,
+    movedSessions: SessionWithInclude[],
+  ): Promise<void> {
+    const movedSession = movedSessions[0];
+    if (!movedSession) return;
+    const sessionGroup = await this.loadSessionGroupSnapshot(movedSession.sessionGroupId);
     await eventService.create({
       organizationId: movedSession.organizationId,
       scopeType: "session",
@@ -10151,19 +10232,19 @@ export class SessionService {
         type: "runtime_move",
         session: serializeSession(movedSession),
         ...(sessionGroup ? { sessionGroup } : {}),
-        sourceHosting: session.hosting,
-        targetHosting,
-        targetRuntimeLabel: targetRuntimeLabel ?? null,
-        sourceGitStatusVerified: sourceInspection.verified,
-        sourceGitStatusSkippedReason: sourceInspection.skippedReason,
+        sourceHosting: params.session.hosting,
+        targetHosting: params.targetHosting,
+        targetRuntimeLabel: params.targetRuntimeLabel ?? null,
+        sourceGitStatusVerified: prepared.sourceInspection.verified,
+        sourceGitStatusSkippedReason: prepared.sourceInspection.skippedReason,
       } as Prisma.InputJsonValue,
-      actorType,
-      actorId,
+      actorType: params.actorType,
+      actorId: params.actorId,
     });
 
-    for (let index = 1; index < movedSessions.sessions.length; index++) {
-      const relocated = movedSessions.sessions[index];
-      const source = sessionsToMove[index];
+    for (let index = 1; index < movedSessions.length; index++) {
+      const relocated = movedSessions[index];
+      const source = prepared.sessionsToMove[index];
       if (!relocated || !source) continue;
       await eventService.create({
         organizationId: relocated.organizationId,
@@ -10174,24 +10255,30 @@ export class SessionService {
           type: "runtime_move",
           session: serializeSession(relocated),
           sourceHosting: source.hosting,
-          targetHosting,
-          targetRuntimeLabel: targetRuntimeLabel ?? null,
+          targetHosting: params.targetHosting,
+          targetRuntimeLabel: params.targetRuntimeLabel ?? null,
           sourceGitStatusVerified: false,
           sourceGitStatusSkippedReason: null,
         } as Prisma.InputJsonValue,
-        actorType,
-        actorId,
+        actorType: params.actorType,
+        actorId: params.actorId,
       });
     }
+  }
 
-    if (reuseCloudRuntime && conversion) {
+  private async activateMovedSession(
+    params: SessionMoveParams,
+    prepared: PreparedSessionMove,
+    movedSession: SessionWithInclude,
+  ): Promise<SessionWithInclude | null> {
+    if (params.reuseCloudRuntime && params.conversion) {
       await this.prepareGeneratedConversionWorkspace(
         movedSession,
-        reuseCloudRuntime,
-        actorType,
-        actorId,
+        params.reuseCloudRuntime,
+        params.actorType,
+        params.actorId,
       );
-    } else if (movedSession.repo || targetHosting === "cloud") {
+    } else if (movedSession.repo || params.targetHosting === "cloud") {
       this.provisionRuntime({
         sessionId: movedSession.id,
         sessionGroupId: movedSession.sessionGroupId,
@@ -10202,19 +10289,20 @@ export class SessionService {
           branch: movedSession.branch,
           channelBaseBranch: movedSession.channel?.baseBranch,
         }),
-        hosting: targetHosting,
+        hosting: params.targetHosting,
         tool: movedSession.tool,
         model: movedSession.model,
         reasoningEffort: movedSession.reasoningEffort,
         repo: movedSession.repo,
         branch: movedSession.branch,
-        checkpointSha,
-        createdById: actorId,
+        checkpointSha: prepared.checkpointSha,
+        createdById: params.actorId,
         organizationId: movedSession.organizationId,
         readOnly: movedSession.readOnlyWorkspace,
-        expectedHomeRuntimeId: targetHosting === "local" ? targetRuntimeInstanceId : undefined,
+        expectedHomeRuntimeId:
+          params.targetHosting === "local" ? params.targetRuntimeInstanceId : undefined,
         adapterType: this.parseConnection(movedSession.connection).adapterType,
-        environment: targetEnvironment,
+        environment: prepared.targetEnvironment,
       });
     } else {
       const deliveryResult = await this.deliverPendingCommand(
@@ -10235,15 +10323,7 @@ export class SessionService {
       }
     }
 
-    if (sourceCloudRuntimeSession) {
-      await this.destroyMovedSourceCloudRuntime(
-        movedSession.id,
-        sourceCloudRuntimeSession,
-        targetHosting === "local" ? "session_moved_to_local" : "session_runtime_replaced",
-      );
-    }
-
-    return movedSession;
+    return null;
   }
 
   private async destroyMovedSourceCloudRuntime(
