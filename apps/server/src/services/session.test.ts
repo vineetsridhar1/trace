@@ -614,6 +614,11 @@ describe("SessionService", () => {
       });
 
       expect(prismaMock.session.update).toHaveBeenCalledTimes(1);
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ projects: { deleteMany: {} } }),
+        }),
+      );
       expect(sessionRouterMock.sendAsync).not.toHaveBeenCalled();
     });
 
@@ -801,6 +806,51 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).not.toHaveBeenCalled();
       expect(eventServiceMock.create).not.toHaveBeenCalled();
       expect(eventServiceMock.publishCreated).not.toHaveBeenCalled();
+    });
+
+    it("does not create a managed repo when another conversion holds the transition lock", async () => {
+      const sourceGroup = makeSessionGroup({
+        id: "group-general",
+        kind: "general",
+        channelId: null,
+        repoId: null,
+      });
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({
+          ...sourceGroup,
+          sessions: [
+            makeSession({
+              id: "session-general",
+              sessionGroupId: sourceGroup.id,
+              sessionGroup: sourceGroup,
+              repoId: null,
+              repo: null,
+            }),
+          ],
+        });
+      prismaMock.session.findUnique.mockResolvedValueOnce({ connection: {} });
+      withDistributedLockMock.mockResolvedValueOnce({ acquired: false });
+
+      await expect(
+        service.convertGroup({
+          sessionGroupId: sourceGroup.id,
+          kind: "app",
+          organizationId: "org-1",
+          actorId: "user-1",
+          actorType: "user",
+        }),
+      ).rejects.toThrow("Session conversion is already in progress");
+
+      expect(withDistributedLockMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: `trace:session-group-runtime-transition:${sourceGroup.id}`,
+        }),
+        expect.any(Function),
+      );
+      expect(managedGitServiceMock.createManagedRepo).not.toHaveBeenCalled();
+      expect(managedGitServiceMock.deleteManagedRepo).not.toHaveBeenCalled();
+      expect(prismaMock.sessionGroup.updateMany).not.toHaveBeenCalled();
     });
 
     it("keeps a completed conversion retryable when its runtime handoff fails", async () => {
@@ -6162,6 +6212,33 @@ describe("SessionService", () => {
         }),
         expect.any(Object),
       );
+    });
+
+    it("treats an attached repo as context-only in a general session prompt", async () => {
+      const session = makeSession({
+        agentStatus: "done",
+        sessionStatus: "in_progress",
+        hosting: "local",
+        workdir: "/tmp/trace/general-sessions/group-1",
+        toolSessionId: "tool-sess-1",
+        repoId: "repo-1",
+        sessionGroup: makeSessionGroup({ kind: "general", repoId: "repo-1" }),
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValue(session);
+      prismaMock.session.update.mockResolvedValue(session);
+      sessionRouterMock.send.mockReturnValue("delivered");
+
+      await service.sendMessage({
+        sessionId: "session-1",
+        text: "summarize the current work",
+        actorType: "agent",
+        actorId: "agent-1",
+      });
+
+      const command = sessionRouterMock.send.mock.calls.at(-1)?.[1];
+      expect(command?.prompt).toContain("This is a Trace general agent session");
+      expect(command?.prompt).not.toContain("trace-<slug>-<descriptive-name>");
+      expect(command?.prompt).not.toContain("git add -A");
     });
 
     it("injects an active artifact credential into plan-mode bridge commands", async () => {

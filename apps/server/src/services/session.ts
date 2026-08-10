@@ -1270,9 +1270,11 @@ function appendPromptInstructions(
   result += REQUEST_USER_INPUT_SKILL_INSTRUCTION;
   result += TRACE_CLI_DISCOVERY_INSTRUCTION;
   result += TRACE_SESSION_SKILL_INSTRUCTION;
+  const hasWritableUserRepo =
+    hasRepo && sessionGroupKind !== "general" && !isGeneratedProjectKind(sessionGroupKind);
   if (sessionGroupKind === "general") result += GENERAL_SESSION_INSTRUCTION;
-  if (hasRepo && !isGeneratedProjectKind(sessionGroupKind)) result += BRANCH_INSTRUCTION;
-  result = appendAutoSave(result, hasRepo);
+  if (hasWritableUserRepo) result += BRANCH_INSTRUCTION;
+  result = appendAutoSave(result, hasWritableUserRepo);
   return result;
 }
 
@@ -3518,65 +3520,78 @@ export class SessionService {
         throw new ValidationError("No enabled cloud agent environment is configured");
       }
       assertAgentEnvironmentSupportsTool(cloudEnvironment, targetTool);
-      const managedRepo = await managedGitService.createManagedRepo({
-        organizationId: input.organizationId,
-        name: `${sourceSession.name} source`,
-        actorType: input.actorType ?? "user",
-        actorId: input.actorId,
-      });
-
-      try {
-        return await this.moveSessionInPlace({
-          session: sourceSession,
-          targetHosting: "cloud",
-          targetRuntimeInstanceId: null,
-          targetRuntimeLabel: null,
-          targetEnvironment: cloudEnvironment,
-          allowUnverifiedSourceGitStatus: true,
-          bootstrapPrompt: conversionContinuationPrompt(generatedKind),
-          conversion: {
-            kind: generatedKind,
-            repoId: managedRepo.id,
-            branch: managedRepo.defaultBranch,
-            tool: targetTool,
-            model: targetModel,
-            reasoningEffort: targetReasoningEffort,
-          },
-          actorType: input.actorType ?? "user",
-          actorId: input.actorId,
-        });
-      } catch (error) {
-        const committed = await prisma.session.findFirst({
-          where: {
-            id: sourceSession.id,
+      const locked = await withDistributedLock(
+        {
+          key: this.runtimeTransitionLockKey(sourceSession.id, sourceSession.sessionGroupId),
+          ttlMs: RUNTIME_TRANSITION_LOCK_TTL_MS,
+        },
+        async () => {
+          const managedRepo = await managedGitService.createManagedRepo({
             organizationId: input.organizationId,
-            hosting: "cloud",
-            repoId: managedRepo.id,
-            sessionGroup: { kind: generatedKind },
-          },
-          include: SESSION_INCLUDE,
-        });
-        if (committed) {
-          const message = error instanceof Error ? error.message : String(error);
-          await this.workspaceFailed(
-            committed.id,
-            `Converted to ${generatedKind}, but workspace preparation failed: ${message}`,
-          ).catch(() => {});
-          return prisma.session.findUniqueOrThrow({
-            where: { id: committed.id },
-            include: SESSION_INCLUDE,
-          });
-        }
-        await managedGitService
-          .deleteManagedRepo({
-            organizationId: input.organizationId,
-            repoId: managedRepo.id,
+            name: `${sourceSession.name} source`,
             actorType: input.actorType ?? "user",
             actorId: input.actorId,
-          })
-          .catch(() => {});
-        throw error;
+          });
+
+          try {
+            return await this.moveSessionInPlace({
+              session: sourceSession,
+              targetHosting: "cloud",
+              targetRuntimeInstanceId: null,
+              targetRuntimeLabel: null,
+              targetEnvironment: cloudEnvironment,
+              allowUnverifiedSourceGitStatus: true,
+              bootstrapPrompt: conversionContinuationPrompt(generatedKind),
+              conversion: {
+                kind: generatedKind,
+                repoId: managedRepo.id,
+                branch: managedRepo.defaultBranch,
+                tool: targetTool,
+                model: targetModel,
+                reasoningEffort: targetReasoningEffort,
+              },
+              actorType: input.actorType ?? "user",
+              actorId: input.actorId,
+              runtimeLockHeld: true,
+            });
+          } catch (error) {
+            const committed = await prisma.session.findFirst({
+              where: {
+                id: sourceSession.id,
+                organizationId: input.organizationId,
+                hosting: "cloud",
+                repoId: managedRepo.id,
+                sessionGroup: { kind: generatedKind },
+              },
+              include: SESSION_INCLUDE,
+            });
+            if (committed) {
+              const message = error instanceof Error ? error.message : String(error);
+              await this.workspaceFailed(
+                committed.id,
+                `Converted to ${generatedKind}, but workspace preparation failed: ${message}`,
+              ).catch(() => {});
+              return prisma.session.findUniqueOrThrow({
+                where: { id: committed.id },
+                include: SESSION_INCLUDE,
+              });
+            }
+            await managedGitService
+              .deleteManagedRepo({
+                organizationId: input.organizationId,
+                repoId: managedRepo.id,
+                actorType: input.actorType ?? "user",
+                actorId: input.actorId,
+              })
+              .catch(() => {});
+            throw error;
+          }
+        },
+      );
+      if (!locked.acquired) {
+        throw new ValidationError("Session conversion is already in progress");
       }
+      return locked.value;
     }
 
     const result: {
@@ -3705,9 +3720,9 @@ export class SessionService {
           ...(targetReasoningEffort !== undefined
             ? { reasoningEffort: targetReasoningEffort }
             : {}),
-          ...(input.projectId
-            ? { projects: { deleteMany: {}, create: { projectId: input.projectId } } }
-            : {}),
+          projects: input.projectId
+            ? { deleteMany: {}, create: { projectId: input.projectId } }
+            : { deleteMany: {} },
         },
         include: SESSION_INCLUDE,
       });
