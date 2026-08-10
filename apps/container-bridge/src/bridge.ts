@@ -499,6 +499,26 @@ export class ContainerBridge implements IBridgeClient {
         break;
       }
 
+      case "prepare_general": {
+        const workdir = path.join(
+          os.homedir(),
+          "trace",
+          "general-sessions",
+          cmd.sessionGroupId ?? cmd.sessionId,
+        );
+        fs.promises
+          .mkdir(workdir, { recursive: true })
+          .then(() => {
+            this.sessionWorkdirs.set(cmd.sessionId, workdir);
+            this.send({ type: "register_session", sessionId: cmd.sessionId });
+            this.send({ type: "workspace_ready", sessionId: cmd.sessionId, workdir });
+          })
+          .catch((err: Error) => {
+            this.send({ type: "workspace_failed", sessionId: cmd.sessionId, error: err.message });
+          });
+        break;
+      }
+
       case "list_workspace_slugs": {
         getWorkspaceSlugs(cmd.repoId)
           .then((slugs) => {

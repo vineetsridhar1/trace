@@ -1288,6 +1288,26 @@ export class BridgeClient implements IBridgeClient {
           });
         break;
       }
+      case "prepare_general": {
+        const { sessionId, sessionGroupId } = cmd;
+        const workdir = path.join(
+          os.homedir(),
+          "trace",
+          "general-sessions",
+          sessionGroupId ?? sessionId,
+        );
+        fs.promises
+          .mkdir(workdir, { recursive: true })
+          .then(() => {
+            this.sessionWorkdirs.set(sessionId, workdir);
+            this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
+            this.send({ type: "workspace_ready", sessionId, workdir });
+          })
+          .catch((err: Error) => {
+            this.send({ type: "workspace_failed", sessionId, error: err.message });
+          });
+        break;
+      }
       case "list_workspace_slugs": {
         const repoConfig = getRepoConfig(cmd.repoId);
         const repoPath = repoConfig?.path;

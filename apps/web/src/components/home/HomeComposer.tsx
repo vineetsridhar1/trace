@@ -29,6 +29,7 @@ export function HomeComposer({
   reasoningEffort,
   mode,
   submitting,
+  bridgeLoading,
   attachments,
   onPromptChange,
   onPasteFiles,
@@ -36,6 +37,7 @@ export function HomeComposer({
   onRemoveAttachment,
   onChannelTargetChange,
   onBridgeChange,
+  onBridgeLoadingChange,
   onDesignSystemChange,
   onDesignChange,
   onToolChange,
@@ -56,6 +58,7 @@ export function HomeComposer({
   reasoningEffort: string | null;
   mode: InteractionMode;
   submitting: boolean;
+  bridgeLoading: boolean;
   attachments: FileAttachment[];
   onPromptChange: (prompt: string) => void;
   onPasteFiles: (files: File[], options?: ChatEditorPasteFilesOptions) => boolean;
@@ -63,6 +66,7 @@ export function HomeComposer({
   onRemoveAttachment: (id: string) => void;
   onChannelTargetChange: (target: HomeChannelTarget | null) => void;
   onBridgeChange: (bridgeId: string | null) => void;
+  onBridgeLoadingChange: (loading: boolean) => void;
   onDesignSystemChange: (versionId: string | null) => void;
   onDesignChange: (designId: string | null) => void;
   onToolChange: (tool: ToolOptionValue) => void;
@@ -77,7 +81,8 @@ export function HomeComposer({
   const prefill = useHomeComposerStore((state) => state.prefill);
   const consumePrefill = useHomeComposerStore((state) => state.consumePrefill);
   const codingSetupComplete = kind !== "coding" || (!!channelTargetKey && !!bridgeId);
-  const canSubmit = prompt.trim().length > 0 && codingSetupComplete && !submitting;
+  const runtimeReady = kind !== "general" || !bridgeLoading;
+  const canSubmit = prompt.trim().length > 0 && codingSetupComplete && runtimeReady && !submitting;
   const effortOptions = getReasoningEffortsForTool(tool);
 
   useEffect(() => {
@@ -106,7 +111,9 @@ export function HomeComposer({
         sendLabel="Start session"
         editorRef={editorRef}
         mode={mode}
-        placeholder={kind === "general" ? "Ask about your work…" : "Describe what you want to make…"}
+        placeholder={
+          kind === "general" ? "Ask about your work…" : "Describe what you want to make…"
+        }
         disabled={submitting}
         submitDisabled={!canSubmit}
         attachments={attachments}
@@ -154,6 +161,29 @@ export function HomeComposer({
             <>
               <span className="shrink-0 text-[12px] text-muted-foreground">Context</span>
               <HomeChannelPicker selectedKey={channelTargetKey} onSelect={onChannelTargetChange} />
+              <HomeBridgePicker
+                selectedBridgeId={bridgeId}
+                repoId={selectedChannelRepoId}
+                tool={tool}
+                preferLocal
+                onSelect={onBridgeChange}
+                onLoadingChange={onBridgeLoadingChange}
+              />
+              <ComposerInputOptions
+                mode={mode}
+                tool={tool}
+                model={model}
+                reasoningEffort={reasoningEffort}
+                reasoningEffortOptions={effortOptions}
+                disabled={submitting}
+                compact={false}
+                showMode={false}
+                alwaysExpandToolModel
+                onModeChange={onModeChange}
+                onToolChange={onToolChange}
+                onModelChange={onModelChange}
+                onReasoningEffortChange={onReasoningEffortChange}
+              />
             </>
           ) : undefined
         }

@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { Repo } from "@trace/gql";
-import { DEFAULT_HOME_KIND } from "./HomeKindIcon";
+import { DEFAULT_HOME_KIND, HOME_SELECTABLE_KIND_OPTIONS } from "./HomeKindIcon";
 import { detectPromptRepo } from "./home-kind-routing";
 
 describe("home session creation", () => {
   it("always starts the universal composer as a general session", () => {
     expect(DEFAULT_HOME_KIND).toBe("general");
+    expect(HOME_SELECTABLE_KIND_OPTIONS.map(({ kind }) => kind)).toEqual([
+      "coding",
+      "design",
+      "app",
+      "pdf",
+      "animation",
+    ]);
   });
 
   it("detects an explicitly mentioned repo", () => {

@@ -808,6 +808,43 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
+  it("prepares a repo-less general session on its selected local bridge", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    router.bindSession("session-1", "runtime-1");
+
+    const failures: string[] = [];
+    router.createRuntime({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      sessionGroupKind: "general",
+      hosting: "local",
+      adapterType: "local",
+      tool: "codex",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      onFailed: (error) => failures.push(error),
+    });
+
+    await vi.waitFor(() => expect(ws.send).toHaveBeenCalledOnce());
+    expect(failures).toEqual([]);
+    const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    expect(JSON.parse(send.mock.calls[0]?.[0] as string)).toMatchObject({
+      type: "prepare_general",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+    });
+  });
+
   it("pins initial local prepare delivery to the selected home bridge", async () => {
     const router = new SessionRouter();
     const runtimeId = "runtime-remote-owner";

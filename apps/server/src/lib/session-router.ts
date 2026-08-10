@@ -57,6 +57,7 @@ interface BaseSessionCommand {
     | "resume"
     | "send"
     | "prepare"
+    | "prepare_general"
     | "prepare_app"
     | "delete"
     | "list_branches"
@@ -2394,6 +2395,23 @@ export class SessionRouter {
           if (result !== "delivered") {
             options.onFailed(`prepare: ${result}`);
           }
+          return;
+        }
+
+        if (options.sessionGroupKind === "general" && adapterType !== "provisioned") {
+          const result = await this.sendAsync(
+            options.sessionId,
+            {
+              type: "prepare_general",
+              sessionId: options.sessionId,
+              sessionGroupId: options.sessionGroupId,
+            },
+            {
+              expectedHomeRuntimeId,
+              organizationId: options.organizationId,
+            },
+          );
+          if (result !== "delivered") options.onFailed(`prepare_general: ${result}`);
           return;
         }
 

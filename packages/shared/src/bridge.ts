@@ -65,6 +65,12 @@ export interface BridgePrepareCommand {
   adoptWorktreePath?: string;
 }
 
+export interface BridgePrepareGeneralCommand {
+  type: "prepare_general";
+  sessionId: string;
+  sessionGroupId?: string;
+}
+
 export interface BridgePrepareAppCommand {
   type: "prepare_app";
   sessionId: string;
@@ -472,6 +478,7 @@ export type BridgeCommand =
   | BridgeRunCommand
   | BridgeSendCommand
   | BridgePrepareCommand
+  | BridgePrepareGeneralCommand
   | BridgePrepareAppCommand
   | BridgeUpgradeWorkspaceCommand
   | BridgeTerminateCommand

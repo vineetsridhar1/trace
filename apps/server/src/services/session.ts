@@ -4525,7 +4525,9 @@ export class SessionService {
       input.interactionMode === "ask" && !input.restoreCheckpointId && !adoptWorktreePath;
 
     const needsRuntimeProvisioning =
-      !sharedRuntimeInstanceId && !sharedWorkdir && (!!resolvedRepoId || hosting === "cloud");
+      !sharedRuntimeInstanceId &&
+      !sharedWorkdir &&
+      (!!resolvedRepoId || hosting === "cloud" || resolvedKind === "general");
     // Queue the initial prompt as a pending run whenever we're provisioning a
     // fresh runtime for it; it's delivered once the workspace is ready
     // (workspaceReady → deliverPendingCommand). This must cover BOTH the

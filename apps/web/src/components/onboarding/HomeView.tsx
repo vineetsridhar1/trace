@@ -12,6 +12,8 @@ import { buildHomeChannelTargets } from "../home/HomeChannelPicker";
 import { HomeFirstRunSparks } from "../home/HomeFirstRunSparks";
 import { HomeHeader } from "../home/HomeHeader";
 import { DEFAULT_HOME_KIND } from "../home/HomeKindIcon";
+import { HomeKindSelector } from "../home/HomeKindSelector";
+import type { HomeCreatableKind } from "../home/home-kinds";
 import { HomeLedgerError } from "../home/HomeLedgerError";
 import { HomeLedgerSkeleton } from "../home/HomeLedgerSkeleton";
 import { HomeWorkLedger } from "../home/HomeWorkLedger";
@@ -44,6 +46,8 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   useHomeCreations(activeOrgId);
   const [selectedChannelTargetKey, setSelectedChannelTargetKey] = useState<string | null>(null);
   const [selectedBridgeId, setSelectedBridgeId] = useState<string | null>(null);
+  const [selectedKind, setSelectedKind] = useState<HomeCreatableKind | null>(null);
+  const [bridgeLoading, setBridgeLoading] = useState(true);
   const [selectedDesignSystemVersionId, setSelectedDesignSystemVersionId] = useState<string | null>(
     null,
   );
@@ -77,7 +81,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
       state.organizationId === activeOrgId &&
       (state.codingStatus === "error" || state.generatedStatus === "error"),
   );
-  const activeKind = DEFAULT_HOME_KIND;
+  const activeKind = selectedKind ?? DEFAULT_HOME_KIND;
   const selectedChannelTarget =
     channelTargets.find((target) => target.key === selectedChannelTargetKey) ?? null;
   const selectedChannelRepoId = selectedChannelTarget?.repoId ?? null;
@@ -96,6 +100,8 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
   useEffect(() => {
     setSelectedChannelTargetKey(null);
     setSelectedBridgeId(null);
+    setSelectedKind(null);
+    setBridgeLoading(true);
     setInteractionMode("code");
     setSelectedDesignSystemVersionId(null);
     setSelectedDesignSessionGroupId(null);
@@ -150,15 +156,21 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
         channel: selectedChannelTarget?.channel ?? null,
         projectId: selectedChannelTarget?.projectId ?? null,
         repoId: selectedChannelTarget?.repoId ?? null,
-        runtimeInstanceId: null,
-        designSystemVersionId: null,
-        designSessionGroupId: null,
+        runtimeInstanceId:
+          activeKind === "general" || activeKind === "coding" ? selectedBridgeId : null,
+        designSystemVersionId: activeKind === "design" ? selectedDesignSystemVersionId : null,
+        designSessionGroupId:
+          activeKind !== "general" && activeKind !== "coding" && activeKind !== "design"
+            ? selectedDesignSessionGroupId
+            : null,
       });
       if (created) {
         clearAttachments();
         clearDraft(draftScope);
         setSelectedChannelTargetKey(null);
         setSelectedBridgeId(null);
+        setSelectedKind(null);
+        setBridgeLoading(true);
         setSelectedDesignSystemVersionId(null);
         setSelectedDesignSessionGroupId(null);
       } else if (attachmentIds.size > 0) {
@@ -206,6 +218,7 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
               reasoningEffort={reasoningEffort}
               mode={interactionMode}
               submitting={submitting}
+              bridgeLoading={bridgeLoading}
               attachments={attachments}
               onPromptChange={updatePrompt}
               onPasteFiles={addAttachments}
@@ -214,8 +227,10 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
               onChannelTargetChange={(target) => {
                 setSelectedChannelTargetKey(target?.key ?? null);
                 setSelectedBridgeId(null);
+                if (activeKind === "general") setBridgeLoading(true);
               }}
               onBridgeChange={setSelectedBridgeId}
+              onBridgeLoadingChange={setBridgeLoading}
               onDesignSystemChange={setSelectedDesignSystemVersionId}
               onDesignChange={setSelectedDesignSessionGroupId}
               onToolChange={selectTool}
@@ -224,13 +239,24 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
               onModeChange={cycleMode}
               onSubmit={submit}
             />
+            <HomeKindSelector
+              selectedKind={selectedKind}
+              onSelect={(kind) => {
+                setSelectedKind(kind);
+                if (kind === null || kind === "general") setBridgeLoading(true);
+                if (kind && kind !== "general" && kind !== "coding") {
+                  setSelectedChannelTargetKey(null);
+                  setSelectedBridgeId(null);
+                }
+              }}
+            />
           </div>
 
           {isCreateMode &&
           prompt.trim().length > 0 ? (
             <p className="mt-5 flex items-center justify-center gap-2 text-[13px] text-[var(--th-muted)]">
               <span className="size-1.5 rounded-full bg-[var(--th-success)]" />
-              <span>Ready — this opens a general AI session</span>
+              <span>Ready — this opens a {selectedKind ? activeKind : "general AI"} session</span>
             </p>
           ) : !isCreateMode && !homeDataReady ? (
             homeDataFailed ? (

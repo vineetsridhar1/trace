@@ -30,6 +30,10 @@ export const HOME_KIND_OPTIONS: ReadonlyArray<{
   },
 ];
 
+export const HOME_SELECTABLE_KIND_OPTIONS = HOME_KIND_OPTIONS.filter(
+  ({ kind }) => kind !== "general" && kind !== "design_system",
+);
+
 export function HomeKindIcon({ kind, className }: { kind: SessionGroupKind; className?: string }) {
   const option = HOME_KIND_OPTIONS.find((candidate) => candidate.kind === kind);
   const Icon = option?.Icon ?? CodeXml;

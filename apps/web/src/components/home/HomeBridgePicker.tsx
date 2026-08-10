@@ -10,21 +10,30 @@ export function HomeBridgePicker({
   selectedBridgeId,
   repoId,
   tool,
+  preferLocal = false,
   onSelect,
+  onLoadingChange,
 }: {
   selectedBridgeId: string | null;
   repoId: string | null;
   tool: string;
+  preferLocal?: boolean;
   onSelect: (bridgeId: string | null) => void;
+  onLoadingChange?: (loading: boolean) => void;
 }) {
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
   const [loading, setLoading] = useState(false);
+  const [preferCloud, setPreferCloud] = useState(false);
   const connectedBridges = useMemo(() => runtimes.filter(isAccessibleLocalRuntime), [runtimes]);
   const selected = connectedBridges.find((bridge) => bridge.id === selectedBridgeId) ?? null;
+  const preferredBridge = connectedBridges.find(
+    (bridge) => !repoId || bridge.registeredRepoIds.includes(repoId),
+  );
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    onLoadingChange?.(true);
     void client
       .query(
         AVAILABLE_RUNTIMES_QUERY,
@@ -42,7 +51,29 @@ export function HomeBridgePicker({
     return () => {
       active = false;
     };
-  }, [tool]);
+  }, [onLoadingChange, tool]);
+
+  useEffect(() => {
+    setPreferCloud(false);
+  }, [repoId, tool]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (preferLocal && !preferCloud && !selectedBridgeId && preferredBridge) {
+      onLoadingChange?.(true);
+      onSelect(preferredBridge.id);
+      return;
+    }
+    onLoadingChange?.(false);
+  }, [
+    loading,
+    onLoadingChange,
+    onSelect,
+    preferCloud,
+    preferredBridge,
+    preferLocal,
+    selectedBridgeId,
+  ]);
 
   useEffect(() => {
     if (!selectedBridgeId || loading) return;
@@ -54,16 +85,18 @@ export function HomeBridgePicker({
 
   return (
     <Select
-      value={selectedBridgeId}
+      value={selectedBridgeId ?? "cloud"}
       onValueChange={(bridgeId) => {
-        if (bridgeId) onSelect(bridgeId);
+        const cloud = bridgeId === "cloud";
+        setPreferCloud(cloud);
+        onSelect(cloud ? null : bridgeId);
       }}
     >
       <SelectTrigger
         size="sm"
         className="max-w-40 border-transparent bg-transparent hover:border-transparent hover:bg-white/10 data-popup-open:border-transparent"
         aria-label="Choose bridge"
-        title={selected?.label}
+        title={selected?.label ?? "Cloud"}
       >
         <SelectValue placeholder={loading ? "Loading bridges…" : "Choose bridge"}>
           {selected ? (
@@ -71,10 +104,13 @@ export function HomeBridgePicker({
               <Monitor />
               <span className="truncate">{selected.label}</span>
             </>
-          ) : undefined}
+          ) : (
+            <span>Cloud</span>
+          )}
         </SelectValue>
       </SelectTrigger>
       <SelectContent className="min-w-56">
+        <SelectItem value="cloud">Cloud</SelectItem>
         {connectedBridges.map((bridge) => {
           const lacksRepo = !!repoId && !bridge.registeredRepoIds.includes(repoId);
           return (
@@ -82,7 +118,9 @@ export function HomeBridgePicker({
               key={bridge.id}
               value={bridge.id}
               disabled={lacksRepo}
-              title={lacksRepo ? "This bridge does not have the project repository linked" : bridge.label}
+              title={
+                lacksRepo ? "This bridge does not have the project repository linked" : bridge.label
+              }
             >
               <Monitor />
               <span className="min-w-0 flex-1 truncate">{bridge.label}</span>
