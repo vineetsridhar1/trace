@@ -183,6 +183,7 @@ import { sessionApplicationService } from "./session-applications.js";
 import {
   getDefaultModel,
   getDefaultReasoningEffort,
+  isSupportedModel,
   isSupportedReasoningEffort,
   hasQuestionBlock,
   MAX_WORKSPACE_NAME_LENGTH,
@@ -219,6 +220,7 @@ const githubRepoServiceMock = githubRepoService as unknown as MockedDeep<typeof 
 const parseGitHubRepoMock = vi.mocked(parseGitHubRepo);
 const getDefaultModelMock = vi.mocked(getDefaultModel);
 const getDefaultReasoningEffortMock = vi.mocked(getDefaultReasoningEffort);
+const isSupportedModelMock = vi.mocked(isSupportedModel);
 const isSupportedReasoningEffortMock = vi.mocked(isSupportedReasoningEffort);
 const withDistributedLockMock = vi.mocked(withDistributedLock);
 
@@ -758,9 +760,9 @@ describe("SessionService", () => {
           expect.objectContaining({
             data: expect.objectContaining({
               hosting: "cloud",
+              pendingGeneralWorkspaceCleanupRuntimeId: "runtime-local",
               pendingRun: expect.objectContaining({
                 prompt: `Continue the user's request in the newly prepared ${kind === "pdf" ? "PDF" : kind} workspace.`,
-                cleanupGeneralWorkspaceRuntimeId: "runtime-local",
               }),
             }),
           }),
@@ -811,6 +813,135 @@ describe("SessionService", () => {
         actorType: "user",
         actorId: "user-1",
       });
+    });
+
+    it("keeps a completed conversion retryable when its runtime handoff fails", async () => {
+      const sourceGroup = makeSessionGroup({
+        id: "group-general",
+        kind: "general",
+        channelId: null,
+        repoId: null,
+      });
+      const managedRepo = await managedGitServiceMock.createManagedRepo({
+        organizationId: "org-1",
+        name: "unused",
+        actorType: "user",
+        actorId: "user-1",
+      });
+      managedGitServiceMock.createManagedRepo.mockClear();
+      const convertedSession = makeSession({
+        id: "session-general",
+        sessionGroupId: sourceGroup.id,
+        sessionGroup: { ...sourceGroup, kind: "app", repoId: managedRepo.id, repo: managedRepo },
+        repoId: managedRepo.id,
+        repo: managedRepo,
+      });
+      const failedSession = { ...convertedSession, agentStatus: "done" };
+
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({
+          kind: "general",
+          sessions: [{ id: convertedSession.id, name: convertedSession.name, tool: "codex" }],
+        })
+        .mockResolvedValueOnce({ ...sourceGroup, sessions: [makeSession({ repoId: null })] });
+      prismaMock.session.update.mockResolvedValueOnce(convertedSession);
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...sourceGroup,
+        kind: "app",
+        repoId: managedRepo.id,
+        repo: managedRepo,
+        sessions: [{ agentStatus: "active", sessionStatus: "in_progress" }],
+      });
+      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(failedSession);
+      const moveSpy = vi
+        .spyOn(
+          service as unknown as {
+            moveSessionInPlace: (...args: unknown[]) => Promise<unknown>;
+          },
+          "moveSessionInPlace",
+        )
+        .mockRejectedValueOnce(new Error("runtime unavailable"));
+      const failureSpy = vi.spyOn(service, "workspaceFailed").mockResolvedValueOnce();
+
+      await expect(
+        service.convertGroup({
+          sessionGroupId: sourceGroup.id,
+          kind: "app",
+          organizationId: "org-1",
+          actorId: "user-1",
+          actorType: "user",
+        }),
+      ).resolves.toBe(failedSession);
+
+      expect(moveSpy).toHaveBeenCalledOnce();
+      expect(failureSpy).toHaveBeenCalledWith(
+        convertedSession.id,
+        "Converted to app, but workspace preparation failed: runtime unavailable",
+      );
+      expect(managedGitServiceMock.deleteManagedRepo).not.toHaveBeenCalled();
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-1" });
+    });
+
+    it("resets model and reasoning defaults when conversion changes tools", async () => {
+      const sourceGroup = makeSessionGroup({ id: "group-general", kind: "general", repoId: null });
+      const sourceSession = makeSession({ tool: "claude_code", model: "claude-old" });
+      const convertedSession = makeSession({ tool: "codex", model: "gpt-default" });
+      getDefaultModelMock.mockReturnValueOnce("gpt-default");
+      getDefaultReasoningEffortMock.mockReturnValueOnce("high");
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({ ...sourceGroup, sessions: [sourceSession] });
+      prismaMock.channel.findFirst.mockResolvedValueOnce({ id: "channel-1", repoId: "repo-1" });
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.session.update.mockResolvedValueOnce(convertedSession);
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...sourceGroup,
+        kind: "coding",
+        sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
+      });
+
+      await service.convertGroup({
+        sessionGroupId: sourceGroup.id,
+        kind: "coding",
+        channelId: "channel-1",
+        tool: "codex",
+        organizationId: "org-1",
+        actorId: "user-1",
+      });
+
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tool: "codex",
+            model: "gpt-default",
+            reasoningEffort: "high",
+          }),
+        }),
+      );
+    });
+
+    it("rejects a model that is incompatible with the target tool", async () => {
+      const sourceGroup = makeSessionGroup({ id: "group-general", kind: "general" });
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({ ...sourceGroup, sessions: [makeSession()] });
+      isSupportedModelMock.mockReturnValueOnce(false);
+
+      await expect(
+        service.convertGroup({
+          sessionGroupId: sourceGroup.id,
+          kind: "coding",
+          channelId: "channel-1",
+          tool: "codex",
+          model: "claude-only",
+          organizationId: "org-1",
+          actorId: "user-1",
+        }),
+      ).rejects.toThrow('Unsupported model "claude-only" for tool "codex"');
+
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
 
     it("keeps design-system authoring on its source-backed creation flow", async () => {
@@ -8470,6 +8601,45 @@ describe("SessionService", () => {
       );
     });
 
+    it("retries durable general-workspace cleanup when the source runtime reconnects", async () => {
+      sessionRouterMock.getRuntime.mockReturnValueOnce({
+        key: "org-1:runtime-source",
+        id: "runtime-source",
+        label: "Laptop",
+        hostingMode: "local",
+        organizationId: "org-1",
+        supportedTools: ["codex"],
+        registeredRepoIds: [],
+        boundSessions: new Set<string>(),
+        ws: { readyState: 1, OPEN: 1 },
+      });
+      prismaMock.session.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { id: "session-1", sessionGroupId: "group-1", organizationId: "org-1" },
+        ]);
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await service.restoreSessionsForRuntime("runtime-source", "org-1");
+
+      expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+        "runtime-source",
+        {
+          type: "cleanup_general_workspace",
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+        },
+        "org-1",
+      );
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: "session-1",
+          pendingGeneralWorkspaceCleanupRuntimeId: "runtime-source",
+        },
+        data: { pendingGeneralWorkspaceCleanupRuntimeId: null },
+      });
+    });
+
     it("heals a timed-out cloud session when its runtime reconnects", async () => {
       sessionRouterMock.getRuntime.mockReturnValueOnce({
         key: "runtime-cloud",
@@ -8568,7 +8738,6 @@ describe("SessionService", () => {
         type: "run",
         prompt: "Continue in the generated workspace",
         interactionMode: null,
-        cleanupGeneralWorkspaceRuntimeId: "runtime-local",
       };
       const readySession = makeSession({
         hosting: "cloud",
@@ -8582,6 +8751,7 @@ describe("SessionService", () => {
           sessionStatus: "in_progress",
           readOnlyWorkspace: false,
           workdir: null,
+          pendingGeneralWorkspaceCleanupRuntimeId: "runtime-local",
         })
         .mockResolvedValueOnce(readySession);
       prismaMock.session.update.mockResolvedValue(readySession);
@@ -8602,6 +8772,13 @@ describe("SessionService", () => {
         },
         "org-1",
       );
+      expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: "session-1",
+          pendingGeneralWorkspaceCleanupRuntimeId: "runtime-local",
+        },
+        data: { pendingGeneralWorkspaceCleanupRuntimeId: null },
+      });
       expect(sessionRouterMock.send).toHaveBeenCalledWith(
         "session-1",
         expect.objectContaining({

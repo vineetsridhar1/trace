@@ -72,7 +72,7 @@ import {
   isTraceManagedWorktreePath,
 } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
-import { generalWorkspacePath, removeGeneralWorkspace } from "./general-workspace.js";
+import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
 import { TerminalManager } from "@trace/shared/adapters";
 import {
   loadQueuedGitHookCheckpoints,

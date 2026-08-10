@@ -40,6 +40,7 @@ import {
 } from "@trace/shared";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
+import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
 import type { GitExecFn } from "@trace/shared";
 import {
   AntigravityAdapter,
@@ -500,12 +501,7 @@ export class ContainerBridge implements IBridgeClient {
       }
 
       case "prepare_general": {
-        const workdir = path.join(
-          os.homedir(),
-          "trace",
-          "general-sessions",
-          cmd.sessionGroupId ?? cmd.sessionId,
-        );
+        const workdir = generalWorkspacePath(cmd.sessionGroupId ?? cmd.sessionId);
         fs.promises
           .mkdir(workdir, { recursive: true })
           .then(() => {
@@ -515,6 +511,25 @@ export class ContainerBridge implements IBridgeClient {
           })
           .catch((err: Error) => {
             this.send({ type: "workspace_failed", sessionId: cmd.sessionId, error: err.message });
+          });
+        break;
+      }
+
+      case "cleanup_general_workspace": {
+        const sessionKey = cmd.sessionGroupId ?? cmd.sessionId;
+        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
+        void removeGeneralWorkspace(workdir, sessionKey)
+          .then((removed) => {
+            if (!removed || !workdir) return;
+            for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
+              if (trackedWorkdir === workdir) this.sessionWorkdirs.delete(trackedSessionId);
+            }
+          })
+          .catch((err: Error) => {
+            console.warn(
+              `[container-bridge] failed to remove general workspace ${workdir}:`,
+              err.message,
+            );
           });
         break;
       }
@@ -612,6 +627,7 @@ export class ContainerBridge implements IBridgeClient {
           branch,
           preserveBranchName,
         } = cmd;
+        const previousWorkdir = this.sessionWorkdirs.get(sessionId);
 
         (async () => {
           try {
@@ -640,6 +656,22 @@ export class ContainerBridge implements IBridgeClient {
               slug: worktreeSlug,
               warning: repoResult.warning,
             });
+            const sessionKey = sessionGroupId ?? sessionId;
+            try {
+              const removed = await removeGeneralWorkspace(previousWorkdir, sessionKey);
+              if (removed && previousWorkdir) {
+                for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
+                  if (trackedWorkdir === previousWorkdir) {
+                    this.sessionWorkdirs.delete(trackedSessionId);
+                  }
+                }
+              }
+            } catch (error) {
+              console.warn(
+                `[container-bridge] failed to remove upgraded general workspace ${previousWorkdir}:`,
+                error instanceof Error ? error.message : String(error),
+              );
+            }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] workspace upgrade failed for ${sessionId}:`, message);

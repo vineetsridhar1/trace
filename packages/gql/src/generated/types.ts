@@ -332,14 +332,11 @@ export type ConnectionsRepoEntry = {
 
 export type ConvertSessionGroupInput = {
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
-  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
-  environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   kind: SessionGroupKind;
   model?: InputMaybe<Scalars["String"]["input"]>;
   projectId?: InputMaybe<Scalars["ID"]["input"]>;
   reasoningEffort?: InputMaybe<Scalars["String"]["input"]>;
   repoId?: InputMaybe<Scalars["ID"]["input"]>;
-  runtimeInstanceId?: InputMaybe<Scalars["ID"]["input"]>;
   sessionGroupId: Scalars["ID"]["input"];
   tool?: InputMaybe<CodingTool>;
 };

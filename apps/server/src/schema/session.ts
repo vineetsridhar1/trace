@@ -425,9 +425,6 @@ export const sessionMutations = {
         tool?: CodingTool | null;
         model?: string | null;
         reasoningEffort?: string | null;
-        environmentId?: string | null;
-        runtimeInstanceId?: string | null;
-        clientMutationId?: string | null;
       };
     },
     ctx: Context,

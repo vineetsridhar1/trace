@@ -1,6 +1,6 @@
-import fs from "fs";
-import os from "os";
-import path from "path";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 export function generalWorkspacePath(sessionKey: string, homeDir = os.homedir()): string {
   return path.join(homeDir, "trace", "general-sessions", sessionKey);

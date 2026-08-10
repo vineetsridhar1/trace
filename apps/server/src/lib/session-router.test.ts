@@ -808,7 +808,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
-  it("prepares a repo-less general session on its selected local bridge", async () => {
+  it("prepares a repo-linked general session in scratch space instead of its repo", async () => {
     const router = new SessionRouter();
     const ws = makeWs();
     router.registerRuntime({
@@ -818,7 +818,7 @@ describe("SessionRouter runtime adapter dispatch", () => {
       hostingMode: "local",
       protocolVersion: 3,
       supportedTools: ["codex"],
-      registeredRepoIds: [],
+      registeredRepoIds: ["repo-1"],
     });
     router.bindSession("session-1", "runtime-1");
 
@@ -830,7 +830,12 @@ describe("SessionRouter runtime adapter dispatch", () => {
       hosting: "local",
       adapterType: "local",
       tool: "codex",
-      repo: null,
+      repo: {
+        id: "repo-1",
+        name: "repo",
+        remoteUrl: "https://github.com/acme/repo.git",
+        defaultBranch: "main",
+      },
       createdById: "user-1",
       organizationId: "org-1",
       onFailed: (error) => failures.push(error),
@@ -840,6 +845,65 @@ describe("SessionRouter runtime adapter dispatch", () => {
     expect(failures).toEqual([]);
     const send = ws.send as unknown as ReturnType<typeof vi.fn>;
     expect(JSON.parse(send.mock.calls[0]?.[0] as string)).toMatchObject({
+      type: "prepare_general",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+    });
+  });
+
+  it("prepares a provisioned general session in cloud scratch space", async () => {
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected", runtimeInstanceId: "runtime-cloud" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "connected" };
+      },
+    };
+    const router = new SessionRouter(new RuntimeAdapterRegistry([provisionedAdapter]));
+    const ws = makeWs();
+    router.registerRuntime({
+      id: "runtime-cloud",
+      label: "Cloud",
+      ws,
+      hostingMode: "cloud",
+      organizationId: "org-1",
+      protocolVersion: 3,
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+    });
+    router.bindSession("session-1", "runtime-cloud");
+
+    router.createRuntime({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      sessionGroupKind: "general",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      tool: "codex",
+      repo: {
+        id: "repo-1",
+        name: "repo",
+        remoteUrl: "https://github.com/acme/repo.git",
+        defaultBranch: "main",
+      },
+      createdById: "user-1",
+      organizationId: "org-1",
+      onFailed: vi.fn(),
+    });
+
+    await vi.waitFor(() => expect(ws.send).toHaveBeenCalledOnce());
+    expect(
+      JSON.parse((ws.send as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]),
+    ).toMatchObject({
       type: "prepare_general",
       sessionId: "session-1",
       sessionGroupId: "group-1",

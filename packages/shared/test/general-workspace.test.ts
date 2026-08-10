@@ -1,8 +1,8 @@
-import fs from "fs";
-import os from "os";
-import path from "path";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { generalWorkspacePath, removeGeneralWorkspace } from "./general-workspace.js";
+import { generalWorkspacePath, removeGeneralWorkspace } from "../src/general-workspace.js";
 
 const tempDirs: string[] = [];
 

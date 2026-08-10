@@ -1571,9 +1571,6 @@ input ConvertSessionGroupInput {
   tool: CodingTool
   model: String
   reasoningEffort: String
-  environmentId: ID
-  runtimeInstanceId: ID
-  clientMutationId: String
 }
 
 input CreateDesignSystemInput {

@@ -140,9 +140,6 @@ export type ConvertSessionGroupServiceInput = {
   tool?: CodingTool | null;
   model?: string | null;
   reasoningEffort?: string | null;
-  environmentId?: string | null;
-  runtimeInstanceId?: string | null;
-  clientMutationId?: string | null;
   organizationId: string;
   actorId: string;
   actorType?: ActorType;
@@ -3533,6 +3530,20 @@ export class SessionService {
         }
 
         const session = group.sessions[0]!;
+        const targetTool = input.tool ?? session.tool;
+        const toolChanged = targetTool !== session.tool;
+        const targetModel =
+          input.model != null
+            ? validateModelForTool(targetTool, input.model)
+            : toolChanged
+              ? (getDefaultModel(targetTool) ?? null)
+              : undefined;
+        const targetReasoningEffort =
+          input.reasoningEffort != null
+            ? validateReasoningEffortForTool(targetTool, input.reasoningEffort)
+            : toolChanged
+              ? (getDefaultReasoningEffort(targetTool) ?? null)
+              : undefined;
         let targetChannelId: string | null = null;
         let targetRepoId: string;
         let targetBranch: string | null = null;
@@ -3604,10 +3615,10 @@ export class SessionService {
             repoId: targetRepoId,
             ...(targetBranch ? { branch: targetBranch } : {}),
             readOnlyWorkspace: input.kind === "coding",
-            ...(input.tool ? { tool: input.tool } : {}),
-            ...(input.model !== undefined ? { model: input.model } : {}),
-            ...(input.reasoningEffort !== undefined
-              ? { reasoningEffort: input.reasoningEffort }
+            ...(input.tool ? { tool: targetTool } : {}),
+            ...(targetModel !== undefined ? { model: targetModel } : {}),
+            ...(targetReasoningEffort !== undefined
+              ? { reasoningEffort: targetReasoningEffort }
               : {}),
             ...(targetIsGenerated
               ? { projects: { deleteMany: {} } }
@@ -3657,16 +3668,31 @@ export class SessionService {
     eventService.publishCreated(result.event);
 
     if (targetIsGenerated) {
-      return this.moveSessionInPlace({
-        session: result.session,
-        targetHosting: "cloud",
-        targetRuntimeInstanceId: null,
-        targetRuntimeLabel: null,
-        allowUnverifiedSourceGitStatus: true,
-        bootstrapPrompt: conversionContinuationPrompt(input.kind),
-        actorType: input.actorType ?? "user",
-        actorId: input.actorId,
-      });
+      try {
+        return await this.moveSessionInPlace({
+          session: result.session,
+          targetHosting: "cloud",
+          targetRuntimeInstanceId: null,
+          targetRuntimeLabel: null,
+          allowUnverifiedSourceGitStatus: true,
+          bootstrapPrompt: conversionContinuationPrompt(input.kind),
+          actorType: input.actorType ?? "user",
+          actorId: input.actorId,
+        });
+      } catch (error) {
+        // The durable type change and its event have already committed. Runtime
+        // preparation is a retryable follow-up, so never report the conversion
+        // itself as failed or delete the managed repo it now owns.
+        const message = error instanceof Error ? error.message : String(error);
+        await this.workspaceFailed(
+          result.session.id,
+          `Converted to ${input.kind}, but workspace preparation failed: ${message}`,
+        );
+        return prisma.session.findUniqueOrThrow({
+          where: { id: result.session.id },
+          include: SESSION_INCLUDE,
+        });
+      }
     }
 
     // An agent-initiated conversion is a handoff, not the end of the user's
@@ -7902,7 +7928,7 @@ export class SessionService {
     sourceCommitSha?: string,
   ) {
     // Read and clear pendingRun atomically in a transaction to prevent double-delivery
-    const [session, pendingRun] = await prisma.$transaction(
+    const [session, pendingRun, pendingCleanupRuntimeId] = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
         const prev = await tx.session.findUniqueOrThrow({
           where: { id: sessionId },
@@ -7912,6 +7938,7 @@ export class SessionService {
             sessionStatus: true,
             readOnlyWorkspace: true,
             workdir: true,
+            pendingGeneralWorkspaceCleanupRuntimeId: true,
           },
         });
         const pendingCommand = this.parsePendingCommands(prev.pendingRun)[0] ?? null;
@@ -7939,7 +7966,7 @@ export class SessionService {
           include: SESSION_INCLUDE,
         });
 
-        return [updated, prev.pendingRun] as const;
+        return [updated, prev.pendingRun, prev.pendingGeneralWorkspaceCleanupRuntimeId] as const;
       },
     );
     const setupScript = await this.getChannelSetupScript(session.channelId);
@@ -7988,22 +8015,16 @@ export class SessionService {
       actorId: "system",
     });
     const cleanupRuntimeInstanceId =
-      this.parsePendingCommands(pendingRun)[0]?.cleanupGeneralWorkspaceRuntimeId ?? null;
+      pendingCleanupRuntimeId ??
+      this.parsePendingCommands(pendingRun)[0]?.cleanupGeneralWorkspaceRuntimeId ??
+      null;
     if (cleanupRuntimeInstanceId) {
-      const cleanupResult = await sendRuntimeCommand(
-        cleanupRuntimeInstanceId,
-        {
-          type: "cleanup_general_workspace",
-          sessionId,
-          sessionGroupId: session.sessionGroupId ?? undefined,
-        },
-        session.organizationId,
-      );
-      if (cleanupResult !== "delivered") {
-        console.warn(
-          `[session] failed to clean up the general workspace for ${sessionId}: ${cleanupResult}`,
-        );
-      }
+      await this.deliverGeneralWorkspaceCleanup({
+        sessionId,
+        sessionGroupId: session.sessionGroupId,
+        organizationId: session.organizationId,
+        runtimeInstanceId: cleanupRuntimeInstanceId,
+      });
     }
     if (
       sourceCommitSha &&
@@ -8544,6 +8565,52 @@ export class SessionService {
         await this.markConnectionRestored(session.id, runtimeId);
       }
     }
+
+    const pendingCleanups = await prisma.session.findMany({
+      where: {
+        ...(organizationId ? { organizationId } : {}),
+        pendingGeneralWorkspaceCleanupRuntimeId: runtimeId,
+      },
+      select: { id: true, sessionGroupId: true, organizationId: true },
+    });
+    for (const cleanup of pendingCleanups) {
+      await this.deliverGeneralWorkspaceCleanup({
+        sessionId: cleanup.id,
+        sessionGroupId: cleanup.sessionGroupId,
+        organizationId: cleanup.organizationId,
+        runtimeInstanceId: runtimeId,
+      });
+    }
+  }
+
+  private async deliverGeneralWorkspaceCleanup(input: {
+    sessionId: string;
+    sessionGroupId: string | null;
+    organizationId: string;
+    runtimeInstanceId: string;
+  }): Promise<void> {
+    const cleanupResult = await sendRuntimeCommand(
+      input.runtimeInstanceId,
+      {
+        type: "cleanup_general_workspace",
+        sessionId: input.sessionId,
+        sessionGroupId: input.sessionGroupId ?? undefined,
+      },
+      input.organizationId,
+    );
+    if (cleanupResult === "delivered") {
+      await prisma.session.updateMany({
+        where: {
+          id: input.sessionId,
+          pendingGeneralWorkspaceCleanupRuntimeId: input.runtimeInstanceId,
+        },
+        data: { pendingGeneralWorkspaceCleanupRuntimeId: null },
+      });
+      return;
+    }
+    console.warn(
+      `[session] failed to clean up the general workspace for ${input.sessionId}: ${cleanupResult}`,
+    );
   }
 
   async storeToolSessionId(sessionId: string, toolSessionId: string) {
@@ -9716,10 +9783,9 @@ export class SessionService {
                   type: "run",
                   prompt: bootstrapPrompt,
                   interactionMode: null,
-                  ...(session.hosting === "local" && sourceRuntimeId
-                    ? { cleanupGeneralWorkspaceRuntimeId: sourceRuntimeId }
-                    : {}),
                 } satisfies PendingSessionCommand,
+                pendingGeneralWorkspaceCleanupRuntimeId:
+                  session.hosting === "local" ? sourceRuntimeId : null,
               }),
               toolSessionId: null,
               connection: connJson({
