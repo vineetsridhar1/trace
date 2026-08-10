@@ -1967,6 +1967,7 @@ describe("SessionService", () => {
         expect.objectContaining({
           adapterType: "local",
           environment: expect.objectContaining({ id: "env-1" }),
+          expectedHomeRuntimeId: "runtime-env",
         }),
       );
     });
