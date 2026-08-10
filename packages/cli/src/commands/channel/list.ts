@@ -1,5 +1,5 @@
 import { traceCliOperations } from "@trace/cli-contract";
-import type { Channel, Project, Repo } from "@trace/gql";
+import type { Channel, Repo } from "@trace/gql";
 import { defineCommand, optionBoolean } from "../../runtime.js";
 import { requireOrganizationId } from "../organization.js";
 
@@ -8,12 +8,21 @@ type ChannelView = Pick<
   "id" | "name" | "type" | "visibility" | "baseBranch" | "viewerIsMember"
 > & {
   repo?: Pick<Repo, "id" | "name"> | null;
-  projects: Array<Pick<Project, "id" | "name">>;
 };
 
 export const channelListCommand = defineCommand({
   path: ["channel", "list"],
   description: "List channels available to the session owner",
+  examples: [
+    '"$TRACE_CLI" channel list --json',
+    '"$TRACE_CLI" channel list --member-only --json',
+  ],
+  effects: ["Read-only; does not join channels or change membership."],
+  output: "Channel IDs, names, visibility, and linked repositories.",
+  nextSteps: [
+    'Pass a channel ID to "$TRACE_CLI" session start --channel <channel-id>.',
+    "Use --member-only when selecting a channel for the current user.",
+  ],
   options: [
     {
       name: "memberOnly",

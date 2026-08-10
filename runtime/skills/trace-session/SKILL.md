@@ -36,8 +36,6 @@ an unrelated command or call Trace's GraphQL API directly.
 "$TRACE_CLI" channel list --json
 "$TRACE_CLI" channel list --member-only --json
 "$TRACE_CLI" repo list --json
-"$TRACE_CLI" project list --json
-"$TRACE_CLI" project list --repo <repo-id> --json
 "$TRACE_CLI" session list --json
 "$TRACE_CLI" session list --status active --limit 50 --json
 "$TRACE_CLI" session get <session-id> --json
@@ -48,7 +46,7 @@ Session lists exclude merged and archived sessions by default. Add `--include-me
 
 ## Start sessions
 
-The simplest command starts a new session group in the current session's channel/repo destination:
+The simplest command starts a new session group in the current session's channel with a concrete task prompt:
 
 ```sh
 "$TRACE_CLI" session start "Implement the API tests" --json
@@ -59,22 +57,23 @@ pass `--group <group-id>` explicitly; use the `sessionGroupId` returned by `cont
 group. Do not combine `--group` with group-level options such as `--hosting`, `--runtime`,
 `--environment`, `--branch`, `--visibility`, or `--defer` because the new session inherits them.
 
-For a new group, omitted values default from the current session: kind and visibility; channel,
-repo, and its single project when unambiguous; tool, model, and reasoning effort; and hosting plus
+For a new group, omitted values default from the current session: kind and visibility; channel and
+repo; tool, model, and reasoning effort; and hosting plus
 the agent environment (or local runtime for older sessions without an environment). Explicit flags
 always win. Trace intentionally creates a fresh branch for the new group instead of reusing the
 current worktree branch.
 
-Use `--channel`, `--project`, or `--repo` to choose a destination other than the current one. Prefer
-a channel so the result appears in the normal channel workflow. A channel or project supplies its
-linked repo; if it has none, also pass `--repo`.
+Every new coding session needs a task prompt and a channel. Use `--channel` to choose a destination
+other than the current one; if it is omitted, Trace inherits the current session's channel when one
+exists. A channel supplies its linked repo; if it has none, also pass `--repo`. A repository alone
+is not a session destination.
 
 Select another existing group or an explicit destination when appropriate:
 
 ```sh
 "$TRACE_CLI" session start "Review this work" --group <group-id> --tool codex --json
 "$TRACE_CLI" session start "Fix the login flow" --channel <channel-id> --tool claude_code --json
-"$TRACE_CLI" session start "Refactor the parser" --repo <repo-id> --hosting cloud --json
+"$TRACE_CLI" session start "Refactor the parser" --channel <channel-id> --repo <repo-id> --hosting cloud --json
 "$TRACE_CLI" session start "Build the dashboard" --kind app --hosting cloud --json
 ```
 
@@ -89,7 +88,7 @@ key, reuse it with `--idempotency-key <key>` so a manual retry returns the origi
 of creating a duplicate.
 
 Useful options include `--model`, `--reasoning`, `--hosting`, `--runtime`, `--environment`,
-`--branch`, `--project`, `--ticket`, `--visibility`, `--interaction-mode`, and `--defer`. Explicit
+`--branch`, `--ticket`, `--visibility`, `--interaction-mode`, and `--defer`. Explicit
 cloud hosting fails when cloud is unavailable; it is never silently changed to local. Use
 `session start --help` for the complete syntax.
 

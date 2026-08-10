@@ -5,6 +5,14 @@ import { printSession, resolveSessionId, type SessionView } from "./shared.js";
 export const sessionStopCommand = defineCommand({
   path: ["session", "stop"],
   description: "Stop a running session",
+  examples: [
+    '"$TRACE_CLI" session stop <session-id> --json',
+    '"$TRACE_CLI" session stop --self --json',
+  ],
+  effects: ["Stops the selected running session."],
+  output: "The stopped session and its final reported status.",
+  nextSteps: ['Run "$TRACE_CLI" session get <session-id> --json to confirm its status.'],
+  notes: ["Stopping --self can end this agent's own ability to continue work."],
   positionals: [{ name: "session-id" }],
   options: [
     { name: "self", flag: "--self", kind: "boolean", description: "Target the current session" },

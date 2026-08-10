@@ -6,6 +6,14 @@ import { getSession, resolveSessionId, type GroupView } from "./shared.js";
 export const sessionArchiveCommand = defineCommand({
   path: ["session", "archive"],
   description: "Archive a session's group",
+  examples: [
+    '"$TRACE_CLI" session archive <session-id> --json',
+    '"$TRACE_CLI" session archive --self --json',
+  ],
+  effects: ["Archives the selected session's entire group."],
+  output: "The archived session group and its archive timestamp.",
+  nextSteps: ['Run "$TRACE_CLI" session list --include-archived --json to find the group again.'],
+  notes: ["Archiving --self can end this agent's own ability to continue work."],
   positionals: [{ name: "session-id" }],
   options: [
     { name: "self", flag: "--self", kind: "boolean", description: "Target the current session" },

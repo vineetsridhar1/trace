@@ -6,6 +6,17 @@ import { AGENT_STATUSES, CODING_TOOLS, type SessionView } from "./shared.js";
 export const sessionListCommand = defineCommand({
   path: ["session", "list"],
   description: "List sessions visible to the session owner",
+  examples: [
+    '"$TRACE_CLI" session list --status active --limit 50 --json',
+    '"$TRACE_CLI" session list --channel <channel-id> --json',
+  ],
+  effects: ["Read-only; does not start, stop, or modify sessions."],
+  output: "Matching session IDs, names, agent statuses, and coding tools.",
+  nextSteps: [
+    'Run "$TRACE_CLI" session get <session-id> --json for details.',
+    'Run "$TRACE_CLI" session events <session-id> --limit 50 --json to inspect activity.',
+  ],
+  notes: ["Archived and merged sessions are excluded unless explicitly included."],
   options: [
     {
       name: "status",

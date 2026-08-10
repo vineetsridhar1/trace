@@ -12,6 +12,23 @@ const UPLOAD_TIMEOUT_MS = 2 * 60 * 1_000;
 export const artifactCommand = defineCommand({
   path: ["artifact", "push"],
   description: "Upload an immutable artifact from an active Trace invocation",
+  examples: [
+    '"$TRACE_CLI" artifact push visual-plan docs/plan --key primary --json',
+    '"$TRACE_CLI" artifact push video output/demo.mp4 --json',
+  ],
+  effects: [
+    "Packages the supplied file or directory and creates an immutable Trace artifact.",
+    "Retries transient upload failures once with the same idempotency key.",
+  ],
+  output: "The artifact ID, type, key, and idempotency key for a safe retry.",
+  nextSteps: [
+    "Use the artifact type's required skill before preparing or revising its source files.",
+    "Keep the returned idempotency key when retrying a failed upload.",
+  ],
+  notes: [
+    "Video artifacts must be one validated video file; other artifact types may use a file or directory.",
+    "The compressed upload must not exceed 64 MiB.",
+  ],
   positionals: [
     { name: "type", required: true },
     { name: "file-or-directory", required: true },

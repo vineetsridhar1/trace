@@ -936,6 +936,45 @@ describe("SessionService", () => {
       ).rejects.toThrow("Project does not belong to this organization");
     });
 
+    it("requires a non-empty prompt for coding sessions", async () => {
+      prismaMock.channel.findUnique.mockResolvedValueOnce({
+        id: "channel-1",
+        organizationId: "org-1",
+        type: "coding",
+        repoId: "repo-1",
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          clientSource: "cli",
+          kind: "coding",
+          channelId: "channel-1",
+          prompt: "   ",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Coding sessions require a non-empty task prompt");
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+    });
+
+    it("requires a channel for a new coding session group", async () => {
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          clientSource: "cli",
+          kind: "coding",
+          repoId: "repo-1",
+          prompt: "Build checkout",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("New coding session groups require a channel");
+
+      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+    });
+
     it("rejects app sessions linked to a user repo", async () => {
       await expect(
         service.start({

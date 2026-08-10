@@ -3881,6 +3881,10 @@ export class SessionService {
     if (resolvedChannel && resolvedChannel.organizationId !== input.organizationId) {
       throw new Error("Channel does not belong to this organization");
     }
+    const requiresCompleteCodingInput = input.clientSource === "cli" && resolvedKind === "coding";
+    if (requiresCompleteCodingInput && !input.prompt?.trim()) {
+      throw new ValidationError("Coding sessions require a non-empty task prompt");
+    }
     const resolvedProject = input.projectId
       ? await prisma.project.findFirst({
           where: {
@@ -3896,6 +3900,11 @@ export class SessionService {
         resolvedChannelId
           ? "Project is not linked to the selected channel"
           : "Project does not belong to this organization",
+      );
+    }
+    if (requiresCompleteCodingInput && !existingGroup && !resolvedChannelId) {
+      throw new ValidationError(
+        "New coding session groups require a channel. Select a channel before starting the session.",
       );
     }
 

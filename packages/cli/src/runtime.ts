@@ -209,7 +209,9 @@ export function parseCommandInput(
     const missing = positionalDefinitions.find(
       (definition, index) => definition.required && index >= positionals.length,
     );
-    usage(`${missing?.name ?? "Argument"} is required`);
+    usage(
+      `Missing required input: <${missing?.name ?? "argument"}>. Run ${TRACE_CLI_EXECUTABLE} ${command.path.join(" ")} --help for required arguments and examples.`,
+    );
   }
   if (variadicIndex === -1 && positionals.length > positionalDefinitions.length) {
     usage(`Unexpected argument: ${positionals[positionalDefinitions.length]}`);

@@ -3,6 +3,13 @@ import { defineCommand } from "../runtime.js";
 export const contextCommand = defineCommand({
   path: ["context"],
   description: "Show the selected Trace server, organization, and session context",
+  examples: ['"$TRACE_CLI" context --json'],
+  effects: ["Read-only; does not change Trace state."],
+  output: "The selected server, organization, session, session group, and authentication state.",
+  nextSteps: [
+    'Run "$TRACE_CLI" channel list --member-only --json to choose a channel.',
+    'Run "$TRACE_CLI" session get --json to inspect the current session.',
+  ],
   async run(ctx) {
     const value = {
       serverUrl: ctx.env.TRACE_API_URL || ctx.env.TRACE_SERVER_URL || null,

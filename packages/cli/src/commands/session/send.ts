@@ -8,6 +8,17 @@ import { resolveSessionId, type EventView } from "./shared.js";
 export const sessionSendCommand = defineCommand({
   path: ["session", "send"],
   description: "Send or queue a message for a session",
+  examples: [
+    '"$TRACE_CLI" session send <session-id> "Please also cover migrations" --queue --json',
+    '"$TRACE_CLI" session send --self "Continue with the revised scope" --json',
+  ],
+  effects: [
+    "Sends a message to the session, or queues it when --queue is supplied.",
+    "A non-queued message can interrupt an active turn.",
+  ],
+  output: "The created event, or the queued message and its position.",
+  nextSteps: ['Run "$TRACE_CLI" session events <session-id> --limit 50 --json to confirm delivery.'],
+  notes: ["Use --queue for an active session unless the user explicitly wants an interruption."],
   positionals: [{ name: "session-id" }, { name: "message", required: true, variadic: true }],
   options: [
     { name: "self", flag: "--self", kind: "boolean", description: "Target the current session" },
@@ -31,7 +42,11 @@ export const sessionSendCommand = defineCommand({
       ? resolveSessionId(ctx)
       : resolveSessionId(ctx, values.shift());
     const text = values.join(" ").trim();
-    if (!text) usage("Message text is required");
+    if (!text) {
+      usage(
+        'A message is required. Provide text after <session-id>, or use --self "<message>" inside a Trace session.',
+      );
+    }
     const interactionMode = optionString(input, "interactionMode") ?? null;
     const client = await ctx.client();
     if (optionBoolean(input, "queue")) {

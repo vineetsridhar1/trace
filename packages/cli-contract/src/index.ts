@@ -127,7 +127,6 @@ export const traceCliOperations = {
       channels(organizationId: $organizationId, memberOnly: $memberOnly) {
         id name type visibility baseBranch viewerIsMember
         repo { id name }
-        projects { id name }
       }
     }`,
   }),
@@ -139,16 +138,6 @@ export const traceCliOperations = {
     argumentPaths: ["organizationId"],
     document: `query TraceCliRepos($organizationId: ID!) {
       repos(organizationId: $organizationId) { id name provider remoteUrl defaultBranch }
-    }`,
-  }),
-  projects: operation({
-    name: "TraceCliProjects",
-    type: "query",
-    rootField: "projects",
-    capability: "resource:list",
-    argumentPaths: ["organizationId", "repoId"],
-    document: `query TraceCliProjects($organizationId: ID!, $repoId: ID) {
-      projects(organizationId: $organizationId, repoId: $repoId) { id name repo { id name } }
     }`,
   }),
   session: operation({
@@ -170,7 +159,6 @@ export const traceCliOperations = {
         id tool model reasoningEffort hosting
         channel { id name repo { id name } }
         repo { id name }
-        projects { id }
         connection { environmentId runtimeInstanceId }
         sessionGroup { kind visibility }
       }
@@ -184,16 +172,6 @@ export const traceCliOperations = {
     argumentPaths: ["id"],
     document: `query TraceCliStartChannel($id: ID!) {
       channel(id: $id) { id name repo { id name } }
-    }`,
-  }),
-  startProject: operation({
-    name: "TraceCliStartProject",
-    type: "query",
-    rootField: "project",
-    capability: "resource:list",
-    argumentPaths: ["id"],
-    document: `query TraceCliStartProject($id: ID!) {
-      project(id: $id) { id name repo { id name } }
     }`,
   }),
   sessions: operation({
@@ -236,7 +214,6 @@ export const traceCliOperations = {
       "input.ticketId",
       "input.channelId",
       "input.sessionGroupId",
-      "input.projectId",
       "input.prompt",
       "input.interactionMode",
     ],

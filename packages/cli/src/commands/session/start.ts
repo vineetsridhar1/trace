@@ -14,6 +14,7 @@ import {
   SESSION_KINDS,
   VISIBILITIES,
   printSession,
+  requireStartPrompt,
   resolveStartDefaultsAndDestination,
   sessionUiPath,
   startSessionWithRetry,
@@ -22,6 +23,25 @@ import {
 export const sessionStartCommand = defineCommand({
   path: ["session", "start"],
   description: "Start a new session group or add a session to an explicit group",
+  examples: [
+    '"$TRACE_CLI" session start "Implement the API tests" --json',
+    '"$TRACE_CLI" session start "Fix the login flow" --channel <channel-id> --tool codex --json',
+    '"$TRACE_CLI" session start "Review this work" --group <group-id> --json',
+  ],
+  effects: [
+    "Creates a session and, unless --group is supplied, creates a new session group.",
+    "A prompt requests the initial run in the same operation.",
+  ],
+  output: "The new session, whether an initial run was requested, its UI path, and an idempotency key.",
+  nextSteps: [
+    'Run "$TRACE_CLI" session events <session-id> --limit 50 --json to monitor progress.',
+    'Use "$TRACE_CLI" session send <session-id> "<message>" --queue --json for follow-up work.',
+  ],
+  notes: [
+    "A new coding group needs a channel and task prompt; the channel can be inherited from the current session when available.",
+    "--repo validates or supplies the repository for the selected or inherited channel; it never selects a destination by itself.",
+    "Do not call session run with the same initial prompt, because that can duplicate the work.",
+  ],
   positionals: [{ name: "prompt", variadic: true }],
   options: [
     {
@@ -37,13 +57,6 @@ export const sessionStartCommand = defineCommand({
       kind: "string",
       valueName: "ID",
       description: "Create the group in this channel",
-    },
-    {
-      name: "project",
-      flag: "--project",
-      kind: "string",
-      valueName: "ID",
-      description: "Link the new group to this project",
     },
     {
       name: "repo",
@@ -153,7 +166,6 @@ export const sessionStartCommand = defineCommand({
     const input: StartSessionInput = {
       sessionGroupId: optionString(parsed, "group"),
       channelId: optionString(parsed, "channel"),
-      projectId: optionString(parsed, "project"),
       repoId: optionString(parsed, "repo"),
       tool: optionString(parsed, "tool") as CodingTool | undefined,
       model: optionString(parsed, "model"),
@@ -175,9 +187,10 @@ export const sessionStartCommand = defineCommand({
       if (input.prompt) usage("Provide the prompt either positionally or with --prompt, not both");
       input.prompt = positionalPrompt;
     }
+    input.prompt = requireStartPrompt(input.prompt);
 
     const hasGroup = parsed.providedOptions.has("group");
-    const destinationOptions = ["channel", "project", "repo"];
+    const destinationOptions = ["channel", "repo"];
     const groupConfigurationOptions = [
       "kind",
       "hosting",
@@ -188,7 +201,7 @@ export const sessionStartCommand = defineCommand({
       "defer",
     ];
     if (hasGroup && destinationOptions.some((name) => parsed.providedOptions.has(name))) {
-      usage("--group cannot be combined with --channel, --project, or --repo");
+      usage("--group cannot be combined with --channel or --repo");
     }
     if (hasGroup && groupConfigurationOptions.some((name) => parsed.providedOptions.has(name))) {
       usage(

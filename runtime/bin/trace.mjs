@@ -106,7 +106,6 @@ var traceCliOperations = {
       channels(organizationId: $organizationId, memberOnly: $memberOnly) {
         id name type visibility baseBranch viewerIsMember
         repo { id name }
-        projects { id name }
       }
     }`
   }),
@@ -118,16 +117,6 @@ var traceCliOperations = {
     argumentPaths: ["organizationId"],
     document: `query TraceCliRepos($organizationId: ID!) {
       repos(organizationId: $organizationId) { id name provider remoteUrl defaultBranch }
-    }`
-  }),
-  projects: operation({
-    name: "TraceCliProjects",
-    type: "query",
-    rootField: "projects",
-    capability: "resource:list",
-    argumentPaths: ["organizationId", "repoId"],
-    document: `query TraceCliProjects($organizationId: ID!, $repoId: ID) {
-      projects(organizationId: $organizationId, repoId: $repoId) { id name repo { id name } }
     }`
   }),
   session: operation({
@@ -149,7 +138,6 @@ var traceCliOperations = {
         id tool model reasoningEffort hosting
         channel { id name repo { id name } }
         repo { id name }
-        projects { id }
         connection { environmentId runtimeInstanceId }
         sessionGroup { kind visibility }
       }
@@ -163,16 +151,6 @@ var traceCliOperations = {
     argumentPaths: ["id"],
     document: `query TraceCliStartChannel($id: ID!) {
       channel(id: $id) { id name repo { id name } }
-    }`
-  }),
-  startProject: operation({
-    name: "TraceCliStartProject",
-    type: "query",
-    rootField: "project",
-    capability: "resource:list",
-    argumentPaths: ["id"],
-    document: `query TraceCliStartProject($id: ID!) {
-      project(id: $id) { id name repo { id name } }
     }`
   }),
   sessions: operation({
@@ -215,7 +193,6 @@ var traceCliOperations = {
       "input.ticketId",
       "input.channelId",
       "input.sessionGroupId",
-      "input.projectId",
       "input.prompt",
       "input.interactionMode"
     ],
@@ -672,7 +649,9 @@ function parseCommandInput(command, args) {
     const missing = positionalDefinitions.find(
       (definition, index) => definition.required && index >= positionals.length
     );
-    usage(`${missing?.name ?? "Argument"} is required`);
+    usage(
+      `Missing required input: <${missing?.name ?? "argument"}>. Run ${TRACE_CLI_EXECUTABLE} ${command.path.join(" ")} --help for required arguments and examples.`
+    );
   }
   if (variadicIndex === -1 && positionals.length > positionalDefinitions.length) {
     usage(`Unexpected argument: ${positionals[positionalDefinitions.length]}`);
@@ -815,6 +794,23 @@ var UPLOAD_TIMEOUT_MS = 2 * 60 * 1e3;
 var artifactCommand = defineCommand({
   path: ["artifact", "push"],
   description: "Upload an immutable artifact from an active Trace invocation",
+  examples: [
+    '"$TRACE_CLI" artifact push visual-plan docs/plan --key primary --json',
+    '"$TRACE_CLI" artifact push video output/demo.mp4 --json'
+  ],
+  effects: [
+    "Packages the supplied file or directory and creates an immutable Trace artifact.",
+    "Retries transient upload failures once with the same idempotency key."
+  ],
+  output: "The artifact ID, type, key, and idempotency key for a safe retry.",
+  nextSteps: [
+    "Use the artifact type's required skill before preparing or revising its source files.",
+    "Keep the returned idempotency key when retrying a failed upload."
+  ],
+  notes: [
+    "Video artifacts must be one validated video file; other artifact types may use a file or directory.",
+    "The compressed upload must not exceed 64 MiB."
+  ],
   positionals: [
     { name: "type", required: true },
     { name: "file-or-directory", required: true }
@@ -931,6 +927,16 @@ function requireOrganizationId(value) {
 var channelListCommand = defineCommand({
   path: ["channel", "list"],
   description: "List channels available to the session owner",
+  examples: [
+    '"$TRACE_CLI" channel list --json',
+    '"$TRACE_CLI" channel list --member-only --json'
+  ],
+  effects: ["Read-only; does not join channels or change membership."],
+  output: "Channel IDs, names, visibility, and linked repositories.",
+  nextSteps: [
+    'Pass a channel ID to "$TRACE_CLI" session start --channel <channel-id>.',
+    "Use --member-only when selecting a channel for the current user."
+  ],
   options: [
     {
       name: "memberOnly",
@@ -962,6 +968,13 @@ var channelListCommand = defineCommand({
 var contextCommand = defineCommand({
   path: ["context"],
   description: "Show the selected Trace server, organization, and session context",
+  examples: ['"$TRACE_CLI" context --json'],
+  effects: ["Read-only; does not change Trace state."],
+  output: "The selected server, organization, session, session group, and authentication state.",
+  nextSteps: [
+    'Run "$TRACE_CLI" channel list --member-only --json to choose a channel.',
+    'Run "$TRACE_CLI" session get --json to inspect the current session.'
+  ],
   async run(ctx) {
     const value = {
       serverUrl: ctx.env.TRACE_API_URL || ctx.env.TRACE_SERVER_URL || null,
@@ -1242,40 +1255,17 @@ var integrationCommands = [
   integrationRemoveCommand
 ];
 
-// src/commands/project/list.ts
-var projectListCommand = defineCommand({
-  path: ["project", "list"],
-  description: "List projects in the current organization",
-  options: [
-    {
-      name: "repo",
-      flag: "--repo",
-      kind: "string",
-      valueName: "ID",
-      description: "Only include projects linked to this repository"
-    }
-  ],
-  async run(ctx, input) {
-    const client = await ctx.client();
-    const variables = {
-      organizationId: requireOrganizationId(client.organizationId),
-      repoId: optionString(input, "repo") ?? null
-    };
-    const result = await client.graphql(
-      traceCliOperations.projects,
-      variables
-    );
-    ctx.output(
-      { projects: result.projects },
-      result.projects.length ? result.projects.map((project) => `${project.id}	${project.name}	${project.repo?.name ?? "no repo"}`).join("\n") : "No projects found"
-    );
-  }
-});
-
 // src/commands/repo/list.ts
 var repoListCommand = defineCommand({
   path: ["repo", "list"],
   description: "List repositories in the current organization",
+  examples: ['"$TRACE_CLI" repo list --json'],
+  effects: ["Read-only; does not clone, modify, or connect repositories."],
+  output: "Repository IDs, providers, remote URLs, and default branches.",
+  nextSteps: [
+    'Pass a repository ID to "$TRACE_CLI" session start --repo <repo-id>.',
+    'Run "$TRACE_CLI" channel list --json to find a channel already linked to a repository.'
+  ],
   async run(ctx) {
     const client = await ctx.client();
     const variables = { organizationId: requireOrganizationId(client.organizationId) };
@@ -1311,7 +1301,16 @@ var SESSION_KINDS = [
 var HOSTING_MODES = ["cloud", "local"];
 var VISIBILITIES = ["public", "private"];
 function resolveSessionId(ctx, explicit) {
-  return explicit || ctx.env.TRACE_SESSION_ID || usage("Session ID is required outside a Trace session");
+  return explicit || ctx.env.TRACE_SESSION_ID || usage(
+    'A session ID is required. Provide <session-id>, use --self inside a Trace session, or run "$TRACE_CLI" session list --json to find one.'
+  );
+}
+function requireStartPrompt(prompt) {
+  const value = prompt?.trim();
+  if (value) return value;
+  usage(
+    'A task prompt is required to start a session. Provide it after session start or with --prompt "<task>".'
+  );
 }
 function printSession(session) {
   return [
@@ -1336,7 +1335,7 @@ async function getSession(ctx, id) {
 }
 async function resolveStartDefaultsAndDestination(client, input, currentSessionId) {
   if (input.sessionGroupId) return;
-  const hasExplicitDestination = !!input.channelId || !!input.projectId || !!input.repoId;
+  const hasExplicitDestination = !!input.channelId;
   const hasExplicitGeneratedKind = !!input.kind && input.kind !== "coding";
   const hasExplicitTool = !!input.tool;
   const hasExplicitRuntimeSelection = !!input.environmentId || !!input.runtimeInstanceId || !!input.hosting;
@@ -1362,22 +1361,19 @@ async function resolveStartDefaultsAndDestination(client, input, currentSessionI
     if (!hasExplicitDestination && (!input.kind || input.kind === "coding")) {
       input.channelId = current.channel?.id;
       input.repoId = current.repo?.id;
-      if (current.projects.length === 1) input.projectId = current.projects[0]?.id;
       impliedRepo = current.channel?.repo ?? current.repo ?? null;
     }
   }
   if (input.kind && input.kind !== "coding") return;
-  if (!input.channelId && !input.projectId && !input.repoId) {
-    usage("Starting a coding session group requires --channel, --project, or --repo");
+  if (!input.channelId) {
+    usage(
+      'A channel is required to start a coding session. Provide --channel <channel-id>, or start from a session already in a channel. Discover channels with "$TRACE_CLI" channel list --member-only --json.'
+    );
   }
   if (input.channelId && !impliedRepo) {
     const result = await client.graphql(traceCliOperations.startChannel, { id: input.channelId });
     if (!result.channel) usage(`Channel not found: ${input.channelId}`);
     impliedRepo = result.channel.repo ?? null;
-  } else if (input.projectId && !impliedRepo) {
-    const result = await client.graphql(traceCliOperations.startProject, { id: input.projectId });
-    if (!result.project) usage(`Project not found: ${input.projectId}`);
-    impliedRepo = result.project.repo ?? null;
   }
   if (impliedRepo && input.repoId && input.repoId !== impliedRepo.id) {
     usage(
@@ -1386,7 +1382,9 @@ async function resolveStartDefaultsAndDestination(client, input, currentSessionI
   }
   input.repoId ??= impliedRepo?.id;
   if (!input.repoId) {
-    usage("The selected destination has no repository; add --repo for a coding session");
+    usage(
+      'The selected channel has no linked repository. Provide --repo <repo-id>, or choose a coding channel with a repository from "$TRACE_CLI" channel list --json.'
+    );
   }
 }
 function sessionUiPath(session) {
@@ -1423,6 +1421,14 @@ async function startSessionWithRetry(client, input) {
 var sessionArchiveCommand = defineCommand({
   path: ["session", "archive"],
   description: "Archive a session's group",
+  examples: [
+    '"$TRACE_CLI" session archive <session-id> --json',
+    '"$TRACE_CLI" session archive --self --json'
+  ],
+  effects: ["Archives the selected session's entire group."],
+  output: "The archived session group and its archive timestamp.",
+  nextSteps: ['Run "$TRACE_CLI" session list --include-archived --json to find the group again.'],
+  notes: ["Archiving --self can end this agent's own ability to continue work."],
   positionals: [{ name: "session-id" }],
   options: [
     { name: "self", flag: "--self", kind: "boolean", description: "Target the current session" }
@@ -1447,6 +1453,17 @@ var sessionArchiveCommand = defineCommand({
 var sessionEventsCommand = defineCommand({
   path: ["session", "events"],
   description: "Read a bounded event snapshot and optionally follow the session stream",
+  examples: [
+    '"$TRACE_CLI" session events <session-id> --limit 50 --json',
+    '"$TRACE_CLI" session events <session-id> --follow --json'
+  ],
+  effects: ["Read-only; --follow keeps an event subscription open until it is stopped."],
+  output: "A bounded event snapshot and, with --follow, one JSON event per subsequent line.",
+  nextSteps: [
+    "Use the snapshot to assess progress, then stop following once the requested condition is met.",
+    'Run "$TRACE_CLI" session get <session-id> --json for the current status.'
+  ],
+  notes: ["Use --follow only for continuous monitoring; otherwise keep snapshots bounded with --limit."],
   positionals: [{ name: "session-id" }],
   options: [
     {
@@ -1511,6 +1528,16 @@ var sessionEventsCommand = defineCommand({
 var sessionGetCommand = defineCommand({
   path: ["session", "get"],
   description: "Get a session, defaulting to TRACE_SESSION_ID",
+  examples: [
+    '"$TRACE_CLI" session get --json',
+    '"$TRACE_CLI" session get <session-id> --json'
+  ],
+  effects: ["Read-only; does not change the session."],
+  output: "The session's status, tool, hosting, group, channel, repository, and branch.",
+  nextSteps: [
+    'Run "$TRACE_CLI" session events <session-id> --limit 50 --json for recent activity.',
+    'Run "$TRACE_CLI" session send <session-id> "<message>" --queue --json for follow-up work.'
+  ],
   positionals: [{ name: "session-id" }],
   async run(ctx, input) {
     const session = await getSession(ctx, resolveSessionId(ctx, input.positionals[0]));
@@ -1522,6 +1549,17 @@ var sessionGetCommand = defineCommand({
 var sessionListCommand = defineCommand({
   path: ["session", "list"],
   description: "List sessions visible to the session owner",
+  examples: [
+    '"$TRACE_CLI" session list --status active --limit 50 --json',
+    '"$TRACE_CLI" session list --channel <channel-id> --json'
+  ],
+  effects: ["Read-only; does not start, stop, or modify sessions."],
+  output: "Matching session IDs, names, agent statuses, and coding tools.",
+  nextSteps: [
+    'Run "$TRACE_CLI" session get <session-id> --json for details.',
+    'Run "$TRACE_CLI" session events <session-id> --limit 50 --json to inspect activity.'
+  ],
+  notes: ["Archived and merged sessions are excluded unless explicitly included."],
   options: [
     {
       name: "status",
@@ -1604,6 +1642,14 @@ var sessionListCommand = defineCommand({
 var sessionRunCommand = defineCommand({
   path: ["session", "run"],
   description: "Start or resume a session run",
+  examples: [
+    '"$TRACE_CLI" session run <session-id> "Continue with the revised scope" --json',
+    '"$TRACE_CLI" session run --self --json'
+  ],
+  effects: ["Requests that the selected session start or resume work."],
+  output: "The updated session status and execution settings.",
+  nextSteps: ['Run "$TRACE_CLI" session events <session-id> --limit 50 --json to monitor progress.'],
+  notes: ["Do not use this to repeat the prompt already supplied to session start."],
   positionals: [{ name: "session-id" }, { name: "prompt", variadic: true }],
   options: [
     { name: "self", flag: "--self", kind: "boolean", description: "Target the current session" },
@@ -1637,6 +1683,17 @@ import { randomUUID as randomUUID2 } from "node:crypto";
 var sessionSendCommand = defineCommand({
   path: ["session", "send"],
   description: "Send or queue a message for a session",
+  examples: [
+    '"$TRACE_CLI" session send <session-id> "Please also cover migrations" --queue --json',
+    '"$TRACE_CLI" session send --self "Continue with the revised scope" --json'
+  ],
+  effects: [
+    "Sends a message to the session, or queues it when --queue is supplied.",
+    "A non-queued message can interrupt an active turn."
+  ],
+  output: "The created event, or the queued message and its position.",
+  nextSteps: ['Run "$TRACE_CLI" session events <session-id> --limit 50 --json to confirm delivery.'],
+  notes: ["Use --queue for an active session unless the user explicitly wants an interruption."],
   positionals: [{ name: "session-id" }, { name: "message", required: true, variadic: true }],
   options: [
     { name: "self", flag: "--self", kind: "boolean", description: "Target the current session" },
@@ -1658,7 +1715,11 @@ var sessionSendCommand = defineCommand({
     const values = [...input.positionals];
     const id = optionBoolean(input, "self") ? resolveSessionId(ctx) : resolveSessionId(ctx, values.shift());
     const text = values.join(" ").trim();
-    if (!text) usage("Message text is required");
+    if (!text) {
+      usage(
+        'A message is required. Provide text after <session-id>, or use --self "<message>" inside a Trace session.'
+      );
+    }
     const interactionMode = optionString(input, "interactionMode") ?? null;
     const client = await ctx.client();
     if (optionBoolean(input, "queue")) {
@@ -1690,6 +1751,25 @@ import { randomUUID as randomUUID3 } from "node:crypto";
 var sessionStartCommand = defineCommand({
   path: ["session", "start"],
   description: "Start a new session group or add a session to an explicit group",
+  examples: [
+    '"$TRACE_CLI" session start "Implement the API tests" --json',
+    '"$TRACE_CLI" session start "Fix the login flow" --channel <channel-id> --tool codex --json',
+    '"$TRACE_CLI" session start "Review this work" --group <group-id> --json'
+  ],
+  effects: [
+    "Creates a session and, unless --group is supplied, creates a new session group.",
+    "A prompt requests the initial run in the same operation."
+  ],
+  output: "The new session, whether an initial run was requested, its UI path, and an idempotency key.",
+  nextSteps: [
+    'Run "$TRACE_CLI" session events <session-id> --limit 50 --json to monitor progress.',
+    'Use "$TRACE_CLI" session send <session-id> "<message>" --queue --json for follow-up work.'
+  ],
+  notes: [
+    "A new coding group needs a channel and task prompt; the channel can be inherited from the current session when available.",
+    "--repo validates or supplies the repository for the selected or inherited channel; it never selects a destination by itself.",
+    "Do not call session run with the same initial prompt, because that can duplicate the work."
+  ],
   positionals: [{ name: "prompt", variadic: true }],
   options: [
     {
@@ -1705,13 +1785,6 @@ var sessionStartCommand = defineCommand({
       kind: "string",
       valueName: "ID",
       description: "Create the group in this channel"
-    },
-    {
-      name: "project",
-      flag: "--project",
-      kind: "string",
-      valueName: "ID",
-      description: "Link the new group to this project"
     },
     {
       name: "repo",
@@ -1821,7 +1894,6 @@ var sessionStartCommand = defineCommand({
     const input = {
       sessionGroupId: optionString(parsed, "group"),
       channelId: optionString(parsed, "channel"),
-      projectId: optionString(parsed, "project"),
       repoId: optionString(parsed, "repo"),
       tool: optionString(parsed, "tool"),
       model: optionString(parsed, "model"),
@@ -1843,8 +1915,9 @@ var sessionStartCommand = defineCommand({
       if (input.prompt) usage("Provide the prompt either positionally or with --prompt, not both");
       input.prompt = positionalPrompt;
     }
+    input.prompt = requireStartPrompt(input.prompt);
     const hasGroup = parsed.providedOptions.has("group");
-    const destinationOptions = ["channel", "project", "repo"];
+    const destinationOptions = ["channel", "repo"];
     const groupConfigurationOptions = [
       "kind",
       "hosting",
@@ -1855,7 +1928,7 @@ var sessionStartCommand = defineCommand({
       "defer"
     ];
     if (hasGroup && destinationOptions.some((name) => parsed.providedOptions.has(name))) {
-      usage("--group cannot be combined with --channel, --project, or --repo");
+      usage("--group cannot be combined with --channel or --repo");
     }
     if (hasGroup && groupConfigurationOptions.some((name) => parsed.providedOptions.has(name))) {
       usage(
@@ -1887,6 +1960,14 @@ var sessionStartCommand = defineCommand({
 var sessionStopCommand = defineCommand({
   path: ["session", "stop"],
   description: "Stop a running session",
+  examples: [
+    '"$TRACE_CLI" session stop <session-id> --json',
+    '"$TRACE_CLI" session stop --self --json'
+  ],
+  effects: ["Stops the selected running session."],
+  output: "The stopped session and its final reported status.",
+  nextSteps: ['Run "$TRACE_CLI" session get <session-id> --json to confirm its status.'],
+  notes: ["Stopping --self can end this agent's own ability to continue work."],
   positionals: [{ name: "session-id" }],
   options: [
     { name: "self", flag: "--self", kind: "boolean", description: "Target the current session" }
@@ -1920,7 +2001,6 @@ var commands = [
   ...integrationCommands,
   channelListCommand,
   repoListCommand,
-  projectListCommand,
   ...sessionCommands,
   artifactCommand
 ];
@@ -1949,6 +2029,12 @@ var commandGroups = [
   {
     name: "session",
     description: "Discover and control Trace AI sessions",
+    workflow: [
+      'Run "$TRACE_CLI" session list --json to find a session, or "$TRACE_CLI" context --json for the current one.',
+      'Run "$TRACE_CLI" session get <session-id> --json to inspect its status and destination.',
+      'Use "$TRACE_CLI" session events <session-id> --limit 50 --json to assess progress before intervening.',
+      "Start, message, run, stop, or archive only when the requested action requires it."
+    ],
     examples: [
       '"$TRACE_CLI" session list --json',
       '"$TRACE_CLI" session start "Implement the API tests" --json'
@@ -1959,19 +2045,33 @@ var commandGroups = [
   },
   {
     name: "channel",
-    description: "Discover channels available to the session owner"
+    description: "Discover channels available to the session owner",
+    workflow: [
+      'Run "$TRACE_CLI" channel list --member-only --json to list eligible destinations.',
+      'Choose a channel ID and pass it to "$TRACE_CLI" session start --channel <channel-id>.'
+    ],
+    examples: ['"$TRACE_CLI" channel list --member-only --json'],
+    notes: ["Channels are the collaboration and session destination in Trace."]
   },
   {
     name: "repo",
-    description: "Discover repositories in the current organization"
-  },
-  {
-    name: "project",
-    description: "Discover projects in the current organization"
+    description: "Discover repositories in the current organization",
+    workflow: [
+      'Run "$TRACE_CLI" repo list --json to find a repository ID.',
+      'Use the repository ID with a channel that has no linked repository: "$TRACE_CLI" session start --channel <channel-id> --repo <repo-id>.'
+    ],
+    examples: ['"$TRACE_CLI" repo list --json'],
+    notes: ["Repositories support coding channels; they are not standalone session destinations."]
   },
   {
     name: "artifact",
     description: "Validate and upload immutable Trace artifacts",
+    workflow: [
+      "Use the required artifact skill to prepare and validate the source file or directory.",
+      'Run "$TRACE_CLI" artifact push <type> <file-or-directory> --json once the artifact is ready.',
+      "Keep the returned idempotency key for a safe retry if the upload fails."
+    ],
+    examples: ['"$TRACE_CLI" artifact push visual-plan docs/plan --key primary --json'],
     notes: [
       "Artifact types can impose additional validation; use the relevant artifact skill when instructed."
     ]
