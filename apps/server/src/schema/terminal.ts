@@ -75,6 +75,8 @@ export const terminalMutations = {
       terminalId: args.terminalId,
       organizationId: requireOrgContext(ctx),
       userId: ctx.userId,
+      agentSessionId: ctx.agentSessionId,
+      agentSessionId: ctx.agentSessionId,
     });
   },
   sendTerminalInput: async (_parent: unknown, args: { terminalId: string; data: string }, ctx: Context) => {

@@ -25,7 +25,9 @@ class TerminalService {
 
   private validateInput(data: string): void {
     if (Buffer.byteLength(data, "utf8") > TerminalService.MAX_INPUT_BYTES) throw new ValidationError("Terminal input exceeds 16384 bytes");
-    if (/\u0000/.test(data)) throw new ValidationError("Terminal input cannot contain NUL bytes");
+    if (/[\u0000-\u0002\u0005-\u0008\u000b\u000e-\u001f\u007f-\u009f]/.test(data)) {
+      throw new ValidationError("Terminal input contains unsupported control bytes");
+    }
   }
   private getConnectionRuntimeInstanceId(connection: unknown): string | null {
     if (!connection || typeof connection !== "object" || Array.isArray(connection)) {
@@ -419,7 +421,7 @@ class TerminalService {
         runtimeInstanceId: authContext.runtimeInstanceId,
         capability: "terminal",
       });
-      terminalRelay.destroyTerminal(terminalId);
+      await terminalRelay.destroyTerminalDistributed(terminalId);
       return true;
     }
 
@@ -437,7 +439,7 @@ class TerminalService {
     const runtimeInstanceId = await this.assertTerminalAccess(session, userId, "deny");
     if (!runtimeInstanceId) return true;
 
-    terminalRelay.destroyTerminal(terminalId);
+    await terminalRelay.destroyTerminalDistributed(terminalId);
     return true;
   }
 
@@ -460,7 +462,9 @@ class TerminalService {
     const requested = input.maxBytes ?? TerminalService.MAX_CAPTURE_BYTES;
     if (!Number.isInteger(requested) || requested < 1 || requested > TerminalService.MAX_CAPTURE_BYTES) throw new ValidationError(`maxBytes must be between 1 and ${TerminalService.MAX_CAPTURE_BYTES}`);
     await this.assertTerminalOperation(input.terminalId, input.organizationId, input.userId, input.agentSessionId);
-    const capture = terminalRelay.captureTerminal(input.terminalId, requested);
+    const capture = await terminalRelay.captureTerminalDistributed(input.terminalId, requested) as
+      | { output: string; byteCount: number; truncated: boolean; closed: boolean; connected: boolean }
+      | null;
     if (!capture) throw new NotFoundError("Terminal", input.terminalId);
     const output = input.plainText ? capture.output.replace(/[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PRZcf-nq-uy=><~]))/g, "") : capture.output;
     return { terminalId: input.terminalId, output, byteCount: Buffer.byteLength(output), truncated: capture.truncated, capturedAt: new Date().toISOString(), closed: capture.closed, connected: capture.connected };
@@ -469,14 +473,14 @@ class TerminalService {
   async sendInput(input: { terminalId: string; data: string; organizationId: string; userId: string; agentSessionId?: string | null }): Promise<boolean> {
     this.validateInput(input.data);
     await this.assertTerminalOperation(input.terminalId, input.organizationId, input.userId, input.agentSessionId);
-    if (!terminalRelay.sendInput(input.terminalId, input.data)) throw new ValidationError("Terminal is closed");
+    if (!(await terminalRelay.sendInputDistributed(input.terminalId, input.data))) throw new ValidationError("Terminal is closed");
     return true;
   }
 
   async resize(input: { terminalId: string; cols: number; rows: number; organizationId: string; userId: string; agentSessionId?: string | null }): Promise<boolean> {
     this.validateDimensions(input.cols, input.rows);
     await this.assertTerminalOperation(input.terminalId, input.organizationId, input.userId, input.agentSessionId);
-    if (!terminalRelay.resizeTerminal(input.terminalId, input.cols, input.rows)) throw new ValidationError("Terminal is closed");
+    if (!(await terminalRelay.resizeTerminalDistributed(input.terminalId, input.cols, input.rows))) throw new ValidationError("Terminal is closed");
     return true;
   }
 }
