@@ -94,20 +94,27 @@ cloud hosting fails when cloud is unavailable; it is never silently changed to l
 
 ## Message and lifecycle
 
-When a general conversation becomes one focused coding task, convert it in place so the existing
+When a general conversation becomes one focused task, convert it in place so the existing
 conversation and session identity are preserved:
 
 ```sh
 "$TRACE_CLI" session convert --kind coding --channel <channel-id> --json
+"$TRACE_CLI" session convert --kind app --json
+"$TRACE_CLI" session convert --kind design --json
+"$TRACE_CLI" session convert --kind pdf --json
+"$TRACE_CLI" session convert --kind animation --json
 ```
 
 The coding channel is the destination and normally supplies its linked repository. Add `--repo`
-only when the selected channel has no repository. Add `--tool`, `--model`, or `--reasoning` when the
-destination needs an explicit override. Conversion targets the current session by default; use
-`--session <session-id>` only when explicitly acting on another session. Prefer conversion over
-`session start` for the current conversation. A successful current-session conversion prepares the
-repository workspace and resumes the request there automatically. Treat a nonzero exit or JSON
-`error` as a failed conversion: surface its exact message and never claim the session changed.
+only when the selected channel has no repository. App, Design, PDF, and Animation conversions do
+not accept a channel or repo; Trace creates an isolated managed repo and moves the session to cloud.
+Design System authoring is not a standalone conversion target because it requires a source repo and
+its dedicated creation flow. Add `--tool`, `--model`, or `--reasoning` when the destination needs an
+explicit override. Conversion targets the current session by default; use `--session <session-id>`
+only when explicitly acting on another session. Prefer conversion over `session start` for the
+current conversation. A successful current-session conversion prepares the target workspace and
+resumes the request there automatically with the preserved conversation. Treat a nonzero exit or
+JSON `error` as a failed conversion: surface its exact message and never claim the session changed.
 Start a separate session only for independent or parallel work.
 
 ```sh

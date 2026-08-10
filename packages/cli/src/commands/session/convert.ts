@@ -2,12 +2,22 @@ import type { CodingTool, SessionGroupKind } from "@trace/gql";
 import { traceCliOperations } from "@trace/cli-contract";
 import { usage } from "../../errors.js";
 import { defineCommand, optionString } from "../../runtime.js";
-import { CODING_TOOLS, printSession, resolveSessionId, type SessionView } from "./shared.js";
+import {
+  CODING_TOOLS,
+  printSession,
+  resolveSessionId,
+  SESSION_KINDS,
+  type SessionView,
+} from "./shared.js";
+
+const CONVERSION_KINDS = SESSION_KINDS.filter(
+  (kind) => kind !== "general" && kind !== "design_system",
+);
 
 type ConvertSessionGroupInput = {
   sessionGroupId: string;
   kind: SessionGroupKind;
-  channelId: string;
+  channelId?: string;
   repoId?: string;
   tool?: CodingTool;
   model?: string;
@@ -16,19 +26,23 @@ type ConvertSessionGroupInput = {
 
 export const sessionConvertCommand = defineCommand({
   path: ["session", "convert"],
-  description: "Convert the current general session into a coding session",
-  examples: ['"$TRACE_CLI" session convert --kind coding --channel <channel-id> --json'],
+  description: "Convert the current general session into a specialized session",
+  examples: [
+    '"$TRACE_CLI" session convert --kind coding --channel <channel-id> --json',
+    '"$TRACE_CLI" session convert --kind app --json',
+  ],
   effects: [
     "Changes the existing session group in place and preserves its conversation history.",
-    "Prepares the selected channel's repository workspace and resumes the request there.",
+    "Prepares the target workspace and resumes the request with its session-specific instructions.",
+    "App, Design, PDF, and Animation targets create an isolated managed repo in a cloud runtime.",
   ],
   output: "The converted session.",
   nextSteps: [
     'Use "$TRACE_CLI" session events <session-id> --limit 50 --json to monitor the resumed run.',
   ],
   notes: [
-    "Only general-to-coding conversion is currently supported.",
-    "A coding channel is required; --repo may only supply a repository when that channel has none.",
+    "Conversion starts from a General session. Design System authoring uses its dedicated creation flow.",
+    "Coding requires a channel; --repo may only supply a repository when that channel has none.",
   ],
   options: [
     {
@@ -43,7 +57,7 @@ export const sessionConvertCommand = defineCommand({
       flag: "--kind",
       kind: "string",
       valueName: "KIND",
-      choices: ["coding"],
+      choices: CONVERSION_KINDS,
       description: "Target session kind",
     },
     {
@@ -58,7 +72,7 @@ export const sessionConvertCommand = defineCommand({
       flag: "--repo",
       kind: "string",
       valueName: "ID",
-      description: "Repository for a channel without one",
+      description: "Repository for a coding channel without one",
     },
     {
       name: "tool",
@@ -84,9 +98,11 @@ export const sessionConvertCommand = defineCommand({
     },
   ],
   async run(ctx, parsed) {
-    if (optionString(parsed, "kind") !== "coding") {
-      usage("--kind coding is required");
+    const kind = optionString(parsed, "kind") as SessionGroupKind | undefined;
+    if (!kind || !CONVERSION_KINDS.includes(kind as (typeof CONVERSION_KINDS)[number])) {
+      usage(`--kind is required and must be one of: ${CONVERSION_KINDS.join(", ")}`);
     }
+
     const client = await ctx.client();
     const source = await client.graphql<
       {
@@ -103,37 +119,46 @@ export const sessionConvertCommand = defineCommand({
       usage("Session does not belong to a session group");
     }
 
-    const channelId = optionString(parsed, "channel") ?? source.session.channel?.id;
-    if (!channelId) {
-      usage(
-        'A coding channel is required. Provide --channel <channel-id>; discover channels with "$TRACE_CLI" channel list --member-only --json.',
-      );
-    }
-    const channel = await client.graphql<
-      { channel: { id: string; name: string; repo?: { id: string; name: string } | null } | null },
-      { id: string }
-    >(traceCliOperations.startChannel, { id: channelId });
-    if (!channel.channel) usage(`Channel not found: ${channelId}`);
-
+    let channelId: string | undefined;
+    let repoId: string | undefined;
+    const explicitChannelId = optionString(parsed, "channel");
     const explicitRepoId = optionString(parsed, "repo");
-    const impliedRepo = channel.channel.repo ?? null;
-    if (impliedRepo && explicitRepoId && explicitRepoId !== impliedRepo.id) {
-      usage(
-        `The selected channel uses repo ${impliedRepo.id} (${impliedRepo.name}); remove --repo or use that repo`,
-      );
-    }
-    const repoId = impliedRepo?.id ?? explicitRepoId;
-    if (!repoId) {
-      usage(
-        "The selected channel has no linked repository. Provide --repo <repo-id>, or choose a coding channel with a repository.",
-      );
+    if (kind === "coding") {
+      channelId = explicitChannelId ?? source.session.channel?.id;
+      if (!channelId) {
+        usage(
+          'A coding channel is required. Provide --channel <channel-id>; discover channels with "$TRACE_CLI" channel list --member-only --json.',
+        );
+      }
+      const channel = await client.graphql<
+        {
+          channel: { id: string; name: string; repo?: { id: string; name: string } | null } | null;
+        },
+        { id: string }
+      >(traceCliOperations.startChannel, { id: channelId });
+      if (!channel.channel) usage(`Channel not found: ${channelId}`);
+
+      const impliedRepo = channel.channel.repo ?? null;
+      if (impliedRepo && explicitRepoId && explicitRepoId !== impliedRepo.id) {
+        usage(
+          `The selected channel uses repo ${impliedRepo.id} (${impliedRepo.name}); remove --repo or use that repo`,
+        );
+      }
+      repoId = impliedRepo?.id ?? explicitRepoId;
+      if (!repoId) {
+        usage(
+          "The selected channel has no linked repository. Provide --repo <repo-id>, or choose a coding channel with a repository.",
+        );
+      }
+    } else if (explicitChannelId || explicitRepoId) {
+      usage(`${kind} conversions create an isolated workspace; remove --channel and --repo`);
     }
 
     const input: ConvertSessionGroupInput = {
       sessionGroupId: source.session.sessionGroupId,
-      kind: "coding",
-      channelId,
-      repoId,
+      kind,
+      ...(channelId ? { channelId } : {}),
+      ...(repoId ? { repoId } : {}),
       tool: optionString(parsed, "tool") as CodingTool | undefined,
       model: optionString(parsed, "model"),
       reasoningEffort: optionString(parsed, "reasoning"),

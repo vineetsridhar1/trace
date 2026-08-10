@@ -12,15 +12,17 @@ The agent creates a linked session only for independent or parallel work.
 
 ## Runtime policy
 
-| Target kind                                          | Hosting        |
-| ---------------------------------------------------- | -------------- |
-| `general`                                            | cloud or local |
-| `coding`                                             | cloud or local |
-| `app`, `design`, `design_system`, `pdf`, `animation` | cloud only     |
+| Target kind                         | Hosting        |
+| ----------------------------------- | -------------- |
+| `general`                           | cloud or local |
+| `coding`                            | cloud or local |
+| `app`, `design`, `pdf`, `animation` | cloud only     |
+| `design_system`                     | dedicated flow |
 
-Cloud-only conversion is a runtime migration: prepare and health-check the cloud
-target before switching state, then invalidate and stop the old local runtime.
-There is no silent local fallback.
+Cloud-only conversion is a runtime migration: verify that a cloud environment
+exists, prepare the managed repository, stop the old runtime, persist the cloud
+binding, and provision the target starter. Provisioning failures remain visible
+and retryable on the converted session. There is no silent local fallback.
 
 ## Conversion contract
 
@@ -29,16 +31,25 @@ application, and failure cleanup. A target is not advertised until it implements
 those operations. The product can say that sessions are convertible while the
 runtime exposes only safe targets.
 
-The first implemented target is `general` to `coding`. Coding-to-general is
-deliberately deferred until runtime teardown and workspace detachment can be
-performed atomically. Other
-generated targets are deliberately rejected until their starter/runtime
-provisioning is implemented as an atomic conversion target.
+Supported conversions start from `general` and target `coding`, `app`, `design`,
+`pdf`, or `animation`. Coding-to-general and specialized-to-specialized
+transitions remain deferred until workspace teardown and replacement can be
+made safe. Design-system authoring is not a standalone mode: it requires a
+source repository and a `DesignSystem` record, so it keeps its dedicated
+creation flow.
 
 A coding conversion requires a coding channel. The channel is the destination
 and supplies its linked repository; an explicit repository is accepted only
 when the channel has none. This matches normal coding-session creation and
 prevents repo-only sessions from bypassing the channel workflow.
+
+Creation-mode conversion clears channel/project links, creates a Trace-managed
+repo, stops the old runtime, and moves the existing session to the default cloud
+environment. Runtime preparation uses the same target-specific starter and
+system instructions as normal session creation. Its first command is only a
+short continuation prompt; the normal first-run path prepends the preserved
+conversation so the target agent receives the full task context without a
+second copy of the user's request.
 
 Every successful conversion appends `session_converted` in the active session's
 scope with complete `session` and `sessionGroup` snapshots. Clients update their

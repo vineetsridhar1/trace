@@ -613,6 +613,219 @@ describe("SessionService", () => {
       expect(sessionRouterMock.sendAsync).not.toHaveBeenCalled();
     });
 
+    it.each(["app", "design", "pdf", "animation"] as const)(
+      "moves a converted %s session to an isolated cloud workspace",
+      async (kind) => {
+        const sourceGroup = makeSessionGroup({
+          id: "group-general",
+          kind: "general",
+          channelId: null,
+          channel: null,
+          repoId: null,
+          repo: null,
+          branch: null,
+          workdir: "/tmp/trace-general/group-general",
+        });
+        const managedRepo = await managedGitServiceMock.createManagedRepo({
+          organizationId: "org-1",
+          name: "unused",
+          actorType: "user",
+          actorId: "user-1",
+        });
+        managedGitServiceMock.createManagedRepo.mockClear();
+        const convertedGroup = {
+          ...sourceGroup,
+          kind,
+          repoId: managedRepo.id,
+          repo: managedRepo,
+          branch: managedRepo.defaultBranch,
+        };
+        const convertedSession = makeSession({
+          id: "session-general",
+          sessionGroupId: sourceGroup.id,
+          sessionGroup: convertedGroup,
+          hosting: "local",
+          repoId: managedRepo.id,
+          repo: managedRepo,
+          branch: managedRepo.defaultBranch,
+          channelId: null,
+          channel: null,
+          workdir: sourceGroup.workdir,
+          connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
+        });
+        const movedSession = {
+          ...convertedSession,
+          hosting: "cloud",
+          workdir: null,
+          agentStatus: "not_started",
+          pendingRun: {
+            type: "run",
+            prompt: `Continue the user's request in the newly prepared ${kind === "pdf" ? "PDF" : kind} workspace.`,
+            interactionMode: null,
+          },
+          connection: {
+            state: "requested",
+            adapterType: "provisioned",
+            environmentId: "env-default",
+          },
+        };
+
+        prismaMock.sessionGroup.findFirst
+          .mockResolvedValueOnce({
+            id: sourceGroup.id,
+            visibility: "public",
+            ownerUserId: "user-1",
+          })
+          .mockResolvedValueOnce({
+            kind: "general",
+            sessions: [
+              { id: convertedSession.id, name: convertedSession.name, tool: convertedSession.tool },
+            ],
+          })
+          .mockResolvedValueOnce({
+            ...sourceGroup,
+            sessions: [
+              makeSession({
+                id: convertedSession.id,
+                sessionGroupId: sourceGroup.id,
+                sessionGroup: sourceGroup,
+                hosting: "local",
+                repoId: null,
+                repo: null,
+                channelId: null,
+                channel: null,
+                workdir: sourceGroup.workdir,
+              }),
+            ],
+          });
+        prismaMock.session.findUnique.mockResolvedValue({
+          connection: convertedSession.connection,
+        });
+        prismaMock.session.update
+          .mockResolvedValueOnce(convertedSession)
+          .mockResolvedValueOnce(movedSession);
+        prismaMock.sessionGroup.findUnique.mockResolvedValue({
+          ...convertedGroup,
+          sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+        });
+
+        const result = await service.convertGroup({
+          sessionGroupId: sourceGroup.id,
+          kind,
+          organizationId: "org-1",
+          actorId: "user-1",
+          actorType: "user",
+        });
+
+        expect(result).toBe(movedSession);
+        expect(managedGitServiceMock.createManagedRepo).toHaveBeenCalledWith({
+          organizationId: "org-1",
+          name: `${convertedSession.name} source`,
+          actorType: "user",
+          actorId: "user-1",
+        });
+        expect(prismaMock.sessionGroup.update).toHaveBeenNthCalledWith(
+          1,
+          expect.objectContaining({
+            where: { id: sourceGroup.id },
+            data: expect.objectContaining({
+              kind,
+              channelId: null,
+              repoId: managedRepo.id,
+              branch: managedRepo.defaultBranch,
+            }),
+          }),
+        );
+        expect(prismaMock.session.update).toHaveBeenNthCalledWith(
+          1,
+          expect.objectContaining({
+            data: expect.objectContaining({
+              channelId: null,
+              repoId: managedRepo.id,
+              readOnlyWorkspace: false,
+              projects: { deleteMany: {} },
+            }),
+          }),
+        );
+        expect(prismaMock.session.update).toHaveBeenNthCalledWith(
+          2,
+          expect.objectContaining({
+            data: expect.objectContaining({
+              hosting: "cloud",
+              pendingRun: expect.objectContaining({
+                prompt: `Continue the user's request in the newly prepared ${kind === "pdf" ? "PDF" : kind} workspace.`,
+              }),
+            }),
+          }),
+        );
+        await vi.waitFor(() => {
+          expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+            expect.objectContaining({
+              sessionId: convertedSession.id,
+              sessionGroupKind: kind,
+              hosting: "cloud",
+              repo: null,
+            }),
+          );
+        });
+      },
+    );
+
+    it("cleans up a managed repo when generated conversion validation loses a race", async () => {
+      const sourceGroup = makeSessionGroup({
+        id: "group-general",
+        kind: "general",
+        channelId: null,
+        repoId: null,
+      });
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({
+          kind: "general",
+          sessions: [{ id: "session-general", name: "Build an app", tool: "codex" }],
+        })
+        .mockResolvedValueOnce({ ...sourceGroup, kind: "coding", sessions: [makeSession()] });
+      prismaMock.session.findUnique.mockResolvedValue({ connection: {} });
+      managedGitServiceMock.deleteManagedRepo.mockResolvedValue(true);
+
+      await expect(
+        service.convertGroup({
+          sessionGroupId: sourceGroup.id,
+          kind: "app",
+          organizationId: "org-1",
+          actorId: "user-1",
+          actorType: "user",
+        }),
+      ).rejects.toThrow("Only general sessions can be converted");
+
+      expect(managedGitServiceMock.deleteManagedRepo).toHaveBeenCalledWith({
+        organizationId: "org-1",
+        repoId: "managed-repo-1",
+        actorType: "user",
+        actorId: "user-1",
+      });
+    });
+
+    it("keeps design-system authoring on its source-backed creation flow", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "group-general",
+        visibility: "public",
+        ownerUserId: "user-1",
+      });
+
+      await expect(
+        service.convertGroup({
+          sessionGroupId: "group-general",
+          kind: "design_system",
+          organizationId: "org-1",
+          actorId: "user-1",
+          actorType: "user",
+        }),
+      ).rejects.toThrow("requires a source repository");
+
+      expect(managedGitServiceMock.createManagedRepo).not.toHaveBeenCalled();
+    });
+
     it("rejects a coding conversion without a destination channel", async () => {
       const sourceGroup = makeSessionGroup({
         id: "group-general",
@@ -12345,6 +12558,7 @@ describe("SessionService", () => {
             state: "connected",
             runtimeInstanceId: "runtime-source",
             runtimeLabel: "Laptop A",
+            environmentId: "env-local",
             retryCount: 0,
             canRetry: true,
             canMove: true,
@@ -12352,6 +12566,12 @@ describe("SessionService", () => {
           projects: [{ projectId: "project-1" }],
         }),
       );
+      prismaMock.session.findUnique.mockResolvedValueOnce({
+        connection: { environmentId: "env-local" },
+      });
+      prismaMock.agentEnvironment.findFirst
+        .mockResolvedValueOnce(makeAgentEnvironment({ id: "env-local", adapterType: "local" }))
+        .mockResolvedValueOnce(makeAgentEnvironment({ id: "env-default" }));
       prismaMock.event.findMany.mockResolvedValueOnce([]);
       prismaMock.session.update.mockResolvedValueOnce(
         makeSession({

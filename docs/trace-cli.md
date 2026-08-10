@@ -33,7 +33,7 @@ command-specific schemas use `"$TRACE_CLI" <command> <subcommand> --help --json`
 "$TRACE_CLI" session list [--status STATUS] [--tool TOOL] [--repo ID] [--channel ID]
 "$TRACE_CLI" session get [session-id]
 "$TRACE_CLI" session start [prompt] [--group ID | --channel ID | --project ID | --repo ID | --kind KIND]
-"$TRACE_CLI" session convert --kind coding --channel ID [--session ID] [--repo ID]
+"$TRACE_CLI" session convert --kind KIND [--session ID] [--channel ID] [--repo ID]
 "$TRACE_CLI" session send [session-id] <message> [--self] [--queue]
 "$TRACE_CLI" session run [session-id] [prompt] [--self]
 "$TRACE_CLI" session stop [session-id] [--self]
@@ -62,6 +62,12 @@ A prompt passed to `session start` requests its run immediately. The returned se
 run`. The CLI automatically attaches an idempotency key and retries transient empty/server
 responses once. If a retry is still necessary, reuse the reported key with `--idempotency-key`.
 Explicit cloud requests fail if cloud is unavailable and are never downgraded to local.
+
+Conversion preserves the current session, group, URL, and conversation. `coding` requires a coding
+channel and uses its linked repo; `--repo` is only needed when that channel has none. `app`,
+`design`, `pdf`, and `animation` create an isolated managed repo, move the existing session to a
+cloud runtime, prepare the target starter, and resume with a short continuation prompt plus the
+preserved conversation. Design-system authoring continues to use its dedicated source-backed flow.
 
 ## Adding a command
 

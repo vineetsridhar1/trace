@@ -116,7 +116,7 @@ describe("ensureTraceRuntime", () => {
     const bundledCli = await readFile(join(runtime.binDir, "trace.mjs"), "utf8");
     expect(bundledCli).toContain("Command groups:");
     expect(bundledCli).toContain("integration list --json");
-    expect(bundledCli).toContain("Convert the current general session into a coding session");
+    expect(bundledCli).toContain("Convert the current general session into a specialized session");
     await expect(
       readFile(join(runtime.skillsDir, "trace-integrations", "SKILL.md"), "utf8"),
     ).rejects.toMatchObject({ code: "ENOENT" });

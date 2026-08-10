@@ -520,6 +520,71 @@ describe("Trace CLI", () => {
     expect(stdout.mock.calls.flat().join("")).toContain('"id":"session-general"');
   });
 
+  it.each(["app", "design", "pdf", "animation"] as const)(
+    "converts the current session to a managed %s workspace",
+    async (kind) => {
+      vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+      vi.stubEnv("TRACE_SESSION_ID", "session-general");
+      vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+      vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+      const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          query: string;
+          variables: Record<string, unknown>;
+        };
+        if (request.query.includes("TraceCliSession")) {
+          return new Response(
+            JSON.stringify({
+              data: {
+                session: {
+                  id: "session-general",
+                  sessionGroupId: "group-general",
+                  channel: null,
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        expect(request.variables.input).toEqual({
+          sessionGroupId: "group-general",
+          kind,
+          tool: "codex",
+        });
+        return new Response(
+          JSON.stringify({
+            data: {
+              convertSessionGroup: {
+                id: "session-general",
+                name: "Create something",
+                agentStatus: "active",
+                sessionStatus: "in_progress",
+                tool: "codex",
+                model: null,
+                reasoningEffort: null,
+                hosting: "cloud",
+                branch: "main",
+                sessionGroupId: "group-general",
+                createdAt: "2026-08-08T00:00:00.000Z",
+                updatedAt: "2026-08-08T00:00:00.000Z",
+                channel: null,
+                repo: { id: "managed-repo-1", name: "Create something source" },
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(
+        run(["session", "convert", "--kind", kind, "--tool", "codex", "--json"]),
+      ).resolves.toBe(0);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(stdout.mock.calls.flat().join("")).toContain('"hosting":"cloud"');
+    },
+  );
+
   it("requires a channel when converting a general session", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_SESSION_ID", "session-general");
