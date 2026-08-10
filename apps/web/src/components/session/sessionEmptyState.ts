@@ -47,6 +47,18 @@ const CODING_EMPTY_STATE: SessionEmptyStateContent = {
   ],
 };
 
+const GENERAL_EMPTY_STATE: SessionEmptyStateContent = {
+  title: "What can I help coordinate?",
+  description: "Ask about work across Trace, plan a task, or let the agent choose the right session type.",
+  placeholder: "Ask about your work…",
+  sendStarterImmediately: true,
+  starterPrompts: [
+    { label: "Summarize active work", prompt: "Summarize the active work across my projects." },
+    { label: "Plan a feature", prompt: "Help me plan the next feature and identify the workstreams." },
+    { label: "Investigate an issue", prompt: "Help me investigate an issue and decide what session should handle it." },
+  ],
+};
+
 const APP_EMPTY_STATE: SessionEmptyStateContent = {
   title: "What should we build?",
   description: "Describe your app, paste a reference image, or start with an idea below.",
@@ -137,6 +149,7 @@ const ANIMATION_EMPTY_STATE: SessionEmptyStateContent = {
 export function getSessionEmptyStateContent(
   kind: string | null | undefined,
 ): SessionEmptyStateContent {
+  if (kind === "general") return GENERAL_EMPTY_STATE;
   if (kind === "app") return APP_EMPTY_STATE;
   if (kind === "design") return DESIGN_EMPTY_STATE;
   if (kind === "pdf") return PDF_EMPTY_STATE;

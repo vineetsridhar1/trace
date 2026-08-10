@@ -808,6 +808,140 @@ describe("SessionRouter runtime adapter dispatch", () => {
     });
   });
 
+  it("prepares a repo-linked general session in scratch space instead of its repo", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Laptop",
+      ws,
+      hostingMode: "local",
+      protocolVersion: 3,
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+    });
+    router.bindSession("session-1", "runtime-1");
+
+    const failures: string[] = [];
+    router.createRuntime({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      sessionGroupKind: "general",
+      hosting: "local",
+      adapterType: "local",
+      tool: "codex",
+      repo: {
+        id: "repo-1",
+        name: "repo",
+        remoteUrl: "https://github.com/acme/repo.git",
+        defaultBranch: "main",
+      },
+      createdById: "user-1",
+      organizationId: "org-1",
+      onFailed: (error) => failures.push(error),
+    });
+
+    await vi.waitFor(() => expect(ws.send).toHaveBeenCalledOnce());
+    expect(failures).toEqual([]);
+    const send = ws.send as unknown as ReturnType<typeof vi.fn>;
+    expect(JSON.parse(send.mock.calls[0]?.[0] as string)).toMatchObject({
+      type: "prepare_general",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+    });
+  });
+
+  it("prepares a provisioned general session in cloud scratch space", async () => {
+    const provisionedAdapter: RuntimeAdapter = {
+      type: "provisioned",
+      async validateConfig() {},
+      async testConfig() {
+        return { ok: true };
+      },
+      async startSession() {
+        return { status: "selected", runtimeInstanceId: "runtime-cloud" };
+      },
+      async stopSession() {
+        return { ok: true, status: "stopped" };
+      },
+      async getStatus() {
+        return { status: "connected" };
+      },
+    };
+    const router = new SessionRouter(new RuntimeAdapterRegistry([provisionedAdapter]));
+    const ws = makeWs();
+    router.registerRuntime({
+      id: "runtime-cloud",
+      label: "Cloud",
+      ws,
+      hostingMode: "cloud",
+      organizationId: "org-1",
+      protocolVersion: 3,
+      supportedTools: ["codex"],
+      registeredRepoIds: ["repo-1"],
+    });
+    router.bindSession("session-1", "runtime-cloud");
+
+    router.createRuntime({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      sessionGroupKind: "general",
+      hosting: "cloud",
+      adapterType: "provisioned",
+      tool: "codex",
+      repo: {
+        id: "repo-1",
+        name: "repo",
+        remoteUrl: "https://github.com/acme/repo.git",
+        defaultBranch: "main",
+      },
+      createdById: "user-1",
+      organizationId: "org-1",
+      onFailed: vi.fn(),
+    });
+
+    await vi.waitFor(() => expect(ws.send).toHaveBeenCalledOnce());
+    expect(
+      JSON.parse((ws.send as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]),
+    ).toMatchObject({
+      type: "prepare_general",
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+    });
+  });
+
+  it("runs a repo-less general session from home on an older local bridge", async () => {
+    const router = new SessionRouter();
+    const ws = makeWs();
+    router.registerRuntime({
+      id: "runtime-1",
+      label: "Older laptop",
+      ws,
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    router.bindSession("session-1", "runtime-1");
+
+    const onWorkspaceReady = vi.fn();
+    router.createRuntime({
+      sessionId: "session-1",
+      sessionGroupId: "group-1",
+      sessionGroupKind: "general",
+      hosting: "local",
+      adapterType: "local",
+      tool: "codex",
+      repo: null,
+      createdById: "user-1",
+      organizationId: "org-1",
+      onWorkspaceReady,
+      onFailed: vi.fn(),
+    });
+
+    await vi.waitFor(() => expect(onWorkspaceReady).toHaveBeenCalledWith(""));
+    expect(ws.send).not.toHaveBeenCalled();
+  });
+
   it("pins initial local prepare delivery to the selected home bridge", async () => {
     const router = new SessionRouter();
     const runtimeId = "runtime-remote-owner";

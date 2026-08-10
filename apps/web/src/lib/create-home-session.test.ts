@@ -6,6 +6,44 @@ const repo = { id: "repo-1", name: "trace" } as Repo;
 const channel = { id: "channel-1", name: "Trace", type: "coding", repo } as Channel;
 
 describe("buildHomeStartInput", () => {
+  it("uses a selected local runtime for a general session", () => {
+    expect(
+      buildHomeStartInput({
+        prompt: "Answer this question",
+        kind: "general",
+        tool: "claude_code",
+        model: null,
+        reasoningEffort: null,
+        interactionMode: "code",
+        channel: null,
+        projectId: null,
+        repoId: null,
+        runtimeInstanceId: "bridge-1",
+        designSystemVersionId: null,
+        designSessionGroupId: null,
+      }),
+    ).toMatchObject({ kind: "general", hosting: "local", runtimeInstanceId: "bridge-1" });
+  });
+
+  it("falls back to cloud for a general session without a local runtime", () => {
+    expect(
+      buildHomeStartInput({
+        prompt: "Answer this question",
+        kind: "general",
+        tool: "codex",
+        model: null,
+        reasoningEffort: null,
+        interactionMode: "code",
+        channel: null,
+        projectId: null,
+        repoId: null,
+        runtimeInstanceId: null,
+        designSystemVersionId: null,
+        designSessionGroupId: null,
+      }),
+    ).toMatchObject({ kind: "general", hosting: "cloud" });
+  });
+
   it("preserves the shared composer model, effort, and interaction settings", () => {
     expect(
       buildHomeStartInput({

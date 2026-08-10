@@ -526,6 +526,9 @@ async function main() {
   assertNodeVersion();
   await initializeLocalModeEnv();
 
+  log("building managed CLI contract");
+  await runCommand("cli-contract build", ["--filter", "@trace/cli-contract", "build"], sharedEnv);
+
   log("building shared package");
   await runCommand("build:shared", ["build:shared"], sharedEnv);
 

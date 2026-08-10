@@ -38,6 +38,7 @@ import {
   inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
   BridgeOutbox,
+  BRIDGE_PROTOCOL_VERSION,
 } from "@trace/shared";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
@@ -71,16 +72,14 @@ import {
   isTraceManagedWorktreePath,
 } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
+import { generalWorkspacePath, removeGeneralWorkspace } from "@trace/shared/general-workspace";
 import { TerminalManager } from "@trace/shared/adapters";
 import {
   loadQueuedGitHookCheckpoints,
   removeQueuedCheckpointFile,
   writeCheckpointContext,
 } from "./hook-runtime.js";
-import {
-  collectTrackedPrWorkspaces,
-  type TrackedSessionWorkspace,
-} from "./pr-tracking.js";
+import { collectTrackedPrWorkspaces, type TrackedSessionWorkspace } from "./pr-tracking.js";
 
 const BRIDGE_USER_AGENT = "Trace-Desktop-Bridge/0.1";
 const HEARTBEAT_INTERVAL_MS = 10_000;
@@ -266,19 +265,15 @@ async function inspectLocalPrStatus(workdir: string): Promise<{
 
   let stdout: string;
   try {
-    ({ stdout } = await execFileAsync(
-      "gh",
-      ["pr", "view", "--json", "url,state"],
-      {
-        cwd: workdir,
-        env: {
-          ...process.env,
-          GH_PROMPT_DISABLED: "1",
-        },
-        maxBuffer: 1024 * 1024,
-        timeout: LOCAL_PR_POLL_TIMEOUT_MS,
+    ({ stdout } = await execFileAsync("gh", ["pr", "view", "--json", "url,state"], {
+      cwd: workdir,
+      env: {
+        ...process.env,
+        GH_PROMPT_DISABLED: "1",
       },
-    ));
+      maxBuffer: 1024 * 1024,
+      timeout: LOCAL_PR_POLL_TIMEOUT_MS,
+    }));
   } catch (error) {
     const message = extractExecErrorMessage(error);
     if (isNoPullRequestError(message)) {
@@ -746,6 +741,7 @@ export class BridgeClient implements IBridgeClient {
       instanceId: this.instanceId,
       label,
       hostingMode: "local",
+      protocolVersion: BRIDGE_PROTOCOL_VERSION,
       supportedTools,
       registeredRepoIds: Object.keys(config.repos),
       activeTerminals: this.terminalManager.getActiveTerminals(),
@@ -867,7 +863,12 @@ export class BridgeClient implements IBridgeClient {
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             console.warn(`[bridge] failed to inspect local PR status for ${workdir}: ${message}`);
-            const branch = await maybeReadGitRef(workdir, ["symbolic-ref", "--short", "-q", "HEAD"]);
+            const branch = await maybeReadGitRef(workdir, [
+              "symbolic-ref",
+              "--short",
+              "-q",
+              "HEAD",
+            ]);
             for (const sessionId of sessionIds) {
               this.send({
                 type: "session_pr_status",
@@ -1288,6 +1289,49 @@ export class BridgeClient implements IBridgeClient {
           });
         break;
       }
+      case "prepare_general": {
+        const { sessionId, sessionGroupId } = cmd;
+        const workdir = generalWorkspacePath(sessionGroupId ?? sessionId);
+        fs.promises
+          .mkdir(workdir, { recursive: true })
+          .then(() => {
+            this.sessionWorkdirs.set(sessionId, workdir);
+            this.sessionGroupIds.set(sessionId, sessionGroupId ?? null);
+            this.send({ type: "workspace_ready", sessionId, workdir });
+          })
+          .catch((err: Error) => {
+            this.send({ type: "workspace_failed", sessionId, error: err.message });
+          });
+        break;
+      }
+      case "cleanup_general_workspace": {
+        const sessionKey = cmd.sessionGroupId ?? cmd.sessionId;
+        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
+        void removeGeneralWorkspace(workdir, sessionKey)
+          .then((removed) => {
+            if (removed && workdir) {
+              for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
+                if (trackedWorkdir === workdir) this.sessionWorkdirs.delete(trackedSessionId);
+              }
+            }
+            this.send({
+              type: "cleanup_general_workspace_result",
+              sessionId: cmd.sessionId,
+              success: removed,
+              ...(!removed ? { error: "General workspace path was rejected" } : {}),
+            });
+          })
+          .catch((err: Error) => {
+            console.warn(`[bridge] failed to remove general workspace ${workdir}:`, err.message);
+            this.send({
+              type: "cleanup_general_workspace_result",
+              sessionId: cmd.sessionId,
+              success: false,
+              error: err.message,
+            });
+          });
+        break;
+      }
       case "list_workspace_slugs": {
         const repoConfig = getRepoConfig(cmd.repoId);
         const repoPath = repoConfig?.path;
@@ -1359,6 +1403,7 @@ export class BridgeClient implements IBridgeClient {
         } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
+        const previousWorkdir = this.sessionWorkdirs.get(sessionId);
 
         if (!repoPath) {
           this.send({
@@ -1391,6 +1436,22 @@ export class BridgeClient implements IBridgeClient {
               branch: worktreeBranch,
               slug: worktreeSlug,
             });
+            const sessionKey = sessionGroupId ?? sessionId;
+            void removeGeneralWorkspace(previousWorkdir, sessionKey)
+              .then((removed) => {
+                if (!removed || !previousWorkdir) return;
+                for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
+                  if (trackedWorkdir === previousWorkdir) {
+                    this.sessionWorkdirs.delete(trackedSessionId);
+                  }
+                }
+              })
+              .catch((err: Error) => {
+                console.warn(
+                  `[bridge] failed to remove general workspace ${previousWorkdir}:`,
+                  err.message,
+                );
+              });
             void this.pollLocalPrStatuses();
           })
           .catch((err: Error) => {

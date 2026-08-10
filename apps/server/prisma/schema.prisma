@@ -44,6 +44,7 @@ enum SessionGroupVisibility {
 }
 
 enum SessionGroupKind {
+  general
   coding
   design
   design_system
@@ -182,6 +183,7 @@ enum ParticipantScope {
 }
 
 enum EventType {
+  session_converted
   message_sent
   message_edited
   message_deleted
@@ -797,6 +799,7 @@ model Session {
   workdir           String?
   toolSessionId     String?
   pendingRun        Json?
+  pendingGeneralWorkspaceCleanupRuntimeId String?
   endpoints         Json?
   connection        Json?
   prUrl             String?
@@ -821,6 +824,7 @@ model Session {
   @@index([sessionGroupId, updatedAt])
   @@index([organizationId, agentStatus])
   @@index([channelId, updatedAt])
+  @@index([pendingGeneralWorkspaceCleanupRuntimeId])
 }
 
 model Artifact {

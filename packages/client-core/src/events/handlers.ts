@@ -547,6 +547,23 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
+  // Conversion keeps the same active session and group. The event carries
+  // complete snapshots so a route/UI mode switch never needs a refetch.
+  if (event.eventType === ("session_converted" as EventType)) {
+    const session = asJsonObject(payload.session);
+    if (session && typeof session.id === "string") {
+      upsertSessionGroupFromPayload({ batch, payload, timestamp: event.timestamp, bumpSort: true });
+      const existingSession = batch.get("sessions", session.id);
+      batch.upsert("sessions", session.id, {
+        ...(existingSession ? { ...existingSession, ...session } : session),
+        _sortTimestamp:
+          (session.lastMessageAt as string | undefined) ??
+          (session.updatedAt as string | undefined) ??
+          event.timestamp,
+      } as unknown as SessionEntity);
+    }
+  }
+
   // Session deleted — remove from store and navigate away if active
   if (
     event.eventType === "session_deleted" &&

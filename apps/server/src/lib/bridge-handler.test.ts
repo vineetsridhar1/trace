@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   restoreSessionsForRuntime: vi.fn(() => Promise.resolve()),
   recordOutput: vi.fn(() => Promise.resolve()),
   complete: vi.fn(() => Promise.resolve()),
+  generalWorkspaceCleanupCompleted: vi.fn(() => Promise.resolve()),
   authorizeRuntimeLease: vi.fn(() => Promise.resolve({ authorized: true as const })),
   listIdleActiveRunSessionIds: vi.fn(() => Promise.resolve([])),
   reconcileIdleActiveRuns: vi.fn(() => Promise.resolve([])),
@@ -69,6 +70,7 @@ vi.mock("../services/session.js", () => ({
     restoreSessionsForRuntime: mocks.restoreSessionsForRuntime,
     recordOutput: mocks.recordOutput,
     complete: mocks.complete,
+    generalWorkspaceCleanupCompleted: mocks.generalWorkspaceCleanupCompleted,
     authorizeRuntimeLease: mocks.authorizeRuntimeLease,
     listIdleActiveRunSessionIds: mocks.listIdleActiveRunSessionIds,
     reconcileIdleActiveRuns: mocks.reconcileIdleActiveRuns,
@@ -257,6 +259,51 @@ describe("bridge handler auth", () => {
 
     expect(mocks.addRegisteredRepo).not.toHaveBeenCalled();
     expect(mocks.addRegisteredRepoToLocalRuntime).not.toHaveBeenCalled();
+  });
+
+  it("accepts a general-workspace cleanup result from its source runtime", async () => {
+    const ws = createMockWs();
+    mocks.registerLocalRuntimeConnection.mockResolvedValueOnce({
+      id: "bridge-runtime-1",
+      label: "Laptop",
+      organizationId: "org-1",
+      ownerUserId: "user-1",
+    });
+
+    handleBridgeConnection(ws as never, {
+      bridgeAuth: {
+        kind: "local",
+        instanceId: "bridge-owned",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    });
+    ws.emitMessage({
+      type: "runtime_hello",
+      instanceId: "bridge-owned",
+      hostingMode: "local",
+      supportedTools: ["codex"],
+      registeredRepoIds: [],
+    });
+    await vi.waitFor(() => {
+      expect(mocks.registerRuntime).toHaveBeenCalled();
+    });
+
+    ws.emitMessage({
+      type: "cleanup_general_workspace_result",
+      sessionId: "session-1",
+      success: true,
+    });
+
+    await vi.waitFor(() => {
+      expect(mocks.generalWorkspaceCleanupCompleted).toHaveBeenCalledWith({
+        sessionId: "session-1",
+        organizationId: "org-1",
+        runtimeInstanceId: "bridge-owned",
+        success: true,
+        error: undefined,
+      });
+    });
   });
 
   it("ignores post-registration messages from a superseded websocket", async () => {

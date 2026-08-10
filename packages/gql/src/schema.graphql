@@ -22,6 +22,7 @@ enum SessionGroupVisibility {
 }
 
 enum SessionGroupKind {
+  general
   coding
   design
   design_system
@@ -369,6 +370,7 @@ enum EventType {
   session_runtime_disconnected
   session_runtime_reconnected
   session_group_visibility_updated
+  session_converted
   application_config_updated
   session_setup_script_started
   session_setup_script_completed
@@ -1560,6 +1562,17 @@ input StartSessionInput {
   worktreePath: String
 }
 
+input ConvertSessionGroupInput {
+  sessionGroupId: ID!
+  kind: SessionGroupKind!
+  channelId: ID
+  repoId: ID
+  projectId: ID
+  tool: CodingTool
+  model: String
+  reasoningEffort: String
+}
+
 input CreateDesignSystemInput {
   name: String!
   repoId: ID!
@@ -1992,6 +2005,7 @@ type Mutation {
   reorderChannels(input: ReorderChannelsInput!): [Channel!]!
   sendMessage(channelId: ID!, text: String!, parentId: ID): Event!
   startSession(input: StartSessionInput!): Session!
+  convertSessionGroup(input: ConvertSessionGroupInput!): Session!
   createDesignSystem(input: CreateDesignSystemInput!): DesignSystem!
   saveDesignSystem(id: ID!): DesignSystemVersion!
   retryDesignSystemCommitArtifact(designSystemId: ID!): DesignSystem!

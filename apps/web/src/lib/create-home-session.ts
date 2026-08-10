@@ -23,8 +23,9 @@ interface CreateHomeSessionInput {
 }
 
 export function buildHomeStartInput(input: CreateHomeSessionInput) {
+  const usesExistingContext = input.kind === "coding" || input.kind === "general";
   const codingChannel = input.kind === "coding" ? input.channel : null;
-  const linkedRepoId = input.kind === "coding" ? input.repoId : null;
+  const linkedRepoId = usesExistingContext ? input.repoId : null;
   return {
     kind: input.kind,
     tool: input.tool,
@@ -35,8 +36,8 @@ export function buildHomeStartInput(input: CreateHomeSessionInput) {
     ...(input.attachmentKeys?.length ? { attachmentKeys: input.attachmentKeys } : {}),
     ...(linkedRepoId ? { repoId: linkedRepoId } : {}),
     ...(codingChannel ? { channelId: codingChannel.id } : {}),
-    ...(input.kind === "coding" && input.projectId ? { projectId: input.projectId } : {}),
-    ...(input.kind === "coding"
+    ...(usesExistingContext && input.projectId ? { projectId: input.projectId } : {}),
+    ...(input.kind === "coding" || (input.kind === "general" && input.runtimeInstanceId)
       ? {
           hosting: "local" as const,
           ...(input.runtimeInstanceId ? { runtimeInstanceId: input.runtimeInstanceId } : {}),
@@ -104,7 +105,7 @@ export async function createHomeSession({
       return false;
     }
 
-    navigateToSession(channel?.id ?? null, sessionGroupId, sessionId);
+    navigateToSession(kind === "coding" ? (channel?.id ?? null) : null, sessionGroupId, sessionId);
     return true;
   } catch (error) {
     toast.error("Could not start session", {

@@ -6,6 +6,7 @@ export const TRACE_CLI_CAPABILITIES = [
   "integration:configure",
   "session:list",
   "session:create",
+  "session:convert",
   "session:read",
   "session:events",
   "session:send",
@@ -219,6 +220,24 @@ export const traceCliOperations = {
     ],
     document: `mutation TraceCliStartSession($input: StartSessionInput!) {
       startSession(input: $input) { ${SESSION_FIELDS} }
+    }`,
+  }),
+  convertSessionGroup: operation({
+    name: "TraceCliConvertSessionGroup",
+    type: "mutation",
+    rootField: "convertSessionGroup",
+    capability: "session:convert",
+    argumentPaths: [
+      "input.sessionGroupId",
+      "input.kind",
+      "input.channelId",
+      "input.repoId",
+      "input.tool",
+      "input.model",
+      "input.reasoningEffort",
+    ],
+    document: `mutation TraceCliConvertSessionGroup($input: ConvertSessionGroupInput!) {
+      convertSessionGroup(input: $input) { ${SESSION_FIELDS} }
     }`,
   }),
   queueSessionMessage: operation({

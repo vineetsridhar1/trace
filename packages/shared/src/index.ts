@@ -125,6 +125,8 @@ export type {
   BridgeWorktreesResult,
 } from "./bridge.js";
 export {
+  BRIDGE_PROTOCOL_VERSION,
+  GENERAL_WORKSPACE_PROTOCOL_VERSION,
   parseBranchOutput,
   parseWorktreeListPorcelain,
   walkDir,

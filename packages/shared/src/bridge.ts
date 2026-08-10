@@ -5,6 +5,9 @@
 
 import type { GitCheckpointBridgePayload, GitCheckpointContext } from "./git-checkpoint.js";
 
+export const BRIDGE_PROTOCOL_VERSION = 4;
+export const GENERAL_WORKSPACE_PROTOCOL_VERSION = 3;
+
 // --- Server → Bridge commands ---
 
 export interface BridgeRunCommand {
@@ -63,6 +66,25 @@ export interface BridgePrepareCommand {
    * branch, and never resets or removes it. Takes precedence over readOnly.
    */
   adoptWorktreePath?: string;
+}
+
+export interface BridgePrepareGeneralCommand {
+  type: "prepare_general";
+  sessionId: string;
+  sessionGroupId?: string;
+}
+
+export interface BridgeCleanupGeneralWorkspaceCommand {
+  type: "cleanup_general_workspace";
+  sessionId: string;
+  sessionGroupId?: string;
+}
+
+export interface BridgeCleanupGeneralWorkspaceResult {
+  type: "cleanup_general_workspace_result";
+  sessionId: string;
+  success: boolean;
+  error?: string;
 }
 
 export interface BridgePrepareAppCommand {
@@ -472,6 +494,8 @@ export type BridgeCommand =
   | BridgeRunCommand
   | BridgeSendCommand
   | BridgePrepareCommand
+  | BridgePrepareGeneralCommand
+  | BridgeCleanupGeneralWorkspaceCommand
   | BridgePrepareAppCommand
   | BridgeUpgradeWorkspaceCommand
   | BridgeTerminateCommand
@@ -972,6 +996,7 @@ export type BridgeMessage =
   | BridgeSessionComplete
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed
+  | BridgeCleanupGeneralWorkspaceResult
   | BridgeToolSessionId
   | BridgeToolSessionMissing
   | BridgeGitCheckpoint

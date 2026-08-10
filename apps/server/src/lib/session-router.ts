@@ -34,6 +34,7 @@ import type {
   BridgeAnimationExportCommand,
   BridgeDesignSystemExportCommand,
 } from "@trace/shared";
+import { GENERAL_WORKSPACE_PROTOCOL_VERSION } from "@trace/shared";
 import { prisma } from "./db.js";
 import { isGeneratedProjectKind } from "./generated-project.js";
 import { runtimeDebug } from "./runtime-debug.js";
@@ -57,6 +58,8 @@ interface BaseSessionCommand {
     | "resume"
     | "send"
     | "prepare"
+    | "prepare_general"
+    | "cleanup_general_workspace"
     | "prepare_app"
     | "delete"
     | "list_branches"
@@ -159,7 +162,14 @@ export interface SessionAdapterCreateOptions {
   sessionId: string;
   /** Session group ID — used to key worktrees so all sessions in a group share the same workspace. */
   sessionGroupId?: string;
-  sessionGroupKind?: "coding" | "design" | "design_system" | "app" | "pdf" | "animation";
+  sessionGroupKind?:
+    | "general"
+    | "coding"
+    | "design"
+    | "design_system"
+    | "app"
+    | "pdf"
+    | "animation";
   prepareAppGit?: (runtimeInstanceId: string) => Promise<{
     repoId: string;
     repoRemoteUrl: string;
@@ -2365,6 +2375,35 @@ export class SessionRouter {
           if (result !== "delivered") {
             options.onFailed(`prepare_app: ${result}`);
           }
+          return;
+        }
+
+        // A linked repository is context for a general session, not permission
+        // to place the agent in a writable checkout. General sessions always
+        // start in their disposable scratch directory and convert before coding.
+        if (options.sessionGroupKind === "general") {
+          const runtime = expectedHomeRuntimeId
+            ? this.getRuntime(expectedHomeRuntimeId, options.organizationId)
+            : this.getRuntimeForSession(options.sessionId);
+          if ((runtime?.protocolVersion ?? 1) < GENERAL_WORKSPACE_PROTOCOL_VERSION) {
+            // Older bridges do not understand prepare_general. Preserve their
+            // established home-directory behavior until they are upgraded.
+            options.onWorkspaceReady?.(adapterType === "provisioned" ? "/home/coder" : "");
+            return;
+          }
+          const result = await this.sendAsync(
+            options.sessionId,
+            {
+              type: "prepare_general",
+              sessionId: options.sessionId,
+              sessionGroupId: options.sessionGroupId,
+            },
+            {
+              expectedHomeRuntimeId,
+              organizationId: options.organizationId,
+            },
+          );
+          if (result !== "delivered") options.onFailed(`prepare_general: ${result}`);
           return;
         }
 

@@ -117,7 +117,10 @@ function getCapabilities(config: Record<string, unknown>): Record<string, unknow
   return capabilities as Record<string, unknown>;
 }
 
-function assertSupportsTool(environment: AgentEnvironmentRecord, tool: CodingTool): void {
+export function assertAgentEnvironmentSupportsTool(
+  environment: Pick<AgentEnvironmentRecord, "config">,
+  tool: CodingTool,
+): void {
   const capabilities = getCapabilities(asConfigRecord(environment.config));
   const supportedTools = capabilities?.supportedTools;
   if (!Array.isArray(supportedTools)) return;
@@ -659,7 +662,7 @@ export class AgentEnvironmentService {
         .get(environment.adapterType)
         .validateConfig(asConfigRecord(environment.config));
       if (params.validateTool !== false) {
-        assertSupportsTool(environment, params.tool);
+        assertAgentEnvironmentSupportsTool(environment, params.tool);
       }
       return environment as ResolvedSessionEnvironment;
     });

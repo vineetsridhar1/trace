@@ -1,9 +1,18 @@
-import { AppWindow, CodeXml, Component, FileText, Frame, Gem, type LucideIcon } from "lucide-react";
+import {
+  AppWindow,
+  BotMessageSquare,
+  CodeXml,
+  Component,
+  FileText,
+  Frame,
+  Gem,
+  type LucideIcon,
+} from "lucide-react";
 import type { SessionGroupKind } from "@trace/gql";
 import { cn } from "../../lib/utils";
 import type { HomeCreatableKind } from "./home-kinds";
 
-export const DEFAULT_HOME_KIND: HomeCreatableKind = "coding";
+export const DEFAULT_HOME_KIND: HomeCreatableKind = "general";
 
 export const HOME_KIND_OPTIONS: ReadonlyArray<{
   kind: SessionGroupKind;
@@ -11,6 +20,7 @@ export const HOME_KIND_OPTIONS: ReadonlyArray<{
   Icon: LucideIcon;
   colorClass: string;
 }> = [
+  { kind: "general", label: "AI", Icon: BotMessageSquare, colorClass: "text-muted-foreground" },
   { kind: "coding", label: "Code", Icon: CodeXml, colorClass: "text-[var(--th-kind-code)]" },
   { kind: "design", label: "Design", Icon: Frame, colorClass: "text-[var(--th-kind-design)]" },
   { kind: "app", label: "App", Icon: AppWindow, colorClass: "text-[var(--th-kind-app)]" },
@@ -29,11 +39,8 @@ export const HOME_KIND_OPTIONS: ReadonlyArray<{
   },
 ];
 
-export const HOME_CREATE_KIND_OPTIONS: ReadonlyArray<
-  (typeof HOME_KIND_OPTIONS)[number] & { kind: HomeCreatableKind }
-> = HOME_KIND_OPTIONS.filter(
-  (option): option is (typeof HOME_KIND_OPTIONS)[number] & { kind: HomeCreatableKind } =>
-    option.kind !== "design_system",
+export const HOME_SELECTABLE_KIND_OPTIONS = HOME_KIND_OPTIONS.filter(
+  ({ kind }) => kind !== "general" && kind !== "design_system",
 );
 
 export function HomeKindIcon({ kind, className }: { kind: SessionGroupKind; className?: string }) {
