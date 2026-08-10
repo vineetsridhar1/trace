@@ -343,6 +343,7 @@ export function SessionGroupDetailView({
 
   const {
     handleOpenTerminal,
+    handleCreateTerminal,
     handleCloseTerminal,
     handleSelectTerminal: selectTerminal,
   } = useTerminalActions({
@@ -473,18 +474,14 @@ export function SessionGroupDetailView({
     setActiveTerminalId(null);
   }, [activeTerminalId, terminals, setActiveTerminalId]);
 
-  // Auto-restore terminal tabs from server when returning to this session group.
+  // Restore terminals which predate this view. Subsequent lifecycle changes
+  // arrive through the organization event stream.
   useEffect(() => {
     let aborted = false;
     const firstSessionId = groupSessions[0]?.id;
     if (!firstSessionId) return;
 
-    const existingGroupTerminals = (
-      Object.values(useTerminalStore.getState().terminals) as Array<{ sessionGroupId: string }>
-    ).filter((t) => t.sessionGroupId === sessionGroupId);
-    if (existingGroupTerminals.length > 0) return;
-
-    client
+    void client
       .query(SESSION_TERMINALS_QUERY, { sessionId: firstSessionId })
       .toPromise()
       .then((result: { data?: Record<string, unknown> }) => {
@@ -1076,7 +1073,7 @@ export function SessionGroupDetailView({
                   onNewChat={handleNewChat}
                   onOpenTerminal={() => {
                     setActiveWorkflowTab("session");
-                    void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
+                    void handleCreateTerminal(selectedSession ?? null, terminalAllowed);
                   }}
                   onOpenFilePalette={handleOpenFilePalette}
                   canNewChat={

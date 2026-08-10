@@ -19,7 +19,6 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
   const setActiveSessionId = useUIStore((s) => s.setActiveSessionId);
   const setActiveTerminalId = useUIStore((s) => s.setActiveTerminalId);
   const addTerminal = useTerminalStore((s) => s.addTerminal);
-  const removeTerminal = useTerminalStore((s) => s.removeTerminal);
 
   const ensureSessionTerminals = useCallback(
     async (sessionId: string) => {
@@ -58,23 +57,35 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
         .toPromise();
       if (result.data?.createTerminal) {
         const { id } = result.data.createTerminal as { id: string };
-        addTerminal(id, session.id, sessionGroupId);
         setActiveSessionId(session.id);
         setActiveTerminalId(id);
       }
     },
-    [addTerminal, ensureSessionTerminals, sessionGroupId, setActiveSessionId, setActiveTerminalId],
+    [ensureSessionTerminals, setActiveSessionId, setActiveTerminalId],
+  );
+
+  const handleCreateTerminal = useCallback(
+    async (session: { id: string; _optimistic?: boolean } | null, terminalAllowed: boolean) => {
+      if (!session || session._optimistic || !terminalAllowed) return;
+      const result = await client
+        .mutation(CREATE_TERMINAL_MUTATION, { sessionId: session.id, cols: 80, rows: 24 })
+        .toPromise();
+      if (!result.data?.createTerminal) return;
+      const { id } = result.data.createTerminal as { id: string };
+      setActiveSessionId(session.id);
+      setActiveTerminalId(id);
+    },
+    [setActiveSessionId, setActiveTerminalId],
   );
 
   const handleCloseTerminal = useCallback(
     async (terminalId: string) => {
-      removeTerminal(terminalId);
       if (activeTerminalId === terminalId) {
         setActiveTerminalId(null);
       }
       await client.mutation(DESTROY_TERMINAL_MUTATION, { terminalId }).toPromise();
     },
-    [activeTerminalId, removeTerminal, setActiveTerminalId],
+    [activeTerminalId, setActiveTerminalId],
   );
 
   const handleSelectTerminal = useCallback(
@@ -87,6 +98,7 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
 
   return {
     handleOpenTerminal,
+    handleCreateTerminal,
     handleCloseTerminal,
     handleSelectTerminal,
   };

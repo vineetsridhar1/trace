@@ -808,6 +808,8 @@ export type EventType =
   | "session_setup_script_started"
   | "session_started"
   | "session_terminated"
+  | "terminal_created"
+  | "terminal_destroyed"
   | "ticket_assigned"
   | "ticket_commented"
   | "ticket_created"
@@ -1080,6 +1082,7 @@ export type Mutation = {
   reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
   requestPdfSessionExport: Scalars["Boolean"]["output"];
+  resizeTerminal: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retryDesignSystemCommitArtifact: DesignSystem;
@@ -1098,6 +1101,7 @@ export type Mutation = {
   sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
+  sendTerminalInput: Scalars["Boolean"]["output"];
   setApiToken: ApiTokenStatus;
   setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
@@ -1478,6 +1482,12 @@ export type MutationRequestPdfSessionExportArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationResizeTerminalArgs = {
+  cols: Scalars["Int"]["input"];
+  rows: Scalars["Int"]["input"];
+  terminalId: Scalars["ID"]["input"];
+};
+
 export type MutationRestartSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
@@ -1574,6 +1584,11 @@ export type MutationSendSessionMessageArgs = {
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   sessionId: Scalars["ID"]["input"];
   text: Scalars["String"]["input"];
+};
+
+export type MutationSendTerminalInputArgs = {
+  data: Scalars["String"]["input"];
+  terminalId: Scalars["ID"]["input"];
 };
 
 export type MutationSetApiTokenArgs = {
@@ -1925,6 +1940,7 @@ export type Query = {
   sessionTimeline: SessionTimelinePage;
   sessions: Array<Session>;
   supportedAppIntegrations: Array<SupportedAppIntegration>;
+  terminalCapture: TerminalCapture;
   threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
@@ -2257,6 +2273,12 @@ export type QuerySessionTimelineArgs = {
 export type QuerySessionsArgs = {
   filters?: InputMaybe<SessionFilters>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryTerminalCaptureArgs = {
+  maxBytes?: InputMaybe<Scalars["Int"]["input"]>;
+  plainText?: InputMaybe<Scalars["Boolean"]["input"]>;
+  terminalId: Scalars["ID"]["input"];
 };
 
 export type QueryThreadRepliesArgs = {
@@ -2888,8 +2910,23 @@ export type SupportedIntegrationCapability = {
 
 export type Terminal = {
   __typename?: "Terminal";
+  cols?: Maybe<Scalars["Int"]["output"]>;
+  connected: Scalars["Boolean"]["output"];
   id: Scalars["ID"]["output"];
+  rows?: Maybe<Scalars["Int"]["output"]>;
   sessionId: Scalars["ID"]["output"];
+  status: Scalars["String"]["output"];
+};
+
+export type TerminalCapture = {
+  __typename?: "TerminalCapture";
+  byteCount: Scalars["Int"]["output"];
+  capturedAt: Scalars["DateTime"]["output"];
+  closed: Scalars["Boolean"]["output"];
+  connected: Scalars["Boolean"]["output"];
+  output: Scalars["String"]["output"];
+  terminalId: Scalars["ID"]["output"];
+  truncated: Scalars["Boolean"]["output"];
 };
 
 export type TerminalEndpoint = {
@@ -3277,6 +3314,7 @@ export type ResolversTypes = ResolversObject<{
   SupportedAppIntegration: ResolverTypeWrapper<SupportedAppIntegration>;
   SupportedIntegrationCapability: ResolverTypeWrapper<SupportedIntegrationCapability>;
   Terminal: ResolverTypeWrapper<Terminal>;
+  TerminalCapture: ResolverTypeWrapper<TerminalCapture>;
   TerminalEndpoint: ResolverTypeWrapper<TerminalEndpoint>;
   ThreadSummary: ResolverTypeWrapper<ThreadSummary>;
   Ticket: ResolverTypeWrapper<Ticket>;
@@ -3421,6 +3459,7 @@ export type ResolversParentTypes = ResolversObject<{
   SupportedAppIntegration: SupportedAppIntegration;
   SupportedIntegrationCapability: SupportedIntegrationCapability;
   Terminal: Terminal;
+  TerminalCapture: TerminalCapture;
   TerminalEndpoint: TerminalEndpoint;
   ThreadSummary: ThreadSummary;
   Ticket: Ticket;
@@ -4711,6 +4750,12 @@ export type MutationResolvers<
     ContextType,
     RequireFields<MutationRequestPdfSessionExportArgs, "sessionGroupId">
   >;
+  resizeTerminal?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationResizeTerminalArgs, "cols" | "rows" | "terminalId">
+  >;
   restartSessionProcess?: Resolver<
     ResolversTypes["SessionApplicationProcess"],
     ParentType,
@@ -4821,6 +4866,12 @@ export type MutationResolvers<
     ParentType,
     ContextType,
     RequireFields<MutationSendSessionMessageArgs, "sessionId" | "text">
+  >;
+  sendTerminalInput?: Resolver<
+    ResolversTypes["Boolean"],
+    ParentType,
+    ContextType,
+    RequireFields<MutationSendTerminalInputArgs, "data" | "terminalId">
   >;
   setApiToken?: Resolver<
     ResolversTypes["ApiTokenStatus"],
@@ -5559,6 +5610,12 @@ export type QueryResolvers<
     ParentType,
     ContextType
   >;
+  terminalCapture?: Resolver<
+    ResolversTypes["TerminalCapture"],
+    ParentType,
+    ContextType,
+    RequireFields<QueryTerminalCaptureArgs, "terminalId">
+  >;
   threadReplies?: Resolver<
     Array<ResolversTypes["Message"]>,
     ParentType,
@@ -6154,8 +6211,27 @@ export type TerminalResolvers<
   ContextType = Context,
   ParentType extends ResolversParentTypes["Terminal"] = ResolversParentTypes["Terminal"],
 > = ResolversObject<{
+  cols?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
+  connected?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   id?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  rows?: Resolver<Maybe<ResolversTypes["Int"]>, ParentType, ContextType>;
   sessionId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type TerminalCaptureResolvers<
+  ContextType = Context,
+  ParentType extends ResolversParentTypes["TerminalCapture"] =
+    ResolversParentTypes["TerminalCapture"],
+> = ResolversObject<{
+  byteCount?: Resolver<ResolversTypes["Int"], ParentType, ContextType>;
+  capturedAt?: Resolver<ResolversTypes["DateTime"], ParentType, ContextType>;
+  closed?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  connected?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
+  output?: Resolver<ResolversTypes["String"], ParentType, ContextType>;
+  terminalId?: Resolver<ResolversTypes["ID"], ParentType, ContextType>;
+  truncated?: Resolver<ResolversTypes["Boolean"], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -6335,6 +6411,7 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   SupportedAppIntegration?: SupportedAppIntegrationResolvers<ContextType>;
   SupportedIntegrationCapability?: SupportedIntegrationCapabilityResolvers<ContextType>;
   Terminal?: TerminalResolvers<ContextType>;
+  TerminalCapture?: TerminalCaptureResolvers<ContextType>;
   TerminalEndpoint?: TerminalEndpointResolvers<ContextType>;
   ThreadSummary?: ThreadSummaryResolvers<ContextType>;
   Ticket?: TicketResolvers<ContextType>;

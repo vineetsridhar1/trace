@@ -805,6 +805,8 @@ export type EventType =
   | "session_setup_script_started"
   | "session_started"
   | "session_terminated"
+  | "terminal_created"
+  | "terminal_destroyed"
   | "ticket_assigned"
   | "ticket_commented"
   | "ticket_created"
@@ -1077,6 +1079,7 @@ export type Mutation = {
   reorderQueuedMessages: Array<QueuedMessage>;
   requestBridgeAccess: BridgeAccessRequest;
   requestPdfSessionExport: Scalars["Boolean"]["output"];
+  resizeTerminal: Scalars["Boolean"]["output"];
   restartSessionProcess: SessionApplicationProcess;
   restoreLinkedCheckout: LinkedCheckoutActionResult;
   retryDesignSystemCommitArtifact: DesignSystem;
@@ -1095,6 +1098,7 @@ export type Mutation = {
   sendChatMessage: Message;
   sendMessage: Event;
   sendSessionMessage: Event;
+  sendTerminalInput: Scalars["Boolean"]["output"];
   setApiToken: ApiTokenStatus;
   setCodexCredential: CodexCredentialStatus;
   setLinkedCheckoutAutoSync: LinkedCheckoutActionResult;
@@ -1475,6 +1479,12 @@ export type MutationRequestPdfSessionExportArgs = {
   sessionGroupId: Scalars["ID"]["input"];
 };
 
+export type MutationResizeTerminalArgs = {
+  cols: Scalars["Int"]["input"];
+  rows: Scalars["Int"]["input"];
+  terminalId: Scalars["ID"]["input"];
+};
+
 export type MutationRestartSessionProcessArgs = {
   appConfigId: Scalars["ID"]["input"];
   processConfigId: Scalars["ID"]["input"];
@@ -1571,6 +1581,11 @@ export type MutationSendSessionMessageArgs = {
   interactionMode?: InputMaybe<Scalars["String"]["input"]>;
   sessionId: Scalars["ID"]["input"];
   text: Scalars["String"]["input"];
+};
+
+export type MutationSendTerminalInputArgs = {
+  data: Scalars["String"]["input"];
+  terminalId: Scalars["ID"]["input"];
 };
 
 export type MutationSetApiTokenArgs = {
@@ -1922,6 +1937,7 @@ export type Query = {
   sessionTimeline: SessionTimelinePage;
   sessions: Array<Session>;
   supportedAppIntegrations: Array<SupportedAppIntegration>;
+  terminalCapture: TerminalCapture;
   threadReplies: Array<Message>;
   threadSummary?: Maybe<ThreadSummary>;
   ticket?: Maybe<Ticket>;
@@ -2254,6 +2270,12 @@ export type QuerySessionTimelineArgs = {
 export type QuerySessionsArgs = {
   filters?: InputMaybe<SessionFilters>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryTerminalCaptureArgs = {
+  maxBytes?: InputMaybe<Scalars["Int"]["input"]>;
+  plainText?: InputMaybe<Scalars["Boolean"]["input"]>;
+  terminalId: Scalars["ID"]["input"];
 };
 
 export type QueryThreadRepliesArgs = {
@@ -2885,8 +2907,23 @@ export type SupportedIntegrationCapability = {
 
 export type Terminal = {
   __typename?: "Terminal";
+  cols?: Maybe<Scalars["Int"]["output"]>;
+  connected: Scalars["Boolean"]["output"];
   id: Scalars["ID"]["output"];
+  rows?: Maybe<Scalars["Int"]["output"]>;
   sessionId: Scalars["ID"]["output"];
+  status: Scalars["String"]["output"];
+};
+
+export type TerminalCapture = {
+  __typename?: "TerminalCapture";
+  byteCount: Scalars["Int"]["output"];
+  capturedAt: Scalars["DateTime"]["output"];
+  closed: Scalars["Boolean"]["output"];
+  connected: Scalars["Boolean"]["output"];
+  output: Scalars["String"]["output"];
+  terminalId: Scalars["ID"]["output"];
+  truncated: Scalars["Boolean"]["output"];
 };
 
 export type TerminalEndpoint = {
