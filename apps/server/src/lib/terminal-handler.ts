@@ -141,7 +141,9 @@ export function handleTerminalConnection(
       return false;
     };
 
-    const authContext = terminalRelay.getTerminalAuthContext(terminalId);
+    const authContext = terminalRelay.getTerminalAuthContextDistributed
+      ? await terminalRelay.getTerminalAuthContextDistributed(terminalId)
+      : terminalRelay.getTerminalAuthContext(terminalId);
     if (!authContext || !userId || authContext.ownerUserId !== userId) {
       return denyCurrentCommand();
     }
