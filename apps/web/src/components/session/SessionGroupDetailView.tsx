@@ -775,7 +775,9 @@ export function SessionGroupDetailView({
       groupRepo ??
       (selectedSession.repo as { id: string; remoteUrl?: string | null } | null | undefined);
     if (selectedSession.hosting === "cloud" && repoRemoteKnownMissing(selectedRepo)) {
-      toast.error("Cloud is unavailable for this repo", { description: CLOUD_REPO_REMOTE_REQUIRED });
+      toast.error("Cloud is unavailable for this repo", {
+        description: CLOUD_REPO_REMOTE_REQUIRED,
+      });
       return null;
     }
     const selectedHosting = resolveSupportedHostingForRepo(selectedSession.hosting, selectedRepo);
