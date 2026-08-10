@@ -1,6 +1,8 @@
 import { ListChecks } from "lucide-react";
 import { stripPromptWrapping } from "./interactionModes";
+import { structuredResponseSummary } from "./structuredResponseSummary";
 import { TraceLoader } from "../ui/trace-loader";
+import { Markdown } from "../ui/Markdown";
 import type { CompactChatSummary } from "./compact-chat-summary";
 
 export function CondensedSessionMessages({
@@ -24,9 +26,11 @@ export function CondensedSessionMessages({
         {summary.userText ? (
           <div className="flex justify-end">
             <div className="max-w-[88%] rounded-2xl rounded-br-md bg-accent/15 px-3 py-2.5 text-sm leading-5 text-foreground">
-              <p className="line-clamp-3 whitespace-pre-wrap">
-                {stripPromptWrapping(summary.userText)}
-              </p>
+              <div className="line-clamp-3">
+                <Markdown>
+                  {structuredResponseSummary(stripPromptWrapping(summary.userText))}
+                </Markdown>
+              </div>
             </div>
           </div>
         ) : null}
