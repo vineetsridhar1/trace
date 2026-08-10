@@ -17,6 +17,7 @@ export function ProjectPreviewWorkspace({
   canvasReady,
   canvasKey,
   canvas,
+  floatingChat,
   showCanvasWhileLoading = false,
   manualSessionGroupId,
   onOpenArtifact,
@@ -29,6 +30,7 @@ export function ProjectPreviewWorkspace({
   canvasReady: boolean;
   canvasKey: string;
   canvas: ReactNode;
+  floatingChat: boolean;
   showCanvasWhileLoading?: boolean;
   manualSessionGroupId?: string;
   onOpenArtifact: OpenArtifact;
@@ -95,7 +97,7 @@ export function ProjectPreviewWorkspace({
       </div>
     );
 
-  if (!isMobile && canvasRevealed && !manualEditing) {
+  if (!isMobile && canvasRevealed && !manualEditing && floatingChat) {
     return (
       <div className="relative isolate h-full min-h-0 overflow-hidden">
         <motion.main
