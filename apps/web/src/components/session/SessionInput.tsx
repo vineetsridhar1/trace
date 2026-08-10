@@ -21,7 +21,6 @@ import { TraceLoader } from "../ui/trace-loader";
 import { toast } from "sonner";
 import { type ChatEditorHandle, type ChatEditorSubmitOptions } from "../chat/ChatEditor";
 import { SessionComposer } from "./SessionComposer";
-import { hasMessageContent } from "../chat/message-utils";
 import { useSlashCommands } from "./useSlashCommands";
 import { createQuickSession } from "../../lib/create-quick-session";
 import { showToolNotInstalledToast } from "../../lib/coding-tool-install";
@@ -95,7 +94,7 @@ export function SessionInput({
     () => useDraftsStore.getState().drafts[sessionId]?.html ?? "",
   );
   const [hasContent, setHasContent] = useState(
-    () => hasMessageContent(useDraftsStore.getState().drafts[sessionId]?.text ?? ""),
+    () => (useDraftsStore.getState().drafts[sessionId]?.text ?? "").trim().length > 0,
   );
   const [mode, setMode] = useState<InteractionMode>("code");
   const [isSending, setIsSending] = useState(false);
@@ -469,7 +468,7 @@ export function SessionInput({
           onRemoveAttachment={handleRemoveImage}
           onOpenAttachment={handleOpenAttachment}
           onChange={(text: string, html: string) => {
-            setHasContent(hasMessageContent(text));
+            setHasContent(text.trim().length > 0);
             setDraftText(sessionId, text, html);
           }}
           emptyHint={

@@ -14,7 +14,6 @@ import { Mention } from "quill-mention";
 import "./MentionBlot";
 import "./mention-styles.css";
 import { createCustomUserElement, createSlashCommandElement } from "./mention-dom";
-import { editorTextToMessageText, hasMessageContent } from "./message-utils";
 
 // Guard against double-registration (e.g. HMR in dev mode)
 if (!Quill.imports["modules/mention"]) {
@@ -308,8 +307,8 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
       if (!editor || disabled || submitDisabled) return false;
 
       const html = editor.root.innerHTML;
-      const text = editorTextToMessageText(editor.getText());
-      if (!hasMessageContent(text) && !hasAttachmentsRef.current) return false;
+      const text = editor.getText().trim();
+      if (!text && !hasAttachmentsRef.current) return false;
 
       // Clear input immediately so it feels instant — the optimistic message
       // is already in the store by the time onSubmit returns synchronously.
@@ -340,7 +339,7 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(function
       submit,
       getText: () => {
         const editor = quillRef.current?.getEditor();
-        return editor ? editorTextToMessageText(editor.getText()) : "";
+        return editor?.getText().trim() ?? "";
       },
       setText: replaceEditorText,
       clear: () => {
