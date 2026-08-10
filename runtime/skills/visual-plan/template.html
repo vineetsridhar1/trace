@@ -3,9 +3,10 @@
   Trace visual plan canvas.
 
   Copy this file into the change-specific folder under docs/ with a descriptive
-  filename, then replace the sample content. This file is the agent's authoring canvas. Keep the <style> block;
-  it is the component vocabulary. Every class below is demonstrated once in the
-  body so you can see what it renders as.
+  filename. This is a component palette, not an outline: start with the decision
+  brief below and add only sections that answer a reviewer question for the change.
+  Do not add scope, phases, file inventories, metrics, or diagrams merely because
+  a plan usually has them. Keep the <style> block; it is the component vocabulary.
 
   Rules that are enforced on upload:
     - Exactly one HTML document per plan folder.
@@ -497,6 +498,39 @@
   </head>
   <body>
     <article class="plan">
+      <h1 class="plan-title">[Change title]</h1>
+      <p class="plan-summary">
+        [The decision to approve, the concrete outcome, and why it is the right approach.]
+      </p>
+      <div class="meta">
+        <span class="chip"><strong>Decision</strong> [what approval enables]</span>
+        <span class="chip"><strong>Confidence</strong> [known / assumption / open choice]</span>
+      </div>
+
+      <section>
+        <h2>What needs approval</h2>
+        <div class="callout">
+          <strong>[The key decision.]</strong> [State the proposed approach, the constraint it
+          resolves, and the most important proof point.]
+        </div>
+      </section>
+
+      <!--
+        Add only components that earn their place:
+        - .flow / .diagram-svg: behavior across a boundary or a failure branch
+        - .sequence: ordered interactions and ownership
+        - .split or a table: comparison, alternatives, or coordinated impact
+        - .metrics: a few real, decision-relevant quantities
+        - <details>: evidence a reviewer may inspect but need not scan
+        - .callout.risk: a material risk, assumption, or rollout gate
+
+        For every implementation move, describe: responsible symbol/boundary;
+        behavior or invariant changed; important condition; verification method.
+      -->
+    </article>
+
+    <!-- Legacy examples retained as a source-level component reference only.
+    <article class="plan">
       <h1 class="plan-title">Title of the change</h1>
       <p class="plan-summary">
         One or two sentences a reviewer can decide on: what changes, and what it buys.
@@ -745,6 +779,7 @@
         </div>
       </section>
     </article>
+    -->
     <script>
       (() => {
         document.querySelectorAll("[data-view-switcher]").forEach((switcher) => {

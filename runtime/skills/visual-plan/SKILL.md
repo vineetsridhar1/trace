@@ -12,8 +12,8 @@ repository.
 Design for two reading modes:
 
 - Give a reviewer the decision, value, scope, architecture, and major risks in a 90-second scan.
-- Give an implementer enough expandable evidence, contracts, file detail, and verification criteria
-  to execute without repeating discovery.
+- Give an implementer enough expandable evidence, behavioral detail, and verification criteria to
+  execute without repeating discovery.
 
 Keep approval-critical information visible. Put substantiation and execution detail behind
 progressive disclosure; never bury a breaking change, open decision, migration, or major risk.
@@ -44,7 +44,38 @@ change the plan. Look for:
 Prefer reading a few files completely over grepping many files shallowly. Keep notes as evidence,
 but make the published canvas a coherent argument rather than a research dump.
 
-## 2. Design the explanation
+## 2. Design the explanation around decisions
+
+Do not fill out a plan form. First identify the few questions a reviewer must be able to answer to
+approve this change: for example, "is this the right boundary?", "what behavior changes?", "how
+will existing data or callers survive?", or "what is the smallest safe rollout?". Make each
+visible section answer one of those questions. Omit sections that answer no question for this
+change.
+
+Match plan depth to uncertainty, not to apparent change size:
+
+- **Direct, local change:** outcome, precise behavior, implementation moves, and proof may be
+  enough. Use one comparison or flow only if it makes the behavior clearer.
+- **Cross-boundary change:** show the contract and the handoff between layers. Name the source and
+  destination, the data or event that crosses, and each side's responsibility.
+- **Behavioral or stateful change:** show normal, edge, and failure behavior. A decision flow or
+  state view is usually more useful than a file list.
+- **Migration, rollout, or compatibility change:** make before/after behavior, compatibility
+  window, reversibility, and rollout gates visible.
+- **Design choice with viable alternatives:** show the decision, rejected alternatives, and why.
+  Do not disguise a meaningful choice as an implementation detail.
+
+Describe execution as concrete moves, not vague phases or a file inventory. For each move, state:
+
+- the responsible boundary or symbol;
+- what behavior, contract, or invariant changes;
+- the important condition, failure case, or compatibility constraint; and
+- how that move is proved.
+
+Name paths or symbols only where they anchor a claim, identify the owner of a change, or help an
+implementer start. Include an impact map when several components or consumers need coordination;
+do not list every touched file merely to look complete. State scope, non-goals, risks, assumptions,
+or a phased rollout only when they materially constrain approval or implementation.
 
 Choose the story and visuals from the shape of the change. Use:
 
@@ -62,10 +93,10 @@ the transition, show important unhappy paths, and distinguish existing, changed,
 Prefer editable HTML/CSS for simple diagrams and inline SVG for branches or connectors that would
 otherwise be ambiguous. Do not use ASCII diagrams or external diagram libraries.
 
-Cover, in whatever order best explains the change: objective and outcome, scope and explicit
-non-goals, current state grounded in real paths, the proposed behavior and boundaries, phased work,
-the file impact map, verification criteria, and risks with mitigations. State assumptions as
-assumptions and include the consequence of being wrong.
+Start with the proposed outcome and the decision being requested. Then use only the evidence needed
+to make that decision safe: current state when it explains a constraint, proposed behavior and
+boundaries, concrete implementation moves, verification, and any material risk or unknown. State
+assumptions with the consequence of being wrong.
 
 Use `<details>` for supporting material. Write a conclusion-bearing `<summary>` that remains useful
 when collapsed. Keep the decision, behavioral changes, critical risks, migrations, and unresolved
@@ -89,10 +120,10 @@ cp "$TRACE_SKILLS_DIR/visual-plan/template.html" \
 ```
 
 The HTML filename is descriptive, not standardized. Treat the copied file as a component palette,
-not a form: delete sample sections, reorder the story, combine components, and add shapes when the
-change calls for them. The template demonstrates summaries and metrics, cards, flows, before/after
-views, a branching flowchart, an interaction sequence, phases, accordions, tables, tags, callouts,
-and small DOM-only interactions.
+not a form: start from its small decision brief, then add only the components that answer an
+approval question. Reorder the story, combine components, and add shapes when the change calls for
+them. The template supplies summaries and metrics, cards, flows, before/after views, a branching
+flowchart, an interaction sequence, tables, tags, callouts, and small DOM-only interactions.
 
 Use inline CSS, inline SVG, and concise inline JavaScript to make the explanation clear and
 interactive. Scripts may modify only their own document: do not access the network, storage,
@@ -111,7 +142,9 @@ Before publishing, verify:
 - The visible layer stands alone as a 90-second decision brief.
 - Expanded detail adds evidence rather than repeating the summary.
 - Every visual answers a relationship, sequence, state, comparison, or impact question.
-- Every proposed boundary change names its affected files or symbols and its verification method.
+- Every proposed boundary change names its affected symbol or owner and its verification method.
+- Each implementation move says what will change and how its behavior will be proved; no step is
+  merely "update", "wire up", or "add support".
 - Facts, assumptions, open decisions, and non-goals are distinguishable.
 - Another agent could implement the plan without repeating repository discovery.
 
