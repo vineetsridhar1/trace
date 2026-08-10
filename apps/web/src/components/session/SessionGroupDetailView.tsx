@@ -343,6 +343,7 @@ export function SessionGroupDetailView({
 
   const {
     handleOpenTerminal,
+    handleCreateTerminal,
     handleCloseTerminal,
     handleSelectTerminal: selectTerminal,
   } = useTerminalActions({
@@ -473,31 +474,32 @@ export function SessionGroupDetailView({
     setActiveTerminalId(null);
   }, [activeTerminalId, terminals, setActiveTerminalId]);
 
-  // Auto-restore terminal tabs from server when returning to this session group.
+  // Reconcile server terminals while the session group is visible. CLI-created
+  // terminals do not flow through the local Zustand creation action.
   useEffect(() => {
     let aborted = false;
     const firstSessionId = groupSessions[0]?.id;
     if (!firstSessionId) return;
 
-    const existingGroupTerminals = (
-      Object.values(useTerminalStore.getState().terminals) as Array<{ sessionGroupId: string }>
-    ).filter((t) => t.sessionGroupId === sessionGroupId);
-    if (existingGroupTerminals.length > 0) return;
-
-    client
-      .query(SESSION_TERMINALS_QUERY, { sessionId: firstSessionId })
-      .toPromise()
-      .then((result: { data?: Record<string, unknown> }) => {
-        if (aborted) return;
-        const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
-        for (const terminal of serverTerminals) {
-          if (!useTerminalStore.getState().terminals[terminal.id]) {
-            addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
+    const restore = () => {
+      void client
+        .query(SESSION_TERMINALS_QUERY, { sessionId: firstSessionId })
+        .toPromise()
+        .then((result: { data?: Record<string, unknown> }) => {
+          if (aborted) return;
+          const serverTerminals = (result.data?.sessionTerminals as Terminal[] | undefined) ?? [];
+          for (const terminal of serverTerminals) {
+            if (!useTerminalStore.getState().terminals[terminal.id]) {
+              addTerminal(terminal.id, terminal.sessionId, sessionGroupId, "active");
+            }
           }
-        }
-      });
+        });
+    };
+    restore();
+    const interval = setInterval(restore, 2_000);
     return () => {
       aborted = true;
+      clearInterval(interval);
     };
   }, [groupSessions, sessionGroupId, addTerminal]);
   const selectedSessionIsOptimistic = selectedSession?._optimistic === true;
@@ -1076,7 +1078,7 @@ export function SessionGroupDetailView({
                   onNewChat={handleNewChat}
                   onOpenTerminal={() => {
                     setActiveWorkflowTab("session");
-                    void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
+                    void handleCreateTerminal(selectedSession ?? null, terminalAllowed);
                   }}
                   onOpenFilePalette={handleOpenFilePalette}
                   canNewChat={
