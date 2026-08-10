@@ -19,15 +19,12 @@ The agent creates a linked session only for independent or parallel work.
 | `app`, `design`, `pdf`, `animation` | cloud only     |
 | `design_system`                     | dedicated flow |
 
-Cloud-only conversion is a runtime migration: verify that a cloud environment
-exists, prepare the managed repository, stop the old runtime, persist the cloud
-binding, and provision the target starter. Provisioning failures remain visible
-and retryable on the converted session. There is no silent local fallback.
-
-The durable kind change and runtime preparation are separate outcomes. Once the
-kind change commits, a handoff error is recorded as a retryable workspace failure
-on the converted session; the mutation does not claim that the conversion itself
-rolled back, and its managed repository is retained for retry.
+Cloud-only conversion is a runtime migration: verify that a compatible cloud
+environment exists, prepare the managed repository, stop the old runtime, and
+atomically persist the target kind, repository, and cloud binding. Failures before
+that transaction leave the session general and remove the unused managed repo.
+Provisioning failures after the cloud binding commits remain visible and retryable
+on the converted session. There is no silent local fallback.
 
 ## Conversion contract
 
@@ -52,8 +49,8 @@ A repository attached to a general session is context only. Local and cloud
 general sessions always run from `~/trace/general-sessions/<session-group-id>`,
 never a writable repository checkout. Converting to coding upgrades that scratch
 workspace to the selected repository worktree. The bridge removes the scratch
-directory after a successful upgrade; cross-runtime cleanup is persisted and
-retried when the source bridge reconnects.
+directory after a successful upgrade; cross-runtime cleanup is persisted until
+the source bridge confirms deletion and retried when that bridge reconnects.
 
 Creation-mode conversion clears channel/project links, creates a Trace-managed
 repo, stops the old runtime, and moves the existing session to the default cloud

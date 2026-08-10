@@ -51,7 +51,10 @@ import {
   setBridgeAccessApprovedHandler,
   type BridgeAccessApprovedHandlerInput,
 } from "./runtime-access.js";
-import { agentEnvironmentService } from "./agent-environment.js";
+import {
+  agentEnvironmentService,
+  assertAgentEnvironmentSupportsTool,
+} from "./agent-environment.js";
 import {
   alertAgentEnvironmentOperator,
   logAgentEnvironmentTelemetry,
@@ -143,6 +146,22 @@ export type ConvertSessionGroupServiceInput = {
   organizationId: string;
   actorId: string;
   actorType?: ActorType;
+};
+
+type GeneratedSessionConversion = {
+  kind: "app" | "design" | "pdf" | "animation";
+  repoId: string;
+  branch: string;
+  tool: CodingTool;
+  model?: string | null;
+  reasoningEffort?: string | null;
+};
+
+type ProvisioningEnvironment = {
+  id: string;
+  name: string;
+  adapterType: RuntimeAdapterType;
+  config: Prisma.JsonValue;
 };
 
 type SessionStartMetadata = {
@@ -2007,12 +2026,7 @@ export class SessionService {
     sessionId: string;
     organizationId: string;
     adapterType?: RuntimeAdapterType;
-  }): Promise<{
-    id: string;
-    name: string;
-    adapterType: RuntimeAdapterType;
-    config: Prisma.JsonValue;
-  } | null> {
+  }): Promise<ProvisioningEnvironment | null> {
     if (params.adapterType !== "provisioned") return null;
     const session = await prisma.session.findUnique({
       where: { id: params.sessionId },
@@ -3456,8 +3470,8 @@ export class SessionService {
       throw new ValidationError(`${input.kind} sessions require cloud hosting`);
     }
 
-    let managedRepo: Awaited<ReturnType<typeof managedGitService.createManagedRepo>> | null = null;
     if (targetIsGenerated) {
+      const generatedKind = input.kind as GeneratedSessionConversion["kind"];
       const source = await prisma.sessionGroup.findFirst({
         where: {
           id: input.sessionGroupId,
@@ -3469,7 +3483,7 @@ export class SessionService {
           sessions: {
             orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
             take: 2,
-            select: { id: true, name: true, tool: true },
+            include: SESSION_INCLUDE,
           },
         },
       });
@@ -3481,6 +3495,20 @@ export class SessionService {
         throw new ValidationError("Only single-session groups can be converted");
       }
       const sourceSession = source.sessions[0]!;
+      const targetTool = input.tool ?? sourceSession.tool;
+      const toolChanged = targetTool !== sourceSession.tool;
+      const targetModel =
+        input.model != null
+          ? validateModelForTool(targetTool, input.model)
+          : toolChanged
+            ? (getDefaultModel(targetTool) ?? null)
+            : undefined;
+      const targetReasoningEffort =
+        input.reasoningEffort != null
+          ? validateReasoningEffortForTool(targetTool, input.reasoningEffort)
+          : toolChanged
+            ? (getDefaultReasoningEffort(targetTool) ?? null)
+            : undefined;
       const cloudEnvironment = await this.resolveProvisioningEnvironment({
         sessionId: sourceSession.id,
         organizationId: input.organizationId,
@@ -3489,20 +3517,72 @@ export class SessionService {
       if (!cloudEnvironment) {
         throw new ValidationError("No enabled cloud agent environment is configured");
       }
-      managedRepo = await managedGitService.createManagedRepo({
+      assertAgentEnvironmentSupportsTool(cloudEnvironment, targetTool);
+      const managedRepo = await managedGitService.createManagedRepo({
         organizationId: input.organizationId,
         name: `${sourceSession.name} source`,
         actorType: input.actorType ?? "user",
         actorId: input.actorId,
       });
+
+      try {
+        return await this.moveSessionInPlace({
+          session: sourceSession,
+          targetHosting: "cloud",
+          targetRuntimeInstanceId: null,
+          targetRuntimeLabel: null,
+          targetEnvironment: cloudEnvironment,
+          allowUnverifiedSourceGitStatus: true,
+          bootstrapPrompt: conversionContinuationPrompt(generatedKind),
+          conversion: {
+            kind: generatedKind,
+            repoId: managedRepo.id,
+            branch: managedRepo.defaultBranch,
+            tool: targetTool,
+            model: targetModel,
+            reasoningEffort: targetReasoningEffort,
+          },
+          actorType: input.actorType ?? "user",
+          actorId: input.actorId,
+        });
+      } catch (error) {
+        const committed = await prisma.session.findFirst({
+          where: {
+            id: sourceSession.id,
+            organizationId: input.organizationId,
+            hosting: "cloud",
+            repoId: managedRepo.id,
+            sessionGroup: { kind: generatedKind },
+          },
+          include: SESSION_INCLUDE,
+        });
+        if (committed) {
+          const message = error instanceof Error ? error.message : String(error);
+          await this.workspaceFailed(
+            committed.id,
+            `Converted to ${generatedKind}, but workspace preparation failed: ${message}`,
+          ).catch(() => {});
+          return prisma.session.findUniqueOrThrow({
+            where: { id: committed.id },
+            include: SESSION_INCLUDE,
+          });
+        }
+        await managedGitService
+          .deleteManagedRepo({
+            organizationId: input.organizationId,
+            repoId: managedRepo.id,
+            actorType: input.actorType ?? "user",
+            actorId: input.actorId,
+          })
+          .catch(() => {});
+        throw error;
+      }
     }
 
-    let result: {
+    const result: {
       session: SessionWithInclude;
       event: Awaited<ReturnType<typeof eventService.create>>;
-    };
-    try {
-      result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         await tx.$queryRaw`SELECT "id" FROM "SessionGroup" WHERE "id" = ${input.sessionGroupId} FOR UPDATE`;
         const group = await tx.sessionGroup.findFirst({
           where: {
@@ -3544,9 +3624,18 @@ export class SessionService {
             : toolChanged
               ? (getDefaultReasoningEffort(targetTool) ?? null)
               : undefined;
+        const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
+        const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+        const effectiveRuntime =
+          boundRuntime ??
+          (persistedRuntimeId
+            ? runtimeMetadata(persistedRuntimeId, input.organizationId)
+            : undefined);
+        if (effectiveRuntime && !effectiveRuntime.supportedTools.includes(targetTool)) {
+          throw new ToolNotInstalledError(targetTool, effectiveRuntime.label ?? null);
+        }
         let targetChannelId: string | null = null;
         let targetRepoId: string;
-        let targetBranch: string | null = null;
         if (input.kind === "coding") {
           targetChannelId = input.channelId ?? group.channelId;
           if (!targetChannelId) {
@@ -3572,9 +3661,7 @@ export class SessionService {
           }
           targetRepoId = codingRepoId;
         } else {
-          if (!managedRepo) throw new Error("Generated workspace repository was not prepared");
-          targetRepoId = managedRepo.id;
-          targetBranch = managedRepo.defaultBranch;
+          throw new ValidationError(`Unsupported conversion target: ${input.kind}`);
         }
 
         if (input.projectId) {
@@ -3605,7 +3692,6 @@ export class SessionService {
             kind: input.kind,
             channelId: targetChannelId,
             repoId: targetRepoId,
-            ...(targetBranch ? { branch: targetBranch } : {}),
           },
         });
         const updated = await tx.session.update({
@@ -3613,18 +3699,15 @@ export class SessionService {
           data: {
             channelId: targetChannelId,
             repoId: targetRepoId,
-            ...(targetBranch ? { branch: targetBranch } : {}),
             readOnlyWorkspace: input.kind === "coding",
             ...(input.tool ? { tool: targetTool } : {}),
             ...(targetModel !== undefined ? { model: targetModel } : {}),
             ...(targetReasoningEffort !== undefined
               ? { reasoningEffort: targetReasoningEffort }
               : {}),
-            ...(targetIsGenerated
-              ? { projects: { deleteMany: {} } }
-              : input.projectId
-                ? { projects: { deleteMany: {}, create: { projectId: input.projectId } } }
-                : {}),
+            ...(input.projectId
+              ? { projects: { deleteMany: {}, create: { projectId: input.projectId } } }
+              : {}),
           },
           include: SESSION_INCLUDE,
         });
@@ -3651,49 +3734,8 @@ export class SessionService {
         );
         return { session: updated, event };
       });
-    } catch (error) {
-      if (managedRepo) {
-        await managedGitService
-          .deleteManagedRepo({
-            organizationId: input.organizationId,
-            repoId: managedRepo.id,
-            actorType: input.actorType ?? "user",
-            actorId: input.actorId,
-          })
-          .catch(() => {});
-      }
-      throw error;
-    }
 
     eventService.publishCreated(result.event);
-
-    if (targetIsGenerated) {
-      try {
-        return await this.moveSessionInPlace({
-          session: result.session,
-          targetHosting: "cloud",
-          targetRuntimeInstanceId: null,
-          targetRuntimeLabel: null,
-          allowUnverifiedSourceGitStatus: true,
-          bootstrapPrompt: conversionContinuationPrompt(input.kind),
-          actorType: input.actorType ?? "user",
-          actorId: input.actorId,
-        });
-      } catch (error) {
-        // The durable type change and its event have already committed. Runtime
-        // preparation is a retryable follow-up, so never report the conversion
-        // itself as failed or delete the managed repo it now owns.
-        const message = error instanceof Error ? error.message : String(error);
-        await this.workspaceFailed(
-          result.session.id,
-          `Converted to ${input.kind}, but workspace preparation failed: ${message}`,
-        );
-        return prisma.session.findUniqueOrThrow({
-          where: { id: result.session.id },
-          include: SESSION_INCLUDE,
-        });
-      }
-    }
 
     // An agent-initiated conversion is a handoff, not the end of the user's
     // request. Prepare the repository worktree and resume the same tool
@@ -8598,19 +8640,33 @@ export class SessionService {
       },
       input.organizationId,
     );
-    if (cleanupResult === "delivered") {
-      await prisma.session.updateMany({
-        where: {
-          id: input.sessionId,
-          pendingGeneralWorkspaceCleanupRuntimeId: input.runtimeInstanceId,
-        },
-        data: { pendingGeneralWorkspaceCleanupRuntimeId: null },
-      });
-      return;
-    }
+    if (cleanupResult === "delivered") return;
     console.warn(
       `[session] failed to clean up the general workspace for ${input.sessionId}: ${cleanupResult}`,
     );
+  }
+
+  async generalWorkspaceCleanupCompleted(input: {
+    sessionId: string;
+    organizationId: string;
+    runtimeInstanceId: string;
+    success: boolean;
+    error?: string;
+  }): Promise<void> {
+    if (!input.success) {
+      console.warn(
+        `[session] source runtime ${input.runtimeInstanceId} failed to clean up the general workspace for ${input.sessionId}: ${input.error ?? "unknown error"}`,
+      );
+      return;
+    }
+    await prisma.session.updateMany({
+      where: {
+        id: input.sessionId,
+        organizationId: input.organizationId,
+        pendingGeneralWorkspaceCleanupRuntimeId: input.runtimeInstanceId,
+      },
+      data: { pendingGeneralWorkspaceCleanupRuntimeId: null },
+    });
   }
 
   async storeToolSessionId(sessionId: string, toolSessionId: string) {
@@ -9557,8 +9613,10 @@ export class SessionService {
     targetRuntimeInstanceId?: string | null;
     targetRuntimeLabel?: string | null;
     targetRuntime?: Pick<RuntimeInstance, "supportedTools" | "label"> | null;
+    targetEnvironment?: ProvisioningEnvironment;
     allowUnverifiedSourceGitStatus?: boolean;
     bootstrapPrompt?: string;
+    conversion?: GeneratedSessionConversion;
     actorType: ActorType;
     actorId: string;
     runtimeLockHeld?: boolean;
@@ -9591,14 +9649,20 @@ export class SessionService {
       targetRuntimeInstanceId,
       targetRuntimeLabel,
       targetRuntime,
+      targetEnvironment: requestedTargetEnvironment,
       allowUnverifiedSourceGitStatus,
       bootstrapPrompt: requestedBootstrapPrompt,
+      conversion,
       actorType,
       actorId,
     } = params;
     const currentSessionGroup = (
       session as {
-        sessionGroup?: { visibility: string; ownerUserId: string } | null;
+        sessionGroup?: {
+          visibility: string;
+          ownerUserId: string;
+          kind: SessionGroupKind;
+        } | null;
       }
     ).sessionGroup;
     await this.assertPrivateRuntimeOwner({
@@ -9618,16 +9682,27 @@ export class SessionService {
         : null;
     const targetEnvironment =
       targetHosting === "cloud"
-        ? await this.resolveProvisioningEnvironment({
+        ? (requestedTargetEnvironment ??
+          (await this.resolveProvisioningEnvironment({
             sessionId: session.id,
             organizationId: session.organizationId,
             adapterType: "provisioned",
-          })
+          })))
         : null;
     if (targetHosting === "cloud" && !targetEnvironment) {
       throw new Error("No enabled cloud agent environment is configured");
     }
-    assertCloudRepoRemoteAvailable(targetHosting, session.repo);
+    const targetRepo = conversion
+      ? await prisma.repo.findFirst({
+          where: {
+            id: conversion.repoId,
+            organizationId: session.organizationId,
+            provider: "managed",
+          },
+          select: { remoteUrl: true },
+        })
+      : session.repo;
+    assertCloudRepoRemoteAvailable(targetHosting, targetRepo);
     let sourceCloudRuntimeSession =
       session.hosting === "cloud" && targetHosting === "local"
         ? await this.withGroupRuntimeState(session)
@@ -9710,8 +9785,10 @@ export class SessionService {
       sourceGitStatus?.headCommitSha && (!sourceGitStatus.branch || !sourceGitStatus.remoteBranch)
         ? sourceGitStatus.headCommitSha
         : null;
-    const sourceBranch = sourceGitStatus?.branch ?? session.branch ?? null;
+    const sourceBranch = conversion?.branch ?? sourceGitStatus?.branch ?? session.branch ?? null;
     const sourceConnection = this.parseConnection(session.connection);
+    const shouldCleanupGeneralWorkspace =
+      session.hosting === "local" && currentSessionGroup?.kind === "general";
     // Mark a cloud replacement as starting before any post-move events or
     // adapter work. `provisionRuntime` will reserve the concrete runtime id
     // shortly afterward, but idle cleanup can run in between; persisting the
@@ -9749,6 +9826,24 @@ export class SessionService {
       }
 
       if (session.sessionGroupId) {
+        if (conversion) {
+          const conversionFence = await tx.sessionGroup.updateMany({
+            where: {
+              id: session.sessionGroupId,
+              organizationId: session.organizationId,
+              kind: "general",
+              archivedAt: null,
+            },
+            data: {
+              kind: conversion.kind,
+              channelId: null,
+              repoId: conversion.repoId,
+            },
+          });
+          if (conversionFence.count !== 1) {
+            throw new ValidationError("Only active general sessions can be converted");
+          }
+        }
         await tx.sessionGroup.update({
           where: { id: session.sessionGroupId },
           data: {
@@ -9779,13 +9874,26 @@ export class SessionService {
               branch: sourceBranch,
               workdir: null,
               ...(isPrimary && {
+                ...(conversion
+                  ? {
+                      channelId: null,
+                      repoId: conversion.repoId,
+                      readOnlyWorkspace: false,
+                      tool: conversion.tool,
+                      ...(conversion.model !== undefined ? { model: conversion.model } : {}),
+                      ...(conversion.reasoningEffort !== undefined
+                        ? { reasoningEffort: conversion.reasoningEffort }
+                        : {}),
+                      projects: { deleteMany: {} },
+                    }
+                  : {}),
                 pendingRun: {
                   type: "run",
                   prompt: bootstrapPrompt,
                   interactionMode: null,
                 } satisfies PendingSessionCommand,
                 pendingGeneralWorkspaceCleanupRuntimeId:
-                  session.hosting === "local" ? sourceRuntimeId : null,
+                  shouldCleanupGeneralWorkspace ? sourceRuntimeId : null,
               }),
               toolSessionId: null,
               connection: connJson({
@@ -9818,10 +9926,39 @@ export class SessionService {
           },
         });
       }
-      return updated;
+      let conversionEvent: Awaited<ReturnType<typeof eventService.create>> | null = null;
+      if (conversion) {
+        const converted = updated[0];
+        if (!converted) throw new Error("Converted session was not persisted");
+        const convertedGroup = await this.loadSessionGroupSnapshot(session.sessionGroupId, tx);
+        if (!convertedGroup) throw new Error("Session group disappeared during conversion");
+        conversionEvent = await eventService.create(
+          {
+            organizationId: session.organizationId,
+            scopeType: "session",
+            scopeId: converted.id,
+            eventType: "session_converted" as EventType,
+            payload: eventJson({
+              sessionGroupId: session.sessionGroupId,
+              fromKind: "general",
+              toKind: conversion.kind,
+              session: serializeSession(converted),
+              sessionGroup: convertedGroup,
+            }),
+            actorType,
+            actorId,
+            deferPublish: true,
+          },
+          tx,
+        );
+      }
+      return { sessions: updated, conversionEvent };
     });
-    const movedSession = movedSessions[0];
+    const movedSession = movedSessions.sessions[0];
     if (!movedSession) throw new Error("Moved session was not persisted");
+    if (movedSessions.conversionEvent) {
+      eventService.publishCreated(movedSessions.conversionEvent);
+    }
     const sessionGroup = await this.loadSessionGroupSnapshot(movedSession.sessionGroupId);
 
     const targetRuntimeKey =
@@ -9829,7 +9966,7 @@ export class SessionService {
         ? (runtimeMetadata(targetRuntimeInstanceId, movedSession.organizationId)?.key ??
           targetRuntimeInstanceId)
         : null;
-    const sessionIdsToBind = new Set(movedSessions.map((moved) => moved.id));
+    const sessionIdsToBind = new Set(movedSessions.sessions.map((moved) => moved.id));
     if (movedSession.sessionGroupId) {
       const committedGroupSessions = await prisma.session.findMany({
         where: { sessionGroupId: movedSession.sessionGroupId },
@@ -9861,8 +9998,8 @@ export class SessionService {
       actorId,
     });
 
-    for (let index = 1; index < movedSessions.length; index++) {
-      const relocated = movedSessions[index];
+    for (let index = 1; index < movedSessions.sessions.length; index++) {
+      const relocated = movedSessions.sessions[index];
       const source = sessionsToMove[index];
       if (!relocated || !source) continue;
       await eventService.create({

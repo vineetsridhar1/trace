@@ -520,16 +520,29 @@ export class ContainerBridge implements IBridgeClient {
         const workdir = this.sessionWorkdirs.get(cmd.sessionId);
         void removeGeneralWorkspace(workdir, sessionKey)
           .then((removed) => {
-            if (!removed || !workdir) return;
-            for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
-              if (trackedWorkdir === workdir) this.sessionWorkdirs.delete(trackedSessionId);
+            if (removed && workdir) {
+              for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
+                if (trackedWorkdir === workdir) this.sessionWorkdirs.delete(trackedSessionId);
+              }
             }
+            this.send({
+              type: "cleanup_general_workspace_result",
+              sessionId: cmd.sessionId,
+              success: removed,
+              ...(!removed ? { error: "General workspace path was rejected" } : {}),
+            });
           })
           .catch((err: Error) => {
             console.warn(
               `[container-bridge] failed to remove general workspace ${workdir}:`,
               err.message,
             );
+            this.send({
+              type: "cleanup_general_workspace_result",
+              sessionId: cmd.sessionId,
+              success: false,
+              error: err.message,
+            });
           });
         break;
       }

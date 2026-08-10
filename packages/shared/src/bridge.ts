@@ -80,6 +80,13 @@ export interface BridgeCleanupGeneralWorkspaceCommand {
   sessionGroupId?: string;
 }
 
+export interface BridgeCleanupGeneralWorkspaceResult {
+  type: "cleanup_general_workspace_result";
+  sessionId: string;
+  success: boolean;
+  error?: string;
+}
+
 export interface BridgePrepareAppCommand {
   type: "prepare_app";
   sessionId: string;
@@ -989,6 +996,7 @@ export type BridgeMessage =
   | BridgeSessionComplete
   | BridgeWorkspaceReady
   | BridgeWorkspaceFailed
+  | BridgeCleanupGeneralWorkspaceResult
   | BridgeToolSessionId
   | BridgeToolSessionMissing
   | BridgeGitCheckpoint

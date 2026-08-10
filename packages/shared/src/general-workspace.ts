@@ -11,12 +11,10 @@ export async function removeGeneralWorkspace(
   sessionKey: string,
   homeDir = os.homedir(),
 ): Promise<boolean> {
-  if (!workdir) return false;
-
   const root = path.resolve(homeDir, "trace", "general-sessions");
   const expected = path.resolve(generalWorkspacePath(sessionKey, homeDir));
   if (!sessionKey || path.dirname(expected) !== root) return false;
-  if (path.resolve(workdir) !== expected) return false;
+  if (path.resolve(workdir ?? expected) !== expected) return false;
 
   await fs.promises.rm(expected, { recursive: true, force: true });
   return true;

@@ -17,6 +17,16 @@ async function makeHome(): Promise<string> {
 }
 
 describe("removeGeneralWorkspace", () => {
+  it("reconstructs the deterministic path after a bridge restart", async () => {
+    const home = await makeHome();
+    const workdir = generalWorkspacePath("group-1", home);
+    await fs.promises.mkdir(workdir, { recursive: true });
+    await fs.promises.writeFile(path.join(workdir, "temporary.txt"), "temporary");
+
+    await expect(removeGeneralWorkspace(undefined, "group-1", home)).resolves.toBe(true);
+    await expect(fs.promises.stat(workdir)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("removes the matching managed general workspace", async () => {
     const home = await makeHome();
     const workdir = generalWorkspacePath("group-1", home);
