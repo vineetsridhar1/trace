@@ -432,6 +432,7 @@ type PendingSessionCommand =
       checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
+      cleanupGeneralWorkspaceRuntimeId?: string | null;
       designAttachments?: DesignAttachmentRef[] | null;
     }
   | {
@@ -442,6 +443,7 @@ type PendingSessionCommand =
       checkpointContext?: GitCheckpointContext | null;
       imageKeys?: string[] | null;
       workspaceUpgrade?: boolean;
+      cleanupGeneralWorkspaceRuntimeId?: string | null;
       designAttachments?: DesignAttachmentRef[] | null;
     };
 
@@ -7985,6 +7987,24 @@ export class SessionService {
       actorType: "system",
       actorId: "system",
     });
+    const cleanupRuntimeInstanceId =
+      this.parsePendingCommands(pendingRun)[0]?.cleanupGeneralWorkspaceRuntimeId ?? null;
+    if (cleanupRuntimeInstanceId) {
+      const cleanupResult = await sendRuntimeCommand(
+        cleanupRuntimeInstanceId,
+        {
+          type: "cleanup_general_workspace",
+          sessionId,
+          sessionGroupId: session.sessionGroupId ?? undefined,
+        },
+        session.organizationId,
+      );
+      if (cleanupResult !== "delivered") {
+        console.warn(
+          `[session] failed to clean up the general workspace for ${sessionId}: ${cleanupResult}`,
+        );
+      }
+    }
     if (
       sourceCommitSha &&
       session.sessionGroup?.kind === "design_system" &&
@@ -9696,6 +9716,9 @@ export class SessionService {
                   type: "run",
                   prompt: bootstrapPrompt,
                   interactionMode: null,
+                  ...(session.hosting === "local" && sourceRuntimeId
+                    ? { cleanupGeneralWorkspaceRuntimeId: sourceRuntimeId }
+                    : {}),
                 } satisfies PendingSessionCommand,
               }),
               toolSessionId: null,
@@ -11683,6 +11706,10 @@ export class SessionService {
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
+        cleanupGeneralWorkspaceRuntimeId:
+          typeof pending.cleanupGeneralWorkspaceRuntimeId === "string"
+            ? pending.cleanupGeneralWorkspaceRuntimeId
+            : null,
         designAttachments: parseDesignAttachments(pending.designAttachments),
       };
     }
@@ -11696,6 +11723,10 @@ export class SessionService {
         checkpointContext: parseCheckpointContext(pending.checkpointContext),
         imageKeys: Array.isArray(pending.imageKeys) ? (pending.imageKeys as string[]) : null,
         workspaceUpgrade: pending.workspaceUpgrade === true,
+        cleanupGeneralWorkspaceRuntimeId:
+          typeof pending.cleanupGeneralWorkspaceRuntimeId === "string"
+            ? pending.cleanupGeneralWorkspaceRuntimeId
+            : null,
         designAttachments: parseDesignAttachments(pending.designAttachments),
       };
     }

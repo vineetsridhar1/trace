@@ -651,7 +651,13 @@ describe("SessionService", () => {
           channelId: null,
           channel: null,
           workdir: sourceGroup.workdir,
-          connection: { state: "connected", retryCount: 0, canRetry: true, canMove: true },
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-local",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
         });
         const movedSession = {
           ...convertedSession,
@@ -754,6 +760,7 @@ describe("SessionService", () => {
               hosting: "cloud",
               pendingRun: expect.objectContaining({
                 prompt: `Continue the user's request in the newly prepared ${kind === "pdf" ? "PDF" : kind} workspace.`,
+                cleanupGeneralWorkspaceRuntimeId: "runtime-local",
               }),
             }),
           }),
@@ -8556,6 +8563,55 @@ describe("SessionService", () => {
   });
 
   describe("workspaceReady", () => {
+    it("cleans the source general workspace after the replacement workspace is ready", async () => {
+      const pendingRun = {
+        type: "run",
+        prompt: "Continue in the generated workspace",
+        interactionMode: null,
+        cleanupGeneralWorkspaceRuntimeId: "runtime-local",
+      };
+      const readySession = makeSession({
+        hosting: "cloud",
+        workdir: "/home/coder",
+        sessionGroup: makeSessionGroup({ kind: "coding", workdir: "/home/coder" }),
+      });
+      prismaMock.session.findUniqueOrThrow
+        .mockResolvedValueOnce({
+          pendingRun,
+          agentStatus: "active",
+          sessionStatus: "in_progress",
+          readOnlyWorkspace: false,
+          workdir: null,
+        })
+        .mockResolvedValueOnce(readySession);
+      prismaMock.session.update.mockResolvedValue(readySession);
+      prismaMock.sessionGroup.update.mockResolvedValue(
+        makeSessionGroup({ kind: "coding", workdir: "/home/coder" }),
+      );
+      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
+      prismaMock.event.findMany.mockResolvedValue([]);
+
+      await service.workspaceReady("session-1", "/home/coder");
+
+      expect(sessionRouterMock.sendToRuntime).toHaveBeenCalledWith(
+        "runtime-local",
+        {
+          type: "cleanup_general_workspace",
+          sessionId: "session-1",
+          sessionGroupId: "group-1",
+        },
+        "org-1",
+      );
+      expect(sessionRouterMock.send).toHaveBeenCalledWith(
+        "session-1",
+        expect.objectContaining({
+          type: "run",
+          prompt: expect.stringContaining("Continue in the generated workspace"),
+        }),
+        expect.any(Object),
+      );
+    });
+
     it("auto-starts design sessions through the shared application service", async () => {
       const startApplication = vi
         .spyOn(sessionApplicationService, "startApplication")

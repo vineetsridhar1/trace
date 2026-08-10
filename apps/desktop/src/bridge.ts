@@ -72,6 +72,7 @@ import {
   isTraceManagedWorktreePath,
 } from "./worktree.js";
 import { runtimeDebug } from "./runtime-debug.js";
+import { generalWorkspacePath, removeGeneralWorkspace } from "./general-workspace.js";
 import { TerminalManager } from "@trace/shared/adapters";
 import {
   loadQueuedGitHookCheckpoints,
@@ -1292,12 +1293,7 @@ export class BridgeClient implements IBridgeClient {
       }
       case "prepare_general": {
         const { sessionId, sessionGroupId } = cmd;
-        const workdir = path.join(
-          os.homedir(),
-          "trace",
-          "general-sessions",
-          sessionGroupId ?? sessionId,
-        );
+        const workdir = generalWorkspacePath(sessionGroupId ?? sessionId);
         fs.promises
           .mkdir(workdir, { recursive: true })
           .then(() => {
@@ -1307,6 +1303,21 @@ export class BridgeClient implements IBridgeClient {
           })
           .catch((err: Error) => {
             this.send({ type: "workspace_failed", sessionId, error: err.message });
+          });
+        break;
+      }
+      case "cleanup_general_workspace": {
+        const sessionKey = cmd.sessionGroupId ?? cmd.sessionId;
+        const workdir = this.sessionWorkdirs.get(cmd.sessionId);
+        void removeGeneralWorkspace(workdir, sessionKey)
+          .then((removed) => {
+            if (!removed || !workdir) return;
+            for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
+              if (trackedWorkdir === workdir) this.sessionWorkdirs.delete(trackedSessionId);
+            }
+          })
+          .catch((err: Error) => {
+            console.warn(`[bridge] failed to remove general workspace ${workdir}:`, err.message);
           });
         break;
       }
@@ -1381,6 +1392,7 @@ export class BridgeClient implements IBridgeClient {
         } = cmd;
         const repoConfig = getRepoConfig(repoId);
         const repoPath = repoConfig?.path;
+        const previousWorkdir = this.sessionWorkdirs.get(sessionId);
 
         if (!repoPath) {
           this.send({
@@ -1413,6 +1425,22 @@ export class BridgeClient implements IBridgeClient {
               branch: worktreeBranch,
               slug: worktreeSlug,
             });
+            const sessionKey = sessionGroupId ?? sessionId;
+            void removeGeneralWorkspace(previousWorkdir, sessionKey)
+              .then((removed) => {
+                if (!removed || !previousWorkdir) return;
+                for (const [trackedSessionId, trackedWorkdir] of this.sessionWorkdirs) {
+                  if (trackedWorkdir === previousWorkdir) {
+                    this.sessionWorkdirs.delete(trackedSessionId);
+                  }
+                }
+              })
+              .catch((err: Error) => {
+                console.warn(
+                  `[bridge] failed to remove general workspace ${previousWorkdir}:`,
+                  err.message,
+                );
+              });
             void this.pollLocalPrStatuses();
           })
           .catch((err: Error) => {

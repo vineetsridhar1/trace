@@ -5,7 +5,7 @@
 
 import type { GitCheckpointBridgePayload, GitCheckpointContext } from "./git-checkpoint.js";
 
-export const BRIDGE_PROTOCOL_VERSION = 3;
+export const BRIDGE_PROTOCOL_VERSION = 4;
 export const GENERAL_WORKSPACE_PROTOCOL_VERSION = 3;
 
 // --- Server → Bridge commands ---
@@ -70,6 +70,12 @@ export interface BridgePrepareCommand {
 
 export interface BridgePrepareGeneralCommand {
   type: "prepare_general";
+  sessionId: string;
+  sessionGroupId?: string;
+}
+
+export interface BridgeCleanupGeneralWorkspaceCommand {
+  type: "cleanup_general_workspace";
   sessionId: string;
   sessionGroupId?: string;
 }
@@ -482,6 +488,7 @@ export type BridgeCommand =
   | BridgeSendCommand
   | BridgePrepareCommand
   | BridgePrepareGeneralCommand
+  | BridgeCleanupGeneralWorkspaceCommand
   | BridgePrepareAppCommand
   | BridgeUpgradeWorkspaceCommand
   | BridgeTerminateCommand

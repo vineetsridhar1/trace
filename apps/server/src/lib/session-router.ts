@@ -59,6 +59,7 @@ interface BaseSessionCommand {
     | "send"
     | "prepare"
     | "prepare_general"
+    | "cleanup_general_workspace"
     | "prepare_app"
     | "delete"
     | "list_branches"
