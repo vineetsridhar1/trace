@@ -94,6 +94,18 @@ cloud hosting fails when cloud is unavailable; it is never silently changed to l
 
 ## Message and lifecycle
 
+When a general conversation becomes one focused coding task, convert it in place so the existing
+conversation and session identity are preserved:
+
+```sh
+"$TRACE_CLI" session convert --kind coding --repo <repo-id> --json
+```
+
+Add `--project`, `--tool`, `--model`, `--reasoning`, or `--runtime` when the destination needs an
+explicit override. Conversion targets the current session by default; use `--session <session-id>`
+only when explicitly acting on another session. Prefer conversion over `session start` for the
+current conversation. Start a separate session only for independent or parallel work.
+
 ```sh
 "$TRACE_CLI" session send <session-id> "Please also cover migrations" --json
 "$TRACE_CLI" session send <session-id> "Do this next" --queue --json

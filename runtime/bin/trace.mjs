@@ -200,6 +200,16 @@ var traceCliOperations = {
       startSession(input: $input) { ${SESSION_FIELDS} }
     }`
   }),
+  convertSessionGroup: operation({
+    name: "TraceCliConvertSessionGroup",
+    type: "mutation",
+    rootField: "convertSessionGroup",
+    capability: "session:convert",
+    argumentPaths: ["input.sessionGroupId", "input.kind", "input.repoId", "input.projectId", "input.tool", "input.model", "input.reasoningEffort", "input.environmentId", "input.runtimeInstanceId", "input.clientMutationId"],
+    document: `mutation TraceCliConvertSessionGroup($input: ConvertSessionGroupInput!) {
+      convertSessionGroup(input: $input) { ${SESSION_FIELDS} }
+    }`
+  }),
   queueSessionMessage: operation({
     name: "TraceCliQueueSessionMessage",
     type: "mutation",
@@ -1291,6 +1301,7 @@ var CODING_TOOLS = [
   "pi"
 ];
 var SESSION_KINDS = [
+  "general",
   "coding",
   "design",
   "design_system",
@@ -1956,6 +1967,49 @@ var sessionStartCommand = defineCommand({
   }
 });
 
+// src/commands/session/convert.ts
+import { randomUUID as randomUUID4 } from "node:crypto";
+var sessionConvertCommand = defineCommand({
+  path: ["session", "convert"],
+  description: "Convert the current session group in place",
+  options: [
+    { name: "session", flag: "--session", kind: "string", valueName: "ID", description: "Source session" },
+    { name: "kind", flag: "--kind", kind: "string", valueName: "KIND", choices: SESSION_KINDS, description: "Target session kind" },
+    { name: "repo", flag: "--repo", kind: "string", valueName: "ID", description: "Target repository" },
+    { name: "project", flag: "--project", kind: "string", valueName: "ID", description: "Target project" },
+    { name: "tool", flag: "--tool", kind: "string", valueName: "TOOL", description: "Coding tool override" },
+    { name: "model", flag: "--model", kind: "string", valueName: "MODEL", description: "Model override" },
+    { name: "reasoning", flag: "--reasoning", kind: "string", valueName: "EFFORT", description: "Reasoning override" },
+    { name: "environment", flag: "--environment", kind: "string", valueName: "ID", description: "Cloud environment" },
+    { name: "runtime", flag: "--runtime", kind: "string", valueName: "ID", description: "Local runtime" },
+    { name: "idempotencyKey", flag: "--idempotency-key", kind: "string", valueName: "KEY", description: "Retry-safe key" }
+  ],
+  async run(ctx, parsed) {
+    const client = await ctx.client();
+    const source = await client.graphql(
+      traceCliOperations.session,
+      { id: resolveSessionId(ctx, optionString(parsed, "session")) }
+    );
+    if (!source.session?.sessionGroupId) throw new Error("Session does not belong to a session group");
+    const kind = optionString(parsed, "kind");
+    if (!kind) throw new Error("--kind is required");
+    const input = {
+      sessionGroupId: source.session.sessionGroupId,
+      kind,
+      repoId: optionString(parsed, "repo"),
+      projectId: optionString(parsed, "project"),
+      tool: optionString(parsed, "tool"),
+      model: optionString(parsed, "model"),
+      reasoningEffort: optionString(parsed, "reasoning"),
+      environmentId: optionString(parsed, "environment"),
+      runtimeInstanceId: optionString(parsed, "runtime"),
+      clientMutationId: optionString(parsed, "idempotencyKey") ?? randomUUID4()
+    };
+    const result = await client.graphql(traceCliOperations.convertSessionGroup, { input });
+    ctx.output({ session: result.convertSessionGroup }, printSession(result.convertSessionGroup));
+  }
+});
+
 // src/commands/session/stop.ts
 var sessionStopCommand = defineCommand({
   path: ["session", "stop"],
@@ -1988,6 +2042,7 @@ var sessionCommands = [
   sessionListCommand,
   sessionGetCommand,
   sessionStartCommand,
+  sessionConvertCommand,
   sessionSendCommand,
   sessionRunCommand,
   sessionStopCommand,
