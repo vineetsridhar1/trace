@@ -574,43 +574,50 @@
   <body>
     <article class="plan">
       <p class="eyebrow">Plan for review · no product implementation yet</p>
-      <h1 class="plan-title">Durable published applications</h1>
+      <h1 class="plan-title">CLI-driven durable application publishing</h1>
       <p class="plan-summary">
-        Turn Publish into an independent AWS deployment: an immutable commit becomes an image, gets
-        isolated PostgreSQL data, passes migrations and health checks, and is promoted to a stable
-        app URL. Development sessions can then hibernate without stopping the published app.
+        Let the app-building AI inspect its project and invoke one safe Trace CLI workflow. Trace
+        validates the committed deploy manifest, builds either a static bundle or a private service,
+        adds PostgreSQL only when requested, and promotes one stable URL. The development session can
+        then hibernate without stopping or erasing the published result.
       </p>
       <div class="meta">
         <span class="chip"><strong>2</strong> coordinated repositories</span>
-        <span class="chip"><strong>8</strong> implementation phases</span>
-        <span class="chip">Schema + infrastructure migrations</span>
+        <span class="chip"><strong>11</strong> implementation phases</span>
+        <span class="chip">CLI + schema + infrastructure contracts</span>
         <span class="chip">Redis excluded from app contract</span>
       </div>
       <div class="metrics" aria-label="Plan outcome summary">
-        <div class="metric"><b>1 app</b><span>one ECS service + one database identity</span></div>
+        <div class="metric"><b>2 modes</b><span>static bundle or private service</span></div>
         <div class="metric"><b>0 coupling</b><span>to the development session after publish</span></div>
-        <div class="metric"><b>1 gate</b><span>route changes only after migration + health</span></div>
+        <div class="metric"><b>1 command</b><span>AI publishes through the managed Trace CLI</span></div>
       </div>
 
       <section>
         <h2>Approval decision</h2>
         <div class="callout">
-          <strong>Recommended v1:</strong> use a database and login per app on the shared app-data
-          Aurora cluster, with direct TLS connections and a tiny application pool. Keep the current
-          RDS Proxy out of generated-app traffic until its authentication model is redesigned.
+          <strong>Recommended v1:</strong> expose one agent-facing <code>app</code> CLI workflow with
+          two internal deployment modes. The AI may explain and request <code>static</code> or
+          <code>service</code>, but a committed manifest plus Trace service validation is authoritative.
+          Static output is stored in private S3; services run on ECS and receive an isolated Aurora
+          database only when the manifest declares PostgreSQL.
         </div>
         <div class="decision-grid" style="margin-top: 12px">
           <div class="decision-option recommended">
-            <h3>Direct Aurora TLS · recommended</h3>
-            <p>One secret per app, injected only into that app's ECS task definition. Simple tenant isolation and no dynamic proxy-auth registration.</p>
-            <small>Tradeoff: cap each app pool (initially 2) and monitor aggregate connections.</small>
+            <h3>AI proposes, CLI and service verify · recommended</h3>
+            <p>The agent inspects user intent and project evidence, writes <code>.trace/app-starter.json</code>, commits it, then invokes <code>"$TRACE_CLI" app publish --mode auto --json</code>. The CLI reports the resolved mode and blockers; the service revalidates the immutable checkpoint before creating desired state.</p>
+            <small>One Publish concept for users; no AWS vocabulary or hosting-plan questionnaire.</small>
           </div>
           <div class="decision-option">
-            <h3>RDS Proxy per-app credentials</h3>
-            <p>The current proxy registers only the cluster admin secret. Registering every app secret expands operational and quota pressure.</p>
-            <small>Defer until IAM end-to-end auth or another scalable proxy identity design is approved.</small>
+            <h3>AI directly selects AWS resources · rejected</h3>
+            <p>Letting a prompt choose S3, ECS, secrets, or Aurora without a checked contract makes retries, security, UI state, and future migrations unpredictable.</p>
+            <small>The AI chooses product capabilities; Trace owns infrastructure translation.</small>
           </div>
         </div>
+        <details>
+          <summary>Database sub-decision: direct Aurora TLS remains the recommended service-mode v1</summary>
+          <div class="detail-body"><p>When <code>capabilities.postgres</code> is true, create one database, login, and secret per app on the shared app-data Aurora cluster. Inject only that app secret, cap its pool at two, and defer the current RDS Proxy because it registers only the cluster admin secret.</p></div>
+        </details>
       </section>
 
       <section>
@@ -620,10 +627,12 @@
             <h3>In scope</h3>
             <ul>
               <li>Publish only an immutable Git checkpoint.</li>
-              <li>Build and store a digest-addressed image in ECR.</li>
-              <li>Provision one PostgreSQL database, role, and secret per app.</li>
-              <li>Run an idempotent migration task before serving traffic.</li>
-              <li>Create/update one private ECS Fargate service per app.</li>
+              <li>Add discoverable <code>app inspect</code>, <code>app publish</code>, and <code>app status</code> CLI commands.</li>
+              <li>Resolve a committed deploy manifest to <code>static</code> or <code>service</code> with evidence.</li>
+              <li>Build static output into a digest-addressed private S3 bundle.</li>
+              <li>Build service output into a digest-addressed ECR image.</li>
+              <li>Provision PostgreSQL and run migrations only when declared.</li>
+              <li>Create/update one private ECS Fargate service only for service mode.</li>
               <li>Promote a stable <code>*.apps.&lt;domain&gt;</code> route after health passes.</li>
               <li>Preserve data across task restarts, republishes, and dev-session hibernation.</li>
               <li>Expose lifecycle status through Trace events and the application card.</li>
@@ -638,6 +647,8 @@
               <li>No persistent file/object storage in this slice.</li>
               <li>No destructive migration rollback; schema changes follow expand/migrate/contract.</li>
               <li>No silent database deletion on unpublish.</li>
+              <li>No free-form AWS resource creation from the agent runtime.</li>
+              <li>No trusting an uncommitted local build as the production artifact.</li>
             </ul>
           </div>
         </div>
@@ -651,33 +662,75 @@
           <button type="button" data-view="gap" aria-pressed="false">Missing boundary</button>
         </div>
         <div class="view-panel" data-view-group="current-state" data-view-panel="trace">
-          <h3>Request and status foundation is present</h3>
+          <h3>Deployment and managed CLI foundations are present after rebase</h3>
           <ul class="compact-list">
             <li><code>apps/server/src/services/app-deployment.ts</code> selects a Git checkpoint, serializes publishes with advisory locks, and enforces monotonic callbacks.</li>
             <li><code>apps/server/src/services/app-deployment-dispatcher.ts</code> streams a size-limited Git archive to S3 and enqueues a versioned SQS job.</li>
             <li><code>apps/server/src/routes/app-deployment-callback.ts</code> authenticates internal deployment status updates.</li>
             <li><code>AppDeploymentCard.tsx</code> displays queued/building/deploying/live/failed state and the live URL.</li>
+            <li><code>packages/cli</code> provides registry-driven JSON help, strict parsing, stable errors, idempotency patterns, and commands for sessions, terminals, integrations, resources, and artifacts.</li>
+            <li><code>packages/cli-contract</code> is consumed by both the CLI and server authorization: an invocation may call only an exact registered GraphQL document with explicitly allowed argument paths.</li>
+            <li>The app starter already teaches agents to use the managed CLI for integrations, but the app prompt currently forces full-stack behavior and always advertises local PostgreSQL/Redis.</li>
           </ul>
         </div>
         <div class="view-panel" data-view-group="current-state" data-view-panel="ops">
           <h3>Build and data primitives are present</h3>
           <ul class="compact-list">
-            <li><code>infra/lib/app-deployment-stack.ts</code> owns the queue, worker, CodeBuild project, ECR repository, ECS cluster, and shared task roles.</li>
-            <li><code>infra/lambda/app-deployment-worker/index.ts</code> validates provenance and starts CodeBuild idempotently.</li>
+            <li><code>infra/lib/app-deployment-stack.ts</code> on current main owns the queue, CodeBuild project, ECR repository, ECS cluster, and shared task roles.</li>
+            <li>The unmerged <code>trace-moose-4-app-deployments</code> branch adds the provenance-validating SQS worker and tests; it must be rebased before reuse.</li>
             <li><code>infra/lib/data-stack.ts</code> can create a separate Aurora PostgreSQL app-data cluster and proxy when <code>enableAppData</code> is enabled.</li>
             <li>Wildcard app DNS reaches the ALB, but the listener deliberately returns the placeholder “App gateway is not deployed.”</li>
           </ul>
         </div>
         <div class="view-panel" data-view-group="current-state" data-view-panel="gap">
-          <h3>The current workflow stops at “deploying”</h3>
-          <p>No component provisions an app database, runs migrations, creates an ECS service, verifies health, or promotes the wildcard route. The Aurora feature is intentionally disabled in production examples.</p>
+          <h3>The CLI and deployment workflows are not connected</h3>
+          <p>No <code>app</code> CLI group, deployment capability, manifest classifier, static-bundle target, data provisioner, migration runner, ECS reconciler, health verifier, or route promoter exists. Current trace-ops main also creates an SQS queue without attaching a consumer. Aurora remains disabled in production examples.</p>
           <p>The smoke script is also stale: <code>scripts/smoke-cloud-app-session.mjs</code> still expects the old public-preview mutation and a development Redis process.</p>
         </div>
         <div class="callout risk" style="margin-top: 12px">
-          <strong>Repository prerequisite:</strong> both open feature branches are behind their
-          respective default branches. Implementation starts by rebasing the Trace and trace-ops
-          work, resolving contracts together, and rerunning both suites before adding behavior.
+          <strong>Repository baseline:</strong> the Trace plan branch is now rebased onto
+          <code>c7d35bad2</code>. The trace-ops deployment worker branch still needs rebasing onto
+          <code>3001ecb</code>; implementation must resolve that drift and synthesize current production
+          configuration before adding behavior.
         </div>
+      </section>
+
+      <section>
+        <h2>CLI control surface</h2>
+        <div class="flow">
+          <div class="node"><b>AI reasoning</b><span>user intent + project evidence</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new"><b>app inspect</b><span>facts · recommendation · blockers</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>Git checkpoint</b><span>manifest + source</span></div>
+          <div class="arrow">→</div>
+          <div class="node is-new"><b>app publish</b><span>desired state through service</span></div>
+        </div>
+        <div class="split" style="margin-top: 14px">
+          <div class="card">
+            <h3>Proposed commands</h3>
+            <ul>
+              <li><code>app inspect [path] --json</code>: read local files, validate the manifest, and return detected facts, recommended mode, required capabilities, and blocking contradictions. No Trace state changes.</li>
+              <li><code>app publish --mode auto|static|service --json</code>: request publication of the current app's latest immutable checkpoint with an idempotency key. <code>auto</code> is the normal path.</li>
+              <li><code>app status [--follow] --json</code>: return the desired mode, resolved mode, phases, URL, and safe failure details from deployment events.</li>
+              <li>Later lifecycle leaves: <code>app unpublish</code>, <code>app rollback</code>, and explicit destructive deletion.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Authorization and ownership</h3>
+            <ul>
+              <li>Add narrow <code>app:read</code> and <code>app:deploy</code> invocation capabilities.</li>
+              <li>Register exact GraphQL documents and permitted argument paths in <code>packages/cli-contract</code>.</li>
+              <li>Server authorization restricts every command to <code>TRACE_SESSION_GROUP_ID</code>; the AI never supplies another app's binding or credentials.</li>
+              <li>The CLI calls the same service layer as the web Publish button. Only the service creates deployment records and events.</li>
+              <li>Help must describe effects clearly: inspect is read-only; publish creates shared external state and runs only after the user requests publishing.</li>
+            </ul>
+          </div>
+        </div>
+        <details>
+          <summary>Conclusion: the CLI is a typed agent control surface, not the AWS deployment engine</summary>
+          <div class="detail-body"><p>The runtime may perform a local preflight build to give fast feedback, but production is rebuilt from the committed checkpoint by the AWS workflow. The CLI must not upload arbitrary uncommitted HTML straight to the public bucket, create ECS services itself, receive admin database credentials, or bypass Trace's desired-state and event model.</p></div>
+        </details>
       </section>
 
       <section>
@@ -698,17 +751,17 @@
           <p>The last committed checkpoint remains durable; local runtime processes and its local PostgreSQL data do not.</p>
         </div>
         <div class="view-panel" data-view-group="architecture" data-view-panel="published">
-          <h3>Independent published path</h3>
+          <h3>Independent capability-selected path</h3>
           <div class="flow">
-            <div class="node"><b>Trace service</b><span>desired state + events</span></div>
+            <div class="node is-new"><b>Trace CLI</b><span>inspect + publish intent</span></div>
             <div class="arrow">→</div>
-            <div class="node is-new"><b>AWS workflow</b><span>build · migrate · reconcile</span></div>
+            <div class="node"><b>Trace service</b><span>validate + desired state + events</span></div>
             <div class="arrow">→</div>
-            <div class="node is-new"><b>ECS + Aurora</b><span>runtime + durable data</span></div>
+            <div class="node is-new"><b>AWS workflow</b><span>static or service branch</span></div>
             <div class="arrow">→</div>
             <div class="node is-new"><b>App gateway</b><span>stable public route</span></div>
           </div>
-          <p>Session hibernation touches none of these resources. A publish is an explicit deployment, not a preview visibility toggle.</p>
+          <p>Static mode targets a private S3 bundle; service mode targets ECS plus optional Aurora. Session hibernation touches neither. A publish is an explicit deployment, not a preview visibility toggle.</p>
         </div>
         <div class="legend">
           <span class="new"><i></i>new durable boundary</span>
@@ -719,10 +772,22 @@
 
       <section>
         <h2>End-to-end publish flow</h2>
+        <div class="decision-grid" style="margin-bottom: 14px">
+          <div class="decision-option recommended">
+            <h3>Static branch</h3>
+            <p>For literal HTML or a browser-only build: run the declared build, verify the output directory and fallback behavior, store the immutable bundle under a deployment/content digest in private S3, then promote the route.</p>
+            <small>No per-app task, database, migration, secret, or always-on compute.</small>
+          </div>
+          <div class="decision-option recommended">
+            <h3>Service branch</h3>
+            <p>For API routes, server-only secrets, integrations, authentication callbacks, WebSockets, or persistence: build an image, optionally provision PostgreSQL and migrate, reconcile ECS, verify health, then promote.</p>
+            <small>Integrations force service mode because provider calls stay in server routes.</small>
+          </div>
+        </div>
         <div class="diagram" aria-label="Published app architecture">
           <svg class="diagram-svg" viewBox="0 0 820 430" role="img">
             <title>Durable published application architecture</title>
-            <desc>Trace records desired state and invokes an AWS workflow that builds, provisions data, migrates, deploys, verifies, and promotes a route.</desc>
+            <desc>The AI invokes the managed CLI, Trace validates immutable desired state, and an AWS workflow selects a static or service target before promoting one route.</desc>
             <defs>
               <marker id="plan-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
                 <path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)" />
@@ -740,7 +805,7 @@
             <path class="edge" marker-end="url(#plan-arrow)" d="M605 355 H510 V390 H160 V95" />
 
             <rect class="box" x="20" y="35" width="140" height="60" rx="8" />
-            <text x="90" y="61">Publish action</text><text class="edge-label" x="90" y="79">committed SHA only</text>
+            <text x="90" y="61">CLI app publish</text><text class="edge-label" x="90" y="79">current app only</text>
             <rect class="box" x="238" y="35" width="150" height="60" rx="8" />
             <text x="313" y="61">Trace service</text><text class="edge-label" x="313" y="79">event + desired state</text>
             <rect class="box is-new" x="462" y="35" width="150" height="60" rx="8" />
@@ -748,24 +813,29 @@
             <rect class="box is-new" x="605" y="145" width="150" height="60" rx="8" />
             <text x="680" y="171">Step Functions</text><text class="edge-label" x="680" y="189">durable orchestration</text>
             <rect class="box is-new" x="360" y="145" width="150" height="60" rx="8" />
-            <text x="435" y="171">CodeBuild → ECR</text><text class="edge-label" x="435" y="189">immutable digest</text>
+            <text x="435" y="171">Trusted build</text><text class="edge-label" x="435" y="189">bundle or image digest</text>
             <rect class="box is-new" x="115" y="145" width="150" height="60" rx="8" />
-            <text x="190" y="171">Data provisioner</text><text class="edge-label" x="190" y="189">DB + role + secret</text>
+            <text x="190" y="171">Data provisioner</text><text class="edge-label" x="190" y="189">service + postgres only</text>
             <rect class="box is-new" x="115" y="285" width="150" height="60" rx="8" />
-            <text x="190" y="311">Migration task</text><text class="edge-label" x="190" y="329">same image, no traffic</text>
+            <text x="190" y="311">Migration task</text><text class="edge-label" x="190" y="329">optional, no traffic</text>
             <rect class="box is-new" x="360" y="285" width="150" height="60" rx="8" />
-            <text x="435" y="311">ECS service</text><text class="edge-label" x="435" y="329">private Fargate task</text>
+            <text x="435" y="311">Runtime target</text><text class="edge-label" x="435" y="329">private S3 or ECS</text>
             <rect class="box is-new" x="605" y="285" width="150" height="60" rx="8" />
             <text x="680" y="311">App gateway</text><text class="edge-label" x="680" y="329">atomic route promotion</text>
             <text class="edge-label" x="335" y="382">authenticated callbacks: phase, digest, runtime identity, URL, failure</text>
           </svg>
         </div>
         <ol>
-          <li>Trace locks the app, chooses the latest checkpoint, creates a deployment record, uploads the source archive, and enqueues a versioned job.</li>
-          <li>A Standard Step Functions execution named by deployment ID owns retries and ordering: build → provision/reuse data → migrate → reconcile ECS → verify → promote.</li>
+          <li>The AI runs <code>app inspect</code>, resolves contradictions with the project or user, commits the manifest and source, and invokes <code>app publish --mode auto</code>.</li>
+          <li>Trace re-reads the latest checkpoint, validates the manifest and authorization, locks the app, records requested and resolved capabilities, uploads source, and enqueues a versioned job.</li>
+          <li>A Standard Step Functions execution named by deployment ID owns retries and ordering. Static runs build → verify bundle → store S3 → promote. Service runs build image → optional data/migration → reconcile ECS → health → promote.</li>
           <li>Each phase calls Trace’s internal callback. The service layer validates the transition, records it, and emits the event consumed by the UI.</li>
           <li>The previous live route remains active until the replacement passes all gates. Any failure marks the attempt failed without taking the prior revision down.</li>
         </ol>
+        <details>
+          <summary>Classification rules: the AI owns semantic intent; deterministic evidence prevents unsafe choices</summary>
+          <div class="detail-body"><ul><li>The AI sets the manifest from the user's requested behavior. <code>app inspect</code> reports mechanical facts and contradictions; it does not pretend arbitrary source-code inference is perfect.</li><li>Static is valid only when the declared build produces files and no request-time server capability is required. The untouched starter's dormant <code>server.ts</code> and installed <code>pg</code> package are not enough to force service mode.</li><li>Declared API routes, private environment variables, live integration bindings, authentication callbacks, WebSockets, background work, or PostgreSQL require service mode.</li><li>The agent may deliberately request service mode for future functionality, but cannot force static when validation finds a server requirement.</li><li>Mode changes preserve the app ID and URL. Moving static → service may create a retained database; moving back to static never silently deletes it.</li></ul></div>
+        </details>
       </section>
 
       <section>
@@ -804,9 +874,9 @@
         <h2>State and failure semantics</h2>
         <div class="status-line" aria-label="Deployment state machine">
           <span class="status-step">queued</span><span class="status-arrow">→</span>
+          <span class="status-step">validating</span><span class="status-arrow">→</span>
           <span class="status-step">building</span><span class="status-arrow">→</span>
-          <span class="status-step">provisioning_data</span><span class="status-arrow">→</span>
-          <span class="status-step">migrating</span><span class="status-arrow">→</span>
+          <span class="status-step">preparing_target</span><span class="status-arrow">→</span>
           <span class="status-step">deploying</span><span class="status-arrow">→</span>
           <span class="status-step">verifying</span><span class="status-arrow">→</span>
           <span class="status-step live">live</span>
@@ -821,8 +891,9 @@
           <div class="detail-body">
             <ul>
               <li>A new publish supersedes older queued/in-progress desired state, but running AWS executions receive a cancellation signal and still finish cleanup.</li>
-              <li>Republishing the same deployment ID or checkpoint is idempotent across SQS delivery, Step Functions start, database provisioning, task-definition registration, and route promotion.</li>
+              <li>Republishing the same deployment ID or checkpoint is idempotent across the CLI retry, GraphQL mutation, SQS delivery, Step Functions start, bundle/image creation, optional database provisioning, and route promotion.</li>
               <li>Migration failure leaves the current ECS service and route unchanged. Rollback deploys a previous image as a new attempt and reuses the database; it does not automatically reverse schema.</li>
+              <li>Each deployment records <code>requestedMode</code>, <code>resolvedMode</code>, manifest digest, target digest, and capabilities so UI and operations can explain why a branch was selected.</li>
             </ul>
           </div>
         </details>
@@ -832,48 +903,58 @@
         <h2>Implementation phases</h2>
         <div class="phase" data-step="0">
           <h3>Rebase and establish a green baseline</h3>
-          <p>Bring both open branches onto current default branches, resolve shared contract drift, and prove existing deployment tests still pass.</p>
-          <details><summary>Gate: no feature work proceeds on stale branch assumptions</summary><div class="detail-body"><p>Revalidate PR #728 in Trace and PR #5 in trace-ops, including generated GraphQL types, Prisma migration history, CDK synthesis, worker tests, and current production configuration.</p></div></details>
+          <p>Keep the completed Trace rebase, rebase the trace-ops worker branch, resolve shared contract drift, and prove existing deployment and CLI tests still pass.</p>
+          <details><summary>Gate: both repositories build from current main before behavior changes</summary><div class="detail-body"><p>Revalidate generated GraphQL types, Prisma migration history, CLI contract authorization, CLI runtime bundles, CDK synthesis, worker tests, and current production configuration.</p></div></details>
         </div>
         <div class="phase" data-step="1">
-          <h3>Define durable contracts and desired state</h3>
-          <p>Add <code>AppDataBinding</code>, richer deployment phases/runtime identifiers, full event payloads, and a backward-compatible v2 deployment job.</p>
-          <details><summary>Gate: service transitions, concurrency, authorization, and event replay are covered by tests</summary><div class="detail-body"><p>GraphQL resolvers remain thin. The service layer alone creates deployments and events. Job parsing supports v1 only for safe draining during rollout; all new jobs are v2.</p></div></details>
+          <h3>Version the deploy manifest and deterministic classifier</h3>
+          <p>Expand <code>.trace/app-starter.json</code> with mode, build output, runtime port, health path, migration command, and capabilities. Implement one shared classifier used by CLI preflight and server checkpoint validation.</p>
+          <details><summary>Gate: fixtures explain every static/service decision and reject contradictions</summary><div class="detail-body"><p>Literal HTML, Vite static output with untouched full-stack starter scaffolding, declared API routes, integrations, secrets, PostgreSQL, missing scripts, invalid output paths, and explicit overrides receive unit fixtures. The result contains facts, reasons, warnings, blockers, and a manifest digest—not only a boolean.</p></div></details>
         </div>
         <div class="phase" data-step="2">
-          <h3>Make the app source contract deployable</h3>
-          <p>Version <code>.trace/app-starter.json</code> with runtime port, health path, migration command, and PostgreSQL requirement; teach validation to reject an unstartable image before build.</p>
-          <details><summary>Gate: the starter app demonstrates durable reads/writes and idempotent migrations</summary><div class="detail-body"><p>Replace the in-memory-only note path with a small PostgreSQL-backed example, add a migration command, bound the <code>pg</code> pool, and document that local development data is disposable while published data is durable.</p></div></details>
+          <h3>Add the managed CLI application workflow</h3>
+          <p>Register the <code>app</code> group and focused inspect, publish, and status modules; add <code>app:read</code>/<code>app:deploy</code> capability contracts and current-group server restrictions.</p>
+          <details><summary>Gate: machine-readable help lets an agent complete the workflow safely</summary><div class="detail-body"><p>Tests cover help schemas, exact documents, allowed argument paths, current-app isolation, idempotency keys, stable JSON/error shapes, read-only inspect effects, publish authorization, and runtime bundle regeneration. App guidance tells the AI to inspect, commit, publish only on request, and report the resolved mode.</p></div></details>
         </div>
         <div class="phase" data-step="3">
-          <h3>Provision isolated PostgreSQL data</h3>
-          <p>Enable the app-data cluster behind an environment flag and add a VPC provisioner that creates/reuses the database, login, grants, and per-app secret.</p>
-          <details><summary>Gate: retrying the same request returns the same binding; app A cannot connect to app B</summary><div class="detail-body"><p>Use UUID-derived identifiers, quoted SQL identifiers, advisory locks, TLS, explicit statement/connect timeouts, secret rotation metadata, and no admin credential in deployment payloads or logs.</p></div></details>
+          <h3>Define durable desired state and a v2 job</h3>
+          <p>Add requested/resolved mode, manifest and target digests, capabilities, static/runtime identities, <code>AppDataBinding</code>, richer phases, full event payloads, and a backward-compatible v2 deployment job.</p>
+          <details><summary>Gate: UI Publish and CLI Publish converge on the same service method</summary><div class="detail-body"><p>GraphQL resolvers remain thin. The service revalidates the immutable checkpoint, owns transitions and events, and ignores any client claim contradicted by the manifest. Job parsing supports v1 only for safe draining; all new jobs are v2.</p></div></details>
         </div>
         <div class="phase" data-step="4">
-          <h3>Orchestrate build and migrations durably</h3>
-          <p>Replace the one-hop Lambda flow with a Standard Step Functions execution: CodeBuild sync, provision data, run migration task, and report guarded phase callbacks.</p>
-          <details><summary>Gate: timeouts and duplicate SQS delivery converge; migration failure preserves the old live app</summary><div class="detail-body"><p>Use execution names derived from deployment IDs. Disable execution-data logging for secrets, sanitize callbacks, put bounded retries only around transient AWS/database errors, and send deterministic failures to Trace and the DLQ.</p></div></details>
+          <h3>Build and serve the static target</h3>
+          <p>Add a non-container CodeBuild path that runs the declared build, validates safe relative output, uploads the immutable bundle to a private S3 prefix, and records its content digest.</p>
+          <details><summary>Gate: a literal HTML page survives session hibernation with no per-app compute</summary><div class="detail-body"><p>Test index and SPA fallback behavior, content types, compression, path traversal and symlink rejection, size/file-count limits, CSP/security headers, cache policy, duplicate builds, route promotion, and rollback to a previous bundle.</p></div></details>
         </div>
         <div class="phase" data-step="5">
+          <h3>Provision isolated PostgreSQL data</h3>
+          <p>For service deployments declaring PostgreSQL, enable the app-data cluster behind an environment flag and add a VPC provisioner that creates/reuses the database, login, grants, and per-app secret.</p>
+          <details><summary>Gate: retrying the same request returns the same binding; app A cannot connect to app B</summary><div class="detail-body"><p>Use UUID-derived identifiers, quoted SQL identifiers, advisory locks, TLS, explicit statement/connect timeouts, secret rotation metadata, and no admin credential in deployment payloads or logs.</p></div></details>
+        </div>
+        <div class="phase" data-step="6">
+          <h3>Orchestrate service builds and migrations durably</h3>
+          <p>Replace the one-hop Lambda flow with a Standard Step Functions execution: build an image, optionally provision data and migrate, then report guarded phase callbacks.</p>
+          <details><summary>Gate: timeouts and duplicate SQS delivery converge; migration failure preserves the old live app</summary><div class="detail-body"><p>Use execution names derived from deployment IDs. Disable execution-data logging for secrets, sanitize callbacks, put bounded retries only around transient AWS/database errors, and send deterministic failures to Trace and the DLQ.</p></div></details>
+        </div>
+        <div class="phase" data-step="7">
           <h3>Reconcile the private ECS service</h3>
           <p>Register a digest-pinned task definition, inject only the app secret, create/update one desired-count-1 Fargate service, and wait for ECS and application health.</p>
           <details><summary>Gate: forced task replacement retains data and the container cannot reach control-plane PostgreSQL or Redis</summary><div class="detail-body"><p>Use private subnets, no public IP, app-runtime and app-data security groups, deployment circuit breaker, CloudWatch logs, resource bounds, health endpoint, and shared task role with no app secrets available to container code.</p></div></details>
         </div>
-        <div class="phase" data-step="6">
+        <div class="phase" data-step="8">
           <h3>Deploy the app gateway and promote routes</h3>
-          <p>Replace the wildcard ALB 404 target with a dedicated gateway service. App tasks establish authenticated outbound registrations; promotion atomically switches the app slug only after health.</p>
-          <details><summary>Gate: old revision serves until the new revision is ready; invalid registration cannot claim another slug</summary><div class="detail-body"><p>The durable slug-to-deployment mapping stays in Trace/PostgreSQL. Runtime registrations are transient gateway state. No generated app receives Trace's Redis URL; infrastructure may use the existing control-plane Redis later for gateway HA, but v1 can run one gateway task.</p></div></details>
+          <p>Replace the wildcard ALB 404 target with a dedicated gateway service that resolves each promoted route to either a private S3 bundle or an authenticated ECS runtime.</p>
+          <details><summary>Gate: one stable URL safely switches across modes and revisions</summary><div class="detail-body"><p>The durable slug-to-deployment mapping stays in Trace/PostgreSQL. The gateway reads static objects through scoped IAM and accepts authenticated outbound runtime registrations. Invalid registration cannot claim another slug; static → service → static preserves the URL and retained database.</p></div></details>
         </div>
-        <div class="phase" data-step="7">
+        <div class="phase" data-step="9">
           <h3>Complete UI, lifecycle controls, and observability</h3>
           <p>Show all phases and actionable failures; add unpublish/rollback/delete behavior; emit metrics and alarms for stuck workflows, unhealthy services, connection pressure, and DLQ messages.</p>
-          <details><summary>Gate: UI is event-driven and lifecycle actions have explicit retention semantics</summary><div class="detail-body"><p>The application card consumes full deployment events from Zustand, never mutation results. Unpublish retains data, rollback is a new deployment attempt, and permanent deletion is separately authorized and auditable.</p></div></details>
+          <details><summary>Gate: CLI and UI read the same event-driven lifecycle</summary><div class="detail-body"><p>The application card consumes full deployment events from Zustand, never mutation results. CLI status reads the same service state/events. Both show requested/resolved mode. Unpublish retains data and static bundles by policy, rollback is a new attempt, and permanent deletion is separately authorized and auditable.</p></div></details>
         </div>
-        <div class="phase" data-step="8">
+        <div class="phase" data-step="10">
           <h3>Prove persistence in staging, then canary production</h3>
           <p>Rewrite the cloud-app smoke test around the durable deployment API and run a real AWS acceptance matrix before enabling the production flag.</p>
-          <details><summary>Gate: published app and its PostgreSQL data survive session hibernation, task replacement, and republish</summary><div class="detail-body"><p>Deploy disabled infrastructure first, enable one internal app, observe cost/connections/errors, then allow a small canary cohort. Remove the old preview-publish behavior only after the durable path is verified.</p></div></details>
+          <details><summary>Gate: both targets survive hibernation and service data survives replacement</summary><div class="detail-body"><p>Canary a literal HTML page, a Vite SPA, a stateless API app, and a PostgreSQL app. Verify mode explanations, stable URLs, task replacement, republish, cross-mode promotion, failure preservation, cost/connections/errors, and removal of the old preview-publish behavior only after the durable path passes.</p></div></details>
         </div>
       </section>
 
@@ -887,16 +968,19 @@
         <table data-file-table>
           <thead><tr><th>Repository / path</th><th>Change</th><th>Responsibility</th></tr></thead>
           <tbody>
-            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>apps/server/prisma/schema.prisma</code> + migration</td><td><span class="tag change">edit</span></td><td>Add data binding, deployment phases, and runtime/route identities.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>apps/server/prisma/schema.prisma</code> + migration</td><td><span class="tag change">edit</span></td><td>Add requested/resolved mode, manifest/target digests, data binding, phases, and target identities.</td></tr>
             <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>packages/gql/src/schema.graphql</code> + generated types</td><td><span class="tag change">edit</span></td><td>Expose lifecycle state and safe diagnostic metadata.</td></tr>
-            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>packages/shared/src/app-deployment.ts</code></td><td><span class="tag change">edit</span></td><td>Version the deployment job and manifest contract.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>packages/shared/src/app-deployment.ts</code> + classifier</td><td><span class="tag change">edit</span></td><td>Version the job, manifest, static/service capability result, evidence, and blockers.</td></tr>
+            <tr data-change="add"><td><span class="repo-label">Trace</span><br><code>packages/cli/src/commands/app/*</code></td><td><span class="tag add">new</span></td><td>Machine-readable inspect, publish, and status workflow.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>packages/cli-contract/src/index.ts</code> + server authorization</td><td><span class="tag change">edit</span></td><td>Add narrow app capabilities, exact operations, allowed paths, and current-group enforcement.</td></tr>
             <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>apps/server/src/services/app-deployment*.ts</code></td><td><span class="tag change">edit</span></td><td>Desired state, transition guards, cancellation, lifecycle actions, and full events.</td></tr>
             <tr data-change="add"><td><span class="repo-label">Trace</span><br><code>apps/server/src/services/app-data.ts</code></td><td><span class="tag add">new</span></td><td>Own app-data binding state and callback validation.</td></tr>
             <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>apps/web/src/components/session/applications/*</code></td><td><span class="tag change">edit</span></td><td>Phase progress, errors, URL, unpublish, and rollback controls via events.</td></tr>
-            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>apps/container-bridge/app-starter/*</code></td><td><span class="tag change">edit</span></td><td>Deploy manifest, migration command, health endpoint, bounded PostgreSQL pool, durable sample.</td></tr>
-            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>scripts/smoke-cloud-app-session.mjs</code></td><td><span class="tag change">rewrite</span></td><td>Wait for durable deployment, write/read data, hibernate session, replace task, republish.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>apps/container-bridge/app-starter/*</code> + session guidance</td><td><span class="tag change">edit</span></td><td>Expanded manifest, CLI workflow, optional server/data guidance, migration/health contracts, and removal of forced full-stack/Redis assumptions.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">Trace</span><br><code>scripts/smoke-cloud-app-session.mjs</code></td><td><span class="tag change">rewrite</span></td><td>Exercise CLI classification, static and service targets, data, hibernation, replacement, and republish.</td></tr>
             <tr data-change="change"><td><span class="repo-label">trace-ops</span><br><code>infra/lib/data-stack.ts</code></td><td><span class="tag change">edit</span></td><td>Wire app-runtime TLS access to Aurora and production feature flags.</td></tr>
-            <tr data-change="change"><td><span class="repo-label">trace-ops</span><br><code>infra/lib/app-deployment-stack.ts</code></td><td><span class="tag change">edit</span></td><td>Add state machine, ECS reconciliation, migration tasks, gateway, IAM, alarms.</td></tr>
+            <tr data-change="change"><td><span class="repo-label">trace-ops</span><br><code>infra/lib/app-deployment-stack.ts</code></td><td><span class="tag change">edit</span></td><td>Rebase worker; add state machine branches, private static bundles, ECS/data targets, gateway IAM, and alarms.</td></tr>
+            <tr data-change="add"><td><span class="repo-label">trace-ops</span><br><code>infra/lambda/app-static-publisher/*</code></td><td><span class="tag add">new</span></td><td>Validate build output and reconcile immutable private S3 bundle metadata.</td></tr>
             <tr data-change="add"><td><span class="repo-label">trace-ops</span><br><code>infra/lambda/app-data-provisioner/*</code></td><td><span class="tag add">new</span></td><td>Idempotent database/role/secret creation and teardown.</td></tr>
             <tr data-change="add"><td><span class="repo-label">trace-ops</span><br><code>infra/lambda/app-runtime-reconciler/*</code></td><td><span class="tag add">new</span></td><td>Task definitions, ECS service health, cancellation, and route promotion.</td></tr>
             <tr data-change="add"><td><span class="repo-label">Trace + trace-ops</span><br><code>apps/app-gateway/*</code> + gateway CDK resources</td><td><span class="tag add">new</span></td><td>Authenticated app registration and wildcard host routing.</td></tr>
@@ -910,13 +994,16 @@
         <table>
           <thead><tr><th>Gate</th><th>Proof</th></tr></thead>
           <tbody>
+            <tr><td>CLI discovery and authorization</td><td>Global/group/leaf JSON help is complete; inspect is read-only; publish is idempotent; modified GraphQL documents, forbidden arguments, another session group, and missing user permission are rejected.</td></tr>
+            <tr><td>Classification</td><td>Literal HTML and browser-only Vite fixtures resolve static; API, integration, secret, WebSocket, and PostgreSQL fixtures resolve service; contradictions fail with evidence; server revalidation matches CLI preflight.</td></tr>
             <tr><td>Contract and service</td><td>Unit tests cover authorization, checkpoint selection, advisory locking, duplicate jobs, all valid/invalid transitions, event payload completeness, supersede, unpublish, rollback, and deletion.</td></tr>
-            <tr><td>Infrastructure</td><td>CDK assertions verify private networking, least-privilege roles, secret injection, no public task IP, state-machine catches/timeouts, DLQ, alarms, and feature-flagged production resources.</td></tr>
+            <tr><td>Infrastructure</td><td>CDK assertions verify private static storage, scoped gateway reads, private networking, least-privilege roles, secret injection, no public task IP, state-machine branches/catches/timeouts, DLQ, alarms, and feature flags.</td></tr>
+            <tr><td>Static durability</td><td>Publish literal HTML and a Vite SPA, hibernate the session, verify assets/routes/security headers, republish, roll back, and confirm no app ECS task or database was created.</td></tr>
             <tr><td>Database isolation</td><td>Integration test proves app A reads/writes A, cannot connect to B, cannot access the admin database, and receives no admin or control-plane credentials.</td></tr>
             <tr><td>Migration safety</td><td>First publish migrates once; duplicate delivery converges; a failing migration leaves the previous live revision and route untouched.</td></tr>
             <tr><td>Runtime durability</td><td>Create a counter, stop the ECS task, wait for replacement, and confirm the counter persists. Republish and confirm it persists again.</td></tr>
-            <tr><td>Session independence</td><td>Hibernate/deprovision the development session and confirm the public URL and database-backed read/write path remain available.</td></tr>
-            <tr><td>Promotion and rollback</td><td>New revision is invisible until healthy; route switches once; rollback deploys the old image without dropping data; unpublish removes route but preserves data.</td></tr>
+            <tr><td>Session independence</td><td>Hibernate/deprovision development and confirm both a static public URL and a database-backed service read/write path remain available.</td></tr>
+            <tr><td>Promotion and rollback</td><td>New revision is invisible until verified; route switches once across static/service targets; rollback restores the prior target without dropping retained data; unpublish removes route but preserves data.</td></tr>
             <tr><td>Build quality</td><td><code>pnpm gql:codegen</code>, focused package tests, <code>pnpm build</code>, trace-ops unit tests, <code>cdk synth</code>, and the rewritten staging smoke command all pass.</td></tr>
           </tbody>
         </table>
@@ -925,6 +1012,9 @@
       <section>
         <h2>Risks and mitigations</h2>
         <div class="callout risk"><strong>Aurora connection exhaustion.</strong> Direct connections are simple but finite. Enforce a pool cap of two per task, desired count one, connection timeouts, Aurora alarms, and a canary concurrency gate; revisit proxying before autoscaling.</div>
+        <div class="callout risk"><strong>AI misclassifies a project.</strong> Treat AI reasoning as a proposal, require a versioned manifest, return evidence from CLI inspect, and revalidate the committed checkpoint on the server. Server-required features always force service mode.</div>
+        <div class="callout risk"><strong>Static bundles execute hostile browser content.</strong> Store privately, serve through the user-content/app boundary with strict headers, reject unsafe paths and symlinks, cap files and bytes, and never grant the bundle AWS credentials.</div>
+        <div class="callout risk"><strong>CLI becomes a second business-logic layer.</strong> Keep local inspect deterministic and shared; publication calls the same service method as the UI. The service alone authorizes, creates desired state and events, and translates capabilities into infrastructure.</div>
         <div class="callout risk"><strong>Cross-app credential exposure.</strong> Never pass the admin secret through jobs. ECS injects only the referenced app secret, the container task role has no Secrets Manager permission, SQL identities are UUID-derived, and isolation gets a negative integration test.</div>
         <div class="callout risk"><strong>Migration damages shared live data.</strong> Run migrations before traffic, require idempotent expand/migrate/contract changes, keep timeouts and logs, and never attempt automatic down migrations on rollback.</div>
         <div class="callout risk"><strong>Orchestrator retries create duplicate AWS resources.</strong> Use deployment ID as the Step Functions execution key and stable names for database, service, task family, and route; every reconciler performs describe-before-create/update.</div>
@@ -934,10 +1024,11 @@
       <section>
         <h2>Approval means</h2>
         <div class="callout">
-          <strong>Proceed with this sequence and boundary:</strong> two coordinated repositories,
-          durable AWS orchestration, database-per-app on shared Aurora, direct TLS for v1, no
-          generated-app Redis, and route promotion only after migration and health. Implementation
-          will stop at each phase gate if the stated verification does not pass.
+          <strong>Proceed with this sequence and boundary:</strong> one managed <code>app</code> CLI
+          workflow; AI-proposed but deterministically verified capabilities; static bundles on private
+          S3; services on private ECS; PostgreSQL only when declared, with a database-per-app on shared
+          Aurora and direct TLS for v1; no generated-app Redis; and one stable route promoted only after
+          target-specific verification. Implementation stops at each phase gate if its proof fails.
         </div>
       </section>
     </article>
