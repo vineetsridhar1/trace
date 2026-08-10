@@ -472,6 +472,132 @@ describe("SessionService", () => {
     });
   });
 
+  describe("convertGroup", () => {
+    it("moves an agent conversion into a coding worktree and resumes the request", async () => {
+      const sourceGroup = makeSessionGroup({
+        id: "group-general",
+        kind: "general",
+        repoId: null,
+        channelId: null,
+        channel: null,
+      });
+      const convertedGroup = { ...sourceGroup, kind: "coding", repoId: "repo-1" };
+      const convertedSession = makeSession({
+        id: "session-general",
+        sessionGroupId: sourceGroup.id,
+        sessionGroup: convertedGroup,
+        repoId: "repo-1",
+        readOnlyWorkspace: true,
+        workdir: "/tmp/trace-general/group-general",
+        hosting: "local",
+        channelId: null,
+        channel: null,
+        agentStatus: "active",
+      });
+
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({
+          ...sourceGroup,
+          sessions: [
+            makeSession({
+              id: convertedSession.id,
+              sessionGroupId: sourceGroup.id,
+              sessionGroup: sourceGroup,
+              repoId: null,
+              repo: null,
+              workdir: "/tmp/trace-general/group-general",
+              hosting: "local",
+              channelId: null,
+              channel: null,
+              agentStatus: "active",
+            }),
+          ],
+        });
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.session.update.mockResolvedValueOnce(convertedSession).mockResolvedValueOnce({});
+      prismaMock.session.findUnique.mockResolvedValueOnce({ pendingRun: null });
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...convertedGroup,
+        sessions: [{ agentStatus: "active", sessionStatus: "in_progress" }],
+      });
+
+      const result = await service.convertGroup({
+        sessionGroupId: sourceGroup.id,
+        kind: "coding",
+        repoId: "repo-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+        actorType: "agent",
+      });
+
+      expect(result).toBe(convertedSession);
+      expect(prismaMock.session.update).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          where: { id: convertedSession.id },
+          data: expect.objectContaining({ repoId: "repo-1", readOnlyWorkspace: true }),
+        }),
+      );
+      expect(prismaMock.session.update).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: { id: convertedSession.id },
+          data: expect.objectContaining({
+            agentStatus: "active",
+            pendingRun: expect.objectContaining({ type: "run", workspaceUpgrade: true }),
+          }),
+        }),
+      );
+      expect(sessionRouterMock.sendAsync).toHaveBeenCalledWith(
+        convertedSession.id,
+        expect.objectContaining({
+          type: "upgrade_workspace",
+          repoId: "repo-1",
+        }),
+        expect.objectContaining({ organizationId: "org-1" }),
+      );
+      expect(eventServiceMock.publishCreated).toHaveBeenCalledWith({ id: "event-1" });
+    });
+
+    it("marks a user conversion for upgrade without starting another run", async () => {
+      const sourceGroup = makeSessionGroup({
+        id: "group-general",
+        kind: "general",
+        repoId: null,
+      });
+      const convertedSession = makeSession({
+        sessionGroupId: sourceGroup.id,
+        repoId: "repo-1",
+        readOnlyWorkspace: true,
+      });
+
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({ ...sourceGroup, sessions: [makeSession({ repoId: null })] });
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
+      prismaMock.session.update.mockResolvedValueOnce(convertedSession);
+      prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
+        ...sourceGroup,
+        kind: "coding",
+        repoId: "repo-1",
+        sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
+      });
+
+      await service.convertGroup({
+        sessionGroupId: sourceGroup.id,
+        kind: "coding",
+        repoId: "repo-1",
+        organizationId: "org-1",
+        actorId: "user-1",
+        actorType: "user",
+      });
+
+      expect(prismaMock.session.update).toHaveBeenCalledTimes(1);
+      expect(sessionRouterMock.sendAsync).not.toHaveBeenCalled();
+    });
+  });
+
   describe("listGroups", () => {
     it("lists session groups ordered by their most recent session", async () => {
       const olderSession = makeSession({

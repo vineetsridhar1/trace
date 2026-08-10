@@ -1153,7 +1153,7 @@ When you need a Trace platform capability, first run \`"$TRACE_CLI" --help --jso
 </system-instruction>`;
 
 const GENERAL_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace general agent session. Coordinate, monitor, answer questions, and use the managed Trace CLI to discover the relevant project, repository, and sessions. Do not edit code or create a code workspace in this session. When this conversation becomes one focused implementation task, use the CLI to convert this session to a Coding session after resolving its repository. When work is independent or parallel, create a linked session instead.
+This is a Trace general agent session. Coordinate, monitor, answer questions, and use the managed Trace CLI to discover the relevant project, repository, and sessions. Do not edit code or create a code workspace in this session. When this conversation becomes one focused implementation task, use the CLI to convert this session to a Coding session after resolving its repository. A successful conversion prepares the repository workspace and resumes the request automatically. If the CLI returns an error, report that exact failure and do not imply the conversion happened. When work is independent or parallel, create a linked session instead.
 </system-instruction>`;
 
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves each response. */
@@ -3487,6 +3487,10 @@ export class SessionService {
         where: { id: session.id },
         data: {
           repoId: targetRepoId,
+          // The general workspace is not a repository checkout. Keep the
+          // session read-only until the router replaces it with a coding
+          // worktree; the next code-mode run will use the normal upgrade path.
+          readOnlyWorkspace: true,
           ...(input.tool ? { tool: input.tool } : {}),
           ...(input.model !== undefined ? { model: input.model } : {}),
           ...(input.reasoningEffort !== undefined
@@ -3523,6 +3527,29 @@ export class SessionService {
     });
 
     eventService.publishCreated(result.event);
+
+    // An agent-initiated conversion is a handoff, not the end of the user's
+    // request. Prepare the repository worktree and resume the same tool
+    // conversation there. workspaceReady atomically consumes this pending run,
+    // and the desktop bridge aborts the old general-workspace process before
+    // starting it in the new cwd.
+    if (input.actorType === "agent") {
+      await this.triggerWorkspaceUpgrade(
+        result.session.id,
+        result.session,
+        {
+          type: "run",
+          prompt: "Continue the user's request in the newly prepared coding workspace.",
+          interactionMode: "code",
+          clientSource: "cli",
+        },
+        {
+          agentStatus: "active",
+          sessionStatus: getRunningSessionStatus(result.session.sessionStatus),
+        },
+      );
+    }
+
     return result.session;
   }
 

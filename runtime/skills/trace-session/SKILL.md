@@ -104,7 +104,10 @@ conversation and session identity are preserved:
 Add `--project`, `--tool`, `--model`, `--reasoning`, or `--runtime` when the destination needs an
 explicit override. Conversion targets the current session by default; use `--session <session-id>`
 only when explicitly acting on another session. Prefer conversion over `session start` for the
-current conversation. Start a separate session only for independent or parallel work.
+current conversation. A successful current-session conversion prepares the repository workspace
+and resumes the request there automatically. Treat a nonzero exit or JSON `error` as a failed
+conversion: surface its exact message and never claim the session changed. Start a separate session
+only for independent or parallel work.
 
 ```sh
 "$TRACE_CLI" session send <session-id> "Please also cover migrations" --json
