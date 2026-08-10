@@ -6,6 +6,12 @@ function readStarterFile(path: string): string {
 }
 
 describe("app starter styling", () => {
+  it("loads the shared design-craft skill for interface work", () => {
+    expect(readStarterFile("docs/ai-guidance.md")).toContain(
+      "$TRACE_SKILLS_DIR/design-craft/SKILL.md",
+    );
+  });
+
   it("loads Tailwind through the Vite module graph", () => {
     expect(readStarterFile("src/main.tsx")).toContain('import "./index.css";');
     expect(readStarterFile("index.html")).toContain(

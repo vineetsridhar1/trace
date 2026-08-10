@@ -17,6 +17,6 @@ Use the narrowest action matching the request. Preserve the brief, current visua
 | Clarify | Rewrite actions, labels, errors, permissions, empty states, and help by function. | Factual meaning, terminology, and brand voice. |
 | Adapt | Recompose navigation, hierarchy, content priority, and controls for the target viewport. | Product capability; adaptation is not scaling. |
 
-For live comparison, preserve the original and add two or three labeled variation artboards beside it. Keep viewport, state, content, and product facts constant so the comparison isolates the design decision. Once the user chooses, retain the selected direction and remove only the temporary alternatives.
+When the user asks for live comparison in a Design session, preserve the original and add two or three labeled variation artboards beside it. Keep viewport, state, content, and product facts constant so the comparison isolates the design decision. In an App session, prefer one coherent implementation unless the user explicitly asks for a comparison view. Once the user chooses, retain the selected direction and remove only the temporary alternatives.
 
 Before finishing any refinement, inspect the complete affected path at representative widths. A focused request should not leave adjacent states or breakpoints below the same quality bar.

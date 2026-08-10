@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Craft"
+  short_description: "Design and refine high-quality interfaces"
+  default_prompt: "Use $design-craft to design or improve this interface with a clear visual direction and complete states."

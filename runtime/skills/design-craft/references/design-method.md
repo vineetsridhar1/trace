@@ -1,10 +1,10 @@
 # Design method
 
-Use this for every new surface or substantial redesign.
+Use this for every new interface or substantial redesign.
 
 ## Select the visitor mode
 
-Persist one mode in `design.brief.json` based on what success means on this surface:
+Choose one mode based on what success means on this surface. In a Design session, persist it in `design.brief.json`.
 
 - `persuade`: understand the offer, trust its proof, and act. The opening must make the promise and primary action legible.
 - `operate`: complete a task. Scanability, state, recovery, efficiency, and familiar affordances outrank spectacle.
@@ -13,7 +13,7 @@ Persist one mode in `design.brief.json` based on what success means on this surf
 
 ## Establish visual authority
 
-Inspect the selected design package, tokens, components, assets, and representative screens before inventing.
+Inspect the available design system, tokens, components, assets, and representative screens before inventing.
 
 - A coherent existing interface is authority even when no prose describes it.
 - A local addition inherits its surrounding world.
@@ -23,7 +23,7 @@ Inspect the selected design package, tokens, components, assets, and representat
 
 ## Resolve the brief
 
-Record audience, mode, primary job, core flow, states, content ranges, platform, responsive intent, fidelity, protected constraints, and assumptions. Ask only when an unresolved answer would materially change the artifact.
+Resolve audience, mode, primary job, core flow, states, content ranges, platform, responsive intent, fidelity, protected constraints, and assumptions. Persist them in the session's existing brief or product structure when one exists. Ask only when an unresolved answer would materially change the result.
 
 For a new direction, identify the product's distinctive mechanism, the audience's real context, and the category-default treatment to avoid. Consider materially different structures or visual worlds, not recolors. Commit to one direction and record its:
 
@@ -46,4 +46,4 @@ For a new direction, identify the product's distinctive mechanism, the audience'
 - Give motion one authored purpose: explain state, relationship, hierarchy, or a product-specific moment.
 - Keep claims factual and label illustrative values clearly.
 
-Build one valid representative artboard early, then complete the coherent flow and its important states in visible batches.
+Build one valid representative surface early, then complete the coherent flow and its important states in visible batches. In a Design session, keep each surface inside its declared artboard; in an App session, keep the running route usable between batches.

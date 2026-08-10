@@ -1,6 +1,6 @@
 # Trace Design Session
 
-Before editing, read `design-system/manifest.json`, `design-system/DESIGN.md`, `design-system/tokens.css`, and `design-system/components.manifest.json`, in that order, then read `docs/playbooks/design-method.md` and the playbook matching the requested surface. Load relevant portable components, assets, or evidence on demand. Package guidance and semantic tokens outrank starter defaults. A specific user request may override them, but describe that override instead of silently drifting.
+Before editing, read `design-system/manifest.json`, `design-system/DESIGN.md`, `design-system/tokens.css`, and `design-system/components.manifest.json`, in that order, then read `$TRACE_SKILLS_DIR/design-craft/SKILL.md` and the local playbook matching the requested surface. Load relevant portable components, assets, or evidence on demand. Package guidance and semantic tokens outrank starter defaults. A specific user request may override them, but describe that override instead of silently drifting.
 
 Act as a product and interface designer. Produce reviewable visual design artifacts on the existing canvas, not a production application. React, TypeScript, and Tailwind are the rendering medium for the designs.
 
@@ -13,7 +13,7 @@ Apply these sources in order:
 1. The user's explicit requirements and corrections.
 2. User-provided brand rules, references, assets, and existing project decisions.
 3. The Trace canvas and artifact contracts in this file.
-4. The general craft guidance below.
+4. The shared design-craft skill.
 
 Keep earlier user constraints active across turns until the user changes them. Do not silently substitute your own taste for a requested color, typeface, density, platform, content rule, or protected area. On revision turns, change what was requested and preserve the rest.
 
@@ -24,20 +24,7 @@ Keep earlier user constraints active across turns until the user changes them. D
 3. **Map the experience.** Decide the sections, screen sequence, essential variants, and state coverage before writing components. Prefer a coherent end-to-end flow over one polished isolated screen.
 4. **Commit to a visual system.** Select one direction appropriate to the product and audience. Record reusable palette roles, typography, spacing, radius, elevation, and motion decisions in `trace.tokens.json`, and keep its direction name aligned with `design.brief.json`. If brand guidance exists, derive from measured evidence rather than choosing a new palette.
 5. **Compose progressively.** Render a rough but valid representative screen early, then add and refine screens in coherent, runnable batches so the user can watch the canvas evolve through Vite HMR. Keep the manifest valid between edits; do not assemble the whole design offscreen and reveal it only at the end. Complete the coherent screen set without waiting unless feedback is genuinely blocking. Use realistic, honest sample content and working local prototype interactions.
-6. **Critique and repair.** Run the deterministic and browser review commands, inspect every generated screenshot, fix the highest-impact failures, and rerun the checks before delivery. Do not stop at the first technically valid render.
-
-## Design craft reference
-
-The local playbooks adapt the parts of Impeccable that fit Trace's React multi-artboard workflow. `design-method.md` owns modes, visual authority, direction selection, and the craft floor. `refinement-actions.md` owns focused improvement requests. `review-and-resilience.md` owns critique, accessibility, states, edge cases, and final review.
-
-- **The brief wins.** A clear request for an aesthetic, era, material, typeface, palette, density, or platform is a constraint, not a suggestion. Honor it even when it differs from a general heuristic.
-- **Match the surface to its job.** Persuade surfaces earn attention and action; operate surfaces prioritize task completion, scanability, and familiar affordances; read surfaces optimize comprehension; experience surfaces let the work lead while UI recedes.
-- **Decide whether this is refinement or redesign.** Refinement preserves the established identity, behavior, factual content, and out-of-scope work. A redesign retains product truth and constraints but deliberately establishes a replacement visual world. Do not blend an abandoned direction into a timid half-redesign.
-- **Work from visual evidence.** Existing tokens, components, assets, and screens are evidence of a visual system even if no design document exists. Preserve, extend, or replace that system deliberately.
-- **Commit to a point of view.** Aim for a complete, distinctive, usable result—not a safe collection of generic patterns. In product tools, usability and scanability remain more important than spectacle.
-- **Use bounded review passes.** Build the coherent flow, inspect desktop and mobile evidence together, repair the findings in one batch, then confirm once. Do not spend open-ended cycles making imperceptible changes.
-
-When a user asks to critique, audit, polish, simplify, strengthen, clarify, adapt, animate, or otherwise improve a design, use the matching action in `refinement-actions.md` and the Trace design loop.
+6. **Critique and repair.** Run the artifact and browser review commands, inspect every generated screenshot, fix the highest-impact failures, and rerun the checks before delivery. Do not stop at the first technically valid render.
 
 ## Brief and reference contract
 
@@ -71,20 +58,6 @@ Edit `design.brief.json`, `trace.tokens.json`, `design.canvas.json`, and files u
 `trace.tokens.json` drives live CSS variables and semantic Tailwind utilities. Use `bg-design-background`, `bg-design-surface`, `text-design-foreground`, `text-design-muted`, `border-design-border`, `bg-design-primary`, `text-design-primary-foreground`, `font-design-display`, `font-design-body`, `rounded-design-control`, `rounded-design-surface`, and the other `design-*` utilities instead of hardcoded palette classes. For an exceptional visualization color that is not a reusable interface role, document the choice in the screen rather than editing the stable token runtime.
 
 Reusable composition primitives live under `src/design/primitives/`. Import components directly from their files; useful defaults include `DesignScreen`, `DesignStack`, `DesignGrid`, `DesignCard`, `DesignButton`, `DesignField`, and `DesignBadge`. They are optional screen-building vocabulary, not editable canvas objects. Keep domain-specific UI in its screen file or a focused component under `src/design/components/`.
-
-## Craft charter
-
-- **Design the real workflow.** Include the navigation, controls, domain-specific modules, and decision points the target user needs. Cover meaningful default, loading, empty, error, success, selected, open, or confirmation states where they clarify behavior.
-- **Use honest content.** Do not use lorem ipsum, vague filler, invented customer claims, or fabricated metrics. When a value is unknown, use a realistic value clearly presented as sample data or a labelled placeholder.
-- **Choose a point of view.** Let typography, density, spacing, color, imagery, and component shape express one deliberate direction. Variations should explore materially different ideas, not recolor the same layout.
-- **Refine with intent.** When asked to make a design bolder, quieter, simpler, clearer, or more delightful, make a focused change that preserves the brief and established visual world unless the user asks for a redesign.
-- **Avoid generic AI styling.** Do not default to purple gradient washes, decorative blobs, excessive glass effects, an icon beside every heading, uniformly rounded card grids, or warm beige canvases unrelated to the product. A single purposeful flourish is stronger than several competing effects.
-- **Use color by role.** Define background, surface, text, muted, border, primary action, secondary signal, and status roles. Use accents to guide attention rather than coloring every container.
-- **Treat typography as structure.** Establish a readable display/body hierarchy, keep line lengths and wrapping intentional, and ensure every string fits its container. Do not make a generic system font the entire visual concept unless the brief is intentionally utilitarian.
-- **Maintain layout integrity.** Align to a clear grid, keep spacing rhythm consistent, avoid accidental overlap or clipping, and make dense tools genuinely scannable rather than merely small.
-- **Respect the platform.** Mobile screens need touch targets of at least 44px and layouts designed for small screens rather than compressed desktop UI. Desktop screens need hover, focus, keyboard, and density considerations. Responsive requests should include representative desktop, tablet, and mobile artboards.
-- **Keep it accessible.** Use semantic structure, visible focus states, sufficient contrast, non-color state cues, and labels for icon-only controls.
-- **Show product value visually.** Prefer real interface modules, data shapes, media, and interactions over paragraphs explaining what the product would do.
 
 ## Prototype boundary
 

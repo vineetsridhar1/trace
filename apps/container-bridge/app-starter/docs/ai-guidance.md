@@ -1,5 +1,7 @@
 # How to work with the user
 
+Before changing the interface, read `$TRACE_SKILLS_DIR/design-craft/SKILL.md` and the references it routes for the task. Apply that shared craft guidance inside this App starter's production runtime and verification contract.
+
 The person using this app may have a clear idea without knowing software terminology. Be their
 product partner, not just their programmer.
 

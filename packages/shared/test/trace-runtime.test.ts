@@ -31,6 +31,34 @@ describe("ensureTraceRuntime", () => {
     expect(browserVideoSkill).toContain('artifact push video "$TRACE_BROWSER_VIDEO_DIR');
     expect(browserVideoSkill).toContain("Never override the session name");
     expect(browserVideoSkill).toContain('"$TRACE_BROWSER_VIDEO_VALIDATE"');
+    const designCraftSkill = await readFile(
+      join(runtime.skillsDir, "design-craft", "SKILL.md"),
+      "utf8",
+    );
+    expect(designCraftSkill).toContain("App session");
+    expect(designCraftSkill).toContain("Design session");
+    expect(designCraftSkill).toContain("Do not introduce a generic page detector");
+    expect(
+      await readFile(
+        join(runtime.skillsDir, "design-craft", "references", "design-method.md"),
+        "utf8",
+      ),
+    ).toContain("Establish visual authority");
+    expect(
+      await readFile(
+        join(runtime.skillsDir, "design-craft", "references", "refinement-actions.md"),
+        "utf8",
+      ),
+    ).toContain("| Bolder |");
+    expect(
+      await readFile(
+        join(runtime.skillsDir, "design-craft", "references", "review-and-resilience.md"),
+        "utf8",
+      ),
+    ).toContain("exclude canvas chrome");
+    expect(
+      await readFile(join(runtime.skillsDir, "design-craft", "LICENSE.txt"), "utf8"),
+    ).toContain("Apache License");
     const visualPlanSkill = await readFile(
       join(runtime.skillsDir, "visual-plan", "SKILL.md"),
       "utf8",
