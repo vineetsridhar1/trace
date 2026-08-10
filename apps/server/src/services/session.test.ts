@@ -781,6 +781,213 @@ describe("SessionService", () => {
       },
     );
 
+    it("reuses a compatible cloud runtime for generated conversion", async () => {
+      const sourceGroup = makeSessionGroup({
+        id: "group-general",
+        kind: "general",
+        channelId: null,
+        channel: null,
+        repoId: null,
+        repo: null,
+        branch: null,
+        workdir: "/home/coder/trace/general-sessions/group-general",
+      });
+      const managedRepo = await managedGitServiceMock.createManagedRepo({
+        organizationId: "org-1",
+        name: "unused",
+        actorType: "agent",
+        actorId: "user-1",
+      });
+      managedGitServiceMock.createManagedRepo.mockClear();
+      managedGitServiceMock.mintAccessToken.mockResolvedValueOnce({ token: "runtime-token" });
+      const sourceSession = makeSession({
+        id: "session-general",
+        sessionGroupId: sourceGroup.id,
+        sessionGroup: sourceGroup,
+        hosting: "cloud",
+        repoId: null,
+        repo: null,
+        channelId: null,
+        channel: null,
+        workdir: sourceGroup.workdir,
+        tool: "codex",
+        connection: {
+          state: "connected",
+          adapterType: "provisioned",
+          environmentId: "env-original",
+          runtimeInstanceId: "runtime-cloud",
+          providerRuntimeId: "machine-cloud",
+          version: 4,
+        },
+      });
+      const convertedGroup = {
+        ...sourceGroup,
+        kind: "app",
+        repoId: managedRepo.id,
+        repo: managedRepo,
+        branch: managedRepo.defaultBranch,
+      };
+      const convertedSession = makeSession({
+        ...sourceSession,
+        sessionGroup: convertedGroup,
+        repoId: managedRepo.id,
+        repo: managedRepo,
+        branch: managedRepo.defaultBranch,
+        workdir: null,
+        pendingRun: {
+          type: "run",
+          prompt: "Continue the user's request in the newly prepared app workspace.",
+          interactionMode: null,
+        },
+        connection: {
+          ...sourceSession.connection,
+          state: "connected",
+          runtimeLabel: "Existing cloud",
+          version: 5,
+        },
+      });
+      const runtime = {
+        id: "runtime-cloud",
+        key: "org-1:runtime-cloud",
+        label: "Existing cloud",
+        hostingMode: "cloud",
+        organizationId: "org-1",
+        ownerUserId: "user-1",
+        supportedTools: ["codex"],
+        protocolVersion: 4,
+        registeredRepoIds: [],
+        boundSessions: new Set([sourceSession.id]),
+        ws: { readyState: 1, OPEN: 1 },
+      };
+
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({ ...sourceGroup, sessions: [sourceSession] });
+      prismaMock.repo.findFirst.mockResolvedValueOnce({ remoteUrl: managedRepo.remoteUrl });
+      prismaMock.session.findUnique.mockResolvedValueOnce({ connection: sourceSession.connection });
+      prismaMock.session.update.mockResolvedValueOnce(convertedSession);
+      prismaMock.sessionGroup.findUnique.mockResolvedValue({
+        ...convertedGroup,
+        sessions: [{ agentStatus: "not_started", sessionStatus: "in_progress" }],
+      });
+      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce(
+        runtime as unknown as ReturnType<typeof sessionRouterMock.getRuntimeForSession>,
+      );
+
+      const result = await service.convertGroup({
+        sessionGroupId: sourceGroup.id,
+        kind: "app",
+        organizationId: "org-1",
+        actorId: "user-1",
+        actorType: "agent",
+      });
+
+      expect(result).toBe(convertedSession);
+      expect(prismaMock.agentEnvironment.findFirst).not.toHaveBeenCalled();
+      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
+      expect(sessionRouterMock.transitionRuntime).toHaveBeenCalledWith(
+        sourceSession.id,
+        "cloud",
+        "terminate",
+      );
+      expect(sessionRouterMock.bindSession).toHaveBeenCalledWith(sourceSession.id, runtime.key);
+      expect(managedGitServiceMock.mintAccessToken).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: sourceSession.id,
+          subject: runtime.id,
+          capabilities: ["read", "write"],
+        }),
+      );
+      expect(sessionRouterMock.sendAsync).toHaveBeenCalledWith(
+        sourceSession.id,
+        expect.objectContaining({
+          type: "prepare_app",
+          sessionGroupKind: "app",
+          repoId: managedRepo.id,
+        }),
+        { expectedHomeRuntimeId: runtime.id, organizationId: "org-1" },
+      );
+      expect(prismaMock.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            hosting: "cloud",
+            pendingGeneralWorkspaceCleanupRuntimeId: null,
+            connection: expect.objectContaining({
+              state: "connected",
+              runtimeInstanceId: runtime.id,
+              providerRuntimeId: "machine-cloud",
+              version: 5,
+            }),
+          }),
+        }),
+      );
+    });
+
+    it("selects a replacement cloud environment when the current cloud lacks the target tool", async () => {
+      const sourceGroup = makeSessionGroup({
+        id: "group-general",
+        kind: "general",
+        channelId: null,
+        repoId: null,
+      });
+      const sourceSession = makeSession({
+        id: "session-general",
+        sessionGroupId: sourceGroup.id,
+        sessionGroup: sourceGroup,
+        hosting: "cloud",
+        tool: "claude_code",
+        connection: { state: "connected", runtimeInstanceId: "runtime-cloud" },
+      });
+      const incompatibleRuntime = {
+        id: "runtime-cloud",
+        key: "org-1:runtime-cloud",
+        label: "Claude cloud",
+        hostingMode: "cloud",
+        organizationId: "org-1",
+        supportedTools: ["claude_code"],
+      };
+      const convertedSession = makeSession({
+        ...sourceSession,
+        hosting: "cloud",
+        tool: "codex",
+        sessionGroup: { ...sourceGroup, kind: "app" },
+      });
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({ ...sourceGroup, sessions: [sourceSession] });
+      sessionRouterMock.getRuntimeForSession.mockReturnValueOnce(
+        incompatibleRuntime as unknown as ReturnType<typeof sessionRouterMock.getRuntimeForSession>,
+      );
+      const moveSpy = vi.spyOn(
+        service as unknown as {
+          moveSessionInPlace: (...args: unknown[]) => Promise<unknown>;
+        },
+        "moveSessionInPlace",
+      );
+      moveSpy.mockResolvedValueOnce(convertedSession);
+
+      await expect(
+        service.convertGroup({
+          sessionGroupId: sourceGroup.id,
+          kind: "app",
+          tool: "codex",
+          organizationId: "org-1",
+          actorId: "user-1",
+          actorType: "agent",
+        }),
+      ).resolves.toBe(convertedSession);
+
+      expect(prismaMock.agentEnvironment.findFirst).toHaveBeenCalled();
+      expect(moveSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetHosting: "cloud",
+          targetEnvironment: expect.objectContaining({ id: "env-default" }),
+          reuseCloudRuntime: null,
+          conversion: expect.objectContaining({ kind: "app", tool: "codex" }),
+        }),
+      );
+    });
+
     it("cleans up a managed repo when generated conversion validation loses a race", async () => {
       const sourceGroup = makeSessionGroup({
         id: "group-general",

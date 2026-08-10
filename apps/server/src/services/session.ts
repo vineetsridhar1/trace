@@ -37,6 +37,7 @@ import {
   sessionRouter,
   type DeliveryResult,
   type RuntimeInstance,
+  type RuntimeMetadata,
   type RuntimeLifecycleEventType,
   type RuntimeLifecycleUpdate,
 } from "../lib/session-router.js";
@@ -3540,15 +3541,21 @@ export class SessionService {
     });
     const sourceSession = requireSingleGeneralConversionSession(source);
     const target = resolveConversionToolSelection(sourceSession.tool, input);
-    const cloudEnvironment = await this.resolveProvisioningEnvironment({
-      sessionId: sourceSession.id,
-      organizationId: input.organizationId,
-      adapterType: "provisioned",
-    });
-    if (!cloudEnvironment) {
+    const reusableCloudRuntime = this.resolveReusableGeneratedConversionRuntime(
+      sourceSession,
+      target.tool,
+    );
+    const cloudEnvironment = reusableCloudRuntime
+      ? null
+      : await this.resolveProvisioningEnvironment({
+          sessionId: sourceSession.id,
+          organizationId: input.organizationId,
+          adapterType: "provisioned",
+        });
+    if (!reusableCloudRuntime && !cloudEnvironment) {
       throw new ValidationError("No enabled cloud agent environment is configured");
     }
-    assertAgentEnvironmentSupportsTool(cloudEnvironment, target.tool);
+    if (cloudEnvironment) assertAgentEnvironmentSupportsTool(cloudEnvironment, target.tool);
     const locked = await withDistributedLock(
       {
         key: this.runtimeTransitionLockKey(sourceSession.id, sourceSession.sessionGroupId),
@@ -3566,9 +3573,11 @@ export class SessionService {
           return await this.moveSessionInPlace({
             session: sourceSession,
             targetHosting: "cloud",
-            targetRuntimeInstanceId: null,
-            targetRuntimeLabel: null,
-            targetEnvironment: cloudEnvironment,
+            targetRuntimeInstanceId: reusableCloudRuntime?.id ?? null,
+            targetRuntimeLabel: reusableCloudRuntime?.label ?? null,
+            targetRuntime: reusableCloudRuntime,
+            targetEnvironment: cloudEnvironment ?? undefined,
+            reuseCloudRuntime: reusableCloudRuntime,
             allowUnverifiedSourceGitStatus: true,
             bootstrapPrompt: conversionContinuationPrompt(generatedKind),
             conversion: {
@@ -3621,6 +3630,69 @@ export class SessionService {
       throw new ValidationError("Session conversion is already in progress");
     }
     return locked.value;
+  }
+
+  private resolveReusableGeneratedConversionRuntime(
+    session: { id: string; hosting: string; organizationId: string; connection: unknown },
+    tool: CodingTool,
+  ): RuntimeMetadata | null {
+    if (session.hosting !== "cloud") return null;
+    const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
+    const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+    const runtime =
+      boundRuntime ??
+      (persistedRuntimeId ? runtimeMetadata(persistedRuntimeId, session.organizationId) : undefined);
+    if (
+      !runtime ||
+      runtime.hostingMode !== "cloud" ||
+      (runtime.organizationId && runtime.organizationId !== session.organizationId) ||
+      !sessionRouter.isRuntimeAvailable(runtime.id, session.organizationId) ||
+      !runtime.supportedTools.includes(tool)
+    ) {
+      return null;
+    }
+    return runtime;
+  }
+
+  private async prepareGeneratedConversionWorkspace(
+    session: SessionWithInclude,
+    runtime: RuntimeMetadata,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<void> {
+    const group = session.sessionGroup;
+    const kind = group?.kind;
+    if (!isGeneratedProjectKind(kind) || !group || !session.sessionGroupId || !session.repo) {
+      throw new Error("Converted generated workspace metadata is unavailable");
+    }
+    const appGit = await this.createGeneratedProjectGitCredential({
+      organizationId: session.organizationId,
+      sessionId: session.id,
+      runtimeInstanceId: runtime.id,
+      repo: session.repo,
+      actorType,
+      actorId,
+    });
+    const designSystemPackage =
+      kind === "design"
+        ? await this.createDesignSystemPackageDescriptor(session.sessionGroupId)
+        : undefined;
+    const delivery = await sendSessionCommand(
+      session.id,
+      {
+        type: "prepare_app",
+        sessionId: session.id,
+        sessionGroupId: session.sessionGroupId,
+        sessionGroupKind: kind,
+        slug: group.slug ?? undefined,
+        ...appGit,
+        ...(designSystemPackage ? { designSystemPackage } : {}),
+      },
+      { expectedHomeRuntimeId: runtime.id, organizationId: session.organizationId },
+    );
+    if (delivery !== "delivered") {
+      throw new Error(`prepare_app: ${delivery}`);
+    }
   }
 
   private async resolveCodingConversionDestination(
@@ -9694,6 +9766,7 @@ export class SessionService {
     targetRuntimeLabel?: string | null;
     targetRuntime?: Pick<RuntimeInstance, "supportedTools" | "label"> | null;
     targetEnvironment?: ProvisioningEnvironment;
+    reuseCloudRuntime?: RuntimeMetadata | null;
     allowUnverifiedSourceGitStatus?: boolean;
     bootstrapPrompt?: string;
     conversion?: GeneratedSessionConversion;
@@ -9730,6 +9803,7 @@ export class SessionService {
       targetRuntimeLabel,
       targetRuntime,
       targetEnvironment: requestedTargetEnvironment,
+      reuseCloudRuntime,
       allowUnverifiedSourceGitStatus,
       bootstrapPrompt: requestedBootstrapPrompt,
       conversion,
@@ -9761,7 +9835,7 @@ export class SessionService {
         ? sourceRuntimeId
         : null;
     const targetEnvironment =
-      targetHosting === "cloud"
+      targetHosting === "cloud" && !reuseCloudRuntime
         ? (requestedTargetEnvironment ??
           (await this.resolveProvisioningEnvironment({
             sessionId: session.id,
@@ -9769,7 +9843,7 @@ export class SessionService {
             adapterType: "provisioned",
           })))
         : null;
-    if (targetHosting === "cloud" && !targetEnvironment) {
+    if (targetHosting === "cloud" && !reuseCloudRuntime && !targetEnvironment) {
       throw new Error("No enabled cloud agent environment is configured");
     }
     const targetRepo = conversion
@@ -9784,7 +9858,7 @@ export class SessionService {
       : session.repo;
     assertCloudRepoRemoteAvailable(targetHosting, targetRepo);
     let sourceCloudRuntimeSession =
-      session.hosting === "cloud" && targetHosting === "local"
+      session.hosting === "cloud" && (targetHosting === "local" || !reuseCloudRuntime)
         ? await this.withGroupRuntimeState(session)
         : null;
     if (sourceCloudRuntimeSession) {
@@ -9874,8 +9948,15 @@ export class SessionService {
     // shortly afterward, but idle cleanup can run in between; persisting the
     // startup state here keeps the normal grace window in effect for that gap.
     const replacementRequestedAt = new Date().toISOString();
-    const nextConnectionBase =
-      targetHosting === "local"
+    const nextConnectionBase = reuseCloudRuntime
+      ? {
+          ...sourceConnection,
+          state: "connected" as const,
+          adapterType: "provisioned" as const,
+          runtimeInstanceId: reuseCloudRuntime.id,
+          runtimeLabel: reuseCloudRuntime.label,
+        }
+      : targetHosting === "local"
         ? defaultConnection({
             runtimeInstanceId: targetRuntimeInstanceId ?? undefined,
             runtimeLabel: targetRuntimeLabel ?? undefined,
@@ -10042,8 +10123,9 @@ export class SessionService {
     }
     const sessionGroup = await this.loadSessionGroupSnapshot(movedSession.sessionGroupId);
 
-    const targetRuntimeKey =
-      targetHosting === "local" && targetRuntimeInstanceId
+    const targetRuntimeKey = reuseCloudRuntime
+      ? reuseCloudRuntime.key
+      : targetHosting === "local" && targetRuntimeInstanceId
         ? (runtimeMetadata(targetRuntimeInstanceId, movedSession.organizationId)?.key ??
           targetRuntimeInstanceId)
         : null;
@@ -10102,7 +10184,14 @@ export class SessionService {
       });
     }
 
-    if (movedSession.repo || targetHosting === "cloud") {
+    if (reuseCloudRuntime && conversion) {
+      await this.prepareGeneratedConversionWorkspace(
+        movedSession,
+        reuseCloudRuntime,
+        actorType,
+        actorId,
+      );
+    } else if (movedSession.repo || targetHosting === "cloud") {
       this.provisionRuntime({
         sessionId: movedSession.id,
         sessionGroupId: movedSession.sessionGroupId,
@@ -10147,7 +10236,11 @@ export class SessionService {
     }
 
     if (sourceCloudRuntimeSession) {
-      await this.destroyMovedSourceCloudRuntime(movedSession.id, sourceCloudRuntimeSession);
+      await this.destroyMovedSourceCloudRuntime(
+        movedSession.id,
+        sourceCloudRuntimeSession,
+        targetHosting === "local" ? "session_moved_to_local" : "session_runtime_replaced",
+      );
     }
 
     return movedSession;
@@ -10162,10 +10255,11 @@ export class SessionService {
       repoId?: string | null;
       connection?: unknown;
     },
+    reason: "session_moved_to_local" | "session_runtime_replaced",
   ): Promise<void> {
     try {
       await sessionRouter.destroyRuntime(sessionId, sourceRuntimeSession, {
-        reason: "session_moved_to_local",
+        reason,
         skipBridgeDelete: true,
         skipUnbind: true,
       });

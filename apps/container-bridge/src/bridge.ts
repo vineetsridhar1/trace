@@ -579,6 +579,7 @@ export class ContainerBridge implements IBridgeClient {
           designSystemPackage,
           sourceRepository,
         } = cmd;
+        const previousWorkdir = this.sessionWorkdirs.get(sessionId);
         (async () => {
           try {
             const { workdir, slug: workspaceSlug } = await createAppWorkspace({
@@ -620,6 +621,14 @@ export class ContainerBridge implements IBridgeClient {
               ...(sourceWorkdir ? { sourceWorkdir } : {}),
               ...(sourceCommitSha ? { sourceCommitSha } : {}),
             });
+            try {
+              await removeGeneralWorkspace(previousWorkdir, sessionGroupId ?? sessionId);
+            } catch (error) {
+              console.warn(
+                `[container-bridge] failed to remove converted general workspace ${previousWorkdir}:`,
+                error instanceof Error ? error.message : String(error),
+              );
+            }
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             console.error(`[container-bridge] app workspace failed for ${sessionId}:`, message);

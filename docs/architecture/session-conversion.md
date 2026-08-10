@@ -19,12 +19,15 @@ The agent creates a linked session only for independent or parallel work.
 | `app`, `design`, `pdf`, `animation` | cloud only     |
 | `design_system`                     | dedicated flow |
 
-Cloud-only conversion is a runtime migration: verify that a compatible cloud
-environment exists, prepare the managed repository, stop the old runtime, and
-atomically persist the target kind, repository, and cloud binding. Failures before
-that transaction leave the session general and remove the unused managed repo.
-Provisioning failures after the cloud binding commits remain visible and retryable
-on the converted session. There is no silent local fallback.
+Cloud-only conversion reuses an available cloud runtime when it supports the
+selected tool. Trace stops the general agent process, atomically persists the
+target kind and managed repository while retaining the runtime binding, then
+replaces the scratch directory with the target workspace. A local, disconnected,
+or tool-incompatible source instead provisions a replacement in the default cloud
+environment. Failures before the transaction leave the session general and remove
+the unused managed repo. Preparation or provisioning failures after conversion
+commits remain visible and retryable on the converted session. There is no silent
+local fallback.
 
 ## Conversion contract
 
@@ -60,12 +63,12 @@ is persisted until the source bridge confirms deletion and retried when that
 bridge reconnects.
 
 Creation-mode conversion clears channel/project links, creates a Trace-managed
-repo, stops the old runtime, and moves the existing session to the default cloud
-environment. Runtime preparation uses the same target-specific starter and
-system instructions as normal session creation. Its first command is only a
-short continuation prompt; the normal first-run path prepends the preserved
-conversation so the target agent receives the full task context without a
-second copy of the user's request.
+repo, and stops the general agent process. It reuses compatible cloud compute or
+moves local/incompatible sessions to the default cloud environment. Runtime
+preparation uses the same target-specific starter and system instructions as
+normal session creation. Its first command is only a short continuation prompt;
+the normal first-run path prepends the preserved conversation so the target agent
+receives the full task context without a second copy of the user's request.
 
 Every successful conversion appends `session_converted` in the active session's
 scope with complete `session` and `sessionGroup` snapshots. Clients update their
