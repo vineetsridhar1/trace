@@ -46,6 +46,10 @@ export const terminalCommands = [
   defineCommand({
     path: ["terminal", "list"],
     description: "List terminals authorized for a session",
+    examples: ['"$TRACE_CLI" terminal list --json'],
+    effects: ["Read-only; does not create, attach to, or modify a terminal."],
+    output: "Terminal IDs with owning session, state, dimensions, and runtime connectivity.",
+    nextSteps: ['Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect output.'],
     options: [sessionOption],
     async run(ctx, input) {
       const sessionId = resolveSessionId(ctx, optionString(input, "session"));
@@ -63,6 +67,10 @@ export const terminalCommands = [
   defineCommand({
     path: ["terminal", "create"],
     description: "Create a managed terminal on the session runtime",
+    examples: ['"$TRACE_CLI" terminal create --cols 120 --rows 30 --json'],
+    effects: ["Creates a PTY on the session's authorized runtime; it does not execute a command."],
+    output: "The new terminal ID, session, initial state, dimensions, and connectivity.",
+    nextSteps: ['Use "$TRACE_CLI" terminal send <terminal-id> <text> --enter to run a command.'],
     options: [
       sessionOption,
       { name: "cols", flag: "--cols", kind: "integer", valueName: "N", min: 20, max: 500, description: "Columns, from 20 to 500 (default: 80)" },
@@ -77,6 +85,10 @@ export const terminalCommands = [
   defineCommand({
     path: ["terminal", "capture"],
     description: "Capture bounded terminal scrollback; ANSI is preserved by default",
+    examples: ['"$TRACE_CLI" terminal capture <terminal-id> --plain --json'],
+    effects: ["Read-only; captures only ephemeral bounded relay scrollback."],
+    output: "Output, byte count, truncation state, timestamp, and terminal connectivity state.",
+    nextSteps: ['Use "$TRACE_CLI" terminal send <terminal-id> <text> --enter to provide more input.'],
     positionals: [{ name: "terminal-id", required: true }],
     options: [
       { name: "maxBytes", flag: "--max-bytes", kind: "integer", valueName: "N", min: 1, max: 51200, description: "Output byte limit, from 1 to 51200" },
@@ -91,6 +103,10 @@ export const terminalCommands = [
   defineCommand({
     path: ["terminal", "send"],
     description: "Write bounded text to an existing managed terminal",
+    examples: ['"$TRACE_CLI" terminal send <terminal-id> "pnpm test" --enter --json'],
+    effects: ["Writes to the selected terminal PTY; sent text is never included in Trace events."],
+    output: "A confirmation containing the terminal ID, without echoing the sent text.",
+    nextSteps: ['Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect command output.'],
     positionals: [{ name: "terminal-id", required: true }, { name: "text", required: true }],
     options: [{ name: "enter", flag: "--enter", kind: "boolean", description: "Append a carriage-return Enter key" }],
     async run(ctx, input) {
@@ -102,6 +118,10 @@ export const terminalCommands = [
   defineCommand({
     path: ["terminal", "key"],
     description: "Send an allowlisted terminal key (for example ctrl-c or enter)",
+    examples: ['"$TRACE_CLI" terminal key <terminal-id> ctrl-c --json'],
+    effects: ["Writes only the documented key byte sequence to the selected terminal PTY."],
+    output: "A confirmation containing the terminal ID and allowlisted key name.",
+    nextSteps: ['Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect the terminal state.'],
     positionals: [{ name: "terminal-id", required: true }, { name: "key", required: true }],
     async run(ctx, input) {
       const key = input.positionals[1]!.toLowerCase();
@@ -115,6 +135,10 @@ export const terminalCommands = [
   defineCommand({
     path: ["terminal", "resize"],
     description: "Resize an existing managed terminal",
+    examples: ['"$TRACE_CLI" terminal resize <terminal-id> --cols 140 --rows 40 --json'],
+    effects: ["Resizes the selected terminal PTY; no shell command is executed."],
+    output: "A confirmation containing the terminal ID without terminal contents.",
+    nextSteps: ['Use "$TRACE_CLI" terminal capture <terminal-id> --json to inspect post-resize output.'],
     positionals: [{ name: "terminal-id", required: true }],
     options: [
       { name: "cols", flag: "--cols", kind: "integer", valueName: "N", min: 20, max: 500, description: "Columns, from 20 to 500" },
@@ -132,6 +156,10 @@ export const terminalCommands = [
   defineCommand({
     path: ["terminal", "destroy"],
     description: "Destroy an existing managed terminal",
+    examples: ['"$TRACE_CLI" terminal destroy <terminal-id> --json'],
+    effects: ["Terminates the selected managed terminal and releases its ephemeral relay state."],
+    output: "A destruction confirmation containing the terminal ID.",
+    nextSteps: ['Run "$TRACE_CLI" terminal list --json to verify the terminal is gone.'],
     positionals: [{ name: "terminal-id", required: true }],
     async run(ctx, input) {
       const variables = { terminalId: requiredTerminalId(input) };

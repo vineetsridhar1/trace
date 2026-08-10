@@ -57,6 +57,25 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
     ],
   },
   {
+    name: "terminal",
+    description: "Create and control authorized managed terminals",
+    workflow: [
+      'Run "$TRACE_CLI" terminal list --json to discover terminals in the current session.',
+      'Run "$TRACE_CLI" terminal create --json only when a shared terminal is needed.',
+      'Use "$TRACE_CLI" terminal send <terminal-id> <text> --enter, then terminal capture, to run and inspect a command.',
+      'Use terminal key only for its documented allowlisted keys; use terminal destroy when the terminal is no longer needed.',
+    ],
+    examples: [
+      '"$TRACE_CLI" terminal create --cols 120 --rows 30 --json',
+      '"$TRACE_CLI" terminal send <terminal-id> "pnpm test" --enter --json',
+      '"$TRACE_CLI" terminal capture <terminal-id> --plain --json',
+    ],
+    notes: [
+      "Terminal input and output are ephemeral and are not stored in Trace events.",
+      "Session context is only a default selector; the server authorizes every terminal operation.",
+    ],
+  },
+  {
     name: "channel",
     description: "Discover channels available to the session owner",
     workflow: [
