@@ -7,6 +7,7 @@ export function QuestionTrayFrame({
   meta,
   tone = "pending",
   compact = false,
+  fill = false,
   children,
   footer,
   onExit,
@@ -15,16 +16,26 @@ export function QuestionTrayFrame({
   meta: string;
   tone?: "pending" | "error";
   compact?: boolean;
+  fill?: boolean;
   children: ReactNode;
   footer?: ReactNode;
   onExit?: () => void;
 }) {
   return (
-    <div className={cn("shrink-0 bg-background px-4", compact ? "pb-2" : "pb-8")}>
+    <div
+      className={cn(
+        "shrink-0 bg-background",
+        fill ? "h-full" : "px-4",
+        !fill && (compact ? "pb-2" : "pb-8"),
+      )}
+    >
       <section
         aria-label="Questions from the agent"
+        data-layout={fill ? "fill" : undefined}
         className={cn(
           "mx-auto max-h-[calc(100dvh-4rem)] w-[90%] overflow-y-auto rounded-2xl border bg-surface-mid shadow-sm",
+          fill &&
+            "flex h-full max-h-none w-full flex-col overflow-hidden rounded-none border-0 shadow-none",
           tone === "error" ? "border-destructive/55" : "border-border",
         )}
       >
@@ -56,7 +67,14 @@ export function QuestionTrayFrame({
             </button>
           ) : null}
         </header>
-        <div className="border-t border-border px-3 py-3">{children}</div>
+        <div
+          className={cn(
+            "border-t border-border px-3 py-3",
+            fill && "min-h-0 flex-1 overflow-y-auto",
+          )}
+        >
+          {children}
+        </div>
         {footer ? <footer className="border-t border-border px-3 py-3">{footer}</footer> : null}
       </section>
     </div>

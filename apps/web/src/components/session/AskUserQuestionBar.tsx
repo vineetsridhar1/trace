@@ -18,6 +18,7 @@ import {
 interface AskUserQuestionBarProps {
   node: { id: string; questions: Question[] };
   collapsed?: boolean;
+  fillPanel?: boolean;
   onResponse: (text: string, attachments?: FileAttachment[]) => void | Promise<void>;
   onDismiss: () => void;
   onResume?: () => void;
@@ -26,6 +27,7 @@ interface AskUserQuestionBarProps {
 export function AskUserQuestionBar({
   node,
   collapsed = false,
+  fillPanel = false,
   onResponse,
   onDismiss,
   onResume,
@@ -150,6 +152,7 @@ export function AskUserQuestionBar({
             : meta
       }
       tone={validationError ? "error" : "pending"}
+      fill={fillPanel}
       onExit={onDismiss}
       footer={
         <QuestionTrayFooter

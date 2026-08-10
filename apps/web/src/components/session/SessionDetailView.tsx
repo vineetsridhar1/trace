@@ -55,6 +55,7 @@ import { uploadFile } from "../../lib/upload";
 import type { FileAttachment } from "./ImageAttachmentBar";
 import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
 import { findActiveQuestion, findReplacedQuestionIds } from "./questionHistory";
+import { cn } from "../../lib/utils";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -729,7 +730,7 @@ export function SessionDetailView({
                 <div className="flex h-full items-center justify-center">
                   <p className="text-sm text-destructive">Failed to load events</p>
                 </div>
-              ) : condensed ? (
+              ) : condensed && !showQuestion ? (
                 <CondensedSessionMessages
                   summary={compactSummary}
                   active={agentStatus === "active"}
@@ -821,13 +822,17 @@ export function SessionDetailView({
               />
             )}
           </div>
-          <div ref={bottomBarRef} className="absolute inset-x-0 bottom-0 z-10">
+          <div
+            ref={bottomBarRef}
+            className={cn("absolute inset-x-0 bottom-0 z-10", condensed && showQuestion && "top-0")}
+          >
             {showQuestion || pinnedQuestion ? (
               <>
                 <AskUserQuestionBar
                   key={(showQuestion ?? pinnedQuestion!).id}
                   node={showQuestion ?? pinnedQuestion!}
                   collapsed={Boolean(pinnedQuestion)}
+                  fillPanel={condensed && Boolean(showQuestion)}
                   onResponse={handleQuestionResponse}
                   onDismiss={() => {
                     setDismissedQuestionId((showQuestion ?? pinnedQuestion)!.id);

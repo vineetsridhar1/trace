@@ -108,6 +108,19 @@ describe("AskUserQuestionBar", () => {
     expect(markup).not.toContain("You decide");
   });
 
+  it("fills a condensed panel with the active question", () => {
+    const markup = renderToStaticMarkup(
+      <AskUserQuestionBar
+        node={{ id: "question-node", questions: [question("one")] }}
+        fillPanel
+        onResponse={() => undefined}
+        onDismiss={() => undefined}
+      />,
+    );
+
+    expect(markup).toContain('data-layout="fill"');
+  });
+
   it("preserves an answer while dismissing and resuming a question", async () => {
     const onDismiss = vi.fn();
     const onResume = vi.fn();
