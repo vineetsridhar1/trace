@@ -3583,157 +3583,157 @@ export class SessionService {
       session: SessionWithInclude;
       event: Awaited<ReturnType<typeof eventService.create>>;
     } = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        await tx.$queryRaw`SELECT "id" FROM "SessionGroup" WHERE "id" = ${input.sessionGroupId} FOR UPDATE`;
-        const group = await tx.sessionGroup.findFirst({
-          where: {
-            id: input.sessionGroupId,
-            organizationId: input.organizationId,
-            archivedAt: null,
+      await tx.$queryRaw`SELECT "id" FROM "SessionGroup" WHERE "id" = ${input.sessionGroupId} FOR UPDATE`;
+      const group = await tx.sessionGroup.findFirst({
+        where: {
+          id: input.sessionGroupId,
+          organizationId: input.organizationId,
+          archivedAt: null,
+        },
+        select: {
+          id: true,
+          kind: true,
+          channelId: true,
+          repoId: true,
+          sessions: {
+            orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+            include: SESSION_INCLUDE,
           },
-          select: {
-            id: true,
-            kind: true,
-            channelId: true,
-            repoId: true,
-            sessions: {
-              orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-              include: SESSION_INCLUDE,
-            },
-          },
-        });
-        if (!group) throw new ValidationError("Session group not found or is archived");
-        if (group.kind !== "general") {
-          throw new ValidationError("Only general sessions can be converted");
-        }
-        if (group.sessions.length !== 1) {
-          throw new ValidationError("Only single-session groups can be converted");
-        }
-
-        const session = group.sessions[0]!;
-        const targetTool = input.tool ?? session.tool;
-        const toolChanged = targetTool !== session.tool;
-        const targetModel =
-          input.model != null
-            ? validateModelForTool(targetTool, input.model)
-            : toolChanged
-              ? (getDefaultModel(targetTool) ?? null)
-              : undefined;
-        const targetReasoningEffort =
-          input.reasoningEffort != null
-            ? validateReasoningEffortForTool(targetTool, input.reasoningEffort)
-            : toolChanged
-              ? (getDefaultReasoningEffort(targetTool) ?? null)
-              : undefined;
-        const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
-        const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
-        const effectiveRuntime =
-          boundRuntime ??
-          (persistedRuntimeId
-            ? runtimeMetadata(persistedRuntimeId, input.organizationId)
-            : undefined);
-        if (effectiveRuntime && !effectiveRuntime.supportedTools.includes(targetTool)) {
-          throw new ToolNotInstalledError(targetTool, effectiveRuntime.label ?? null);
-        }
-        let targetChannelId: string | null = null;
-        let targetRepoId: string;
-        if (input.kind === "coding") {
-          targetChannelId = input.channelId ?? group.channelId;
-          if (!targetChannelId) {
-            throw new ValidationError("Converting to coding requires a channel");
-          }
-          const targetChannel = await tx.channel.findFirst({
-            where: {
-              id: targetChannelId,
-              organizationId: input.organizationId,
-              type: "coding",
-            },
-            select: { id: true, repoId: true },
-          });
-          if (!targetChannel) {
-            throw new ValidationError("Coding channel does not belong to this organization");
-          }
-          if (targetChannel.repoId && input.repoId && targetChannel.repoId !== input.repoId) {
-            throw new ValidationError("Coding channel sessions must use the channel's linked repo");
-          }
-          const codingRepoId = targetChannel.repoId ?? input.repoId ?? group.repoId;
-          if (!codingRepoId) {
-            throw new ValidationError("The selected coding channel requires a repository");
-          }
-          targetRepoId = codingRepoId;
-        } else {
-          throw new ValidationError(`Unsupported conversion target: ${input.kind}`);
-        }
-
-        if (input.projectId) {
-          const project = await tx.project.findFirst({
-            where: {
-              id: input.projectId,
-              organizationId: input.organizationId,
-              channels: { some: { channelId: targetChannelId! } },
-            },
-            select: { id: true, repoId: true },
-          });
-          if (!project) throw new ValidationError("Project is not linked to the selected channel");
-          if (project.repoId && project.repoId !== targetRepoId) {
-            throw new ValidationError("Project must be linked to the selected repository");
-          }
-        }
-        if (input.kind === "coding") {
-          const repo = await tx.repo.findFirst({
-            where: { id: targetRepoId, organizationId: input.organizationId },
-            select: { id: true },
-          });
-          if (!repo) throw new ValidationError("Repository does not belong to this organization");
-        }
-
-        await tx.sessionGroup.update({
-          where: { id: group.id },
-          data: {
-            kind: input.kind,
-            channelId: targetChannelId,
-            repoId: targetRepoId,
-          },
-        });
-        const updated = await tx.session.update({
-          where: { id: session.id },
-          data: {
-            channelId: targetChannelId,
-            repoId: targetRepoId,
-            readOnlyWorkspace: input.kind === "coding",
-            ...(input.tool ? { tool: targetTool } : {}),
-            ...(targetModel !== undefined ? { model: targetModel } : {}),
-            ...(targetReasoningEffort !== undefined
-              ? { reasoningEffort: targetReasoningEffort }
-              : {}),
-            ...(input.projectId
-              ? { projects: { deleteMany: {}, create: { projectId: input.projectId } } }
-              : {}),
-          },
-          include: SESSION_INCLUDE,
-        });
-        const sessionGroup = await this.loadSessionGroupSnapshot(group.id, tx);
-        if (!sessionGroup) throw new Error("Session group disappeared during conversion");
-        const event = await eventService.create(
-          {
-            organizationId: input.organizationId,
-            scopeType: "session",
-            scopeId: updated.id,
-            eventType: "session_converted" as EventType,
-            payload: eventJson({
-              sessionGroupId: group.id,
-              fromKind: group.kind,
-              toKind: input.kind,
-              session: serializeSession(updated),
-              sessionGroup,
-            }),
-            actorType: input.actorType ?? "user",
-            actorId: input.actorId,
-            deferPublish: true,
-          },
-          tx,
-        );
-        return { session: updated, event };
+        },
       });
+      if (!group) throw new ValidationError("Session group not found or is archived");
+      if (group.kind !== "general") {
+        throw new ValidationError("Only general sessions can be converted");
+      }
+      if (group.sessions.length !== 1) {
+        throw new ValidationError("Only single-session groups can be converted");
+      }
+
+      const session = group.sessions[0]!;
+      const targetTool = input.tool ?? session.tool;
+      const toolChanged = targetTool !== session.tool;
+      const targetModel =
+        input.model != null
+          ? validateModelForTool(targetTool, input.model)
+          : toolChanged
+            ? (getDefaultModel(targetTool) ?? null)
+            : undefined;
+      const targetReasoningEffort =
+        input.reasoningEffort != null
+          ? validateReasoningEffortForTool(targetTool, input.reasoningEffort)
+          : toolChanged
+            ? (getDefaultReasoningEffort(targetTool) ?? null)
+            : undefined;
+      const boundRuntime = sessionRouter.getRuntimeForSession(session.id);
+      const persistedRuntimeId = this.getConnectionRuntimeInstanceId(session.connection);
+      const effectiveRuntime =
+        boundRuntime ??
+        (persistedRuntimeId
+          ? runtimeMetadata(persistedRuntimeId, input.organizationId)
+          : undefined);
+      if (effectiveRuntime && !effectiveRuntime.supportedTools.includes(targetTool)) {
+        throw new ToolNotInstalledError(targetTool, effectiveRuntime.label ?? null);
+      }
+      let targetChannelId: string | null = null;
+      let targetRepoId: string;
+      if (input.kind === "coding") {
+        targetChannelId = input.channelId ?? group.channelId;
+        if (!targetChannelId) {
+          throw new ValidationError("Converting to coding requires a channel");
+        }
+        const targetChannel = await tx.channel.findFirst({
+          where: {
+            id: targetChannelId,
+            organizationId: input.organizationId,
+            type: "coding",
+          },
+          select: { id: true, repoId: true },
+        });
+        if (!targetChannel) {
+          throw new ValidationError("Coding channel does not belong to this organization");
+        }
+        if (targetChannel.repoId && input.repoId && targetChannel.repoId !== input.repoId) {
+          throw new ValidationError("Coding channel sessions must use the channel's linked repo");
+        }
+        const codingRepoId = targetChannel.repoId ?? input.repoId ?? group.repoId;
+        if (!codingRepoId) {
+          throw new ValidationError("The selected coding channel requires a repository");
+        }
+        targetRepoId = codingRepoId;
+      } else {
+        throw new ValidationError(`Unsupported conversion target: ${input.kind}`);
+      }
+
+      if (input.projectId) {
+        const project = await tx.project.findFirst({
+          where: {
+            id: input.projectId,
+            organizationId: input.organizationId,
+            channels: { some: { channelId: targetChannelId! } },
+          },
+          select: { id: true, repoId: true },
+        });
+        if (!project) throw new ValidationError("Project is not linked to the selected channel");
+        if (project.repoId && project.repoId !== targetRepoId) {
+          throw new ValidationError("Project must be linked to the selected repository");
+        }
+      }
+      if (input.kind === "coding") {
+        const repo = await tx.repo.findFirst({
+          where: { id: targetRepoId, organizationId: input.organizationId },
+          select: { id: true },
+        });
+        if (!repo) throw new ValidationError("Repository does not belong to this organization");
+      }
+
+      await tx.sessionGroup.update({
+        where: { id: group.id },
+        data: {
+          kind: input.kind,
+          channelId: targetChannelId,
+          repoId: targetRepoId,
+        },
+      });
+      const updated = await tx.session.update({
+        where: { id: session.id },
+        data: {
+          channelId: targetChannelId,
+          repoId: targetRepoId,
+          readOnlyWorkspace: input.kind === "coding",
+          ...(input.tool ? { tool: targetTool } : {}),
+          ...(targetModel !== undefined ? { model: targetModel } : {}),
+          ...(targetReasoningEffort !== undefined
+            ? { reasoningEffort: targetReasoningEffort }
+            : {}),
+          ...(input.projectId
+            ? { projects: { deleteMany: {}, create: { projectId: input.projectId } } }
+            : {}),
+        },
+        include: SESSION_INCLUDE,
+      });
+      const sessionGroup = await this.loadSessionGroupSnapshot(group.id, tx);
+      if (!sessionGroup) throw new Error("Session group disappeared during conversion");
+      const event = await eventService.create(
+        {
+          organizationId: input.organizationId,
+          scopeType: "session",
+          scopeId: updated.id,
+          eventType: "session_converted" as EventType,
+          payload: eventJson({
+            sessionGroupId: group.id,
+            fromKind: group.kind,
+            toKind: input.kind,
+            session: serializeSession(updated),
+            sessionGroup,
+          }),
+          actorType: input.actorType ?? "user",
+          actorId: input.actorId,
+          deferPublish: true,
+        },
+        tx,
+      );
+      return { session: updated, event };
+    });
 
     eventService.publishCreated(result.event);
 
@@ -9892,8 +9892,9 @@ export class SessionService {
                   prompt: bootstrapPrompt,
                   interactionMode: null,
                 } satisfies PendingSessionCommand,
-                pendingGeneralWorkspaceCleanupRuntimeId:
-                  shouldCleanupGeneralWorkspace ? sourceRuntimeId : null,
+                pendingGeneralWorkspaceCleanupRuntimeId: shouldCleanupGeneralWorkspace
+                  ? sourceRuntimeId
+                  : null,
               }),
               toolSessionId: null,
               connection: connJson({
