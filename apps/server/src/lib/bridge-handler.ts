@@ -2,6 +2,7 @@ import type { WebSocket } from "ws";
 import { randomUUID } from "crypto";
 import type { CodingTool } from "@trace/gql";
 import {
+  BRIDGE_PROTOCOL_VERSION,
   CODING_TOOL_IDS,
   type BridgeLinkedCheckoutStatus,
   type BridgeLinkedCheckoutChangedFilePreview,
@@ -29,7 +30,6 @@ import { correlatedResponseRelay } from "./correlated-response-relay.js";
 /** Grace period before marking sessions disconnected — allows fast reconnects */
 const DISCONNECT_GRACE_MS = 10_000;
 
-const BRIDGE_PROTOCOL_VERSION = 2;
 const RUNTIME_LEASE_CAPABILITY = "runtime_lease_v1";
 const LEASE_OWNERSHIP_REVALIDATE_INTERVAL_MS = 30_000;
 const CODING_TOOLS = new Set<CodingTool>(CODING_TOOL_IDS as CodingTool[]);
