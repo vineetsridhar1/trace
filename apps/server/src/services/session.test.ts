@@ -1040,13 +1040,11 @@ describe("SessionService", () => {
       expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
 
-    it("rejects a destination coding channel the actor cannot see", async () => {
+    it("rejects a destination coding channel without active membership", async () => {
       const sourceGroup = makeSessionGroup({ id: "group-general", kind: "general" });
       prismaMock.sessionGroup.findFirst
         .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
         .mockResolvedValueOnce({ ...sourceGroup, sessions: [makeSession()] });
-      // A private channel the actor is neither owner nor member of is filtered
-      // out by the visibility clause, so the lookup finds nothing.
       prismaMock.channel.findFirst.mockResolvedValueOnce(null);
 
       await expect(
@@ -1065,11 +1063,7 @@ describe("SessionService", () => {
             id: "channel-private",
             organizationId: "org-1",
             type: "coding",
-            OR: [
-              { visibility: "public" },
-              { ownerId: "user-1" },
-              { members: { some: { userId: "user-1", leftAt: null } } },
-            ],
+            members: { some: { userId: "user-1", leftAt: null } },
           }),
         }),
       );

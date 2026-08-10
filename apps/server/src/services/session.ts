@@ -1,5 +1,6 @@
 import type {
   StartSessionInput,
+  ConvertSessionGroupInput,
   UpdateSessionDefaultsInput,
   ActorType,
   DesignElementStylesInput,
@@ -68,7 +69,6 @@ import { isLocalMode } from "../lib/mode.js";
 import {
   assertSessionGroupAccess,
   canViewSessionGroup,
-  visibleChannelWhere,
   visibleSessionGroupWhere,
   visibleSessionWhere,
 } from "./access.js";
@@ -135,15 +135,12 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
  * Target-specific provisioning is added through this service rather than a
  * resolver so agents and GraphQL clients share the same rules.
  */
-export type ConvertSessionGroupServiceInput = {
-  sessionGroupId: string;
+export type ConvertSessionGroupServiceInput = Omit<
+  ConvertSessionGroupInput,
+  "kind" | "tool"
+> & {
   kind: SessionGroupKind;
-  channelId?: string | null;
-  repoId?: string | null;
-  projectId?: string | null;
   tool?: CodingTool | null;
-  model?: string | null;
-  reasoningEffort?: string | null;
   organizationId: string;
   actorId: string;
   actorType?: ActorType;
@@ -3636,15 +3633,14 @@ export class SessionService {
     if (!channelId) {
       throw new ValidationError("Converting to coding requires a channel");
     }
-    // The destination channel must be one the actor could have selected
-    // themselves; organization membership alone would let a caller attach the
-    // session to a private channel they cannot see.
+    // Match channel mutation authorization: visibility alone is insufficient
+    // because public channels still require active membership for writes.
     const channel = await tx.channel.findFirst({
       where: {
         id: channelId,
         organizationId: input.organizationId,
         type: "coding",
-        ...visibleChannelWhere(input.actorId),
+        members: { some: { userId: input.actorId, leftAt: null } },
       },
       select: { id: true, repoId: true },
     });
