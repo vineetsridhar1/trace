@@ -2,7 +2,7 @@
 
 # Operate mode depth (and Read notes)
 
-When design SERVES the product: app UIs, admin dashboards, settings panels, data tables, tools, authenticated surfaces, anything where the user is in a task. The essentials live in SKILL.md's modes and [craft-floor.md](craft-floor.md); this file is extended depth, written for Operate surfaces. Read surfaces (docs, guides, long-form) take SKILL.md's Read mode plus this file's typography and consistency rules; their prose measure and navigation matter more than component density.
+When design SERVES the product: app UIs, admin dashboards, settings panels, data tables, tools, authenticated surfaces, anything where the user is in a task. The essentials live in [design-method.md](design-method.md) and [craft-floor.md](craft-floor.md); this file is extended depth, written for Operate surfaces. Read surfaces (docs, guides, long-form) take the Read mode from `design-method.md` plus this file's typography and consistency rules; their prose measure and navigation matter more than component density. When this mode-specific guidance narrows a general craft-floor rule, follow this file.
 
 ## The product slop test
 
@@ -49,7 +49,7 @@ Every interactive component has: default, hover, focus, active, disabled, loadin
 - Decorative motion that doesn't convey state.
 - Inconsistent component vocabulary across screens. If the "save" button looks different in two places, one is wrong.
 - Display fonts in UI labels, buttons, data.
-- Reinventing standard affordances for flavor (custom scrollbars, weird form controls, non-standard modals).
+- Reinventing standard affordances for flavor (replacing native scrollbar behavior, unusual form controls, non-standard modals).
 - Heavy color or full-saturation accents on inactive states.
 - Modal as first thought. Modals are usually laziness. Exhaust inline / progressive alternatives first.
 

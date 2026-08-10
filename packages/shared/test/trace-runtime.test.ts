@@ -61,17 +61,24 @@ describe("ensureTraceRuntime", () => {
       ),
     ).toContain("exclude canvas chrome");
     expect(
-      await readFile(
-        join(runtime.skillsDir, "design-craft", "references", "critique.md"),
-        "utf8",
-      ),
+      await readFile(join(runtime.skillsDir, "design-craft", "references", "critique.md"), "utf8"),
     ).toContain("Run independent passes");
     expect(
-      await readFile(
-        join(runtime.skillsDir, "design-craft", "references", "harden.md"),
-        "utf8",
-      ),
+      await readFile(join(runtime.skillsDir, "design-craft", "references", "harden.md"), "utf8"),
     ).toContain("Hardening Dimensions");
+    const bolderReference = await readFile(
+      join(runtime.skillsDir, "design-craft", "references", "bolder.md"),
+      "utf8",
+    );
+    expect(bolderReference).toContain("Trace's normal question mechanism");
+    expect(bolderReference).not.toContain("Codex's structured user-input");
+    const operateReference = await readFile(
+      join(runtime.skillsDir, "design-craft", "references", "operate.md"),
+      "utf8",
+    );
+    expect(operateReference).toContain("[design-method.md](design-method.md)");
+    expect(operateReference).toContain("mode-specific guidance narrows a general craft-floor rule");
+    expect(operateReference).toContain("replacing native scrollbar behavior");
     expect(
       await readFile(join(runtime.skillsDir, "design-craft", "LICENSE.txt"), "utf8"),
     ).toContain("Apache License");
