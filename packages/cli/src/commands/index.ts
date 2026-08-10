@@ -69,10 +69,10 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
     description: "Discover repositories in the current organization",
     workflow: [
       'Run "$TRACE_CLI" repo list --json to find a repository ID.',
-      'Pass the ID to "$TRACE_CLI" session start --repo <repo-id> when a channel is not appropriate.',
+      'Use the repository ID with a channel that has no linked repository: "$TRACE_CLI" session start --channel <channel-id> --repo <repo-id>.',
     ],
     examples: ['"$TRACE_CLI" repo list --json'],
-    notes: ["Repository targeting creates a session outside the normal channel workflow."],
+    notes: ["Repositories support coding channels; they are not standalone session destinations."],
   },
   {
     name: "artifact",

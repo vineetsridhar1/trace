@@ -42,7 +42,11 @@ export const sessionSendCommand = defineCommand({
       ? resolveSessionId(ctx)
       : resolveSessionId(ctx, values.shift());
     const text = values.join(" ").trim();
-    if (!text) usage("Message text is required");
+    if (!text) {
+      usage(
+        'A message is required. Provide text after <session-id>, or use --self "<message>" inside a Trace session.',
+      );
+    }
     const interactionMode = optionString(input, "interactionMode") ?? null;
     const client = await ctx.client();
     if (optionBoolean(input, "queue")) {

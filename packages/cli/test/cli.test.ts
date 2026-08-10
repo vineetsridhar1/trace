@@ -233,6 +233,33 @@ describe("Trace CLI", () => {
     expect(stderr.mock.calls.flat().join("")).toContain("sessions inherit those settings");
   });
 
+  it("requires a task prompt before starting a session", async () => {
+    await expect(run(["session", "start", "--json"])).resolves.toBe(64);
+    expect(stderr.mock.calls.flat().join("")).toContain("A task prompt is required");
+    expect(stderr.mock.calls.flat().join("")).toContain("--prompt");
+  });
+
+  it("requires a channel instead of accepting a repository-only coding destination", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      run(["session", "start", "Implement", "the", "API", "tests", "--repo", "repo-1", "--json"]),
+    ).resolves.toBe(64);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(stderr.mock.calls.flat().join("")).toContain("A channel is required");
+    expect(stderr.mock.calls.flat().join("")).toContain("channel list --member-only");
+  });
+
+  it("explains how to provide missing session message text", async () => {
+    await expect(run(["session", "send", "session-1", "--json"])).resolves.toBe(64);
+    expect(stderr.mock.calls.flat().join("")).toContain("A message is required");
+    expect(stderr.mock.calls.flat().join("")).toContain("--self");
+  });
+
   it("joins a session group only when --group is explicit", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-current");
@@ -329,66 +356,6 @@ describe("Trace CLI", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("creates a new repo-targeted group without inheriting the current group", async () => {
-    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
-    vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-1");
-    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
-    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
-    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
-      const request = JSON.parse(String(init?.body)) as {
-        query: string;
-        variables: { input: Record<string, unknown> };
-      };
-      expect(request.query).not.toContain("projects {");
-      expect(request.variables.input).toEqual({
-        clientMutationId: "start-key-1",
-        prompt: "hello",
-        hosting: "local",
-        repoId: "repo-1",
-      });
-      return new Response(
-        JSON.stringify({
-          data: {
-            startSession: {
-              id: "session-2",
-              name: "hello",
-              agentStatus: "active",
-              sessionStatus: "in_progress",
-              tool: "codex",
-              model: null,
-              reasoningEffort: null,
-              hosting: "local",
-              branch: null,
-              sessionGroupId: "group-2",
-              createdAt: "2026-08-08T00:00:00.000Z",
-              updatedAt: "2026-08-08T00:00:00.000Z",
-              channel: null,
-              repo: null,
-            },
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(
-      run([
-        "session",
-        "start",
-        "hello",
-        "--repo",
-        "repo-1",
-        "--hosting",
-        "local",
-        "--idempotency-key",
-        "start-key-1",
-        "--json",
-      ]),
-    ).resolves.toBe(0);
-    expect(fetchMock).toHaveBeenCalledOnce();
-  });
-
   it("derives the repository from a selected channel before starting", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
@@ -462,7 +429,7 @@ describe("Trace CLI", () => {
       run(["session", "start", "hello", "--channel", "channel-1", "--json"]),
     ).resolves.toBe(64);
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(stderr.mock.calls.flat().join("")).toContain("has no repository; add --repo");
+    expect(stderr.mock.calls.flat().join("")).toContain("has no linked repository");
   });
 
   it("retries an empty start response with the same idempotency key", async () => {
@@ -504,7 +471,7 @@ describe("Trace CLI", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(run(["session", "start", "hello", "--repo", "repo-1", "--json"])).resolves.toBe(0);
+    await expect(run(["session", "start", "hello", "--kind", "app", "--json"])).resolves.toBe(0);
     expect(keys).toHaveLength(2);
     expect(keys[0]).toBe(keys[1]);
   });

@@ -46,7 +46,7 @@ Session lists exclude merged and archived sessions by default. Add `--include-me
 
 ## Start sessions
 
-The simplest command starts a new session group in the current session's channel/repo destination:
+The simplest command starts a new session group in the current session's channel with a concrete task prompt:
 
 ```sh
 "$TRACE_CLI" session start "Implement the API tests" --json
@@ -57,22 +57,23 @@ pass `--group <group-id>` explicitly; use the `sessionGroupId` returned by `cont
 group. Do not combine `--group` with group-level options such as `--hosting`, `--runtime`,
 `--environment`, `--branch`, `--visibility`, or `--defer` because the new session inherits them.
 
-For a new group, omitted values default from the current session: kind and visibility; channel,
+For a new group, omitted values default from the current session: kind and visibility; channel and
 repo; tool, model, and reasoning effort; and hosting plus
 the agent environment (or local runtime for older sessions without an environment). Explicit flags
 always win. Trace intentionally creates a fresh branch for the new group instead of reusing the
 current worktree branch.
 
-Use `--channel` or `--repo` to choose a destination other than the current one. Prefer a channel so
-the result appears in the normal channel workflow. A channel supplies its linked repo; if it has
-none, also pass `--repo`.
+Every new coding session needs a task prompt and a channel. Use `--channel` to choose a destination
+other than the current one; if it is omitted, Trace inherits the current session's channel when one
+exists. A channel supplies its linked repo; if it has none, also pass `--repo`. A repository alone
+is not a session destination.
 
 Select another existing group or an explicit destination when appropriate:
 
 ```sh
 "$TRACE_CLI" session start "Review this work" --group <group-id> --tool codex --json
 "$TRACE_CLI" session start "Fix the login flow" --channel <channel-id> --tool claude_code --json
-"$TRACE_CLI" session start "Refactor the parser" --repo <repo-id> --hosting cloud --json
+"$TRACE_CLI" session start "Refactor the parser" --channel <channel-id> --repo <repo-id> --hosting cloud --json
 "$TRACE_CLI" session start "Build the dashboard" --kind app --hosting cloud --json
 ```
 

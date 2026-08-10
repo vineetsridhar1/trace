@@ -14,6 +14,7 @@ import {
   SESSION_KINDS,
   VISIBILITIES,
   printSession,
+  requireStartPrompt,
   resolveStartDefaultsAndDestination,
   sessionUiPath,
   startSessionWithRetry,
@@ -37,7 +38,7 @@ export const sessionStartCommand = defineCommand({
     'Use "$TRACE_CLI" session send <session-id> "<message>" --queue --json for follow-up work.',
   ],
   notes: [
-    "A new coding group needs a channel or repository; omitted values inherit from the current session when available.",
+    "A new coding group needs a channel and task prompt; the channel can be inherited from the current session when available.",
     "Do not call session run with the same initial prompt, because that can duplicate the work.",
   ],
   positionals: [{ name: "prompt", variadic: true }],
@@ -185,6 +186,7 @@ export const sessionStartCommand = defineCommand({
       if (input.prompt) usage("Provide the prompt either positionally or with --prompt, not both");
       input.prompt = positionalPrompt;
     }
+    input.prompt = requireStartPrompt(input.prompt);
 
     const hasGroup = parsed.providedOptions.has("group");
     const destinationOptions = ["channel", "repo"];

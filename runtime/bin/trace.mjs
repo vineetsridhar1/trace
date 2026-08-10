@@ -649,7 +649,9 @@ function parseCommandInput(command, args) {
     const missing = positionalDefinitions.find(
       (definition, index) => definition.required && index >= positionals.length
     );
-    usage(`${missing?.name ?? "Argument"} is required`);
+    usage(
+      `Missing required input: <${missing?.name ?? "argument"}>. Run ${TRACE_CLI_EXECUTABLE} ${command.path.join(" ")} --help for required arguments and examples.`
+    );
   }
   if (variadicIndex === -1 && positionals.length > positionalDefinitions.length) {
     usage(`Unexpected argument: ${positionals[positionalDefinitions.length]}`);
@@ -1299,7 +1301,16 @@ var SESSION_KINDS = [
 var HOSTING_MODES = ["cloud", "local"];
 var VISIBILITIES = ["public", "private"];
 function resolveSessionId(ctx, explicit) {
-  return explicit || ctx.env.TRACE_SESSION_ID || usage("Session ID is required outside a Trace session");
+  return explicit || ctx.env.TRACE_SESSION_ID || usage(
+    'A session ID is required. Provide <session-id>, use --self inside a Trace session, or run "$TRACE_CLI" session list --json to find one.'
+  );
+}
+function requireStartPrompt(prompt) {
+  const value = prompt?.trim();
+  if (value) return value;
+  usage(
+    'A task prompt is required to start a session. Provide it after session start or with --prompt "<task>".'
+  );
 }
 function printSession(session) {
   return [
@@ -1324,7 +1335,7 @@ async function getSession(ctx, id) {
 }
 async function resolveStartDefaultsAndDestination(client, input, currentSessionId) {
   if (input.sessionGroupId) return;
-  const hasExplicitDestination = !!input.channelId || !!input.repoId;
+  const hasExplicitDestination = !!input.channelId;
   const hasExplicitGeneratedKind = !!input.kind && input.kind !== "coding";
   const hasExplicitTool = !!input.tool;
   const hasExplicitRuntimeSelection = !!input.environmentId || !!input.runtimeInstanceId || !!input.hosting;
@@ -1354,8 +1365,10 @@ async function resolveStartDefaultsAndDestination(client, input, currentSessionI
     }
   }
   if (input.kind && input.kind !== "coding") return;
-  if (!input.channelId && !input.repoId) {
-    usage("Starting a coding session group requires --channel or --repo");
+  if (!input.channelId) {
+    usage(
+      'A channel is required to start a coding session. Provide --channel <channel-id>, or start from a session already in a channel. Discover channels with "$TRACE_CLI" channel list --member-only --json.'
+    );
   }
   if (input.channelId && !impliedRepo) {
     const result = await client.graphql(traceCliOperations.startChannel, { id: input.channelId });
@@ -1369,7 +1382,9 @@ async function resolveStartDefaultsAndDestination(client, input, currentSessionI
   }
   input.repoId ??= impliedRepo?.id;
   if (!input.repoId) {
-    usage("The selected destination has no repository; add --repo for a coding session");
+    usage(
+      'The selected channel has no linked repository. Provide --repo <repo-id>, or choose a coding channel with a repository from "$TRACE_CLI" channel list --json.'
+    );
   }
 }
 function sessionUiPath(session) {
@@ -1700,7 +1715,11 @@ var sessionSendCommand = defineCommand({
     const values = [...input.positionals];
     const id = optionBoolean(input, "self") ? resolveSessionId(ctx) : resolveSessionId(ctx, values.shift());
     const text = values.join(" ").trim();
-    if (!text) usage("Message text is required");
+    if (!text) {
+      usage(
+        'A message is required. Provide text after <session-id>, or use --self "<message>" inside a Trace session.'
+      );
+    }
     const interactionMode = optionString(input, "interactionMode") ?? null;
     const client = await ctx.client();
     if (optionBoolean(input, "queue")) {
@@ -1747,7 +1766,7 @@ var sessionStartCommand = defineCommand({
     'Use "$TRACE_CLI" session send <session-id> "<message>" --queue --json for follow-up work.'
   ],
   notes: [
-    "A new coding group needs a channel or repository; omitted values inherit from the current session when available.",
+    "A new coding group needs a channel and task prompt; the channel can be inherited from the current session when available.",
     "Do not call session run with the same initial prompt, because that can duplicate the work."
   ],
   positionals: [{ name: "prompt", variadic: true }],
@@ -1895,6 +1914,7 @@ var sessionStartCommand = defineCommand({
       if (input.prompt) usage("Provide the prompt either positionally or with --prompt, not both");
       input.prompt = positionalPrompt;
     }
+    input.prompt = requireStartPrompt(input.prompt);
     const hasGroup = parsed.providedOptions.has("group");
     const destinationOptions = ["channel", "repo"];
     const groupConfigurationOptions = [
@@ -2037,10 +2057,10 @@ var commandGroups = [
     description: "Discover repositories in the current organization",
     workflow: [
       'Run "$TRACE_CLI" repo list --json to find a repository ID.',
-      'Pass the ID to "$TRACE_CLI" session start --repo <repo-id> when a channel is not appropriate.'
+      'Use the repository ID with a channel that has no linked repository: "$TRACE_CLI" session start --channel <channel-id> --repo <repo-id>.'
     ],
     examples: ['"$TRACE_CLI" repo list --json'],
-    notes: ["Repository targeting creates a session outside the normal channel workflow."]
+    notes: ["Repositories support coding channels; they are not standalone session destinations."]
   },
   {
     name: "artifact",

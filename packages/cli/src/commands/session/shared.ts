@@ -60,7 +60,19 @@ export const VISIBILITIES = ["public", "private"] as const;
 
 export function resolveSessionId(ctx: CommandContext, explicit?: string): string {
   return (
-    explicit || ctx.env.TRACE_SESSION_ID || usage("Session ID is required outside a Trace session")
+    explicit ||
+    ctx.env.TRACE_SESSION_ID ||
+    usage(
+      'A session ID is required. Provide <session-id>, use --self inside a Trace session, or run "$TRACE_CLI" session list --json to find one.',
+    )
+  );
+}
+
+export function requireStartPrompt(prompt?: string | null): string {
+  const value = prompt?.trim();
+  if (value) return value;
+  usage(
+    'A task prompt is required to start a session. Provide it after session start or with --prompt "<task>".',
   );
 }
 
@@ -94,7 +106,7 @@ export async function resolveStartDefaultsAndDestination(
 ): Promise<void> {
   if (input.sessionGroupId) return;
 
-  const hasExplicitDestination = !!input.channelId || !!input.repoId;
+  const hasExplicitDestination = !!input.channelId;
   const hasExplicitGeneratedKind = !!input.kind && input.kind !== "coding";
   const hasExplicitTool = !!input.tool;
   const hasExplicitRuntimeSelection =
@@ -153,8 +165,10 @@ export async function resolveStartDefaultsAndDestination(
   }
 
   if (input.kind && input.kind !== "coding") return;
-  if (!input.channelId && !input.repoId) {
-    usage("Starting a coding session group requires --channel or --repo");
+  if (!input.channelId) {
+    usage(
+      'A channel is required to start a coding session. Provide --channel <channel-id>, or start from a session already in a channel. Discover channels with "$TRACE_CLI" channel list --member-only --json.',
+    );
   }
 
   if (input.channelId && !impliedRepo) {
@@ -173,7 +187,9 @@ export async function resolveStartDefaultsAndDestination(
   }
   input.repoId ??= impliedRepo?.id;
   if (!input.repoId) {
-    usage("The selected destination has no repository; add --repo for a coding session");
+    usage(
+      'The selected channel has no linked repository. Provide --repo <repo-id>, or choose a coding channel with a repository from "$TRACE_CLI" channel list --json.',
+    );
   }
 }
 
