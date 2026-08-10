@@ -159,6 +159,49 @@ describe("bridge handler auth", () => {
     mocks.sessionFindFirst.mockResolvedValue(null);
   });
 
+  it("does not terminate an actively heartbeating bridge when WebSocket pongs are unavailable", async () => {
+    vi.useFakeTimers();
+    try {
+      const ws = createMockWs();
+      mocks.registerLocalRuntimeConnection.mockResolvedValue({
+        connectedAt: new Date(),
+        label: "Bridge",
+      });
+
+      handleBridgeConnection(ws as never, {
+        bridgeAuth: {
+          kind: "local",
+          instanceId: "bridge-owned",
+          organizationId: "org-1",
+          userId: "user-1",
+        },
+      });
+      ws.emitMessage({
+        type: "runtime_hello",
+        instanceId: "bridge-owned",
+        hostingMode: "local",
+        supportedTools: ["codex"],
+        registeredRepoIds: [],
+      });
+      await vi.runAllTicks();
+
+      ws.emitMessage({
+        type: "runtime_heartbeat",
+        instanceId: "bridge-owned",
+        activeSessionIds: [],
+      });
+      await vi.runAllTicks();
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(mocks.recordHeartbeat).toHaveBeenCalled();
+      expect(ws.ping).not.toHaveBeenCalled();
+      expect(ws.terminate).not.toHaveBeenCalled();
+      ws.emitClose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects a local bridge token that announces another runtime instance", async () => {
     const ws = createMockWs();
 

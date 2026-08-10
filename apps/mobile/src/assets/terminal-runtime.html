@@ -23255,6 +23255,9 @@
           window.__traceFocus = function () {
             if (term) term.focus();
           };
+          window.__traceCopySelection = function () {
+            if (term) post({ type: "copy", text: term.getSelection() });
+          };
           window.__traceFit = fit;
 
           fit();
