@@ -1,3 +1,5 @@
+<!-- Adapted from Impeccable and modified for Trace's shared React App and Design workflows; provider-specific tooling was removed. -->
+
 # Review and resilience
 
 Use this for critique, hardening, onboarding, and the final delivery pass.

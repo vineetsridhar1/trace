@@ -38,6 +38,10 @@ describe("ensureTraceRuntime", () => {
     expect(designCraftSkill).toContain("App session");
     expect(designCraftSkill).toContain("Design session");
     expect(designCraftSkill).toContain("Do not introduce a generic page detector");
+    expect(designCraftSkill).toContain("references/new-work.md");
+    expect(designCraftSkill).toContain("references/operate.md");
+    expect(designCraftSkill).toContain("references/critique.md");
+    expect(designCraftSkill).toContain("references/harden.md");
     expect(
       await readFile(
         join(runtime.skillsDir, "design-craft", "references", "design-method.md"),
@@ -56,6 +60,18 @@ describe("ensureTraceRuntime", () => {
         "utf8",
       ),
     ).toContain("exclude canvas chrome");
+    expect(
+      await readFile(
+        join(runtime.skillsDir, "design-craft", "references", "critique.md"),
+        "utf8",
+      ),
+    ).toContain("Run independent passes");
+    expect(
+      await readFile(
+        join(runtime.skillsDir, "design-craft", "references", "harden.md"),
+        "utf8",
+      ),
+    ).toContain("Hardening Dimensions");
     expect(
       await readFile(join(runtime.skillsDir, "design-craft", "LICENSE.txt"), "utf8"),
     ).toContain("Apache License");

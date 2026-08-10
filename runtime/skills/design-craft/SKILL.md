@@ -7,10 +7,13 @@ description: Design and refine high-quality user interfaces for Trace App and De
 
 Apply this guidance inside the active session's artifact contract. It improves interface decisions; it does not replace the App runtime, Design canvas, selected design system, or their native validation and review workflows.
 
-Before substantial UI work, read [references/design-method.md](references/design-method.md). Also read:
+Before substantial UI work, read [references/design-method.md](references/design-method.md). Load detailed references only for the work in scope:
 
-- [references/refinement-actions.md](references/refinement-actions.md) for critique, polish, simplification, strengthening, typography, color, layout, motion, delight, clarification, or responsive adaptation.
-- [references/review-and-resilience.md](references/review-and-resilience.md) before delivery and for accessibility, onboarding, states, edge cases, or hardening.
+- **New or replacement direction:** read [new-work.md](references/new-work.md) and [craft-floor.md](references/craft-floor.md).
+- **Task-heavy product or reading surface:** also read [operate.md](references/operate.md).
+- **Focused refinement:** start with [refinement-actions.md](references/refinement-actions.md), then read only the matching depth reference: [polish.md](references/polish.md), [bolder.md](references/bolder.md), [distill.md](references/distill.md), [clarify.md](references/clarify.md), [colorize.md](references/colorize.md), [typeset.md](references/typeset.md), [layout.md](references/layout.md), [animate.md](references/animate.md), or [adapt.md](references/adapt.md).
+- **Critique and delivery:** read [review-and-resilience.md](references/review-and-resilience.md) and [critique.md](references/critique.md).
+- **Production resilience:** also read [harden.md](references/harden.md) for states and edge cases or [onboard.md](references/onboard.md) for first-use and empty-state work.
 
 Respect the surface boundary:
 

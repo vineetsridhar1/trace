@@ -1,3 +1,5 @@
+<!-- Adapted from Impeccable and modified for Trace's shared React App and Design workflows; provider-specific tooling was removed. -->
+
 # Design method
 
 Use this for every new interface or substantial redesign.

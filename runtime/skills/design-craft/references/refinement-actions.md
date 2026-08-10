@@ -1,3 +1,5 @@
+<!-- Adapted from Impeccable and modified for Trace's shared React App and Design workflows; provider-specific tooling was removed. -->
+
 # Refinement actions
 
 Use the narrowest action matching the request. Preserve the brief, current visual world, content, behavior, and out-of-scope screens unless the user explicitly asks for redesign.
