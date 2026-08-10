@@ -1898,6 +1898,7 @@ describe("SessionService", () => {
             sessionGroupId: "group-1",
             hosting: "local",
             repo: expect.objectContaining({ id: "repo-1" }),
+            expectedHomeRuntimeId: "runtime-1",
           }),
         );
       });
@@ -5027,6 +5028,13 @@ describe("SessionService", () => {
           toolSessionId: null,
           repoId: "repo-1",
           sessionGroupId: "group-1",
+          connection: {
+            state: "connected",
+            runtimeInstanceId: "runtime-cloud",
+            retryCount: 0,
+            canRetry: true,
+            canMove: true,
+          },
         }),
       );
       prismaMock.event.findFirst.mockResolvedValueOnce({
@@ -5066,6 +5074,11 @@ describe("SessionService", () => {
           }),
         },
         include: expect.any(Object),
+      });
+      await vi.waitFor(() => {
+        expect(sessionRouterMock.createRuntime).toHaveBeenCalledWith(
+          expect.objectContaining({ expectedHomeRuntimeId: "runtime-cloud" }),
+        );
       });
     });
   });
@@ -6326,6 +6339,7 @@ describe("SessionService", () => {
           hosting: "local",
           adapterType: "local",
           repo: expect.objectContaining({ id: "repo-1" }),
+          expectedHomeRuntimeId: "runtime-a",
         }),
       );
       expect(eventServiceMock.create).toHaveBeenCalledWith(
@@ -7657,6 +7671,7 @@ describe("SessionService", () => {
           sessionGroupId: "group-1",
           hosting: "local",
           repo: expect.objectContaining({ id: "repo-1" }),
+          expectedHomeRuntimeId: "runtime-a",
         }),
       );
     });
