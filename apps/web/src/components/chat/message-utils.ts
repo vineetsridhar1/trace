@@ -27,3 +27,13 @@ export function textToEditorHtml(text: string): string {
   const withBreaks = safe.replace(/\n/g, "<br />");
   return `<p>${withBreaks || "<br />"}</p>`;
 }
+
+/** Removes Quill's required trailing newline without discarding intentional line breaks. */
+export function editorTextToMessageText(text: string): string {
+  const messageText = text.endsWith("\n") ? text.slice(0, -1) : text;
+  return messageText.includes("\n") ? messageText : messageText.trim();
+}
+
+export function hasMessageContent(text: string): boolean {
+  return text.trim().length > 0 || text.includes("\n");
+}
