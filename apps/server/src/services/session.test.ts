@@ -481,7 +481,13 @@ describe("SessionService", () => {
         channelId: null,
         channel: null,
       });
-      const convertedGroup = { ...sourceGroup, kind: "coding", repoId: "repo-1" };
+      const convertedGroup = {
+        ...sourceGroup,
+        kind: "coding",
+        channelId: "channel-1",
+        channel: { id: "channel-1", name: "Backend" },
+        repoId: "repo-1",
+      };
       const convertedSession = makeSession({
         id: "session-general",
         sessionGroupId: sourceGroup.id,
@@ -490,8 +496,8 @@ describe("SessionService", () => {
         readOnlyWorkspace: true,
         workdir: "/tmp/trace-general/group-general",
         hosting: "local",
-        channelId: null,
-        channel: null,
+        channelId: "channel-1",
+        channel: { id: "channel-1", name: "Backend" },
         agentStatus: "active",
       });
 
@@ -514,6 +520,7 @@ describe("SessionService", () => {
             }),
           ],
         });
+      prismaMock.channel.findFirst.mockResolvedValueOnce({ id: "channel-1", repoId: "repo-1" });
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
       prismaMock.session.update.mockResolvedValueOnce(convertedSession).mockResolvedValueOnce({});
       prismaMock.session.findUnique.mockResolvedValueOnce({ pendingRun: null });
@@ -525,6 +532,7 @@ describe("SessionService", () => {
       const result = await service.convertGroup({
         sessionGroupId: sourceGroup.id,
         kind: "coding",
+        channelId: "channel-1",
         repoId: "repo-1",
         organizationId: "org-1",
         actorId: "user-1",
@@ -536,7 +544,11 @@ describe("SessionService", () => {
         1,
         expect.objectContaining({
           where: { id: convertedSession.id },
-          data: expect.objectContaining({ repoId: "repo-1", readOnlyWorkspace: true }),
+          data: expect.objectContaining({
+            channelId: "channel-1",
+            repoId: "repo-1",
+            readOnlyWorkspace: true,
+          }),
         }),
       );
       expect(prismaMock.session.update).toHaveBeenNthCalledWith(
@@ -568,6 +580,7 @@ describe("SessionService", () => {
       });
       const convertedSession = makeSession({
         sessionGroupId: sourceGroup.id,
+        channelId: "channel-1",
         repoId: "repo-1",
         readOnlyWorkspace: true,
       });
@@ -575,11 +588,13 @@ describe("SessionService", () => {
       prismaMock.sessionGroup.findFirst
         .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
         .mockResolvedValueOnce({ ...sourceGroup, sessions: [makeSession({ repoId: null })] });
+      prismaMock.channel.findFirst.mockResolvedValueOnce({ id: "channel-1", repoId: "repo-1" });
       prismaMock.repo.findFirst.mockResolvedValueOnce({ id: "repo-1" });
       prismaMock.session.update.mockResolvedValueOnce(convertedSession);
       prismaMock.sessionGroup.findUnique.mockResolvedValueOnce({
         ...sourceGroup,
         kind: "coding",
+        channelId: "channel-1",
         repoId: "repo-1",
         sessions: [{ agentStatus: "done", sessionStatus: "in_progress" }],
       });
@@ -587,6 +602,7 @@ describe("SessionService", () => {
       await service.convertGroup({
         sessionGroupId: sourceGroup.id,
         kind: "coding",
+        channelId: "channel-1",
         repoId: "repo-1",
         organizationId: "org-1",
         actorId: "user-1",
@@ -595,6 +611,33 @@ describe("SessionService", () => {
 
       expect(prismaMock.session.update).toHaveBeenCalledTimes(1);
       expect(sessionRouterMock.sendAsync).not.toHaveBeenCalled();
+    });
+
+    it("rejects a coding conversion without a destination channel", async () => {
+      const sourceGroup = makeSessionGroup({
+        id: "group-general",
+        kind: "general",
+        channelId: null,
+        channel: null,
+        repoId: "repo-1",
+      });
+      prismaMock.sessionGroup.findFirst
+        .mockResolvedValueOnce({ id: sourceGroup.id, visibility: "public", ownerUserId: "user-1" })
+        .mockResolvedValueOnce({ ...sourceGroup, sessions: [makeSession()] });
+
+      await expect(
+        service.convertGroup({
+          sessionGroupId: sourceGroup.id,
+          kind: "coding",
+          repoId: "repo-1",
+          organizationId: "org-1",
+          actorId: "user-1",
+          actorType: "user",
+        }),
+      ).rejects.toThrow("Converting to coding requires a channel");
+
+      expect(prismaMock.sessionGroup.update).not.toHaveBeenCalled();
+      expect(prismaMock.session.update).not.toHaveBeenCalled();
     });
   });
 
@@ -5847,9 +5890,7 @@ describe("SessionService", () => {
       );
       expect(command).toEqual(
         expect.objectContaining({
-          appendSystemPrompt: expect.stringContaining(
-            "Read the workspace guidance, design brief",
-          ),
+          appendSystemPrompt: expect.stringContaining("Read the workspace guidance, design brief"),
         }),
       );
       expect(command).toEqual(

@@ -1565,6 +1565,7 @@ input StartSessionInput {
 input ConvertSessionGroupInput {
   sessionGroupId: ID!
   kind: SessionGroupKind!
+  channelId: ID
   repoId: ID
   projectId: ID
   tool: CodingTool

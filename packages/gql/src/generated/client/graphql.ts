@@ -333,6 +333,7 @@ export type ConnectionsRepoEntry = {
 };
 
 export type ConvertSessionGroupInput = {
+  channelId?: InputMaybe<Scalars["ID"]["input"]>;
   clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;
   kind: SessionGroupKind;

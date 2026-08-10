@@ -12,11 +12,11 @@ The agent creates a linked session only for independent or parallel work.
 
 ## Runtime policy
 
-| Target kind | Hosting |
-| --- | --- |
-| `general` | cloud or local |
-| `coding` | cloud or local |
-| `app`, `design`, `design_system`, `pdf`, `animation` | cloud only |
+| Target kind                                          | Hosting        |
+| ---------------------------------------------------- | -------------- |
+| `general`                                            | cloud or local |
+| `coding`                                             | cloud or local |
+| `app`, `design`, `design_system`, `pdf`, `animation` | cloud only     |
 
 Cloud-only conversion is a runtime migration: prepare and health-check the cloud
 target before switching state, then invalidate and stop the old local runtime.
@@ -34,6 +34,11 @@ deliberately deferred until runtime teardown and workspace detachment can be
 performed atomically. Other
 generated targets are deliberately rejected until their starter/runtime
 provisioning is implemented as an atomic conversion target.
+
+A coding conversion requires a coding channel. The channel is the destination
+and supplies its linked repository; an explicit repository is accepted only
+when the channel has none. This matches normal coding-session creation and
+prevents repo-only sessions from bypassing the channel workflow.
 
 Every successful conversion appends `session_converted` in the active session's
 scope with complete `session` and `sessionGroup` snapshots. Clients update their

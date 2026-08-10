@@ -227,7 +227,15 @@ export const traceCliOperations = {
     type: "mutation",
     rootField: "convertSessionGroup",
     capability: "session:convert",
-    argumentPaths: ["input.sessionGroupId", "input.kind", "input.repoId", "input.projectId", "input.tool", "input.model", "input.reasoningEffort", "input.environmentId", "input.runtimeInstanceId", "input.clientMutationId"],
+    argumentPaths: [
+      "input.sessionGroupId",
+      "input.kind",
+      "input.channelId",
+      "input.repoId",
+      "input.tool",
+      "input.model",
+      "input.reasoningEffort",
+    ],
     document: `mutation TraceCliConvertSessionGroup($input: ConvertSessionGroupInput!) {
       convertSessionGroup(input: $input) { ${SESSION_FIELDS} }
     }`,

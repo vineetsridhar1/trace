@@ -419,6 +419,7 @@ export const sessionMutations = {
       input: {
         sessionGroupId: string;
         kind: import("@trace/gql").SessionGroupKind;
+        channelId?: string | null;
         repoId?: string | null;
         projectId?: string | null;
         tool?: CodingTool | null;

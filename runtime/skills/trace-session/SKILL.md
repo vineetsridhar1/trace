@@ -98,16 +98,17 @@ When a general conversation becomes one focused coding task, convert it in place
 conversation and session identity are preserved:
 
 ```sh
-"$TRACE_CLI" session convert --kind coding --repo <repo-id> --json
+"$TRACE_CLI" session convert --kind coding --channel <channel-id> --json
 ```
 
-Add `--project`, `--tool`, `--model`, `--reasoning`, or `--runtime` when the destination needs an
-explicit override. Conversion targets the current session by default; use `--session <session-id>`
-only when explicitly acting on another session. Prefer conversion over `session start` for the
-current conversation. A successful current-session conversion prepares the repository workspace
-and resumes the request there automatically. Treat a nonzero exit or JSON `error` as a failed
-conversion: surface its exact message and never claim the session changed. Start a separate session
-only for independent or parallel work.
+The coding channel is the destination and normally supplies its linked repository. Add `--repo`
+only when the selected channel has no repository. Add `--tool`, `--model`, or `--reasoning` when the
+destination needs an explicit override. Conversion targets the current session by default; use
+`--session <session-id>` only when explicitly acting on another session. Prefer conversion over
+`session start` for the current conversation. A successful current-session conversion prepares the
+repository workspace and resumes the request there automatically. Treat a nonzero exit or JSON
+`error` as a failed conversion: surface its exact message and never claim the session changed.
+Start a separate session only for independent or parallel work.
 
 ```sh
 "$TRACE_CLI" session send <session-id> "Please also cover migrations" --json

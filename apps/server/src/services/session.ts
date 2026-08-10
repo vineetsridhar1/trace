@@ -134,6 +134,7 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
 export type ConvertSessionGroupServiceInput = {
   sessionGroupId: string;
   kind: SessionGroupKind;
+  channelId?: string | null;
   repoId?: string | null;
   projectId?: string | null;
   tool?: CodingTool | null;
@@ -1153,7 +1154,7 @@ When you need a Trace platform capability, first run \`"$TRACE_CLI" --help --jso
 </system-instruction>`;
 
 const GENERAL_SESSION_INSTRUCTION = `\n\n<system-instruction>
-This is a Trace general agent session. Coordinate, monitor, answer questions, and use the managed Trace CLI to discover the relevant project, repository, and sessions. Do not edit code or create a code workspace in this session. When this conversation becomes one focused implementation task, use the CLI to convert this session to a Coding session after resolving its repository. A successful conversion prepares the repository workspace and resumes the request automatically. If the CLI returns an error, report that exact failure and do not imply the conversion happened. When work is independent or parallel, create a linked session instead.
+This is a Trace general agent session. Coordinate, monitor, answer questions, and use the managed Trace CLI to discover the relevant channel, repository, and sessions. Do not edit code or create a code workspace in this session. When this conversation becomes one focused implementation task, use the CLI to convert this session to a Coding session after resolving its coding channel. The channel normally supplies its repository. A successful conversion prepares the repository workspace and resumes the request automatically. If the CLI returns an error, report that exact failure and do not imply the conversion happened. When work is independent or parallel, create a linked session instead.
 </system-instruction>`;
 
 /** Instruction appended to every prompt for repo-based sessions so the AI auto-saves each response. */
@@ -3437,6 +3438,7 @@ export class SessionService {
         select: {
           id: true,
           kind: true,
+          channelId: true,
           repoId: true,
           sessions: {
             orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
@@ -3453,17 +3455,39 @@ export class SessionService {
       }
 
       const session = group.sessions[0]!;
-      const targetRepoId = input.repoId ?? group.repoId;
-      if (input.kind === "coding" && !targetRepoId) {
-        throw new ValidationError("Converting to coding requires a repository");
+      const targetChannelId = input.channelId ?? group.channelId;
+      if (!targetChannelId) {
+        throw new ValidationError("Converting to coding requires a channel");
+      }
+      const targetChannel = await tx.channel.findFirst({
+        where: {
+          id: targetChannelId,
+          organizationId: input.organizationId,
+          type: "coding",
+        },
+        select: { id: true, repoId: true },
+      });
+      if (!targetChannel) {
+        throw new ValidationError("Coding channel does not belong to this organization");
+      }
+      if (targetChannel.repoId && input.repoId && targetChannel.repoId !== input.repoId) {
+        throw new ValidationError("Coding channel sessions must use the channel's linked repo");
+      }
+      const targetRepoId = targetChannel.repoId ?? input.repoId ?? group.repoId;
+      if (!targetRepoId) {
+        throw new ValidationError("The selected coding channel requires a repository");
       }
 
       if (input.projectId) {
         const project = await tx.project.findFirst({
-          where: { id: input.projectId, organizationId: input.organizationId },
+          where: {
+            id: input.projectId,
+            organizationId: input.organizationId,
+            channels: { some: { channelId: targetChannelId } },
+          },
           select: { id: true, repoId: true },
         });
-        if (!project) throw new ValidationError("Project does not belong to this organization");
+        if (!project) throw new ValidationError("Project is not linked to the selected channel");
         if (targetRepoId && project.repoId && project.repoId !== targetRepoId) {
           throw new ValidationError("Project must be linked to the selected repository");
         }
@@ -3481,11 +3505,12 @@ export class SessionService {
       // adapter can prepare and health-check a cloud runtime before this write.
       await tx.sessionGroup.update({
         where: { id: group.id },
-        data: { kind: input.kind, repoId: targetRepoId },
+        data: { kind: input.kind, channelId: targetChannelId, repoId: targetRepoId },
       });
       const updated = await tx.session.update({
         where: { id: session.id },
         data: {
+          channelId: targetChannelId,
           repoId: targetRepoId,
           // The general workspace is not a repository checkout. Keep the
           // session read-only until the router replaces it with a coding

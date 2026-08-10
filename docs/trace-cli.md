@@ -33,7 +33,7 @@ command-specific schemas use `"$TRACE_CLI" <command> <subcommand> --help --json`
 "$TRACE_CLI" session list [--status STATUS] [--tool TOOL] [--repo ID] [--channel ID]
 "$TRACE_CLI" session get [session-id]
 "$TRACE_CLI" session start [prompt] [--group ID | --channel ID | --project ID | --repo ID | --kind KIND]
-"$TRACE_CLI" session convert --kind KIND [--session ID] [--repo ID] [--project ID]
+"$TRACE_CLI" session convert --kind coding --channel ID [--session ID] [--repo ID]
 "$TRACE_CLI" session send [session-id] <message> [--self] [--queue]
 "$TRACE_CLI" session run [session-id] [prompt] [--self]
 "$TRACE_CLI" session stop [session-id] [--self]
@@ -87,18 +87,18 @@ follow mode prints the snapshot object first and then one `{ "event": ... }` obj
 If more than 1,000 events accumulated after the snapshot cursor, follow mode asks the caller to take
 a new snapshot instead of replaying an unbounded history.
 
-| Command          | JSON shape                                                                 |
-| ---------------- | -------------------------------------------------------------------------- |
-| `context`        | `{ serverUrl, organizationId, sessionId, sessionGroupId, authentication }` |
-| resource lists   | `{ channels }`, `{ repos }`, or `{ projects }`                             |
-| `session list`   | `{ sessions }`                                                             |
-| `session get`    | `{ session }`                                                              |
-| `session start`  | `{ session, runRequested, uiPath, idempotencyKey }`                        |
-| `session convert` | `{ session }`                                                               |
-| `session send`   | `{ event }` or `{ queuedMessage }`                                         |
-| lifecycle        | `{ session }` or `{ sessionGroup }`                                        |
-| `session events` | `{ events: [...], following }`                                             |
-| `artifact push`  | `{ artifact: { id, type, key }, idempotencyKey }`                          |
+| Command           | JSON shape                                                                 |
+| ----------------- | -------------------------------------------------------------------------- |
+| `context`         | `{ serverUrl, organizationId, sessionId, sessionGroupId, authentication }` |
+| resource lists    | `{ channels }`, `{ repos }`, or `{ projects }`                             |
+| `session list`    | `{ sessions }`                                                             |
+| `session get`     | `{ session }`                                                              |
+| `session start`   | `{ session, runRequested, uiPath, idempotencyKey }`                        |
+| `session convert` | `{ session }`                                                              |
+| `session send`    | `{ event }` or `{ queuedMessage }`                                         |
+| lifecycle         | `{ session }` or `{ sessionGroup }`                                        |
+| `session events`  | `{ events: [...], following }`                                             |
+| `artifact push`   | `{ artifact: { id, type, key }, idempotencyKey }`                          |
 
 Errors are written to stderr as `{ "error": { "category", "message" } }` in JSON mode. Exit
 codes are stable: `2` authentication, `3` authorization, `4` validation, `5` connectivity, `6`
