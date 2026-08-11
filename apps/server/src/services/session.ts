@@ -6281,10 +6281,11 @@ export class SessionService {
 
     const parentToolUseId =
       typeof data.parentToolUseId === "string" ? data.parentToolUseId : undefined;
-    const artifact = actionRequiredArtifactForToolOutput(session.tool, data);
+    const sourceTool = typeof data.sourceTool === "string" ? data.sourceTool : session.tool;
+    const artifact = actionRequiredArtifactForToolOutput(sourceTool, data);
     const payload = {
       ...data,
-      sourceTool: session.tool,
+      sourceTool,
       ...(artifact ? { artifact } : {}),
     };
 

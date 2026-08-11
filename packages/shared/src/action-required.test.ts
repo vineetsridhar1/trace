@@ -42,4 +42,14 @@ describe("actionRequiredArtifactForToolError", () => {
       }),
     ).toMatchObject({ kind: "login_required", provider: "claude_code" });
   });
+
+  it("classifies Codex's Responses API authentication failure", () => {
+    expect(
+      actionRequiredArtifactForToolOutput("codex", {
+        type: "error",
+        message:
+          "Reconnecting... unexpected status 401 Unauthorized: Missing bearer or basic authentication in header",
+      }),
+    ).toMatchObject({ kind: "login_required", provider: "codex" });
+  });
 });

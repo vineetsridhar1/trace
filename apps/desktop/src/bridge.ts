@@ -1005,12 +1005,14 @@ export class BridgeClient implements IBridgeClient {
 
         hasForwardedOutput = true;
         const message = actionableErrorMessage(output);
-        const artifact = message ? actionRequiredArtifactForToolError(tool, message) : undefined;
+        const sourceTool = tool ?? this.sessionTools.get(sessionId);
+        const artifact = message ? actionRequiredArtifactForToolError(sourceTool, message) : undefined;
         const data =
-          artifact && (output.type === "error" || output.type === "assistant")
+          output.type === "error" || output.type === "assistant"
             ? {
                 ...output,
-                artifact,
+                ...(sourceTool ? { sourceTool } : {}),
+                ...(artifact ? { artifact } : {}),
               }
             : output;
         this.send({ type: "session_output", sessionId, data });
