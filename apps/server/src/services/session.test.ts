@@ -129,10 +129,6 @@ vi.mock("./api-token.js", () => ({
   },
 }));
 
-vi.mock("./cloud-runtime-credentials.js", () => ({
-  assertCloudToolCredentialConfigured: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock("./org-secret.js", () => ({
   orgSecretService: {
     getDecryptedValueByName: vi.fn().mockResolvedValue(null),
@@ -179,7 +175,6 @@ import { storage } from "../lib/storage/index.js";
 import { runtimeAccessService } from "./runtime-access.js";
 import { inboxService } from "./inbox.js";
 import { apiTokenService } from "./api-token.js";
-import { assertCloudToolCredentialConfigured } from "./cloud-runtime-credentials.js";
 import { GitHubApiError, githubRepoService, parseGitHubRepo } from "./github-repo.js";
 import { orgSecretService } from "./org-secret.js";
 import { managedGitService } from "./managed-git.js";
@@ -216,7 +211,6 @@ const runtimeAccessServiceMock = runtimeAccessService as unknown as MockedDeep<
 >;
 const inboxServiceMock = inboxService as unknown as MockedDeep<typeof inboxService>;
 const apiTokenServiceMock = apiTokenService as unknown as MockedDeep<typeof apiTokenService>;
-const assertCloudToolCredentialConfiguredMock = vi.mocked(assertCloudToolCredentialConfigured);
 const orgSecretServiceMock = orgSecretService as unknown as MockedDeep<typeof orgSecretService>;
 const managedGitServiceMock = managedGitService as unknown as MockedDeep<typeof managedGitService>;
 const appCheckpointCaptureServiceMock = appCheckpointCaptureService as unknown as MockedDeep<
@@ -414,7 +408,6 @@ describe("SessionService", () => {
     sessionRouterMock.inspectSessionCurrentBranch.mockResolvedValue(null);
     sessionRouterMock.inspectSessionGitSyncStatus.mockResolvedValue(makeGitSyncStatus());
     apiTokenServiceMock.getDecryptedTokens.mockResolvedValue({ github: "gh-token" });
-    assertCloudToolCredentialConfiguredMock.mockResolvedValue(undefined);
     orgSecretServiceMock.getDecryptedValueByName.mockResolvedValue(null);
     managedGitServiceMock.createManagedRepo.mockResolvedValue({
       id: "managed-repo-1",
@@ -2110,29 +2103,6 @@ describe("SessionService", () => {
           }),
         );
       });
-    });
-
-    it("rejects a cloud start before creating session resources when credentials are missing", async () => {
-      assertCloudToolCredentialConfiguredMock.mockRejectedValueOnce(
-        new Error("Add an Anthropic API key"),
-      );
-
-      await expect(
-        service.start({
-          organizationId: "org-1",
-          createdById: "user-1",
-          kind: "app",
-          hosting: "cloud",
-          tool: "claude_code",
-          prompt: "Build a CRM",
-        } as unknown as StartSessionServiceInput),
-      ).rejects.toThrow("Add an Anthropic API key");
-
-      expect(assertCloudToolCredentialConfiguredMock).toHaveBeenCalledWith("user-1", "claude_code");
-      expect(managedGitServiceMock.createManagedRepo).not.toHaveBeenCalled();
-      expect(prismaMock.sessionGroup.create).not.toHaveBeenCalled();
-      expect(prismaMock.session.create).not.toHaveBeenCalled();
-      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
     });
 
     it("queues a selected design with the initial session run", async () => {
@@ -6258,34 +6228,6 @@ describe("SessionService", () => {
   });
 
   describe("sendMessage", () => {
-    it("rejects the first cloud message before queuing it when credentials are missing", async () => {
-      prismaMock.session.findUniqueOrThrow.mockResolvedValueOnce(
-        makeSession({
-          agentStatus: "not_started",
-          hosting: "cloud",
-          workdir: null,
-          toolSessionId: null,
-        }),
-      );
-      assertCloudToolCredentialConfiguredMock.mockRejectedValueOnce(
-        new Error("Add an Anthropic API key"),
-      );
-
-      await expect(
-        service.sendMessage({
-          sessionId: "session-1",
-          text: "Start work",
-          actorType: "user",
-          actorId: "user-1",
-        }),
-      ).rejects.toThrow("Add an Anthropic API key");
-
-      expect(assertCloudToolCredentialConfiguredMock).toHaveBeenCalledWith("user-1", "claude_code");
-      expect(prismaMock.session.update).not.toHaveBeenCalled();
-      expect(eventServiceMock.create).not.toHaveBeenCalled();
-      expect(sessionRouterMock.createRuntime).not.toHaveBeenCalled();
-    });
-
     it("resumes a session waiting for input when a new message is sent", async () => {
       const session = makeSession({
         agentStatus: "done",

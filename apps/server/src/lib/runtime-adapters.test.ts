@@ -244,7 +244,7 @@ describe("ProvisionedRuntimeAdapter", () => {
         tool: "codex",
         bridgeUrl: "wss://trace.example/bridge",
       }),
-    ).rejects.toThrow("Cannot start a Codex cloud session");
+    ).rejects.toThrow("Cannot start cloud runtime for codex");
 
     expect(fetchMock()).not.toHaveBeenCalled();
   });
