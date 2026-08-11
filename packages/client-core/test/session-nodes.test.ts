@@ -82,9 +82,9 @@ describe("buildSessionNodes", () => {
     );
 
     expect(result.nodes).toEqual([
-      { kind: "event", id: first.id },
+      { kind: "event", id: first.id, repeatCount: 2 },
       { kind: "event", id: userMessage.id },
-      { kind: "event", id: retryAfterMessage.id },
+      { kind: "event", id: retryAfterMessage.id, repeatCount: 1 },
     ]);
   });
 

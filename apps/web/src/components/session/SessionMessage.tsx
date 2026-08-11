@@ -1,12 +1,11 @@
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import {
   attachmentKeysFromPayload,
-  actionRequiredArtifactKey,
   asJsonObject,
   isActionRequiredArtifact,
   type JsonObject,
 } from "@trace/shared";
-import { useScopedEventField, useScopedEvents } from "@trace/client-core";
+import { useEntityField, useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
@@ -234,6 +233,7 @@ export const SessionMessage = memo(function SessionMessage({
   onForkSession,
   canForkSession = false,
   showActions = false,
+  repeatCount = 1,
 }: {
   id: string;
   completedAgentTools: Map<string, AgentToolResult>;
@@ -241,6 +241,7 @@ export const SessionMessage = memo(function SessionMessage({
   onForkSession?: (eventId: string) => void;
   canForkSession?: boolean;
   showActions?: boolean;
+  repeatCount?: number;
 }) {
   const scopeKey = useEventScopeKey();
   const eventType = useScopedEventField(scopeKey, id, "eventType");
@@ -250,33 +251,7 @@ export const SessionMessage = memo(function SessionMessage({
     | { type: string; id: string; name?: string | null }
     | undefined;
   const sessionId = useScopedEventField(scopeKey, id, "scopeId") as string | undefined;
-  const scopedEvents = useScopedEvents(scopeKey);
-  const repeatCount = useMemo(() => {
-    const current = scopedEvents[id];
-    const payload = asJsonObject(current?.payload);
-    const artifact = asJsonObject(payload?.artifact);
-    if (!current || !isActionRequiredArtifact(artifact)) return 1;
-
-    const key = actionRequiredArtifactKey(artifact);
-    const events = Object.values(scopedEvents).sort((left, right) =>
-      left.timestamp.localeCompare(right.timestamp),
-    );
-    const index = events.findIndex((event) => event.id === id);
-    if (index === -1) return 1;
-
-    let count = 0;
-    for (let cursor = index; cursor < events.length; cursor += 1) {
-      const event = events[cursor];
-      if (cursor !== index && event.eventType === "message_sent") break;
-      const eventPayload = asJsonObject(event.payload);
-      const eventArtifact = asJsonObject(eventPayload?.artifact);
-      if (isActionRequiredArtifact(eventArtifact) && actionRequiredArtifactKey(eventArtifact) === key) {
-        count += 1;
-      }
-    }
-    return count;
-  }, [id, scopedEvents]);
-
+  const tool = useEntityField("sessions", sessionId ?? "", "tool") as string | undefined;
   if (!eventType || !timestamp) return null;
 
   switch (eventType) {

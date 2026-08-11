@@ -32,6 +32,7 @@ describe("actionRequiredArtifactForToolError", () => {
 
   it("leaves unknown errors unclassified", () => {
     expect(actionRequiredArtifactForToolError("codex", "unexpected process exit")).toBeUndefined();
+    expect(actionRequiredArtifactForToolError("codex", "authentication failed")).toBeUndefined();
   });
 
   it("classifies assistant text at the time the tool output is recorded", () => {

@@ -55,7 +55,7 @@ export function actionRequiredArtifactForToolError(
   tool: string | undefined,
   message: string,
 ): ActionRequiredArtifact | undefined {
-  if (/could not read Username|authentication failed|terminal prompts disabled/i.test(message)) {
+  if (/could not read Username.*github\.com|github\.com.*terminal prompts disabled/i.test(message)) {
     return {
       kind: "login_required",
       provider: "github",

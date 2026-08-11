@@ -62,7 +62,7 @@ function isEmptySessionOutput(payload: JsonObject | undefined): boolean {
 }
 
 export type SessionNode =
-  | { kind: "event"; id: string }
+  | { kind: "event"; id: string; repeatCount?: number }
   | {
       kind: "command-execution";
       id: string;
@@ -210,7 +210,10 @@ export function buildSessionNodes(
   events: Record<string, Event>,
 ): BuildSessionNodesResult {
   const result: SessionNode[] = [];
-  const visibleActionableArtifacts = new Set<string>();
+  const visibleActionableArtifacts = new Map<
+    string,
+    Extract<SessionNode, { kind: "event" }>
+  >();
   const completedAgentTools = new Map<string, AgentToolResult>();
   const toolResultByUseId = new Map<string, unknown>();
   let bucket: ReadGlobItem[] = [];
@@ -292,8 +295,20 @@ export function buildSessionNodes(
       const artifact = asJsonObject(payload?.artifact);
       if (isActionRequiredArtifact(artifact)) {
         const key = actionRequiredArtifactKey(artifact);
-        if (visibleActionableArtifacts.has(key)) continue;
-        visibleActionableArtifacts.add(key);
+        const priorNode = visibleActionableArtifacts.get(key);
+        if (priorNode) {
+          priorNode.repeatCount = (priorNode.repeatCount ?? 1) + 1;
+          continue;
+        }
+        const artifactNode: Extract<SessionNode, { kind: "event" }> = {
+          kind: "event",
+          id,
+          repeatCount: 1,
+        };
+        visibleActionableArtifacts.set(key, artifactNode);
+        flushBucket();
+        result.push(artifactNode);
+        continue;
       }
 
       if (isEmptySessionOutput(payload)) {

@@ -56,7 +56,6 @@ export function CredentialRequiredArtifactActions({
       <Input
         type="password"
         autoComplete="off"
-        autoFocus
         placeholder={`${providerName} API key`}
         value={apiKey}
         onChange={(event) => setApiKey(event.target.value)}
