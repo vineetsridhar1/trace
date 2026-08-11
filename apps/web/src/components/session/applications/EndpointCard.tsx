@@ -1,4 +1,4 @@
-import { Activity, Copy, ExternalLink, Globe, Power, Square } from "lucide-react";
+import { Activity, Copy, ExternalLink, Power, Square } from "lucide-react";
 import type { SessionEndpoint } from "@trace/gql";
 import { cn } from "../../../lib/utils";
 import { Button } from "../../ui/button";
@@ -6,23 +6,19 @@ import { displayApplicationStatus } from "./session-applications-operations";
 
 export function EndpointCard({
   endpoint,
-  isAppGroup,
   isPending,
   processRunning,
   onCopy,
   onOpen,
   onOpenTraffic,
-  onPublish,
   onToggle,
 }: {
   endpoint: SessionEndpoint;
-  isAppGroup: boolean;
   isPending: (key: string) => boolean;
   processRunning: boolean;
   onCopy: () => void;
   onOpen: () => void;
   onOpenTraffic: () => void;
-  onPublish: () => void;
   onToggle: () => void;
 }) {
   const enabled = endpoint.status === "enabled";
@@ -91,18 +87,6 @@ export function EndpointCard({
         >
           <Copy size={14} />
         </Button>
-        {isAppGroup && enabled && endpoint.accessMode === "private" ? (
-          <Button
-            variant="outline"
-            size="sm"
-            title={`Publish ${endpoint.label}`}
-            disabled={isPending(`publish:${endpoint.id}`)}
-            onClick={onPublish}
-          >
-            <Globe size={13} />
-            Publish
-          </Button>
-        ) : null}
         <Button
           variant="ghost"
           size="icon-sm"

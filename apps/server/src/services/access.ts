@@ -1,5 +1,6 @@
-import { prisma } from "../lib/db.js";
 import { Prisma } from "@prisma/client";
+import { prisma } from "../lib/db.js";
+import { AuthorizationError } from "../lib/errors.js";
 
 async function assertOrgEntityExists(
   model: "channel" | "session" | "ticket" | "project",
@@ -64,6 +65,22 @@ export function canViewSessionGroup(
   userId: string,
 ): boolean {
   return group.visibility == null || group.visibility === "public" || group.ownerUserId === userId;
+}
+
+export async function assertCanManageSessionGroup(
+  group: { ownerUserId: string },
+  organizationId: string,
+  userId: string,
+  action = "manage applications",
+) {
+  if (group.ownerUserId === userId) return;
+  const member = await prisma.orgMember.findUnique({
+    where: { userId_organizationId: { userId, organizationId } },
+    select: { role: true },
+  });
+  if (member?.role !== "admin") {
+    throw new AuthorizationError(`Only the session owner or an org admin can ${action}`);
+  }
 }
 
 export async function assertSessionGroupAccess(

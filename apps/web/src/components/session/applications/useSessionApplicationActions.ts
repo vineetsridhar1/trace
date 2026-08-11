@@ -6,7 +6,6 @@ import {
   CREATE_PREVIEW_MUTATION,
   DISABLE_ENDPOINT_MUTATION,
   ENABLE_ENDPOINT_MUTATION,
-  PUBLISH_APP_MUTATION,
   RUN_SETUP_MUTATION,
   START_PROCESS_MUTATION,
   STOP_PROCESS_MUTATION,
@@ -118,10 +117,6 @@ export function useSessionApplicationActions({
               : { endpointId: endpoint.id, accessMode: groupKind === "app" ? "private" : "public" },
           )
           .toPromise(),
-      ),
-    publish: (endpointId: string) =>
-      void execute(`publish:${endpointId}`, () =>
-        client.mutation(PUBLISH_APP_MUTATION, { sessionGroupId }).toPromise(),
       ),
     openEndpoint: async (endpoint: EndpointReference) => {
       // Open the tab synchronously in the click handler so Safari keeps the

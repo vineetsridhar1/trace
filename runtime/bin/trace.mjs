@@ -18,7 +18,42 @@ var SESSION_FIELDS = `
 `;
 var EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
 var TERMINAL_FIELDS = `id sessionId status cols rows connected`;
+var APP_DEPLOYMENT_FIELDS = `
+  id sessionGroupId repoId sourceCheckpointId commitSha status target spec appSlug
+  externalJobId imageDigest staticPrefix serviceName url errorMessage
+  queuedAt startedAt completedAt createdAt updatedAt
+`;
 var traceCliOperations = {
+  appDeployments: operation({
+    name: "TraceCliAppDeployments",
+    type: "query",
+    rootField: "appDeployments",
+    capability: "app:deploy",
+    argumentPaths: ["sessionGroupId"],
+    document: `query TraceCliAppDeployments($sessionGroupId: ID!) {
+      appDeployments(sessionGroupId: $sessionGroupId) { ${APP_DEPLOYMENT_FIELDS} }
+    }`
+  }),
+  deployAppSession: operation({
+    name: "TraceCliDeployAppSession",
+    type: "mutation",
+    rootField: "deployAppSession",
+    capability: "app:deploy",
+    argumentPaths: [
+      "input.sessionGroupId",
+      "input.target",
+      "input.buildCommand",
+      "input.outputDirectory",
+      "input.startCommand",
+      "input.port",
+      "input.healthPath",
+      "input.database",
+      "input.migrationCommand"
+    ],
+    document: `mutation TraceCliDeployAppSession($input: DeployAppSessionInput!) {
+      deployAppSession(input: $input) { ${APP_DEPLOYMENT_FIELDS} }
+    }`
+  }),
   integrationCatalog: operation({
     name: "TraceCliIntegrationCatalog",
     type: "query",
@@ -97,12 +132,54 @@ var traceCliOperations = {
       deleteAppIntegrationBinding(id: $id, sessionGroupId: $sessionGroupId)
     }`
   }),
-  sessionTerminals: operation({ name: "TraceCliSessionTerminals", type: "query", rootField: "sessionTerminals", capability: "terminal:control", argumentPaths: ["sessionId"], document: `query TraceCliSessionTerminals($sessionId: ID!) { sessionTerminals(sessionId: $sessionId) { ${TERMINAL_FIELDS} } }` }),
-  terminalCapture: operation({ name: "TraceCliTerminalCapture", type: "query", rootField: "terminalCapture", capability: "terminal:control", argumentPaths: ["terminalId", "maxBytes", "plainText"], document: `query TraceCliTerminalCapture($terminalId: ID!, $maxBytes: Int, $plainText: Boolean) { terminalCapture(terminalId: $terminalId, maxBytes: $maxBytes, plainText: $plainText) { terminalId output byteCount truncated capturedAt closed connected } }` }),
-  createTerminal: operation({ name: "TraceCliCreateTerminal", type: "mutation", rootField: "createTerminal", capability: "terminal:control", argumentPaths: ["sessionId", "cols", "rows"], document: `mutation TraceCliCreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) { ${TERMINAL_FIELDS} } }` }),
-  sendTerminalInput: operation({ name: "TraceCliSendTerminalInput", type: "mutation", rootField: "sendTerminalInput", capability: "terminal:control", argumentPaths: ["terminalId", "data"], document: `mutation TraceCliSendTerminalInput($terminalId: ID!, $data: String!) { sendTerminalInput(terminalId: $terminalId, data: $data) }` }),
-  resizeTerminal: operation({ name: "TraceCliResizeTerminal", type: "mutation", rootField: "resizeTerminal", capability: "terminal:control", argumentPaths: ["terminalId", "cols", "rows"], document: `mutation TraceCliResizeTerminal($terminalId: ID!, $cols: Int!, $rows: Int!) { resizeTerminal(terminalId: $terminalId, cols: $cols, rows: $rows) }` }),
-  destroyTerminal: operation({ name: "TraceCliDestroyTerminal", type: "mutation", rootField: "destroyTerminal", capability: "terminal:control", argumentPaths: ["terminalId"], document: `mutation TraceCliDestroyTerminal($terminalId: ID!) { destroyTerminal(terminalId: $terminalId) }` }),
+  sessionTerminals: operation({
+    name: "TraceCliSessionTerminals",
+    type: "query",
+    rootField: "sessionTerminals",
+    capability: "terminal:control",
+    argumentPaths: ["sessionId"],
+    document: `query TraceCliSessionTerminals($sessionId: ID!) { sessionTerminals(sessionId: $sessionId) { ${TERMINAL_FIELDS} } }`
+  }),
+  terminalCapture: operation({
+    name: "TraceCliTerminalCapture",
+    type: "query",
+    rootField: "terminalCapture",
+    capability: "terminal:control",
+    argumentPaths: ["terminalId", "maxBytes", "plainText"],
+    document: `query TraceCliTerminalCapture($terminalId: ID!, $maxBytes: Int, $plainText: Boolean) { terminalCapture(terminalId: $terminalId, maxBytes: $maxBytes, plainText: $plainText) { terminalId output byteCount truncated capturedAt closed connected } }`
+  }),
+  createTerminal: operation({
+    name: "TraceCliCreateTerminal",
+    type: "mutation",
+    rootField: "createTerminal",
+    capability: "terminal:control",
+    argumentPaths: ["sessionId", "cols", "rows"],
+    document: `mutation TraceCliCreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) { ${TERMINAL_FIELDS} } }`
+  }),
+  sendTerminalInput: operation({
+    name: "TraceCliSendTerminalInput",
+    type: "mutation",
+    rootField: "sendTerminalInput",
+    capability: "terminal:control",
+    argumentPaths: ["terminalId", "data"],
+    document: `mutation TraceCliSendTerminalInput($terminalId: ID!, $data: String!) { sendTerminalInput(terminalId: $terminalId, data: $data) }`
+  }),
+  resizeTerminal: operation({
+    name: "TraceCliResizeTerminal",
+    type: "mutation",
+    rootField: "resizeTerminal",
+    capability: "terminal:control",
+    argumentPaths: ["terminalId", "cols", "rows"],
+    document: `mutation TraceCliResizeTerminal($terminalId: ID!, $cols: Int!, $rows: Int!) { resizeTerminal(terminalId: $terminalId, cols: $cols, rows: $rows) }`
+  }),
+  destroyTerminal: operation({
+    name: "TraceCliDestroyTerminal",
+    type: "mutation",
+    rootField: "destroyTerminal",
+    capability: "terminal:control",
+    argumentPaths: ["terminalId"],
+    document: `mutation TraceCliDestroyTerminal($terminalId: ID!) { destroyTerminal(terminalId: $terminalId) }`
+  }),
   channels: operation({
     name: "TraceCliChannels",
     type: "query",
@@ -943,6 +1020,145 @@ var artifactCommand = defineCommand({
   }
 });
 
+// src/commands/app/shared.ts
+function requireCurrentAppGroup(ctx) {
+  const sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
+  if (!sessionGroupId) {
+    throw new CliError(
+      "This command requires an active Trace app session",
+      ExitCode.validation,
+      "validation"
+    );
+  }
+  return sessionGroupId;
+}
+
+// src/commands/app/index.ts
+function deploymentLine(deployment) {
+  const destination = deployment.url ?? deployment.errorMessage ?? "pending";
+  return `${deployment.id}	${deployment.status}	${deployment.target}	${deployment.commitSha.slice(0, 8)}	${destination}`;
+}
+var deployCommand = defineCommand({
+  path: ["app", "deploy"],
+  description: "Deploy the current app using explicit AI-supplied runtime facts",
+  examples: [
+    '"$TRACE_CLI" app deploy --target static --output-directory dist --build-command "pnpm build" --json',
+    '"$TRACE_CLI" app deploy --target service --build-command "pnpm build" --start-command "pnpm start" --port 3000 --health-path /health --database --migration-command "pnpm db:migrate" --json'
+  ],
+  effects: [
+    "Commits no files and performs no project analysis.",
+    "Queues a durable production deployment of the latest saved app checkpoint.",
+    "May create or update AWS runtime resources and a persistent app database."
+  ],
+  output: "The queued deployment, immutable commit, selected target, status, and eventual URL.",
+  nextSteps: ['Run "$TRACE_CLI" app status --json to monitor the durable workflow.'],
+  notes: [
+    "The AI must inspect and build-test the project before choosing these arguments; the CLI does not infer them.",
+    "Static output directories must be relative to the repository root.",
+    "A migration command is valid only with --database."
+  ],
+  options: [
+    {
+      name: "target",
+      flag: "--target",
+      kind: "string",
+      valueName: "KIND",
+      choices: ["static", "service"],
+      description: "Explicit hosting target"
+    },
+    {
+      name: "buildCommand",
+      flag: "--build-command",
+      kind: "string",
+      valueName: "COMMAND",
+      description: "Build command selected by the AI"
+    },
+    {
+      name: "outputDirectory",
+      flag: "--output-directory",
+      kind: "string",
+      valueName: "PATH",
+      description: "Static build output directory"
+    },
+    {
+      name: "startCommand",
+      flag: "--start-command",
+      kind: "string",
+      valueName: "COMMAND",
+      description: "Long-running service start command"
+    },
+    {
+      name: "port",
+      flag: "--port",
+      kind: "integer",
+      valueName: "PORT",
+      min: 1,
+      max: 65535,
+      description: "HTTP port exposed by the service"
+    },
+    {
+      name: "healthPath",
+      flag: "--health-path",
+      kind: "string",
+      valueName: "PATH",
+      description: "HTTP health-check path"
+    },
+    {
+      name: "database",
+      flag: "--database",
+      kind: "boolean",
+      description: "Provision persistent PostgreSQL access"
+    },
+    {
+      name: "migrationCommand",
+      flag: "--migration-command",
+      kind: "string",
+      valueName: "COMMAND",
+      description: "One-time database migration command"
+    }
+  ],
+  async run(ctx, parsed) {
+    const target = optionString(parsed, "target");
+    if (!target) usage("--target is required");
+    const input = {
+      sessionGroupId: requireCurrentAppGroup(ctx),
+      target,
+      buildCommand: optionString(parsed, "buildCommand"),
+      outputDirectory: optionString(parsed, "outputDirectory"),
+      startCommand: optionString(parsed, "startCommand"),
+      port: optionInteger(parsed, "port"),
+      healthPath: optionString(parsed, "healthPath"),
+      database: optionBoolean(parsed, "database"),
+      migrationCommand: optionString(parsed, "migrationCommand")
+    };
+    const client = await ctx.client();
+    const result = await client.graphql(traceCliOperations.deployAppSession, { input });
+    ctx.output({ deployment: result.deployAppSession }, deploymentLine(result.deployAppSession));
+  }
+});
+var statusCommand = defineCommand({
+  path: ["app", "status"],
+  description: "List durable deployments for the current app",
+  examples: ['"$TRACE_CLI" app status --json'],
+  effects: ["Read-only; does not build, deploy, promote, or stop anything."],
+  output: "Recent deployments with target, checkpoint, status, URL, and safe failure details.",
+  nextSteps: [
+    "If the deployment is still active, wait and run this command again; if it failed, inspect the returned error before retrying."
+  ],
+  async run(ctx) {
+    const variables = { sessionGroupId: requireCurrentAppGroup(ctx) };
+    const result = await (await ctx.client()).graphql(
+      traceCliOperations.appDeployments,
+      variables
+    );
+    ctx.output(
+      { deployments: result.appDeployments },
+      result.appDeployments.length ? result.appDeployments.map(deploymentLine).join("\n") : "No deployments found"
+    );
+  }
+});
+var appCommands = [deployCommand, statusCommand];
+
 // src/commands/organization.ts
 function requireOrganizationId(value) {
   return value || usage("The Trace organization is unavailable in this session");
@@ -1022,17 +1238,6 @@ var contextCommand = defineCommand({
 });
 
 // src/commands/integration/shared.ts
-function requireCurrentAppGroup(ctx) {
-  const sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
-  if (!sessionGroupId) {
-    throw new CliError(
-      "This command requires an active Trace app session",
-      ExitCode.validation,
-      "validation"
-    );
-  }
-  return sessionGroupId;
-}
 async function loadIntegrationCatalog(client) {
   const result = await client.graphql(traceCliOperations.integrationCatalog, {});
   return result.supportedAppIntegrations;
@@ -2310,6 +2515,7 @@ var terminalCommands = [
 // src/commands/index.ts
 var commands = [
   contextCommand,
+  ...appCommands,
   ...integrationCommands,
   channelListCommand,
   repoListCommand,
@@ -2318,6 +2524,23 @@ var commands = [
   artifactCommand
 ];
 var commandGroups = [
+  {
+    name: "app",
+    description: "Deploy the current Trace app from explicit AI-supplied facts",
+    workflow: [
+      "Inspect the project and verify its production build before invoking the CLI.",
+      'Choose static hosting or a running service, then run "$TRACE_CLI" app deploy with every required fact.',
+      'Run "$TRACE_CLI" app status --json to monitor the backend-owned workflow after the session ends.'
+    ],
+    examples: [
+      '"$TRACE_CLI" app deploy --target static --output-directory dist --build-command "pnpm build" --json',
+      '"$TRACE_CLI" app status --json'
+    ],
+    notes: [
+      "The CLI never analyzes code or chooses infrastructure.",
+      "The latest saved checkpoint is the immutable deployment source."
+    ]
+  },
   {
     name: "integration",
     description: "Discover, connect, and configure data providers for the current Trace app",

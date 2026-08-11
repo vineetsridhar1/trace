@@ -1,6 +1,7 @@
 import { RotateCw, Settings } from "lucide-react";
 import { Button } from "../../ui/button";
 import { ApplicationProcessCard } from "./ApplicationProcessCard";
+import { AppDeploymentCard } from "./AppDeploymentCard";
 import { SetupScriptCard } from "./SetupScriptCard";
 import { useSessionApplicationsPanel } from "./useSessionApplicationsPanel";
 import { AppIntegrationBindingsCard } from "./AppIntegrationBindingsCard";
@@ -49,7 +50,10 @@ export function SessionApplicationsPanel({
           </p>
         ) : null}
         {state.groupKind === "app" ? (
-          <AppIntegrationBindingsCard sessionGroupId={sessionGroupId} />
+          <>
+            <AppDeploymentCard deploymentId={state.deployments[0]?.id} />
+            <AppIntegrationBindingsCard sessionGroupId={sessionGroupId} />
+          </>
         ) : null}
         {config.setupScripts.length > 0 ? (
           <section className="space-y-1.5">
@@ -82,7 +86,6 @@ export function SessionApplicationsPanel({
                       key={processConfig.id}
                       config={processConfig}
                       endpoints={state.endpointsByProcess.get(key) ?? []}
-                      groupKind={state.groupKind}
                       logEntries={process ? (state.processLogsById[process.id] ?? []) : []}
                       isPending={state.isPending}
                       process={process}
@@ -91,7 +94,6 @@ export function SessionApplicationsPanel({
                       onCopyEndpoint={(endpoint) => void state.copyEndpoint(endpoint)}
                       onOpenEndpoint={(endpoint) => void state.openEndpoint(endpoint)}
                       onOpenTraffic={onOpenTraffic}
-                      onPublish={state.publish}
                       onRefreshLogs={() => process && void state.refreshProcessLogs(process.id)}
                       onToggleEndpoint={state.toggleEndpoint}
                       onToggleProcess={(active) =>

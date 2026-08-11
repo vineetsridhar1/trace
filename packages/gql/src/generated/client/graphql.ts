@@ -75,6 +75,39 @@ export type ApiTokenStatus = {
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type AppDeployment = {
+  __typename?: "AppDeployment";
+  appSlug: Scalars["String"]["output"];
+  commitSha: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  errorMessage?: Maybe<Scalars["String"]["output"]>;
+  externalJobId?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  imageDigest?: Maybe<Scalars["String"]["output"]>;
+  queuedAt: Scalars["DateTime"]["output"];
+  repoId: Scalars["ID"]["output"];
+  serviceName?: Maybe<Scalars["String"]["output"]>;
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceCheckpointId: Scalars["ID"]["output"];
+  spec: Scalars["JSON"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  staticPrefix?: Maybe<Scalars["String"]["output"]>;
+  status: AppDeploymentStatus;
+  target: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+  url?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type AppDeploymentStatus =
+  | "building"
+  | "deploying"
+  | "failed"
+  | "live"
+  | "queued"
+  | "stopped"
+  | "superseded";
+
 export type AppIntegrationBinding = {
   __typename?: "AppIntegrationBinding";
   allowedMethods: Array<Scalars["String"]["output"]>;
@@ -424,6 +457,18 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DeployAppSessionInput = {
+  buildCommand?: InputMaybe<Scalars["String"]["input"]>;
+  database?: InputMaybe<Scalars["Boolean"]["input"]>;
+  healthPath?: InputMaybe<Scalars["String"]["input"]>;
+  migrationCommand?: InputMaybe<Scalars["String"]["input"]>;
+  outputDirectory?: InputMaybe<Scalars["String"]["input"]>;
+  port?: InputMaybe<Scalars["Int"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+  startCommand?: InputMaybe<Scalars["String"]["input"]>;
+  target: Scalars["String"]["input"];
+};
+
 export type DesignElementStyleEditResult = {
   __typename?: "DesignElementStyleEditResult";
   elementId: Scalars["String"]["output"];
@@ -715,6 +760,8 @@ export type EventType =
   | "agent_environment_deleted"
   | "agent_environment_updated"
   | "animation_preview_updated"
+  | "app_deployment_queued"
+  | "app_deployment_updated"
   | "app_integration_binding_updated"
   | "app_integration_request_executed"
   | "app_integration_request_started"
@@ -1047,6 +1094,7 @@ export type Mutation = {
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
+  deployAppSession: AppDeployment;
   destroyTerminal: Scalars["Boolean"]["output"];
   disableSessionEndpointForwarding: SessionEndpoint;
   dismissInboxItem: InboxItem;
@@ -1067,7 +1115,6 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
-  publishAppSession: SessionEndpoint;
   queueSessionMessage: QueuedMessage;
   refreshDesignSystemSource: DesignSystem;
   registerPushToken: Scalars["Boolean"]["output"];
@@ -1321,6 +1368,10 @@ export type MutationDenyBridgeAccessRequestArgs = {
   requestId: Scalars["ID"]["input"];
 };
 
+export type MutationDeployAppSessionArgs = {
+  input: DeployAppSessionInput;
+};
+
 export type MutationDestroyTerminalArgs = {
   terminalId: Scalars["ID"]["input"];
 };
@@ -1409,11 +1460,6 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
-};
-
-export type MutationPublishAppSessionArgs = {
-  accessMode?: InputMaybe<SessionEndpointAccessMode>;
-  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationQueueSessionMessageArgs = {
@@ -1861,6 +1907,7 @@ export type Query = {
   agentEnvironments: Array<AgentEnvironment>;
   /** Animation-kind session groups for the org (the sidebar Animations section). */
   animationSessionGroups: Array<SessionGroup>;
+  appDeployments: Array<AppDeployment>;
   appIntegrationBindings: Array<AppIntegrationBinding>;
   /**
    * App-kind session groups for the org. Apps have no channel, so this is their
@@ -1953,6 +2000,10 @@ export type QueryAgentEnvironmentsArgs = {
 export type QueryAnimationSessionGroupsArgs = {
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryAppDeploymentsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryAppIntegrationBindingsArgs = {
@@ -4102,6 +4153,29 @@ export type SessionApplicationsStateQuery = {
     disabledAt?: string | null;
     revokedAt?: string | null;
   }>;
+  appDeployments: Array<{
+    __typename?: "AppDeployment";
+    id: string;
+    sessionGroupId: string;
+    repoId: string;
+    sourceCheckpointId: string;
+    commitSha: string;
+    status: AppDeploymentStatus;
+    target: string;
+    spec: JsonValue;
+    appSlug: string;
+    externalJobId?: string | null;
+    imageDigest?: string | null;
+    staticPrefix?: string | null;
+    serviceName?: string | null;
+    url?: string | null;
+    errorMessage?: string | null;
+    queuedAt: string;
+    startedAt?: string | null;
+    completedAt?: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 };
 
 export type SessionApplicationProcessLogsQueryVariables = Exact<{
@@ -4171,16 +4245,6 @@ export type DisableSessionEndpointForwardingMutationVariables = Exact<{
 export type DisableSessionEndpointForwardingMutation = {
   __typename?: "Mutation";
   disableSessionEndpointForwarding: { __typename?: "SessionEndpoint"; id: string };
-};
-
-export type PublishAppSessionMutationVariables = Exact<{
-  sessionGroupId: Scalars["ID"]["input"];
-  accessMode?: InputMaybe<SessionEndpointAccessMode>;
-}>;
-
-export type PublishAppSessionMutation = {
-  __typename?: "Mutation";
-  publishAppSession: { __typename?: "SessionEndpoint"; id: string };
 };
 
 export type CreateSessionEndpointPreviewMutationVariables = Exact<{
@@ -8825,6 +8889,42 @@ export const SessionApplicationsStateDocument = {
               ],
             },
           },
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "appDeployments" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "sessionGroupId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "sessionGroupId" } },
+                { kind: "Field", name: { kind: "Name", value: "repoId" } },
+                { kind: "Field", name: { kind: "Name", value: "sourceCheckpointId" } },
+                { kind: "Field", name: { kind: "Name", value: "commitSha" } },
+                { kind: "Field", name: { kind: "Name", value: "status" } },
+                { kind: "Field", name: { kind: "Name", value: "target" } },
+                { kind: "Field", name: { kind: "Name", value: "spec" } },
+                { kind: "Field", name: { kind: "Name", value: "appSlug" } },
+                { kind: "Field", name: { kind: "Name", value: "externalJobId" } },
+                { kind: "Field", name: { kind: "Name", value: "imageDigest" } },
+                { kind: "Field", name: { kind: "Name", value: "staticPrefix" } },
+                { kind: "Field", name: { kind: "Name", value: "serviceName" } },
+                { kind: "Field", name: { kind: "Name", value: "url" } },
+                { kind: "Field", name: { kind: "Name", value: "errorMessage" } },
+                { kind: "Field", name: { kind: "Name", value: "queuedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "startedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "completedAt" } },
+                { kind: "Field", name: { kind: "Name", value: "createdAt" } },
+                { kind: "Field", name: { kind: "Name", value: "updatedAt" } },
+              ],
+            },
+          },
         ],
       },
     },
@@ -9173,57 +9273,6 @@ export const DisableSessionEndpointForwardingDocument = {
   DisableSessionEndpointForwardingMutation,
   DisableSessionEndpointForwardingMutationVariables
 >;
-export const PublishAppSessionDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "PublishAppSession" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "accessMode" } },
-          type: { kind: "NamedType", name: { kind: "Name", value: "SessionEndpointAccessMode" } },
-          defaultValue: { kind: "EnumValue", value: "private" },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "publishAppSession" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "sessionGroupId" },
-                value: { kind: "Variable", name: { kind: "Name", value: "sessionGroupId" } },
-              },
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "accessMode" },
-                value: { kind: "Variable", name: { kind: "Name", value: "accessMode" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<PublishAppSessionMutation, PublishAppSessionMutationVariables>;
 export const CreateSessionEndpointPreviewDocument = {
   kind: "Document",
   definitions: [

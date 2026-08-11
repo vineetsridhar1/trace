@@ -11,6 +11,7 @@ describe("Trace CLI", () => {
   beforeEach(async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "");
     vi.stubEnv("TRACE_SESSION_ID", "");
+    vi.stubEnv("TRACE_SESSION_GROUP_ID", "");
     vi.stubEnv("TRACE_ORGANIZATION_ID", "");
     stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -122,6 +123,71 @@ describe("Trace CLI", () => {
       expect(group.workflow?.length, `${group.name} workflow`).toBeGreaterThan(0);
       expect(group.examples?.length, `${group.name} examples`).toBeGreaterThan(0);
     }
+  });
+
+  it("submits explicit app deployment facts without analyzing the project", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-app");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as {
+        query: string;
+        variables: { input: Record<string, unknown> };
+      };
+      expect(request.query).toContain("TraceCliDeployAppSession");
+      expect(request.variables.input).toMatchObject({
+        sessionGroupId: "group-app",
+        target: "service",
+        buildCommand: "pnpm build",
+        startCommand: "pnpm start",
+        port: 3000,
+        healthPath: "/health",
+        database: true,
+        migrationCommand: "pnpm db:migrate",
+      });
+      return new Response(
+        JSON.stringify({
+          data: {
+            deployAppSession: {
+              id: "deployment-1",
+              status: "queued",
+              target: "service",
+              commitSha: "a".repeat(40),
+              url: null,
+              errorMessage: null,
+              queuedAt: "2026-08-11T00:00:00.000Z",
+              updatedAt: "2026-08-11T00:00:00.000Z",
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      run([
+        "app",
+        "deploy",
+        "--target",
+        "service",
+        "--build-command",
+        "pnpm build",
+        "--start-command",
+        "pnpm start",
+        "--port",
+        "3000",
+        "--health-path",
+        "/health",
+        "--database",
+        "--migration-command",
+        "pnpm db:migrate",
+        "--json",
+      ]),
+    ).resolves.toBe(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(stdout.mock.calls.flat().join("")).toContain('"status":"queued"');
   });
 
   it("starts a new group in the current session destination without exposing the bearer", async () => {

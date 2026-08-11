@@ -5,8 +5,9 @@ import type {
   SupportedAppIntegration,
 } from "@trace/gql";
 import type { TraceClient } from "../../client.js";
-import { CliError, ExitCode } from "../../errors.js";
 import type { CommandContext } from "../../runtime.js";
+export { requireCurrentAppGroup } from "../app/shared.js";
+import { requireCurrentAppGroup } from "../app/shared.js";
 
 export type IntegrationCatalogView = Pick<
   SupportedAppIntegration,
@@ -38,18 +39,6 @@ export type IntegrationBindingView = Pick<
   | "allowedMethods"
   | "allowedPathPrefixes"
 >;
-
-export function requireCurrentAppGroup(ctx: CommandContext): string {
-  const sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
-  if (!sessionGroupId) {
-    throw new CliError(
-      "This command requires an active Trace app session",
-      ExitCode.validation,
-      "validation",
-    );
-  }
-  return sessionGroupId;
-}
 
 export async function loadIntegrationCatalog(
   client: TraceClient,

@@ -4,6 +4,7 @@ export const TRACE_CLI_CAPABILITIES = [
   "integration:read",
   "integration:connect",
   "integration:configure",
+  "app:deploy",
   "session:list",
   "session:create",
   "session:convert",
@@ -40,8 +41,43 @@ const SESSION_FIELDS = `
 `;
 const EVENT_FIELDS = `id eventType scopeType scopeId timestamp payload`;
 const TERMINAL_FIELDS = `id sessionId status cols rows connected`;
+const APP_DEPLOYMENT_FIELDS = `
+  id sessionGroupId repoId sourceCheckpointId commitSha status target spec appSlug
+  externalJobId imageDigest staticPrefix serviceName url errorMessage
+  queuedAt startedAt completedAt createdAt updatedAt
+`;
 
 export const traceCliOperations = {
+  appDeployments: operation({
+    name: "TraceCliAppDeployments",
+    type: "query",
+    rootField: "appDeployments",
+    capability: "app:deploy",
+    argumentPaths: ["sessionGroupId"],
+    document: `query TraceCliAppDeployments($sessionGroupId: ID!) {
+      appDeployments(sessionGroupId: $sessionGroupId) { ${APP_DEPLOYMENT_FIELDS} }
+    }`,
+  }),
+  deployAppSession: operation({
+    name: "TraceCliDeployAppSession",
+    type: "mutation",
+    rootField: "deployAppSession",
+    capability: "app:deploy",
+    argumentPaths: [
+      "input.sessionGroupId",
+      "input.target",
+      "input.buildCommand",
+      "input.outputDirectory",
+      "input.startCommand",
+      "input.port",
+      "input.healthPath",
+      "input.database",
+      "input.migrationCommand",
+    ],
+    document: `mutation TraceCliDeployAppSession($input: DeployAppSessionInput!) {
+      deployAppSession(input: $input) { ${APP_DEPLOYMENT_FIELDS} }
+    }`,
+  }),
   integrationCatalog: operation({
     name: "TraceCliIntegrationCatalog",
     type: "query",
@@ -120,12 +156,54 @@ export const traceCliOperations = {
       deleteAppIntegrationBinding(id: $id, sessionGroupId: $sessionGroupId)
     }`,
   }),
-  sessionTerminals: operation({ name: "TraceCliSessionTerminals", type: "query", rootField: "sessionTerminals", capability: "terminal:control", argumentPaths: ["sessionId"], document: `query TraceCliSessionTerminals($sessionId: ID!) { sessionTerminals(sessionId: $sessionId) { ${TERMINAL_FIELDS} } }` }),
-  terminalCapture: operation({ name: "TraceCliTerminalCapture", type: "query", rootField: "terminalCapture", capability: "terminal:control", argumentPaths: ["terminalId", "maxBytes", "plainText"], document: `query TraceCliTerminalCapture($terminalId: ID!, $maxBytes: Int, $plainText: Boolean) { terminalCapture(terminalId: $terminalId, maxBytes: $maxBytes, plainText: $plainText) { terminalId output byteCount truncated capturedAt closed connected } }` }),
-  createTerminal: operation({ name: "TraceCliCreateTerminal", type: "mutation", rootField: "createTerminal", capability: "terminal:control", argumentPaths: ["sessionId", "cols", "rows"], document: `mutation TraceCliCreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) { ${TERMINAL_FIELDS} } }` }),
-  sendTerminalInput: operation({ name: "TraceCliSendTerminalInput", type: "mutation", rootField: "sendTerminalInput", capability: "terminal:control", argumentPaths: ["terminalId", "data"], document: `mutation TraceCliSendTerminalInput($terminalId: ID!, $data: String!) { sendTerminalInput(terminalId: $terminalId, data: $data) }` }),
-  resizeTerminal: operation({ name: "TraceCliResizeTerminal", type: "mutation", rootField: "resizeTerminal", capability: "terminal:control", argumentPaths: ["terminalId", "cols", "rows"], document: `mutation TraceCliResizeTerminal($terminalId: ID!, $cols: Int!, $rows: Int!) { resizeTerminal(terminalId: $terminalId, cols: $cols, rows: $rows) }` }),
-  destroyTerminal: operation({ name: "TraceCliDestroyTerminal", type: "mutation", rootField: "destroyTerminal", capability: "terminal:control", argumentPaths: ["terminalId"], document: `mutation TraceCliDestroyTerminal($terminalId: ID!) { destroyTerminal(terminalId: $terminalId) }` }),
+  sessionTerminals: operation({
+    name: "TraceCliSessionTerminals",
+    type: "query",
+    rootField: "sessionTerminals",
+    capability: "terminal:control",
+    argumentPaths: ["sessionId"],
+    document: `query TraceCliSessionTerminals($sessionId: ID!) { sessionTerminals(sessionId: $sessionId) { ${TERMINAL_FIELDS} } }`,
+  }),
+  terminalCapture: operation({
+    name: "TraceCliTerminalCapture",
+    type: "query",
+    rootField: "terminalCapture",
+    capability: "terminal:control",
+    argumentPaths: ["terminalId", "maxBytes", "plainText"],
+    document: `query TraceCliTerminalCapture($terminalId: ID!, $maxBytes: Int, $plainText: Boolean) { terminalCapture(terminalId: $terminalId, maxBytes: $maxBytes, plainText: $plainText) { terminalId output byteCount truncated capturedAt closed connected } }`,
+  }),
+  createTerminal: operation({
+    name: "TraceCliCreateTerminal",
+    type: "mutation",
+    rootField: "createTerminal",
+    capability: "terminal:control",
+    argumentPaths: ["sessionId", "cols", "rows"],
+    document: `mutation TraceCliCreateTerminal($sessionId: ID!, $cols: Int!, $rows: Int!) { createTerminal(sessionId: $sessionId, cols: $cols, rows: $rows) { ${TERMINAL_FIELDS} } }`,
+  }),
+  sendTerminalInput: operation({
+    name: "TraceCliSendTerminalInput",
+    type: "mutation",
+    rootField: "sendTerminalInput",
+    capability: "terminal:control",
+    argumentPaths: ["terminalId", "data"],
+    document: `mutation TraceCliSendTerminalInput($terminalId: ID!, $data: String!) { sendTerminalInput(terminalId: $terminalId, data: $data) }`,
+  }),
+  resizeTerminal: operation({
+    name: "TraceCliResizeTerminal",
+    type: "mutation",
+    rootField: "resizeTerminal",
+    capability: "terminal:control",
+    argumentPaths: ["terminalId", "cols", "rows"],
+    document: `mutation TraceCliResizeTerminal($terminalId: ID!, $cols: Int!, $rows: Int!) { resizeTerminal(terminalId: $terminalId, cols: $cols, rows: $rows) }`,
+  }),
+  destroyTerminal: operation({
+    name: "TraceCliDestroyTerminal",
+    type: "mutation",
+    rootField: "destroyTerminal",
+    capability: "terminal:control",
+    argumentPaths: ["terminalId"],
+    document: `mutation TraceCliDestroyTerminal($terminalId: ID!) { destroyTerminal(terminalId: $terminalId) }`,
+  }),
   channels: operation({
     name: "TraceCliChannels",
     type: "query",

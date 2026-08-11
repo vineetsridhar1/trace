@@ -402,6 +402,18 @@ enum EventType {
   app_integration_binding_updated
   app_integration_request_started
   app_integration_request_executed
+  app_deployment_queued
+  app_deployment_updated
+}
+
+enum AppDeploymentStatus {
+  queued
+  building
+  deploying
+  live
+  failed
+  superseded
+  stopped
 }
 
 # --- Core Types ---
@@ -692,7 +704,6 @@ type DesignSystemCommitArtifactConnection {
   hasNextPage: Boolean!
   endCursor: String
 }
-
 """
 An existing git worktree of a repo on a local runtime, offered for import.
 """
@@ -1100,6 +1111,41 @@ type AppIntegrationBinding {
   updatedAt: DateTime!
 }
 
+type AppDeployment {
+  id: ID!
+  sessionGroupId: ID!
+  repoId: ID!
+  sourceCheckpointId: ID!
+  commitSha: String!
+  status: AppDeploymentStatus!
+  target: String!
+  spec: JSON!
+  appSlug: String!
+  externalJobId: String
+  imageDigest: String
+  staticPrefix: String
+  serviceName: String
+  url: String
+  errorMessage: String
+  queuedAt: DateTime!
+  startedAt: DateTime
+  completedAt: DateTime
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+input DeployAppSessionInput {
+  sessionGroupId: ID!
+  target: String!
+  buildCommand: String
+  outputDirectory: String
+  startCommand: String
+  port: Int
+  healthPath: String
+  database: Boolean
+  migrationCommand: String
+}
+
 type NangoConnectSession {
   connectLink: String!
   expiresAt: DateTime!
@@ -1123,7 +1169,6 @@ type SupportedAppIntegration {
   guide: String!
   capabilities: [SupportedIntegrationCapability!]!
 }
-
 type EndpointTrafficEntry {
   id: ID!
   endpointId: ID!
@@ -1922,6 +1967,7 @@ type Query {
     beforeSequence: Int
   ): [SessionApplicationLogEntry!]!
   sessionEndpoints(sessionGroupId: ID!): [SessionEndpoint!]!
+  appDeployments(sessionGroupId: ID!): [AppDeployment!]!
   endpointTraffic(endpointId: ID!, limit: Int, before: DateTime): [EndpointTrafficEntry!]!
   nangoIntegrationConfigured: Boolean!
   supportedAppIntegrations: [SupportedAppIntegration!]!
@@ -2225,10 +2271,7 @@ type Mutation {
   ): SessionEndpoint!
   clearEndpointTraffic(endpointId: ID!): Boolean!
   createSessionEndpointPreview(endpointId: ID!): SessionEndpointPreview!
-  publishAppSession(
-    sessionGroupId: ID!
-    accessMode: SessionEndpointAccessMode = private
-  ): SessionEndpoint!
+  deployAppSession(input: DeployAppSessionInput!): AppDeployment!
   createNangoConnectSession(input: CreateNangoConnectSessionInput!): NangoConnectSession!
   deleteIntegrationConnection(id: ID!): Boolean!
   upsertAppIntegrationBinding(input: UpsertAppIntegrationBindingInput!): AppIntegrationBinding!

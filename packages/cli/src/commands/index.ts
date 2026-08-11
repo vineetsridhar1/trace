@@ -1,5 +1,6 @@
 import type { CommandDefinition, CommandGroupDefinition } from "../runtime.js";
 import { artifactCommand } from "./artifact.js";
+import { appCommands } from "./app/index.js";
 import { channelListCommand } from "./channel/list.js";
 import { contextCommand } from "./context.js";
 import { integrationCommands } from "./integration/index.js";
@@ -9,6 +10,7 @@ import { terminalCommands } from "./terminal/index.js";
 
 export const commands: readonly CommandDefinition[] = [
   contextCommand,
+  ...appCommands,
   ...integrationCommands,
   channelListCommand,
   repoListCommand,
@@ -18,6 +20,23 @@ export const commands: readonly CommandDefinition[] = [
 ];
 
 export const commandGroups: readonly CommandGroupDefinition[] = [
+  {
+    name: "app",
+    description: "Deploy the current Trace app from explicit AI-supplied facts",
+    workflow: [
+      "Inspect the project and verify its production build before invoking the CLI.",
+      'Choose static hosting or a running service, then run "$TRACE_CLI" app deploy with every required fact.',
+      'Run "$TRACE_CLI" app status --json to monitor the backend-owned workflow after the session ends.',
+    ],
+    examples: [
+      '"$TRACE_CLI" app deploy --target static --output-directory dist --build-command "pnpm build" --json',
+      '"$TRACE_CLI" app status --json',
+    ],
+    notes: [
+      "The CLI never analyzes code or chooses infrastructure.",
+      "The latest saved checkpoint is the immutable deployment source.",
+    ],
+  },
   {
     name: "integration",
     description: "Discover, connect, and configure data providers for the current Trace app",
@@ -63,7 +82,7 @@ export const commandGroups: readonly CommandGroupDefinition[] = [
       'Run "$TRACE_CLI" terminal list --json to discover terminals in the current session.',
       'Run "$TRACE_CLI" terminal create --json only when a shared terminal is needed.',
       'Use "$TRACE_CLI" terminal send <terminal-id> <text> --enter, then terminal capture, to run and inspect a command.',
-      'Use terminal key only for its documented allowlisted keys; use terminal destroy when the terminal is no longer needed.',
+      "Use terminal key only for its documented allowlisted keys; use terminal destroy when the terminal is no longer needed.",
     ],
     examples: [
       '"$TRACE_CLI" terminal create --cols 120 --rows 30 --json',

@@ -26,6 +26,7 @@ import { agentArtifactRouter } from "./routes/agent-artifact.js";
 import { artifactContentRouter } from "./routes/artifact-content.js";
 import { nangoRouter } from "./routes/nango.js";
 import { appIntegrationsRouter } from "./routes/app-integrations.js";
+import { appDeploymentCallbackRouter } from "./routes/app-deployment-callback.js";
 import { slackEventBridge } from "./lib/slack/event-bridge.js";
 import { isSlackConfigured } from "./lib/slack/config.js";
 import { buildContext, buildWsContext, verifyBridgeAuthToken } from "./lib/auth.js";
@@ -63,6 +64,7 @@ import {
 import { ServerLifecycle } from "./lib/server-lifecycle.js";
 import { realtimeBackplane } from "./lib/realtime-backplane.js";
 import { runtimeDirectory } from "./lib/runtime-directory.js";
+import { publishedAppGateway } from "./services/published-app-gateway.js";
 
 // A single proxied response is base64-framed over the bridge WS; bound a single
 // message so an untrusted runtime can't force an unbounded allocation.
@@ -159,6 +161,19 @@ async function main() {
   // cross-origin API allowlist must not apply — otherwise the app's own /api
   // calls (whose Origin is the preview host, not an allowlisted Trace origin)
   // are rejected by CORS before the proxy ever sees them.
+  app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const appSlug = publishedAppGateway.extractSlug(req.headers.host);
+    if (!appSlug) {
+      next();
+      return;
+    }
+    void publishedAppGateway.handle(req, res, appSlug).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!res.headersSent) res.status(500);
+      res.end(message);
+    });
+  });
+
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     const endpointKey = endpointProxyService.extractKey(req.headers.host);
     if (!endpointKey) {
@@ -263,6 +278,7 @@ async function main() {
   });
   app.use(authRouter);
   app.use(uploadRouter);
+  app.use(appDeploymentCallbackRouter);
 
   // GraphQL subscriptions
   const wsServer = new WebSocketServer({ noServer: true });
@@ -567,6 +583,13 @@ async function main() {
     if (!lifecycle.isReady()) {
       socket.write("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
       socket.destroy();
+      return;
+    }
+    const publishedAppSlug = publishedAppGateway.extractSlug(req.headers.host);
+    if (publishedAppSlug) {
+      void publishedAppGateway
+        .handleWebSocketUpgrade(req, socket as import("net").Socket, head, publishedAppSlug)
+        .catch(() => socket.destroy());
       return;
     }
     if (endpointProxyService.isEndpointHost(req.headers.host)) {

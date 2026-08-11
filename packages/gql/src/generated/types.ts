@@ -73,6 +73,39 @@ export type ApiTokenStatus = {
   updatedAt?: Maybe<Scalars["DateTime"]["output"]>;
 };
 
+export type AppDeployment = {
+  __typename?: "AppDeployment";
+  appSlug: Scalars["String"]["output"];
+  commitSha: Scalars["String"]["output"];
+  completedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  createdAt: Scalars["DateTime"]["output"];
+  errorMessage?: Maybe<Scalars["String"]["output"]>;
+  externalJobId?: Maybe<Scalars["String"]["output"]>;
+  id: Scalars["ID"]["output"];
+  imageDigest?: Maybe<Scalars["String"]["output"]>;
+  queuedAt: Scalars["DateTime"]["output"];
+  repoId: Scalars["ID"]["output"];
+  serviceName?: Maybe<Scalars["String"]["output"]>;
+  sessionGroupId: Scalars["ID"]["output"];
+  sourceCheckpointId: Scalars["ID"]["output"];
+  spec: Scalars["JSON"]["output"];
+  startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  staticPrefix?: Maybe<Scalars["String"]["output"]>;
+  status: AppDeploymentStatus;
+  target: Scalars["String"]["output"];
+  updatedAt: Scalars["DateTime"]["output"];
+  url?: Maybe<Scalars["String"]["output"]>;
+};
+
+export type AppDeploymentStatus =
+  | "building"
+  | "deploying"
+  | "failed"
+  | "live"
+  | "queued"
+  | "stopped"
+  | "superseded";
+
 export type AppIntegrationBinding = {
   __typename?: "AppIntegrationBinding";
   allowedMethods: Array<Scalars["String"]["output"]>;
@@ -422,6 +455,18 @@ export type DeliveryResult =
   | "runtime_disconnected"
   | "session_unbound";
 
+export type DeployAppSessionInput = {
+  buildCommand?: InputMaybe<Scalars["String"]["input"]>;
+  database?: InputMaybe<Scalars["Boolean"]["input"]>;
+  healthPath?: InputMaybe<Scalars["String"]["input"]>;
+  migrationCommand?: InputMaybe<Scalars["String"]["input"]>;
+  outputDirectory?: InputMaybe<Scalars["String"]["input"]>;
+  port?: InputMaybe<Scalars["Int"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+  startCommand?: InputMaybe<Scalars["String"]["input"]>;
+  target: Scalars["String"]["input"];
+};
+
 export type DesignElementStyleEditResult = {
   __typename?: "DesignElementStyleEditResult";
   elementId: Scalars["String"]["output"];
@@ -713,6 +758,8 @@ export type EventType =
   | "agent_environment_deleted"
   | "agent_environment_updated"
   | "animation_preview_updated"
+  | "app_deployment_queued"
+  | "app_deployment_updated"
   | "app_integration_binding_updated"
   | "app_integration_request_executed"
   | "app_integration_request_started"
@@ -1045,6 +1092,7 @@ export type Mutation = {
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
+  deployAppSession: AppDeployment;
   destroyTerminal: Scalars["Boolean"]["output"];
   disableSessionEndpointForwarding: SessionEndpoint;
   dismissInboxItem: InboxItem;
@@ -1065,7 +1113,6 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
-  publishAppSession: SessionEndpoint;
   queueSessionMessage: QueuedMessage;
   refreshDesignSystemSource: DesignSystem;
   registerPushToken: Scalars["Boolean"]["output"];
@@ -1319,6 +1366,10 @@ export type MutationDenyBridgeAccessRequestArgs = {
   requestId: Scalars["ID"]["input"];
 };
 
+export type MutationDeployAppSessionArgs = {
+  input: DeployAppSessionInput;
+};
+
 export type MutationDestroyTerminalArgs = {
   terminalId: Scalars["ID"]["input"];
 };
@@ -1407,11 +1458,6 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
-};
-
-export type MutationPublishAppSessionArgs = {
-  accessMode?: InputMaybe<SessionEndpointAccessMode>;
-  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationQueueSessionMessageArgs = {
@@ -1859,6 +1905,7 @@ export type Query = {
   agentEnvironments: Array<AgentEnvironment>;
   /** Animation-kind session groups for the org (the sidebar Animations section). */
   animationSessionGroups: Array<SessionGroup>;
+  appDeployments: Array<AppDeployment>;
   appIntegrationBindings: Array<AppIntegrationBinding>;
   /**
    * App-kind session groups for the org. Apps have no channel, so this is their
@@ -1951,6 +1998,10 @@ export type QueryAgentEnvironmentsArgs = {
 export type QueryAnimationSessionGroupsArgs = {
   includeArchived?: InputMaybe<Scalars["Boolean"]["input"]>;
   organizationId: Scalars["ID"]["input"];
+};
+
+export type QueryAppDeploymentsArgs = {
+  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type QueryAppIntegrationBindingsArgs = {
