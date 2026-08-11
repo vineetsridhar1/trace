@@ -8,6 +8,7 @@ interface TraceLoaderProps {
   label?: string;
   showLabel?: boolean;
   size?: number;
+  animated?: boolean;
 }
 
 const GRID_SIZE = 3;
@@ -60,6 +61,7 @@ export function TraceLoader({
   label = "Loading",
   showLabel = true,
   size = 96,
+  animated = true,
 }: TraceLoaderProps) {
   const renderedSize = Math.max(size, 16);
 
@@ -139,22 +141,24 @@ export function TraceLoader({
           );
         })}
 
-        {snakeLights.map((dot) => {
-          const cx = GRID_ORIGIN + dot.x * DOT_SPACING;
-          const cy = GRID_ORIGIN + dot.y * DOT_SPACING;
+        {animated
+          ? snakeLights.map((dot) => {
+              const cx = GRID_ORIGIN + dot.x * DOT_SPACING;
+              const cy = GRID_ORIGIN + dot.y * DOT_SPACING;
 
-          return (
-            <circle
-              key={dot.id}
-              className="trace-loader-light"
-              cx={cx}
-              cy={cy}
-              r="5"
-              fill="currentColor"
-              style={{ "--snake-index": dot.snakeIndex } as SnakeDotStyle}
-            />
-          );
-        })}
+              return (
+                <circle
+                  key={dot.id}
+                  className="trace-loader-light"
+                  cx={cx}
+                  cy={cy}
+                  r="5"
+                  fill="currentColor"
+                  style={{ "--snake-index": dot.snakeIndex } as SnakeDotStyle}
+                />
+              );
+            })
+          : null}
       </svg>
 
       {showLabel ? (
