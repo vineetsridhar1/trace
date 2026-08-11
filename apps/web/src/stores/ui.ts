@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import type { ApiTokenProvider } from "@trace/gql";
 import { useEntityStore } from "@trace/client-core";
 import type { SessionEntity } from "@trace/client-core";
 import { blockNavigation } from "../lib/navigation-blocker";
@@ -71,8 +70,6 @@ export interface UIState {
   setChannelSubPage: (subPage: ChannelSubPage) => void;
   settingsInitialTab: string | null;
   setSettingsInitialTab: (tab: string | null) => void;
-  settingsInitialApiTokenProvider: ApiTokenProvider | null;
-  setSettingsInitialApiTokenProvider: (provider: ApiTokenProvider | null) => void;
   unreadChatIds: Record<string, boolean>;
   markChatUnread: (chatId: string) => void;
   markChatRead: (chatId: string) => void;
@@ -124,7 +121,6 @@ const initialNavigationState = {
   activeArtifactIdsByGroup: {} as Record<string, string | null>,
   channelSubPage: null as ChannelSubPage,
   settingsInitialTab: null as string | null,
-  settingsInitialApiTokenProvider: null as ApiTokenProvider | null,
   showTerminalPanel: false,
   unreadChatIds: {} as Record<string, boolean>,
   channelDoneBadges: {} as Record<string, boolean>,
@@ -136,8 +132,6 @@ export const useUIStore = create<UIState>((set: SetState<UIState>, get: GetState
   ...initialNavigationState,
   refreshTick: 0,
   setSettingsInitialTab: (tab: string | null) => set({ settingsInitialTab: tab }),
-  setSettingsInitialApiTokenProvider: (provider: ApiTokenProvider | null) =>
-    set({ settingsInitialApiTokenProvider: provider }),
   setShowTerminalPanel: (show: boolean) => set({ showTerminalPanel: show }),
   setChannelSubPage: (subPage: ChannelSubPage) => {
     set({ channelSubPage: subPage });

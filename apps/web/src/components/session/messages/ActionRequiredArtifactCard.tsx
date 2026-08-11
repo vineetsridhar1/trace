@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { KeyRound, RefreshCw, TerminalSquare, Wrench } from "lucide-react";
+import { TerminalSquare, Wrench } from "lucide-react";
 import { getCodingToolCli, type ActionRequiredArtifact } from "@trace/shared";
 import {
   CREATE_TERMINAL_MUTATION,
-  RETRY_SESSION_CONNECTION_MUTATION,
   useEntityField,
 } from "@trace/client-core";
 import { client } from "../../../lib/urql";
 import { useTerminalStore } from "../../../stores/terminal";
 import { useUIStore } from "../../../stores/ui";
 import { Button } from "../../ui/button";
+import { CredentialRequiredArtifactActions } from "./CredentialRequiredArtifactActions";
 
 const LOGIN_COMMANDS = {
   codex: "codex login",
@@ -30,24 +30,10 @@ export function ActionRequiredArtifactCard({
   const sessionGroupId = useEntityField("sessions", sessionId ?? "", "sessionGroupId") as
     | string
     | undefined;
-  const setActivePage = useUIStore((state) => state.setActivePage);
-  const setSettingsInitialTab = useUIStore((state) => state.setSettingsInitialTab);
-  const setSettingsInitialApiTokenProvider = useUIStore(
-    (state) => state.setSettingsInitialApiTokenProvider,
-  );
   const setShowTerminalPanel = useUIStore((state) => state.setShowTerminalPanel);
   const setActiveTerminalId = useUIStore((state) => state.setActiveTerminalId);
   const addTerminal = useTerminalStore((state) => state.addTerminal);
   const [working, setWorking] = useState(false);
-  const [retrying, setRetrying] = useState(false);
-
-  const openApiTokens = () => {
-    if (artifact.kind !== "credential_required") return;
-    setSettingsInitialApiTokenProvider(artifact.provider);
-    setSettingsInitialTab("api-keys");
-    setActivePage("settings");
-  };
-
   const openLoginTerminal = async () => {
     if (artifact.kind !== "login_required" || !sessionGroupId || !sessionId) return;
     setWorking(true);
@@ -84,23 +70,8 @@ export function ActionRequiredArtifactCard({
     if (command) await navigator.clipboard?.writeText(command);
   };
 
-  const retrySession = async () => {
-    if (!sessionId) return;
-    setRetrying(true);
-    try {
-      await client.mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId }).toPromise();
-    } finally {
-      setRetrying(false);
-    }
-  };
-
   const action =
-    artifact.kind === "credential_required" ? (
-      <Button size="sm" onClick={openApiTokens}>
-        <KeyRound />
-        Add {artifact.provider === "anthropic" ? "Anthropic" : "OpenAI"} API key
-      </Button>
-    ) : artifact.kind === "login_required" ? (
+    artifact.kind === "login_required" ? (
       <Button
         size="sm"
         disabled={working || !sessionGroupId}
@@ -129,20 +100,11 @@ export function ActionRequiredArtifactCard({
           This failure repeated {repeatCount} times while the tool retried.
         </p>
       )}
-      <div className="mt-3 flex flex-wrap gap-2">
-        {action}
-        {artifact.kind === "credential_required" && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={retrying}
-            onClick={() => void retrySession()}
-          >
-            <RefreshCw />
-            {retrying ? "Retrying…" : "Retry session"}
-          </Button>
-        )}
-      </div>
+      {artifact.kind === "credential_required" ? (
+        <CredentialRequiredArtifactActions provider={artifact.provider} sessionId={sessionId} />
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-2">{action}</div>
+      )}
     </div>
   );
 }
