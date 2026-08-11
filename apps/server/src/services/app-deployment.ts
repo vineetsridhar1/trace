@@ -3,6 +3,7 @@ import { Prisma, type AppDeployment, type AppDeploymentStatus } from "@prisma/cl
 import type { DeployAppSessionInput } from "@trace/gql";
 import type { AppDeploymentSpec } from "@trace/shared";
 import { prisma } from "../lib/db.js";
+import { decryptSecret, encryptSecret } from "../lib/encryption.js";
 import { AuthorizationError, ValidationError } from "../lib/errors.js";
 import {
   appDeploymentDispatcher,
@@ -13,6 +14,8 @@ import { eventService } from "./event.js";
 
 const ACTIVE_STATUSES: AppDeploymentStatus[] = ["queued", "building", "deploying"];
 const TERMINAL_STATUSES: AppDeploymentStatus[] = ["live", "failed", "superseded", "stopped"];
+const DISPATCH_LEASE_MS = 5 * 60 * 1000;
+const MAX_DISPATCH_ATTEMPTS = 8;
 const CALLBACK_TRANSITIONS: Record<AppDeploymentStatus, AppDeploymentStatus[]> = {
   queued: ["building", "failed"],
   building: ["deploying", "failed"],
@@ -223,6 +226,10 @@ export class AppDeploymentService {
   async deploy(input: DeployAppSessionInput, organizationId: string, userId: string) {
     const sessionGroupId = input.sessionGroupId;
     const spec = normalizeDeploymentSpec(input);
+    const clientMutationId = input.clientMutationId?.trim() || undefined;
+    if (clientMutationId && clientMutationId.length > 200) {
+      throw new ValidationError("clientMutationId is too long");
+    }
     const group = await prisma.sessionGroup.findFirstOrThrow({
       where: { id: sessionGroupId, organizationId },
       select: { id: true, kind: true, ownerUserId: true, repoId: true, slug: true },
@@ -238,9 +245,15 @@ export class AppDeploymentService {
     if (!checkpoint) throw new ValidationError("Commit the app before publishing");
 
     const callbackToken = randomBytes(32).toString("base64url");
-    const createdAt = new Date();
+    const encryptedToken = encryptSecret(callbackToken);
     const transactionResult = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${sessionGroupId}))`;
+      if (clientMutationId) {
+        const idempotent = await tx.appDeployment.findFirst({
+          where: { organizationId, clientMutationId },
+        });
+        if (idempotent) return { deployment: idempotent, created: false, event: null };
+      }
       const existing = await tx.appDeployment.findFirst({
         where: { sessionGroupId, status: { in: ACTIVE_STATUSES } },
         orderBy: { createdAt: "desc" },
@@ -249,16 +262,12 @@ export class AppDeploymentService {
         existing?.sourceCheckpointId === checkpoint.id &&
         JSON.stringify(existing.spec) === JSON.stringify(spec)
       ) {
-        return { deployment: existing, created: false, superseded: [] as AppDeployment[] };
+        return { deployment: existing, created: false, event: null };
       }
-      const superseded = await tx.appDeployment.findMany({
-        where: { sessionGroupId, status: { in: ACTIVE_STATUSES } },
-      });
-      if (superseded.length > 0) {
-        await tx.appDeployment.updateMany({
-          where: { id: { in: superseded.map((item) => item.id) } },
-          data: { status: "superseded", completedAt: createdAt },
-        });
+      if (existing) {
+        throw new ValidationError(
+          "This app already has a deployment in progress; wait for it to finish before publishing again",
+        );
       }
       const deployment = await tx.appDeployment.create({
         data: {
@@ -272,67 +281,111 @@ export class AppDeploymentService {
           appSlug: deploymentSlug(group),
           requestedByUserId: userId,
           callbackTokenHash: tokenHash(callbackToken).toString("hex"),
+          callbackTokenEncrypted: encryptedToken.encrypted,
+          callbackTokenIv: encryptedToken.iv,
+          clientMutationId,
         },
       });
-      return {
-        deployment,
-        created: true,
-        superseded: superseded.map((item) => ({
-          ...item,
-          status: "superseded" as const,
-          completedAt: createdAt,
-          updatedAt: createdAt,
-        })),
-      };
+      const event = await eventService.create(
+        {
+          organizationId,
+          scopeType: "session",
+          scopeId: sessionGroupId,
+          eventType: "app_deployment_queued",
+          payload: { deployment: publicAppDeployment(deployment), sessionGroupId },
+          actorType: "user",
+          actorId: userId,
+          deferPublish: true,
+        },
+        tx,
+      );
+      return { deployment, created: true, event };
     });
     if (!transactionResult.created) return transactionResult.deployment;
-
-    for (const superseded of transactionResult.superseded) {
-      await emitUpdated(superseded, "app-deployment-publisher");
-    }
-    let deployment = transactionResult.deployment;
-    await eventService.create({
-      organizationId,
-      scopeType: "session",
-      scopeId: sessionGroupId,
-      eventType: "app_deployment_queued",
-      payload: { deployment: publicAppDeployment(deployment), sessionGroupId },
-      actorType: "user",
-      actorId: userId,
+    if (!transactionResult.event) throw new Error("Queued deployment event was not created");
+    eventService.publishCreated(transactionResult.event);
+    await this.dispatchPending(transactionResult.deployment.id);
+    return prisma.appDeployment.findUniqueOrThrow({
+      where: { id: transactionResult.deployment.id },
     });
+  }
 
+  async reconcilePendingDispatches(limit = 10): Promise<number> {
+    const deployments = await prisma.appDeployment.findMany({
+      where: { status: "queued", dispatchedAt: null, nextDispatchAt: { lte: new Date() } },
+      orderBy: { nextDispatchAt: "asc" },
+      take: limit,
+      select: { id: true },
+    });
+    for (const deployment of deployments) await this.dispatchPending(deployment.id);
+    return deployments.length;
+  }
+
+  private async dispatchPending(deploymentId: string): Promise<void> {
+    const claimed = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${deploymentId}))`;
+      const deployment = await tx.appDeployment.findUnique({ where: { id: deploymentId } });
+      if (
+        !deployment ||
+        deployment.status !== "queued" ||
+        deployment.dispatchedAt ||
+        deployment.nextDispatchAt > new Date()
+      ) {
+        return null;
+      }
+      await tx.appDeployment.update({
+        where: { id: deploymentId },
+        data: { nextDispatchAt: new Date(Date.now() + DISPATCH_LEASE_MS) },
+      });
+      return deployment;
+    });
+    if (!claimed) return;
+    if (!claimed.callbackTokenEncrypted || !claimed.callbackTokenIv) {
+      await this.recordDispatchFailure(claimed, new Error("Deployment callback secret is missing"));
+      return;
+    }
     try {
       const dispatched = await this.dispatcher.enqueue({
-        deploymentId: deployment.id,
-        organizationId,
-        sessionGroupId,
-        repoId: group.repoId,
-        checkpointId: checkpoint.id,
-        commitSha: checkpoint.commitSha,
-        appSlug: deploymentSlug(group),
-        spec,
-        callback: { url: callbackUrl(deployment.id), token: callbackToken },
-        requestedAt: deployment.queuedAt.toISOString(),
+        deploymentId: claimed.id,
+        organizationId: claimed.organizationId,
+        sessionGroupId: claimed.sessionGroupId,
+        repoId: claimed.repoId,
+        checkpointId: claimed.sourceCheckpointId,
+        commitSha: claimed.commitSha,
+        appSlug: claimed.appSlug,
+        spec: claimed.spec as unknown as AppDeploymentSpec,
+        callback: {
+          url: callbackUrl(claimed.id),
+          token: decryptSecret(claimed.callbackTokenEncrypted, claimed.callbackTokenIv),
+        },
+        requestedAt: claimed.queuedAt.toISOString(),
       });
-      if (dispatched.externalJobId) {
-        deployment = await prisma.appDeployment.update({
-          where: { id: deployment.id },
-          data: { externalJobId: dispatched.externalJobId },
-        });
-      }
-      return deployment;
-    } catch (error) {
-      deployment = await prisma.appDeployment.update({
-        where: { id: deployment.id },
+      await prisma.appDeployment.update({
+        where: { id: claimed.id },
         data: {
-          status: "failed",
-          errorMessage: error instanceof Error ? error.message : String(error),
-          completedAt: new Date(),
+          dispatchedAt: new Date(),
+          externalJobId: dispatched.externalJobId,
+          errorMessage: null,
         },
       });
-      await emitUpdated(deployment, "app-deployment-dispatcher");
-      throw error;
+    } catch (error) {
+      await this.recordDispatchFailure(claimed, error);
     }
+  }
+
+  private async recordDispatchFailure(deployment: AppDeployment, error: unknown): Promise<void> {
+    const attempts = deployment.dispatchAttempts + 1;
+    const terminal = attempts >= MAX_DISPATCH_ATTEMPTS;
+    const updated = await prisma.appDeployment.update({
+      where: { id: deployment.id },
+      data: {
+        dispatchAttempts: attempts,
+        errorMessage: error instanceof Error ? error.message.slice(0, 4000) : String(error),
+        nextDispatchAt: new Date(Date.now() + Math.min(2 ** attempts * 15_000, 15 * 60_000)),
+        ...(terminal ? { status: "failed", completedAt: new Date() } : {}),
+      },
+    });
+    if (terminal) await emitUpdated(updated, "app-deployment-dispatcher");
   }
 
   async updateFromCallback(deploymentId: string, token: string, callback: AppDeploymentCallback) {
@@ -344,8 +397,21 @@ export class AppDeploymentService {
         throw new AuthorizationError("Invalid deployment callback credentials");
       }
       validateCallbackFields(existing, callback);
-      if (callback.status === existing.status || TERMINAL_STATUSES.includes(existing.status)) {
-        return { deployment: existing, supersededLive: [] as AppDeployment[], updated: false };
+      if (callback.status === existing.status) {
+        return {
+          deployment: existing,
+          supersededLive: [] as AppDeployment[],
+          updated: false,
+          accepted: TERMINAL_STATUSES.includes(existing.status),
+        };
+      }
+      if (TERMINAL_STATUSES.includes(existing.status)) {
+        return {
+          deployment: existing,
+          supersededLive: [] as AppDeployment[],
+          updated: false,
+          accepted: false,
+        };
       }
       if (!CALLBACK_TRANSITIONS[existing.status].includes(callback.status)) {
         throw new ValidationError(
@@ -384,9 +450,9 @@ export class AppDeploymentService {
             : {}),
         },
       });
-      return { deployment, supersededLive, updated: true };
+      return { deployment, supersededLive, updated: true, accepted: true };
     });
-    if (!result.updated) return result.deployment;
+    if (!result.updated) return { deployment: result.deployment, accepted: result.accepted };
     for (const previous of result.supersededLive) {
       await emitUpdated(
         { ...previous, status: "superseded", completedAt: now, updatedAt: now },
@@ -394,7 +460,7 @@ export class AppDeploymentService {
       );
     }
     await emitUpdated(result.deployment, "app-deployment-callback");
-    return result.deployment;
+    return { deployment: result.deployment, accepted: true };
   }
 }
 

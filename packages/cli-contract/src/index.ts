@@ -65,6 +65,7 @@ export const traceCliOperations = {
     capability: "app:deploy",
     argumentPaths: [
       "input.sessionGroupId",
+      "input.clientMutationId",
       "input.target",
       "input.buildCommand",
       "input.outputDirectory",

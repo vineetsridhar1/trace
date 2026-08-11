@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { traceCliOperations } from "@trace/cli-contract";
 import type { AppDeployment, DeployAppSessionInput } from "@trace/gql";
 import {
@@ -40,6 +41,13 @@ const deployCommand = defineCommand({
     "A migration command is valid only with --database.",
   ],
   options: [
+    {
+      name: "idempotencyKey",
+      flag: "--idempotency-key",
+      kind: "string",
+      valueName: "KEY",
+      description: "Stable key for safely retrying the same deployment request",
+    },
     {
       name: "target",
       flag: "--target",
@@ -104,6 +112,7 @@ const deployCommand = defineCommand({
     if (!target) usage("--target is required");
     const input: DeployAppSessionInput = {
       sessionGroupId: requireCurrentAppGroup(ctx),
+      clientMutationId: optionString(parsed, "idempotencyKey") ?? randomUUID(),
       target,
       buildCommand: optionString(parsed, "buildCommand"),
       outputDirectory: optionString(parsed, "outputDirectory"),
