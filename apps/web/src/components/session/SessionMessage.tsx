@@ -1,5 +1,10 @@
 import { memo } from "react";
-import { attachmentKeysFromPayload, asJsonObject, type JsonObject } from "@trace/shared";
+import {
+  attachmentKeysFromPayload,
+  asJsonObject,
+  isActionRequiredArtifact,
+  type JsonObject,
+} from "@trace/shared";
 import { useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
@@ -9,6 +14,7 @@ import { SubagentRow } from "./messages/SubagentRow";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
 import { ArtifactUploadedCard } from "./messages/ArtifactUploadedCard";
+import { ActionRequiredArtifactCard } from "./messages/ActionRequiredArtifactCard";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
 import { structuredResponseSummary } from "./structuredResponseSummary";
@@ -134,6 +140,7 @@ function renderAssistantContent(
 
 function renderSessionOutput(
   payload: JsonObject,
+  sessionId: string | undefined,
   ts: string,
   scopeKey: string,
   completedAgentTools: Map<string, AgentToolResult>,
@@ -168,10 +175,18 @@ function renderSessionOutput(
   }
 
   if (type === "error") {
+    const artifact = asJsonObject(payload.artifact);
+    if (sessionId && isActionRequiredArtifact(artifact)) {
+      return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
+    }
     return <CompletionRow timestamp={ts} error={str(payload.message)} />;
   }
 
   if (type === "workspace_failed") {
+    const artifact = asJsonObject(payload.artifact);
+    if (sessionId && isActionRequiredArtifact(artifact)) {
+      return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
+    }
     const error = str(payload.error);
     return <SystemBadge text={error || "Workspace preparation failed"} />;
   }
@@ -236,6 +251,7 @@ export const SessionMessage = memo(function SessionMessage({
   const actor = useScopedEventField(scopeKey, id, "actor") as
     | { type: string; id: string; name?: string | null }
     | undefined;
+  const sessionId = useScopedEventField(scopeKey, id, "scopeId") as string | undefined;
 
   if (!eventType || !timestamp) return null;
 
@@ -260,7 +276,8 @@ export const SessionMessage = memo(function SessionMessage({
     case "session_output":
       return payload
         ? renderSessionOutput(
-            payload,
+          payload,
+            sessionId,
             timestamp,
             scopeKey,
             completedAgentTools,
@@ -271,6 +288,13 @@ export const SessionMessage = memo(function SessionMessage({
             showActions,
           )
         : null;
+
+    case "session_runtime_start_failed": {
+      const artifact = asJsonObject(payload?.artifact);
+      return sessionId && isActionRequiredArtifact(artifact) ? (
+        <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />
+      ) : null;
+    }
 
     case "message_sent":
       return (

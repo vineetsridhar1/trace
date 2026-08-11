@@ -388,6 +388,7 @@ export interface UsageEvent {
 export interface ErrorEvent {
   type: "error";
   message: string;
+  artifact?: import("../action-required.js").ActionRequiredArtifact;
 }
 
 export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | UsageEvent | ErrorEvent;
