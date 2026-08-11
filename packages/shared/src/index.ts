@@ -21,6 +21,7 @@ export type { ActionRequiredArtifact } from "./action-required.js";
 export {
   actionRequiredArtifactForToolError,
   actionRequiredArtifactForToolOutput,
+  actionRequiredArtifactKey,
   isActionRequiredArtifact,
 } from "./action-required.js";
 export {

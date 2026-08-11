@@ -1,11 +1,12 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import {
   attachmentKeysFromPayload,
+  actionRequiredArtifactKey,
   asJsonObject,
   isActionRequiredArtifact,
   type JsonObject,
 } from "@trace/shared";
-import { useScopedEventField } from "@trace/client-core";
+import { useScopedEventField, useScopedEvents } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
@@ -249,6 +250,32 @@ export const SessionMessage = memo(function SessionMessage({
     | { type: string; id: string; name?: string | null }
     | undefined;
   const sessionId = useScopedEventField(scopeKey, id, "scopeId") as string | undefined;
+  const scopedEvents = useScopedEvents(scopeKey);
+  const repeatCount = useMemo(() => {
+    const current = scopedEvents[id];
+    const payload = asJsonObject(current?.payload);
+    const artifact = asJsonObject(payload?.artifact);
+    if (!current || !isActionRequiredArtifact(artifact)) return 1;
+
+    const key = actionRequiredArtifactKey(artifact);
+    const events = Object.values(scopedEvents).sort((left, right) =>
+      left.timestamp.localeCompare(right.timestamp),
+    );
+    const index = events.findIndex((event) => event.id === id);
+    if (index === -1) return 1;
+
+    let count = 0;
+    for (let cursor = index; cursor < events.length; cursor += 1) {
+      const event = events[cursor];
+      if (cursor !== index && event.eventType === "message_sent") break;
+      const eventPayload = asJsonObject(event.payload);
+      const eventArtifact = asJsonObject(eventPayload?.artifact);
+      if (isActionRequiredArtifact(eventArtifact) && actionRequiredArtifactKey(eventArtifact) === key) {
+        count += 1;
+      }
+    }
+    return count;
+  }, [id, scopedEvents]);
 
   if (!eventType || !timestamp) return null;
 
@@ -272,9 +299,20 @@ export const SessionMessage = memo(function SessionMessage({
 
     case "session_output":
       if (payload) {
-        const artifact = asJsonObject(payload.artifact);
+        const artifact =
+          asJsonObject(payload.artifact) ??
+          (() => {
+            const text = assistantText(payload);
+            return text ? actionRequiredArtifactForToolError(tool, text) : undefined;
+          })();
         if (sessionId && isActionRequiredArtifact(artifact)) {
-          return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
+          return (
+            <ActionRequiredArtifactCard
+              artifact={artifact}
+              sessionId={sessionId}
+              repeatCount={repeatCount}
+            />
+          );
         }
         return renderSessionOutput(
             payload,

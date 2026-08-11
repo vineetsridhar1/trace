@@ -1,6 +1,7 @@
 import type { Event } from "@trace/gql";
 import {
   asJsonObject,
+  actionRequiredArtifactKey,
   hasVisibleUserSessionContent,
   isActionRequiredArtifact,
   parseQuestion,
@@ -209,6 +210,7 @@ export function buildSessionNodes(
   events: Record<string, Event>,
 ): BuildSessionNodesResult {
   const result: SessionNode[] = [];
+  const visibleActionableArtifacts = new Set<string>();
   const completedAgentTools = new Map<string, AgentToolResult>();
   const toolResultByUseId = new Map<string, unknown>();
   let bucket: ReadGlobItem[] = [];
@@ -275,6 +277,10 @@ export function buildSessionNodes(
       }
     }
 
+    if (event.eventType === "message_sent") {
+      visibleActionableArtifacts.clear();
+    }
+
     // Subagent child events render nested inside their parent's SubagentRow — never as top-level nodes.
     if (event.parentId) {
       continue;
@@ -282,6 +288,13 @@ export function buildSessionNodes(
 
     if (event.eventType === "session_output") {
       const payload = asJsonObject(event.payload);
+
+      const artifact = asJsonObject(payload?.artifact);
+      if (isActionRequiredArtifact(artifact)) {
+        const key = actionRequiredArtifactKey(artifact);
+        if (visibleActionableArtifacts.has(key)) continue;
+        visibleActionableArtifacts.add(key);
+      }
 
       if (isEmptySessionOutput(payload)) {
         continue;

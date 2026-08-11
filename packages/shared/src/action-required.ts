@@ -39,6 +39,17 @@ export function isActionRequiredArtifact(value: unknown): value is ActionRequire
   );
 }
 
+export function actionRequiredArtifactKey(artifact: ActionRequiredArtifact): string {
+  switch (artifact.kind) {
+    case "credential_required":
+      return `${artifact.kind}:${artifact.provider}`;
+    case "tool_not_installed":
+      return `${artifact.kind}:${artifact.tool}`;
+    case "login_required":
+      return `${artifact.kind}:${artifact.provider}`;
+  }
+}
+
 /** Recognize stable, documented CLI recovery prompts without exposing raw stderr as UI. */
 export function actionRequiredArtifactForToolError(
   tool: string | undefined,

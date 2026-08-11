@@ -21,9 +21,11 @@ const LOGIN_COMMANDS = {
 export function ActionRequiredArtifactCard({
   artifact,
   sessionId,
+  repeatCount = 1,
 }: {
   artifact: ActionRequiredArtifact;
   sessionId?: string;
+  repeatCount?: number;
 }) {
   const sessionGroupId = useEntityField("sessions", sessionId ?? "", "sessionGroupId") as
     | string
@@ -117,6 +119,11 @@ export function ActionRequiredArtifactCard({
     <div className="my-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
       <p className="text-sm font-medium text-foreground">{artifact.title}</p>
       <p className="mt-1 text-sm text-muted-foreground">{artifact.description}</p>
+      {repeatCount > 1 && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          This failure repeated {repeatCount} times while the tool retried.
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         {action}
         {artifact.kind === "credential_required" && (
