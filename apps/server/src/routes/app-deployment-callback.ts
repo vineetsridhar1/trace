@@ -19,6 +19,8 @@ function parseCallback(body: unknown): AppDeploymentCallback {
     status: input.status as AppDeploymentCallback["status"],
     externalJobId: optionalString(input.externalJobId),
     imageDigest: optionalString(input.imageDigest),
+    staticPrefix: optionalString(input.staticPrefix),
+    serviceName: optionalString(input.serviceName),
     url: optionalString(input.url),
     errorMessage: optionalString(input.errorMessage),
   };

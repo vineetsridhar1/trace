@@ -1,4 +1,5 @@
 import type { EndpointTrafficCaptureMode, SessionEndpointAccessMode } from "@prisma/client";
+import type { DeployAppSessionInput } from "@trace/gql";
 import type { Context } from "../context.js";
 import { AuthenticationError } from "../lib/errors.js";
 import { requireOrgContext } from "../lib/require-org.js";
@@ -177,8 +178,8 @@ export const sessionApplicationMutations = {
       requireOrgContext(ctx),
       requireUser(ctx),
     ),
-  publishAppSession: (_parent: unknown, args: { sessionGroupId: string }, ctx: Context) =>
-    appDeploymentService.publish(args.sessionGroupId, requireOrgContext(ctx), requireUser(ctx)),
+  deployAppSession: (_parent: unknown, args: { input: DeployAppSessionInput }, ctx: Context) =>
+    appDeploymentService.deploy(args.input, requireOrgContext(ctx), requireUser(ctx)),
 };
 
 export const sessionApplicationTypeResolvers = {

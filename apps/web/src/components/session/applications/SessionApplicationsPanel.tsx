@@ -51,11 +51,7 @@ export function SessionApplicationsPanel({
         ) : null}
         {state.groupKind === "app" ? (
           <>
-            <AppDeploymentCard
-              deploymentId={state.deployments[0]?.id}
-              pending={state.isPending("publish")}
-              onPublish={state.publish}
-            />
+            <AppDeploymentCard deploymentId={state.deployments[0]?.id} />
             <AppIntegrationBindingsCard sessionGroupId={sessionGroupId} />
           </>
         ) : null}

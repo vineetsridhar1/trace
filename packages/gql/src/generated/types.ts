@@ -75,6 +75,7 @@ export type ApiTokenStatus = {
 
 export type AppDeployment = {
   __typename?: "AppDeployment";
+  appSlug: Scalars["String"]["output"];
   commitSha: Scalars["String"]["output"];
   completedAt?: Maybe<Scalars["DateTime"]["output"]>;
   createdAt: Scalars["DateTime"]["output"];
@@ -84,10 +85,14 @@ export type AppDeployment = {
   imageDigest?: Maybe<Scalars["String"]["output"]>;
   queuedAt: Scalars["DateTime"]["output"];
   repoId: Scalars["ID"]["output"];
+  serviceName?: Maybe<Scalars["String"]["output"]>;
   sessionGroupId: Scalars["ID"]["output"];
   sourceCheckpointId: Scalars["ID"]["output"];
+  spec: Scalars["JSON"]["output"];
   startedAt?: Maybe<Scalars["DateTime"]["output"]>;
+  staticPrefix?: Maybe<Scalars["String"]["output"]>;
   status: AppDeploymentStatus;
+  target: Scalars["String"]["output"];
   updatedAt: Scalars["DateTime"]["output"];
   url?: Maybe<Scalars["String"]["output"]>;
 };
@@ -449,6 +454,18 @@ export type DeliveryResult =
   | "no_runtime"
   | "runtime_disconnected"
   | "session_unbound";
+
+export type DeployAppSessionInput = {
+  buildCommand?: InputMaybe<Scalars["String"]["input"]>;
+  database?: InputMaybe<Scalars["Boolean"]["input"]>;
+  healthPath?: InputMaybe<Scalars["String"]["input"]>;
+  migrationCommand?: InputMaybe<Scalars["String"]["input"]>;
+  outputDirectory?: InputMaybe<Scalars["String"]["input"]>;
+  port?: InputMaybe<Scalars["Int"]["input"]>;
+  sessionGroupId: Scalars["ID"]["input"];
+  startCommand?: InputMaybe<Scalars["String"]["input"]>;
+  target: Scalars["String"]["input"];
+};
 
 export type DesignElementStyleEditResult = {
   __typename?: "DesignElementStyleEditResult";
@@ -1075,6 +1092,7 @@ export type Mutation = {
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
+  deployAppSession: AppDeployment;
   destroyTerminal: Scalars["Boolean"]["output"];
   disableSessionEndpointForwarding: SessionEndpoint;
   dismissInboxItem: InboxItem;
@@ -1095,7 +1113,6 @@ export type Mutation = {
   moveSessionToCloud: Session;
   moveSessionToRuntime: Session;
   muteScope: Participant;
-  publishAppSession: AppDeployment;
   queueSessionMessage: QueuedMessage;
   refreshDesignSystemSource: DesignSystem;
   registerPushToken: Scalars["Boolean"]["output"];
@@ -1349,6 +1366,10 @@ export type MutationDenyBridgeAccessRequestArgs = {
   requestId: Scalars["ID"]["input"];
 };
 
+export type MutationDeployAppSessionArgs = {
+  input: DeployAppSessionInput;
+};
+
 export type MutationDestroyTerminalArgs = {
   terminalId: Scalars["ID"]["input"];
 };
@@ -1437,10 +1458,6 @@ export type MutationMoveSessionToRuntimeArgs = {
 export type MutationMuteScopeArgs = {
   scopeId: Scalars["ID"]["input"];
   scopeType: Scalars["String"]["input"];
-};
-
-export type MutationPublishAppSessionArgs = {
-  sessionGroupId: Scalars["ID"]["input"];
 };
 
 export type MutationQueueSessionMessageArgs = {

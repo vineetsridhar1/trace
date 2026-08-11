@@ -1,5 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import type { AppDeployment, AppDeploymentStatus } from "@prisma/client";
+import { Prisma, type AppDeployment, type AppDeploymentStatus } from "@prisma/client";
+import type { DeployAppSessionInput } from "@trace/gql";
+import type { AppDeploymentSpec } from "@trace/shared";
 import { prisma } from "../lib/db.js";
 import { AuthorizationError, ValidationError } from "../lib/errors.js";
 import {
@@ -20,6 +22,69 @@ const CALLBACK_TRANSITIONS: Record<AppDeploymentStatus, AppDeploymentStatus[]> =
   superseded: [],
   stopped: [],
 };
+function optionalCommand(value: string | null | undefined, name: string): string | undefined {
+  const command = value?.trim();
+  if (!command) return undefined;
+  if (command.length > 2000) throw new ValidationError(`${name} is too long`);
+  return command;
+}
+
+function relativeDirectory(value: string | null | undefined, name: string): string | undefined {
+  const directory = value?.trim().replace(/\/+$/, "");
+  if (!directory) return undefined;
+  if (
+    directory.startsWith("/") ||
+    directory.includes("\\") ||
+    directory.split("/").some((part) => part === ".." || part === "")
+  ) {
+    throw new ValidationError(`${name} must be a relative directory inside the app`);
+  }
+  return directory;
+}
+
+export function normalizeDeploymentSpec(input: DeployAppSessionInput): AppDeploymentSpec {
+  if (input.target !== "static" && input.target !== "service") {
+    throw new ValidationError("Deployment target must be static or service");
+  }
+  const buildCommand = optionalCommand(input.buildCommand, "buildCommand");
+  if (input.target === "static") {
+    const outputDirectory = relativeDirectory(input.outputDirectory, "outputDirectory");
+    if (!outputDirectory) {
+      throw new ValidationError("Static deployments require outputDirectory");
+    }
+    if (input.startCommand || input.port || input.database || input.migrationCommand) {
+      throw new ValidationError(
+        "Static deployments cannot include a server, database, or migration command",
+      );
+    }
+    return { target: "static", ...(buildCommand ? { buildCommand } : {}), outputDirectory };
+  }
+
+  const startCommand = optionalCommand(input.startCommand, "startCommand");
+  if (!startCommand) throw new ValidationError("Service deployments require startCommand");
+  const port = input.port ?? 3000;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new ValidationError("Service port must be between 1 and 65535");
+  }
+  const healthPath = input.healthPath?.trim() || "/";
+  if (!healthPath.startsWith("/") || healthPath.length > 500) {
+    throw new ValidationError("healthPath must start with /");
+  }
+  const database = input.database === true;
+  const migrationCommand = optionalCommand(input.migrationCommand, "migrationCommand");
+  if (migrationCommand && !database) {
+    throw new ValidationError("migrationCommand requires database access");
+  }
+  return {
+    target: "service",
+    ...(buildCommand ? { buildCommand } : {}),
+    startCommand,
+    port,
+    healthPath,
+    database,
+    ...(migrationCommand ? { migrationCommand } : {}),
+  };
+}
 
 export function publicAppDeployment(deployment: AppDeployment) {
   return {
@@ -29,8 +94,13 @@ export function publicAppDeployment(deployment: AppDeployment) {
     sourceCheckpointId: deployment.sourceCheckpointId,
     commitSha: deployment.commitSha,
     status: deployment.status,
+    target: deployment.target,
+    spec: deployment.spec,
+    appSlug: deployment.appSlug,
     externalJobId: deployment.externalJobId,
     imageDigest: deployment.imageDigest,
+    staticPrefix: deployment.staticPrefix,
+    serviceName: deployment.serviceName,
     url: deployment.url,
     errorMessage: deployment.errorMessage,
     queuedAt: deployment.queuedAt.toISOString(),
@@ -46,11 +116,45 @@ function deploymentSlug(group: { id: string; slug: string | null }): string {
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
+    .slice(0, 28);
   return `${base || "app"}-${group.id
     .replace(/[^a-zA-Z0-9]/g, "")
-    .slice(0, 8)
+    .slice(0, 32)
     .toLowerCase()}`;
+}
+
+function validateCallbackFields(deployment: AppDeployment, callback: AppDeploymentCallback): void {
+  const expectedPrefix = `published-apps/${deployment.appSlug}/${deployment.id}`;
+  if (callback.staticPrefix && callback.staticPrefix !== expectedPrefix) {
+    throw new ValidationError("Deployment callback artifact prefix does not match this app");
+  }
+  if (deployment.target !== "static" && callback.staticPrefix) {
+    throw new ValidationError("A service deployment cannot publish static artifacts");
+  }
+  if (callback.serviceName && callback.serviceName !== deployment.appSlug) {
+    throw new ValidationError("Deployment callback service name does not match this app");
+  }
+  if (deployment.target !== "service" && callback.serviceName) {
+    throw new ValidationError("A static deployment cannot publish a service route");
+  }
+  if (callback.imageDigest && !/^sha256:[0-9a-f]{64}$/i.test(callback.imageDigest)) {
+    throw new ValidationError("Deployment callback image digest is invalid");
+  }
+  if (callback.url) {
+    const base = process.env.TRACE_PUBLISHED_APP_BASE_HOST?.trim().toLowerCase();
+    if (!base || callback.url !== `https://${deployment.appSlug}.${base}`) {
+      throw new ValidationError("Deployment callback URL does not match this app");
+    }
+  }
+  if (callback.status !== "live") return;
+  if (!callback.url) throw new ValidationError("A live deployment requires its stable URL");
+  if (deployment.target === "static") {
+    if ((callback.staticPrefix ?? deployment.staticPrefix) !== expectedPrefix) {
+      throw new ValidationError("A live static deployment requires its artifact prefix");
+    }
+  } else if ((callback.serviceName ?? deployment.serviceName) !== deployment.appSlug) {
+    throw new ValidationError("A live service deployment requires its service name");
+  }
 }
 
 function callbackUrl(deploymentId: string): string {
@@ -92,6 +196,8 @@ export type AppDeploymentCallback = {
   status: Extract<AppDeploymentStatus, "building" | "deploying" | "live" | "failed">;
   externalJobId?: string;
   imageDigest?: string;
+  staticPrefix?: string;
+  serviceName?: string;
   url?: string;
   errorMessage?: string;
 };
@@ -114,7 +220,9 @@ export class AppDeploymentService {
     });
   }
 
-  async publish(sessionGroupId: string, organizationId: string, userId: string) {
+  async deploy(input: DeployAppSessionInput, organizationId: string, userId: string) {
+    const sessionGroupId = input.sessionGroupId;
+    const spec = normalizeDeploymentSpec(input);
     const group = await prisma.sessionGroup.findFirstOrThrow({
       where: { id: sessionGroupId, organizationId },
       select: { id: true, kind: true, ownerUserId: true, repoId: true, slug: true },
@@ -137,7 +245,10 @@ export class AppDeploymentService {
         where: { sessionGroupId, status: { in: ACTIVE_STATUSES } },
         orderBy: { createdAt: "desc" },
       });
-      if (existing?.sourceCheckpointId === checkpoint.id) {
+      if (
+        existing?.sourceCheckpointId === checkpoint.id &&
+        JSON.stringify(existing.spec) === JSON.stringify(spec)
+      ) {
         return { deployment: existing, created: false, superseded: [] as AppDeployment[] };
       }
       const superseded = await tx.appDeployment.findMany({
@@ -156,6 +267,9 @@ export class AppDeploymentService {
           repoId: group.repoId!,
           sourceCheckpointId: checkpoint.id,
           commitSha: checkpoint.commitSha,
+          target: spec.target,
+          spec: spec as Prisma.InputJsonValue,
+          appSlug: deploymentSlug(group),
           requestedByUserId: userId,
           callbackTokenHash: tokenHash(callbackToken).toString("hex"),
         },
@@ -196,6 +310,7 @@ export class AppDeploymentService {
         checkpointId: checkpoint.id,
         commitSha: checkpoint.commitSha,
         appSlug: deploymentSlug(group),
+        spec,
         callback: { url: callbackUrl(deployment.id), token: callbackToken },
         requestedAt: deployment.queuedAt.toISOString(),
       });
@@ -228,6 +343,7 @@ export class AppDeploymentService {
       if (!existing || !validCallbackToken(existing.callbackTokenHash, token)) {
         throw new AuthorizationError("Invalid deployment callback credentials");
       }
+      validateCallbackFields(existing, callback);
       if (callback.status === existing.status || TERMINAL_STATUSES.includes(existing.status)) {
         return { deployment: existing, supersededLive: [] as AppDeployment[], updated: false };
       }
@@ -258,6 +374,8 @@ export class AppDeploymentService {
           status: callback.status,
           ...(callback.externalJobId ? { externalJobId: callback.externalJobId } : {}),
           ...(callback.imageDigest ? { imageDigest: callback.imageDigest } : {}),
+          ...(callback.staticPrefix ? { staticPrefix: callback.staticPrefix } : {}),
+          ...(callback.serviceName ? { serviceName: callback.serviceName } : {}),
           ...(callback.url ? { url: callback.url } : {}),
           ...(callback.errorMessage ? { errorMessage: callback.errorMessage.slice(0, 4000) } : {}),
           ...(!existing.startedAt ? { startedAt: now } : {}),

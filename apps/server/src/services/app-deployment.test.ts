@@ -12,12 +12,22 @@ vi.mock("./event.js", () => ({
 
 import { prisma } from "../lib/db.js";
 import { eventService } from "./event.js";
-import { AppDeploymentService } from "./app-deployment.js";
+import { AppDeploymentService, normalizeDeploymentSpec } from "./app-deployment.js";
 
 const prismaMock = prisma as ReturnType<typeof import("../../test/helpers.js").createPrismaMock>;
 const eventServiceMock = eventService as unknown as { create: ReturnType<typeof vi.fn> };
 const enqueue = vi.fn();
 const now = new Date("2026-07-17T18:00:00.000Z");
+
+const serviceInput = {
+  sessionGroupId: "group-1",
+  target: "service",
+  buildCommand: "pnpm build",
+  startCommand: "pnpm start",
+  port: 3000,
+  healthPath: "/",
+  database: false,
+} as const;
 
 function deployment(overrides: Record<string, unknown> = {}) {
   return {
@@ -28,10 +38,22 @@ function deployment(overrides: Record<string, unknown> = {}) {
     sourceCheckpointId: "checkpoint-1",
     commitSha: "a".repeat(40),
     status: "queued",
+    target: "service",
+    spec: {
+      target: "service",
+      buildCommand: "pnpm build",
+      startCommand: "pnpm start",
+      port: 3000,
+      healthPath: "/",
+      database: false,
+    },
+    appSlug: "notes-group1",
     requestedByUserId: "user-1",
     callbackTokenHash: createHash("sha256").update("callback-secret").digest("hex"),
     externalJobId: null,
     imageDigest: null,
+    staticPrefix: null,
+    serviceName: null,
     url: null,
     errorMessage: null,
     queuedAt: now,
@@ -67,11 +89,12 @@ describe("AppDeploymentService", () => {
     prismaMock.appDeployment.update.mockImplementation(async ({ data }) => deployment(data));
     enqueue.mockResolvedValue({ externalJobId: "message-1" });
     vi.stubEnv("TRACE_SERVER_PUBLIC_URL", "https://trace.example.com");
+    vi.stubEnv("TRACE_PUBLISHED_APP_BASE_HOST", "apps.trace.example.com");
   });
 
   it("queues the latest durable checkpoint without exposing the preview endpoint", async () => {
     const service = new AppDeploymentService({ enqueue });
-    const result = await service.publish("group-1", "org-1", "user-1");
+    const result = await service.deploy(serviceInput, "org-1", "user-1");
 
     expect(enqueue).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -87,11 +110,37 @@ describe("AppDeploymentService", () => {
     );
   });
 
+  it("keeps deployment decisions explicit and validates target-specific facts", () => {
+    expect(
+      normalizeDeploymentSpec({
+        sessionGroupId: "group-1",
+        target: "static",
+        buildCommand: "pnpm build",
+        outputDirectory: "dist",
+      }),
+    ).toEqual({ target: "static", buildCommand: "pnpm build", outputDirectory: "dist" });
+    expect(() =>
+      normalizeDeploymentSpec({
+        sessionGroupId: "group-1",
+        target: "static",
+        outputDirectory: "../dist",
+      }),
+    ).toThrow("relative directory");
+    expect(() =>
+      normalizeDeploymentSpec({
+        sessionGroupId: "group-1",
+        target: "service",
+        startCommand: "pnpm start",
+        migrationCommand: "pnpm db:migrate",
+      }),
+    ).toThrow("requires database access");
+  });
+
   it("requires a committed checkpoint", async () => {
     prismaMock.gitCheckpoint.findFirst.mockResolvedValueOnce(null);
     const service = new AppDeploymentService({ enqueue });
 
-    await expect(service.publish("group-1", "org-1", "user-1")).rejects.toThrow(
+    await expect(service.deploy(serviceInput, "org-1", "user-1")).rejects.toThrow(
       "Commit the app before publishing",
     );
     expect(enqueue).not.toHaveBeenCalled();
@@ -101,7 +150,7 @@ describe("AppDeploymentService", () => {
     prismaMock.appDeployment.findFirst.mockResolvedValueOnce(deployment());
     const service = new AppDeploymentService({ enqueue });
 
-    const result = await service.publish("group-1", "org-1", "user-1");
+    const result = await service.deploy(serviceInput, "org-1", "user-1");
 
     expect(result.id).toBe("deployment-1");
     expect(prismaMock.appDeployment.create).not.toHaveBeenCalled();
@@ -117,7 +166,7 @@ describe("AppDeploymentService", () => {
     ]);
     const service = new AppDeploymentService({ enqueue });
 
-    await service.publish("group-1", "org-1", "user-1");
+    await service.deploy(serviceInput, "org-1", "user-1");
 
     expect(prismaMock.appDeployment.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "superseded" }) }),
@@ -152,11 +201,27 @@ describe("AppDeploymentService", () => {
     expect(prismaMock.appDeployment.update).not.toHaveBeenCalled();
   });
 
+  it("prevents a build callback from routing to another app", async () => {
+    prismaMock.appDeployment.findUnique.mockResolvedValueOnce(
+      deployment({ status: "deploying", imageDigest: `sha256:${"a".repeat(64)}` }),
+    );
+    const service = new AppDeploymentService({ enqueue });
+
+    await expect(
+      service.updateFromCallback("deployment-1", "callback-secret", {
+        status: "live",
+        serviceName: "another-app",
+        url: "https://another-app.apps.trace.example.com",
+      }),
+    ).rejects.toThrow("service name does not match this app");
+    expect(prismaMock.appDeployment.update).not.toHaveBeenCalled();
+  });
+
   it("records dispatch failures on the durable deployment", async () => {
     enqueue.mockRejectedValueOnce(new Error("queue unavailable"));
     const service = new AppDeploymentService({ enqueue });
 
-    await expect(service.publish("group-1", "org-1", "user-1")).rejects.toThrow(
+    await expect(service.deploy(serviceInput, "org-1", "user-1")).rejects.toThrow(
       "queue unavailable",
     );
     expect(prismaMock.appDeployment.update).toHaveBeenCalledWith({

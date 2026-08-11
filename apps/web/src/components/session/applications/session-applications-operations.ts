@@ -102,8 +102,13 @@ export const APPLICATIONS_STATE_QUERY = gql`
       sourceCheckpointId
       commitSha
       status
+      target
+      spec
+      appSlug
       externalJobId
       imageDigest
+      staticPrefix
+      serviceName
       url
       errorMessage
       queuedAt
@@ -173,16 +178,6 @@ export const DISABLE_ENDPOINT_MUTATION = gql`
   mutation DisableSessionEndpointForwarding($endpointId: ID!) {
     disableSessionEndpointForwarding(endpointId: $endpointId) {
       id
-    }
-  }
-`;
-
-export const PUBLISH_APP_MUTATION = gql`
-  mutation PublishAppSession($sessionGroupId: ID!) {
-    publishAppSession(sessionGroupId: $sessionGroupId) {
-      id
-      status
-      commitSha
     }
   }
 `;

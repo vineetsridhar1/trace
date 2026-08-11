@@ -363,32 +363,32 @@ model Organization {
   name     String
   settings Json   @default("{}")
 
-  orgMembers                  OrgMember[]
-  pushTokens                  PushToken[]
-  mobilePairingTokens         MobilePairingToken[]
-  pairedMobileDevices         MobileDevice[]
-  repos                       Repo[]
-  projects                    Project[]
-  bridgeRuntimes              BridgeRuntime[]
-  channelGroups               ChannelGroup[]
-  channels                    Channel[]
-  sessionGroups               SessionGroup[]
-  sessions                    Session[]
-  tickets                     Ticket[]
-  events                      Event[]
-  inboxItems                  InboxItem[]
-  sessionSetupScriptRuns      SessionSetupScriptRun[]
-  sessionApplicationProcesses SessionApplicationProcess[]
-  sessionEndpoints            SessionEndpoint[]
-  appDeployments              AppDeployment[]
-  agentEnvironments           AgentEnvironment[]
-  orgSecrets                  OrgSecret[]
-  slackInstalls               SlackInstall[]
-  slackChannelBindings        SlackChannelBinding[]
-  designSystems               DesignSystem[]
-  artifacts                   Artifact[]
-  integrationConnections      IntegrationConnection[]
-  appIntegrationBindings      AppIntegrationBinding[]
+  orgMembers                     OrgMember[]
+  pushTokens                     PushToken[]
+  mobilePairingTokens            MobilePairingToken[]
+  pairedMobileDevices            MobileDevice[]
+  repos                          Repo[]
+  projects                       Project[]
+  bridgeRuntimes                 BridgeRuntime[]
+  channelGroups                  ChannelGroup[]
+  channels                       Channel[]
+  sessionGroups                  SessionGroup[]
+  sessions                       Session[]
+  tickets                        Ticket[]
+  events                         Event[]
+  inboxItems                     InboxItem[]
+  sessionSetupScriptRuns         SessionSetupScriptRun[]
+  sessionApplicationProcesses    SessionApplicationProcess[]
+  sessionEndpoints               SessionEndpoint[]
+  appDeployments                 AppDeployment[]
+  agentEnvironments              AgentEnvironment[]
+  orgSecrets                     OrgSecret[]
+  slackInstalls                  SlackInstall[]
+  slackChannelBindings           SlackChannelBinding[]
+  designSystems                  DesignSystem[]
+  artifacts                      Artifact[]
+  integrationConnections         IntegrationConnection[]
+  appIntegrationBindings         AppIntegrationBinding[]
   integrationRequestAuditEntries IntegrationRequestAuditEntry[]
 
   createdAt DateTime @default(now())
@@ -452,34 +452,34 @@ model User {
   enableClaudeInChrome          Boolean     @default(false)
 
   orgMemberships                OrgMember[]
-  mobilePairingTokens          MobilePairingToken[]         @relation("MobilePairingTokenOwner")
-  mobileDevices                MobileDevice[]               @relation("MobileDeviceOwner")
-  ownedBridgeRuntimes          BridgeRuntime[]              @relation("BridgeRuntimeOwner")
-  bridgeAccessGrants           BridgeAccessGrant[]          @relation("BridgeAccessGrantGrantee")
-  grantedBridgeAccessGrants    BridgeAccessGrant[]          @relation("BridgeAccessGrantGrantedBy")
-  requestedBridgeAccess        BridgeAccessRequest[]        @relation("BridgeAccessRequestRequester")
-  ownedBridgeAccessRequests    BridgeAccessRequest[]        @relation("BridgeAccessRequestOwner")
-  resolvedBridgeAccessRequests BridgeAccessRequest[]        @relation("BridgeAccessRequestResolver")
-  createdSessions              Session[]                    @relation("SessionCreator")
-  ownedSessionGroups           SessionGroup[]               @relation("SessionGroupOwner")
-  createdTickets               Ticket[]                     @relation("TicketCreator")
-  ticketAssignments            TicketAssignee[]             @relation("TicketAssignees")
-  createdChats                 Chat[]                       @relation("ChatCreator")
-  ownedChannels                Channel[]                    @relation("ChannelOwner")
-  chatMemberships              ChatMember[]
-  channelMemberships           ChannelMember[]
-  participants                 Participant[]
-  apiTokens                    ApiToken[]
-  codexCredential              CodexCredential?
-  createdDesignSystems         DesignSystem[]               @relation("DesignSystemCreator")
-  createdDesignSystemArtifacts DesignSystemCommitArtifact[] @relation("DesignSystemArtifactCreator")
-  createdDesignSystemVersions  DesignSystemVersion[]        @relation("DesignSystemVersionCreator")
-  createdArtifacts             Artifact[]                    @relation("ArtifactCreator")
-  pushTokens                   PushToken[]
-  queuedMessages               QueuedMessage[]              @relation("QueuedMessageCreator")
-  slackInstalls                SlackInstall[]               @relation("SlackInstallInstaller")
-  slackAccounts                SlackAccount[]
-  slackChannelBindings         SlackChannelBinding[]
+  mobilePairingTokens           MobilePairingToken[]         @relation("MobilePairingTokenOwner")
+  mobileDevices                 MobileDevice[]               @relation("MobileDeviceOwner")
+  ownedBridgeRuntimes           BridgeRuntime[]              @relation("BridgeRuntimeOwner")
+  bridgeAccessGrants            BridgeAccessGrant[]          @relation("BridgeAccessGrantGrantee")
+  grantedBridgeAccessGrants     BridgeAccessGrant[]          @relation("BridgeAccessGrantGrantedBy")
+  requestedBridgeAccess         BridgeAccessRequest[]        @relation("BridgeAccessRequestRequester")
+  ownedBridgeAccessRequests     BridgeAccessRequest[]        @relation("BridgeAccessRequestOwner")
+  resolvedBridgeAccessRequests  BridgeAccessRequest[]        @relation("BridgeAccessRequestResolver")
+  createdSessions               Session[]                    @relation("SessionCreator")
+  ownedSessionGroups            SessionGroup[]               @relation("SessionGroupOwner")
+  createdTickets                Ticket[]                     @relation("TicketCreator")
+  ticketAssignments             TicketAssignee[]             @relation("TicketAssignees")
+  createdChats                  Chat[]                       @relation("ChatCreator")
+  ownedChannels                 Channel[]                    @relation("ChannelOwner")
+  chatMemberships               ChatMember[]
+  channelMemberships            ChannelMember[]
+  participants                  Participant[]
+  apiTokens                     ApiToken[]
+  codexCredential               CodexCredential?
+  createdDesignSystems          DesignSystem[]               @relation("DesignSystemCreator")
+  createdDesignSystemArtifacts  DesignSystemCommitArtifact[] @relation("DesignSystemArtifactCreator")
+  createdDesignSystemVersions   DesignSystemVersion[]        @relation("DesignSystemVersionCreator")
+  createdArtifacts              Artifact[]                   @relation("ArtifactCreator")
+  pushTokens                    PushToken[]
+  queuedMessages                QueuedMessage[]              @relation("QueuedMessageCreator")
+  slackInstalls                 SlackInstall[]               @relation("SlackInstallInstaller")
+  slackAccounts                 SlackAccount[]
+  slackChannelBindings          SlackChannelBinding[]
   integrationConnections        IntegrationConnection[]      @relation("IntegrationConnectionOwner")
   createdIntegrationConnections IntegrationConnection[]      @relation("IntegrationConnectionCreator")
   createdAppIntegrationBindings AppIntegrationBinding[]      @relation("AppIntegrationBindingCreator")
@@ -678,7 +678,7 @@ model SessionGroup {
   animationPreviewCapturedAt  DateTime?
   animationPreviewAttemptedAt DateTime?
   animationPreviewError       String?
-  appDeployments       AppDeployment[]
+  appDeployments              AppDeployment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -791,38 +791,38 @@ model DesignSystemVersion {
 }
 
 model Session {
-  id                String        @id @default(uuid())
-  name              String
-  agentStatus       AgentStatus   @default(not_started)
-  sessionStatus     SessionStatus @default(in_progress)
-  tool              CodingTool
-  model             String?
-  reasoningEffort   String?
-  toolChangedAt     DateTime?
-  lastUserMessageAt DateTime?
-  lastMessageAt     DateTime?
-  hosting           HostingMode
-  organizationId    String
-  organization      Organization  @relation(fields: [organizationId], references: [id])
-  createdById       String
-  createdBy         User          @relation("SessionCreator", fields: [createdById], references: [id])
-  repoId            String?
-  repo              Repo?         @relation(fields: [repoId], references: [id])
-  branch            String?
-  channelId         String?
-  channel           Channel?      @relation(fields: [channelId], references: [id])
-  sessionGroupId    String?
-  sessionGroup      SessionGroup? @relation(fields: [sessionGroupId], references: [id])
-  workdir           String?
-  toolSessionId     String?
-  pendingRun        Json?
+  id                                      String        @id @default(uuid())
+  name                                    String
+  agentStatus                             AgentStatus   @default(not_started)
+  sessionStatus                           SessionStatus @default(in_progress)
+  tool                                    CodingTool
+  model                                   String?
+  reasoningEffort                         String?
+  toolChangedAt                           DateTime?
+  lastUserMessageAt                       DateTime?
+  lastMessageAt                           DateTime?
+  hosting                                 HostingMode
+  organizationId                          String
+  organization                            Organization  @relation(fields: [organizationId], references: [id])
+  createdById                             String
+  createdBy                               User          @relation("SessionCreator", fields: [createdById], references: [id])
+  repoId                                  String?
+  repo                                    Repo?         @relation(fields: [repoId], references: [id])
+  branch                                  String?
+  channelId                               String?
+  channel                                 Channel?      @relation(fields: [channelId], references: [id])
+  sessionGroupId                          String?
+  sessionGroup                            SessionGroup? @relation(fields: [sessionGroupId], references: [id])
+  workdir                                 String?
+  toolSessionId                           String?
+  pendingRun                              Json?
   pendingGeneralWorkspaceCleanupRuntimeId String?
-  endpoints         Json?
-  connection        Json?
-  prUrl             String?
-  worktreeDeleted   Boolean       @default(false)
-  readOnlyWorkspace Boolean       @default(false)
-  activeInvocationId String?
+  endpoints                               Json?
+  connection                              Json?
+  prUrl                                   String?
+  worktreeDeleted                         Boolean       @default(false)
+  readOnlyWorkspace                       Boolean       @default(false)
+  activeInvocationId                      String?
 
   inputTokens         BigInt @default(0)
   outputTokens        BigInt @default(0)
@@ -1288,10 +1288,15 @@ model AppDeployment {
   sourceCheckpoint   GitCheckpoint       @relation(fields: [sourceCheckpointId], references: [id], onDelete: Restrict)
   commitSha          String
   status             AppDeploymentStatus @default(queued)
+  target             String              @default("service")
+  spec               Json                @default("{}")
+  appSlug            String              @default("")
   requestedByUserId  String
   callbackTokenHash  String
   externalJobId      String?
   imageDigest        String?
+  staticPrefix       String?
+  serviceName        String?
   url                String?
   errorMessage       String?
   queuedAt           DateTime            @default(now())
@@ -1302,6 +1307,7 @@ model AppDeployment {
 
   @@index([organizationId, sessionGroupId, createdAt])
   @@index([sessionGroupId, status])
+  @@index([appSlug, status])
   @@index([sourceCheckpointId])
 }
 

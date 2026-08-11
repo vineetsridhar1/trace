@@ -1118,8 +1118,13 @@ type AppDeployment {
   sourceCheckpointId: ID!
   commitSha: String!
   status: AppDeploymentStatus!
+  target: String!
+  spec: JSON!
+  appSlug: String!
   externalJobId: String
   imageDigest: String
+  staticPrefix: String
+  serviceName: String
   url: String
   errorMessage: String
   queuedAt: DateTime!
@@ -1127,6 +1132,18 @@ type AppDeployment {
   completedAt: DateTime
   createdAt: DateTime!
   updatedAt: DateTime!
+}
+
+input DeployAppSessionInput {
+  sessionGroupId: ID!
+  target: String!
+  buildCommand: String
+  outputDirectory: String
+  startCommand: String
+  port: Int
+  healthPath: String
+  database: Boolean
+  migrationCommand: String
 }
 
 type NangoConnectSession {
@@ -2254,7 +2271,7 @@ type Mutation {
   ): SessionEndpoint!
   clearEndpointTraffic(endpointId: ID!): Boolean!
   createSessionEndpointPreview(endpointId: ID!): SessionEndpointPreview!
-  publishAppSession(sessionGroupId: ID!): AppDeployment!
+  deployAppSession(input: DeployAppSessionInput!): AppDeployment!
   createNangoConnectSession(input: CreateNangoConnectSessionInput!): NangoConnectSession!
   deleteIntegrationConnection(id: ID!): Boolean!
   upsertAppIntegrationBinding(input: UpsertAppIntegrationBindingInput!): AppIntegrationBinding!
