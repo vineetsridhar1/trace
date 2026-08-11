@@ -2,6 +2,16 @@ name: Publish Runtime Base Image
 
 on:
   workflow_dispatch:
+  # Build on pull requests too, without publishing, so a change to this workflow or
+  # to what the image contains is proven before it reaches main. Scoped by path
+  # because the build is slow and most changes here cannot affect the image.
+  pull_request:
+    paths:
+      - apps/container-bridge/**
+      - packages/shared/**
+      - .github/workflows/publish-runtime-image.yml
+      - pnpm-lock.yaml
+      - .nvmrc
   push:
     branches:
       - main
@@ -56,7 +66,9 @@ jobs:
           add_platform_suffix: false
           dockerfile: apps/container-bridge/Dockerfile
           context: .
-          push: true
+          # Pull requests validate the build and stop there. The moving-tag steps
+          # below are already ref-gated, so they skip on their own.
+          push: ${{ github.event_name != 'pull_request' }}
           # Off deliberately: buildah exports cache into the image repository
           # itself, and this image is published rarely enough that cache tags
           # accumulating alongside it costs more than the rebuild saves.
