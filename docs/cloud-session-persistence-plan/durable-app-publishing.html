@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Durable app publishing</title>
+    <style>
+      :root { --bg:#171717; --surface:#202020; --raised:#292929; --fg:#e4e4e7; --muted:#a1a1aa; --faint:#71717a; --border:#383838; --accent:#60a5fa; --good:#4ade80; --warn:#facc15; --bad:#f87171; }
+      * { box-sizing:border-box; }
+      body { margin:0; padding:40px 22px 72px; background:var(--bg); color:var(--fg); font:15px/1.6 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+      main { max-width:880px; margin:auto; }
+      h1 { margin:0 0 8px; font-size:30px; letter-spacing:-.025em; }
+      h2 { margin:42px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); color:var(--faint); font-size:12px; letter-spacing:.09em; text-transform:uppercase; }
+      h3 { margin:0 0 6px; font-size:14px; } p { margin:0 0 12px; } code { padding:1px 5px; border-radius:4px; background:var(--raised); font-size:.9em; }
+      .summary { max-width:720px; color:var(--muted); font-size:17px; }
+      .meta, .legend { display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 30px; }
+      .chip, .state { padding:4px 9px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font-size:12px; }
+      .chip strong { color:var(--fg); } .state.new { border-color:var(--accent); color:var(--fg); } .state.live { border-color:var(--good); color:var(--good); } .state.failed { border-color:var(--bad); color:var(--bad); }
+      .callout, .card, details, table { border:1px solid var(--border); border-radius:8px; background:var(--surface); }
+      .callout { padding:15px 17px; border-left:3px solid var(--accent); color:var(--muted); } .callout strong { color:var(--fg); }
+      .callout.risk { border-left-color:var(--warn); } .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; } .card { padding:15px 17px; } .card p:last-child { margin-bottom:0; }
+      .flow { display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; } .node { flex:1 1 145px; padding:12px; border:1px solid var(--border); border-radius:8px; background:var(--surface); } .node.new { border-color:var(--accent); } .node b { display:block; font-size:13px; } .node span { color:var(--faint); font-size:12px; } .arrow { align-self:center; color:var(--faint); }
+      .steps { display:grid; gap:10px; } .step { padding:14px 16px; border-left:2px solid var(--accent); background:var(--surface); } .step p { color:var(--muted); } .step p:last-child { margin-bottom:0; }
+      table { width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; } th,td { padding:10px 12px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; } th { color:var(--faint); font-size:11px; letter-spacing:.06em; text-transform:uppercase; } tr:last-child td { border-bottom:0; }
+      details { margin-top:12px; overflow:hidden; } summary { padding:11px 13px; cursor:pointer; color:var(--fg); } .detail { padding:0 13px 13px; color:var(--muted); } ul { margin:7px 0 0; padding-left:20px; } li { margin:5px 0; }
+      @media (max-width:620px) { .grid { grid-template-columns:1fr; } body { padding:28px 16px 56px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Durable publishing for session-built apps</h1>
+      <p class="summary">Approve a durable deployment lifecycle that snapshots a managed app session, hands that snapshot to an external build worker, and keeps publishing status available after the cloud coding session sleeps.</p>
+      <div class="meta">
+        <span class="chip"><strong>Decision</strong> publish checkpoints, never a live workspace</span>
+        <span class="chip"><strong>Boundary</strong> Trace records intent; a worker builds and hosts</span>
+        <span class="chip"><strong>Gate</strong> worker, queue, bucket, role, and callback URL must exist</span>
+      </div>
+
+      <section>
+        <h2>What needs approval</h2>
+        <div class="callout"><strong>Make deployment state independent of the cloud session.</strong> The proposed <code>AppDeployment</code> record is the durable source for the selected Git checkpoint, lifecycle status, public URL, and failure reason. Session processes remain ephemeral; a publish request creates a separate asynchronous deployment.</div>
+      </section>
+
+      <section>
+        <h2>Lifecycle and ownership</h2>
+        <div class="flow">
+          <div class="node"><b>Publish button</b><span>managed app session only</span></div><span class="arrow">→</span>
+          <div class="node new"><b>Deployment service</b><span>locks group; selects latest checkpoint</span></div><span class="arrow">→</span>
+          <div class="node new"><b>Postgres + event log</b><span>durable status for every client</span></div><span class="arrow">→</span>
+          <div class="node new"><b>S3 + SQS dispatcher</b><span>archives source; queues worker job</span></div><span class="arrow">→</span>
+          <div class="node"><b>External worker</b><span>builds, deploys, reports result</span></div>
+        </div>
+        <p style="margin-top:12px">The worker returns to <code>/internal/app-deployments/:deploymentId/status</code> with its single-use bearer credential. The callback service validates the status transition, updates Postgres, emits an event, and the Applications panel receives the new deployment through the entity store.</p>
+        <div class="legend" aria-label="Deployment states"><span class="state new">queued</span><span>→</span><span class="state new">building</span><span>→</span><span class="state new">deploying</span><span>→</span><span class="state live">live</span><span>or</span><span class="state failed">failed</span><span>· superseded ends an obsolete in-flight or live deployment</span></div>
+      </section>
+
+      <section>
+        <h2>Implementation moves</h2>
+        <div class="steps">
+          <div class="step"><h3>Persist one deployment lifecycle per publish request</h3><p><code>AppDeploymentService.publish()</code> locks by session group, requires a managed app and its latest <code>GitCheckpoint</code>, deduplicates an active request for the same checkpoint, and supersedes older in-flight requests. This prevents a retry from creating two deployments for identical source.</p><p><strong>Proof:</strong> service tests cover no checkpoint, same-checkpoint reuse, superseding an in-flight publish, and dispatch failure.</p></div>
+          <div class="step"><h3>Make transitions authenticated and monotonic</h3><p><code>updateFromCallback()</code> stores only a hash of a fresh token, accepts <code>queued → building → deploying → live</code> or failure, ignores duplicate/terminal callbacks, and supersedes an earlier live deployment only when a successor is live.</p><p><strong>Proof:</strong> verify bearer-token rejection, invalid transition rejection, duplicate delivery, and a failed replacement preserving the currently live deployment.</p></div>
+          <div class="step"><h3>Dispatch an immutable source bundle instead of session files</h3><p><code>AwsAppDeploymentDispatcher</code> archives the selected commit from managed Git, streams a size-limited tarball to S3, then sends a versioned <code>AppDeploymentJob</code> to SQS using assumed-role credentials. The source key is deployment-specific.</p><p><strong>Proof:</strong> dispatcher tests confirm streaming behavior and reject archives over 100 MB; add an integration exercise against a disposable queue and bucket.</p></div>
+          <div class="step"><h3>Expose lifecycle state through existing product channels</h3><p>The GraphQL query/mutation, generated types, event handlers, Zustand table, and <code>AppDeploymentCard</code> make publish progress, errors, and a live URL visible in the Applications panel. UI actions remain fire-and-forget; events reconcile state.</p><p><strong>Proof:</strong> handler tests upsert queued/updated events and a browser test confirms the panel reaches live after callback-driven events.</p></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Decisions that reduce failure impact</h2>
+        <div class="grid">
+          <div class="card"><h3>Checkpoint, not workspace</h3><p>Session shutdown or later edits cannot alter an in-progress deployment. A commit SHA is visible on the deployment and can be replayed.</p></div>
+          <div class="card"><h3>At most one current deployment</h3><p>An advisory lock serializes publishes per session group. A newer request marks earlier active work superseded.</p></div>
+          <div class="card"><h3>Only a live successor replaces live state</h3><p>Publishing failures are durable and visible but must not remove a prior public URL.</p></div>
+          <div class="card"><h3>Callback tokens are stored hashed</h3><p>The worker receives the secret once. Trace verifies it in constant time and never exposes it through GraphQL or events.</p></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Release gate and unresolved boundary</h2>
+        <div class="callout risk"><strong>This branch implements Trace-side orchestration, not the worker or cloud infrastructure.</strong> It will fail closed with “Published app deployments are not configured for this environment” until <code>AWS_REGION</code>, role ARN, source bucket, queue URL, and a valid public callback URL are supplied. The queue consumer must honor <code>AppDeploymentJob</code> version 1 and issue the authenticated callback progression.</div>
+        <details><summary>Evidence and review focus</summary><div class="detail"><ul><li><code>apps/server/src/services/app-deployment.ts</code> owns authorization, idempotency, state transitions, and events.</li><li><code>apps/server/src/services/app-deployment-dispatcher.ts</code> owns Git archive streaming, S3 upload, role assumption, and SQS submission.</li><li><code>apps/server/src/routes/app-deployment-callback.ts</code> limits the callback surface to known statuses and bearer authentication.</li><li><code>apps/web/src/components/session/applications/AppDeploymentCard.tsx</code> renders the latest durable deployment rather than a running process.</li></ul></div></details>
+      </section>
+
+      <section>
+        <h2>Acceptance checks</h2>
+        <table><thead><tr><th>Scenario</th><th>Expected result</th></tr></thead><tbody>
+          <tr><td>Cloud session stops after dispatch</td><td>Deployment record, source bundle, worker job, and subsequent UI status remain available.</td></tr>
+          <tr><td>User presses Publish twice for the same commit</td><td>One active deployment is reused; no duplicate source upload or worker job is emitted.</td></tr>
+          <tr><td>Newer checkpoint publishes while an older job runs</td><td>The old job becomes superseded; only the newest successful job can become current.</td></tr>
+          <tr><td>Worker callback is forged, stale, or out of order</td><td>Trace rejects it without mutating deployment state or emitting a misleading event.</td></tr>
+          <tr><td>Worker/build fails after a prior version is live</td><td>The failure is displayed and recorded; the previous public URL remains live.</td></tr>
+        </tbody></table>
+      </section>
+    </main>
+  </body>
+</html>
