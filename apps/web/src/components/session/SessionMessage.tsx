@@ -1,11 +1,12 @@
 import { memo } from "react";
 import {
   attachmentKeysFromPayload,
+  actionRequiredArtifactForToolError,
   asJsonObject,
   isActionRequiredArtifact,
   type JsonObject,
 } from "@trace/shared";
-import { useScopedEventField } from "@trace/client-core";
+import { useEntityField, useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
@@ -29,6 +30,21 @@ function optionalAttachmentKeys(payload: JsonObject | null | undefined): string[
 /** Safely read a string from an unknown value, returning fallback if not a string */
 function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
+}
+
+function assistantText(payload: JsonObject | null | undefined): string | undefined {
+  if (payload?.type !== "assistant") return undefined;
+  const message = asJsonObject(payload.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return undefined;
+  const text = content
+    .map((block) => {
+      const value = asJsonObject(block);
+      return value?.type === "text" && typeof value.text === "string" ? value.text : "";
+    })
+    .join("\n")
+    .trim();
+  return text || undefined;
 }
 
 /** Narrow and unwrap tool result content for display in ToolCallRow */
@@ -249,6 +265,7 @@ export const SessionMessage = memo(function SessionMessage({
     | { type: string; id: string; name?: string | null }
     | undefined;
   const sessionId = useScopedEventField(scopeKey, id, "scopeId") as string | undefined;
+  const tool = useEntityField("sessions", sessionId ?? "", "tool") as string | undefined;
 
   if (!eventType || !timestamp) return null;
 
@@ -271,9 +288,18 @@ export const SessionMessage = memo(function SessionMessage({
     }
 
     case "session_output":
-      return payload
-          ? renderSessionOutput(
-              payload,
+      if (payload) {
+        const artifact =
+          asJsonObject(payload.artifact) ??
+          (() => {
+            const text = assistantText(payload);
+            return text ? actionRequiredArtifactForToolError(tool, text) : undefined;
+          })();
+        if (sessionId && isActionRequiredArtifact(artifact)) {
+          return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
+        }
+        return renderSessionOutput(
+            payload,
             sessionId,
             timestamp,
             scopeKey,
@@ -283,8 +309,9 @@ export const SessionMessage = memo(function SessionMessage({
             onForkSession,
             canForkSession,
             showActions,
-          )
-        : null;
+          );
+      }
+      return null;
 
     case "session_runtime_start_failed": {
       const artifact = asJsonObject(payload?.artifact);
