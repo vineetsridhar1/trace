@@ -26,6 +26,19 @@ permissions:
 
 jobs:
   publish:
+    # Same-repository pull requests only. A fork's head is untrusted code, and this
+    # pod's IRSA identity can assume the ECR read-write and EKS deploy roles -- a
+    # pod credential, so GitHub withholding secrets from a fork withholds nothing
+    # that matters here. The validation build cannot move to an ephemeral runner
+    # instead: buildah is only in the builder images, and `FROM node:22-slim` is
+    # rewritten to the ECR pull-through cache, which needs those same credentials.
+    #
+    # Guarded on the job because a trigger has no fork filter. The event_name clause
+    # keeps push and workflow_dispatch running, where there is no pull_request
+    # payload to compare against.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     # linux/arm64 only, built natively. trace-deployment is the only consumer and
     # builds arm64, and these pods carry no qemu for a cross-architecture build.
     runs-on: arm-builder-lg
