@@ -1293,6 +1293,12 @@ model AppDeployment {
   appSlug            String              @default("")
   requestedByUserId  String
   callbackTokenHash  String
+  callbackTokenEncrypted String?
+  callbackTokenIv    String?
+  clientMutationId   String?
+  dispatchAttempts   Int                 @default(0)
+  nextDispatchAt     DateTime            @default(now())
+  dispatchedAt       DateTime?
   externalJobId      String?
   imageDigest        String?
   staticPrefix       String?
@@ -1309,6 +1315,8 @@ model AppDeployment {
   @@index([sessionGroupId, status])
   @@index([appSlug, status])
   @@index([sourceCheckpointId])
+  @@index([status, nextDispatchAt])
+  @@unique([organizationId, clientMutationId])
 }
 
 model BridgeRuntime {

@@ -65,6 +65,7 @@ import { ServerLifecycle } from "./lib/server-lifecycle.js";
 import { realtimeBackplane } from "./lib/realtime-backplane.js";
 import { runtimeDirectory } from "./lib/runtime-directory.js";
 import { publishedAppGateway } from "./services/published-app-gateway.js";
+import { appDeploymentService } from "./services/app-deployment.js";
 
 // A single proxied response is base64-framed over the bridge WS; bound a single
 // message so an untrusted runtime can't force an unbounded allocation.
@@ -88,6 +89,8 @@ const DESIGN_PREVIEW_RECONCILE_LOCK_KEY = "trace:jobs:design-preview-reconcile";
 const PDF_EXPORT_RECONCILE_LOCK_KEY = "trace:jobs:pdf-export-reconcile";
 const RUNTIME_PREVIEW_RECONCILE_LOCK_KEY = "trace:jobs:runtime-preview-reconcile";
 const DESIGN_SYSTEM_ARTIFACT_RECONCILE_LOCK_KEY = "trace:jobs:design-system-artifact-reconcile";
+const APP_DEPLOYMENT_DISPATCH_INTERVAL_MS = 30 * 1000;
+const APP_DEPLOYMENT_DISPATCH_LOCK_KEY = "trace:jobs:app-deployment-dispatch";
 
 function readDurationEnv(name: string, fallbackMs: number): number {
   const raw = process.env[name]?.trim();
@@ -578,6 +581,21 @@ async function main() {
       });
   }, ENDPOINT_TRAFFIC_CLEANUP_INTERVAL_MS);
 
+  const appDeploymentDispatchReconciler = setInterval(() => {
+    void withRedisJobLock({
+      enabled: !localMode,
+      key: APP_DEPLOYMENT_DISPATCH_LOCK_KEY,
+      ttlMs: APP_DEPLOYMENT_DISPATCH_INTERVAL_MS * 2,
+      run: () => appDeploymentService.reconcilePendingDispatches(),
+    }).catch((error: unknown) => {
+      console.warn(
+        "[app-deployment-dispatch] iteration failed",
+        error instanceof Error ? error.message : String(error),
+      );
+    });
+  }, APP_DEPLOYMENT_DISPATCH_INTERVAL_MS);
+  appDeploymentDispatchReconciler.unref();
+
   // Route WebSocket upgrades by path
   httpServer.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (!lifecycle.isReady()) {
@@ -693,6 +711,7 @@ async function main() {
               if (cloudIdleCleanup) clearInterval(cloudIdleCleanup);
               clearInterval(runtimeHardDeadlineReconciler);
               clearInterval(endpointTrafficCleanup);
+              clearInterval(appDeploymentDispatchReconciler);
 
               // Code 1012 tells bridges to reconnect to the replacement task
               // immediately. The persisted generation/lastSeen fences make the

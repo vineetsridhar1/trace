@@ -1,12 +1,16 @@
 import { GetObjectCommand, NoSuchKey, S3Client } from "@aws-sdk/client-s3";
+import type { AppDeployment } from "@prisma/client";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import { connect, type Socket } from "node:net";
 import type { AppDeploymentSpec } from "@trace/shared";
 import { prisma } from "../lib/db.js";
+import { forwardableRequestHeaders, forwardableResponseHeaders } from "./endpoint-utils.js";
 
 const MAX_REQUEST_BYTES = 10 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 50 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
+const DEPLOYMENT_CACHE_TTL_MS = 2_000;
+const MAX_DEPLOYMENT_CACHE_ENTRIES = 1_000;
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "content-length",
@@ -37,8 +41,7 @@ function serviceNamespace(): string {
 
 function requestHeaders(headers: IncomingHttpHeaders): Headers {
   const forwarded = new Headers();
-  for (const [name, raw] of Object.entries(headers)) {
-    if (HOP_BY_HOP_HEADERS.has(name.toLowerCase()) || raw === undefined) continue;
+  for (const [name, raw] of Object.entries(forwardableRequestHeaders(headers))) {
     if (Array.isArray(raw)) raw.forEach((value) => forwarded.append(name, value));
     else forwarded.set(name, raw);
   }
@@ -82,22 +85,44 @@ function deploymentSpec(value: unknown): AppDeploymentSpec {
 }
 
 function copyResponseHeaders(source: Headers, res: ServerResponse): void {
-  for (const [name, value] of source.entries()) {
-    if (
-      HOP_BY_HOP_HEADERS.has(name.toLowerCase()) ||
-      name.toLowerCase() === "content-encoding" ||
-      name.toLowerCase() === "set-cookie"
-    ) {
-      continue;
-    }
+  const headers: Record<string, string | string[]> = {};
+  for (const [name, value] of source.entries()) headers[name] = value;
+  const cookies = source.getSetCookie();
+  if (cookies.length) headers["set-cookie"] = cookies;
+  for (const [name, value] of Object.entries(forwardableResponseHeaders(headers))) {
+    if (name.toLowerCase() === "content-encoding") continue;
     res.setHeader(name, value);
   }
-  const cookies = source.getSetCookie();
-  if (cookies.length) res.setHeader("set-cookie", cookies);
+}
+
+function webSocketRequest(req: IncomingMessage): string {
+  const forwarded = forwardableRequestHeaders(req.headers, { websocket: true });
+  forwarded.host = req.headers.host ?? "";
+  for (const name of [
+    "connection",
+    "upgrade",
+    "sec-websocket-key",
+    "sec-websocket-version",
+    "sec-websocket-extensions",
+    "sec-websocket-protocol",
+  ]) {
+    const value = req.headers[name];
+    if (value !== undefined) forwarded[name] = value;
+  }
+  let request = `${req.method ?? "GET"} ${req.url ?? "/"} HTTP/${req.httpVersion}\r\n`;
+  for (const [name, value] of Object.entries(forwarded)) {
+    const values = Array.isArray(value) ? value : [value];
+    for (const entry of values) request += `${name}: ${entry}\r\n`;
+  }
+  return `${request}\r\n`;
 }
 
 export class PublishedAppGateway {
   private readonly s3 = new S3Client({});
+  private readonly deployments = new Map<
+    string,
+    { value: AppDeployment | null; expiresAt: number }
+  >();
 
   extractSlug(hostHeader: string | undefined): string | null {
     const expected = baseHost();
@@ -108,10 +133,7 @@ export class PublishedAppGateway {
   }
 
   async handle(req: IncomingMessage, res: ServerResponse, appSlug: string): Promise<void> {
-    const deployment = await prisma.appDeployment.findFirst({
-      where: { appSlug, status: "live" },
-      orderBy: { completedAt: "desc" },
-    });
+    const deployment = await this.liveDeployment(appSlug);
     if (!deployment) {
       res.writeHead(404, { "Content-Type": "text/plain", "Cache-Control": "no-store" });
       res.end("Published app not found");
@@ -147,11 +169,8 @@ export class PublishedAppGateway {
       socket.write(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\n\r\n`);
       socket.destroy();
     };
-    const deployment = await prisma.appDeployment.findFirst({
-      where: { appSlug, status: "live", target: "service" },
-      orderBy: { completedAt: "desc" },
-    });
-    if (!deployment?.serviceName) {
+    const deployment = await this.liveDeployment(appSlug);
+    if (deployment?.target !== "service" || !deployment.serviceName) {
       reject(404, "Published app not found");
       return;
     }
@@ -178,11 +197,7 @@ export class PublishedAppGateway {
     upstream.once("connect", () => {
       connected = true;
       upstream.setTimeout(0);
-      let request = `${req.method ?? "GET"} ${req.url ?? "/"} HTTP/${req.httpVersion}\r\n`;
-      for (let index = 0; index < req.rawHeaders.length; index += 2) {
-        request += `${req.rawHeaders[index]}: ${req.rawHeaders[index + 1]}\r\n`;
-      }
-      upstream.write(`${request}\r\n`);
+      upstream.write(webSocketRequest(req));
       if (head.length) upstream.write(head);
       socket.pipe(upstream).pipe(socket);
     });
@@ -219,13 +234,23 @@ export class PublishedAppGateway {
     if (object.ContentLength && object.ContentLength > MAX_RESPONSE_BYTES) {
       throw new Error("Published app response is too large");
     }
-    const body = Buffer.from(await object.Body.transformToByteArray());
     res.writeHead(200, {
       "Content-Type": object.ContentType ?? "application/octet-stream",
       "Cache-Control": servedPath === "index.html" ? "no-cache" : "public, max-age=300",
       "X-Content-Type-Options": "nosniff",
     });
-    res.end(req.method === "HEAD" ? undefined : body);
+    if (req.method === "HEAD") {
+      res.end();
+      return;
+    }
+    let size = 0;
+    for await (const value of object.Body as AsyncIterable<Uint8Array>) {
+      const chunk = Buffer.from(value);
+      size += chunk.byteLength;
+      if (size > MAX_RESPONSE_BYTES) throw new Error("Published app response is too large");
+      res.write(chunk);
+    }
+    res.end();
   }
 
   private async proxyService(
@@ -259,6 +284,26 @@ export class PublishedAppGateway {
       res.write(chunk);
     }
     res.end();
+  }
+
+  private async liveDeployment(appSlug: string): Promise<AppDeployment | null> {
+    const now = Date.now();
+    const cached = this.deployments.get(appSlug);
+    if (cached && cached.expiresAt > now) return cached.value;
+    const deployment = await prisma.appDeployment.findFirst({
+      where: { appSlug, status: "live" },
+      orderBy: { completedAt: "desc" },
+    });
+    if (!this.deployments.has(appSlug) && this.deployments.size >= MAX_DEPLOYMENT_CACHE_ENTRIES) {
+      const oldest = this.deployments.keys().next().value;
+      if (oldest) this.deployments.delete(oldest);
+    }
+    this.deployments.delete(appSlug);
+    this.deployments.set(appSlug, {
+      value: deployment,
+      expiresAt: now + DEPLOYMENT_CACHE_TTL_MS,
+    });
+    return deployment;
   }
 }
 

@@ -41,6 +41,7 @@ var traceCliOperations = {
     capability: "app:deploy",
     argumentPaths: [
       "input.sessionGroupId",
+      "input.clientMutationId",
       "input.target",
       "input.buildCommand",
       "input.outputDirectory",
@@ -1020,6 +1021,9 @@ var artifactCommand = defineCommand({
   }
 });
 
+// src/commands/app/index.ts
+import { randomUUID as randomUUID2 } from "node:crypto";
+
 // src/commands/app/shared.ts
 function requireCurrentAppGroup(ctx) {
   const sessionGroupId = ctx.env.TRACE_SESSION_GROUP_ID;
@@ -1058,6 +1062,13 @@ var deployCommand = defineCommand({
     "A migration command is valid only with --database."
   ],
   options: [
+    {
+      name: "idempotencyKey",
+      flag: "--idempotency-key",
+      kind: "string",
+      valueName: "KEY",
+      description: "Stable key for safely retrying the same deployment request"
+    },
     {
       name: "target",
       flag: "--target",
@@ -1122,6 +1133,7 @@ var deployCommand = defineCommand({
     if (!target) usage("--target is required");
     const input = {
       sessionGroupId: requireCurrentAppGroup(ctx),
+      clientMutationId: optionString(parsed, "idempotencyKey") ?? randomUUID2(),
       target,
       buildCommand: optionString(parsed, "buildCommand"),
       outputDirectory: optionString(parsed, "outputDirectory"),
@@ -1910,7 +1922,7 @@ var sessionRunCommand = defineCommand({
 });
 
 // src/commands/session/send.ts
-import { randomUUID as randomUUID2 } from "node:crypto";
+import { randomUUID as randomUUID3 } from "node:crypto";
 var sessionSendCommand = defineCommand({
   path: ["session", "send"],
   description: "Send or queue a message for a session",
@@ -1965,7 +1977,7 @@ var sessionSendCommand = defineCommand({
       );
       return;
     }
-    const variables = { sessionId: id, text, interactionMode, clientMutationId: randomUUID2() };
+    const variables = { sessionId: id, text, interactionMode, clientMutationId: randomUUID3() };
     const result = await client.graphql(
       traceCliOperations.sendSessionMessage,
       variables
@@ -1978,7 +1990,7 @@ var sessionSendCommand = defineCommand({
 });
 
 // src/commands/session/start.ts
-import { randomUUID as randomUUID3 } from "node:crypto";
+import { randomUUID as randomUUID4 } from "node:crypto";
 var sessionStartCommand = defineCommand({
   path: ["session", "start"],
   description: "Start a new session group or add a session to an explicit group",
@@ -2138,7 +2150,7 @@ var sessionStartCommand = defineCommand({
       visibility: optionString(parsed, "visibility"),
       interactionMode: optionString(parsed, "interactionMode"),
       prompt: optionString(parsed, "prompt"),
-      clientMutationId: optionString(parsed, "idempotencyKey") ?? randomUUID3(),
+      clientMutationId: optionString(parsed, "idempotencyKey") ?? randomUUID4(),
       deferRuntimeSelection: optionBoolean(parsed, "defer") || void 0
     };
     const positionalPrompt = parsed.positionals.join(" ").trim();

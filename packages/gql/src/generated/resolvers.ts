@@ -460,6 +460,7 @@ export type DeliveryResult =
 
 export type DeployAppSessionInput = {
   buildCommand?: InputMaybe<Scalars["String"]["input"]>;
+  clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   database?: InputMaybe<Scalars["Boolean"]["input"]>;
   healthPath?: InputMaybe<Scalars["String"]["input"]>;
   migrationCommand?: InputMaybe<Scalars["String"]["input"]>;

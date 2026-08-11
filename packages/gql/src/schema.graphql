@@ -1136,6 +1136,7 @@ type AppDeployment {
 
 input DeployAppSessionInput {
   sessionGroupId: ID!
+  clientMutationId: String
   target: String!
   buildCommand: String
   outputDirectory: String

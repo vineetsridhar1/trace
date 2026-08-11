@@ -41,12 +41,20 @@ router.post(
       return;
     }
     try {
-      const deployment = await appDeploymentService.updateFromCallback(
+      const result = await appDeploymentService.updateFromCallback(
         deploymentId,
         match[1],
         parseCallback(req.body),
       );
-      res.json({ id: deployment.id, status: deployment.status });
+      if (!result.accepted) {
+        res.status(409).json({
+          error: "Deployment is no longer current",
+          id: result.deployment.id,
+          status: result.deployment.status,
+        });
+        return;
+      }
+      res.json({ id: result.deployment.id, status: result.deployment.status, accepted: true });
     } catch (error) {
       if (error instanceof AuthorizationError) {
         res.status(401).json({ error: error.message });
