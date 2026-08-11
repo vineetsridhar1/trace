@@ -55,7 +55,9 @@ export function actionRequiredArtifactForToolError(
 
   if (
     tool === "codex" &&
-    /not logged in|login required|run codex login|authentication required/i.test(message)
+    /not logged in|login required|run\s+(?:`?codex`?\s+)?login|authentication required|unauthorized|\b401\b|invalid api[ _-]?key|no api[ _-]?key|openai_api_key.*(?:not set|missing)/i.test(
+      message,
+    )
   ) {
     return {
       kind: "login_required",

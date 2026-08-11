@@ -16,6 +16,9 @@ describe("actionRequiredArtifactForToolError", () => {
       actionRequiredArtifactForToolError("codex", "Not logged in. Run codex login."),
     ).toMatchObject({ kind: "login_required", provider: "codex" });
     expect(
+      actionRequiredArtifactForToolError("codex", "401 Unauthorized: invalid API key"),
+    ).toMatchObject({ kind: "login_required", provider: "codex" });
+    expect(
       actionRequiredArtifactForToolError("claude_code", "Not logged in · Please run /login"),
     ).toMatchObject({ kind: "login_required", provider: "claude_code" });
     expect(actionRequiredArtifactForToolError("pi", "Not logged in · Please run /login")).toMatchObject({
