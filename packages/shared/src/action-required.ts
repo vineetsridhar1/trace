@@ -90,3 +90,29 @@ export function actionRequiredArtifactForToolError(
 
   return undefined;
 }
+
+/** Extract a provider failure from a normalized tool output without trusting the UI state. */
+export function actionRequiredArtifactForToolOutput(
+  tool: string | undefined,
+  output: unknown,
+): ActionRequiredArtifact | undefined {
+  if (!output || typeof output !== "object" || Array.isArray(output)) return undefined;
+  const data = output as Record<string, unknown>;
+  if (data.type === "error" && typeof data.message === "string") {
+    return actionRequiredArtifactForToolError(tool, data.message);
+  }
+  if (data.type !== "assistant" || !data.message || typeof data.message !== "object") {
+    return undefined;
+  }
+  const content = (data.message as Record<string, unknown>).content;
+  if (!Array.isArray(content)) return undefined;
+  const message = content
+    .map((block) => {
+      if (!block || typeof block !== "object" || Array.isArray(block)) return "";
+      const value = block as Record<string, unknown>;
+      return value.type === "text" && typeof value.text === "string" ? value.text : "";
+    })
+    .join("\n")
+    .trim();
+  return message ? actionRequiredArtifactForToolError(tool, message) : undefined;
+}

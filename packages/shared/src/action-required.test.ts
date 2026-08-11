@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { actionRequiredArtifactForToolError } from "./action-required.js";
+import {
+  actionRequiredArtifactForToolError,
+  actionRequiredArtifactForToolOutput,
+} from "./action-required.js";
 
 describe("actionRequiredArtifactForToolError", () => {
   it("recognizes GitHub credentials errors before tool-specific login errors", () => {
@@ -29,5 +32,14 @@ describe("actionRequiredArtifactForToolError", () => {
 
   it("leaves unknown errors unclassified", () => {
     expect(actionRequiredArtifactForToolError("codex", "unexpected process exit")).toBeUndefined();
+  });
+
+  it("classifies assistant text at the time the tool output is recorded", () => {
+    expect(
+      actionRequiredArtifactForToolOutput("claude_code", {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Not logged in · Please run /login" }] },
+      }),
+    ).toMatchObject({ kind: "login_required", provider: "claude_code" });
   });
 });

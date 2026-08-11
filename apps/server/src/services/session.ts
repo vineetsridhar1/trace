@@ -15,6 +15,7 @@ import {
   hasQuestionBlock,
   hasPlanBlock,
   actionRequiredArtifactForToolError,
+  actionRequiredArtifactForToolOutput,
   isSupportedModel,
   isSupportedReasoningEffort,
   MAX_WORKSPACE_NAME_LENGTH,
@@ -6270,6 +6271,7 @@ export class SessionService {
       where: { id: sessionId },
       select: {
         organizationId: true,
+        tool: true,
         agentStatus: true,
         sessionStatus: true,
         sessionGroupId: true,
@@ -6279,13 +6281,19 @@ export class SessionService {
 
     const parentToolUseId =
       typeof data.parentToolUseId === "string" ? data.parentToolUseId : undefined;
+    const artifact = actionRequiredArtifactForToolOutput(session.tool, data);
+    const payload = {
+      ...data,
+      sourceTool: session.tool,
+      ...(artifact ? { artifact } : {}),
+    };
 
     await eventService.create({
       organizationId: session.organizationId,
       scopeType: "session",
       scopeId: sessionId,
       eventType: "session_output",
-      payload: data as unknown as Prisma.InputJsonValue,
+      payload: payload as Prisma.InputJsonValue,
       actorType: "system",
       actorId: "system",
       ...(parentToolUseId ? { parentId: parentToolUseId } : {}),
