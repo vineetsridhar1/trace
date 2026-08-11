@@ -13,7 +13,7 @@ import { Button } from "../../ui/button";
 
 const LOGIN_COMMANDS = {
   codex: "codex login",
-  claude_code: "claude login",
+  claude_code: "claude\n/login",
   github: "gh auth login",
   pi: "pi\n/login",
 } as const;

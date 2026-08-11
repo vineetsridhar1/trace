@@ -153,6 +153,11 @@ function renderSessionOutput(
   const type = payload.type;
   if (typeof type !== "string") return null;
 
+  const artifact = asJsonObject(payload.artifact);
+  if (sessionId && isActionRequiredArtifact(artifact)) {
+    return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
+  }
+
   if (type === "assistant" || type === "user") {
     return renderAssistantContent(
       payload,
@@ -175,18 +180,10 @@ function renderSessionOutput(
   }
 
   if (type === "error") {
-    const artifact = asJsonObject(payload.artifact);
-    if (sessionId && isActionRequiredArtifact(artifact)) {
-      return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
-    }
     return <CompletionRow timestamp={ts} error={str(payload.message)} />;
   }
 
   if (type === "workspace_failed") {
-    const artifact = asJsonObject(payload.artifact);
-    if (sessionId && isActionRequiredArtifact(artifact)) {
-      return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
-    }
     const error = str(payload.error);
     return <SystemBadge text={error || "Workspace preparation failed"} />;
   }
@@ -275,8 +272,8 @@ export const SessionMessage = memo(function SessionMessage({
 
     case "session_output":
       return payload
-        ? renderSessionOutput(
-          payload,
+          ? renderSessionOutput(
+              payload,
             sessionId,
             timestamp,
             scopeKey,

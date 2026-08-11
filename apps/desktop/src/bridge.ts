@@ -300,6 +300,16 @@ function getPendingInputToolUseId(output: ToolOutput): string | null {
   return null;
 }
 
+function actionableErrorMessage(output: ToolOutput): string | undefined {
+  if (output.type === "error") return output.message;
+  if (output.type !== "assistant") return undefined;
+  const text = output.message.content
+    .map((block) => (block.type === "text" ? block.text : ""))
+    .join("\n")
+    .trim();
+  return text || undefined;
+}
+
 export type BridgeConnectionStatus = "connecting" | "connected" | "disconnected";
 
 type BridgeAuthContext = {
@@ -994,15 +1004,13 @@ export class BridgeClient implements IBridgeClient {
         }
 
         hasForwardedOutput = true;
-        const artifact =
-          output.type === "error"
-            ? actionRequiredArtifactForToolError(tool, output.message)
-            : undefined;
+        const message = actionableErrorMessage(output);
+        const artifact = message ? actionRequiredArtifactForToolError(tool, message) : undefined;
         const data =
-          output.type === "error"
+          artifact && (output.type === "error" || output.type === "assistant")
             ? {
                 ...output,
-                ...(artifact ? { artifact } : {}),
+                artifact,
               }
             : output;
         this.send({ type: "session_output", sessionId, data });

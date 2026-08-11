@@ -353,6 +353,7 @@ export function parseTraceInputResponses(text: string): TraceInputResponse[] {
 export interface AssistantEvent {
   type: "assistant";
   message: { content: MessageBlock[] };
+  artifact?: import("../action-required.js").ActionRequiredArtifact;
   /** Set when this message was produced inside a subagent, pointing to the spawning tool_use id. */
   parentToolUseId?: string;
   /** Token usage for this assistant message, when the tool reports it incrementally. */
