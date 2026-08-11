@@ -32,6 +32,9 @@ export function ActionRequiredArtifactCard({
     | undefined;
   const setActivePage = useUIStore((state) => state.setActivePage);
   const setSettingsInitialTab = useUIStore((state) => state.setSettingsInitialTab);
+  const setSettingsInitialApiTokenProvider = useUIStore(
+    (state) => state.setSettingsInitialApiTokenProvider,
+  );
   const setShowTerminalPanel = useUIStore((state) => state.setShowTerminalPanel);
   const setActiveTerminalId = useUIStore((state) => state.setActiveTerminalId);
   const addTerminal = useTerminalStore((state) => state.addTerminal);
@@ -39,6 +42,8 @@ export function ActionRequiredArtifactCard({
   const [retrying, setRetrying] = useState(false);
 
   const openApiTokens = () => {
+    if (artifact.kind !== "credential_required") return;
+    setSettingsInitialApiTokenProvider(artifact.provider);
     setSettingsInitialTab("api-keys");
     setActivePage("settings");
   };
@@ -93,7 +98,7 @@ export function ActionRequiredArtifactCard({
     artifact.kind === "credential_required" ? (
       <Button size="sm" onClick={openApiTokens}>
         <KeyRound />
-        Add {artifact.provider === "anthropic" ? "Anthropic" : "Codex"} credentials
+        Add {artifact.provider === "anthropic" ? "Anthropic" : "OpenAI"} API key
       </Button>
     ) : artifact.kind === "login_required" ? (
       <Button

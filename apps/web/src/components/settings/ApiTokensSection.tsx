@@ -10,6 +10,7 @@ import { ClaudeIcon, CodexIcon } from "../ui/tool-icons";
 import { CodexAuthenticationDialog } from "./CodexAuthenticationDialog";
 import { SettingsSectionHeader } from "./SettingsSectionHeader";
 import { SettingsStatusPill } from "./SettingsStatusPill";
+import { useUIStore } from "../../stores/ui";
 
 const API_TOKENS_QUERY = gql`
   query MyApiTokens {
@@ -108,6 +109,12 @@ function ProviderIcon({ provider }: { provider: string }) {
 
 export function ApiTokensSection() {
   const user = useAuthStore((s: { user: { id: string } | null }) => s.user);
+  const settingsInitialApiTokenProvider = useUIStore(
+    (state) => state.settingsInitialApiTokenProvider,
+  );
+  const setSettingsInitialApiTokenProvider = useUIStore(
+    (state) => state.setSettingsInitialApiTokenProvider,
+  );
   const isDesktopShell = typeof window !== "undefined" && typeof window.trace !== "undefined";
   const [tokens, setTokens] = useState<TokenStatus[]>([]);
   const [codexCredential, setCodexCredential] = useState<{
@@ -136,6 +143,15 @@ export function ApiTokensSection() {
   useEffect(() => {
     fetchTokens();
   }, [fetchTokens]);
+
+  useEffect(() => {
+    if (!settingsInitialApiTokenProvider) return;
+    setEditing(settingsInitialApiTokenProvider);
+    setInputValue("");
+    setShowInput(false);
+    setErrorMessage(null);
+    setSettingsInitialApiTokenProvider(null);
+  }, [settingsInitialApiTokenProvider, setSettingsInitialApiTokenProvider]);
 
   function startEditing(provider: string) {
     setEditing(provider);
