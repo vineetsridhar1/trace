@@ -8,13 +8,17 @@ on:
     tags:
       - "runtime-v*"
 
+# No id-token: the shared action reaches ECR through the runner pod's IRSA
+# identity, not GitHub OIDC. No packages: write either, now that nothing here
+# publishes to GHCR.
 permissions:
   contents: read
-  packages: write
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    # linux/arm64 only, built natively. trace-deployment is the only consumer and
+    # builds arm64, and these pods carry no qemu for a cross-architecture build.
+    runs-on: arm-builder-lg
     steps:
       - uses: actions/checkout@v4
 
@@ -33,35 +37,54 @@ jobs:
       - name: Build container bridge
         run: pnpm --filter @trace/container-bridge build
 
-      - name: Compute image name
-        id: image
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/trace-agent-runtime" >> "$GITHUB_OUTPUT"
+      - name: Short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-qemu-action@v3
-
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
+      # The Dockerfile COPYs packages/shared/dist and apps/container-bridge/dist,
+      # so the pnpm builds above are prerequisites rather than conveniences. That
+      # is why this calls the composite action from inside a job instead of the
+      # build-push reusable workflow, which owns the whole job and would leave
+      # nowhere to produce them.
+      - name: Build and push
+        id: build
+        uses: opendoor-labs/gha/build-push@build-push-1.4.0-action
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/metadata-action@v5
-        id: meta
-        with:
-          images: ${{ steps.image.outputs.name }}
-          tags: |
-            type=sha,prefix=sha-
-            type=ref,event=branch
-            type=ref,event=tag
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - uses: docker/build-push-action@v6
-        with:
+          image_name: trace-container-bridge
+          image_tag: sha-${{ steps.sha.outputs.short }}
+          platform: linux/arm64
+          add_platform_suffix: false
+          dockerfile: apps/container-bridge/Dockerfile
           context: .
-          file: apps/container-bridge/Dockerfile
-          platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          # Off deliberately: buildah exports cache into the image repository
+          # itself, and this image is published rarely enough that cache tags
+          # accumulating alongside it costs more than the rebuild saves.
+          cache-mode: disabled
+
+      # The action publishes one tag, so the moving tags are pushed from local
+      # storage. gzip matches the action's own compression, so these upload a
+      # manifest rather than the layers again.
+      - name: Push latest
+        if: github.ref == 'refs/heads/main'
+        env:
+          IMAGE: ${{ steps.build.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          latest="${IMAGE%:*}:latest"
+          sudo buildah tag "$IMAGE" "$latest"
+          sudo buildah push --compression-format gzip "$latest"
+
+      # runtime-v* tags are a deliberate release marker, so they survive the move
+      # off docker/metadata-action. Its branch-ref tags do not: nothing consumes
+      # them.
+      - name: Push release tag
+        if: startsWith(github.ref, 'refs/tags/runtime-v')
+        env:
+          IMAGE: ${{ steps.build.outputs.image_tag }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          release="${IMAGE%:*}:${RELEASE_TAG}"
+          sudo buildah tag "$IMAGE" "$release"
+          sudo buildah push --compression-format gzip "$release"
