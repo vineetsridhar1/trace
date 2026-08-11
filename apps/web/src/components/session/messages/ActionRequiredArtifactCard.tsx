@@ -15,6 +15,7 @@ const LOGIN_COMMANDS = {
   codex: "codex login",
   claude_code: "claude login",
   github: "gh auth login",
+  pi: "pi\n/login",
 } as const;
 
 export function ActionRequiredArtifactCard({

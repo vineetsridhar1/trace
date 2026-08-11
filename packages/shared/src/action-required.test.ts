@@ -11,13 +11,17 @@ describe("actionRequiredArtifactForToolError", () => {
     ).toMatchObject({ kind: "login_required", provider: "github" });
   });
 
-  it("recognizes local Codex and Claude Code login errors", () => {
+  it("recognizes local Codex, Claude Code, and Pi login errors", () => {
     expect(
       actionRequiredArtifactForToolError("codex", "Not logged in. Run codex login."),
     ).toMatchObject({ kind: "login_required", provider: "codex" });
     expect(actionRequiredArtifactForToolError("claude_code", "Login required")).toMatchObject({
       kind: "login_required",
       provider: "claude_code",
+    });
+    expect(actionRequiredArtifactForToolError("pi", "Not logged in · Please run /login")).toMatchObject({
+      kind: "login_required",
+      provider: "pi",
     });
   });
 

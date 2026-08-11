@@ -15,7 +15,7 @@ export type ActionRequiredArtifact =
     }
   | {
       kind: "login_required";
-      provider: "codex" | "claude_code" | "github";
+      provider: "codex" | "claude_code" | "github" | "pi";
       title: string;
       description: string;
     };
@@ -32,7 +32,10 @@ export function isActionRequiredArtifact(value: unknown): value is ActionRequire
   }
   return (
     artifact.kind === "login_required" &&
-    (artifact.provider === "codex" || artifact.provider === "claude_code" || artifact.provider === "github")
+    (artifact.provider === "codex" ||
+      artifact.provider === "claude_code" ||
+      artifact.provider === "github" ||
+      artifact.provider === "pi")
   );
 }
 
@@ -71,6 +74,15 @@ export function actionRequiredArtifactForToolError(
       provider: "claude_code",
       title: "Sign in to Claude Code",
       description: "This local runtime needs a Claude Code login to continue.",
+    };
+  }
+
+  if (tool === "pi" && /not logged in|please run \/login|login required/i.test(message)) {
+    return {
+      kind: "login_required",
+      provider: "pi",
+      title: "Sign in to Pi",
+      description: "This local runtime needs a Pi login to continue.",
     };
   }
 
