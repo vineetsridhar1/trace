@@ -38,6 +38,7 @@ import {
   inspectSessionCurrentBranch,
   inspectSessionGitSyncStatus,
   BridgeOutbox,
+  actionRequiredArtifactForToolError,
 } from "@trace/shared";
 import { buildTraceInvocationEnv } from "@trace/shared/trace-invocation-env";
 import { ensureTraceRuntime } from "@trace/shared/trace-runtime";
@@ -1087,7 +1088,18 @@ export class BridgeClient implements IBridgeClient {
         }
 
         hasForwardedOutput = true;
-        this.send({ type: "session_output", sessionId, data: output });
+        const artifact =
+          output.type === "error"
+            ? actionRequiredArtifactForToolError(tool, output.message)
+            : undefined;
+        const data =
+          output.type === "error"
+            ? {
+                ...output,
+                ...(artifact ? { artifact } : {}),
+              }
+            : output;
+        this.send({ type: "session_output", sessionId, data });
 
         // Phase 1: collect tool_use blocks whose command is a git commit/push
         const newPending = extractGitToolUsePending(output);

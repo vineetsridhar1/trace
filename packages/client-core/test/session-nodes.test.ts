@@ -20,6 +20,32 @@ function makeEvent(overrides: Partial<Event> = {}): Event {
 }
 
 describe("buildSessionNodes", () => {
+  it("keeps runtime start failures that carry an actionable artifact", () => {
+    const event = makeEvent({
+      eventType: "session_runtime_start_failed",
+      payload: {
+        artifact: {
+          kind: "credential_required",
+          provider: "openai",
+          title: "Connect Codex",
+          description: "Add a credential.",
+        },
+      },
+    });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([{ kind: "event", id: event.id }]);
+  });
+
+  it("continues hiding ordinary runtime start failures", () => {
+    const event = makeEvent({ eventType: "session_runtime_start_failed", payload: {} });
+
+    const result = buildSessionNodes([event.id], { [event.id]: event });
+
+    expect(result.nodes).toEqual([]);
+  });
+
   it("keeps runtime move markers even without a prompt", () => {
     const event = makeEvent({
       payload: {

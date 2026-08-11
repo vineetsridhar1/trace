@@ -13,6 +13,7 @@ import {
   getDefaultReasoningEffort,
   hasQuestionBlock,
   hasPlanBlock,
+  actionRequiredArtifactForToolError,
   isSupportedModel,
   isSupportedReasoningEffort,
   MAX_WORKSPACE_NAME_LENGTH,
@@ -2132,6 +2133,7 @@ export class SessionService {
           providerDeadlineEnforcementId: update.providerDeadlineEnforcementId,
         }),
         ...(update.error && { error: update.error }),
+        ...(update.artifact && { artifact: update.artifact }),
         ...(update.abandoned && { abandoned: true }),
         ...(update.reconcileAttempts !== undefined && {
           reconcileAttempts: update.reconcileAttempts,
@@ -7805,9 +7807,10 @@ export class SessionService {
   async workspaceFailed(sessionId: string, error: string) {
     const prev = await prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      select: { connection: true },
+      select: { connection: true, tool: true },
     });
     const conn = this.parseConnection(prev.connection);
+    const artifact = actionRequiredArtifactForToolError(prev.tool, error);
     const now = new Date().toISOString();
     const failedState: SessionConnectionData["state"] =
       conn.state === "timed_out" ? "timed_out" : "failed";
@@ -7845,6 +7848,7 @@ export class SessionService {
         type: "workspace_failed",
         sessionId,
         error,
+        ...(artifact ? { artifact } : {}),
         agentStatus: session.agentStatus,
         sessionStatus: session.sessionStatus,
         connection: nextConnection,

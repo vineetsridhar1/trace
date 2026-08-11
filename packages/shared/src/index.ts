@@ -17,6 +17,8 @@ export type {
   TraceInputResponse,
   PlanBlock,
 } from "./adapters/coding-tool.js";
+export type { ActionRequiredArtifact } from "./action-required.js";
+export { actionRequiredArtifactForToolError, isActionRequiredArtifact } from "./action-required.js";
 export {
   DESIGN_SYSTEM_LIMITS,
   DESIGN_SYSTEM_SCHEMA_VERSION,

@@ -1,6 +1,11 @@
 import { memo } from "react";
 import type { GitCheckpoint } from "@trace/gql";
-import { attachmentKeysFromPayload, asJsonObject, type JsonObject } from "@trace/shared";
+import {
+  attachmentKeysFromPayload,
+  asJsonObject,
+  isActionRequiredArtifact,
+  type JsonObject,
+} from "@trace/shared";
 import { useScopedEventField } from "@trace/client-core";
 import { useEventScopeKey } from "./EventScopeContext";
 import { UserBubble } from "./messages/UserBubble";
@@ -11,6 +16,7 @@ import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
 import { GitCheckpointChips } from "./messages/GitCheckpointChips";
 import { ArtifactUploadedCard } from "./messages/ArtifactUploadedCard";
+import { ActionRequiredArtifactCard } from "./messages/ActionRequiredArtifactCard";
 import { serializeUnknown } from "./messages/utils";
 import type { AgentToolResult } from "./groupReadGlob";
 import { structuredResponseSummary } from "./structuredResponseSummary";
@@ -174,10 +180,18 @@ function renderSessionOutput(
   }
 
   if (type === "error") {
+    const artifact = asJsonObject(payload.artifact);
+    if (sessionId && isActionRequiredArtifact(artifact)) {
+      return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
+    }
     return <CompletionRow timestamp={ts} error={str(payload.message)} />;
   }
 
   if (type === "workspace_failed") {
+    const artifact = asJsonObject(payload.artifact);
+    if (sessionId && isActionRequiredArtifact(artifact)) {
+      return <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />;
+    }
     const error = str(payload.error);
     return <SystemBadge text={error || "Workspace preparation failed"} />;
   }
@@ -245,6 +259,7 @@ export const SessionMessage = memo(function SessionMessage({
     | { type: string; id: string; name?: string | null }
     | undefined;
   const promptGitCheckpoints = gitCheckpointsByPromptEventId.get(id) ?? [];
+  const sessionId = useScopedEventField(scopeKey, id, "scopeId") as string | undefined;
 
   if (!eventType || !timestamp) return null;
 
@@ -282,6 +297,13 @@ export const SessionMessage = memo(function SessionMessage({
             showActions,
           )
         : null;
+
+    case "session_runtime_start_failed": {
+      const artifact = asJsonObject(payload?.artifact);
+      return sessionId && isActionRequiredArtifact(artifact) ? (
+        <ActionRequiredArtifactCard artifact={artifact} sessionId={sessionId} />
+      ) : null;
+    }
 
     case "message_sent":
       return (

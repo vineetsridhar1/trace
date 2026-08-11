@@ -2,6 +2,7 @@ import type { Event } from "@trace/gql";
 import {
   asJsonObject,
   hasVisibleUserSessionContent,
+  isActionRequiredArtifact,
   parseQuestion,
   parseTraceRequestInputs,
   type JsonObject,
@@ -259,6 +260,10 @@ export function buildSessionNodes(
 
     if (HIDDEN_SESSION_PAYLOAD_TYPE_SET.has(event.eventType)) {
       continue;
+    }
+    if (event.eventType === "session_runtime_start_failed") {
+      const payload = asJsonObject(event.payload);
+      if (!isActionRequiredArtifact(asJsonObject(payload?.artifact))) continue;
     }
     if (event.eventType === "session_started") {
       const payload = asJsonObject(event.payload);
