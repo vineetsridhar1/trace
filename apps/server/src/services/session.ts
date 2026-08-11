@@ -74,6 +74,7 @@ import {
   visibleSessionWhere,
 } from "./access.js";
 import { apiTokenService } from "./api-token.js";
+import { assertCloudToolCredentialConfigured } from "./cloud-runtime-credentials.js";
 import { assertActorOrgAccess } from "./actor-auth.js";
 import {
   GitHubApiError,
@@ -4923,6 +4924,14 @@ export class SessionService {
       : (resolveStoredReasoningEffortForTool(tool, userDefaults?.defaultSessionReasoningEffort) ??
         getDefaultReasoningEffort(tool));
 
+    const startsCloudRuntime =
+      hosting === "cloud" &&
+      input.deferInitialRun !== true &&
+      (!!input.prompt || !!input.provisionWithoutPrompt || !!input.restoreCheckpointId);
+    if (startsCloudRuntime) {
+      await assertCloudToolCredentialConfigured(input.createdById, tool);
+    }
+
     // Tracked so we can clean up the managed repo if the session transaction
     // below rolls back (it's created before the txn because it initializes
     // filesystem-backed git storage, not just a row).
@@ -7182,6 +7191,9 @@ export class SessionService {
       const needsProvisioning = !!session.repoId || session.hosting === "cloud";
       if (needsProvisioning) {
         assertCloudRepoRemoteAvailable(session.hosting, session.repo);
+        if (session.hosting === "cloud") {
+          await assertCloudToolCredentialConfigured(session.createdById, activeTool);
+        }
         const pendingSessionStatus = getRunningSessionStatus(session.sessionStatus);
         const pendingCommand: PendingSessionCommand = {
           type: "send",

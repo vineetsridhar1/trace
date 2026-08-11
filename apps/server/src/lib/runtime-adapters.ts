@@ -12,8 +12,10 @@ import {
   type RuntimeEnvironment,
 } from "./runtime-adapter-registry.js";
 import { orgSecretService } from "../services/org-secret.js";
-import { apiTokenService } from "../services/api-token.js";
-import { codexCredentialService } from "../services/codex-credential.js";
+import {
+  assertCloudToolCredentialAvailable,
+  resolveCloudRuntimeCredentialEnv,
+} from "../services/cloud-runtime-credentials.js";
 import { resolveJwtSecret } from "./jwt-secret.js";
 import { isLocalMode } from "./mode.js";
 import { logAgentEnvironmentTelemetry } from "./agent-environment-telemetry.js";
@@ -46,49 +48,6 @@ const RUNTIME_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const RUNTIME_TOKEN_STARTUP_MARGIN_SECONDS = 60;
 const JWT_SECRET = resolveJwtSecret();
 const LAUNCHER_REQUEST_TIMEOUT_MS = 30_000;
-
-async function resolveUserApiTokenEnv(userId: string): Promise<Record<string, string>> {
-  const [tokens, codexCredential] = await Promise.all([
-    apiTokenService.getDecryptedTokens(userId),
-    codexCredentialService.getDecryptedCredential(userId),
-  ]);
-  // Codex supports a dedicated credential as well as the user's OpenAI API
-  // key. Prefer the dedicated credential when both are present.
-  const codexAuthMethod = codexCredential?.method ?? (tokens.openai ? "api_key" : undefined);
-  const codexApiKey =
-    codexCredential?.method === "api_key"
-      ? codexCredential.credential
-      : codexCredential
-        ? undefined
-        : tokens.openai;
-  return {
-    ...(tokens.anthropic ? { ANTHROPIC_API_KEY: tokens.anthropic } : {}),
-    ...(tokens.openai ? { OPENAI_API_KEY: tokens.openai } : {}),
-    ...(codexAuthMethod ? { CODEX_AUTH_METHOD: codexAuthMethod } : {}),
-    ...(codexCredential?.method === "access_token"
-      ? { CODEX_ACCESS_TOKEN: codexCredential.credential }
-      : {}),
-    ...(codexApiKey ? { CODEX_API_KEY: codexApiKey } : {}),
-    ...(codexCredential?.method === "chatgpt_session"
-      ? { CODEX_AUTH_JSON: codexCredential.credential }
-      : {}),
-    ...(tokens.github ? { GITHUB_TOKEN: tokens.github } : {}),
-    ...(tokens.ssh_key ? { SSH_PRIVATE_KEY: tokens.ssh_key } : {}),
-  };
-}
-
-function assertToolCredentialAvailable(tool: string, env: Record<string, string>): void {
-  if (tool === "claude_code" && !env.ANTHROPIC_API_KEY) {
-    throw new Error(
-      "Cannot start cloud runtime for claude_code: add an Anthropic API key in Settings → API Tokens.",
-    );
-  }
-  if (tool === "codex" && !env.CODEX_AUTH_METHOD) {
-    throw new Error(
-      "Cannot start cloud runtime for codex: add a ChatGPT session, Codex access token, or OpenAI API key in Settings → API Tokens.",
-    );
-  }
-}
 
 type ProvisionedAuthConfig = {
   type: "bearer" | "hmac";
@@ -730,12 +689,12 @@ export class ProvisionedRuntimeAdapter implements RuntimeAdapter {
     const bridgeUrl = input.bridgeUrl ?? defaultBridgeUrl();
     const [runtimeEnv, userApiTokenEnv] = await Promise.all([
       resolveProvisionedRuntimeEnv(input.organizationId, config.runtimeEnv),
-      resolveUserApiTokenEnv(input.actorId),
+      resolveCloudRuntimeCredentialEnv(input.actorId),
     ]);
     // Check before contacting the launcher. The bridge can only discover a
     // missing credential after Fargate has started, which leaves an unusable
     // task behind until the idle reaper catches it.
-    assertToolCredentialAvailable(input.tool, userApiTokenEnv);
+    assertCloudToolCredentialAvailable(input.tool, userApiTokenEnv);
 
     const body = {
       sessionId: input.sessionId,
