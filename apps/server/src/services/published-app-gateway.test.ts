@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PublishedAppGateway, staticObjectPath } from "./published-app-gateway.js";
+import {
+  PublishedAppGateway,
+  publishedAppRequestHeaders,
+  staticObjectPath,
+} from "./published-app-gateway.js";
 
 describe("PublishedAppGateway", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -19,5 +23,25 @@ describe("PublishedAppGateway", () => {
     expect(staticObjectPath("/assets/app.js")).toBe("assets/app.js");
     expect(() => staticObjectPath("/%2e%2e/secret")).toThrow("Invalid published app path");
     expect(() => staticObjectPath("/assets%5csecret")).toThrow("Invalid published app path");
+  });
+
+  it("does not expose proxied same-origin requests as cross-origin", () => {
+    const headers = publishedAppRequestHeaders({
+      host: "notes-123.apps.trace.example.com",
+      origin: "https://notes-123.apps.trace.example.com",
+    });
+
+    expect(headers.get("x-forwarded-host")).toBe("notes-123.apps.trace.example.com");
+    expect(headers.get("x-forwarded-proto")).toBe("https");
+    expect(headers.get("origin")).toBeNull();
+  });
+
+  it("preserves cross-origin requests for the service app to authorize", () => {
+    const headers = publishedAppRequestHeaders({
+      host: "notes-123.apps.trace.example.com",
+      origin: "https://other.example.com",
+    });
+
+    expect(headers.get("origin")).toBe("https://other.example.com");
   });
 });

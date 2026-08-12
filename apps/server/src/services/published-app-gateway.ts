@@ -39,13 +39,23 @@ function serviceNamespace(): string {
   return namespace;
 }
 
-function requestHeaders(headers: IncomingHttpHeaders): Headers {
+export function publishedAppRequestHeaders(headers: IncomingHttpHeaders): Headers {
   const forwarded = new Headers();
   for (const [name, raw] of Object.entries(forwardableRequestHeaders(headers))) {
     if (Array.isArray(raw)) raw.forEach((value) => forwarded.append(name, value));
     else forwarded.set(name, raw);
   }
-  if (headers.host) forwarded.set("x-forwarded-host", headers.host);
+  if (headers.host) {
+    forwarded.set("x-forwarded-host", headers.host);
+    const origin = forwarded.get("origin");
+    try {
+      if (origin && new URL(origin).origin === new URL(`https://${headers.host}`).origin) {
+        forwarded.delete("origin");
+      }
+    } catch {
+      // Preserve malformed or non-URL origins for the upstream application to reject.
+    }
+  }
   forwarded.set("x-forwarded-proto", "https");
   return forwarded;
 }
@@ -264,7 +274,7 @@ export class PublishedAppGateway {
     upstream.port = String(spec.port);
     const response = await fetch(upstream, {
       method: req.method,
-      headers: requestHeaders(req.headers),
+      headers: publishedAppRequestHeaders(req.headers),
       body: await requestBody(req),
       redirect: "manual",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
