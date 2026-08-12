@@ -10,9 +10,7 @@ export interface CodingToolsState {
   recentlyUpdated: string[];
   lastCheckedAt: number | null;
   checkOnLaunch: boolean;
-  showSidebarCount: boolean;
   setCheckOnLaunch: (enabled: boolean) => void;
-  setShowSidebarCount: (enabled: boolean) => void;
   check: () => Promise<void>;
   installOrUpdate: (toolId: string) => Promise<void>;
   updateAll: () => Promise<void>;
@@ -34,14 +32,9 @@ export const useCodingToolsStore = create<CodingToolsState>((set, get) => ({
   recentlyUpdated: [],
   lastCheckedAt: null,
   checkOnLaunch: readPreference("trace:coding-tools:check-on-launch", true),
-  showSidebarCount: readPreference("trace:coding-tools:show-sidebar-count", true),
   setCheckOnLaunch: (enabled) => {
     localStorage.setItem("trace:coding-tools:check-on-launch", String(enabled));
     set({ checkOnLaunch: enabled });
-  },
-  setShowSidebarCount: (enabled) => {
-    localStorage.setItem("trace:coding-tools:show-sidebar-count", String(enabled));
-    set({ showSidebarCount: enabled });
   },
   check: () => {
     if (!window.trace?.getCodingToolStatuses) return Promise.resolve();

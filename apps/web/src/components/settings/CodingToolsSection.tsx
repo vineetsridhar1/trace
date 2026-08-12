@@ -252,12 +252,6 @@ export function CodingToolsSection() {
               onChange={setAutoUpdate}
             />
             <PreferenceSwitch
-              label="Show a count in the sidebar"
-              description="Turn this off to check manually from Coding tools instead."
-              checked={state.showSidebarCount}
-              onChange={state.setShowSidebarCount}
-            />
-            <PreferenceSwitch
               label="Include prerelease versions"
               description="Offer beta builds. Useful for testing, riskier for daily work."
               checked={includePrerelease}
