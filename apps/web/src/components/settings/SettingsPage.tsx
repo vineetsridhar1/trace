@@ -137,6 +137,7 @@ export function SettingsPage() {
     (membership: OrgMembership) => membership.organizationId === activeOrgId,
   )?.organization;
   const detail = TAB_DETAILS[activeTab];
+  const isDesktopShell = typeof window.trace !== "undefined";
 
   useEffect(() => {
     if (
@@ -155,7 +156,12 @@ export function SettingsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#0a0a0c] text-foreground [--background:#0a0a0c] [--border:#27272d] [--card:#161619] [--foreground:#fafafa] [--input:#27272d] [--muted-foreground:#9d9da8] [--popover:#161619] [--primary-foreground:#0a0a0c] [--primary:#fafafa]">
-      <header className="app-region-drag flex h-[52px] shrink-0 items-center justify-end border-b border-[#27272d] px-4 md:justify-between">
+      <header
+        className={cn(
+          "app-region-drag flex h-[52px] shrink-0 items-center justify-end border-b border-[#27272d] px-4 md:justify-between",
+          isDesktopShell && "pl-[92px]",
+        )}
+      >
         <div className="hidden min-w-0 items-center gap-2.5 md:flex">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-[11px] font-bold text-zinc-950">
             T
