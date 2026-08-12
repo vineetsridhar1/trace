@@ -190,6 +190,92 @@ describe("Trace CLI", () => {
     expect(stdout.mock.calls.flat().join("")).toContain('"status":"queued"');
   });
 
+  it("prints complete deployment failure details from app status", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-app");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: {
+                appDeployments: [
+                  {
+                    id: "deployment-1",
+                    status: "failed",
+                    target: "service",
+                    commitSha: "a".repeat(40),
+                    url: null,
+                    errorMessage: "CodeBuild failed: pnpm install exited with code 1",
+                    queuedAt: "2026-08-11T00:00:00.000Z",
+                    updatedAt: "2026-08-11T00:01:00.000Z",
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+
+    await expect(run(["app", "status", "--json"])).resolves.toBe(0);
+    expect(JSON.parse(stdout.mock.calls.flat().join(""))).toEqual({
+      deployments: [
+        expect.objectContaining({
+          status: "failed",
+          errorMessage: "CodeBuild failed: pnpm install exited with code 1",
+        }),
+      ],
+    });
+  });
+
+  it("surfaces app deploy validation errors with a failing exit code", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_SESSION_GROUP_ID", "group-app");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              errors: [
+                {
+                  message:
+                    "Persistent PostgreSQL is not enabled for published apps in this environment",
+                  extensions: { code: "BAD_USER_INPUT" },
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+      ),
+    );
+
+    await expect(
+      run([
+        "app",
+        "deploy",
+        "--target",
+        "service",
+        "--start-command",
+        "pnpm start",
+        "--database",
+        "--json",
+      ]),
+    ).resolves.toBe(4);
+    expect(JSON.parse(stderr.mock.calls.flat().join(""))).toEqual({
+      error: {
+        category: "validation",
+        message: "Persistent PostgreSQL is not enabled for published apps in this environment",
+      },
+    });
+  });
+
   it("starts a new group in the current session destination without exposing the bearer", async () => {
     vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
     vi.stubEnv("TRACE_SESSION_ID", "session-1");

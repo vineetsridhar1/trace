@@ -109,6 +109,7 @@ describe("AppDeploymentService", () => {
     enqueue.mockResolvedValue({ externalJobId: "message-1" });
     vi.stubEnv("TRACE_SERVER_PUBLIC_URL", "https://trace.example.com");
     vi.stubEnv("TRACE_PUBLISHED_APP_BASE_HOST", "apps.trace.example.com");
+    vi.stubEnv("TRACE_APP_DATA_ENABLED", "true");
   });
 
   it("queues the latest durable checkpoint without exposing the preview endpoint", async () => {
@@ -168,6 +169,16 @@ describe("AppDeploymentService", () => {
     await expect(service.deploy(serviceInput, "org-1", "user-1")).rejects.toThrow(
       "Commit the app before publishing",
     );
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("rejects database deployments before enqueue when app data is disabled", async () => {
+    vi.stubEnv("TRACE_APP_DATA_ENABLED", "false");
+    const service = new AppDeploymentService({ enqueue });
+
+    await expect(
+      service.deploy({ ...serviceInput, database: true }, "org-1", "user-1"),
+    ).rejects.toThrow("Persistent PostgreSQL is not enabled");
     expect(enqueue).not.toHaveBeenCalled();
   });
 
@@ -281,7 +292,7 @@ describe("AppDeploymentService", () => {
     expect(prismaMock.appDeployment.update).not.toHaveBeenCalled();
   });
 
-  it("fences duplicate nonterminal callbacks before infrastructure mutation", async () => {
+  it("accepts duplicate nonterminal callbacks so trusted promotion can resume", async () => {
     prismaMock.appDeployment.findUnique.mockResolvedValueOnce(deployment({ status: "deploying" }));
     const service = new AppDeploymentService({ enqueue });
 
@@ -289,7 +300,35 @@ describe("AppDeploymentService", () => {
       status: "deploying",
     });
 
-    expect(result.accepted).toBe(false);
+    expect(result.accepted).toBe(true);
     expect(prismaMock.appDeployment.update).not.toHaveBeenCalled();
+  });
+
+  it("expires orphaned queued deployments and emits the failure", async () => {
+    const stale = deployment({ updatedAt: new Date(now.getTime() - 16 * 60 * 1000) });
+    prismaMock.appDeployment.findMany.mockResolvedValueOnce([stale]);
+    prismaMock.appDeployment.updateMany.mockResolvedValueOnce({ count: 1 });
+    const service = new AppDeploymentService({ enqueue });
+
+    await expect(service.expireStaleDeployments()).resolves.toBe(1);
+    expect(prismaMock.appDeployment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "failed",
+          errorMessage: "Deployment timed out while queued",
+        }),
+      }),
+    );
+    expect(eventServiceMock.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        eventType: "app_deployment_updated",
+        payload: expect.objectContaining({
+          deployment: expect.objectContaining({
+            status: "failed",
+            errorMessage: "Deployment timed out while queued",
+          }),
+        }),
+      }),
+    );
   });
 });
