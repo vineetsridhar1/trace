@@ -817,6 +817,7 @@ export type EventType =
   | "queued_messages_drained"
   | "queued_messages_reordered"
   | "repo_created"
+  | "repo_deleted"
   | "repo_updated"
   | "session_application_log_appended"
   | "session_application_process_failed"
@@ -1092,6 +1093,7 @@ export type Mutation = {
   deleteCodexCredential: Scalars["Boolean"]["output"];
   deleteIntegrationConnection: Scalars["Boolean"]["output"];
   deleteOrgSecret: Scalars["Boolean"]["output"];
+  deleteRepo: Scalars["Boolean"]["output"];
   deleteSession: Session;
   deleteSessionGroup: Scalars["Boolean"]["output"];
   denyBridgeAccessRequest: BridgeAccessRequest;
@@ -1355,6 +1357,10 @@ export type MutationDeleteIntegrationConnectionArgs = {
 export type MutationDeleteOrgSecretArgs = {
   id: Scalars["ID"]["input"];
   orgId: Scalars["ID"]["input"];
+};
+
+export type MutationDeleteRepoArgs = {
+  id: Scalars["ID"]["input"];
 };
 
 export type MutationDeleteSessionArgs = {
@@ -3056,6 +3062,7 @@ export type UpdateRepoInput = {
   applicationConfig?: InputMaybe<RepoApplicationConfigInput>;
   defaultBranch?: InputMaybe<Scalars["String"]["input"]>;
   name?: InputMaybe<Scalars["String"]["input"]>;
+  remoteUrl?: InputMaybe<Scalars["String"]["input"]>;
 };
 
 export type UpdateSessionDefaultsInput = {

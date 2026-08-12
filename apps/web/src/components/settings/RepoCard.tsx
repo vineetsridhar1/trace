@@ -1,20 +1,20 @@
 import { useState } from "react";
-import { GitBranch, Pencil, Check, X } from "lucide-react";
+import { GitBranch, Pencil, Trash2 } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import {
-  UPDATE_REPO_MUTATION,
   REGISTER_REPO_WEBHOOK_MUTATION,
   UNREGISTER_REPO_WEBHOOK_MUTATION,
 } from "@trace/client-core";
 import { Button } from "../ui/button";
-import { BranchCombobox } from "../channel/BranchCombobox";
 import { RepoDesktopSection } from "./RepoDesktopSection";
 import { DisabledTooltip } from "../ui/DisabledTooltip";
 import { WEBHOOK_REPO_REMOTE_REQUIRED, hasRepoRemote } from "../../lib/repo-capabilities";
 import { isLocalMode } from "../../lib/runtime-mode";
 import { RepoApplicationsSection } from "./repo-applications/RepoApplicationsSection";
 import { SettingsStatusPill } from "./SettingsStatusPill";
+import { EditRepoDialog } from "./EditRepoDialog";
+import { DeleteRepoDialog } from "./DeleteRepoDialog";
 
 const isElectron = typeof window.trace?.getRepoConfig === "function";
 const LOCAL_MODE_WEBHOOK_DISABLED = "Local mode does not support GitHub webhooks.";
@@ -31,9 +31,8 @@ export function RepoCard({
   const remoteUrl = useEntityField("repos", id, "remoteUrl");
   const defaultBranch = useEntityField("repos", id, "defaultBranch");
   const webhookActive = useEntityField("repos", id, "webhookActive") as boolean | undefined;
-  const [editing, setEditing] = useState(false);
-  const [editBranch, setEditBranch] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [webhookPending, setWebhookPending] = useState(false);
   const [webhookError, setWebhookError] = useState<string | null>(null);
   const webhookDisabledReason = isLocalMode
@@ -41,36 +40,6 @@ export function RepoCard({
     : hasRepoRemote({ remoteUrl })
       ? null
       : WEBHOOK_REPO_REMOTE_REQUIRED;
-
-  const startEditing = () => {
-    setEditBranch(defaultBranch ?? "main");
-    setEditing(true);
-  };
-
-  const cancelEditing = () => {
-    setEditing(false);
-    setEditBranch("");
-  };
-
-  const saveBranch = async () => {
-    const trimmed = editBranch.trim();
-    if (!trimmed || trimmed === defaultBranch) {
-      cancelEditing();
-      return;
-    }
-    setSaving(true);
-    try {
-      await client
-        .mutation(UPDATE_REPO_MUTATION, {
-          id,
-          input: { defaultBranch: trimmed },
-        })
-        .toPromise();
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const toggleWebhook = async () => {
     if (webhookPending || webhookDisabledReason) return;
@@ -113,46 +82,27 @@ export function RepoCard({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-          {editing ? (
-            <>
-              <span>Default branch</span>
-              <div className="w-40">
-                <BranchCombobox repoId={id} value={editBranch} onChange={setEditBranch} />
-              </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={saveBranch}
-                disabled={saving}
-                aria-label="Save default branch"
-              >
-                <Check size={12} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={cancelEditing}
-                aria-label="Cancel editing default branch"
-              >
-                <X size={12} />
-              </Button>
-            </>
-          ) : (
-            <>
-              <span>Default branch</span>
-              <code className="rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground">
-                {defaultBranch}
-              </code>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={startEditing}
-                aria-label="Edit default branch"
-              >
-                <Pencil size={11} />
-              </Button>
-            </>
-          )}
+          <span>Default branch</span>
+          <code className="rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+            {defaultBranch}
+          </code>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setEditOpen(true)}
+            aria-label="Edit repository"
+          >
+            <Pencil size={11} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setDeleteOpen(true)}
+            aria-label="Delete repository"
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 size={12} />
+          </Button>
         </div>
       </div>
 
@@ -192,6 +142,21 @@ export function RepoCard({
 
       {isElectron && <RepoDesktopSection repoId={id} desktopRefreshKey={desktopRefreshKey} />}
       <RepoApplicationsSection repoId={id} />
+      <EditRepoDialog
+        repoId={id}
+        name={name ?? ""}
+        remoteUrl={remoteUrl ?? null}
+        defaultBranch={defaultBranch ?? "main"}
+        webhookActive={!!webhookActive}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+      <DeleteRepoDialog
+        repoId={id}
+        repoName={name ?? "Repository"}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+      />
     </div>
   );
 }

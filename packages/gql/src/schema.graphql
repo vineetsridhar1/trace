@@ -323,6 +323,7 @@ enum EventType {
   organization_created
   repo_created
   repo_updated
+  repo_deleted
   managed_git_token_minted
   channel_created
   channel_updated
@@ -1681,6 +1682,7 @@ input CreateRepoInput {
 
 input UpdateRepoInput {
   name: String
+  remoteUrl: String
   defaultBranch: String
   applicationConfig: RepoApplicationConfigInput
 }
@@ -2229,6 +2231,7 @@ type Mutation {
   createOrganization(input: CreateOrganizationInput!): OrgMember!
   createRepo(input: CreateRepoInput!): Repo!
   updateRepo(id: ID!, input: UpdateRepoInput!): Repo!
+  deleteRepo(id: ID!): Boolean!
   createProject(input: CreateProjectInput!): Project!
   dismissInboxItem(id: ID!): InboxItem!
   setApiToken(input: SetApiTokenInput!): ApiTokenStatus!

@@ -206,6 +206,7 @@ enum EventType {
   organization_created
   repo_created
   repo_updated
+  repo_deleted
   managed_git_token_minted
   channel_created
   channel_updated
