@@ -16,6 +16,11 @@ const ACTIVE_STATUSES: AppDeploymentStatus[] = ["queued", "building", "deploying
 const TERMINAL_STATUSES: AppDeploymentStatus[] = ["live", "failed", "superseded", "stopped"];
 const DISPATCH_LEASE_MS = 5 * 60 * 1000;
 const MAX_DISPATCH_ATTEMPTS = 8;
+const ACTIVE_DEPLOYMENT_TIMEOUTS_MS: Partial<Record<AppDeploymentStatus, number>> = {
+  queued: 15 * 60 * 1000,
+  building: 45 * 60 * 1000,
+  deploying: 25 * 60 * 1000,
+};
 const CALLBACK_TRANSITIONS: Record<AppDeploymentStatus, AppDeploymentStatus[]> = {
   queued: ["building", "failed"],
   building: ["deploying", "failed"],
@@ -226,6 +231,11 @@ export class AppDeploymentService {
   async deploy(input: DeployAppSessionInput, organizationId: string, userId: string) {
     const sessionGroupId = input.sessionGroupId;
     const spec = normalizeDeploymentSpec(input);
+    if (spec.database && process.env.TRACE_APP_DATA_ENABLED !== "true") {
+      throw new ValidationError(
+        "Persistent PostgreSQL is not enabled for published apps in this environment",
+      );
+    }
     const clientMutationId = input.clientMutationId?.trim() || undefined;
     if (clientMutationId && clientMutationId.length > 200) {
       throw new ValidationError("clientMutationId is too long");
@@ -321,6 +331,48 @@ export class AppDeploymentService {
     return deployments.length;
   }
 
+  async expireStaleDeployments(limit = 10): Promise<number> {
+    const now = new Date();
+    const candidates = await prisma.appDeployment.findMany({
+      where: {
+        OR: ACTIVE_STATUSES.map((status) => ({
+          status,
+          updatedAt: {
+            lte: new Date(now.getTime() - (ACTIVE_DEPLOYMENT_TIMEOUTS_MS[status] ?? 0)),
+          },
+        })),
+      },
+      orderBy: { updatedAt: "asc" },
+      take: limit,
+    });
+    let expired = 0;
+    for (const deployment of candidates) {
+      const timeout = ACTIVE_DEPLOYMENT_TIMEOUTS_MS[deployment.status];
+      if (!timeout || deployment.updatedAt.getTime() > now.getTime() - timeout) continue;
+      const updated = await prisma.appDeployment.updateMany({
+        where: { id: deployment.id, status: deployment.status, updatedAt: deployment.updatedAt },
+        data: {
+          status: "failed",
+          errorMessage: `Deployment timed out while ${deployment.status}`,
+          completedAt: now,
+        },
+      });
+      if (updated.count !== 1) continue;
+      expired += 1;
+      await emitUpdated(
+        {
+          ...deployment,
+          status: "failed",
+          errorMessage: `Deployment timed out while ${deployment.status}`,
+          completedAt: now,
+          updatedAt: now,
+        },
+        "app-deployment-reconciler",
+      );
+    }
+    return expired;
+  }
+
   private async dispatchPending(deploymentId: string): Promise<void> {
     const claimed = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${deploymentId}))`;
@@ -402,7 +454,7 @@ export class AppDeploymentService {
           deployment: existing,
           supersededLive: [] as AppDeployment[],
           updated: false,
-          accepted: TERMINAL_STATUSES.includes(existing.status),
+          accepted: true,
         };
       }
       if (TERMINAL_STATUSES.includes(existing.status)) {

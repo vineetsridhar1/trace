@@ -586,7 +586,10 @@ async function main() {
       enabled: !localMode,
       key: APP_DEPLOYMENT_DISPATCH_LOCK_KEY,
       ttlMs: APP_DEPLOYMENT_DISPATCH_INTERVAL_MS * 2,
-      run: () => appDeploymentService.reconcilePendingDispatches(),
+      run: async () => {
+        await appDeploymentService.expireStaleDeployments();
+        return appDeploymentService.reconcilePendingDispatches();
+      },
     }).catch((error: unknown) => {
       console.warn(
         "[app-deployment-dispatch] iteration failed",
