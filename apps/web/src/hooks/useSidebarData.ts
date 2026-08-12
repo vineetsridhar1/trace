@@ -465,14 +465,10 @@ export function useSidebarData() {
         }
       }
     }
-    const { activeChannelId, activeChatId, activePage } = useUIStore.getState();
+    const { activeChannelId } = useUIStore.getState();
     if (activeChannelId && !allChannelIds.includes(activeChannelId)) {
       useUIStore.getState().setActiveChannelId(allChannelIds[0] ?? null);
       return;
-    }
-    if (activeChannelId || activeChatId || activePage !== "main") return;
-    if (allChannelIds.length > 0) {
-      useUIStore.getState().setActiveChannelId(allChannelIds[0]);
     }
   }, [channelsLoading, allChannelIds]);
 
