@@ -30,14 +30,6 @@ export function CodingToolsSidebarItem() {
         : summary === "failed"
           ? { label: `${failureCount} update failed`, glyph: "!", tone: "text-[#ef4444]" }
           : { label: "Primary tool missing", glyph: "+", tone: "text-[#f59e0b]" };
-  const badgeCount = state.showSidebarCount
-    ? summary === "updates"
-      ? updateCount
-      : summary === "failed"
-        ? failureCount
-        : 0
-    : 0;
-
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
     if (nextOpen && !state.statuses && !state.checking) void state.check();
@@ -68,11 +60,6 @@ export function CodingToolsSidebarItem() {
               {copy.label}
             </span>
           </span>
-          {badgeCount > 0 ? (
-            <span className="rounded-full bg-[#f59e0b]/20 px-1.5 py-0.5 text-[11px] font-semibold text-[#fafafa]">
-              {badgeCount}
-            </span>
-          ) : null}
         </PopoverTrigger>
         <PopoverContent
           side="top"
