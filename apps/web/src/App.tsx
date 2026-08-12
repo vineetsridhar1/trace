@@ -170,35 +170,37 @@ function AuthenticatedApp({ activeChannelId }: { activeChannelId: string | null 
           isDesktopShell ? "[background:var(--trace-window-bg)]" : "bg-surface-deep"
         }`}
       >
-        <SidebarProvider className="min-h-0 flex-1">
-          <AppSidebar />
+        {activePage === "settings" ? (
+          <SettingsPage />
+        ) : (
+          <SidebarProvider className="min-h-0 flex-1">
+            <AppSidebar />
 
-          <MainContentFrame>
-            {activePage === "settings" ? (
-              <SettingsPage />
-            ) : activePage === "create" ? (
+            <MainContentFrame>
+              {activePage === "create" ? (
               <HomeView mode="create" />
-            ) : activePage === "inbox" ? (
-              <InboxView />
-            ) : activePage === "search" ? (
-              <SearchResultsView />
-            ) : activePage === "tickets" && features.tickets ? (
-              <TicketsView />
-            ) : shouldRenderChatView ? (
-              <ChatView chatId={activeChatId} />
-            ) : shouldRenderSessionView ? (
-              <SessionGroupDetailView
-                key={activeSessionGroupId}
-                sessionGroupId={activeSessionGroupId}
-              />
-            ) : shouldRenderChannelView ? (
-              <ChannelView channelId={activeChannelId} />
-            ) : (
-              <HomeView />
-            )}
-          </MainContentFrame>
-          <AppTitleBar />
-        </SidebarProvider>
+              ) : activePage === "inbox" ? (
+                <InboxView />
+              ) : activePage === "search" ? (
+                <SearchResultsView />
+              ) : activePage === "tickets" && features.tickets ? (
+                <TicketsView />
+              ) : shouldRenderChatView ? (
+                <ChatView chatId={activeChatId} />
+              ) : shouldRenderSessionView ? (
+                <SessionGroupDetailView
+                  key={activeSessionGroupId}
+                  sessionGroupId={activeSessionGroupId}
+                />
+              ) : shouldRenderChannelView ? (
+                <ChannelView channelId={activeChannelId} />
+              ) : (
+                <HomeView />
+              )}
+            </MainContentFrame>
+            <AppTitleBar />
+          </SidebarProvider>
+        )}
       </div>
     </TooltipProvider>
   );
