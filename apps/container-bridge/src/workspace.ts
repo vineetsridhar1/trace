@@ -6,23 +6,13 @@ import {
   assertValidCommitSha,
   branchNamesFromGitRefsOutput,
   generatedTraceWorktreeBranch,
+  resolveGitHubCloneUrl,
   resolveGeneratedTraceWorktreeBranch,
   shouldRepairRenamedTraceWorktreeBranch,
 } from "@trace/shared";
 import type { BridgeWorkspaceWarning } from "@trace/shared";
 
 const execFileAsync = promisify(execFile);
-
-// True only for real github.com HTTPS remotes — used to gate token injection so
-// look-alike hosts (github.com.evil.com) never receive the credential.
-function isGitHubHttpsUrl(remoteUrl: string): boolean {
-  try {
-    const url = new URL(remoteUrl);
-    return url.protocol === "https:" && url.hostname.toLowerCase() === "github.com";
-  } catch {
-    return false;
-  }
-}
 
 const REPOS_DIR = "/repos";
 const WORKSPACES_DIR = process.env.TRACE_WORKSPACES_DIR ?? "/workspaces";
@@ -63,17 +53,10 @@ export async function ensureRepo(
   }
   const cloneBranch = branch ?? defaultBranch;
 
-  // Inject GitHub token into HTTPS URL for private repo access. Match the host
-  // exactly — a substring check would also match `github.com.evil.com`, leaking
-  // the org token to an attacker-controlled host.
-  let authUrl = remoteUrl;
-  const githubToken = process.env.GITHUB_TOKEN;
-  if (githubToken && isGitHubHttpsUrl(remoteUrl)) {
-    const parsed = new URL(remoteUrl);
-    parsed.username = "x-access-token";
-    parsed.password = githubToken;
-    authUrl = parsed.toString();
-  }
+  // GitHub tokens authenticate over HTTPS, including when the stored remote is
+  // scp-style SSH. This keeps cloud workspaces usable for the common case where
+  // a user has connected GitHub but has not supplied an SSH key.
+  const authUrl = resolveGitHubCloneUrl(remoteUrl, process.env.GITHUB_TOKEN);
 
   if (fs.existsSync(repoPath)) {
     console.log(`[workspace] fetching ${cloneBranch} for repo ${repoId}`);

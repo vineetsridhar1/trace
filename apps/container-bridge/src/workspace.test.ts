@@ -110,6 +110,17 @@ describe("workspace repo setup", () => {
     expect(gitArgsAt(0)).toContain("main");
   });
 
+  it("converts GitHub SSH remotes to authenticated HTTPS when a token is available", async () => {
+    process.env.GITHUB_TOKEN = "gh-token";
+    mocks.existsSync.mockReturnValue(false);
+
+    await ensureRepo("repo-1", "git@github.com:acme/project.git", "main", "main");
+
+    expect(gitArgsAt(0)).toContain(
+      "https://x-access-token:gh-token@github.com/acme/project.git",
+    );
+  });
+
   it("adds a cache reference when the repo cache mirror exists", async () => {
     process.env.TRACE_REPO_CACHE_DIR = "/repo-cache";
     mocks.existsSync.mockImplementation((path: unknown) => path === "/repo-cache/repo-1.git");
