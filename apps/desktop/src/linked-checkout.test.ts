@@ -86,7 +86,7 @@ async function createRepoFixture(): Promise<{
   await git(repoPath, ["config", "user.name", "Trace Test"]);
   await git(repoPath, ["config", "user.email", "trace@example.com"]);
 
-  fs.writeFileSync(path.join(repoPath, "app.txt"), "base\n");
+  fs.writeFileSync(path.join(repoPath, "app.txt"), "first\nsecond\nthird\n");
   fs.writeFileSync(path.join(repoPath, "notes.txt"), "notes base\n");
   await git(repoPath, ["add", "app.txt", "notes.txt"]);
   await git(repoPath, ["commit", "-m", "initial commit"]);
@@ -318,7 +318,7 @@ describe("linked checkout commit-back", () => {
     expect(result.status.lastSyncedCommitSha).toBe(result.status.currentCommitSha);
   }, 15_000);
 
-  it("refuses to overwrite conflicting live changes already present in the Trace worktree", async () => {
+  it("refuses to overwrite uncommitted changes already present in the Trace worktree", async () => {
     const { repoPath, worktreePath } = await createRepoFixture();
     seedRepo("repo-1", repoPath);
 
@@ -341,6 +341,33 @@ describe("linked checkout commit-back", () => {
     expect(result.error).toContain("app.txt");
     expect(await git(worktreePath, ["log", "-1", "--pretty=%s"])).toBe("initial commit");
     expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).not.toBe("");
+  }, 15_000);
+
+  it("commits local changes when the Trace worktree already committed a different change to the file", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    const syncResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(syncResult.ok).toBe(true);
+
+    fs.writeFileSync(path.join(worktreePath, "app.txt"), "Trace change\nsecond\nthird\n");
+    await git(worktreePath, ["add", "app.txt"]);
+    await git(worktreePath, ["commit", "-m", "Trace change"]);
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "first\nsecond\nRoot change\n");
+
+    const result = await commitLinkedCheckoutChanges({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fs.readFileSync(path.join(worktreePath, "app.txt"), "utf8")).toBe(
+      "Trace change\nsecond\nRoot change\n",
+    );
   }, 15_000);
 
   it("commits only the imported detached-main paths and preserves unrelated worktree changes", async () => {
@@ -417,7 +444,7 @@ describe("linked checkout commit-back", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("base\n");
+    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("first\nsecond\nthird\n");
     expect(fs.existsSync(path.join(repoPath, "scratch.txt"))).toBe(false);
     expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
     expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
@@ -609,7 +636,7 @@ describe("linked checkout commit-back", () => {
     expect(preview.additions).toBe(1);
     expect(preview.deletions).toBe(1);
     expect(preview.diff).toContain("+dirty");
-    expect(preview.originalContent).toBe("base\n");
+    expect(preview.originalContent).toBe("first\nsecond\nthird\n");
     expect(preview.modifiedContent).toBe("dirty\n");
     expect(preview.contentTruncated).toBe(false);
   }, 15_000);
