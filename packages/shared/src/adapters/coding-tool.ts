@@ -390,7 +390,23 @@ export interface ErrorEvent {
   message: string;
 }
 
-export type ToolOutput = AssistantEvent | UserEvent | ResultEvent | UsageEvent | ErrorEvent;
+/**
+ * Emitted instead of a raw ErrorEvent when the coding tool failed because it
+ * is not logged in (expired OAuth session, missing credentials). The frontend
+ * renders a login call-to-action rather than a session error.
+ */
+export interface AuthRequiredEvent {
+  type: "auth_required";
+  message: string;
+}
+
+export type ToolOutput =
+  | AssistantEvent
+  | UserEvent
+  | ResultEvent
+  | UsageEvent
+  | ErrorEvent
+  | AuthRequiredEvent;
 
 export type OutputCallback = (data: ToolOutput) => void;
 
@@ -405,6 +421,18 @@ const MISSING_TOOL_SESSION_PATTERNS = [
 
 export function isMissingToolSessionError(message: string): boolean {
   return MISSING_TOOL_SESSION_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+const TOOL_AUTH_ERROR_PATTERNS = [
+  /\boauth\b[\s\S]{0,60}\b(expired|revoked|invalid)\b/i,
+  /\b(expired|revoked|invalid)\b[\s\S]{0,60}\boauth\b/i,
+  /\bplease run \/login\b/i,
+  /(?:^|\n)\s*(?:error:\s*)?not logged in[\s.!·:-]*(?:please run \/login)?\s*(?:\n|$)/i,
+];
+
+/** Classify an adapter error message as a login/credentials failure. */
+export function isToolAuthError(message: string): boolean {
+  return TOOL_AUTH_ERROR_PATTERNS.some((pattern) => pattern.test(message));
 }
 
 export interface RunOptions {

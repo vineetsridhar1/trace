@@ -7,6 +7,7 @@ import { UserBubble } from "./messages/UserBubble";
 import { AssistantText } from "./messages/AssistantText";
 import { ToolCallRow } from "./messages/ToolCallRow";
 import { SubagentRow } from "./messages/SubagentRow";
+import { AuthRequiredNotice } from "./messages/AuthRequiredNotice";
 import { CompletionRow } from "./messages/CompletionRow";
 import { SystemBadge } from "./messages/SystemBadge";
 import { GitCheckpointChips } from "./messages/GitCheckpointChips";
@@ -175,6 +176,10 @@ function renderSessionOutput(
 
   if (type === "error") {
     return <CompletionRow timestamp={ts} error={str(payload.message)} />;
+  }
+
+  if (type === "auth_required") {
+    return <AuthRequiredNotice timestamp={ts} />;
   }
 
   if (type === "workspace_failed") {

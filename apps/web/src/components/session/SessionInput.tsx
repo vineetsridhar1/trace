@@ -9,7 +9,7 @@ import {
   type SessionEntity,
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
-import { CREATE_TERMINAL_MUTATION, QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
+import { QUEUE_SESSION_MESSAGE_MUTATION } from "@trace/client-core";
 import { type InteractionMode, MODE_CYCLE, wrapPrompt } from "./interactionModes";
 import { AiLoadingIndicator } from "./AiLoadingIndicator";
 import { SessionInputOptions } from "./SessionInputOptions";
@@ -31,7 +31,7 @@ import { useAddAttachments, MAX_ATTACHMENTS } from "./useAddAttachments";
 import { useAuthStore } from "@trace/client-core";
 import { useDraftsStore } from "../../stores/drafts";
 import { useComposerStore } from "../../stores/composer";
-import { useTerminalStore } from "../../stores/terminal";
+import { getToolLoginTerminal, openToolLoginTerminal } from "../../lib/coding-tool-login";
 import { useAttachmentOpen } from "./AttachmentOpenContext";
 import { BridgeAccessNotice } from "./BridgeAccessNotice";
 import { isBridgeInteractionAllowed, type BridgeRuntimeAccessInfo } from "./useBridgeRuntimeAccess";
@@ -219,42 +219,19 @@ export function SessionInput({
         return;
       }
 
-      if (tool === "pi" && text === "/login") {
+      const loginTerminal = text === "/login" && tool ? getToolLoginTerminal(tool) : undefined;
+      if (loginTerminal) {
         if (!sessionGroupId) {
-          toast.error("Cannot open Pi login terminal for this session");
+          toast.error("Cannot open a login terminal for this session");
           return;
         }
         isSendingRef.current = true;
         setIsSending(true);
         try {
-          const result = await client
-            .mutation(CREATE_TERMINAL_MUTATION, { sessionId, cols: 80, rows: 24 })
-            .toPromise();
-
-          if (result.error) {
-            throw result.error;
-          }
-
-          const terminal = result.data?.createTerminal as { id: string } | null | undefined;
-          if (!terminal) {
-            throw new Error("Failed to open terminal");
-          }
-
-          useTerminalStore
-            .getState()
-            .addTerminal(terminal.id, sessionId, sessionGroupId, "connecting", {
-              customName: "Pi Login",
-              initialCommand: "pi\n/login",
-              submitInitialCommand: false,
-            });
-
-          const ui = useUIStore.getState();
-          ui.setActiveSessionId(sessionId);
-          ui.setActiveTerminalId(terminal.id);
-          ui.setShowTerminalPanel(true);
+          await openToolLoginTerminal(sessionId, sessionGroupId, loginTerminal);
           setDraftText(sessionId, "", "");
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Failed to open Pi login terminal");
+          toast.error(error instanceof Error ? error.message : "Failed to open login terminal");
           throw error;
         } finally {
           isSendingRef.current = false;

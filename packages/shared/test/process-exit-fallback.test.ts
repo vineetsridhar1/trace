@@ -317,6 +317,101 @@ describe("coding tool adapter process exit fallback", () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
+  it("emits auth_required instead of error + result when Claude Code fails to authenticate", () => {
+    const adapter = new ClaudeCodeAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "do something",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    const message = "Failed to authenticate: OAuth session expired and could not be refreshed";
+    spawnedChildren[0].stderr.write(`${message}\n`);
+    spawnedChildren[0].emit("exit", 1);
+    vi.advanceTimersByTime(1000);
+
+    expect(onOutput).toHaveBeenCalledWith({ type: "auth_required", message });
+    expect(onOutput).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "result", subtype: "error" }),
+    );
+    expect(onOutput).not.toHaveBeenCalledWith(expect.objectContaining({ type: "error" }));
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("classifies a Claude Code stream result auth failure", () => {
+    const adapter = new ClaudeCodeAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "do something",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    const message = "Not logged in. Please run /login";
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({ type: "result", subtype: "error", result: message })}\n`,
+    );
+    spawnedChildren[0].emit("exit", 1);
+    vi.advanceTimersByTime(1000);
+
+    expect(onOutput).toHaveBeenCalledTimes(1);
+    expect(onOutput).toHaveBeenCalledWith({ type: "auth_required", message });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates the same Claude Code auth failure from stdout and stderr", () => {
+    const adapter = new ClaudeCodeAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "do something",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    const message = "Failed to authenticate: OAuth session expired";
+    spawnedChildren[0].stdout.write(
+      `${JSON.stringify({ type: "result", subtype: "error", result: message })}\n`,
+    );
+    spawnedChildren[0].stderr.write(`${message}\n`);
+    spawnedChildren[0].emit("exit", 1);
+    vi.advanceTimersByTime(1000);
+
+    expect(onOutput).toHaveBeenCalledTimes(1);
+    expect(onOutput).toHaveBeenCalledWith({ type: "auth_required", message });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it("still emits a plain error for non-auth Claude Code failures", () => {
+    const adapter = new ClaudeCodeAdapter();
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+
+    adapter.run({
+      prompt: "do something",
+      cwd: "/tmp",
+      onOutput,
+      onComplete,
+    });
+
+    spawnedChildren[0].stderr.write("something exploded\n");
+    spawnedChildren[0].emit("exit", 1);
+    vi.advanceTimersByTime(1000);
+
+    expect(onOutput).toHaveBeenCalledWith({ type: "error", message: "something exploded" });
+    expect(onOutput).toHaveBeenCalledWith({ type: "result", subtype: "error" });
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
   it("emits Claude Code assistant usage incrementally and suppresses duplicate result usage", () => {
     const adapter = new ClaudeCodeAdapter();
     const onOutput = vi.fn();
