@@ -59,7 +59,7 @@ describe("tool auth", () => {
     expect(spawnMock).toHaveBeenCalledWith(
       "codex",
       ["login", "--with-access-token"],
-      expect.objectContaining({ stdio: ["pipe", "ignore", "ignore"] }),
+      expect.objectContaining({ stdio: ["pipe", "ignore", "pipe"] }),
     );
     expect(child.stdin.end).toHaveBeenCalledWith("codex-access-token");
   });
@@ -74,7 +74,7 @@ describe("tool auth", () => {
     expect(spawnMock).toHaveBeenCalledWith(
       "codex",
       ["login", "--with-api-key"],
-      expect.objectContaining({ stdio: ["pipe", "ignore", "ignore"] }),
+      expect.objectContaining({ stdio: ["pipe", "ignore", "pipe"] }),
     );
     expect(child.stdin.end).toHaveBeenCalledWith("openai-api-key");
   });
@@ -90,9 +90,22 @@ describe("tool auth", () => {
     expect(spawnMock).toHaveBeenCalledWith(
       "codex",
       ["login", "--with-api-key"],
-      expect.objectContaining({ stdio: ["pipe", "ignore", "ignore"] }),
+      expect.objectContaining({ stdio: ["pipe", "ignore", "pipe"] }),
     );
     expect(child.stdin.end).toHaveBeenCalledWith("openai-api-key");
+  });
+
+  it("includes Codex's stderr in the login failure, with the token redacted", async () => {
+    process.env.OPENAI_API_KEY = "openai-api-key";
+    const child = mockCodexLogin(1);
+    const { ensureToolReady } = await importToolAuth();
+
+    const ready = ensureToolReady("codex");
+    child.stderr.emit("data", Buffer.from("unsupported flag; key openai-api-key rejected\n"));
+
+    await expect(ready).rejects.toThrow(
+      "codex login exited 1: unsupported flag; key [redacted] rejected",
+    );
   });
 
   it("reports a clear error when Codex has no credential", async () => {

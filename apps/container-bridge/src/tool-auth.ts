@@ -50,7 +50,12 @@ async function loginCodex(): Promise<void> {
     const loginFlag = accessToken ? "--with-access-token" : "--with-api-key";
     const child = spawn("codex", ["login", loginFlag], {
       env: buildChildProcessEnv(),
-      stdio: ["pipe", "ignore", "ignore"],
+      stdio: ["pipe", "ignore", "pipe"],
+    });
+    // Keep codex's own diagnostics — without them a failure is just "exited 1".
+    let stderr = "";
+    child.stderr?.on("data", (chunk: Buffer) => {
+      if (stderr.length < 4_000) stderr += chunk.toString();
     });
     child.stdin?.on("error", () => {});
     child.stdin?.end(token);
@@ -61,7 +66,9 @@ async function loginCodex(): Promise<void> {
         console.log("[container-bridge] codex login complete");
         resolve();
       } else {
-        reject(new Error(`codex login exited ${code}`));
+        // The token goes in on stdin, but never risk echoing it back into logs.
+        const detail = stderr.replaceAll(token, "[redacted]").trim();
+        reject(new Error(`codex login exited ${code}${detail ? `: ${detail}` : ""}`));
       }
     });
     child.on("error", reject);

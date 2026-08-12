@@ -66,12 +66,17 @@ async function main(): Promise<void> {
     parseRuntimeSetupCommands(process.env.TRACE_RUNTIME_SETUP_COMMANDS),
   );
 
-  // Pre-authenticate whatever tools we have credentials for.
-  await loginAvailableTools();
-
   // Connect to server — sessions register dynamically via prepare commands
   const bridge = new ContainerBridge(bridgeUrl, bridgeToken, runtimeInstanceId, tool);
   bridge.connect();
+
+  // Pre-authenticate whatever tools we have credentials for. This is only a warm-up:
+  // `ensureToolReady` runs again before each session's first run, so it must not block
+  // or fail startup. Credentials are passed to every runtime regardless of which tool
+  // the session uses, so a broken login for one tool would otherwise strand them all.
+  void loginAvailableTools().catch((err) => {
+    console.error("[container-bridge] tool pre-authentication failed, continuing:", err);
+  });
 
   // Keep the process alive
   process.on("SIGTERM", () => {
