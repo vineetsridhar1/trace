@@ -11,44 +11,47 @@ export function UserMenu() {
   const setActivePage = useUIStore((s) => s.setActivePage);
 
   return (
-    <Popover>
-      <PopoverTrigger className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 transition-colors hover:bg-white/10">
-        <motion.div
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.97 }}
-          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-          className="relative shrink-0 overflow-hidden rounded-full"
-        >
-          {user?.avatarUrl ? (
-            <img src={user.avatarUrl} alt={user.name} className="h-7 w-7 rounded-full" />
-          ) : (
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-elevated text-[10px] font-semibold text-foreground">
-              {getInitials(user?.name ?? "")}
-            </div>
-          )}
-        </motion.div>
-        <span className="flex-1 truncate text-left text-sm text-foreground">{user?.name}</span>
-      </PopoverTrigger>
-      <PopoverContent side="top" align="center" sideOffset={4} className="w-64 gap-0 p-1.5">
-        <div className="mb-1 min-w-0 border-b border-border px-2 py-1.5">
-          <p className="truncate text-sm font-medium text-foreground">{user?.name}</p>
-          <p className="truncate text-xs text-foreground">{user?.email}</p>
-        </div>
-        <button
-          onClick={() => setActivePage("settings")}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-white/10"
-        >
-          <Settings size={16} className="text-foreground" />
-          Settings
-        </button>
-        <button
-          onClick={() => void logout()}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-white/10"
-        >
-          <LogOut size={16} />
-          Log out
-        </button>
-      </PopoverContent>
-    </Popover>
+    <div className="flex items-stretch">
+      <Popover>
+        <PopoverTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-3 py-2 transition-colors hover:bg-white/10">
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+            className="relative shrink-0 overflow-hidden rounded-full"
+          >
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt={user.name} className="h-7 w-7 rounded-full" />
+            ) : (
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-elevated text-[10px] font-semibold text-foreground">
+                {getInitials(user?.name ?? "")}
+              </div>
+            )}
+          </motion.div>
+          <span className="flex-1 truncate text-left text-sm text-foreground">{user?.name}</span>
+        </PopoverTrigger>
+        <PopoverContent side="top" align="center" sideOffset={4} className="w-64 gap-0 p-1.5">
+          <div className="mb-1 min-w-0 border-b border-border px-2 py-1.5">
+            <p className="truncate text-sm font-medium text-foreground">{user?.name}</p>
+            <p className="truncate text-xs text-foreground">{user?.email}</p>
+          </div>
+          <button
+            onClick={() => void logout()}
+            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-white/10"
+          >
+            <LogOut size={16} />
+            Log out
+          </button>
+        </PopoverContent>
+      </Popover>
+      <button
+        type="button"
+        onClick={() => setActivePage("settings")}
+        className="flex h-11 w-11 shrink-0 items-center justify-center border-l border-white/10 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+        aria-label="Settings"
+      >
+        <Settings size={18} />
+      </button>
+    </div>
   );
 }
