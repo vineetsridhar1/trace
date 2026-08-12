@@ -24,6 +24,10 @@ export type TerminalSocketEvent =
 const RECONNECT_BASE_MS = 1_000;
 /** Max delay between reconnect attempts (ms). */
 const RECONNECT_MAX_MS = 30_000;
+/** Retry a fresh terminal attach while its cross-replica routing record propagates. */
+const ATTACH_RETRY_BASE_MS = 250;
+const ATTACH_RETRY_MAX_MS = 2_000;
+const ATTACH_RETRY_LIMIT = 5;
 
 /**
  * WebSocket client for a single terminal session.
@@ -38,6 +42,8 @@ export class TerminalSocket {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private awaitingReconnectReady = false;
+  private attachRetryAttempts = 0;
+  private attachRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingWrites: string[] = [];
   private pendingResize: { cols: number; rows: number } | null = null;
 
@@ -54,7 +60,7 @@ export class TerminalSocket {
 
     this.ws.onopen = () => {
       this.awaitingReconnectReady = this.reconnectAttempts > 0;
-      this.ws?.send(JSON.stringify({ type: "attach", terminalId: this.terminalId }));
+      this.sendAttach();
     };
 
     this.ws.onmessage = (event) => {
@@ -63,18 +69,20 @@ export class TerminalSocket {
 
         // Fatal errors — don't reconnect when the terminal is gone or auth fails.
         // NOTE: these strings must match the server error messages in terminal-handler.ts
-        // Exception: "Terminal not found" is transient during reconnect — the bridge
-        // may still be restoring its terminal state. Only treat it as fatal on first connect.
-        if (msg.type === "error" && FATAL_TERMINAL_ERRORS.has(msg.message)) {
-          if (!(msg.message === "Terminal not found" && this.awaitingReconnectReady)) {
-            this.closed = true;
-          }
+        // "Terminal not found" can be transient while a new cross-replica routing record
+        // propagates or while the bridge restores its terminal state.
+        if (msg.type === "error" && msg.message === "Terminal not found") {
+          if (this.scheduleAttachRetry()) return;
+          this.closed = true;
+        } else if (msg.type === "error" && FATAL_TERMINAL_ERRORS.has(msg.message)) {
+          this.closed = true;
         }
 
         if (msg.type === "ready") {
-          const isReconnect = this.awaitingReconnectReady;
+          const isReconnect = this.awaitingReconnectReady || this.attachRetryAttempts > 0;
           this.awaitingReconnectReady = false;
           this.reconnectAttempts = 0;
+          this.clearAttachRetry();
           this.flushPendingResize();
           this.emit(msg);
           this.flushPendingWrites();
@@ -91,6 +99,7 @@ export class TerminalSocket {
     };
 
     this.ws.onclose = (event) => {
+      this.clearAttachRetry();
       if (FATAL_TERMINAL_CLOSE_CODES.has(event.code) || FATAL_TERMINAL_ERRORS.has(event.reason)) {
         this.closed = true;
       }
@@ -121,6 +130,37 @@ export class TerminalSocket {
     }, delay);
   }
 
+  private sendAttach(): void {
+    this.ws?.send(JSON.stringify({ type: "attach", terminalId: this.terminalId }));
+  }
+
+  private scheduleAttachRetry(): boolean {
+    if (this.closed || this.attachRetryAttempts >= ATTACH_RETRY_LIMIT) return false;
+    if (this.attachRetryTimer) return true;
+
+    this.emit({ type: "reconnecting" });
+    const delay = Math.min(
+      ATTACH_RETRY_BASE_MS * Math.pow(2, this.attachRetryAttempts),
+      ATTACH_RETRY_MAX_MS,
+    );
+    this.attachRetryAttempts++;
+    this.attachRetryTimer = setTimeout(() => {
+      this.attachRetryTimer = null;
+      if (this.ws?.readyState === WebSocket.OPEN && !this.closed) {
+        this.sendAttach();
+      }
+    }, delay);
+    return true;
+  }
+
+  private clearAttachRetry(): void {
+    if (this.attachRetryTimer) {
+      clearTimeout(this.attachRetryTimer);
+      this.attachRetryTimer = null;
+    }
+    this.attachRetryAttempts = 0;
+  }
+
   write(data: string): void {
     if (!this.sendMessage({ type: "input", data }) && !this.closed) {
       this.pendingWrites.push(data);
@@ -149,6 +189,7 @@ export class TerminalSocket {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.clearAttachRetry();
     this.listeners.clear();
     this.ws?.close();
     this.ws = null;
