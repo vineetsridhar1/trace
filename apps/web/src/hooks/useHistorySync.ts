@@ -202,20 +202,23 @@ export function useHistorySync() {
       parsedNav.sessionId,
     );
     const { channelId, sessionGroupId, sessionId, chatId, page } = initialRedirect ?? parsedNav;
+    const isHomeRoute = window.location.pathname === "/";
     const isTopLevelPage =
       page === "create" || page === "settings" || page === "inbox" || page === "tickets" || page === "search";
     const initialChat =
-      isTopLevelPage || channelId ? null : (chatId ?? localStorage.getItem("trace:activeChatId"));
+      isTopLevelPage || isHomeRoute || channelId
+        ? null
+        : (chatId ?? localStorage.getItem("trace:activeChatId"));
     const initialChannel =
-      isTopLevelPage || initialChat
+      isTopLevelPage || isHomeRoute || initialChat
         ? null
         : (channelId ?? localStorage.getItem("trace:activeChannelId"));
     const initialSessionGroupId =
-      isTopLevelPage || initialChat
+      isTopLevelPage || isHomeRoute || initialChat
         ? null
         : (sessionGroupId ?? localStorage.getItem("trace:activeSessionGroupId"));
     const initialSessionId =
-      isTopLevelPage || initialChat
+      isTopLevelPage || isHomeRoute || initialChat
         ? null
         : (sessionId ?? localStorage.getItem("trace:activeSessionId"));
 
