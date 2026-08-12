@@ -25,6 +25,7 @@ export {
   designSystemCommitStorageKey,
   designSystemVersionStorageKey,
 } from "./design-system.js";
+export { resolveGitHubCloneUrl } from "./github-clone-url.js";
 export type { DesignSystemManifest, DesignSystemValidation } from "./design-system.js";
 export {
   hasPlanBlock,

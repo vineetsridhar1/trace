@@ -17,6 +17,7 @@ import {
   isSupportedModel,
   isSupportedReasoningEffort,
   MAX_WORKSPACE_NAME_LENGTH,
+  resolveGitHubCloneUrl,
   type GitCheckpointBridgePayload,
   type GitCheckpointContext,
   type BridgeSessionGitSyncStatus,
@@ -1861,17 +1862,7 @@ export class SessionService {
       // Public GitHub repositories can be cloned anonymously. When a user or
       // organization token is available, authenticate the checkout so private
       // repositories and rate limits continue to work as before.
-      if (token) {
-        // Build the authenticated clone URL from the parsed owner/repo rather
-        // than the raw remote: the stored remote may be in scp-style SSH form
-        // (git@github.com:owner/repo.git), which is not a valid WHATWG URL and
-        // would throw ("Invalid URL") when passed to `new URL`, failing runtime
-        // start for the design session.
-        const authenticated = new URL(`https://github.com/${parsed.owner}/${parsed.repo}.git`);
-        authenticated.username = "x-access-token";
-        authenticated.password = token;
-        remoteUrl = authenticated.toString();
-      }
+      if (token) remoteUrl = resolveGitHubCloneUrl(remoteUrl, token);
     }
     return {
       repoId: repo.id,

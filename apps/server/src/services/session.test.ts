@@ -120,6 +120,10 @@ vi.mock("@trace/shared", () => {
     hasPlanBlock: vi.fn().mockReturnValue(false),
     MAX_WORKSPACE_NAME_LENGTH: 80,
     CODING_TOOL_IDS: ["claude_code", "codex", "pi", "antigravity", "cursor_composer", "custom"],
+    resolveGitHubCloneUrl: vi.fn(
+      (remoteUrl: string, token: string) =>
+        "https://x-access-token:" + token + "@github.com/trace/trace.git",
+    ),
   };
 });
 
