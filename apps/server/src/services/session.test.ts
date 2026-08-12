@@ -7499,6 +7499,7 @@ describe("SessionService", () => {
       expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: {
+            lastMessageAt: expect.any(Date),
             connection: expect.objectContaining({
               state: "requested",
               runtimeInstanceId: "runtime-provisioned-1",
@@ -7610,6 +7611,7 @@ describe("SessionService", () => {
       expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
         where: { id: "session-1", connection: { path: ["version"], equals: 3 } },
         data: {
+          lastMessageAt: expect.any(Date),
           connection: expect.objectContaining({
             state: "requested",
             runtimeInstanceId: "runtime-new",
@@ -7658,6 +7660,7 @@ describe("SessionService", () => {
       expect(prismaMock.session.updateMany).toHaveBeenCalledWith({
         where: { id: "session-1", connection: { path: ["version"], equals: 3 } },
         data: {
+          lastMessageAt: expect.any(Date),
           connection: expect.objectContaining({
             state: "requested",
             runtimeInstanceId: "runtime-new",

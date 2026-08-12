@@ -2170,9 +2170,9 @@ export class SessionService {
       return;
     }
 
+    const isNewRuntimeRequest = eventType === "session_runtime_start_requested";
     const result = await this.updateConnectionConditional(sessionId, (conn) => {
       if (update.runtimeInstanceId) {
-        const isNewRuntimeRequest = eventType === "session_runtime_start_requested";
         // A new launch may claim an unbound session, but every subsequent
         // lifecycle event must belong to the runtime generation that is
         // currently persisted. In particular, an old stop event must not
@@ -2219,7 +2219,13 @@ export class SessionService {
       }
 
       return { ...conn, ...this.lifecycleConnectionPatch(eventType, conn, update, adapterType) };
-    });
+    },
+      // A restart can intentionally create a fresh runtime without a new user
+      // message. Refresh activity in the same optimistic write that claims the
+      // new generation, so idle cleanup cannot select the group as stale while
+      // that runtime is provisioning.
+      ...(isNewRuntimeRequest ? { sessionData: { lastMessageAt: new Date() } } : {}),
+    );
 
     if (!result) {
       if (eventType === "session_runtime_start_requested") {
