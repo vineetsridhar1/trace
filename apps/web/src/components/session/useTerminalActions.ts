@@ -57,11 +57,12 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
         .toPromise();
       if (result.data?.createTerminal) {
         const { id } = result.data.createTerminal as { id: string };
+        addTerminal(id, session.id, sessionGroupId, "connecting");
         setActiveSessionId(session.id);
         setActiveTerminalId(id);
       }
     },
-    [ensureSessionTerminals, setActiveSessionId, setActiveTerminalId],
+    [addTerminal, ensureSessionTerminals, sessionGroupId, setActiveSessionId, setActiveTerminalId],
   );
 
   const handleCreateTerminal = useCallback(
@@ -72,10 +73,11 @@ export function useTerminalActions({ sessionGroupId, terminals }: TerminalAction
         .toPromise();
       if (!result.data?.createTerminal) return;
       const { id } = result.data.createTerminal as { id: string };
+      addTerminal(id, session.id, sessionGroupId, "connecting");
       setActiveSessionId(session.id);
       setActiveTerminalId(id);
     },
-    [setActiveSessionId, setActiveTerminalId],
+    [addTerminal, sessionGroupId, setActiveSessionId, setActiveTerminalId],
   );
 
   const handleCloseTerminal = useCallback(
