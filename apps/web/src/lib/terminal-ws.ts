@@ -69,8 +69,8 @@ export class TerminalSocket {
 
         // Fatal errors — don't reconnect when the terminal is gone or auth fails.
         // NOTE: these strings must match the server error messages in terminal-handler.ts
-        // Exception: "Terminal not found" is transient during reconnect — the bridge
-        // may still be restoring its terminal state. Only treat it as fatal on first connect.
+        // "Terminal not found" can be transient while a new cross-replica routing record
+        // propagates or while the bridge restores its terminal state.
         if (msg.type === "error" && msg.message === "Terminal not found") {
           if (this.scheduleAttachRetry()) return;
           this.closed = true;
