@@ -93,8 +93,15 @@ export function HomeView({ mode = "home" }: { mode?: "home" | "create" }) {
 
   useEffect(() => {
     if (!isCreateMode) return;
-    const frame = requestAnimationFrame(() => useHomeComposerStore.getState().requestFocus());
-    return () => cancelAnimationFrame(frame);
+    let scrollFrame: number | undefined;
+    const focusFrame = requestAnimationFrame(() => {
+      useHomeComposerStore.getState().requestFocus();
+      scrollFrame = requestAnimationFrame(() => scrollViewportRef.current?.scrollTo({ top: 0 }));
+    });
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      if (scrollFrame !== undefined) cancelAnimationFrame(scrollFrame);
+    };
   }, [isCreateMode]);
 
   useEffect(() => {
