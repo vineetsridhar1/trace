@@ -18,7 +18,8 @@ const corsAllowedOrigins = new Set(
 );
 
 function requestOrigin(request: express.Request): string | null {
-  const host = request.get("host");
+  const forwardedHost = request.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || request.get("host");
   if (!host) return null;
   const forwardedProtocol = request.get("x-forwarded-proto")?.split(",")[0]?.trim();
   return `${forwardedProtocol || request.protocol}://${host}`;
