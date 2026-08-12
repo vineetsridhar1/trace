@@ -117,6 +117,7 @@ function isSettingsTab(value: string | null): value is SettingsTab {
 export function SettingsPage() {
   const settingsInitialTab = useUIStore((s) => s.settingsInitialTab);
   const setSettingsInitialTab = useUIStore((s) => s.setSettingsInitialTab);
+  const setActivePage = useUIStore((s) => s.setActivePage);
   const user = useAuthStore((s: AuthState) => s.user);
   const activeOrgId = useAuthStore((s: AuthState) => s.activeOrgId);
   const memberships = useAuthStore((s: AuthState) => s.orgMemberships);
@@ -163,6 +164,15 @@ export function SettingsPage() {
         )}
       >
         <div className="hidden min-w-0 items-center gap-2.5 md:flex">
+          <button
+            type="button"
+            onClick={() => setActivePage("main")}
+            className="app-region-no-drag -ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            aria-label="Back to workspace"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <span className="h-5 w-px shrink-0 bg-[#27272d]" />
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-[11px] font-bold text-zinc-950">
             T
           </span>
