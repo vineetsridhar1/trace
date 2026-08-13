@@ -909,6 +909,7 @@ async function applyChangedPathsToWorktree(
   const temporaryDir = fs.mkdtempSync(path.join(os.tmpdir(), "trace-linked-checkout-"));
   const indexPath = path.join(temporaryDir, "index");
   const patchPath = path.join(temporaryDir, "changes.patch");
+  const temporaryWorktreePath = path.join(temporaryDir, "worktree");
   const env = { ...gitEnv(), GIT_INDEX_FILE: indexPath };
 
   try {
@@ -928,11 +929,28 @@ async function applyChangedPathsToWorktree(
       maxBuffer: GIT_MAX_BUFFER,
     });
     fs.writeFileSync(patchPath, stdout);
+    await execFileAsync("git", ["worktree", "add", "--detach", temporaryWorktreePath, "HEAD"], {
+      cwd: worktreePath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
     await execFileAsync("git", ["apply", "--3way", "--index", patchPath], {
+      cwd: temporaryWorktreePath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+    const { stdout: mergedPatch } = await execFileAsync("git", ["diff", "--binary", "--cached"], {
+      cwd: temporaryWorktreePath,
+      maxBuffer: GIT_MAX_BUFFER,
+    });
+    fs.writeFileSync(patchPath, mergedPatch);
+    await execFileAsync("git", ["apply", "--index", patchPath], {
       cwd: worktreePath,
       maxBuffer: GIT_MAX_BUFFER,
     });
   } finally {
+    await execFileAsync("git", ["worktree", "remove", "--force", temporaryWorktreePath], {
+      cwd: worktreePath,
+      maxBuffer: GIT_MAX_BUFFER,
+    }).catch(() => undefined);
     fs.rmSync(temporaryDir, { force: true, recursive: true });
   }
 }

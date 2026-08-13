@@ -370,6 +370,33 @@ describe("linked checkout commit-back", () => {
     );
   }, 15_000);
 
+  it("leaves the Trace worktree clean when committed changes cannot be merged", async () => {
+    const { repoPath, worktreePath } = await createRepoFixture();
+    seedRepo("repo-1", repoPath);
+
+    const syncResult = await syncLinkedCheckout({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+      branch: "trace/raccoon",
+    });
+    expect(syncResult.ok).toBe(true);
+
+    fs.writeFileSync(path.join(worktreePath, "app.txt"), "Trace change\n");
+    await git(worktreePath, ["add", "app.txt"]);
+    await git(worktreePath, ["commit", "-m", "Trace change"]);
+    fs.writeFileSync(path.join(repoPath, "app.txt"), "Root change\n");
+
+    const result = await commitLinkedCheckoutChanges({
+      repoId: "repo-1",
+      sessionGroupId: "group-1",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(await git(worktreePath, ["status", "--porcelain", "--untracked-files=all"])).toBe("");
+    expect(fs.readFileSync(path.join(worktreePath, "app.txt"), "utf8")).toBe("Trace change\n");
+    expect(await git(repoPath, ["status", "--porcelain", "--untracked-files=all"])).not.toBe("");
+  }, 15_000);
+
   it("commits only the imported detached-main paths and preserves unrelated worktree changes", async () => {
     const { repoPath, worktreePath } = await createRepoFixture();
     seedRepo("repo-1", repoPath);
@@ -421,7 +448,7 @@ describe("linked checkout commit-back", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("staged changes");
+    expect(result.error).toContain("uncommitted changes");
     expect(result.error).toContain("app.txt");
     expect(await git(worktreePath, ["log", "-1", "--pretty=%s"])).toBe("initial commit");
     expect(await git(worktreePath, ["status", "--porcelain", "--untracked-files=all"])).toBe(
@@ -845,7 +872,7 @@ describe("linked checkout commit-back", () => {
     expect(result.ok).toBe(true);
     expect(result.status.hasUncommittedChanges).toBe(false);
     expect(result.status.currentCommitSha).toBe(await git(worktreePath, ["rev-parse", "HEAD"]));
-    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("base\n");
+    expect(fs.readFileSync(path.join(repoPath, "app.txt"), "utf8")).toBe("first\nsecond\nthird\n");
     expect(fs.existsSync(path.join(repoPath, "scratch.txt"))).toBe(false);
     expect(await git(repoPath, ["stash", "list"])).toContain("Trace linked checkout stash");
   }, 15_000);
