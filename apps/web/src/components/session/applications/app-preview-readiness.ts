@@ -15,8 +15,22 @@ type PreviewProcess = {
   runtimeInstanceId?: string | null;
 };
 
+type PublishedAppDeployment = {
+  status: string;
+  url?: string | null;
+  updatedAt: string;
+};
+
 export function isLivePreviewRuntimeAvailable(state: unknown): boolean {
   return state === "connected" || state === "degraded";
+}
+
+export function findPublishedAppUrl<T extends PublishedAppDeployment>(
+  deployments: T[],
+): string | undefined {
+  return deployments
+    .filter((deployment) => deployment.status === "live" && Boolean(deployment.url))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.url ?? undefined;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  findPublishedAppUrl,
   findReadyPreviewEndpoint,
   isLivePreviewRuntimeAvailable,
 } from "./app-preview-readiness";
@@ -83,6 +84,18 @@ describe("findReadyPreviewEndpoint", () => {
         activeRuntimeInstanceId: "runtime-new",
       }),
     ).toBe(endpoint);
+  });
+});
+
+describe("findPublishedAppUrl", () => {
+  it("returns the newest live deployment URL", () => {
+    expect(
+      findPublishedAppUrl([
+        { status: "live", url: "https://old.example.test", updatedAt: "2026-01-01T00:00:00Z" },
+        { status: "failed", url: "https://failed.example.test", updatedAt: "2026-02-01T00:00:00Z" },
+        { status: "live", url: "https://new.example.test", updatedAt: "2026-03-01T00:00:00Z" },
+      ]),
+    ).toBe("https://new.example.test");
   });
 });
 

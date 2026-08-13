@@ -1,11 +1,19 @@
+import { useEntityStore } from "@trace/client-core";
 import { AppPreview } from "./AppPreview";
 import { AppPreviewCanvasSkeleton } from "./AppPreviewCanvasSkeleton";
+import { isLivePreviewRuntimeAvailable } from "./app-preview-readiness";
+import { PublishedAppPreview } from "./PublishedAppPreview";
 import { useProjectPreviewData } from "./useProjectPreviewData";
 
 export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: string }) {
-  const { endpoint, error, refresh } = useProjectPreviewData(sessionGroupId, "app");
+  const runtimeState = useEntityStore((s) => {
+    const connection = s.sessionGroups[sessionGroupId]?.connection;
+    if (!connection || typeof connection !== "object" || Array.isArray(connection)) return null;
+    return "state" in connection ? connection.state : null;
+  });
+  const { endpoint, error, publishedUrl, refresh } = useProjectPreviewData(sessionGroupId, "app");
 
-  if (endpoint) {
+  if (endpoint && isLivePreviewRuntimeAvailable(runtimeState)) {
     return (
       <AppPreview
         key={endpoint.id}
@@ -16,6 +24,8 @@ export function AppSessionPreviewPanel({ sessionGroupId }: { sessionGroupId: str
       />
     );
   }
+
+  if (publishedUrl) return <PublishedAppPreview url={publishedUrl} />;
 
   return <AppPreviewCanvasSkeleton error={error} onRetry={() => void refresh()} />;
 }
