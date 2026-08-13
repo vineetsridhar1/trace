@@ -2224,7 +2224,7 @@ export class SessionService {
       // message. Refresh activity in the same optimistic write that claims the
       // new generation, so idle cleanup cannot select the group as stale while
       // that runtime is provisioning.
-      ...(isNewRuntimeRequest ? { sessionData: { lastMessageAt: new Date() } } : {}),
+      isNewRuntimeRequest ? { sessionData: { lastMessageAt: new Date() } } : undefined,
     );
 
     if (!result) {
