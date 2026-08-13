@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useEntityField } from "@trace/client-core";
 import { cn } from "../../lib/utils";
-import { navigateToSessionGroup } from "../../stores/ui";
+import { navigateToSessionGroup, useUIStore } from "../../stores/ui";
 import { SessionStatusIndicator } from "../channel/SessionStatusIndicator";
 import { DeleteGeneratedProjectDialog } from "./DeleteGeneratedProjectDialog";
 import type { GeneratedProjectKind } from "./generated-project-types";
@@ -20,6 +20,9 @@ export function GeneratedProjectSessionItem({
   const row = useGeneratedProjectSessionGroupRow(groupId);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const groupName = useEntityField("sessionGroups", groupId, "name") as string | null | undefined;
+  const hasCompletionAlert = useUIStore(
+    (state) => Boolean(state.sessionGroupDoneBadges[groupId]) && row.displayAgentStatus === "done",
+  );
   const name = groupName ?? `Untitled ${kind}`;
 
   return (
@@ -36,7 +39,15 @@ export function GeneratedProjectSessionItem({
           title={name}
           className="flex h-full min-w-0 flex-1 cursor-pointer touch-manipulation items-center gap-2 rounded-md px-1.5 pr-7 text-left text-xs leading-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <SessionStatusIndicator row={row} size={6} showDonePulse={false} />
+          <span className="relative flex size-3 shrink-0 items-center justify-center">
+            <SessionStatusIndicator row={row} size={6} showDonePulse={false} />
+            {hasCompletionAlert ? (
+              <span
+                aria-label="Creation complete"
+                className="absolute -right-1 -top-1 size-2 rounded-full border border-background bg-red-500"
+              />
+            ) : null}
+          </span>
           <span className="min-w-0 flex-1 truncate">{name}</span>
         </button>
         {kind !== "design_system" ? (
