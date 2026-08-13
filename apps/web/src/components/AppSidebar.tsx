@@ -159,6 +159,7 @@ export function AppSidebar() {
                   channelsById={sidebarData.channelsById}
                   channelsLoading={sidebarData.channelsLoading}
                   groupIds={sidebarData.groupIds}
+                  linkedChannelId={sidebarData.linkedChannelId}
                   onChannelClick={handleChannelClick}
                   onSessionClick={handleSessionClick}
                   topLevelItems={sidebarData.topLevelItems}
@@ -176,6 +177,7 @@ export function AppSidebar() {
                   channelsById={sidebarData.channelsById}
                   channelsLoading={sidebarData.channelsLoading}
                   groupIds={sidebarData.groupIds}
+                  linkedChannelId={sidebarData.linkedChannelId}
                   onChannelClick={handleChannelClick}
                   onSessionClick={handleSessionClick}
                   topLevelItems={sidebarData.topLevelItems}

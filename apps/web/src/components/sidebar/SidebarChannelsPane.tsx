@@ -9,6 +9,7 @@ import { CreateChannelDialog } from "./CreateChannelDialog";
 import { GeneratedProjectsSection } from "./GeneratedProjectsSection";
 import { HomeButton } from "./HomeButton";
 import { InboxButton } from "./InboxButton";
+import { LinkedProjectSection } from "./LinkedProjectSection";
 import { TicketsButton } from "./TicketsButton";
 import { SidebarChannelTree } from "./SidebarChannelTree";
 import {
@@ -29,6 +30,7 @@ export interface SidebarChannelsPaneProps {
   channelsById: Record<string, Channel>;
   channelsLoading: boolean;
   groupIds: string[];
+  linkedChannelId: string | null;
   onChannelClick: (id: string) => void;
   onSessionClick: (channelId: string, sessionGroupId: string, sessionId: string | null) => void;
   onDragActiveChange?: (active: boolean) => void;
@@ -45,6 +47,7 @@ export function SidebarChannelsPane({
   channelsById,
   channelsLoading,
   groupIds,
+  linkedChannelId,
   onChannelClick,
   onSessionClick,
   onDragActiveChange,
@@ -145,6 +148,13 @@ export function SidebarChannelsPane({
                 sessionScopes={sessionScopes}
                 topLevelItems={topLevelItems}
               />
+              {linkedChannelId && (
+                <LinkedProjectSection
+                  channelId={linkedChannelId}
+                  onChannelClick={onChannelClick}
+                  onSessionClick={onSessionClick}
+                />
+              )}
             </motion.div>
           ) : null}
         </AnimatePresence>

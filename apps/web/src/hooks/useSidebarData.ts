@@ -265,6 +265,7 @@ export function useSidebarData() {
     (s: { remove: (entityType: keyof EntityTableMap, id: string) => void }) => s.remove,
   );
   const refreshTick = useUIStore((s: { refreshTick: number }) => s.refreshTick);
+  const activeChannelId = useUIStore((s: { activeChannelId: string | null }) => s.activeChannelId);
   const homeRetryRequest = useHomeDataStore((state) => state.retryRequest);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [channelsLoadFailed, setChannelsLoadFailed] = useState(false);
@@ -553,6 +554,12 @@ export function useSidebarData() {
     [allChannelIds, channelsById],
   );
 
+  // The project the viewer reached through a shared link without joining it.
+  const linkedChannelId = useMemo(() => {
+    if (!activeChannelId) return null;
+    return channelsById[activeChannelId]?.viewerIsMember === false ? activeChannelId : null;
+  }, [activeChannelId, channelsById]);
+
   useEffect(() => {
     if (channelsLoading) return;
     if (channelsLoadFailed) {
@@ -577,6 +584,7 @@ export function useSidebarData() {
     allChannelIds,
     groupIds,
     channelIdsByGroup,
+    linkedChannelId,
     topLevelItems,
     channelsById,
     channelGroupsById,

@@ -1,17 +1,8 @@
 import { useState } from "react";
 import { LogIn } from "lucide-react";
-import { gql } from "@urql/core";
 import { useEntityField } from "@trace/client-core";
-import { client } from "../../lib/urql";
+import { joinChannel } from "../../lib/join-channel";
 import { Button } from "../ui/button";
-
-const JOIN_PROJECT_MUTATION = gql`
-  mutation JoinProject($channelId: ID!) {
-    joinChannel(channelId: $channelId) {
-      id
-    }
-  }
-`;
 
 export function JoinProjectButton({ channelId }: { channelId: string }) {
   const viewerIsMember = useEntityField("channels", channelId, "viewerIsMember");
@@ -22,7 +13,7 @@ export function JoinProjectButton({ channelId }: { channelId: string }) {
   async function handleJoin() {
     setJoining(true);
     try {
-      await client.mutation(JOIN_PROJECT_MUTATION, { channelId }).toPromise();
+      await joinChannel(channelId);
     } finally {
       setJoining(false);
     }
