@@ -113,7 +113,11 @@ Use exact names read from the repository. "Add deployment state" is not enough; 
 statuses, uniqueness or index rule, service method, event types, and UI selector carry the state.
 "Queue a job" is not enough; say what immutable identifier is queued, where the payload is stored,
 which callback authenticates it, and what makes a late job harmless. Keep source citations compact,
-but do not hide the construction layer solely behind a collapsed evidence section.
+but do not hide the construction layer solely behind a collapsed evidence section. Use progressive
+disclosure inside the construction layer: keep one conclusion-bearing sentence per item visible,
+then put its fields, rules, consumer, and focused proof in its own `<details>` block. Prefer several
+small accordions over one catch-all "implementation details" accordion. A reviewer should be able
+to scan the decisions and expand only the implementation slice they are reviewing.
 
 Name paths or symbols only where they anchor a claim, identify the owner of a change, or help an
 implementer start. Include an impact map when several components or consumers need coordination;
