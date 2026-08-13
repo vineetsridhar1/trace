@@ -77,9 +77,14 @@ export function RepoCard({
               label={webhookActive ? "Webhook connected" : remoteUrl ? "Webhook off" : "Local only"}
             />
           </div>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {remoteUrl ?? "Local project — no remote configured"}
-          </p>
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="truncate" title={remoteUrl ?? undefined}>
+              {remoteUrl ?? "Local project — no remote configured"}
+            </span>
+            {isElectron ? (
+              <RepoDesktopSection repoId={id} desktopRefreshKey={desktopRefreshKey} />
+            ) : null}
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
           <span>Default branch</span>
@@ -140,7 +145,6 @@ export function RepoCard({
         <p className="border-t border-border px-4 py-2 text-xs text-destructive">{webhookError}</p>
       )}
 
-      {isElectron && <RepoDesktopSection repoId={id} desktopRefreshKey={desktopRefreshKey} />}
       <RepoApplicationsSection repoId={id} />
       <EditRepoDialog
         repoId={id}
