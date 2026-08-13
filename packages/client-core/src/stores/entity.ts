@@ -75,6 +75,33 @@ type EventsByScope = Record<string, Record<string, Event>>;
 type EventIdsByScope = Record<string, string[]>;
 type MessageIdsByScope = Record<string, string[]>;
 
+/**
+ * Event history is a client-side cache: the timeline queries are authoritative
+ * and rehydrate a scope after it has been evicted. Keep the cache bounded even
+ * when an organization subscription has been open for days.
+ */
+export const MAX_EVENTS_PER_SCOPE = 2_000;
+export const MAX_EVENT_SCOPES = 100;
+
+const retainedEventScopeCounts = new Map<string, number>();
+const eventScopeAccessOrder = new Map<string, number>();
+let eventScopeAccessSequence = 0;
+
+/** Keep a mounted timeline's scope out of whole-scope LRU eviction. */
+export function retainScopedEvents(scopeKey: string): () => void {
+  retainedEventScopeCounts.set(scopeKey, (retainedEventScopeCounts.get(scopeKey) ?? 0) + 1);
+  touchEventScope(scopeKey);
+  return () => {
+    const count = retainedEventScopeCounts.get(scopeKey) ?? 0;
+    if (count <= 1) retainedEventScopeCounts.delete(scopeKey);
+    else retainedEventScopeCounts.set(scopeKey, count - 1);
+  };
+}
+
+function touchEventScope(scopeKey: string): void {
+  eventScopeAccessOrder.set(scopeKey, ++eventScopeAccessSequence);
+}
+
 interface EntityActions {
   upsert: <T extends EntityType>(entityType: T, id: string, data: EntityTableMap[T]) => void;
   upsertMany: <T extends EntityType>(
@@ -323,7 +350,7 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
     set((state: EntityState) => {
       const bucket = state.eventsByScope[scopeKey];
       const updated = bucket ? { ...bucket, [id]: event } : { [id]: event };
-      const eventIdsByScope = upsertEventIdByScope(
+      let eventIdsByScope = upsertEventIdByScope(
         state._eventIdsByScope,
         scopeKey,
         id,
@@ -331,13 +358,24 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
         bucket,
         bucket?.[id],
       );
-      const parentIdx = updateParentIdIndex(state._eventIdsByParentId, id, event.parentId);
+      let parentIdx = updateParentIdIndex(state._eventIdsByParentId, id, event.parentId);
+      const capped = capScopedEventBucket(scopeKey, updated, eventIdsByScope, parentIdx);
+      eventIdsByScope = capped.eventIdsByScope;
+      parentIdx = capped.eventIdsByParentId;
+      touchEventScope(scopeKey);
+      const evicted = evictLeastRecentlyUsedScopes(
+        { ...state.eventsByScope, [scopeKey]: capped.bucket },
+        eventIdsByScope,
+        parentIdx,
+      );
       return {
-        eventsByScope: { ...state.eventsByScope, [scopeKey]: updated },
-        ...(eventIdsByScope !== state._eventIdsByScope
-          ? { _eventIdsByScope: eventIdsByScope }
+        eventsByScope: evicted.eventsByScope,
+        ...(evicted._eventIdsByScope !== state._eventIdsByScope
+          ? { _eventIdsByScope: evicted._eventIdsByScope }
           : {}),
-        ...(parentIdx !== state._eventIdsByParentId ? { _eventIdsByParentId: parentIdx } : {}),
+        ...(evicted._eventIdsByParentId !== state._eventIdsByParentId
+          ? { _eventIdsByParentId: evicted._eventIdsByParentId }
+          : {}),
       };
     }),
 
@@ -358,53 +396,71 @@ export const useEntityStore = create<EntityState>((set: SetState<EntityState>) =
         bucket[item.id] = item;
         parentIdx = updateParentIdIndex(parentIdx, item.id, item.parentId);
       }
+      const capped = capScopedEventBucket(scopeKey, bucket, eventIdsByScope, parentIdx);
+      eventIdsByScope = capped.eventIdsByScope;
+      parentIdx = capped.eventIdsByParentId;
+      touchEventScope(scopeKey);
+      const evicted = evictLeastRecentlyUsedScopes(
+        { ...state.eventsByScope, [scopeKey]: capped.bucket },
+        eventIdsByScope,
+        parentIdx,
+      );
       return {
-        eventsByScope: { ...state.eventsByScope, [scopeKey]: bucket },
-        ...(eventIdsByScope !== state._eventIdsByScope
-          ? { _eventIdsByScope: eventIdsByScope }
+        eventsByScope: evicted.eventsByScope,
+        ...(evicted._eventIdsByScope !== state._eventIdsByScope
+          ? { _eventIdsByScope: evicted._eventIdsByScope }
           : {}),
-        ...(parentIdx !== state._eventIdsByParentId ? { _eventIdsByParentId: parentIdx } : {}),
+        ...(evicted._eventIdsByParentId !== state._eventIdsByParentId
+          ? { _eventIdsByParentId: evicted._eventIdsByParentId }
+          : {}),
       };
     }),
 
   removeScopedEvents: (scopeKey: string) =>
     set((state: EntityState) => {
-      const { [scopeKey]: _, ...rest } = state.eventsByScope;
-      const { [scopeKey]: _eventIds, ...restEventIds } = state._eventIdsByScope;
-      return { eventsByScope: rest, _eventIdsByScope: restEventIds };
+      return removeScopedEventBucket(
+        state.eventsByScope,
+        state._eventIdsByScope,
+        state._eventIdsByParentId,
+        scopeKey,
+      );
     }),
 
   reset: () =>
-    set({
-      organizations: {},
-      users: {},
-      repos: {},
-      projects: {},
-      channels: {},
-      channelGroups: {},
-      sessionGroups: {},
-      chats: {},
-      sessions: {},
-      tickets: {},
-      inboxItems: {},
-      messages: {},
-      queuedMessages: {},
-      agentEnvironments: {},
-      sessionApplicationProcesses: {},
-      sessionApplicationLogs: {},
-      sessionEndpoints: {},
-      sessionSetupScriptRuns: {},
-      designSystems: {},
-      designSystemCommitArtifacts: {},
-      designSystemVersions: {},
-      artifacts: {},
-      appDeployments: {},
-      eventsByScope: {},
-      _eventIdsByScope: {},
-      _sessionIdsByGroup: {},
-      _messageIdsByScope: {},
-      _eventIdsByParentId: {},
-      _queuedMessageIdsBySession: {},
+    set(() => {
+      eventScopeAccessOrder.clear();
+      eventScopeAccessSequence = 0;
+      return {
+        organizations: {},
+        users: {},
+        repos: {},
+        projects: {},
+        channels: {},
+        channelGroups: {},
+        sessionGroups: {},
+        chats: {},
+        sessions: {},
+        tickets: {},
+        inboxItems: {},
+        messages: {},
+        queuedMessages: {},
+        agentEnvironments: {},
+        sessionApplicationProcesses: {},
+        sessionApplicationLogs: {},
+        sessionEndpoints: {},
+        sessionSetupScriptRuns: {},
+        designSystems: {},
+        designSystemCommitArtifacts: {},
+        designSystemVersions: {},
+        artifacts: {},
+        appDeployments: {},
+        eventsByScope: {},
+        _eventIdsByScope: {},
+        _sessionIdsByGroup: {},
+        _messageIdsByScope: {},
+        _eventIdsByParentId: {},
+        _queuedMessageIdsBySession: {},
+      };
     }),
 }));
 
@@ -522,6 +578,7 @@ export class StoreBatchWriter {
     this.dirty.add("eventsByScope");
     this.updateEventScopeIndex(scopeKey, id, event, previous);
     this.updateParentIdIndex(id, event.parentId);
+    this.enforceScopedEventCacheLimits(scopeKey);
   }
 
   /** Remove a single event from a scoped bucket (used for optimistic cleanup) */
@@ -646,6 +703,32 @@ export class StoreBatchWriter {
     }
   }
 
+  private enforceScopedEventCacheLimits(scopeKey: string): void {
+    const bucket = this.eventsByScope[scopeKey];
+    if (!bucket) return;
+    const capped = capScopedEventBucket(
+      scopeKey,
+      bucket,
+      this._eventIdsByScope,
+      this._eventIdsByParentId,
+    );
+    this.eventsByScope[scopeKey] = capped.bucket;
+    this._eventIdsByScope = capped.eventIdsByScope;
+    this._eventIdsByParentId = capped.eventIdsByParentId;
+    touchEventScope(scopeKey);
+    const evicted = evictLeastRecentlyUsedScopes(
+      this.eventsByScope,
+      this._eventIdsByScope,
+      this._eventIdsByParentId,
+    );
+    this.eventsByScope = evicted.eventsByScope;
+    this._eventIdsByScope = evicted._eventIdsByScope;
+    this._eventIdsByParentId = evicted._eventIdsByParentId;
+    this.dirty.add("eventsByScope");
+    this.dirty.add("_eventIdsByScope");
+    this.dirty.add("_eventIdsByParentId");
+  }
+
   upsertQueuedMessage(sessionId: string, id: string, data: QueuedMessage): void {
     const table = this.ensureTable("queuedMessages");
     table[id] = data;
@@ -763,6 +846,102 @@ function updateParentIdIndex(
   if (arr?.includes(eventId)) return index;
   const next = index === useEntityStore.getState()._eventIdsByParentId ? { ...index } : index;
   next[parentId] = arr ? [...arr, eventId] : [eventId];
+  return next;
+}
+
+function removeEventFromParentIndex(
+  index: Record<string, string[]>,
+  eventId: string,
+  parentId: string | null | undefined,
+): Record<string, string[]> {
+  if (!parentId) return index;
+  const ids = index[parentId];
+  if (!ids?.includes(eventId)) return index;
+  const next = { ...index };
+  const remaining = ids.filter((id) => id !== eventId);
+  if (remaining.length > 0) next[parentId] = remaining;
+  else delete next[parentId];
+  return next;
+}
+
+function capScopedEventBucket(
+  scopeKey: string,
+  bucket: Record<string, Event>,
+  eventIdsByScope: EventIdsByScope,
+  eventIdsByParentId: Record<string, string[]>,
+): {
+  bucket: Record<string, Event>;
+  eventIdsByScope: EventIdsByScope;
+  eventIdsByParentId: Record<string, string[]>;
+} {
+  const ids = eventIdsByScope[scopeKey] ?? EMPTY_IDS;
+  if (ids.length <= MAX_EVENTS_PER_SCOPE) return { bucket, eventIdsByScope, eventIdsByParentId };
+
+  const evictedIds = ids.slice(0, ids.length - MAX_EVENTS_PER_SCOPE);
+  const nextBucket = { ...bucket };
+  let nextParentIndex = eventIdsByParentId;
+  for (const id of evictedIds) {
+    const event = nextBucket[id];
+    delete nextBucket[id];
+    nextParentIndex = removeEventFromParentIndex(nextParentIndex, id, event?.parentId);
+  }
+  return {
+    bucket: nextBucket,
+    eventIdsByScope: { ...eventIdsByScope, [scopeKey]: ids.slice(-MAX_EVENTS_PER_SCOPE) },
+    eventIdsByParentId: nextParentIndex,
+  };
+}
+
+function removeScopedEventBucket(
+  eventsByScope: EventsByScope,
+  eventIdsByScope: EventIdsByScope,
+  eventIdsByParentId: Record<string, string[]>,
+  scopeKey: string,
+): Pick<EntityState, "eventsByScope" | "_eventIdsByScope" | "_eventIdsByParentId"> {
+  const bucket = eventsByScope[scopeKey];
+  if (!bucket) {
+    return {
+      eventsByScope,
+      _eventIdsByScope: eventIdsByScope,
+      _eventIdsByParentId: eventIdsByParentId,
+    };
+  }
+  const { [scopeKey]: _, ...nextEventsByScope } = eventsByScope;
+  const { [scopeKey]: _eventIds, ...nextEventIdsByScope } = eventIdsByScope;
+  let nextParentIndex = eventIdsByParentId;
+  for (const [id, event] of Object.entries(bucket)) {
+    nextParentIndex = removeEventFromParentIndex(nextParentIndex, id, event.parentId);
+  }
+  eventScopeAccessOrder.delete(scopeKey);
+  return {
+    eventsByScope: nextEventsByScope,
+    _eventIdsByScope: nextEventIdsByScope,
+    _eventIdsByParentId: nextParentIndex,
+  };
+}
+
+function evictLeastRecentlyUsedScopes(
+  eventsByScope: EventsByScope,
+  eventIdsByScope: EventIdsByScope,
+  eventIdsByParentId: Record<string, string[]>,
+): Pick<EntityState, "eventsByScope" | "_eventIdsByScope" | "_eventIdsByParentId"> {
+  let next = {
+    eventsByScope,
+    _eventIdsByScope: eventIdsByScope,
+    _eventIdsByParentId: eventIdsByParentId,
+  };
+  while (Object.keys(next.eventsByScope).length > MAX_EVENT_SCOPES) {
+    const candidate = Object.keys(next.eventsByScope)
+      .filter((scopeKey) => !retainedEventScopeCounts.has(scopeKey))
+      .sort((a, b) => (eventScopeAccessOrder.get(a) ?? 0) - (eventScopeAccessOrder.get(b) ?? 0))[0];
+    if (!candidate) break;
+    next = removeScopedEventBucket(
+      next.eventsByScope,
+      next._eventIdsByScope,
+      next._eventIdsByParentId,
+      candidate,
+    );
+  }
   return next;
 }
 
