@@ -10,6 +10,7 @@ import { SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
 import {
   ContextMenu,
   ContextMenuContent,
+  ContextMenuGroup,
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
@@ -135,17 +136,19 @@ export const ChannelItem = memo(function ChannelItem({
             </SidebarMenuItem>
           </ContextMenuTrigger>
           <ContextMenuContent className="w-60 p-1.5">
-            <ContextMenuLabel className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider">
-              Project actions
-            </ContextMenuLabel>
-            <ContextMenuItem onClick={() => setRenameOpen(true)}>
-              <Pencil size={15} />
-              Rename project
-            </ContextMenuItem>
-            <ContextMenuItem onClick={() => setMembersOpen(true)}>
-              <UserPlus size={15} />
-              Add people
-            </ContextMenuItem>
+            <ContextMenuGroup>
+              <ContextMenuLabel className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider">
+                Project actions
+              </ContextMenuLabel>
+              <ContextMenuItem onClick={() => setRenameOpen(true)}>
+                <Pencil size={15} />
+                Rename project
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => setMembersOpen(true)}>
+                <UserPlus size={15} />
+                Add people
+              </ContextMenuItem>
+            </ContextMenuGroup>
             <ContextMenuSeparator className="my-1" />
             <ContextMenuItem onClick={() => markChannelDone(id)}>
               <Mail size={15} />
