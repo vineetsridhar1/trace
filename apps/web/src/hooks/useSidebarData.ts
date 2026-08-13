@@ -15,6 +15,7 @@ import type { EntityTableMap } from "@trace/client-core";
 import { useUIStore } from "../stores/ui";
 import { client } from "../lib/urql";
 import { features } from "../lib/features";
+import { fetchSharedChannel } from "../lib/shared-channel";
 import { gql } from "@urql/core";
 import { useHomeDataStore } from "../stores/home-data";
 
@@ -287,6 +288,20 @@ export function useSidebarData() {
         const memberChannels = result.data.channels as Array<Channel & { id: string }>;
         const memberChannelIds = new Set(memberChannels.map((channel) => channel.id));
         upsertMany("channels", memberChannels);
+
+        // A shared link can point at a project the viewer hasn't joined. Load it
+        // so the deep link resolves and survives the prune below, even though the
+        // member-only sidebar list omits it.
+        const linkedChannelId = useUIStore.getState().activeChannelId;
+        if (linkedChannelId && !memberChannelIds.has(linkedChannelId)) {
+          const linkedChannel = await fetchSharedChannel(linkedChannelId);
+          if (request !== channelsRequestRef.current) return;
+          if (linkedChannel) {
+            upsertMany("channels", [linkedChannel]);
+            memberChannelIds.add(linkedChannel.id);
+          }
+        }
+
         for (const channelId of Object.keys(useEntityStore.getState().channels)) {
           if (!memberChannelIds.has(channelId)) {
             removeEntity("channels", channelId);
@@ -443,9 +458,11 @@ export function useSidebarData() {
 
   const chatIds = useEntityIds("chats");
 
+  // Sidebar listing stays member-only; channels opened through a shared link
+  // live in the store but are not listed here.
   const allChannelIds = useEntityIds(
     "channels",
-    features.messaging ? undefined : (c) => c.type !== "text",
+    (c) => (features.messaging || c.type !== "text") && c.viewerIsMember !== false,
     (a, b) => {
       const ac = a as EntityTableMap["channels"];
       const bc = b as EntityTableMap["channels"];
@@ -455,20 +472,17 @@ export function useSidebarData() {
 
   useEffect(() => {
     if (channelsLoading) return;
-    if (!features.messaging) {
-      const { activeChannelId } = useUIStore.getState();
-      if (activeChannelId) {
-        const activeChannel = useEntityStore.getState().channels[activeChannelId];
-        if (activeChannel?.type === "text") {
-          useUIStore.getState().setActiveChannelId(allChannelIds[0] ?? null);
-          return;
-        }
-      }
-    }
     const { activeChannelId } = useUIStore.getState();
-    if (activeChannelId && !allChannelIds.includes(activeChannelId)) {
+    if (!activeChannelId) return;
+    const activeChannel = useEntityStore.getState().channels[activeChannelId];
+    if (!features.messaging && activeChannel?.type === "text") {
       useUIStore.getState().setActiveChannelId(allChannelIds[0] ?? null);
       return;
+    }
+    // Only bail out when the channel is unknown entirely. A channel the viewer
+    // has not joined is absent from allChannelIds but still readable by link.
+    if (!activeChannel) {
+      useUIStore.getState().setActiveChannelId(allChannelIds[0] ?? null);
     }
   }, [channelsLoading, allChannelIds]);
 
