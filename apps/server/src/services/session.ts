@@ -12112,12 +12112,18 @@ export class SessionService {
 
   async cleanupIdleCloudSessionGroups(options: {
     idleAfterMs: number;
+    activeIdleAfterMs?: number;
     now?: number;
     batchSize?: number;
   }): Promise<{ scanned: number; cleaned: string[] }> {
     const idleAfterMs = Math.max(1, Math.floor(options.idleAfterMs));
+    const activeIdleAfterMs = Math.max(
+      idleAfterMs,
+      Math.floor(options.activeIdleAfterMs ?? 12 * 60 * 60 * 1000),
+    );
     const now = options.now ?? Date.now();
     const cutoff = new Date(now - idleAfterMs);
+    const activeCutoff = new Date(now - activeIdleAfterMs);
     const batchSize = Math.max(1, Math.min(options.batchSize ?? 25, 100));
 
     const groups: IdleCloudSessionGroupCandidate[] = await prisma.sessionGroup.findMany({
@@ -12146,6 +12152,21 @@ export class SessionService {
                 lastMessageAt: null,
                 lastUserMessageAt: null,
                 createdAt: { gt: cutoff },
+              },
+              // Actively running agents use the longer lease so a legitimate
+              // long-running task is not reclaimed mid-run. Once complete,
+              // the normal idle lease resumes from its most recent output.
+              {
+                agentStatus: "active",
+                OR: [
+                  { lastMessageAt: { gt: activeCutoff } },
+                  { lastMessageAt: null, lastUserMessageAt: { gt: activeCutoff } },
+                  {
+                    lastMessageAt: null,
+                    lastUserMessageAt: null,
+                    createdAt: { gt: activeCutoff },
+                  },
+                ],
               },
               // A local session can share the group, but its active process
               // must never be interrupted by cloud-runtime cleanup.
@@ -12195,7 +12216,14 @@ export class SessionService {
         !!groupConnection.providerRuntimeId;
       const cloudSessions = group.sessions.filter((session) => session.hosting === "cloud");
       const activeSessions = group.sessions.filter((session) => session.agentStatus === "active");
-      if (activeSessions.some((session) => session.hosting !== "cloud")) {
+      const activeSessionHasRecentActivity = activeSessions.some((session) => {
+        const activity = session.lastMessageAt ?? session.lastUserMessageAt ?? session.createdAt;
+        return activity > activeCutoff;
+      });
+      if (
+        activeSessionHasRecentActivity ||
+        activeSessions.some((session) => session.hosting !== "cloud")
+      ) {
         continue;
       }
       const cloudSession =

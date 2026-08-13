@@ -10472,7 +10472,7 @@ describe("SessionService", () => {
       );
     });
 
-    it("keeps cloud session groups running during recent activity", async () => {
+    it("keeps active cloud session groups running on the long activity lease", async () => {
       prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
         {
           id: "group-1",
@@ -10487,22 +10487,61 @@ describe("SessionService", () => {
               agentStatus: "active",
               sessionStatus: "in_progress",
               createdAt: new Date("2026-05-12T11:00:00.000Z"),
-              lastUserMessageAt: new Date("2026-05-12T11:40:00.000Z"),
-              lastMessageAt: new Date("2026-05-12T11:40:00.000Z"),
-              updatedAt: new Date("2026-05-12T11:40:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T10:00:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T10:00:00.000Z"),
+              updatedAt: new Date("2026-05-12T10:00:00.000Z"),
             },
           ],
         },
       ]);
 
       const result = await service.cleanupIdleCloudSessionGroups({
-        idleAfterMs: 10 * 60 * 1000,
+        idleAfterMs: 60 * 60 * 1000,
+        activeIdleAfterMs: 12 * 60 * 60 * 1000,
         now: Date.parse("2026-05-12T11:45:00.000Z"),
       });
 
       expect(result).toEqual({ scanned: 1, cleaned: [] });
       expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
       expect(sessionRouterMock.destroyRuntime).not.toHaveBeenCalled();
+    });
+
+    it("uses the configured long lease only for active cloud sessions", async () => {
+      prismaMock.sessionGroup.findMany.mockResolvedValueOnce([]);
+
+      await service.cleanupIdleCloudSessionGroups({
+        idleAfterMs: 60 * 60 * 1000,
+        activeIdleAfterMs: 12 * 60 * 60 * 1000,
+        now: Date.parse("2026-05-12T12:00:00.000Z"),
+      });
+
+      expect(prismaMock.sessionGroup.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            sessions: expect.objectContaining({
+              none: expect.objectContaining({
+                OR: expect.arrayContaining([
+                  {
+                    agentStatus: "active",
+                    OR: [
+                      { lastMessageAt: { gt: new Date("2026-05-12T00:00:00.000Z") } },
+                      {
+                        lastMessageAt: null,
+                        lastUserMessageAt: { gt: new Date("2026-05-12T00:00:00.000Z") },
+                      },
+                      {
+                        lastMessageAt: null,
+                        lastUserMessageAt: null,
+                        createdAt: { gt: new Date("2026-05-12T00:00:00.000Z") },
+                      },
+                    ],
+                  },
+                ]),
+              }),
+            }),
+          }),
+        }),
+      );
     });
 
     it("keeps a completed restarted cloud session within the single idle lease", async () => {
