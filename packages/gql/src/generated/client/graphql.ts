@@ -3118,6 +3118,15 @@ export type SessionGroupArtifactsQuery = {
   }>;
 };
 
+export type AddChannelMemberMutationVariables = Exact<{
+  input: AddChannelMemberInput;
+}>;
+
+export type AddChannelMemberMutation = {
+  __typename?: "Mutation";
+  addChannelMember: { __typename?: "Channel"; id: string };
+};
+
 export type SendChannelMessageMutationVariables = Exact<{
   channelId: Scalars["ID"]["input"];
   html?: InputMaybe<Scalars["String"]["input"]>;
@@ -3127,37 +3136,6 @@ export type SendChannelMessageMutationVariables = Exact<{
 export type SendChannelMessageMutation = {
   __typename?: "Mutation";
   sendChannelMessage: { __typename?: "Message"; id: string };
-};
-
-export type ChannelMembersQueryVariables = Exact<{
-  id: Scalars["ID"]["input"];
-}>;
-
-export type ChannelMembersQuery = {
-  __typename?: "Query";
-  channel?: {
-    __typename?: "Channel";
-    id: string;
-    members: Array<{
-      __typename?: "ChannelMember";
-      user: {
-        __typename?: "User";
-        id: string;
-        name: string;
-        email: string;
-        avatarUrl?: string | null;
-      };
-    }>;
-  } | null;
-};
-
-export type AddChannelMemberMutationVariables = Exact<{
-  input: AddChannelMemberInput;
-}>;
-
-export type AddChannelMemberMutation = {
-  __typename?: "Mutation";
-  addChannelMember: { __typename?: "Channel"; id: string };
 };
 
 export type SessionGroupsQueryVariables = Exact<{
@@ -3288,6 +3266,28 @@ export type FilteredSessionGroupsQuery = {
       channel?: { __typename?: "Channel"; id: string } | null;
     }>;
   }>;
+};
+
+export type ChannelMembersQueryVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type ChannelMembersQuery = {
+  __typename?: "Query";
+  channel?: {
+    __typename?: "Channel";
+    id: string;
+    members: Array<{
+      __typename?: "ChannelMember";
+      user: {
+        __typename?: "User";
+        id: string;
+        name: string;
+        email: string;
+        avatarUrl?: string | null;
+      };
+    }>;
+  } | null;
 };
 
 export type AddChatMemberMutationVariables = Exact<{
@@ -5538,6 +5538,37 @@ export type SidebarSessionGroupsQuery = {
   }>;
 };
 
+export type JoinProjectMutationVariables = Exact<{
+  channelId: Scalars["ID"]["input"];
+}>;
+
+export type JoinProjectMutation = {
+  __typename?: "Mutation";
+  joinChannel: { __typename?: "Channel"; id: string };
+};
+
+export type SharedChannelQueryVariables = Exact<{
+  id: Scalars["ID"]["input"];
+}>;
+
+export type SharedChannelQuery = {
+  __typename?: "Query";
+  channel?: {
+    __typename?: "Channel";
+    id: string;
+    name: string;
+    type: ChannelType;
+    visibility: ChannelVisibility;
+    position: number;
+    groupId?: string | null;
+    baseBranch?: string | null;
+    setupScript?: string | null;
+    runScripts?: JsonValue | null;
+    viewerIsMember: boolean;
+    repo?: { __typename?: "Repo"; id: string; name: string } | null;
+  } | null;
+};
+
 export type DesignElementEditorStyleSourceQueryVariables = Exact<{
   sessionGroupId: Scalars["ID"]["input"];
   elementId: Scalars["String"]["input"];
@@ -5812,6 +5843,46 @@ export const SessionGroupArtifactsDocument = {
     },
   ],
 } as unknown as DocumentNode<SessionGroupArtifactsQuery, SessionGroupArtifactsQueryVariables>;
+export const AddChannelMemberDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "AddChannelMember" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "AddChannelMemberInput" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "addChannelMember" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "input" },
+                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<AddChannelMemberMutation, AddChannelMemberMutationVariables>;
 export const SendChannelMessageDocument = {
   kind: "Document",
   definitions: [
@@ -5872,110 +5943,6 @@ export const SendChannelMessageDocument = {
     },
   ],
 } as unknown as DocumentNode<SendChannelMessageMutation, SendChannelMessageMutationVariables>;
-export const ChannelMembersDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "query",
-      name: { kind: "Name", value: "ChannelMembers" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "channel" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "id" },
-                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [
-                { kind: "Field", name: { kind: "Name", value: "id" } },
-                {
-                  kind: "Field",
-                  name: { kind: "Name", value: "members" },
-                  selectionSet: {
-                    kind: "SelectionSet",
-                    selections: [
-                      {
-                        kind: "Field",
-                        name: { kind: "Name", value: "user" },
-                        selectionSet: {
-                          kind: "SelectionSet",
-                          selections: [
-                            { kind: "Field", name: { kind: "Name", value: "id" } },
-                            { kind: "Field", name: { kind: "Name", value: "name" } },
-                            { kind: "Field", name: { kind: "Name", value: "email" } },
-                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<ChannelMembersQuery, ChannelMembersQueryVariables>;
-export const AddChannelMemberDocument = {
-  kind: "Document",
-  definitions: [
-    {
-      kind: "OperationDefinition",
-      operation: "mutation",
-      name: { kind: "Name", value: "AddChannelMember" },
-      variableDefinitions: [
-        {
-          kind: "VariableDefinition",
-          variable: { kind: "Variable", name: { kind: "Name", value: "input" } },
-          type: {
-            kind: "NonNullType",
-            type: { kind: "NamedType", name: { kind: "Name", value: "AddChannelMemberInput" } },
-          },
-        },
-      ],
-      selectionSet: {
-        kind: "SelectionSet",
-        selections: [
-          {
-            kind: "Field",
-            name: { kind: "Name", value: "addChannelMember" },
-            arguments: [
-              {
-                kind: "Argument",
-                name: { kind: "Name", value: "input" },
-                value: { kind: "Variable", name: { kind: "Name", value: "input" } },
-              },
-            ],
-            selectionSet: {
-              kind: "SelectionSet",
-              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<AddChannelMemberMutation, AddChannelMemberMutationVariables>;
 export const SessionGroupsDocument = {
   kind: "Document",
   definitions: [
@@ -6311,6 +6278,70 @@ export const FilteredSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<FilteredSessionGroupsQuery, FilteredSessionGroupsQueryVariables>;
+export const ChannelMembersDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "ChannelMembers" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "channel" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "members" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      {
+                        kind: "Field",
+                        name: { kind: "Name", value: "user" },
+                        selectionSet: {
+                          kind: "SelectionSet",
+                          selections: [
+                            { kind: "Field", name: { kind: "Name", value: "id" } },
+                            { kind: "Field", name: { kind: "Name", value: "name" } },
+                            { kind: "Field", name: { kind: "Name", value: "email" } },
+                            { kind: "Field", name: { kind: "Name", value: "avatarUrl" } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ChannelMembersQuery, ChannelMembersQueryVariables>;
 export const AddChatMemberDocument = {
   kind: "Document",
   definitions: [
@@ -13471,6 +13502,108 @@ export const SidebarSessionGroupsDocument = {
     },
   ],
 } as unknown as DocumentNode<SidebarSessionGroupsQuery, SidebarSessionGroupsQueryVariables>;
+export const JoinProjectDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "mutation",
+      name: { kind: "Name", value: "JoinProject" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "channelId" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "joinChannel" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "channelId" },
+                value: { kind: "Variable", name: { kind: "Name", value: "channelId" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [{ kind: "Field", name: { kind: "Name", value: "id" } }],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<JoinProjectMutation, JoinProjectMutationVariables>;
+export const SharedChannelDocument = {
+  kind: "Document",
+  definitions: [
+    {
+      kind: "OperationDefinition",
+      operation: "query",
+      name: { kind: "Name", value: "SharedChannel" },
+      variableDefinitions: [
+        {
+          kind: "VariableDefinition",
+          variable: { kind: "Variable", name: { kind: "Name", value: "id" } },
+          type: {
+            kind: "NonNullType",
+            type: { kind: "NamedType", name: { kind: "Name", value: "ID" } },
+          },
+        },
+      ],
+      selectionSet: {
+        kind: "SelectionSet",
+        selections: [
+          {
+            kind: "Field",
+            name: { kind: "Name", value: "channel" },
+            arguments: [
+              {
+                kind: "Argument",
+                name: { kind: "Name", value: "id" },
+                value: { kind: "Variable", name: { kind: "Name", value: "id" } },
+              },
+            ],
+            selectionSet: {
+              kind: "SelectionSet",
+              selections: [
+                { kind: "Field", name: { kind: "Name", value: "id" } },
+                { kind: "Field", name: { kind: "Name", value: "name" } },
+                { kind: "Field", name: { kind: "Name", value: "type" } },
+                { kind: "Field", name: { kind: "Name", value: "visibility" } },
+                { kind: "Field", name: { kind: "Name", value: "position" } },
+                { kind: "Field", name: { kind: "Name", value: "groupId" } },
+                { kind: "Field", name: { kind: "Name", value: "baseBranch" } },
+                { kind: "Field", name: { kind: "Name", value: "setupScript" } },
+                { kind: "Field", name: { kind: "Name", value: "runScripts" } },
+                { kind: "Field", name: { kind: "Name", value: "viewerIsMember" } },
+                {
+                  kind: "Field",
+                  name: { kind: "Name", value: "repo" },
+                  selectionSet: {
+                    kind: "SelectionSet",
+                    selections: [
+                      { kind: "Field", name: { kind: "Name", value: "id" } },
+                      { kind: "Field", name: { kind: "Name", value: "name" } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<SharedChannelQuery, SharedChannelQueryVariables>;
 export const DesignElementEditorStyleSourceDocument = {
   kind: "Document",
   definitions: [

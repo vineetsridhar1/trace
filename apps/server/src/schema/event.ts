@@ -363,7 +363,7 @@ export const eventQueries = {
       throw new Error("Not authorized for this organization");
     }
 
-    await assertSessionReadable(args.sessionId, ctx.userId, ctx.organizationId);
+    await assertSessionReadable(args.sessionId, ctx.userId, orgId);
 
     return sessionTimelineService.query({
       organizationId: args.organizationId,
@@ -391,7 +391,7 @@ export const eventQueries = {
       throw new Error("Not authorized for this organization");
     }
 
-    await assertSessionReadable(args.sessionId, ctx.userId, ctx.organizationId);
+    await assertSessionReadable(args.sessionId, ctx.userId, orgId);
 
     return sessionTimelineService.queryEventsAroundEvent({
       organizationId: args.organizationId,
@@ -412,7 +412,7 @@ export const eventQueries = {
       throw new Error("Not authorized for this organization");
     }
 
-    await assertSessionReadable(args.sessionId, ctx.userId, ctx.organizationId);
+    await assertSessionReadable(args.sessionId, ctx.userId, orgId);
 
     return sessionTimelineService.queryPromptIndex({
       organizationId: args.organizationId,
