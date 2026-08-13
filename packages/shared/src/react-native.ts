@@ -15,6 +15,13 @@ export {
 } from "./adapters/coding-tool.js";
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from "./json.js";
 export { asJsonObject, isJsonObject } from "./json.js";
+export type { ActionRequiredArtifact } from "./action-required.js";
+export {
+  actionRequiredArtifactForToolError,
+  actionRequiredArtifactForToolOutput,
+  actionRequiredArtifactKey,
+  isActionRequiredArtifact,
+} from "./action-required.js";
 export {
   attachmentKeysFromPayload,
   hasAttachmentKeys,
