@@ -100,12 +100,16 @@ export function ActionRequiredArtifactCard({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground">
             {artifact.kind === "credential_required"
-              ? `${artifact.provider === "anthropic" ? "Anthropic" : "OpenAI"} key required`
+              ? artifact.provider === "anthropic"
+                ? "Anthropic key required"
+                : "Connect Codex"
               : artifact.title}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {artifact.kind === "credential_required"
-              ? "Connect once to start this cloud session."
+              ? artifact.provider === "anthropic"
+                ? "Connect once to start this cloud session."
+                : "Use ChatGPT, a Codex access token, or an OpenAI API key."
               : artifact.description}
           </p>
           {repeatCount > 1 && (
