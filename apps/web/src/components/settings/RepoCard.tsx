@@ -71,6 +71,7 @@ export function RepoCard({
     setActivePage("settings");
   };
   const isMissingGitHubToken = /no github token configured/i.test(webhookError ?? "");
+  const webhookErrorMessage = webhookError?.replace(/^\[GraphQL\]\s*/i, "");
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -152,7 +153,7 @@ export function RepoCard({
       ) : null}
       {webhookError && (
         <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2">
-          <p className="text-xs text-destructive">{webhookError}</p>
+          <p className="text-xs text-destructive">{webhookErrorMessage}</p>
           {isMissingGitHubToken && (
             <Button variant="outline" size="sm" onClick={openGitHubApiKeySettings}>
               Add GitHub API token
