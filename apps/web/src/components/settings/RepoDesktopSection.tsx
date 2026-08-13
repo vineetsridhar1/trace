@@ -54,7 +54,7 @@ export function RepoDesktopSection({ repoId, desktopRefreshKey }: RepoDesktopSec
         ·
       </span>
       {linkedPath ? (
-        <span className="truncate text-emerald-500" title={linkedPath}>
+        <span className="truncate" title={linkedPath}>
           {linkedPath}
         </span>
       ) : (
