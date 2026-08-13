@@ -78,10 +78,9 @@ type ParentEventIds = Record<string, string[]>;
 
 /**
  * Event history is a client-side cache: the timeline queries are authoritative
- * and rehydrate a scope after it has been evicted. Keep the cache bounded even
- * when an organization subscription has been open for days.
+ * and rehydrate a scope after it has been evicted. Eviction operates at the
+ * scope level: a timeline may safely retain its older pages while it is open.
  */
-export const MAX_EVENTS_PER_SCOPE = 2_000;
 export const MAX_EVENT_SCOPES = 100;
 export const MAX_RETAINED_EVENT_SCOPES = 20;
 
@@ -812,41 +811,12 @@ export function updateScopedEventCache(
     eventIdsByParentId = updateParentIdIndex(eventIdsByParentId, event.id, event.parentId);
   }
 
-  const capped = capScopedEventBucket(scopeKey, bucket, eventIdsByScope, eventIdsByParentId);
   touchEventScope(scopeKey);
   return evictLeastRecentlyUsedScopes(
-    { ...state.eventsByScope, [scopeKey]: capped.bucket },
-    capped.eventIdsByScope,
-    capped.eventIdsByParentId,
+    { ...state.eventsByScope, [scopeKey]: bucket },
+    eventIdsByScope,
+    eventIdsByParentId,
   );
-}
-
-function capScopedEventBucket(
-  scopeKey: string,
-  bucket: Record<string, Event>,
-  eventIdsByScope: EventIdsByScope,
-  eventIdsByParentId: Record<string, string[]>,
-): {
-  bucket: Record<string, Event>;
-  eventIdsByScope: EventIdsByScope;
-  eventIdsByParentId: Record<string, string[]>;
-} {
-  const ids = eventIdsByScope[scopeKey] ?? EMPTY_IDS;
-  if (ids.length <= MAX_EVENTS_PER_SCOPE) return { bucket, eventIdsByScope, eventIdsByParentId };
-
-  const evictedIds = ids.slice(0, ids.length - MAX_EVENTS_PER_SCOPE);
-  const nextBucket = { ...bucket };
-  let nextParentIndex = eventIdsByParentId;
-  for (const id of evictedIds) {
-    const event = nextBucket[id];
-    delete nextBucket[id];
-    nextParentIndex = removeEventFromParentIndex(nextParentIndex, id, event?.parentId);
-  }
-  return {
-    bucket: nextBucket,
-    eventIdsByScope: { ...eventIdsByScope, [scopeKey]: ids.slice(-MAX_EVENTS_PER_SCOPE) },
-    eventIdsByParentId: nextParentIndex,
-  };
 }
 
 function removeScopedEventBucket(

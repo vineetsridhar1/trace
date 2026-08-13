@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Event } from "@trace/gql";
 import {
-  MAX_EVENTS_PER_SCOPE,
   MAX_EVENT_SCOPES,
   retainScopedEvents,
   useEntityStore,
 } from "../src/stores/entity.js";
-import { upsertFetchedSessionEventsWithOptimisticResolution } from "../src/mutations/optimistic-message.js";
 
 function event(id: string, timestamp: string, parentId?: string): Event & { id: string } {
   return {
@@ -25,9 +23,10 @@ function event(id: string, timestamp: string, parentId?: string): Event & { id: 
 describe("scoped event cache eviction", () => {
   beforeEach(() => useEntityStore.getState().reset());
 
-  it("keeps the newest events when a scope exceeds its cap", () => {
+  it("preserves older paginated events in an active scope", () => {
     const scopeKey = "session:session-1";
-    for (let index = 0; index <= MAX_EVENTS_PER_SCOPE; index++) {
+    const eventCount = 2_001;
+    for (let index = 0; index < eventCount; index++) {
       const id = `event-${String(index).padStart(4, "0")}`;
       useEntityStore
         .getState()
@@ -39,9 +38,9 @@ describe("scoped event cache eviction", () => {
     }
 
     const state = useEntityStore.getState();
-    expect(Object.keys(state.eventsByScope[scopeKey] ?? {})).toHaveLength(MAX_EVENTS_PER_SCOPE);
-    expect(state.eventsByScope[scopeKey]?.["event-0000"]).toBeUndefined();
-    expect(state._eventIdsByParentId["parent-1"]).not.toContain("event-0000");
+    expect(Object.keys(state.eventsByScope[scopeKey] ?? {})).toHaveLength(eventCount);
+    expect(state.eventsByScope[scopeKey]?.["event-0000"]).toBeDefined();
+    expect(state._eventIdsByParentId["parent-1"]).toContain("event-0000");
   });
 
   it("evicts the least recently touched inactive scope when scope capacity is exceeded", () => {
@@ -57,19 +56,6 @@ describe("scoped event cache eviction", () => {
     expect(Object.keys(buckets)).toHaveLength(MAX_EVENT_SCOPES);
     expect(buckets["session:session-0"]).toBeUndefined();
     expect(buckets[`session:session-${MAX_EVENT_SCOPES}`]).toBeDefined();
-  });
-
-  it("applies the cap when timeline pagination writes a fetched page", () => {
-    const events = Array.from({ length: MAX_EVENTS_PER_SCOPE + 1 }, (_, index) => {
-      const id = `event-${index}`;
-      return event(id, new Date(index * 1_000).toISOString());
-    });
-
-    upsertFetchedSessionEventsWithOptimisticResolution("session-1", events);
-
-    const bucket = useEntityStore.getState().eventsByScope["session:session-1"];
-    expect(Object.keys(bucket ?? {})).toHaveLength(MAX_EVENTS_PER_SCOPE);
-    expect(bucket?.["event-0"]).toBeUndefined();
   });
 
   it("does not evict a retained scope", () => {
