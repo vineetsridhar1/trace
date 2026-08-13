@@ -1,349 +1,718 @@
-import { spawn, type ChildProcess } from "child_process";
-import { createInterface } from "readline";
+import { spawn, type ChildProcess } from "node:child_process";
+import { createInterface } from "node:readline";
 import type { CodingToolAdapter, RunOptions, ToolOutput, TokenUsage } from "./coding-tool.js";
 import { buildChildProcessEnv } from "./spawn-env.js";
 
 const EXIT_CLOSE_GRACE_MS = 1_000;
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
+type JsonObject = Record<string, unknown>;
+
+interface PendingRequest {
+  resolve: (value: JsonObject) => void;
+  reject: (error: Error) => void;
+}
+
+interface ActiveRun {
+  rootThreadId: string;
+  rootTurnId?: string;
+  onOutput: (event: ToolOutput) => void;
+  onComplete: () => void;
+  finished: boolean;
+}
+
+interface ChildThread {
+  threadId: string;
+  parentToolUseId?: string;
+  toolUseId: string;
+  description: string;
+  role: string;
+  lastMessage?: string;
+  completed: boolean;
+}
+
+function asRecord(value: unknown): JsonObject | undefined {
   return value != null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+    ? (value as JsonObject)
     : undefined;
 }
 
-function num(...values: unknown[]): number {
-  for (const value of values) {
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-  }
-  return 0;
+function str(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }
 
-function parseCodexUsage(data: Record<string, unknown>): TokenUsage | undefined {
-  const usage = asRecord(data.usage) ?? data;
-  const inputDetails = asRecord(usage.input_token_details);
-  const usageDetails = asRecord(usage.token_details);
-
-  const rawInputTokens = num(usage.input_tokens, usage.prompt_tokens, usage.inputTokens);
-  const cacheReadTokens = num(
-    usage.cached_input_tokens,
-    usage.cache_read_input_tokens,
-    usage.cacheReadTokens,
-    inputDetails?.cached_tokens,
-    inputDetails?.cache_read_tokens,
-    usageDetails?.cached_input_tokens,
-  );
-
-  // OpenAI bundles cached tokens into the reported input/prompt count, so subtract
-  // them to get fresh (full-rate) input and avoid billing cached tokens twice.
-  const normalized: TokenUsage = {
-    inputTokens: Math.max(0, rawInputTokens - cacheReadTokens),
-    outputTokens: num(usage.output_tokens, usage.completion_tokens, usage.outputTokens),
-    cacheReadTokens,
-    cacheCreationTokens: num(
-      usage.cache_creation_input_tokens,
-      usage.cacheCreationTokens,
-      inputDetails?.cache_creation_tokens,
-      inputDetails?.cache_write_tokens,
-      usageDetails?.cache_creation_input_tokens,
-    ),
-  };
-
-  if (
-    normalized.inputTokens === 0 &&
-    normalized.outputTokens === 0 &&
-    normalized.cacheReadTokens === 0 &&
-    normalized.cacheCreationTokens === 0
-  ) {
-    return undefined;
-  }
-
-  return normalized;
+function num(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function parseCodexTokenCountUsage(data: Record<string, unknown>): TokenUsage | undefined {
-  const payload = asRecord(data.payload);
-  if (payload?.type !== "token_count") return undefined;
+function threadIdFrom(params: JsonObject): string | undefined {
+  return str(params.threadId) ?? str(asRecord(params.thread)?.id);
+}
 
-  const info = asRecord(payload.info);
-  const lastTokenUsage = asRecord(info?.last_token_usage);
-  if (!lastTokenUsage) return undefined;
+function usageFromNotification(params: JsonObject): TokenUsage | undefined {
+  const last = asRecord(asRecord(params.tokenUsage)?.last);
+  if (!last) return undefined;
 
-  const inputTokens = num(lastTokenUsage.input_tokens);
-  const cacheReadTokens = num(lastTokenUsage.cached_input_tokens);
+  const inputTokens = num(last.inputTokens);
+  const cacheReadTokens = num(last.cachedInputTokens);
   const usage: TokenUsage = {
     inputTokens: Math.max(0, inputTokens - cacheReadTokens),
-    outputTokens: num(lastTokenUsage.output_tokens),
+    outputTokens: num(last.outputTokens),
     cacheReadTokens,
-    cacheCreationTokens: 0,
+    cacheCreationTokens: num(last.cacheWriteInputTokens),
   };
 
-  if (
-    usage.inputTokens === 0 &&
-    usage.outputTokens === 0 &&
-    usage.cacheReadTokens === 0 &&
-    usage.cacheCreationTokens === 0
-  ) {
-    return undefined;
-  }
+  return Object.values(usage).some((value) => value > 0) ? usage : undefined;
+}
 
-  return usage;
+function errorMessage(value: unknown, fallback: string): string {
+  const record = asRecord(value);
+  return str(record?.message) ?? fallback;
 }
 
 /**
- * Adapter for running OpenAI Codex CLI sessions.
- * Spawns `codex exec --json` for non-interactive, JSONL-streamed output.
- * Subsequent calls use `codex exec resume <threadId>` to continue the conversation.
+ * Adapter for the Codex app-server JSON-RPC protocol.
  *
- * Normalizes Codex's native output into the shared ToolOutput schema.
+ * A Trace session maps to one root Codex thread. AgentControl-spawned child
+ * threads are normalized into an `agent` tool call plus nested events whose
+ * `parentToolUseId` points at that call, matching Trace's existing subagent UI.
  */
 export class CodexAdapter implements CodingToolAdapter {
   private process: ChildProcess | null = null;
-  private cwd: string | null = null;
   private threadId: string | null = null;
-  private lastTextContent: string | null = null;
+  private activeRun: ActiveRun | null = null;
   private processGeneration = 0;
-  private sawErrorEvent = false;
-  private lastErrorMessage: string | null = null;
-  private emittedIncrementalUsage = false;
+  private requestSequence = 0;
+  private pendingRequests = new Map<number, PendingRequest>();
+  private children = new Map<string, ChildThread>();
+  private announcedChildren = new Set<string>();
+  private emittedUsage = new Set<string>();
+  private stderrChunks: string[] = [];
+  private exitFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
-  run({
-    prompt,
-    cwd,
-    onOutput,
-    onComplete,
-    model,
-    reasoningEffort,
-    toolSessionId,
-    runtimeEnv,
-  }: RunOptions) {
-    this.cwd = cwd;
-    this.lastTextContent = null;
-    this.sawErrorEvent = false;
-    this.lastErrorMessage = null;
-    this.emittedIncrementalUsage = false;
+  run(options: RunOptions): void {
+    const generation = ++this.processGeneration;
+    this.threadId = options.toolSessionId ?? this.threadId;
+    this.children.clear();
+    this.announcedChildren.clear();
+    this.emittedUsage.clear();
+    this.stderrChunks = [];
 
-    if (toolSessionId && !this.threadId) {
-      this.threadId = toolSessionId;
-    }
-
-    const args = this.threadId
-      ? ["exec", "resume", "--json", "--dangerously-bypass-approvals-and-sandbox"]
-      : ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox"];
-    if (model) {
-      args.push("--model", model);
-    }
-    if (reasoningEffort) {
-      args.push("--config", `model_reasoning_effort="${reasoningEffort}"`);
-    }
-    if (this.threadId) {
-      args.push(this.threadId);
-    }
-    args.push("-");
-
-    const processGeneration = ++this.processGeneration;
-    const child = spawn("codex", args, {
-      cwd,
+    const child = spawn("codex", ["app-server", "--listen", "stdio://"], {
+      cwd: options.cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: buildChildProcessEnv({ ...process.env, ...runtimeEnv }),
-      detached: true,
+      env: buildChildProcessEnv({ ...process.env, ...options.runtimeEnv }),
     });
-    child.stdin?.on("error", () => {});
-    child.stdin?.end(prompt);
     this.process = child;
 
-    const isCurrentProcess = () =>
-      this.processGeneration === processGeneration && this.process === child;
-
-    let finished = false;
-    let exitFallbackTimer: ReturnType<typeof setTimeout> | null = null;
-    const clearExitFallbackTimer = () => {
-      if (exitFallbackTimer) {
-        clearTimeout(exitFallbackTimer);
-        exitFallbackTimer = null;
-      }
+    const rootThreadId = this.threadId ?? "";
+    this.activeRun = {
+      rootThreadId,
+      onOutput: options.onOutput,
+      onComplete: options.onComplete,
+      finished: false,
     };
+
+    child.stdin?.on("error", () => {});
+    child.stdout?.on("error", () => {});
+    child.stderr?.on("error", () => {});
 
     if (child.stdout) {
-      // Prevent unhandled 'error' events on the pipe from crashing the process
-      // when abort() kills the child (the pipe can emit ECONNRESET/EPIPE).
-      child.stdout.on("error", () => {});
-      const rl = createInterface({ input: child.stdout });
-      rl.on("line", (line) => {
-        if (!isCurrentProcess()) return;
-        if (!line.trim()) return;
-        try {
-          const parsed = JSON.parse(line);
-          this.processEvent(parsed, onOutput);
-        } catch {
-          // Non-JSON text from stdout
-        }
-      });
+      const lines = createInterface({ input: child.stdout });
+      lines.on("line", (line) => this.processLine(line, generation));
     }
-
-    const stderrChunks: string[] = [];
     if (child.stderr) {
-      child.stderr.on("error", () => {});
-      const rl = createInterface({ input: child.stderr });
-      rl.on("line", (line) => {
-        if (!isCurrentProcess()) return;
-        stderrChunks.push(line);
+      const lines = createInterface({ input: child.stderr });
+      lines.on("line", (line) => {
+        if (generation === this.processGeneration) this.stderrChunks.push(line);
       });
     }
-
-    const finish = (code: number | null) => {
-      if (finished) return;
-      if (!isCurrentProcess()) return;
-      finished = true;
-      clearExitFallbackTimer();
-      const exitError = code !== 0 && code !== null;
-      const isError = exitError || this.sawErrorEvent;
-      if (exitError && stderrChunks.length > 0) {
-        onOutput({ type: "error", message: stderrChunks.join("\n") });
-      }
-      onOutput({ type: "result", subtype: isError ? "error" : "success" });
-      onComplete();
-      this.process = null;
-    };
 
     child.on("exit", (code: number | null) => {
-      if (!isCurrentProcess()) return;
-      clearExitFallbackTimer();
-      exitFallbackTimer = setTimeout(() => finish(code), EXIT_CLOSE_GRACE_MS);
+      if (!this.isCurrent(generation, child)) return;
+      this.clearExitFallback();
+      this.exitFallbackTimer = setTimeout(
+        () => this.finishFromProcessExit(code, generation, child),
+        EXIT_CLOSE_GRACE_MS,
+      );
+    });
+    child.on("close", (code: number | null) => this.finishFromProcessExit(code, generation, child));
+    child.on("error", (error: Error) => {
+      if (!this.isCurrent(generation, child)) return;
+      this.failRun(error.message);
+      this.rejectPending(error);
+      this.process = null;
     });
 
-    child.on("close", finish);
-
-    child.on("error", (err: Error) => {
-      if (finished) return;
-      clearExitFallbackTimer();
-      finished = true;
-      if (!isCurrentProcess()) return;
-      onOutput({ type: "error", message: err.message });
-      onComplete();
-      this.process = null;
+    void this.initializeAndRun(options, generation).catch((error: unknown) => {
+      if (generation !== this.processGeneration) return;
+      this.failRun(error instanceof Error ? error.message : String(error));
+      this.stopProcess(child);
     });
   }
 
-  private processEvent(data: Record<string, unknown>, onOutput: (event: ToolOutput) => void) {
-    const eventType = data.type as string | undefined;
-    if (!eventType) return;
+  private async initializeAndRun(options: RunOptions, generation: number): Promise<void> {
+    await this.request("initialize", {
+      clientInfo: { name: "trace", title: "Trace", version: "2" },
+      capabilities: { experimentalApi: true },
+    });
+    this.notify("initialized", {});
 
-    if (eventType === "thread.started" && typeof data.thread_id === "string") {
-      this.threadId = data.thread_id;
+    let rootThreadId = this.threadId;
+    if (rootThreadId) {
+      const response = await this.request("thread/resume", {
+        threadId: rootThreadId,
+        model: options.model ?? null,
+        cwd: options.cwd,
+        approvalPolicy: "never",
+        sandbox: "danger-full-access",
+      });
+      rootThreadId = str(asRecord(response.thread)?.id) ?? rootThreadId;
+    } else {
+      const config: JsonObject = {};
+      if (options.reasoningEffort) config.model_reasoning_effort = options.reasoningEffort;
+      const response = await this.request("thread/start", {
+        model: options.model ?? null,
+        cwd: options.cwd,
+        approvalPolicy: "never",
+        sandbox: "danger-full-access",
+        config,
+      });
+      rootThreadId = str(asRecord(response.thread)?.id) ?? null;
+    }
+
+    if (!rootThreadId) throw new Error("Codex app-server did not return a thread ID");
+    if (generation !== this.processGeneration) return;
+
+    this.threadId = rootThreadId;
+    if (this.activeRun) this.activeRun.rootThreadId = rootThreadId;
+
+    const response = await this.request("turn/start", {
+      threadId: rootThreadId,
+      input: [{ type: "text", text: options.prompt, text_elements: [] }],
+      cwd: options.cwd,
+      model: options.model ?? null,
+      effort: options.reasoningEffort ?? null,
+      approvalPolicy: "never",
+      sandboxPolicy: { type: "dangerFullAccess" },
+    });
+    const turnId = str(asRecord(response.turn)?.id);
+    if (this.activeRun && generation === this.processGeneration) {
+      this.activeRun.rootTurnId = turnId;
+    }
+  }
+
+  private processLine(line: string, generation: number): void {
+    if (generation !== this.processGeneration || !line.trim()) return;
+
+    let message: JsonObject;
+    try {
+      message = JSON.parse(line) as JsonObject;
+    } catch {
       return;
     }
 
-    if (eventType === "event_msg") {
-      const usage = parseCodexTokenCountUsage(data);
-      if (usage) {
-        this.emittedIncrementalUsage = true;
-        onOutput({
-          type: "usage",
-          usage,
-        });
+    const numericId = typeof message.id === "number" ? message.id : undefined;
+    const requestId =
+      typeof message.id === "number" || typeof message.id === "string" ? message.id : undefined;
+    if (numericId != null && ("result" in message || "error" in message)) {
+      const pending = this.pendingRequests.get(numericId);
+      if (!pending) return;
+      this.pendingRequests.delete(numericId);
+      if (message.error) {
+        pending.reject(new Error(errorMessage(message.error, "Codex app-server request failed")));
+      } else {
+        pending.resolve(asRecord(message.result) ?? {});
       }
       return;
     }
 
-    // Codex surfaces fatal run errors (e.g. usage limits, auth failures) as
-    // top-level `error` and `turn.failed` events with no `item`. Emit these
-    // as ErrorEvents so the UI renders the message instead of a bare "Run ended".
-    if (eventType === "error") {
-      const message = typeof data.message === "string" ? data.message : "Codex error";
-      onOutput({ type: "error", message });
-      this.sawErrorEvent = true;
-      this.lastErrorMessage = message;
+    const method = str(message.method);
+    const params = asRecord(message.params) ?? {};
+    if (!method) return;
+
+    // With approvalPolicy=never these should be exceptional. Always answer
+    // server requests so a protocol addition cannot deadlock the run.
+    if (requestId != null) {
+      this.respondToServerRequest(requestId, method, params);
       return;
     }
 
-    if (eventType === "turn.failed") {
-      const error = data.error as Record<string, unknown> | undefined;
-      const message = typeof error?.message === "string" ? error.message : "Turn failed";
-      if (this.lastErrorMessage !== message) {
-        onOutput({ type: "error", message });
-        this.lastErrorMessage = message;
-      }
-      this.sawErrorEvent = true;
+    this.processNotification(method, params);
+  }
+
+  private processNotification(method: string, params: JsonObject): void {
+    const run = this.activeRun;
+    if (!run || run.finished) return;
+
+    if (method === "thread/started") {
+      this.handleThreadStarted(asRecord(params.thread));
       return;
     }
 
-    if (eventType === "turn.completed") {
-      // token_count events already streamed this turn's usage incrementally, so
-      // the completion event must not re-add it. A Codex
-      // process can complete multiple turns (for example, while running a goal),
-      // so this event must not be treated as the end of the run.
-      if (this.emittedIncrementalUsage) {
-        return;
-      }
-      const usage = parseCodexUsage(data);
-      if (usage) {
-        onOutput({ type: "usage", usage });
+    if (method === "item/started" || method === "item/completed") {
+      const item = asRecord(params.item);
+      const eventThreadId = threadIdFrom(params);
+      if (item && eventThreadId) {
+        this.handleItem(method === "item/completed", eventThreadId, item);
       }
       return;
     }
 
-    const item = data.item as Record<string, unknown> | undefined;
-    if (!item) return;
-    const itemType = item.type as string | undefined;
+    if (method === "thread/tokenUsage/updated") {
+      const eventThreadId = threadIdFrom(params);
+      const turnId = str(params.turnId) ?? "";
+      const usage = usageFromNotification(params);
+      if (!eventThreadId || !usage) return;
+      const key = `${eventThreadId}:${turnId}:${JSON.stringify(usage)}`;
+      if (this.emittedUsage.has(key)) return;
+      this.emittedUsage.add(key);
+      run.onOutput({ type: "usage", usage });
+      return;
+    }
 
-    // item.started + command_execution → tool_use (command is being invoked)
-    if (eventType === "item.started" && itemType === "command_execution") {
-      const command = item.command as string | undefined;
-      if (command) {
-        onOutput({
-          type: "assistant",
-          message: { content: [{ type: "tool_use", name: "command", input: { command } }] },
-        });
+    if (method === "turn/completed") {
+      const eventThreadId = threadIdFrom(params);
+      const turn = asRecord(params.turn);
+      if (!eventThreadId || !turn) return;
+      const status = str(turn.status);
+      const message = errorMessage(turn.error, "Codex turn failed");
+
+      if (eventThreadId === run.rootThreadId) {
+        if (run.rootTurnId && str(turn.id) !== run.rootTurnId) return;
+        if (status === "failed") {
+          run.onOutput({ type: "error", message });
+        }
+        this.finishRun(status === "failed" ? "error" : "success");
+      } else {
+        const child = this.children.get(eventThreadId);
+        if (child) this.completeChild(child, status === "failed" ? message : undefined);
       }
       return;
     }
 
-    if (eventType !== "item.completed") return;
+    if (method === "error" || method === "warning") {
+      const message = str(params.message);
+      if (method === "error" && message) {
+        run.onOutput({ type: "error", message });
+      }
+    }
+  }
 
-    // command_execution completed → tool_result
-    if (itemType === "command_execution") {
-      const command = item.command as string | undefined;
-      const output = item.aggregated_output as string | undefined;
-      const exitCode = typeof item.exit_code === "number" ? item.exit_code : undefined;
-      const content: Record<string, unknown> = { output: output ?? "" };
-      if (command) content.command = command;
-      if (exitCode != null) content.exitCode = exitCode;
-      onOutput({
+  private handleThreadStarted(thread: JsonObject | undefined): void {
+    const run = this.activeRun;
+    const threadId = str(thread?.id);
+    const parentThreadId = str(thread?.parentThreadId);
+    if (!run || !threadId || !parentThreadId) return;
+
+    const description = str(thread?.preview) || str(thread?.agentNickname) || "Codex subagent";
+    const role = str(thread?.agentRole) || str(thread?.agentNickname) || "agent";
+    this.ensureChild(threadId, parentThreadId, description, role);
+  }
+
+  private ensureChild(
+    threadId: string,
+    parentThreadId: string,
+    description: string,
+    role: string,
+  ): ChildThread {
+    const existing = this.children.get(threadId);
+    if (existing) return existing;
+
+    const child: ChildThread = {
+      threadId,
+      parentToolUseId: this.children.get(parentThreadId)?.toolUseId,
+      toolUseId: `codex-subagent:${threadId}`,
+      description,
+      role,
+      completed: false,
+    };
+    this.children.set(threadId, child);
+    this.announceChild(child);
+    return child;
+  }
+
+  private announceChild(child: ChildThread): void {
+    const run = this.activeRun;
+    if (!run || this.announcedChildren.has(child.threadId)) return;
+    this.announcedChildren.add(child.threadId);
+    run.onOutput({
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            id: child.toolUseId,
+            name: "agent",
+            input: {
+              description: child.description,
+              prompt: child.description,
+              subagent_type: child.role,
+              thread_id: child.threadId,
+            },
+          },
+        ],
+      },
+      ...(child.parentToolUseId ? { parentToolUseId: child.parentToolUseId } : {}),
+    });
+  }
+
+  private handleItem(completed: boolean, eventThreadId: string, item: JsonObject): void {
+    const run = this.activeRun;
+    if (!run) return;
+    const itemType = str(item.type);
+    const itemId = str(item.id);
+    const child = this.children.get(eventThreadId);
+    const parentToolUseId = child?.toolUseId;
+
+    if (itemType === "collabAgentToolCall") {
+      const tool = str(item.tool);
+      const receivers = Array.isArray(item.receiverThreadIds)
+        ? item.receiverThreadIds.filter((value): value is string => typeof value === "string")
+        : [];
+      if (tool === "spawnAgent") {
+        for (const receiver of receivers) {
+          this.ensureChild(receiver, eventThreadId, str(item.prompt) || "Codex subagent", "agent");
+        }
+      }
+      return;
+    }
+
+    if (itemType === "subAgentActivity") {
+      const childThreadId = str(item.agentThreadId);
+      if (childThreadId && str(item.kind) === "started") {
+        this.ensureChild(
+          childThreadId,
+          eventThreadId,
+          str(item.agentPath) || "Codex subagent",
+          str(item.agentPath) || "agent",
+        );
+      }
+      return;
+    }
+
+    if (!itemId) return;
+
+    if (!completed && itemType === "commandExecution") {
+      run.onOutput({
         type: "assistant",
-        message: { content: [{ type: "tool_result", name: "command", content }] },
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: itemId,
+              name: "command",
+              input: { command: str(item.command) ?? "" },
+            },
+          ],
+        },
+        ...(parentToolUseId ? { parentToolUseId } : {}),
       });
       return;
     }
 
-    // agent_message → text response
-    if (itemType === "agent_message") {
-      const text = item.text as string | undefined;
-      if (text) {
-        this.lastTextContent = text;
-        onOutput({
+    if (completed && itemType === "commandExecution") {
+      run.onOutput({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: itemId,
+              name: "command",
+              content: {
+                command: str(item.command) ?? "",
+                output: str(item.aggregatedOutput) ?? "",
+                ...(typeof item.exitCode === "number" ? { exitCode: item.exitCode } : {}),
+              },
+              is_error: str(item.status) === "failed",
+            },
+          ],
+        },
+        ...(parentToolUseId ? { parentToolUseId } : {}),
+      });
+      return;
+    }
+
+    if (completed && itemType === "agentMessage") {
+      const text = str(item.text);
+      if (!text) return;
+      if (child) child.lastMessage = text;
+      run.onOutput({
+        type: "assistant",
+        message: { content: [{ type: "text", text }] },
+        ...(parentToolUseId ? { parentToolUseId } : {}),
+      });
+      return;
+    }
+
+    if (completed && itemType === "plan") {
+      const content = str(item.text);
+      if (!content) return;
+      run.onOutput({
+        type: "assistant",
+        message: { content: [{ type: "plan", content }] },
+        ...(parentToolUseId ? { parentToolUseId } : {}),
+      });
+      return;
+    }
+
+    if (itemType === "fileChange") {
+      const changes = Array.isArray(item.changes) ? item.changes : [];
+      if (!completed) {
+        run.onOutput({
           type: "assistant",
-          message: { content: [{ type: "text", text }] },
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: itemId,
+                name: "file_change",
+                input: { changes },
+              },
+            ],
+          },
+          ...(parentToolUseId ? { parentToolUseId } : {}),
+        });
+      } else {
+        run.onOutput({
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: itemId,
+                name: "file_change",
+                content: { changes, status: str(item.status) ?? "completed" },
+                is_error: str(item.status) === "failed",
+              },
+            ],
+          },
+          ...(parentToolUseId ? { parentToolUseId } : {}),
         });
       }
       return;
     }
 
-    // reasoning — skip (internal model thinking)
+    if (itemType === "mcpToolCall" || itemType === "dynamicToolCall") {
+      const name =
+        itemType === "mcpToolCall"
+          ? `${str(item.server) ?? "mcp"}.${str(item.tool) ?? "tool"}`
+          : (str(item.tool) ?? "tool");
+      if (!completed) {
+        run.onOutput({
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: itemId,
+                name,
+                input: asRecord(item.arguments) ?? {},
+              },
+            ],
+          },
+          ...(parentToolUseId ? { parentToolUseId } : {}),
+        });
+      } else {
+        run.onOutput({
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: itemId,
+                name,
+                content: asRecord(item.result) ?? asRecord(item.error) ?? {},
+                is_error: item.error != null || str(item.status) === "failed",
+              },
+            ],
+          },
+          ...(parentToolUseId ? { parentToolUseId } : {}),
+        });
+      }
+    }
+  }
+
+  private completeChild(child: ChildThread, failure?: string): void {
+    const run = this.activeRun;
+    if (!run || child.completed) return;
+    child.completed = true;
+    run.onOutput({
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: child.toolUseId,
+            name: "agent",
+            content: failure ?? child.lastMessage ?? "Subagent completed",
+            ...(failure ? { is_error: true } : {}),
+          },
+        ],
+      },
+      ...(child.parentToolUseId ? { parentToolUseId: child.parentToolUseId } : {}),
+    });
+  }
+
+  private finishRun(subtype: "success" | "error"): void {
+    const run = this.activeRun;
+    if (!run || run.finished) return;
+    for (const child of this.children.values()) {
+      if (!child.completed) this.completeChild(child);
+    }
+    run.finished = true;
+    run.onOutput({ type: "result", subtype });
+    run.onComplete();
+  }
+
+  private failRun(message: string): void {
+    const run = this.activeRun;
+    if (!run || run.finished) return;
+    run.onOutput({ type: "error", message });
+    this.finishRun("error");
+  }
+
+  private request(method: string, params: JsonObject): Promise<JsonObject> {
+    const id = ++this.requestSequence;
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(id, { resolve, reject });
+      if (!this.write({ id, method, params })) {
+        this.pendingRequests.delete(id);
+        reject(new Error("Codex app-server stdin is unavailable"));
+      }
+    });
+  }
+
+  private notify(method: string, params: JsonObject): void {
+    this.write({ method, params });
+  }
+
+  private write(message: JsonObject): boolean {
+    const stdin = this.process?.stdin;
+    if (!stdin || stdin.destroyed || !stdin.writable) return false;
+    return stdin.write(`${JSON.stringify(message)}\n`);
+  }
+
+  private respondToServerRequest(id: number | string, method: string, params: JsonObject): void {
+    if (method === "item/tool/requestUserInput" && params.isBlocking !== false) {
+      const questions = Array.isArray(params.questions)
+        ? params.questions.flatMap((value) => {
+            const question = asRecord(value);
+            const questionText = str(question?.question);
+            if (!questionText) return [];
+            const options = Array.isArray(question?.options)
+              ? question.options.flatMap((optionValue) => {
+                  const option = asRecord(optionValue);
+                  const label = str(option?.label);
+                  return label
+                    ? [
+                        {
+                          id: label,
+                          label,
+                          description: str(option?.description) ?? "",
+                        },
+                      ]
+                    : [];
+                })
+              : [];
+            const allowsOther = question?.isOther === true;
+            return [
+              {
+                id: str(question?.id),
+                type:
+                  options.length === 0
+                    ? ("text" as const)
+                    : allowsOther
+                      ? ("select-with-other" as const)
+                      : ("single-select" as const),
+                protocol: "native" as const,
+                question: questionText,
+                header: str(question?.header) ?? questionText,
+                options,
+                multiSelect: false,
+                other: allowsOther,
+              },
+            ];
+          })
+        : [];
+      if (questions.length > 0) {
+        const eventThreadId = threadIdFrom(params);
+        const child = eventThreadId ? this.children.get(eventThreadId) : undefined;
+        this.activeRun?.onOutput({
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "question",
+                questions,
+                toolUseId: str(params.itemId),
+              },
+            ],
+          },
+          ...(child ? { parentToolUseId: child.toolUseId } : {}),
+        });
+        return;
+      }
+    }
+
+    const result = method.includes("requestApproval")
+      ? { decision: "denied" }
+      : method === "item/tool/requestUserInput"
+        ? { answers: {} }
+        : {};
+    this.write({ id, result });
+  }
+
+  private isCurrent(generation: number, child: ChildProcess): boolean {
+    return generation === this.processGeneration && child === this.process;
+  }
+
+  private finishFromProcessExit(
+    code: number | null,
+    generation: number,
+    child: ChildProcess,
+  ): void {
+    if (!this.isCurrent(generation, child)) return;
+    this.clearExitFallback();
+    const suffix = this.stderrChunks.length > 0 ? `: ${this.stderrChunks.join("\n")}` : "";
+    if (this.activeRun && !this.activeRun.finished) {
+      this.failRun(`Codex app-server exited${code == null ? "" : ` with code ${code}`}${suffix}`);
+    }
+    this.rejectPending(new Error("Codex app-server exited"));
+    this.process = null;
+  }
+
+  private rejectPending(error: Error): void {
+    for (const pending of this.pendingRequests.values()) pending.reject(error);
+    this.pendingRequests.clear();
+  }
+
+  private clearExitFallback(): void {
+    if (!this.exitFallbackTimer) return;
+    clearTimeout(this.exitFallbackTimer);
+    this.exitFallbackTimer = null;
+  }
+
+  private stopProcess(child: ChildProcess): void {
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // Already stopped.
+    }
   }
 
   getSessionId(): string | null {
     return this.threadId;
   }
 
-  abort() {
-    if (this.process) {
-      // Kill the entire process group (negative PID) since we spawn detached
-      try {
-        process.kill(-this.process.pid!, "SIGTERM");
-      } catch {
-        /* already dead */
-      }
-      this.process = null;
-    }
+  abort(): void {
+    const child = this.process;
+    if (!child) return;
+    ++this.processGeneration;
+    this.clearExitFallback();
+    this.rejectPending(new Error("Codex run aborted"));
+    this.activeRun = null;
+    this.process = null;
+    this.stopProcess(child);
   }
 }
