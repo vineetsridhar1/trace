@@ -12,7 +12,11 @@ import {
 } from "@trace/client-core";
 import { client } from "../../lib/urql";
 import { applyOptimisticPatch } from "../../lib/optimistic-entity";
-import { AVAILABLE_RUNTIMES_QUERY, UPDATE_SESSION_CONFIG_MUTATION } from "@trace/client-core";
+import {
+  AVAILABLE_RUNTIMES_QUERY,
+  RETRY_SESSION_CONNECTION_MUTATION,
+  UPDATE_SESSION_CONFIG_MUTATION,
+} from "@trace/client-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { DisabledReasonHint } from "../ui/DisabledReasonHint";
 import { type InteractionMode, MODE_CONFIG } from "./interactionModes";
@@ -64,6 +68,14 @@ const DESIGN_SYSTEMS_QUERY = gql`
     }
   }
 `;
+
+function isRecoverableCloudFailure(connection: Record<string, unknown> | null | undefined) {
+  return (
+    connection?.state === "failed" ||
+    connection?.state === "timed_out" ||
+    connection?.state === "disconnected"
+  );
+}
 
 const UNBOUND_LOCAL_RUNTIME_ID = "__unbound_local__";
 const CLOUD_RUNTIME_ID = "__cloud__";
@@ -324,6 +336,21 @@ export function SessionInputOptions({
     cloudEnvironmentAvailable || currentRuntimeValue === CLOUD_RUNTIME_ID;
   const autoSelectedRuntimeSessionRef = useRef<string | null>(null);
 
+  const restartFailedCloudSession = useCallback(async () => {
+    if (hosting !== "cloud" || !isRecoverableCloudFailure(connection)) return;
+    const rollback = applyOptimisticPatch("sessions", sessionId, {
+      agentStatus: "active",
+      connection: { ...connection, state: "requested" },
+    });
+    const retry = await client
+      .mutation(RETRY_SESSION_CONNECTION_MUTATION, { sessionId })
+      .toPromise();
+    if (retry.error) {
+      rollback();
+      toast.error("Could not restart the cloud session", { description: retry.error.message });
+    }
+  }, [connection, hosting, sessionId]);
+
   // Runtime selection is only available while choosing the first bridge for
   // a new, unbound group. Sibling sessions inherit the group's bridge.
   const [runtimes, setRuntimes] = useState<SessionRuntimeInstance[]>([]);
@@ -423,12 +450,13 @@ export function SessionInputOptions({
           })
           .toPromise();
         if (result.error) throw result.error;
+        await restartFailedCloudSession();
       } catch (error) {
         rollback();
         console.error("Failed to update session tool:", error);
       }
     },
-    [isOptimistic, sessionId],
+    [isOptimistic, restartFailedCloudSession, sessionId],
   );
 
   const handleModelChange = useCallback(
@@ -440,12 +468,13 @@ export function SessionInputOptions({
           .mutation(UPDATE_SESSION_CONFIG_MUTATION, { sessionId, model: newModel })
           .toPromise();
         if (result.error) throw result.error;
+        await restartFailedCloudSession();
       } catch (error) {
         rollback();
         console.error("Failed to update session model:", error);
       }
     },
-    [isOptimistic, sessionId],
+    [isOptimistic, restartFailedCloudSession, sessionId],
   );
 
   const handleReasoningEffortChange = useCallback(
