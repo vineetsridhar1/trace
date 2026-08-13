@@ -98,6 +98,23 @@ Describe execution as concrete moves, not vague phases or a file inventory. For 
 - the important condition, failure case, or compatibility constraint; and
 - how that move is proved.
 
+Give every non-trivial plan a **construction layer** in addition to its review story. The visible
+story answers whether the approach is right; the construction layer answers exactly what another
+agent will change. Attach it directly to the scenario, handoff, or decision it implements—do not
+append a generic task list. For each construction item, name:
+
+- the concrete owner (file and exported symbol, schema type, route, or component);
+- its input and output, including persisted fields, event payload, or externally visible contract;
+- the condition that changes behavior (validation, transition, failure, compatibility, or race);
+- the downstream consumer; and
+- the focused proof case.
+
+Use exact names read from the repository. "Add deployment state" is not enough; say which model,
+statuses, uniqueness or index rule, service method, event types, and UI selector carry the state.
+"Queue a job" is not enough; say what immutable identifier is queued, where the payload is stored,
+which callback authenticates it, and what makes a late job harmless. Keep source citations compact,
+but do not hide the construction layer solely behind a collapsed evidence section.
+
 Name paths or symbols only where they anchor a claim, identify the owner of a change, or help an
 implementer start. Include an impact map when several components or consumers need coordination;
 do not list every touched file merely to look complete. State scope, non-goals, risks, assumptions,
@@ -178,6 +195,8 @@ Before publishing, verify:
   merely "update", "wire up", or "add support".
 - The first three visible blocks expose the change-specific uncertainty, rather than a generic
   plan outline.
+- The construction layer lets an implementer identify each required owner, contract, condition,
+  downstream consumer, and proof case without reopening discovery.
 - Facts, assumptions, open decisions, and non-goals are distinguishable.
 - Another agent could implement the plan without repeating repository discovery.
 
