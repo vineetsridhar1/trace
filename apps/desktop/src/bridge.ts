@@ -1750,7 +1750,6 @@ export class BridgeClient implements IBridgeClient {
       }
       case "list_skills": {
         void handleListSkills(cmd, this.sessionWorkdirs, (msg) => this.send(msg), {
-          userSkillsDir: path.join(os.homedir(), ".claude", "skills"),
           userSkillsDirs: [
             path.join(os.homedir(), ".claude", "skills"),
             path.join(os.homedir(), ".codex", "skills"),

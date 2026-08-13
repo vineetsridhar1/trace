@@ -1859,8 +1859,7 @@ export async function handleListSkills(
   sessionWorkdirs: Map<string, string>,
   send: (msg: BridgeMessage) => void,
   deps: {
-    userSkillsDir: string | null;
-    userSkillsDirs?: string[];
+    userSkillsDirs: string[];
     fs: BridgeFsLike;
     path: BridgePathLike;
   },
@@ -1937,9 +1936,7 @@ export async function handleListSkills(
 
   try {
     if (includeUserSkills) {
-      const userSkillsDirs = deps.userSkillsDirs ??
-        (deps.userSkillsDir ? [deps.userSkillsDir] : []);
-      for (const userSkillsDir of userSkillsDirs) {
+      for (const userSkillsDir of deps.userSkillsDirs) {
         await scanSkillsDir(userSkillsDir, "user");
         await scanCommandsDir(deps.path.resolve(userSkillsDir, "..", "commands"), "user");
       }
