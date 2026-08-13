@@ -271,6 +271,30 @@ export function handleOrgEvent(event: Event): void {
     }
   }
 
+  if (event.eventType === "repo_deleted" && typeof payload.repoId === "string") {
+    batch.remove("repos", payload.repoId);
+    if (Array.isArray(payload.channelIds)) {
+      for (const id of payload.channelIds) {
+        if (typeof id === "string") batch.patch("channels", id, { repo: null });
+      }
+    }
+    if (Array.isArray(payload.projectIds)) {
+      for (const id of payload.projectIds) {
+        if (typeof id === "string") batch.patch("projects", id, { repo: null });
+      }
+    }
+    if (Array.isArray(payload.sessionIds)) {
+      for (const id of payload.sessionIds) {
+        if (typeof id === "string") batch.patch("sessions", id, { repo: null });
+      }
+    }
+    if (Array.isArray(payload.sessionGroupIds)) {
+      for (const id of payload.sessionGroupIds) {
+        if (typeof id === "string") batch.patch("sessionGroups", id, { repo: null });
+      }
+    }
+  }
+
   const processEventTypes = new Set<EventType>([
     "session_application_process_started",
     "session_application_process_stopped",

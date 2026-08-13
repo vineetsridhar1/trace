@@ -15,6 +15,7 @@ import { createChannelInTransaction } from "./channel-create.js";
 import { repoApplicationConfigService } from "./repo-application-config.js";
 import { loadCloudConfig, seedCloudForOrg } from "./cloud-bootstrap.js";
 import { isLocalMode } from "../lib/mode.js";
+import { ValidationError } from "../lib/errors.js";
 
 const PROJECT_INCLUDE = {
   repo: true,
@@ -331,18 +332,33 @@ export class OrganizationService {
     actorType: ActorType,
     actorId: string,
   ) {
+    const name = input.name?.trim();
+    const defaultBranch = input.defaultBranch?.trim();
+    const remoteUrl = input.remoteUrl === undefined ? undefined : input.remoteUrl?.trim() || null;
+    if (input.name != null && !name) throw new ValidationError("Repository name is required");
+    if (input.defaultBranch != null && !defaultBranch) {
+      throw new ValidationError("Default branch is required");
+    }
+
     const [repo] = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Verify repo belongs to caller's org before updating
       const existing = await tx.repo.findFirstOrThrow({
         where: { id, organizationId },
-        select: { id: true, setupConfig: true },
+        select: { id: true, setupConfig: true, remoteUrl: true, webhookId: true },
       });
+
+      if (remoteUrl !== undefined && remoteUrl !== existing.remoteUrl && existing.webhookId) {
+        throw new ValidationError(
+          "Disconnect the repository webhook before changing its remote URL",
+        );
+      }
 
       const repo = await tx.repo.update({
         where: { id },
         data: {
-          ...(input.name != null && { name: input.name }),
-          ...(input.defaultBranch != null && { defaultBranch: input.defaultBranch }),
+          ...(name !== undefined && { name }),
+          ...(remoteUrl !== undefined && { remoteUrl }),
+          ...(defaultBranch !== undefined && { defaultBranch }),
           ...(input.applicationConfig != null && {
             setupConfig: repoApplicationConfigService.mergeIntoSetupConfig(
               existing.setupConfig,
@@ -385,6 +401,57 @@ export class OrganizationService {
     });
 
     return repo;
+  }
+
+  async deleteRepo(
+    id: string,
+    organizationId: string,
+    actorType: ActorType,
+    actorId: string,
+  ): Promise<boolean> {
+    const event = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const repo = await tx.repo.findFirstOrThrow({
+        where: { id, organizationId, provider: "github" },
+        select: {
+          id: true,
+          channels: { select: { id: true } },
+          projects: { select: { id: true } },
+          sessions: { select: { id: true } },
+          sessionGroups: { select: { id: true } },
+        },
+      });
+
+      await Promise.all([
+        tx.channel.updateMany({ where: { repoId: id }, data: { repoId: null } }),
+        tx.project.updateMany({ where: { repoId: id }, data: { repoId: null } }),
+        tx.session.updateMany({ where: { repoId: id }, data: { repoId: null } }),
+        tx.sessionGroup.updateMany({ where: { repoId: id }, data: { repoId: null } }),
+      ]);
+      await tx.repo.delete({ where: { id } });
+
+      return eventService.create(
+        {
+          organizationId,
+          scopeType: "system",
+          scopeId: id,
+          eventType: "repo_deleted",
+          payload: {
+            repoId: id,
+            channelIds: repo.channels.map(({ id: entityId }) => entityId),
+            projectIds: repo.projects.map(({ id: entityId }) => entityId),
+            sessionIds: repo.sessions.map(({ id: entityId }) => entityId),
+            sessionGroupIds: repo.sessionGroups.map(({ id: entityId }) => entityId),
+          },
+          actorType,
+          actorId,
+          deferPublish: true,
+        },
+        tx,
+      );
+    });
+
+    eventService.publishCreated(event);
+    return true;
   }
 
   async createProject(input: CreateProjectInput, actorType: ActorType, actorId: string) {

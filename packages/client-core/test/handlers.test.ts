@@ -211,6 +211,31 @@ describe("handleOrgEvent", () => {
     expect(useEntityStore.getState().eventsByScope["system:managed-1"]?.[event.id]).toEqual(event);
   });
 
+  it("removes deleted repos from the entity store", () => {
+    useEntityStore.getState().upsert("repos", "repo-1", {
+      id: "repo-1",
+      name: "Trace",
+      provider: "github",
+      remoteUrl: null,
+      defaultBranch: "main",
+      webhookActive: false,
+      applicationConfig: { setupScripts: [], runScripts: [], applications: [] },
+      projects: [],
+      sessions: [],
+    });
+
+    handleOrgEvent(
+      makeEvent({
+        eventType: "repo_deleted",
+        scopeType: "system",
+        scopeId: "repo-1",
+        payload: { repoId: "repo-1" },
+      }),
+    );
+
+    expect(useEntityStore.getState().repos["repo-1"]).toBeUndefined();
+  });
+
   it("upserts the event into the scoped bucket", () => {
     const event = makeEvent({
       eventType: "session_output",
