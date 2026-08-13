@@ -12119,7 +12119,7 @@ export class SessionService {
     const idleAfterMs = Math.max(1, Math.floor(options.idleAfterMs));
     const activeIdleAfterMs = Math.max(
       idleAfterMs,
-      Math.floor(options.activeIdleAfterMs ?? 60 * 60 * 1000),
+      Math.floor(options.activeIdleAfterMs ?? 12 * 60 * 60 * 1000),
     );
     const now = options.now ?? Date.now();
     const cutoff = new Date(now - idleAfterMs);
@@ -12153,10 +12153,9 @@ export class SessionService {
                 lastUserMessageAt: null,
                 createdAt: { gt: cutoff },
               },
-              // A cloud agent that is still actively producing output gets a
-              // longer lease than an idle session. Once that lease expires,
-              // it is treated as abandoned so a crashed bridge cannot keep a
-              // Fargate task alive forever.
+              // Actively running agents use the longer lease so a legitimate
+              // long-running task is not reclaimed mid-run. Once complete,
+              // the normal idle lease resumes from its most recent output.
               {
                 agentStatus: "active",
                 OR: [
