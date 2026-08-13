@@ -1851,8 +1851,8 @@ export async function handleFileAtRef(
 // --- Shared skill listing handler ---
 
 /**
- * Handle a `list_skills` bridge command. Scans user and project slash-command
- * locations for skills and legacy command files, returning the combined list.
+ * Handle a `list_skills` bridge command. Scans user and project skill and
+ * slash-command locations, returning the combined list.
  */
 export async function handleListSkills(
   cmd: BridgeListSkillsCommand,
@@ -1860,6 +1860,7 @@ export async function handleListSkills(
   send: (msg: BridgeMessage) => void,
   deps: {
     userSkillsDir: string | null;
+    userSkillsDirs?: string[];
     fs: BridgeFsLike;
     path: BridgePathLike;
   },
@@ -1935,15 +1936,20 @@ export async function handleListSkills(
   }
 
   try {
-    if (deps.userSkillsDir && includeUserSkills) {
-      await scanSkillsDir(deps.userSkillsDir, "user");
-      await scanCommandsDir(deps.path.resolve(deps.userSkillsDir, "..", "commands"), "user");
+    if (includeUserSkills) {
+      const userSkillsDirs = deps.userSkillsDirs ??
+        (deps.userSkillsDir ? [deps.userSkillsDir] : []);
+      for (const userSkillsDir of userSkillsDirs) {
+        await scanSkillsDir(userSkillsDir, "user");
+        await scanCommandsDir(deps.path.resolve(userSkillsDir, "..", "commands"), "user");
+      }
     }
     const workdir = sessionWorkdirs.get(sessionId) ?? workdirHint;
     if (workdir && includeProjectSkills) {
-      const projectSkillsDir = deps.path.join(workdir, ".claude", "skills");
-      await scanSkillsDir(projectSkillsDir, "project");
-      await scanCommandsDir(deps.path.join(workdir, ".claude", "commands"), "project");
+      for (const toolDir of [".claude", ".codex"]) {
+        await scanSkillsDir(deps.path.join(workdir, toolDir, "skills"), "project");
+        await scanCommandsDir(deps.path.join(workdir, toolDir, "commands"), "project");
+      }
     }
     send({ type: "skills_result", requestId, skills });
   } catch (err) {
