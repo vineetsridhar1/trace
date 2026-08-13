@@ -299,6 +299,8 @@ export const traceCliOperations = {
       "input.runtimeInstanceId",
       "input.deferRuntimeSelection",
       "input.repoId",
+      "input.designSessionGroupId",
+      "input.designScreenId",
       "input.branch",
       "input.ticketId",
       "input.channelId",

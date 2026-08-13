@@ -68,6 +68,8 @@ describe("Trace CLI", () => {
     const output = stdout.mock.calls.flat().join("");
     expect(output).toContain('Usage: "$TRACE_CLI" session start');
     expect(output).toContain("Start a new session group");
+    expect(output).toContain("--design-session");
+    expect(output).toContain("--design-screen");
   });
 
   it("exposes the command registry as machine-readable help", async () => {
@@ -96,7 +98,10 @@ describe("Trace CLI", () => {
     stdout.mockClear();
     await expect(run(["session", "start", "--help", "--json"])).resolves.toBe(0);
     expect(JSON.parse(stdout.mock.calls.flat().join(""))).toMatchObject({
-      command: { path: ["session", "start"] },
+      command: {
+        path: ["session", "start"],
+        examples: expect.arrayContaining([expect.stringContaining("--design-session")]),
+      },
     });
 
     stdout.mockClear();
@@ -428,6 +433,79 @@ describe("Trace CLI", () => {
     await expect(run(["session", "start", "--json"])).resolves.toBe(64);
     expect(stderr.mock.calls.flat().join("")).toContain("A task prompt is required");
     expect(stderr.mock.calls.flat().join("")).toContain("--prompt");
+  });
+
+  it("starts an App from an authoritative saved design screen", async () => {
+    vi.stubEnv("TRACE_INVOCATION_TOKEN", "injected-agent-secret");
+    vi.stubEnv("TRACE_ORGANIZATION_ID", "org-1");
+    vi.stubEnv("TRACE_API_URL", "https://trace.test/");
+    const fetchMock = vi.fn(async (_url: URL, init?: RequestInit) => {
+      const request = JSON.parse(String(init?.body)) as {
+        query: string;
+        variables: { input: Record<string, unknown> };
+      };
+      expect(request.query).toContain("TraceCliStartSession");
+      expect(request.variables.input).toMatchObject({
+        kind: "app",
+        prompt: "Implement checkout",
+        designSessionGroupId: "design-group-1",
+        designScreenId: "checkout-mobile",
+      });
+      return new Response(
+        JSON.stringify({
+          data: {
+            startSession: {
+              id: "session-app",
+              name: "Implement checkout",
+              agentStatus: "not_started",
+              sessionStatus: "in_progress",
+              tool: "codex",
+              model: null,
+              reasoningEffort: null,
+              hosting: "cloud",
+              branch: "main",
+              sessionGroupId: "group-app",
+              createdAt: "2026-08-13T00:00:00.000Z",
+              updatedAt: "2026-08-13T00:00:00.000Z",
+              channel: null,
+              repo: null,
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      run([
+        "session",
+        "start",
+        "Implement",
+        "checkout",
+        "--kind",
+        "app",
+        "--design-session",
+        "design-group-1",
+        "--design-screen",
+        "checkout-mobile",
+        "--json",
+      ]),
+    ).resolves.toBe(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("requires a Design session when selecting a design screen", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      run(["session", "start", "Implement", "checkout", "--design-screen", "checkout", "--json"]),
+    ).resolves.toBe(64);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(stderr.mock.calls.flat().join("")).toContain(
+      "--design-screen requires --design-session",
+    );
   });
 
   it("requires a channel instead of accepting a repository-only coding destination", async () => {

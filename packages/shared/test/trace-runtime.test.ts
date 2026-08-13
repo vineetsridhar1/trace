@@ -113,6 +113,8 @@ describe("ensureTraceRuntime", () => {
     expect(traceSessionSkill).toContain("Do not call");
     expect(traceSessionSkill).toContain("idempotencyKey");
     expect(traceSessionSkill).toContain("--queue");
+    expect(traceSessionSkill).toContain("--design-session");
+    expect(traceSessionSkill).toContain("--design-screen");
     const bundledCli = await readFile(join(runtime.binDir, "trace.mjs"), "utf8");
     expect(bundledCli).toContain("Command groups:");
     expect(bundledCli).toContain("integration list --json");

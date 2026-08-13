@@ -110,6 +110,17 @@ vi.mock("../lib/storage/index.js", () => ({
   },
 }));
 
+vi.mock("../lib/design-system-archive.js", () => ({
+  parseGitTreeArchive: vi.fn().mockResolvedValue({ files: new Map() }),
+}));
+
+vi.mock("../lib/git-storage/index.js", () => ({
+  gitStorage: {
+    archiveTreeAtCommit: vi.fn().mockResolvedValue(Buffer.from("archive")),
+    getBranchHead: vi.fn().mockResolvedValue(null),
+  },
+}));
+
 vi.mock("@trace/shared", () => {
   return {
     getDefaultModel: vi.fn().mockReturnValue("claude-sonnet-4-20250514"),
@@ -191,6 +202,8 @@ import { SessionService, isFullyUnloadedSession } from "./session.js";
 import type { StartSessionServiceInput } from "./session.js";
 import { designSourceHash } from "./design-manual-edit.js";
 import { withDistributedLock } from "../lib/distributed-lock.js";
+import { parseGitTreeArchive } from "../lib/design-system-archive.js";
+import { gitStorage } from "../lib/git-storage/index.js";
 
 type MockedDeep<T> = {
   [K in keyof T]: T[K] extends (...args: infer A) => infer R
@@ -219,6 +232,8 @@ const getDefaultReasoningEffortMock = vi.mocked(getDefaultReasoningEffort);
 const isSupportedModelMock = vi.mocked(isSupportedModel);
 const isSupportedReasoningEffortMock = vi.mocked(isSupportedReasoningEffort);
 const withDistributedLockMock = vi.mocked(withDistributedLock);
+const parseGitTreeArchiveMock = vi.mocked(parseGitTreeArchive);
+const gitStorageMock = gitStorage as unknown as MockedDeep<typeof gitStorage>;
 
 function makeSessionGroup(overrides: Record<string, unknown> = {}) {
   return {
@@ -2121,12 +2136,162 @@ describe("SessionService", () => {
                   designSessionGroupId: "design-1",
                   slug: "checkout",
                   designName: "Checkout",
+                  repoId: "design-repo-1",
+                  commitSha: "design-commit-1",
                 },
               ],
             }),
           }),
         }),
       );
+    });
+
+    it("pins and selects an authoritative screen from the saved design commit", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "design-1",
+        name: "Checkout",
+        slug: "checkout",
+        repoId: "design-repo-1",
+        branch: "main",
+        designPreviewCommitSha: "design-commit-1",
+        visibility: "public",
+        ownerUserId: "user-2",
+      });
+      parseGitTreeArchiveMock.mockResolvedValueOnce({
+        files: new Map([
+          [
+            "design.canvas.json",
+            Buffer.from(
+              JSON.stringify({
+                version: 1,
+                screens: [
+                  {
+                    id: "checkout-mobile",
+                    name: "Checkout mobile",
+                    component: "./screens/CheckoutMobile.tsx",
+                  },
+                ],
+              }),
+            ),
+          ],
+        ]),
+      });
+      const repo = await managedGitServiceMock.createManagedRepo({
+        organizationId: "org-1",
+        name: "App source",
+        actorType: "user",
+        actorId: "user-1",
+      });
+      managedGitServiceMock.createManagedRepo.mockClear();
+      const sessionGroup = makeSessionGroup({ kind: "app", repoId: repo.id, repo });
+      const session = makeSession({ hosting: "cloud", repoId: repo.id, repo, sessionGroup });
+      prismaMock.sessionGroup.create.mockResolvedValueOnce(sessionGroup);
+      prismaMock.session.create.mockResolvedValueOnce(session);
+
+      await service.start({
+        organizationId: "org-1",
+        createdById: "user-1",
+        kind: "app",
+        hosting: "cloud",
+        prompt: "Build checkout",
+        designSessionGroupId: "design-1",
+        designScreenId: "checkout-mobile",
+      } as unknown as StartSessionServiceInput);
+
+      expect(gitStorageMock.archiveTreeAtCommit).toHaveBeenCalledWith(
+        "org-1",
+        "design-repo-1",
+        "design-commit-1",
+      );
+      expect(prismaMock.session.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            pendingRun: expect.objectContaining({
+              designAttachments: [
+                expect.objectContaining({
+                  repoId: "design-repo-1",
+                  commitSha: "design-commit-1",
+                  screenId: "checkout-mobile",
+                  screenName: "Checkout mobile",
+                  screenComponent: "./screens/CheckoutMobile.tsx",
+                }),
+              ],
+            }),
+          }),
+        }),
+      );
+    });
+
+    it("rejects a screen that is absent from the saved design commit", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "design-1",
+        name: "Checkout",
+        slug: "checkout",
+        repoId: "design-repo-1",
+        branch: "main",
+        designPreviewCommitSha: "design-commit-1",
+        visibility: "public",
+        ownerUserId: "user-2",
+      });
+      parseGitTreeArchiveMock.mockResolvedValueOnce({
+        files: new Map([["design.canvas.json", Buffer.from('{"version":1,"screens":[]}')]]),
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "app",
+          hosting: "cloud",
+          prompt: "Build checkout",
+          designSessionGroupId: "design-1",
+          designScreenId: "missing",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Design screen not found: missing");
+    });
+
+    it("requires the selected source to be a Design session in the same organization", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "app",
+          hosting: "cloud",
+          prompt: "Build checkout",
+          designSessionGroupId: "coding-group-1",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Design not found");
+      expect(prismaMock.sessionGroup.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "coding-group-1", organizationId: "org-1", kind: "design" },
+        }),
+      );
+    });
+
+    it("rejects a private Design session owned by another user", async () => {
+      prismaMock.sessionGroup.findFirst.mockResolvedValueOnce({
+        id: "design-private",
+        name: "Private checkout",
+        slug: "private-checkout",
+        repoId: "design-repo-1",
+        branch: "main",
+        designPreviewCommitSha: "design-commit-1",
+        visibility: "private",
+        ownerUserId: "user-2",
+      });
+
+      await expect(
+        service.start({
+          organizationId: "org-1",
+          createdById: "user-1",
+          kind: "app",
+          hosting: "cloud",
+          prompt: "Build checkout",
+          designSessionGroupId: "design-private",
+        } as unknown as StartSessionServiceInput),
+      ).rejects.toThrow("Not authorized for this design");
     });
 
     it("validates design sessions as repo-less, cloud sessions", async () => {

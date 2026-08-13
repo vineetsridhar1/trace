@@ -2843,6 +2843,7 @@ export type StartSessionInput = {
   channelId?: InputMaybe<Scalars["ID"]["input"]>;
   clientMutationId?: InputMaybe<Scalars["String"]["input"]>;
   deferRuntimeSelection?: InputMaybe<Scalars["Boolean"]["input"]>;
+  designScreenId?: InputMaybe<Scalars["String"]["input"]>;
   designSessionGroupId?: InputMaybe<Scalars["ID"]["input"]>;
   designSystemVersionId?: InputMaybe<Scalars["ID"]["input"]>;
   environmentId?: InputMaybe<Scalars["ID"]["input"]>;

@@ -274,6 +274,8 @@ var traceCliOperations = {
       "input.runtimeInstanceId",
       "input.deferRuntimeSelection",
       "input.repoId",
+      "input.designSessionGroupId",
+      "input.designScreenId",
       "input.branch",
       "input.ticketId",
       "input.channelId",
@@ -2031,11 +2033,13 @@ var sessionStartCommand = defineCommand({
   examples: [
     '"$TRACE_CLI" session start "Implement the API tests" --json',
     '"$TRACE_CLI" session start "Fix the login flow" --channel <channel-id> --tool codex --json',
+    '"$TRACE_CLI" session start "Implement checkout" --kind app --design-session <design-group-id> --design-screen checkout --json',
     '"$TRACE_CLI" session start "Review this work" --group <group-id> --json'
   ],
   effects: [
     "Creates a session and, unless --group is supplied, creates a new session group.",
-    "A prompt requests the initial run in the same operation."
+    "A prompt requests the initial run in the same operation.",
+    "--design-session copies the selected saved design into the new App workspace before the initial run."
   ],
   output: "The new session, whether an initial run was requested, its UI path, and an idempotency key.",
   nextSteps: [
@@ -2045,7 +2049,8 @@ var sessionStartCommand = defineCommand({
   notes: [
     "A new coding group needs a channel and task prompt; the channel can be inherited from the current session when available.",
     "--repo validates or supplies the repository for the selected or inherited channel; it never selects a destination by itself.",
-    "Do not call session run with the same initial prompt, because that can duplicate the work."
+    "Do not call session run with the same initial prompt, because that can duplicate the work.",
+    "--design-screen selects one authoritative screen from the saved design canvas; the full design source is copied so its dependencies remain available."
   ],
   positionals: [{ name: "prompt", variadic: true }],
   options: [
@@ -2069,6 +2074,20 @@ var sessionStartCommand = defineCommand({
       kind: "string",
       valueName: "ID",
       description: "Use this repository"
+    },
+    {
+      name: "designSession",
+      flag: "--design-session",
+      kind: "string",
+      valueName: "GROUP_ID",
+      description: "Start an App from this saved Design session group"
+    },
+    {
+      name: "designScreen",
+      flag: "--design-screen",
+      kind: "string",
+      valueName: "SCREEN_ID",
+      description: "Authoritative screen from the selected design canvas"
     },
     {
       name: "tool",
@@ -2172,6 +2191,8 @@ var sessionStartCommand = defineCommand({
       sessionGroupId: optionString(parsed, "group"),
       channelId: optionString(parsed, "channel"),
       repoId: optionString(parsed, "repo"),
+      designSessionGroupId: optionString(parsed, "designSession"),
+      designScreenId: optionString(parsed, "designScreen"),
       tool: optionString(parsed, "tool"),
       model: optionString(parsed, "model"),
       reasoningEffort: optionString(parsed, "reasoning"),
@@ -2193,6 +2214,15 @@ var sessionStartCommand = defineCommand({
       input.prompt = positionalPrompt;
     }
     input.prompt = requireStartPrompt(input.prompt);
+    if (input.designScreenId && !input.designSessionGroupId) {
+      usage("--design-screen requires --design-session <design-group-id>");
+    }
+    if (input.designSessionGroupId) {
+      if (input.kind && input.kind !== "app") {
+        usage("--design-session can only start an App session; remove --kind or use --kind app");
+      }
+      input.kind = "app";
+    }
     const hasGroup = parsed.providedOptions.has("group");
     const destinationOptions = ["channel", "repo"];
     const groupConfigurationOptions = [
@@ -2202,7 +2232,9 @@ var sessionStartCommand = defineCommand({
       "environment",
       "branch",
       "visibility",
-      "defer"
+      "defer",
+      "designSession",
+      "designScreen"
     ];
     if (hasGroup && destinationOptions.some((name) => parsed.providedOptions.has(name))) {
       usage("--group cannot be combined with --channel or --repo");

@@ -21,7 +21,16 @@ describe("isDesignSourcePath", () => {
 describe("parseDesignAttachments", () => {
   it("round-trips valid refs so they survive pending-command re-parsing", () => {
     const refs = [
-      { designSessionGroupId: "grp-1", slug: "welcome-flow", designName: "Welcome flow" },
+      {
+        designSessionGroupId: "grp-1",
+        slug: "welcome-flow",
+        designName: "Welcome flow",
+        repoId: "repo-1",
+        commitSha: "commit-1",
+        screenId: "welcome",
+        screenName: "Welcome",
+        screenComponent: "./screens/Welcome.tsx",
+      },
     ];
     expect(parseDesignAttachments(refs)).toEqual(refs);
   });

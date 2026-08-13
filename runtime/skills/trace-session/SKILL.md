@@ -75,7 +75,14 @@ Select another existing group or an explicit destination when appropriate:
 "$TRACE_CLI" session start "Fix the login flow" --channel <channel-id> --tool claude_code --json
 "$TRACE_CLI" session start "Refactor the parser" --channel <channel-id> --repo <repo-id> --hosting cloud --json
 "$TRACE_CLI" session start "Build the dashboard" --kind app --hosting cloud --json
+"$TRACE_CLI" session start "Implement checkout" --kind app --design-session <design-group-id> --design-screen checkout --json
 ```
+
+Use `--design-session` to start an App from a saved Design session group. Trace pins and copies the
+saved design source into the App workspace before the initial run. Add `--design-screen` when one
+screen from `design.canvas.json` is the authoritative implementation target; the complete design
+artifact is still copied so shared components, tokens, the brief, and related context remain
+available.
 
 `session start` with a prompt requests the initial run in the same operation. The returned session
 may temporarily have `agentStatus: "not_started"` while its runtime is provisioning. Do not call
@@ -88,7 +95,8 @@ key, reuse it with `--idempotency-key <key>` so a manual retry returns the origi
 of creating a duplicate.
 
 Useful options include `--model`, `--reasoning`, `--hosting`, `--runtime`, `--environment`,
-`--branch`, `--ticket`, `--visibility`, `--interaction-mode`, and `--defer`. Explicit
+`--branch`, `--ticket`, `--visibility`, `--interaction-mode`, `--design-session`,
+`--design-screen`, and `--defer`. Explicit
 cloud hosting fails when cloud is unavailable; it is never silently changed to local. Use
 `session start --help` for the complete syntax.
 

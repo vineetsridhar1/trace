@@ -1565,6 +1565,7 @@ input StartSessionInput {
   repoId: ID
   designSystemVersionId: ID
   designSessionGroupId: ID
+  designScreenId: String
   branch: String
   ticketId: ID
   channelId: ID

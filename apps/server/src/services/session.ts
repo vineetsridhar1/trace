@@ -435,6 +435,11 @@ type DesignAttachmentRef = {
   designSessionGroupId: string;
   slug: string;
   designName: string;
+  repoId?: string;
+  commitSha?: string;
+  screenId?: string;
+  screenName?: string;
+  screenComponent?: string;
 };
 
 type PendingSessionCommand =
@@ -553,6 +558,13 @@ export function parseDesignAttachments(raw: unknown): DesignAttachmentRef[] | nu
         designSessionGroupId: ref.designSessionGroupId,
         slug: ref.slug,
         designName: ref.designName,
+        ...(typeof ref.repoId === "string" ? { repoId: ref.repoId } : {}),
+        ...(typeof ref.commitSha === "string" ? { commitSha: ref.commitSha } : {}),
+        ...(typeof ref.screenId === "string" ? { screenId: ref.screenId } : {}),
+        ...(typeof ref.screenName === "string" ? { screenName: ref.screenName } : {}),
+        ...(typeof ref.screenComponent === "string"
+          ? { screenComponent: ref.screenComponent }
+          : {}),
       });
     }
   }
@@ -4170,6 +4182,9 @@ export class SessionService {
     ) {
       throw new ValidationError("Designs cannot be attached to Design or Design System sessions");
     }
+    if (input.designScreenId && !input.designSessionGroupId) {
+      throw new ValidationError("A design screen requires a selected Design session");
+    }
     const selectedDesignSystemVersion = input.designSystemVersionId
       ? await prisma.designSystemVersion.findFirst({
           where: {
@@ -4191,6 +4206,7 @@ export class SessionService {
           input.designSessionGroupId,
           input.organizationId,
           input.createdById,
+          input.designScreenId ?? null,
         )
       : null;
     if (
@@ -4806,6 +4822,15 @@ export class SessionService {
                               designSessionGroupId: selectedDesignAttachment.id,
                               slug: selectedDesignAttachment.slug,
                               designName: selectedDesignAttachment.name,
+                              repoId: selectedDesignAttachment.repoId,
+                              commitSha: selectedDesignAttachment.commitSha,
+                              ...(selectedDesignAttachment.screen
+                                ? {
+                                    screenId: selectedDesignAttachment.screen.id,
+                                    screenName: selectedDesignAttachment.screen.name,
+                                    screenComponent: selectedDesignAttachment.screen.component,
+                                  }
+                                : {}),
                             },
                           ],
                         }
@@ -10470,9 +10495,17 @@ export class SessionService {
     return fromName || group.id;
   }
 
-  private buildDesignImplementationPrompt(designName: string, destRoot: string): string {
+  private buildDesignImplementationPrompt(
+    designName: string,
+    destRoot: string,
+    screen?: { id: string; name: string; component: string } | null,
+  ): string {
+    const selection = screen
+      ? `The authoritative implementation target is screen "${screen.name}" (ID: \`${screen.id}\`, component: \`${destRoot}/src/design/${screen.component.slice(2)}\`). Other copied screens are supporting context only.\n\n`
+      : "";
     return (
       `I've added the "${designName}" design to this workspace under \`${destRoot}/\`.\n\n` +
+      selection +
       `- \`${destRoot}/design.canvas.json\` lists every screen — its name, viewport, and the ` +
       `component that renders it.\n` +
       `- \`${destRoot}/design.brief.json\` captures the intent and required states.\n` +
@@ -10502,7 +10535,15 @@ export class SessionService {
     designSessionGroupId: string,
     organizationId: string,
     userId: string,
-  ): Promise<{ id: string; name: string; slug: string; repoId: string; commitSha: string }> {
+    screenId?: string | null,
+  ): Promise<{
+    id: string;
+    name: string;
+    slug: string;
+    repoId: string;
+    commitSha: string;
+    screen: { id: string; name: string; component: string } | null;
+  }> {
     const design = await prisma.sessionGroup.findFirst({
       where: { id: designSessionGroupId, organizationId, kind: "design" },
       select: {
@@ -10532,18 +10573,64 @@ export class SessionService {
     if (!commitSha) {
       throw new ValidationError("This design has no committed source to implement yet");
     }
+    let screen: { id: string; name: string; component: string } | null = null;
+    if (screenId) {
+      const archive = await gitStorage.archiveTreeAtCommit(
+        organizationId,
+        design.repoId,
+        commitSha,
+      );
+      const { files } = await parseGitTreeArchive(archive);
+      const manifestContent = files.get("design.canvas.json");
+      if (!manifestContent) {
+        throw new ValidationError("This design has no saved canvas manifest");
+      }
+      let manifest: unknown;
+      try {
+        manifest = JSON.parse(manifestContent.toString("utf-8"));
+      } catch {
+        throw new ValidationError("This design has an invalid saved canvas manifest");
+      }
+      const screens =
+        manifest &&
+        typeof manifest === "object" &&
+        Array.isArray((manifest as { screens?: unknown }).screens)
+          ? (manifest as { screens: unknown[] }).screens
+          : [];
+      const selected = screens.find(
+        (candidate) =>
+          candidate !== null &&
+          typeof candidate === "object" &&
+          (candidate as { id?: unknown }).id === screenId,
+      );
+      if (!selected || typeof selected !== "object") {
+        throw new ValidationError(`Design screen not found: ${screenId}`);
+      }
+      const candidate = selected as { id?: unknown; name?: unknown; component?: unknown };
+      if (
+        typeof candidate.id !== "string" ||
+        typeof candidate.name !== "string" ||
+        typeof candidate.component !== "string" ||
+        !/^\.\/screens\/[A-Za-z0-9._-]+\.tsx$/.test(candidate.component)
+      ) {
+        throw new ValidationError(`Design screen is invalid: ${screenId}`);
+      }
+      screen = { id: candidate.id, name: candidate.name, component: candidate.component };
+    }
     return {
       id: design.id,
       name: design.name,
       slug: this.designArtifactSlug(design),
       repoId: design.repoId,
       commitSha,
+      screen,
     };
   }
 
-  // Re-resolve a design's repo + commit at delivery time (no view check — access
-  // was already enforced when the attachment was created). Null when the design
-  // has no committed source to copy.
+  // Compatibility path for pending attachments created before repo + commit
+  // were pinned on the command. New attachments always carry their immutable
+  // source reference. No view check is needed here because access was enforced
+  // when the legacy attachment was created.
   private async resolveDesignSource(
     designSessionGroupId: string,
     organizationId: string,
@@ -10647,9 +10734,15 @@ export class SessionService {
 
     const design = await this.resolveDesignArtifact(designSessionGroupId, organizationId, userId);
     const destRoot = `.trace/designs/${design.slug}`;
-    const text = this.buildDesignImplementationPrompt(design.name, destRoot);
+    const text = this.buildDesignImplementationPrompt(design.name, destRoot, design.screen);
     const designAttachments = [
-      { designSessionGroupId, slug: design.slug, designName: design.name },
+      {
+        designSessionGroupId,
+        slug: design.slug,
+        designName: design.name,
+        repoId: design.repoId,
+        commitSha: design.commitSha,
+      },
     ];
 
     // Not provisioned yet: the kickoff message provisions the runtime and the
@@ -11640,7 +11733,13 @@ export class SessionService {
     );
     const attachedDesignInstruction = pending.designAttachments
       ?.map((ref) =>
-        this.buildDesignImplementationPrompt(ref.designName, `.trace/designs/${ref.slug}`),
+        this.buildDesignImplementationPrompt(
+          ref.designName,
+          `.trace/designs/${ref.slug}`,
+          ref.screenId && ref.screenName && ref.screenComponent
+            ? { id: ref.screenId, name: ref.screenName, component: ref.screenComponent }
+            : null,
+        ),
       )
       .join("\n\n");
     const appendSystemPrompt = [generatedInstruction, attachedDesignInstruction]
@@ -11692,10 +11791,10 @@ export class SessionService {
       if (runtimeId) {
         for (const ref of pending.designAttachments) {
           try {
-            const source = await this.resolveDesignSource(
-              ref.designSessionGroupId,
-              session.organizationId,
-            );
+            const source =
+              ref.repoId && ref.commitSha
+                ? { repoId: ref.repoId, commitSha: ref.commitSha }
+                : await this.resolveDesignSource(ref.designSessionGroupId, session.organizationId);
             if (!source) {
               console.warn(
                 `[attachDesign] Design ${ref.designSessionGroupId} has no committed source for session ${sessionId}`,
