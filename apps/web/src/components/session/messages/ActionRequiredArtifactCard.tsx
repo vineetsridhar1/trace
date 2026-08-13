@@ -92,18 +92,18 @@ export function ActionRequiredArtifactCard({
     );
 
   return (
-    <div className="my-2 rounded-2xl bg-muted/50 px-6 py-5">
-      <div className="flex items-center gap-5 max-sm:items-start">
+    <div className="my-2 rounded-xl bg-muted/50 px-5 py-4">
+      <div className="flex items-center gap-4 max-sm:items-start">
         {artifact.kind === "credential_required" && (
-          <KeyRound className="h-5 w-5 shrink-0 text-amber-400" />
+          <KeyRound className="h-4 w-4 shrink-0 text-amber-400" />
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-base font-semibold text-foreground">
+          <p className="text-sm font-semibold text-foreground">
             {artifact.kind === "credential_required"
               ? `${artifact.provider === "anthropic" ? "Anthropic" : "OpenAI"} key required`
               : artifact.title}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {artifact.kind === "credential_required"
               ? "Connect once to start this cloud session."
               : artifact.description}

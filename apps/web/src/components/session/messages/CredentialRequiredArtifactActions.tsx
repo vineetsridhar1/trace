@@ -63,10 +63,10 @@ export function CredentialRequiredArtifactActions({
           if (event.key === "Enter") void saveAndRetry();
         }}
         aria-label={`${providerName} API key`}
-        className="h-11 min-w-0 flex-1 bg-background"
+        className="h-9 min-w-0 flex-1 bg-background text-sm"
       />
       <Button
-        className="h-11 px-5"
+        className="h-9 px-4 text-xs"
         disabled={!apiKey.trim() || saving}
         onClick={() => void saveAndRetry()}
       >
