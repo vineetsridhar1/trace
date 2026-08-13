@@ -211,8 +211,8 @@ export function SessionInput({
 
       if (text === "/clear") {
         const channelId = useUIStore.getState().activeChannelId;
-        if (channelId) {
-          void createQuickSession(channelId);
+        if (channelId && sessionGroupId) {
+          void createQuickSession(channelId, { sessionGroupId });
         }
         return;
       }
