@@ -33,7 +33,7 @@ import type {
   BridgePdfExportCommand,
   BridgeAnimationExportCommand,
   BridgeDesignSystemExportCommand,
-  type ActionRequiredArtifact,
+  ActionRequiredArtifact,
 } from "@trace/shared";
 import { GENERAL_WORKSPACE_PROTOCOL_VERSION } from "@trace/shared";
 import { prisma } from "./db.js";
