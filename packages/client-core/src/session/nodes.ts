@@ -214,6 +214,7 @@ export function buildSessionNodes(
     string,
     Extract<SessionNode, { kind: "event" }>
   >();
+  let hasActionableFailure = false;
   const completedAgentTools = new Map<string, AgentToolResult>();
   const toolResultByUseId = new Map<string, unknown>();
   let bucket: ReadGlobItem[] = [];
@@ -282,6 +283,19 @@ export function buildSessionNodes(
 
     if (event.eventType === "message_sent") {
       visibleActionableArtifacts.clear();
+      hasActionableFailure = false;
+    }
+
+    const eventPayload = asJsonObject(event.payload);
+    const eventArtifact = asJsonObject(eventPayload?.artifact);
+    if (isActionRequiredArtifact(eventArtifact)) hasActionableFailure = true;
+
+    if (
+      event.eventType === "session_terminated" &&
+      eventPayload?.reason === "workspace_failed" &&
+      hasActionableFailure
+    ) {
+      continue;
     }
 
     // Subagent child events render nested inside their parent's SubagentRow — never as top-level nodes.
@@ -290,7 +304,7 @@ export function buildSessionNodes(
     }
 
     if (event.eventType === "session_output") {
-      const payload = asJsonObject(event.payload);
+      const payload = eventPayload;
 
       const artifact = asJsonObject(payload?.artifact);
       if (isActionRequiredArtifact(artifact)) {

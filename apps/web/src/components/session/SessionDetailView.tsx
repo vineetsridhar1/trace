@@ -56,6 +56,7 @@ import type { FileAttachment } from "./ImageAttachmentBar";
 import { sendOptimisticSessionMessage } from "./sendOptimisticSessionMessage";
 import { findActiveQuestion, findReplacedQuestionIds } from "./questionHistory";
 import { cn } from "../../lib/utils";
+import { asJsonObject, isActionRequiredArtifact } from "@trace/shared";
 
 const RUNTIME_BOOTING_STATES = new Set([
   "pending",
@@ -496,6 +497,18 @@ export function SessionDetailView({
   );
   const initialEventsLoading = loading && eventIds.length === 0;
   const connectionState = getConnectionState(connection);
+  const hasActionableRuntimeFailure = useMemo(
+    () => {
+      for (let index = eventIds.length - 1; index >= 0; index -= 1) {
+        const eventId = eventIds[index];
+        const event = events[eventId];
+        if (event?.eventType !== "session_runtime_start_failed") continue;
+        return isActionRequiredArtifact(asJsonObject(asJsonObject(event.payload)?.artifact));
+      }
+      return false;
+    },
+    [eventIds, events],
+  );
   const groupConnectionState = getConnectionState(groupConnection);
   const groupRuntimeConnected = groupConnectionState === "connected";
   const suppressSharedCloudStartupNotice =
@@ -506,6 +519,7 @@ export function SessionDetailView({
     hosting === "cloud" &&
     connectionState !== null &&
     connectionState !== "connected" &&
+    !hasActionableRuntimeFailure &&
     !suppressSharedCloudStartupNotice &&
     (RUNTIME_BOOTING_STATES.has(connectionState) || RUNTIME_FAILURE_STATES.has(connectionState))
       ? connectionState

@@ -88,6 +88,33 @@ describe("buildSessionNodes", () => {
     ]);
   });
 
+  it("hides the redundant workspace termination after an actionable failure", () => {
+    const recovery = makeEvent({
+      id: "cloud-credential-error",
+      eventType: "session_runtime_start_failed",
+      payload: {
+        artifact: {
+          kind: "credential_required",
+          provider: "anthropic",
+          title: "Connect Anthropic",
+          description: "Add an API key.",
+        },
+      },
+    });
+    const termination = makeEvent({
+      id: "workspace-terminated",
+      eventType: "session_terminated",
+      payload: { reason: "workspace_failed" },
+    });
+
+    const result = buildSessionNodes(
+      [recovery.id, termination.id],
+      { [recovery.id]: recovery, [termination.id]: termination },
+    );
+
+    expect(result.nodes).toEqual([{ kind: "event", id: recovery.id }]);
+  });
+
   it("continues hiding ordinary runtime start failures", () => {
     const event = makeEvent({ eventType: "session_runtime_start_failed", payload: {} });
 
