@@ -243,6 +243,7 @@ export function createPrismaMock() {
     },
     designSystem: {
       create: vi.fn(),
+      delete: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
       findFirstOrThrow: vi.fn(),
@@ -261,6 +262,7 @@ export function createPrismaMock() {
     },
     designSystemVersion: {
       create: vi.fn(),
+      deleteMany: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
       findUnique: vi.fn(),

@@ -5767,6 +5767,43 @@ export class SessionService {
       select: { id: true },
     });
 
+    // A design-system authoring group is owned by its DesignSystem row. Remove
+    // that dependent record before deleting the group so its required foreign
+    // key cannot prevent an otherwise valid creation deletion.
+    const authoredDesignSystem = await prisma.designSystem.findUnique({
+      where: { authoringSessionGroupId: groupId },
+      select: {
+        id: true,
+        versions: { select: { storageKey: true } },
+        commitArtifacts: { select: { storageKey: true } },
+      },
+    });
+    const designSystemStorageKeys = authoredDesignSystem
+      ? [
+          ...authoredDesignSystem.versions.map(({ storageKey }) => storageKey),
+          ...authoredDesignSystem.commitArtifacts.map(({ storageKey }) => storageKey),
+        ]
+      : [];
+
+    if (authoredDesignSystem) {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Versions may be pinned to other creations. Clear those pins before
+        // removing the source design system and its versions.
+        await tx.sessionGroup.updateMany({
+          where: { designSystemVersion: { designSystemId: authoredDesignSystem.id } },
+          data: { designSystemVersionId: null },
+        });
+        await tx.designSystem.update({
+          where: { id: authoredDesignSystem.id },
+          data: { activeVersionId: null, latestCommitArtifactId: null },
+        });
+        await tx.designSystemVersion.deleteMany({
+          where: { designSystemId: authoredDesignSystem.id },
+        });
+        await tx.designSystem.delete({ where: { id: authoredDesignSystem.id } });
+      });
+    }
+
     for (const session of sessions) {
       await this.delete(session.id, actorType, actorId, eventPayloadExtras);
     }
@@ -5814,6 +5851,17 @@ export class SessionService {
         });
       }
     }
+
+    await Promise.all(
+      designSystemStorageKeys.map((storageKey) =>
+        storage.deleteObject(storageKey).catch((error: unknown) => {
+          console.warn("[session] failed to delete design-system object with session group", {
+            storageKey,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }),
+      ),
+    );
 
     return true;
   }
