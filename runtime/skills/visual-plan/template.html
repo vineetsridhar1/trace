@@ -3,8 +3,11 @@
   Trace visual plan canvas.
 
   Copy this file into the change-specific folder under docs/ with a descriptive
-  filename. This is a component palette, not an outline: start with the decision
-  brief below and add only sections that answer a reviewer question for the change.
+  filename. This is a component palette, not an outline: choose a story shape
+  first (failure scenario, user journey, boundary contract, decision record,
+  rollout narrative, or change map), then add only sections that answer its
+  review question. The first three visible blocks must make the change's unique
+  uncertainty apparent.
   Do not add scope, phases, file inventories, metrics, or diagrams merely because
   a plan usually has them. Keep the <style> block; it is the component vocabulary.
 
@@ -498,9 +501,15 @@
   </head>
   <body>
     <article class="plan">
-      <h1 class="plan-title">[Change title]</h1>
+      <!--
+        First write a private thesis:
+        "This plan helps the reviewer decide ___ by showing ___."
+        Do not use Scope, Current state, How it will work, Implementation moves,
+        Files, Risks, or Verification unless that exact question earns a place.
+      -->
+      <h1 class="plan-title">[A change-specific question or claim]</h1>
       <p class="plan-summary">
-        [The decision to approve, the concrete outcome, and why it is the right approach.]
+        [The answer, the decision it enables, and why this is the plan's chosen story shape.]
       </p>
       <div class="meta">
         <span class="chip"><strong>Decision</strong> [what approval enables]</span>
@@ -508,7 +517,7 @@
       </div>
 
       <section>
-        <h2>What needs approval</h2>
+        <h2>[The first question this story must answer]</h2>
         <div class="callout">
           <strong>[The key decision.]</strong> [State the proposed approach, the constraint it
           resolves, and the most important proof point.]

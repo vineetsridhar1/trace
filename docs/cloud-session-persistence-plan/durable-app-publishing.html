@@ -3,93 +3,61 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Durable app publishing</title>
+    <title>Can Publish be trusted?</title>
     <style>
-      :root { --bg:#171717; --surface:#202020; --raised:#292929; --fg:#e4e4e7; --muted:#a1a1aa; --faint:#71717a; --border:#383838; --accent:#60a5fa; --good:#4ade80; --warn:#facc15; --bad:#f87171; }
-      * { box-sizing:border-box; }
-      body { margin:0; padding:40px 22px 72px; background:var(--bg); color:var(--fg); font:15px/1.6 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-      main { max-width:880px; margin:auto; }
-      h1 { margin:0 0 8px; font-size:30px; letter-spacing:-.025em; }
-      h2 { margin:42px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); color:var(--faint); font-size:12px; letter-spacing:.09em; text-transform:uppercase; }
-      h3 { margin:0 0 6px; font-size:14px; } p { margin:0 0 12px; } code { padding:1px 5px; border-radius:4px; background:var(--raised); font-size:.9em; }
-      .summary { max-width:720px; color:var(--muted); font-size:17px; }
-      .meta, .legend { display:flex; flex-wrap:wrap; gap:8px; margin:18px 0 30px; }
-      .chip, .state { padding:4px 9px; border:1px solid var(--border); border-radius:999px; color:var(--muted); font-size:12px; }
-      .chip strong { color:var(--fg); } .state.new { border-color:var(--accent); color:var(--fg); } .state.live { border-color:var(--good); color:var(--good); } .state.failed { border-color:var(--bad); color:var(--bad); }
-      .callout, .card, details, table { border:1px solid var(--border); border-radius:8px; background:var(--surface); }
-      .callout { padding:15px 17px; border-left:3px solid var(--accent); color:var(--muted); } .callout strong { color:var(--fg); }
-      .callout.risk { border-left-color:var(--warn); } .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; } .card { padding:15px 17px; } .card p:last-child { margin-bottom:0; }
-      .flow { display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; } .node { flex:1 1 145px; padding:12px; border:1px solid var(--border); border-radius:8px; background:var(--surface); } .node.new { border-color:var(--accent); } .node b { display:block; font-size:13px; } .node span { color:var(--faint); font-size:12px; } .arrow { align-self:center; color:var(--faint); }
-      .steps { display:grid; gap:10px; } .step { padding:14px 16px; border-left:2px solid var(--accent); background:var(--surface); } .step p { color:var(--muted); } .step p:last-child { margin-bottom:0; }
-      table { width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; } th,td { padding:10px 12px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; } th { color:var(--faint); font-size:11px; letter-spacing:.06em; text-transform:uppercase; } tr:last-child td { border-bottom:0; }
-      details { margin-top:12px; overflow:hidden; } summary { padding:11px 13px; cursor:pointer; color:var(--fg); } .detail { padding:0 13px 13px; color:var(--muted); } ul { margin:7px 0 0; padding-left:20px; } li { margin:5px 0; }
-      @media (max-width:620px) { .grid { grid-template-columns:1fr; } body { padding:28px 16px 56px; } }
+      :root { --ink:#eeece8; --muted:#aaa6a0; --paper:#171716; --panel:#22211f; --line:#403e39; --blue:#78aef8; --green:#7bd99b; --yellow:#f0c96a; --red:#ef8585; }
+      * { box-sizing:border-box; } body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.55 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; } main { max-width:980px; margin:auto; padding:56px 28px 92px; }
+      .kicker { margin:0 0 10px; color:var(--blue); font-size:12px; font-weight:700; letter-spacing:.11em; text-transform:uppercase; } h1 { max-width:780px; margin:0; font-size:clamp(34px,6vw,58px); line-height:1.03; letter-spacing:-.045em; } .lede { max-width:700px; margin:20px 0 32px; color:var(--muted); font-size:19px; }
+      .promise { display:grid; grid-template-columns:1.2fr repeat(3,1fr); border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--panel); } .promise > div { min-height:118px; padding:17px; border-right:1px solid var(--line); } .promise > div:last-child { border:0; } .promise b { display:block; margin-bottom:7px; font-size:14px; } .promise span { color:var(--muted); font-size:13px; } .promise .headline { background:linear-gradient(135deg,#29374d,#22211f 66%); } .promise .headline b { font-size:20px; line-height:1.15; }
+      h2 { margin:60px 0 12px; font-size:13px; color:var(--blue); letter-spacing:.1em; text-transform:uppercase; } .intro { max-width:720px; color:var(--muted); }
+      .scenarios { display:grid; gap:13px; margin-top:22px; } .scenario { display:grid; grid-template-columns:128px 1fr; gap:18px; padding:18px; border:1px solid var(--line); border-radius:12px; background:var(--panel); } .scenario h3 { margin:0; font-size:15px; } .scenario p { margin:7px 0 0; color:var(--muted); font-size:14px; } .label { padding-top:2px; color:var(--muted); font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+      .track { display:flex; align-items:center; gap:7px; min-width:0; } .event { flex:1 1 110px; min-height:74px; padding:10px; border:1px solid var(--line); border-radius:8px; background:#1b1b1a; font-size:12px; } .event b { display:block; margin-bottom:4px; font-size:12px; } .event small { color:var(--muted); line-height:1.3; } .event.good { border-color:#377d54; } .event.good b { color:var(--green); } .event.warn { border-color:#7b6333; } .event.warn b { color:var(--yellow); } .event.bad { border-color:#7d4141; } .event.bad b { color:var(--red); } .arrow { color:var(--muted); }
+      .rule { margin:44px 0; padding:24px; border-left:3px solid var(--green); background:#1c251e; font-size:22px; line-height:1.35; } .rule strong { color:var(--green); }
+      .split { display:grid; grid-template-columns:1fr 1fr; gap:14px; } .card { padding:19px; border:1px solid var(--line); border-radius:11px; background:var(--panel); } .card h3 { margin:0 0 8px; font-size:16px; } .card p { margin:0; color:var(--muted); font-size:14px; } .card code, code { padding:1px 5px; border-radius:4px; background:#30302d; font-size:.9em; }
+      .boundary { display:grid; grid-template-columns:1fr 52px 1fr; align-items:stretch; margin-top:20px; } .boundary .side { padding:20px; border:1px solid var(--line); background:var(--panel); } .boundary .side:first-child { border-radius:11px 0 0 11px; } .boundary .side:last-child { border-radius:0 11px 11px 0; } .boundary .divider { display:grid; place-items:center; color:var(--blue); border-top:1px solid var(--line); border-bottom:1px solid var(--line); background:#1d2733; font-size:24px; } .side h3 { margin:0 0 7px; font-size:16px; } .side p { margin:0; color:var(--muted); font-size:14px; }
+      .gate { margin-top:16px; padding:16px 18px; border:1px solid #806737; border-radius:10px; background:#282419; color:var(--muted); } .gate strong { color:var(--yellow); } details { margin-top:26px; border-top:1px solid var(--line); padding-top:14px; } summary { cursor:pointer; color:var(--muted); } ul { margin:11px 0 0; padding-left:20px; color:var(--muted); font-size:14px; } li { margin:6px 0; }
+      @media (max-width:720px) { main { padding:34px 18px 64px; } .promise,.split { grid-template-columns:1fr; } .promise > div { min-height:auto; border-right:0; border-bottom:1px solid var(--line); } .promise > div:last-child { border:0; } .scenario { grid-template-columns:1fr; gap:12px; } .track { flex-wrap:wrap; } .arrow { transform:rotate(90deg); } .boundary { grid-template-columns:1fr; } .boundary .side:first-child,.boundary .side:last-child { border-radius:11px; } .boundary .divider { height:42px; border-left:1px solid var(--line); border-right:1px solid var(--line); } }
     </style>
   </head>
   <body>
     <main>
-      <h1>Durable publishing for session-built apps</h1>
-      <p class="summary">Approve a durable deployment lifecycle that snapshots a managed app session, hands that snapshot to an external build worker, and keeps publishing status available after the cloud coding session sleeps.</p>
-      <div class="meta">
-        <span class="chip"><strong>Decision</strong> publish checkpoints, never a live workspace</span>
-        <span class="chip"><strong>Boundary</strong> Trace records intent; a worker builds and hosts</span>
-        <span class="chip"><strong>Gate</strong> worker, queue, bucket, role, and callback URL must exist</span>
+      <p class="kicker">Review lens · deployment correctness under asynchronous failure</p>
+      <h1>Can Publish be trusted when everything arrives twice?</h1>
+      <p class="lede">This branch turns a temporary app-building session into a durable deployment request. Its value is not the Publish button—it is the guarantee that retries, late workers, and failed replacements cannot point a public URL at the wrong build.</p>
+
+      <div class="promise" aria-label="The publishing promise">
+        <div class="headline"><b>The promise</b><span>Only the newest successful checkpoint becomes the app the public URL represents.</span></div>
+        <div><b>Frozen input</b><span>Each request names an immutable Git checkpoint, never the session workspace.</span></div>
+        <div><b>One authority</b><span>Postgres deployment state decides whether a worker update still matters.</span></div>
+        <div><b>Safe replacement</b><span>An earlier live app remains live until its successor is actually live.</span></div>
       </div>
 
-      <section>
-        <h2>What needs approval</h2>
-        <div class="callout"><strong>Make deployment state independent of the cloud session.</strong> The proposed <code>AppDeployment</code> record is the durable source for the selected Git checkpoint, lifecycle status, public URL, and failure reason. Session processes remain ephemeral; a publish request creates a separate asynchronous deployment.</div>
-      </section>
+      <h2>Four moments that must not break the promise</h2>
+      <p class="intro">Read these as the product contract. The code is acceptable only if every timeline ends in the stated outcome.</p>
+      <div class="scenarios">
+        <article class="scenario"><div class="label">A · Retry</div><div><h3>The user presses Publish twice without changing code</h3><div class="track"><div class="event"><b>Publish A</b><small>checkpoint <code>abc</code></small></div><i class="arrow">→</i><div class="event"><b>Publish again</b><small>same checkpoint <code>abc</code></small></div><i class="arrow">→</i><div class="event good"><b>Reuse A</b><small>one deployment; one job</small></div></div><p><code>publish()</code> holds a per-session advisory lock and returns the active deployment when it already targets that checkpoint.</p></div></article>
+        <article class="scenario"><div class="label">B · Race</div><div><h3>A newer checkpoint is published while the old job is still building</h3><div class="track"><div class="event"><b>Publish A</b><small><code>abc</code> is building</small></div><i class="arrow">→</i><div class="event"><b>Publish B</b><small><code>def</code> is newer</small></div><i class="arrow">→</i><div class="event warn"><b>A is superseded</b><small>late callback changes nothing</small></div><i class="arrow">→</i><div class="event good"><b>B may become live</b><small>only via valid sequence</small></div></div><p>The old worker is allowed to finish physically; it is no longer allowed to change the product’s durable truth.</p></div></article>
+        <article class="scenario"><div class="label">C · Bad release</div><div><h3>A replacement fails while a previous version is already public</h3><div class="track"><div class="event good"><b>A is live</b><small>public URL → <code>abc</code></small></div><i class="arrow">→</i><div class="event"><b>Publish B</b><small>checkpoint <code>def</code></small></div><i class="arrow">→</i><div class="event bad"><b>B fails</b><small>failure is recorded</small></div><i class="arrow">→</i><div class="event good"><b>A stays live</b><small>URL never moves</small></div></div><p>A live deployment is superseded only inside the transaction that accepts a successor’s <code>live</code> callback.</p></div></article>
+        <article class="scenario"><div class="label">D · Bad message</div><div><h3>A callback is forged, repeated, or arrives out of order</h3><div class="track"><div class="event"><b>Worker message</b><small>bearer token + status</small></div><i class="arrow">→</i><div class="event"><b>Callback service</b><small>hash check + transition check</small></div><i class="arrow">→</i><div class="event bad"><b>Reject or ignore</b><small>no event; no state change</small></div></div><p>Only <code>queued → building → deploying → live</code> (or failure) is accepted. Terminal and duplicate updates are harmless.</p></div></article>
+      </div>
 
-      <section>
-        <h2>Lifecycle and ownership</h2>
-        <div class="flow">
-          <div class="node"><b>Publish button</b><span>managed app session only</span></div><span class="arrow">→</span>
-          <div class="node new"><b>Deployment service</b><span>locks group; selects latest checkpoint</span></div><span class="arrow">→</span>
-          <div class="node new"><b>Postgres + event log</b><span>durable status for every client</span></div><span class="arrow">→</span>
-          <div class="node new"><b>S3 + SQS dispatcher</b><span>archives source; queues worker job</span></div><span class="arrow">→</span>
-          <div class="node"><b>External worker</b><span>builds, deploys, reports result</span></div>
-        </div>
-        <p style="margin-top:12px">The worker returns to <code>/internal/app-deployments/:deploymentId/status</code> with its single-use bearer credential. The callback service validates the status transition, updates Postgres, emits an event, and the Applications panel receives the new deployment through the entity store.</p>
-        <div class="legend" aria-label="Deployment states"><span class="state new">queued</span><span>→</span><span class="state new">building</span><span>→</span><span class="state new">deploying</span><span>→</span><span class="state live">live</span><span>or</span><span class="state failed">failed</span><span>· superseded ends an obsolete in-flight or live deployment</span></div>
-      </section>
+      <p class="rule"><strong>The key rule:</strong> a worker may do obsolete work, but it may never make obsolete work current.</p>
 
-      <section>
-        <h2>Implementation moves</h2>
-        <div class="steps">
-          <div class="step"><h3>Persist one deployment lifecycle per publish request</h3><p><code>AppDeploymentService.publish()</code> locks by session group, requires a managed app and its latest <code>GitCheckpoint</code>, deduplicates an active request for the same checkpoint, and supersedes older in-flight requests. This prevents a retry from creating two deployments for identical source.</p><p><strong>Proof:</strong> service tests cover no checkpoint, same-checkpoint reuse, superseding an in-flight publish, and dispatch failure.</p></div>
-          <div class="step"><h3>Make transitions authenticated and monotonic</h3><p><code>updateFromCallback()</code> stores only a hash of a fresh token, accepts <code>queued → building → deploying → live</code> or failure, ignores duplicate/terminal callbacks, and supersedes an earlier live deployment only when a successor is live.</p><p><strong>Proof:</strong> verify bearer-token rejection, invalid transition rejection, duplicate delivery, and a failed replacement preserving the currently live deployment.</p></div>
-          <div class="step"><h3>Dispatch an immutable source bundle instead of session files</h3><p><code>AwsAppDeploymentDispatcher</code> archives the selected commit from managed Git, streams a size-limited tarball to S3, then sends a versioned <code>AppDeploymentJob</code> to SQS using assumed-role credentials. The source key is deployment-specific.</p><p><strong>Proof:</strong> dispatcher tests confirm streaming behavior and reject archives over 100 MB; add an integration exercise against a disposable queue and bucket.</p></div>
-          <div class="step"><h3>Expose lifecycle state through existing product channels</h3><p>The GraphQL query/mutation, generated types, event handlers, Zustand table, and <code>AppDeploymentCard</code> make publish progress, errors, and a live URL visible in the Applications panel. UI actions remain fire-and-forget; events reconcile state.</p><p><strong>Proof:</strong> handler tests upsert queued/updated events and a browser test confirms the panel reaches live after callback-driven events.</p></div>
-        </div>
-      </section>
+      <h2>Where the promise lives</h2>
+      <div class="split">
+        <div class="card"><h3>Durable truth</h3><p><code>AppDeployment</code> records the checkpoint, lifecycle, callback-token hash, URL, error, and timestamps. <code>AppDeploymentService</code> owns authorization, locking, supersession, and monotonic transitions. Its queued/updated events feed the normal session event stream.</p></div>
+        <div class="card"><h3>Visible truth</h3><p>The Applications panel reads deployment entities from Zustand, not a mutation result. <code>AppDeploymentCard</code> shows the newest record’s checkpoint, state, failure, or live URL after the event arrives.</p></div>
+      </div>
 
-      <section>
-        <h2>Decisions that reduce failure impact</h2>
-        <div class="grid">
-          <div class="card"><h3>Checkpoint, not workspace</h3><p>Session shutdown or later edits cannot alter an in-progress deployment. A commit SHA is visible on the deployment and can be replayed.</p></div>
-          <div class="card"><h3>At most one current deployment</h3><p>An advisory lock serializes publishes per session group. A newer request marks earlier active work superseded.</p></div>
-          <div class="card"><h3>Only a live successor replaces live state</h3><p>Publishing failures are durable and visible but must not remove a prior public URL.</p></div>
-          <div class="card"><h3>Callback tokens are stored hashed</h3><p>The worker receives the secret once. Trace verifies it in constant time and never exposes it through GraphQL or events.</p></div>
-        </div>
-      </section>
+      <h2>The intentional handoff</h2>
+      <div class="boundary">
+        <div class="side"><h3>Trace owns the decision</h3><p>Select the latest committed checkpoint; archive it from managed Git; create the durable record; enqueue a versioned job; accept only authenticated status changes.</p></div>
+        <div class="divider">→</div>
+        <div class="side"><h3>The deployment worker owns execution</h3><p>Build and host the archived source, then report <code>building</code>, <code>deploying</code>, <code>live</code>, or <code>failed</code> to the callback URL with its issued token.</p></div>
+      </div>
+      <div class="gate"><strong>Release gate, not a hidden implementation detail.</strong> This branch supplies Trace’s half of the handoff. Until the S3 bucket, SQS queue, assumed role, public callback URL, and a compatible queue consumer exist, publish correctly fails closed. The worker and production infrastructure are not part of this branch.</div>
 
-      <section>
-        <h2>Release gate and unresolved boundary</h2>
-        <div class="callout risk"><strong>This branch implements Trace-side orchestration, not the worker or cloud infrastructure.</strong> It will fail closed with “Published app deployments are not configured for this environment” until <code>AWS_REGION</code>, role ARN, source bucket, queue URL, and a valid public callback URL are supplied. The queue consumer must honor <code>AppDeploymentJob</code> version 1 and issue the authenticated callback progression.</div>
-        <details><summary>Evidence and review focus</summary><div class="detail"><ul><li><code>apps/server/src/services/app-deployment.ts</code> owns authorization, idempotency, state transitions, and events.</li><li><code>apps/server/src/services/app-deployment-dispatcher.ts</code> owns Git archive streaming, S3 upload, role assumption, and SQS submission.</li><li><code>apps/server/src/routes/app-deployment-callback.ts</code> limits the callback surface to known statuses and bearer authentication.</li><li><code>apps/web/src/components/session/applications/AppDeploymentCard.tsx</code> renders the latest durable deployment rather than a running process.</li></ul></div></details>
-      </section>
-
-      <section>
-        <h2>Acceptance checks</h2>
-        <table><thead><tr><th>Scenario</th><th>Expected result</th></tr></thead><tbody>
-          <tr><td>Cloud session stops after dispatch</td><td>Deployment record, source bundle, worker job, and subsequent UI status remain available.</td></tr>
-          <tr><td>User presses Publish twice for the same commit</td><td>One active deployment is reused; no duplicate source upload or worker job is emitted.</td></tr>
-          <tr><td>Newer checkpoint publishes while an older job runs</td><td>The old job becomes superseded; only the newest successful job can become current.</td></tr>
-          <tr><td>Worker callback is forged, stale, or out of order</td><td>Trace rejects it without mutating deployment state or emitting a misleading event.</td></tr>
-          <tr><td>Worker/build fails after a prior version is live</td><td>The failure is displayed and recorded; the previous public URL remains live.</td></tr>
-        </tbody></table>
-      </section>
+      <details><summary>Source anchors behind this walkthrough</summary><ul><li><code>apps/server/src/services/app-deployment.ts</code> contains the advisory lock, duplicate reuse, superseding rules, callback token check, and transition table.</li><li><code>apps/server/src/services/app-deployment-dispatcher.ts</code> streams the selected Git commit to S3 and sends the versioned SQS job without buffering the whole archive.</li><li><code>apps/server/src/routes/app-deployment-callback.ts</code> limits the public callback to bearer-authenticated known statuses.</li><li>The branch’s tests cover missing checkpoints, retries, superseding in-flight work, authenticated monotonic callbacks, rejected credentials, dispatch failure, and source-size limits.</li></ul></details>
     </main>
   </body>
 </html>

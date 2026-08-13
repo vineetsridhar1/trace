@@ -52,6 +52,32 @@ will existing data or callers survive?", or "what is the smallest safe rollout?"
 visible section answer one of those questions. Omit sections that answer no question for this
 change.
 
+Before writing HTML, select one **story shape** and write a one-sentence private thesis in your
+notes: "This plan helps the reviewer decide ___ by showing ___." The story shape determines the
+reading order, section names, and primary visual. Choose the shape that exposes the change's
+hardest uncertainty:
+
+- **Failure-scenario walkthrough:** ask whether a promised outcome survives retries, races,
+  outages, or bad input. Organize around the few consequential scenarios, not implementation
+  layers. Use timelines, state snapshots, and a truth table.
+- **User-journey walkthrough:** explain a product behavior whose value is best understood from a
+  person's sequence of actions. Organize around moments in the journey and the information or
+  control available at each moment.
+- **Boundary contract:** establish ownership between systems or teams. Organize around the
+  handoffs, contract fields, authority, and unacceptable messages.
+- **Decision record:** choose among materially different approaches. Put the options, evaluation
+  criteria, and chosen tradeoff at the center; implementation follows only after the choice.
+- **Migration or rollout narrative:** establish how old and new behavior coexist, what gates
+  progression, and how rollback preserves users. Organize in time, not by code layer.
+- **Change map:** use only when the change is genuinely several independent workstreams. Organize
+  around the workstreams and their dependency edges.
+
+Do not use generic headings such as "Scope", "Current state", "How it will work", "Implementation
+moves", "Files", "Risks", or "Verification" by default. Use one only when it is literally the
+question this plan needs to answer. A plan that presents the standard headings under renamed labels
+has not changed shape. A small, local change may be a title, a single annotated comparison, and a
+proof note; that is a complete plan when it answers the decision.
+
 Match plan depth to uncertainty, not to apparent change size:
 
 - **Direct, local change:** outcome, precise behavior, implementation moves, and proof may be
@@ -76,6 +102,11 @@ Name paths or symbols only where they anchor a claim, identify the owner of a ch
 implementer start. Include an impact map when several components or consumers need coordination;
 do not list every touched file merely to look complete. State scope, non-goals, risks, assumptions,
 or a phased rollout only when they materially constrain approval or implementation.
+
+After drafting, perform a shape check: remove the title and ask whether this canvas could be reused
+for an unrelated feature just by replacing nouns. If yes, rebuild it around the selected story
+shape. The first three visible blocks must make the branch's unique problem apparent; they must not
+be a reusable plan introduction, architecture diagram, and task list.
 
 Choose the story and visuals from the shape of the change. Use:
 
@@ -120,10 +151,10 @@ cp "$TRACE_SKILLS_DIR/visual-plan/template.html" \
 ```
 
 The HTML filename is descriptive, not standardized. Treat the copied file as a component palette,
-not a form: start from its small decision brief, then add only the components that answer an
-approval question. Reorder the story, combine components, and add shapes when the change calls for
-them. The template supplies summaries and metrics, cards, flows, before/after views, a branching
-flowchart, an interaction sequence, tables, tags, callouts, and small DOM-only interactions.
+not a form: begin by selecting a story shape, then assemble only components that serve that shape.
+Reorder the story, combine components, and add shapes when the change calls for them. The template
+supplies summaries and metrics, cards, flows, before/after views, a branching flowchart, an
+interaction sequence, tables, tags, callouts, and small DOM-only interactions.
 
 Use inline CSS, inline SVG, and concise inline JavaScript to make the explanation clear and
 interactive. Scripts may modify only their own document: do not access the network, storage,
@@ -145,6 +176,8 @@ Before publishing, verify:
 - Every proposed boundary change names its affected symbol or owner and its verification method.
 - Each implementation move says what will change and how its behavior will be proved; no step is
   merely "update", "wire up", or "add support".
+- The first three visible blocks expose the change-specific uncertainty, rather than a generic
+  plan outline.
 - Facts, assumptions, open decisions, and non-goals are distinguishable.
 - Another agent could implement the plan without repeating repository discovery.
 
