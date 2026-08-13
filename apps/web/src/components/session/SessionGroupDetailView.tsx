@@ -658,9 +658,10 @@ export function SessionGroupDetailView({
     (sessionId: string | null, terminalId: string) => {
       setActiveWorkflowTab("session");
       setActiveArtifactId(null);
+      setActiveFilePath(null);
       selectTerminal(sessionId, terminalId);
     },
-    [selectTerminal, setActiveArtifactId],
+    [selectTerminal, setActiveArtifactId, setActiveFilePath],
   );
 
   const handleSelectFileTab = useCallback(
@@ -702,8 +703,17 @@ export function SessionGroupDetailView({
 
   const handleOpenTerminalCmd = useCallback(() => {
     setActiveWorkflowTab("session");
+    setActiveArtifactId(null);
+    setActiveFilePath(null);
     void handleOpenTerminal(selectedSession ?? null, terminalAllowed);
-  }, [handleOpenTerminal, selectedSession, terminalAllowed]);
+  }, [handleOpenTerminal, selectedSession, setActiveArtifactId, setActiveFilePath, terminalAllowed]);
+
+  const handleCreateTerminalTab = useCallback(() => {
+    setActiveWorkflowTab("session");
+    setActiveArtifactId(null);
+    setActiveFilePath(null);
+    void handleCreateTerminal(selectedSession ?? null, terminalAllowed);
+  }, [handleCreateTerminal, selectedSession, setActiveArtifactId, setActiveFilePath, terminalAllowed]);
 
   const showSidebarTab = useCallback((tab: SidebarTab) => {
     setShowApplicationsSidebar(false);
@@ -1071,10 +1081,7 @@ export function SessionGroupDetailView({
                   onSelectTraffic={handleSelectTrafficTab}
                   onCloseTraffic={handleCloseTrafficTab}
                   onNewChat={handleNewChat}
-                  onOpenTerminal={() => {
-                    setActiveWorkflowTab("session");
-                    void handleCreateTerminal(selectedSession ?? null, terminalAllowed);
-                  }}
+                  onOpenTerminal={handleCreateTerminalTab}
                   onOpenFilePalette={handleOpenFilePalette}
                   canNewChat={
                     !!selectedSession && !selectedSessionIsOptimistic && bridgeInteractionAllowed
