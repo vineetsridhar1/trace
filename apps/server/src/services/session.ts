@@ -129,6 +129,14 @@ export type StartSessionServiceInput = Omit<StartSessionInput, "tool"> & {
   afterCreate?: (input: StartSessionAfterCreateInput) => Promise<void>;
 };
 
+type DeletedAuthoredDesignSystem = {
+  id: string;
+  storageKeys: string[];
+  versionIds: string[];
+  commitArtifactIds: string[];
+  unpinnedSessionGroupIds: string[];
+};
+
 /**
  * A session group is the durable work unit. Conversion deliberately changes
  * that unit in place so its active session, URL, and event history survive.
@@ -5646,6 +5654,60 @@ export class SessionService {
     );
   }
 
+  private async deleteAuthoredDesignSystem(
+    tx: Prisma.TransactionClient,
+    sessionGroupId: string,
+  ): Promise<DeletedAuthoredDesignSystem | null> {
+    const designSystem = await tx.designSystem.findUnique({
+      where: { authoringSessionGroupId: sessionGroupId },
+      select: {
+        id: true,
+        versions: { select: { id: true, storageKey: true } },
+        commitArtifacts: { select: { id: true, storageKey: true } },
+      },
+    });
+    if (!designSystem) return null;
+
+    const pinnedGroups = await tx.sessionGroup.findMany({
+      where: { designSystemVersion: { designSystemId: designSystem.id } },
+      select: { id: true },
+    });
+    await tx.sessionGroup.updateMany({
+      where: { id: { in: pinnedGroups.map(({ id }) => id) } },
+      data: { designSystemVersionId: null },
+    });
+    await tx.designSystem.update({
+      where: { id: designSystem.id },
+      data: { activeVersionId: null, latestCommitArtifactId: null },
+    });
+    await tx.designSystemVersion.deleteMany({ where: { designSystemId: designSystem.id } });
+    await tx.designSystem.delete({ where: { id: designSystem.id } });
+
+    return {
+      id: designSystem.id,
+      storageKeys: [
+        ...designSystem.versions.map(({ storageKey }) => storageKey),
+        ...designSystem.commitArtifacts.map(({ storageKey }) => storageKey),
+      ],
+      versionIds: designSystem.versions.map(({ id }) => id),
+      commitArtifactIds: designSystem.commitArtifacts.map(({ id }) => id),
+      unpinnedSessionGroupIds: pinnedGroups.map(({ id }) => id),
+    };
+  }
+
+  private async deleteDesignSystemObjects(storageKeys: string[]) {
+    await Promise.all(
+      storageKeys.map((storageKey) =>
+        storage.deleteObject(storageKey).catch((error: unknown) => {
+          console.warn("[session] failed to delete design-system object with session group", {
+            storageKey,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }),
+      ),
+    );
+  }
+
   async delete(
     id: string,
     actorType: ActorType = "system",
@@ -5706,12 +5768,14 @@ export class SessionService {
     }
 
     let deletedSessionGroupId: string | null = null;
+    let deletedDesignSystem: DeletedAuthoredDesignSystem | null = null;
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.sessionProject.deleteMany({ where: { sessionId: id } });
       await tx.ticketLink.deleteMany({ where: { entityType: "session", entityId: id } });
       await tx.session.delete({ where: { id } });
 
       if (session.sessionGroupId && remainingCount === 0) {
+        deletedDesignSystem = await this.deleteAuthoredDesignSystem(tx, session.sessionGroupId);
         await tx.sessionGroup.delete({ where: { id: session.sessionGroupId } });
         deletedSessionGroupId = session.sessionGroupId;
       }
@@ -5727,6 +5791,7 @@ export class SessionService {
         }),
       ),
     );
+    if (deletedDesignSystem) await this.deleteDesignSystemObjects(deletedDesignSystem.storageKeys);
 
     // Broadcast the deletion event (events are kept for audit trail)
     await eventService.create({
@@ -5739,6 +5804,14 @@ export class SessionService {
         name: session.name,
         sessionGroupId: session.sessionGroupId ?? null,
         deletedSessionGroupId,
+        ...(deletedDesignSystem
+          ? {
+              deletedDesignSystemId: deletedDesignSystem.id,
+              deletedDesignSystemVersionIds: deletedDesignSystem.versionIds,
+              deletedDesignSystemCommitArtifactIds: deletedDesignSystem.commitArtifactIds,
+              unpinnedSessionGroupIds: deletedDesignSystem.unpinnedSessionGroupIds,
+            }
+          : {}),
         ...(eventPayloadExtras ?? {}),
       },
       actorType,
@@ -5767,43 +5840,6 @@ export class SessionService {
       select: { id: true },
     });
 
-    // A design-system authoring group is owned by its DesignSystem row. Remove
-    // that dependent record before deleting the group so its required foreign
-    // key cannot prevent an otherwise valid creation deletion.
-    const authoredDesignSystem = await prisma.designSystem.findUnique({
-      where: { authoringSessionGroupId: groupId },
-      select: {
-        id: true,
-        versions: { select: { storageKey: true } },
-        commitArtifacts: { select: { storageKey: true } },
-      },
-    });
-    const designSystemStorageKeys = authoredDesignSystem
-      ? [
-          ...authoredDesignSystem.versions.map(({ storageKey }) => storageKey),
-          ...authoredDesignSystem.commitArtifacts.map(({ storageKey }) => storageKey),
-        ]
-      : [];
-
-    if (authoredDesignSystem) {
-      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        // Versions may be pinned to other creations. Clear those pins before
-        // removing the source design system and its versions.
-        await tx.sessionGroup.updateMany({
-          where: { designSystemVersion: { designSystemId: authoredDesignSystem.id } },
-          data: { designSystemVersionId: null },
-        });
-        await tx.designSystem.update({
-          where: { id: authoredDesignSystem.id },
-          data: { activeVersionId: null, latestCommitArtifactId: null },
-        });
-        await tx.designSystemVersion.deleteMany({
-          where: { designSystemId: authoredDesignSystem.id },
-        });
-        await tx.designSystem.delete({ where: { id: authoredDesignSystem.id } });
-      });
-    }
-
     for (const session of sessions) {
       await this.delete(session.id, actorType, actorId, eventPayloadExtras);
     }
@@ -5821,7 +5857,14 @@ export class SessionService {
 
     // If no sessions existed, the group won't have been cascade-deleted, so delete it directly
     if (sessions.length === 0) {
-      await prisma.sessionGroup.delete({ where: { id: groupId } });
+      const deletedDesignSystem = await prisma.$transaction(
+        async (tx: Prisma.TransactionClient) => {
+          const deleted = await this.deleteAuthoredDesignSystem(tx, groupId);
+          await tx.sessionGroup.delete({ where: { id: groupId } });
+          return deleted;
+        },
+      );
+      if (deletedDesignSystem) await this.deleteDesignSystemObjects(deletedDesignSystem.storageKeys);
       await eventService.create({
         organizationId: group.organizationId,
         scopeType: "session",
@@ -5829,6 +5872,14 @@ export class SessionService {
         eventType: "session_deleted",
         payload: {
           deletedSessionGroupId: groupId,
+          ...(deletedDesignSystem
+            ? {
+                deletedDesignSystemId: deletedDesignSystem.id,
+                deletedDesignSystemVersionIds: deletedDesignSystem.versionIds,
+                deletedDesignSystemCommitArtifactIds: deletedDesignSystem.commitArtifactIds,
+                unpinnedSessionGroupIds: deletedDesignSystem.unpinnedSessionGroupIds,
+              }
+            : {}),
           ...(eventPayloadExtras ?? {}),
         },
         actorType,
@@ -5851,17 +5902,6 @@ export class SessionService {
         });
       }
     }
-
-    await Promise.all(
-      designSystemStorageKeys.map((storageKey) =>
-        storage.deleteObject(storageKey).catch((error: unknown) => {
-          console.warn("[session] failed to delete design-system object with session group", {
-            storageKey,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }),
-      ),
-    );
 
     return true;
   }
