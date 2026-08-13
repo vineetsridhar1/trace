@@ -1,6 +1,7 @@
 import { memo } from "react";
 import {
   attachmentKeysFromPayload,
+  actionRequiredArtifactForToolError,
   asJsonObject,
   isActionRequiredArtifact,
   type JsonObject,
@@ -29,6 +30,21 @@ function optionalAttachmentKeys(payload: JsonObject | null | undefined): string[
 /** Safely read a string from an unknown value, returning fallback if not a string */
 function str(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
+}
+
+function assistantText(payload: JsonObject | null | undefined): string | undefined {
+  if (payload?.type !== "assistant") return undefined;
+  const message = asJsonObject(payload.message);
+  const content = message?.content;
+  if (!Array.isArray(content)) return undefined;
+  const text = content
+    .map((block) => {
+      const value = asJsonObject(block);
+      return value?.type === "text" && typeof value.text === "string" ? value.text : "";
+    })
+    .join("\n")
+    .trim();
+  return text || undefined;
 }
 
 /** Narrow and unwrap tool result content for display in ToolCallRow */
