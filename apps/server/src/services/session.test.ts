@@ -10472,7 +10472,7 @@ describe("SessionService", () => {
       );
     });
 
-    it("keeps active cloud session groups running even without recent messages", async () => {
+    it("keeps cloud session groups running during recent activity", async () => {
       prismaMock.sessionGroup.findMany.mockResolvedValueOnce([
         {
           id: "group-1",
@@ -10487,9 +10487,9 @@ describe("SessionService", () => {
               agentStatus: "active",
               sessionStatus: "in_progress",
               createdAt: new Date("2026-05-12T11:00:00.000Z"),
-              lastUserMessageAt: new Date("2026-05-12T11:10:00.000Z"),
-              lastMessageAt: new Date("2026-05-12T11:20:00.000Z"),
-              updatedAt: new Date("2026-05-12T11:21:00.000Z"),
+              lastUserMessageAt: new Date("2026-05-12T11:40:00.000Z"),
+              lastMessageAt: new Date("2026-05-12T11:40:00.000Z"),
+              updatedAt: new Date("2026-05-12T11:40:00.000Z"),
             },
           ],
         },
