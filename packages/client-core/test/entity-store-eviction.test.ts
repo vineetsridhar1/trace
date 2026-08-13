@@ -3,8 +3,10 @@ import type { Event } from "@trace/gql";
 import {
   MAX_EVENTS_PER_SCOPE,
   MAX_EVENT_SCOPES,
+  retainScopedEvents,
   useEntityStore,
 } from "../src/stores/entity.js";
+import { upsertFetchedSessionEventsWithOptimisticResolution } from "../src/mutations/optimistic-message.js";
 
 function event(id: string, timestamp: string, parentId?: string): Event & { id: string } {
   return {
@@ -29,7 +31,11 @@ describe("scoped event cache eviction", () => {
       const id = `event-${String(index).padStart(4, "0")}`;
       useEntityStore
         .getState()
-        .upsertScopedEvent(scopeKey, id, event(id, new Date(index * 1_000).toISOString(), "parent-1"));
+        .upsertScopedEvent(
+          scopeKey,
+          id,
+          event(id, new Date(index * 1_000).toISOString(), "parent-1"),
+        );
     }
 
     const state = useEntityStore.getState();
@@ -51,5 +57,32 @@ describe("scoped event cache eviction", () => {
     expect(Object.keys(buckets)).toHaveLength(MAX_EVENT_SCOPES);
     expect(buckets["session:session-0"]).toBeUndefined();
     expect(buckets[`session:session-${MAX_EVENT_SCOPES}`]).toBeDefined();
+  });
+
+  it("applies the cap when timeline pagination writes a fetched page", () => {
+    const events = Array.from({ length: MAX_EVENTS_PER_SCOPE + 1 }, (_, index) => {
+      const id = `event-${index}`;
+      return event(id, new Date(index * 1_000).toISOString());
+    });
+
+    upsertFetchedSessionEventsWithOptimisticResolution("session-1", events);
+
+    const bucket = useEntityStore.getState().eventsByScope["session:session-1"];
+    expect(Object.keys(bucket ?? {})).toHaveLength(MAX_EVENTS_PER_SCOPE);
+    expect(bucket?.["event-0"]).toBeUndefined();
+  });
+
+  it("does not evict a retained scope", () => {
+    const release = retainScopedEvents("session:retained");
+    for (let index = 0; index <= MAX_EVENT_SCOPES; index++) {
+      const scopeKey = index === 0 ? "session:retained" : `session:session-${index}`;
+      const id = `event-${index}`;
+      useEntityStore
+        .getState()
+        .upsertScopedEvent(scopeKey, id, event(id, new Date(index * 1_000).toISOString()));
+    }
+
+    expect(useEntityStore.getState().eventsByScope["session:retained"]).toBeDefined();
+    release();
   });
 });
